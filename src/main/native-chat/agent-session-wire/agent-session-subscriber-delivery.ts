@@ -15,6 +15,7 @@ export function queueSubscriberDelivery(
 ): void {
   subscriber.pendingDelivery = {
     ...input,
+    activity: input.activity !== undefined ? input.activity : subscriber.pendingDelivery?.activity,
     emitCheckpoint: input.emitCheckpoint || subscriber.pendingDelivery?.emitCheckpoint === true
   }
   if (subscriber.delivery) {

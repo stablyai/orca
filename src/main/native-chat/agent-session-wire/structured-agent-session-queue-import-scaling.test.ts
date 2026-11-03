@@ -205,28 +205,28 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
   let cards = 0
   let bytes = 0
   let drafts: ReturnType<typeof transitions.isolateJournalTransition>[] = []
-  const index = JournalInputCardIndex.prototype.indexCard
+  const index = JournalInputCardIndex.prototype.indexCardSteps
   const indexSpy = vi
-    .spyOn(JournalInputCardIndex.prototype, 'indexCard')
-    .mockImplementation(function (this: JournalInputCardIndex, ...args) {
+    .spyOn(JournalInputCardIndex.prototype, 'indexCardSteps')
+    .mockImplementation(function* (this: JournalInputCardIndex, ...args) {
       indexed++
-      return index.apply(this, args)
+      return yield* index.apply(this, args)
     })
-  const introduce = JournalInputCardIndex.prototype.introduceOverlays
+  const introduce = JournalInputCardIndex.prototype.introduceOverlaysSteps
   const introduction = vi
-    .spyOn(JournalInputCardIndex.prototype, 'introduceOverlays')
-    .mockImplementation(function (this: JournalInputCardIndex, change) {
-      introduce.call(this, (card) => {
+    .spyOn(JournalInputCardIndex.prototype, 'introduceOverlaysSteps')
+    .mockImplementation(function* (this: JournalInputCardIndex, change) {
+      yield* introduce.call(this, (card) => {
         introduced++
         change(card)
       })
     })
-  const frontier = JournalInputLineageOwner.prototype.restoreFrontier
+  const frontier = JournalInputLineageOwner.prototype.restoreFrontierSteps
   const frontierSpy = vi
-    .spyOn(JournalInputLineageOwner.prototype, 'restoreFrontier')
-    .mockImplementation(function (this: JournalInputLineageOwner, ...args) {
+    .spyOn(JournalInputLineageOwner.prototype, 'restoreFrontierSteps')
+    .mockImplementation(function* (this: JournalInputLineageOwner, ...args) {
       frontiers++
-      return frontier.apply(this, args)
+      return yield* frontier.apply(this, args)
     })
   const isolate = transitions.isolateJournalTransition
   const isolateSpy = vi
@@ -236,9 +236,11 @@ it.each([10, 100])('bounds actual canonical fallback reads/writes N=%i', async (
       drafts.push(draft)
       return draft
     })
-  const encode = outcomes.encodeJournalOutcomes
-  const encodeSpy = vi.spyOn(outcomes, 'encodeJournalOutcomes').mockImplementation((...args) => {
-    const encoded = encode(...args)
+  const encode = outcomes.encodeJournalOutcomeSteps
+  const encodeSpy = vi.spyOn(outcomes, 'encodeJournalOutcomeSteps').mockImplementation(function* (
+    ...args
+  ) {
+    const encoded = yield* encode(...args)
     for (const value of encoded.values) {
       if (value.field === 'inputEntries') {
         entries++

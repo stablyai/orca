@@ -31,7 +31,7 @@ export type JournalReadResult =
   | { kind: 'probe'; present: boolean }
 export type JournalSqlCommand =
   | { type: 'read'; read: JournalRead }
-  | { type: 'upload'; packet: JournalUnitPacket }
+  | { type: 'upload'; packets: JournalUnitPacket[] }
   | { type: 'discard' }
   | { type: 'unit'; normal: boolean; count: number }
   | { type: 'maintenance'; unit: JournalMaintenanceUnit }

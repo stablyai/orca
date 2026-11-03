@@ -1,3 +1,5 @@
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { journalInputOrder } from './journal-input-order'
 // Delete and replace epochs atomically; retaining superseded rows would grow history without bound.
 
 import { publishJournalOutcomeEpochAsync } from './journal-outcome-write'
@@ -10,7 +12,7 @@ import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalQueueRow } from './journal-queue-events'
 import type { JournalQueueRestatement } from './journal-queued-messages'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { settleJournalCommit } from './journal-row-writer'
+import { settleJournalCommitAsync } from './journal-row-writer'
 
 export type JournalNewEpochInput = {
   identity: AgentSessionJournalIdentity
@@ -23,18 +25,18 @@ export type JournalNewEpochInput = {
   /** The epoch the caller built from (null: none yet); a different stored epoch refuses. */
   expectedEpoch?: string | null
   /** Adopt committed state before fallible follow-up work. */
-  onPublished: (loaded: JournalLoad) => void
+  onPublished: (loaded: JournalLoad) => void | Promise<void>
   publish?: () => void
 }
 
 export function publishNewEpoch(
   database: JournalHostDatabase,
-  prepare: () => JournalNewEpochInput
+  prepare: () => JournalNewEpochInput | Promise<JournalNewEpochInput>
 ): Promise<void> {
   return database
     .transaction(
       async (db) => {
-        const input = prepare()
+        const input = await prepare()
         const row: JournalRow = {
           kind: 'epoch',
           reason: input.reason,
@@ -50,7 +52,13 @@ export function publishNewEpoch(
         const state = createJournalReducerState(sessionId, input.epoch)
         applyJournalRow(state, row)
         const rows: JournalRow[] = [row]
+        let work = 0
         for (const { messageId, change } of input.queue.cards) {
+          if (++work === 128) {
+            work = 0
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
+          await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           if (change) {
             const card = buildJournalQueueRow(
               state,
@@ -78,11 +86,11 @@ export function publishNewEpoch(
       false,
       ({ input, publication }) => {
         const state = publication.adopt()
-        settleJournalCommit(
+        return settleJournalCommitAsync([
           () => input.onPublished({ state, newer: null, damage: null }),
           () => input.queue.receipt.committed(),
           () => input.publish?.()
-        )
+        ])
       }
     )
     .then(() => undefined)

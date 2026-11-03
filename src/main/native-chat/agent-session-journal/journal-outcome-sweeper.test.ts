@@ -11,7 +11,8 @@ import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-h
 import type { JournalRow } from './journal-row-schema'
 import { restoreJournal } from './journal-open'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { JournalOutcomeSweeper } from './journal-outcome-cleanup'
+import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
 
 // The production sweeper over a real database, on its own timers.
 const epoch = 'epoch-1'
@@ -118,4 +119,90 @@ it('retries a failed pass at the next periodic pass, and runs none after it stop
   sweepers.forEach((sweeper) => sweeper.stop())
   await vi.advanceTimersByTimeAsync(12 * 60 * 60_000)
   expect(retiredRecords()).toBe(10)
+})
+
+it('bounds retired discovery, indexed outcome pages and writer identity rechecks at N and 10N', async () => {
+  for (const size of [100, 1_000]) {
+    database = await openTestJournalHostDatabase(join(root, String(size)))
+    let retired = 0
+    database.fixtureTransaction((db) => {
+      const generation = db.prepare(
+        'INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)'
+      )
+      const live = db.prepare('INSERT INTO journal_outcome_epochs VALUES (?, ?, ?, 2, 1, 0)')
+      const outcome = db.prepare(`INSERT INTO journal_outcomes VALUES
+        (?, ?, 'aliases', ?, 1, 's0000000000000001:0000000000000000', ?, 0)`)
+      for (let index = 0; index < size; index++) {
+        const id = `live-${index}`
+        const key = Number(generation.run(id, epoch).lastInsertRowid)
+        live.run(id, epoch, key)
+        outcome.run(key, 1, JSON.stringify(id), JSON.stringify([id, 'retained']))
+      }
+      retired = Number(generation.run('retired', 'previous').lastInsertRowid)
+      // Insertion/rowid order disagrees with the existing sequence/key index.
+      for (let index = size; index > 0; index--) {
+        outcome.run(retired, index, JSON.stringify(`gone-${index}`), JSON.stringify(['gone', 'v']))
+      }
+    })
+    const sqls = new Set<string>()
+    let returned = 0
+    let statements = 0
+    const stop = observeNativeJournalSql(database, (entry) => {
+      returned += entry.rows
+      statements += Number(entry.method !== 'prepare')
+      if (entry.method === 'prepare') {
+        sqls.add(entry.sql)
+      }
+    })
+    try {
+      let units = 0
+      for (;;) {
+        returned = 0
+        statements = 0
+        const more = await sweepJournalOutcomePage(database)
+        // Returned rows aren't VM/examined work; bounded ranges/plans below establish access shape.
+        expect(returned).toBeLessThanOrEqual(100)
+        expect(statements).toBeLessThanOrEqual(105)
+        units++
+        if (!more) {
+          break
+        }
+        expect(units).toBeLessThanOrEqual(2 * size + 2)
+      }
+      expect(retiredRecords()).toBe(0)
+      expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).toBe(size)
+      expect(
+        database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
+      ).toBe(size)
+      const queries = [...sqls]
+      const boundaries = [
+        { sql: queries.find((sql) => sql.includes('WHERE generation > ?')), args: [0, retired] },
+        {
+          sql: queries.find((sql) => sql.includes('ORDER BY seq, field, entry_key')),
+          args: [retired]
+        },
+        { sql: queries.find((sql) => sql.startsWith('SELECT session_id, epoch')), args: [retired] },
+        {
+          sql: queries.find((sql) => sql.startsWith('SELECT epoch, generation')),
+          args: ['retired']
+        }
+      ]
+      for (const { sql, args } of boundaries) {
+        expect(sql).toBeDefined()
+        const plan = database.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args)
+        const detail = plan.map((row) => row.detail).join(' ')
+        expect(detail).toContain('SEARCH')
+        expect(detail).not.toContain('TEMP B-TREE')
+      }
+      sqls.clear()
+      // A live-only prefix still advances and completes without inspecting outcomes.
+      let remaining = size + 1
+      while (await sweepJournalOutcomePage(database)) {
+        expect(--remaining).toBeGreaterThan(0)
+      }
+      expect([...sqls].some((sql) => sql.includes('FROM journal_outcomes'))).toBe(false)
+    } finally {
+      stop()
+    }
+  }
 })

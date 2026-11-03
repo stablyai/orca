@@ -186,3 +186,28 @@ export function settleJournalCommit(...effects: (() => void)[]): void {
     throw new AggregateError(failures, 'journal committed effects failed')
   }
 }
+
+/** Epoch-sized committed effects retain ownership and ordering across finite host turns. */
+export async function settleJournalCommitAsync(
+  effects: Iterable<() => void | Promise<void>>
+): Promise<void> {
+  const failures: unknown[] = []
+  let work = 0
+  for (const effect of effects) {
+    try {
+      await effect()
+    } catch (error) {
+      failures.push(error)
+    }
+    if (++work === 128) {
+      work = 0
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
+  if (failures.length === 1) {
+    throw failures[0]
+  }
+  if (failures.length) {
+    throw new AggregateError(failures, 'journal committed effects failed')
+  }
+}

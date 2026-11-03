@@ -61,11 +61,11 @@ export function journalInputIndexProbe(
 
 export function journalInputHistoryProbe() {
   let visits = 0
-  const release = JournalInputLineageOwner.prototype.releaseHistory
+  const release = JournalInputLineageOwner.prototype.releaseHistorySteps
   const spy = vi
-    .spyOn(JournalInputLineageOwner.prototype, 'releaseHistory')
-    .mockImplementation(function (this: JournalInputLineageOwner, keep) {
-      release.call(this, (id) => {
+    .spyOn(JournalInputLineageOwner.prototype, 'releaseHistorySteps')
+    .mockImplementation(function* (this: JournalInputLineageOwner, keep) {
+      yield* release.call(this, (id) => {
         visits++
         return keep(id)
       })

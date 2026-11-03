@@ -4,12 +4,22 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type * as Fs from 'node:fs'
-const fault = vi.hoisted(() => ({ path: '', sync: false }))
+const fault = vi.hoisted(
+  (): {
+    path: string
+    sync: boolean
+    inspect?: (path: string) => Promise<void>
+  } => ({
+    path: '',
+    sync: false
+  })
+)
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
   return {
     ...fs,
-    lstat: (...args: Parameters<typeof fs.lstat>) => {
+    lstat: async (...args: Parameters<typeof fs.lstat>) => {
+      await fault.inspect?.(String(args[0]))
       if (fault.sync && String(args[0]).startsWith(fault.path)) {
         throw Object.assign(new Error('probe failed'), { code: 'EACCES' })
       }
@@ -54,6 +64,7 @@ import {
 import { AgentSessionAttachmentStore } from './agent-session-attachment-store'
 import {
   sweepAgentSessionAttachments,
+  startAgentSessionAttachmentSweeps,
   UNCLAIMED_ATTACHMENT_MAX_AGE_MS,
   type AgentSessionAttachmentSweepFacts
 } from './agent-session-attachment-sweep'
@@ -84,6 +95,9 @@ beforeEach(async () => {
 afterEach(async () => {
   fault.path = ''
   fault.sync = false
+  fault.inspect = undefined
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   store.clearInFlightForTests()
   await closeTestJournalHostDatabases()
   await rm(stateDirectory, { recursive: true, force: true })
@@ -146,6 +160,203 @@ async function remaining(): Promise<string[]> {
 }
 
 describe('sweepAgentSessionAttachments', () => {
+  it.each([100, 1_000])(
+    'bounds scheduled claim reservations and frozen membership at %s retained claims',
+    async (size) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+      await seedUpload(SENT, HOUR)
+      recorded = new Set()
+      const insert = db.prepare('INSERT INTO agent_session_attachment_claims VALUES (?, ?, ?)')
+      journal.fixtureTransaction(() => {
+        for (let i = 0; i < size; i++) {
+          const id = `session-${String(i).padStart(5, '0')}`
+          recorded!.add(id)
+          insert.run(SENT, id, NOW)
+        }
+      })
+      const counts: number[] = []
+      let page = -1
+      let settled = false
+      let entered!: () => void
+      let release!: () => void
+      let completed!: () => void
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const inspecting = new Promise<void>((resolve) => {
+        entered = resolve
+      })
+      const finished = new Promise<void>((resolve) => {
+        completed = resolve
+      })
+      let reads = 0
+      const read = journal.read.bind(journal)
+      const observedRead: typeof journal.read = async (run) => {
+        const position = ++reads
+        const result = await read(run)
+        if (position === 2) {
+          completed()
+        }
+        return result
+      }
+      vi.spyOn(journal, 'read').mockImplementation(observedRead)
+      fault.inspect = async () => {
+        counts[page]++
+        if (page === 0 && counts[page] === 1) {
+          entered()
+          await held
+        }
+      }
+      const errors: unknown[] = []
+      let observedError!: () => void
+      const errored = new Promise<void>((resolve) => {
+        observedError = resolve
+      })
+      const sweeper = startAgentSessionAttachmentSweeps(
+        store,
+        facts({
+          recordedSessionIds: () => {
+            page++
+            counts[page] = 0
+            if (page === 1) {
+              expect(settled).toBe(true)
+            }
+            return recorded
+          }
+        }),
+        {
+          initialDelayMs: 1,
+          intervalMs: 100_000,
+          onError: (error) => {
+            errors.push(error)
+            observedError()
+          }
+        }
+      )
+      try {
+        await vi.advanceTimersByTimeAsync(1)
+        await inspecting
+        const foreground = journal.transaction(
+          (plan) => {
+            plan.add({
+              kind: 'sweep',
+              operation: { kind: 'mark', uploadId: 'unrelated', now: NOW }
+            })
+          },
+          false,
+          () => {
+            settled = true
+            // Both keys are new after the membership snapshot: neither extends this invocation.
+            journal.fixtureTransaction(() => {
+              for (const id of ['session-00032-ahead', 'a-behind']) {
+                insert.run(SENT, id, NOW)
+              }
+            })
+          }
+        )
+        release()
+        await foreground
+        await finished
+        expect(errors).toEqual([])
+        expect(counts.reduce((a, b) => a + b, 0)).toBe(size)
+        expect(Math.max(...counts)).toBeLessThanOrEqual(32)
+        expect(claimedSessions()).toHaveLength(size + 2)
+        expect(
+          db.prepare('SELECT COUNT(*) AS n FROM agent_session_attachment_sweeps').get()?.n
+        ).toBe(1)
+        // The scheduled successor rediscovers both arrivals and prunes exactly their definitive absence.
+        const transaction = journal.transaction.bind(journal)
+        const pruneSizes: number[] = []
+        const observedTransaction: typeof journal.transaction = (prepare, streamed, committed) =>
+          transaction(
+            async (plan) => {
+              const result = await prepare(plan)
+              for (const effect of plan.effects) {
+                if (effect.kind === 'sweep' && effect.operation.kind === 'prune') {
+                  pruneSizes.push(effect.operation.pairs.length)
+                }
+              }
+              return result
+            },
+            streamed,
+            committed
+          )
+        vi.spyOn(journal, 'transaction').mockImplementation(observedTransaction)
+        let nextFinished!: () => void
+        const next = new Promise<void>((resolve) => {
+          nextFinished = resolve
+        })
+        const successorRead: typeof journal.read = async (run) => {
+          const position = ++reads
+          const result = await read(run)
+          if (position === 4) {
+            nextFinished()
+          }
+          return result
+        }
+        vi.mocked(journal.read).mockImplementation(successorRead)
+        await vi.advanceTimersByTimeAsync(100_000)
+        await next
+        expect(errors).toEqual([])
+        expect(claimedSessions()).toHaveLength(size)
+        expect(pruneSizes.reduce((a, b) => a + b, 0)).toBe(2)
+        expect(Math.max(...pruneSizes)).toBeLessThanOrEqual(32)
+        recorded!.delete('session-00000')
+        let inspected = 0
+        fault.inspect = async () => {
+          if (++inspected === 40) {
+            throw new Error('later-page uncertain inspection')
+          }
+        }
+        let failedRead!: () => void
+        const failed = new Promise<void>((resolve) => {
+          failedRead = resolve
+        })
+        const observeFailure: typeof journal.read = async (run) => {
+          const position = ++reads
+          try {
+            return await read(run)
+          } finally {
+            if (position === 6) {
+              failedRead()
+            }
+          }
+        }
+        vi.mocked(journal.read).mockImplementation(observeFailure)
+        await vi.advanceTimersByTimeAsync(100_000)
+        await failed
+        await errored
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(errors).toHaveLength(1)
+        expect(String(errors[0])).toContain('later-page uncertain inspection')
+        expect(claimedSessions()).toHaveLength(size - 1)
+        expect(claimedSessions()).not.toContain('session-00000')
+        fault.inspect = undefined
+        let retried!: () => void
+        const retry = new Promise<void>((resolve) => {
+          retried = resolve
+        })
+        const observeRetry: typeof journal.read = async (run) => {
+          const position = ++reads
+          const result = await read(run)
+          if (position === 8) {
+            retried()
+          }
+          return result
+        }
+        vi.mocked(journal.read).mockImplementation(observeRetry)
+        await vi.advanceTimersByTimeAsync(100_000)
+        await retry
+        expect(errors).toHaveLength(1)
+        expect(claimedSessions()).toHaveLength(size - 1)
+        expect(await readFile(join(store.rootDir, SENT, 'shot.png'), 'utf8')).toBe('bytes')
+      } finally {
+        release()
+        sweeper.stop()
+      }
+    }
+  )
+
   it('removes a part file nobody finished after an hour, and keeps a fresh one', async () => {
     await seedUpload(SENT, HOUR + 1, AGENT_SESSION_ATTACHMENT_PART_FILE)
     await seedUpload(UNSENT, HOUR - 1000, AGENT_SESSION_ATTACHMENT_PART_FILE)

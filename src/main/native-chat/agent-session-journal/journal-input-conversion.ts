@@ -1,3 +1,4 @@
+import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReadConnection } from './journal-sql-owner'
 import { readJournalLegacyCards, readJournalLegacyCardsAsync } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -16,10 +17,24 @@ export type JournalNativePrefix = {
 
 /** Marker-5 ordinary keys remain frozen; native evidence is lifted only after tail overrides. */
 export function detachJournalNativePrefix(state?: JournalReducerState): JournalNativePrefix {
-  const prefix = {
-    entries: new Map(state?.inputEntries),
-    cards: new Map(state?.inputCards),
+  return finishJournalSteps(detachJournalNativePrefixSteps(state))
+}
+
+export function* detachJournalNativePrefixSteps(
+  state?: JournalReducerState
+): Generator<void, JournalNativePrefix> {
+  const prefix: JournalNativePrefix = {
+    entries: new Map(),
+    cards: new Map(),
     base: state ? journalInputOrder(state).lineage.at(0) : 0
+  }
+  for (const [id, entry] of state?.inputEntries ?? []) {
+    prefix.entries.set(id, entry)
+    yield
+  }
+  for (const [id, card] of state?.inputCards ?? []) {
+    prefix.cards.set(id, card)
+    yield
   }
   state?.inputEntries.clear()
   state?.inputCards.clear()
@@ -51,12 +66,9 @@ function* liftJournalNativePrefix(
   fold: JournalOutcomeFold,
   prefix: JournalNativePrefix
 ): Generator<void> {
-  let examined = 0
   if (format < 2) {
     for (const [id, own] of prefix.entries) {
-      if (++examined % 128 === 0) {
-        yield
-      }
+      yield
       if (
         state.submissions.get(id)?.dispatchState === 'pending' &&
         !fold.replaced('submissions', id)
@@ -65,17 +77,13 @@ function* liftJournalNativePrefix(
       }
     }
     for (const [id, card] of prefix.cards) {
-      if (++examined % 128 === 0) {
-        yield
-      }
+      yield
       if (!state.queue.cards.has(id) && !fold.replaced('queue.cards', id)) {
         state.inputCards.set(id, card)
       }
     }
     for (const [id, card] of state.queue.cards) {
-      if (++examined % 128 === 0) {
-        yield
-      }
+      yield
       const known = !fold.replaced('queue.cards', id) ? prefix.cards.get(id) : undefined
       const introducedAt = fold.introduction('queue.cards', id)
       if (known) {
@@ -88,9 +96,7 @@ function* liftJournalNativePrefix(
       }
     }
     for (const [id, entry] of state.submissions) {
-      if (++examined % 128 === 0) {
-        yield
-      }
+      yield
       const sequence = entry.acceptedSequence ?? entry.submittedSequence
       if (
         !state.inputEntries.has(id) &&
@@ -117,22 +123,22 @@ export async function restoreJournalNativeStateAsync(
   fold: JournalOutcomeFold,
   prefix: JournalNativePrefix
 ): Promise<void> {
-  for (const _step of liftJournalNativePrefix(state, format, fold, prefix)) {
-    await new Promise<void>((resolve) => setImmediate(resolve))
-  }
+  await finishJournalStepsAsync(liftJournalNativePrefix(state, format, fold, prefix))
   const owner = initializeJournalInputOrder(state)
-  const ids = owner.needsAcceptance([...state.inputEntries.keys()])
+  const ids = await finishJournalStepsAsync(owner.acceptanceIdsSteps())
   const acceptance = await prepareJournalAcceptance(read, state.sessionId, ids)
   const cards = await readJournalLegacyCardsAsync(read, state)
-  owner.withAcceptance(acceptance, () => {
-    owner.beginReconstruction()
-    owner.restore(state)
+  function* reconstruct(): Generator<void> {
+    yield* owner.beginReconstructionSteps()
+    yield* owner.restoreSteps(state)
     for (const id of ids) {
       owner.place(id)
+      yield
     }
-    owner.overlay(state, cards)
-    owner.finishReconstruction(state)
-  })
+    yield* owner.overlaySteps(state, cards)
+    yield* owner.finishReconstructionSteps(state)
+  }
+  await finishJournalStepsAsync(reconstruct(), (next) => owner.withAcceptance(acceptance, next))
 }
 
 /** Replacement carries facts directly; restatement is not a new admission or introduction. */
@@ -140,11 +146,19 @@ export function copyJournalNativeState(
   previous: JournalReducerState,
   state: JournalReducerState
 ): void {
+  finishJournalSteps(copyJournalNativeStateSteps(previous, state))
+}
+
+export function* copyJournalNativeStateSteps(
+  previous: JournalReducerState,
+  state: JournalReducerState
+): Generator<void> {
   for (const [id, own] of previous.inputEntries) {
     state.inputEntries.set(id, {
       ...own,
       context: { ...own.context, source: { ...own.context.source } }
     })
+    yield
   }
   for (const [id, card] of previous.inputCards) {
     state.inputCards.set(id, {
@@ -153,6 +167,10 @@ export function copyJournalNativeState(
         ? { baseline: { coordinate: card.baseline.coordinate && { ...card.baseline.coordinate } } }
         : {})
     })
+    yield
   }
-  journalInputOrder(state).lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
+  yield* journalInputOrder(state).lineage.restoreFrontierSteps(
+    state.lastSequence,
+    state.inputEntries.values()
+  )
 }

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -67,15 +68,20 @@ function balance(node: Node): Node {
   }
   return node
 }
-function put(node: Node | undefined, entry: Entry, remove: boolean): Node | undefined {
+function* putSteps(
+  node: Node | undefined,
+  entry: Entry,
+  remove: boolean
+): Generator<void, Node | undefined> {
+  yield
   if (!node) {
     return remove ? undefined : { entry, height: 1, result: entry }
   }
   const order = compare(entry, node.entry)
   if (order < 0) {
-    node.left = put(node.left, entry, remove)
+    node.left = yield* putSteps(node.left, entry, remove)
   } else if (order > 0) {
-    node.right = put(node.right, entry, remove)
+    node.right = yield* putSteps(node.right, entry, remove)
   } else if (!remove) {
     node.entry = entry
   } else {
@@ -88,9 +94,10 @@ function put(node: Node | undefined, entry: Entry, remove: boolean): Node | unde
     let next = node.right
     while (next.left) {
       next = next.left
+      yield
     }
     node.entry = next.entry
-    node.right = put(node.right, next.entry, true)
+    node.right = yield* putSteps(node.right, next.entry, true)
   }
   return balance(node)
 }
@@ -109,9 +116,17 @@ export class JournalInputPlaceIndex {
     handoff: boolean,
     coordinate: AgentJournalCursor | null = card.queuedAt
   ): void {
+    finishJournalSteps(this.setSteps(card, actionable, handoff, coordinate))
+  }
+  *setSteps(
+    card: QueuedMessageRow,
+    actionable: boolean,
+    handoff: boolean,
+    coordinate: AgentJournalCursor | null = card.queuedAt
+  ): Generator<void> {
     const prior = this.entries.get(card.messageId)
     if (prior) {
-      this.change(prior, true)
+      yield* this.changeSteps(prior, true)
     }
     this.entries.delete(card.messageId)
     if (card.state === 'withdrawn') {
@@ -129,18 +144,18 @@ export class JournalInputPlaceIndex {
       ...(handoff ? { handoff: card } : {})
     }
     this.entries.set(card.messageId, entry)
-    this.change(entry, false)
+    yield* this.changeSteps(entry, false)
   }
 
-  private change(entry: Entry, remove: boolean): void {
+  private *changeSteps(entry: Entry, remove: boolean): Generator<void> {
     const epoch = entry.domain
-    const root = put(this.epochs.get(epoch), entry, remove)
+    const root = yield* putSteps(this.epochs.get(epoch), entry, remove)
     if (root) {
       this.epochs.set(epoch, root)
     } else {
       this.epochs.delete(epoch)
     }
-    this.all = put(this.all, entry, remove)
+    this.all = yield* putSteps(this.all, entry, remove)
   }
 
   isEmpty(): boolean {

@@ -10,7 +10,7 @@ import NativeDatabase from '../../sqlite/sync-database'
 import { openJournalDatabase } from './journal-database'
 import { JournalIndeterminateWriteError, JournalSqlOwner } from './journal-sql-owner'
 import type { JournalPersistenceEffect } from './journal-persistence-plan'
-import { journalUnitPackets } from './journal-unit-transfer'
+import { journalTransferBatches, journalUnitPackets } from './journal-unit-transfer'
 import { JournalHostDatabase, JournalCommittedEffectError } from './journal-host-database'
 import {
   buildCommandReceiptTransaction,
@@ -208,6 +208,31 @@ it('does not let exhausted history readers block a foreground write and drains l
   expect(database.hasClosed).toBe(true)
 })
 
+it('round trips batched store families without sharing mutable packet defaults', async () => {
+  const database = await host()
+  const upsert: [string, string][] = Array.from({ length: 300 }, (_, index) => [
+    `record-${index}`,
+    JSON.stringify({ index })
+  ])
+  await database.transaction((plan) => {
+    plan.add({
+      kind: 'store',
+      insertOperationsIfAbsent: false,
+      writes: {
+        records: { upsert, remove: ['record-0'] },
+        operations: { upsert: [], remove: [] },
+        retiredClaimKeys: null,
+        sessionTabs: null
+      }
+    })
+  })
+  expect(
+    await database.read((read) =>
+      read.prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid').all()
+    )
+  ).toEqual(upsert.slice(1).map(([session_id, record_json]) => ({ session_id, record_json })))
+})
+
 it('exposes only preceding receipt phases and leaves duplicate receipt units wholly rolled back', async () => {
   const database = await host()
   const receipt = {
@@ -275,8 +300,8 @@ function rows(seq: number, json = 'landed'): JournalPersistenceEffect {
 }
 async function unit(owner: JournalSqlOwner, effects: JournalPersistenceEffect[], normal = false) {
   await owner.request({ type: 'discard' })
-  for (const packet of journalUnitPackets(effects)) {
-    await owner.request({ type: 'upload', packet })
+  for (const packets of journalTransferBatches(journalUnitPackets(effects))) {
+    await owner.request({ type: 'upload', packets })
   }
   return owner.request({ type: 'unit', normal, count: effects.length })
 }

@@ -4,6 +4,7 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 
 export type QueuePauseReason = 'stopped' | 'cleared' | 'restarted'
 
@@ -120,6 +121,23 @@ export function journalQueuePauseRestatement(
   latestAcceptedTurnSequence: number,
   pauses: readonly DerivedQueuePause[]
 ): JournalQueuePauseRestatement {
+  return finishJournalSteps(
+    journalQueuePauseRestatementSteps(marks, latestAcceptedTurnSequence, pauses)
+  )
+}
+
+export function* journalQueuePauseRestatementSteps(
+  marks: JournalQueuePauseMarks,
+  latestAcceptedTurnSequence: number,
+  pauses: readonly DerivedQueuePause[]
+): Generator<void, JournalQueuePauseRestatement> {
+  const messageIds: string[] = []
+  if (marks.cleared) {
+    for (const id of pauses.find((pause) => pause.reason === 'cleared')?.messageIds ?? []) {
+      messageIds.push(id)
+      yield
+    }
+  }
   return {
     lifted: latestAcceptedTurnSequence > 0 || marks.resumedSequence > 0,
     liveStop: journalUserStopInForce(marks, latestAcceptedTurnSequence)?.event ?? null,
@@ -128,7 +146,7 @@ export function journalQueuePauseRestatement(
       ? {
           cleared: {
             operationId: marks.cleared.operationId,
-            messageIds: [...(pauses.find((pause) => pause.reason === 'cleared')?.messageIds ?? [])],
+            messageIds,
             ...(marks.cleared.lifted ||
             Math.max(latestAcceptedTurnSequence, marks.resumedSequence) >= marks.cleared.sequence
               ? { lifted: true as const }
@@ -149,33 +167,56 @@ export function deriveQueuePauses(input: {
   /** Conservative boundary when this handle could not write a reopen mark. */
   reopenFloor: AgentJournalCursor | null
 }): DerivedQueuePause[] {
+  return finishJournalSteps(deriveQueuePauseSteps(input))
+}
+
+export function* deriveQueuePauseSteps(
+  input: Parameters<typeof deriveQueuePauses>[0]
+): Generator<void, DerivedQueuePause[]> {
   const { epoch, marks, latestAcceptedTurnSequence } = input
   const pauses: DerivedQueuePause[] = []
   const stop = journalUserStopInForce(marks, latestAcceptedTurnSequence)
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
-  const waiting = input.cards.filter((card) => card.state === 'waiting')
+  const waiting: QueueCard[] = []
+  for (const card of input.cards) {
+    if (card.state === 'waiting') {
+      waiting.push(card)
+    }
+    yield
+  }
   const cleared = marks.cleared
   if (
     cleared &&
     !cleared.lifted &&
     cleared.sequence > Math.max(latestAcceptedTurnSequence, marks.resumedSequence)
   ) {
-    const membership = new Set(cleared.messageIds)
-    const messageIds = waiting.flatMap((card) =>
-      card.messageId && membership.has(card.messageId) ? [card.messageId] : []
-    )
+    const membership = new Set<string>()
+    for (const id of cleared.messageIds) {
+      membership.add(id)
+      yield
+    }
+    const messageIds: string[] = []
+    for (const card of waiting) {
+      if (card.messageId && membership.has(card.messageId)) {
+        messageIds.push(card.messageId)
+      }
+      yield
+    }
     if (messageIds.length > 0) {
       pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence }, messageIds })
     }
   }
   const reopened = reopenPause(input)
-  if (
-    reopened &&
-    waiting.some((card) => card.holdReason === null && queuedBefore(reopened, card))
-  ) {
-    pauses.push(reopened)
+  if (reopened) {
+    for (const card of waiting) {
+      if (card.holdReason === null && queuedBefore(reopened, card)) {
+        pauses.push(reopened)
+        break
+      }
+      yield
+    }
   }
   return pauses
 }

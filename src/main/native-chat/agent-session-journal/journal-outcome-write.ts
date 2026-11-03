@@ -1,5 +1,6 @@
+import { finishJournalSteps, finishJournalStepsAsync } from './journal-reconstruction-steps'
 import { journalInputAcceptance, prepareJournalAcceptance } from './journal-input-provenance'
-import { copyJournalNativeState } from './journal-input-conversion'
+import { copyJournalNativeState, copyJournalNativeStateSteps } from './journal-input-conversion'
 import { journalInputOrder } from './journal-input-order'
 import type Database from '../../sqlite/sync-database'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
@@ -17,7 +18,15 @@ export function journalOutcomeAcceptanceIds(
   state: JournalReducerState,
   rows: readonly JournalRow[]
 ): string[] {
+  return finishJournalSteps(journalOutcomeAcceptanceIdSteps(state, rows))
+}
+
+export function* journalOutcomeAcceptanceIdSteps(
+  state: JournalReducerState,
+  rows: readonly JournalRow[]
+): Generator<void, string[]> {
   const ids = new Set<string>()
+  const values: string[] = []
   for (const row of rows) {
     if (
       row.kind === 'submission' &&
@@ -31,8 +40,13 @@ export function journalOutcomeAcceptanceIds(
     if (row.kind === 'dispatch' && row.keptAsQueuedMessageId) {
       ids.add(row.clientMessageId)
     }
+    yield
   }
-  return [...ids]
+  for (const id of ids) {
+    values.push(id)
+    yield
+  }
+  return values
 }
 
 export async function prepareJournalOutcomeWriteAsync(
@@ -48,7 +62,7 @@ export async function prepareJournalOutcomeWriteAsync(
   const acceptance = await prepareJournalAcceptance(
     plan,
     live.sessionId,
-    journalOutcomeAcceptanceIds(live, rows)
+    await finishJournalStepsAsync(journalOutcomeAcceptanceIdSteps(live, rows))
   )
   const transition = await prepareJournalOutcomeRowsAsync(
     live,
@@ -90,28 +104,34 @@ export async function publishJournalOutcomeEpochAsync(
   }
   const initial = createJournalReducerState(sessionId, epoch)
   if (previous) {
-    copyJournalNativeState(previous, initial)
+    await finishJournalStepsAsync(copyJournalNativeStateSteps(previous, initial))
   }
-  journalInputOrder(initial).beginReconstruction()
-  const acceptance = await prepareJournalAcceptance(plan, sessionId, [
-    ...journalOutcomeAcceptanceIds(initial, rows),
-    ...journalInputOrder(initial).needsAcceptance([...initial.inputEntries.keys()])
-  ])
+  await finishJournalStepsAsync(journalInputOrder(initial).beginReconstructionSteps())
+  const ids = await finishJournalStepsAsync(journalOutcomeAcceptanceIdSteps(initial, rows))
+  for (const id of await finishJournalStepsAsync(journalInputOrder(initial).acceptanceIdsSteps())) {
+    ids.push(id)
+    if (ids.length % 128 === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+  }
+  const acceptance = await prepareJournalAcceptance(plan, sessionId, ids)
   const transition = await prepareJournalOutcomeRowsAsync(
     initial,
     rows,
     undefined,
     true,
-    (state) => {
+    function* (state) {
       const order = journalInputOrder(state)
-      order.restore(state)
-      for (const id of order.needsAcceptance([...state.inputEntries.keys()])) {
+      yield* order.restoreSteps(state)
+      for (const id of yield* order.acceptanceIdsSteps()) {
         order.place(id)
+        yield
       }
-      order.finishReconstruction(state)
+      yield* order.finishReconstructionSteps(state)
     },
     acceptance
   )
+  const state = await transition.adoptPrivate()
   plan.add({
     kind: 'outcomes',
     sessionId,
@@ -121,8 +141,8 @@ export async function publishJournalOutcomeEpochAsync(
     values: transition.values,
     through: transition.state.lastSequence
   })
-  plan.preparedState = transition.state
-  return transition
+  plan.preparedState = state
+  return { ...transition, state, adopt: () => state }
 }
 
 /** Every write stores outcome records, and nothing else: they are the saved chat. An input-only epoch

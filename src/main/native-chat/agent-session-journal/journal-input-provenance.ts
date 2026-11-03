@@ -1,3 +1,8 @@
+import { journalQueueRebaseWithAcceptance } from './journal-queue-rebase'
+export {
+  journalQueueRebaseWithAcceptance,
+  prepareJournalQueueRebaseWithAcceptance
+} from './journal-queue-rebase'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalReducerState } from './journal-reducer'
 import { journalInputOrder } from './journal-input-order'
@@ -7,6 +12,7 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { readCommandReceipt } from './command-receipt-table'
 import type { CommandReceiptRead } from './command-receipt-table'
 import type { JournalReadConnection } from './journal-sql-owner'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 
 /** Only the original send's accepted coordinate can compare a retired enqueue boundary. */
 export function journalInputAcceptance(
@@ -40,7 +46,22 @@ export async function prepareJournalAcceptance(
   sessionId: string,
   ids: readonly string[]
 ): Promise<(id: string) => AgentJournalCursor | undefined> {
-  const receipts = await read.receipts({ kind: 'global' }, [...new Set(ids)])
+  function* uniqueIds(): Generator<void, string[]> {
+    const unique = new Set<string>()
+    const values: string[] = []
+    for (const id of ids) {
+      if (!unique.has(id)) {
+        unique.add(id)
+        values.push(id)
+      }
+      yield
+    }
+    return values
+  }
+  const receipts = await read.receipts(
+    { kind: 'global' },
+    await finishJournalStepsAsync(uniqueIds())
+  )
   return (id) => {
     const receipt = receipts.get(id)
     if (!receipt) {
@@ -66,92 +87,6 @@ export function journalQueueRebase(
     queued,
     rebuilt
   )
-}
-
-export function journalQueueRebaseWithAcceptance(
-  acceptance: (id: string) => AgentJournalCursor | undefined,
-  epoch: string,
-  previousEpoch: string | undefined,
-  queued: readonly AgentJournalSubmission[],
-  rebuilt: ReadonlyMap<string, number>
-): (queuedAt: AgentJournalCursor | null) => AgentJournalCursor | null {
-  type Position = { sequence: number; rebased: number }
-  const comparableByEpoch = new Map<string, Position[]>()
-  let originalPositions: Map<string, Position[]> | undefined
-  const originals = () => {
-    if (!originalPositions) {
-      originalPositions = new Map()
-      for (const submission of queued) {
-        const original = acceptance(submission.clientMessageId)
-        if (original) {
-          const positions = originalPositions.get(original.epoch) ?? []
-          positions.push({
-            sequence: original.sequence,
-            rebased: rebuilt.get(submission.clientMessageId) ?? 1
-          })
-          originalPositions.set(original.epoch, positions)
-        }
-      }
-    }
-    return originalPositions
-  }
-  return (queuedAt) => {
-    if (queuedAt && previousEpoch !== undefined) {
-      const boundary = queuedAt
-      let comparable = comparableByEpoch.get(boundary.epoch)
-      if (!comparable) {
-        if (boundary.epoch === previousEpoch) {
-          const current = queued.flatMap((submission) =>
-            submission.acceptedSequence === undefined
-              ? []
-              : [
-                  {
-                    sequence: submission.acceptedSequence,
-                    rebased: rebuilt.get(submission.clientMessageId) ?? 1
-                  }
-                ]
-          )
-          if (current.length === queued.length) {
-            comparable = current
-          } else {
-            // Legacy missing admission places retain only comparable original coordinates.
-            const missing = new Set(
-              queued
-                .filter((submission) => submission.acceptedSequence === undefined)
-                .map((submission) => rebuilt.get(submission.clientMessageId))
-            )
-            comparable = [
-              ...current,
-              ...(originals().get(boundary.epoch) ?? []).filter((position) =>
-                missing.has(position.rebased)
-              )
-            ]
-          }
-        } else {
-          comparable = originals().get(boundary.epoch) ?? []
-        }
-        comparable.sort((a, b) => a.sequence - b.sequence)
-        for (let i = 1; i < comparable.length; i++) {
-          comparable[i].rebased = Math.max(comparable[i].rebased, comparable[i - 1].rebased)
-        }
-        comparableByEpoch.set(boundary.epoch, comparable)
-      }
-      if (comparable.length === queued.length) {
-        let low = 0
-        let high = comparable.length
-        while (low < high) {
-          const mid = (low + high) >>> 1
-          if (comparable[mid].sequence <= boundary.sequence) {
-            low = mid + 1
-          } else {
-            high = mid
-          }
-        }
-        queuedAt = { epoch, sequence: low === 0 ? 1 : comparable[low - 1].rebased }
-      }
-    }
-    return queuedAt
-  }
 }
 
 /** Resolve demanded legacy admission facts at the action's publication boundary. */

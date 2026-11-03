@@ -1,11 +1,12 @@
+import {
+  journalQueuePausesAsync,
+  prepareJournalQueueRestatement
+} from './journal-queue-restatement'
 import { journalInputOrder } from './journal-input-order'
 import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan, type JournalQueuePlan } from './journal-queue-adoption-plan'
 export type { JournalQueuePlan } from './journal-queue-adoption-plan'
-import {
-  journalAttachmentClaimReceipt,
-  journalAttachmentClaimsReceipt
-} from './journal-submission-hook'
+import { journalAttachmentClaimReceipt } from './journal-submission-hook'
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -17,7 +18,6 @@ import type {
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
-import { retainedQueueFacts } from './journal-queue-retention'
 import {
   settleJournalCommit,
   composeJournalOperationReceipts,
@@ -43,7 +43,7 @@ import { queuedMessageMovePlan } from './queued-message-move'
 
 export type JournalQueueRestatement = {
   cards: readonly JournalQueueCardChange[]
-  receipt: JournalOperationReceipt
+  receipt: Omit<JournalOperationReceipt, 'committed'> & { committed: () => void | Promise<void> }
 }
 
 export class JournalQueuedMessages {
@@ -246,16 +246,15 @@ export class JournalQueuedMessages {
     throw new QueuedMessageNotConsumableError(input.messageId, input.expect)
   }
 
-  restatement(): JournalQueueRestatement {
-    const cards = retainedQueueFacts(this.list(), this.deps.state().submissions)
-    return {
-      cards,
-      receipt: journalAttachmentClaimsReceipt(
-        this.deps.claimAttachments,
-        cards.flatMap(({ change }) => (change?.op === 'queued' ? [change.body] : [])),
-        this.legacy.deletionOfAll()
-      )
-    }
+  restatementAsync(): Promise<JournalQueueRestatement> {
+    return prepareJournalQueueRestatement(
+      this.deps.state(),
+      this.legacy,
+      this.deps.claimAttachments
+    )
+  }
+  pausesAsync(): Promise<DerivedQueuePause[]> {
+    return journalQueuePausesAsync(this.deps.state(), this.legacy, this.deps.reopenFloor())
   }
 
   /** Latch legacy card outcomes before retiring their handoff rows. */

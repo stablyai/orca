@@ -2,6 +2,7 @@ import { JournalHistoryReader } from './journal-history-read'
 
 import { withJournalInputOrder } from './journal-input-provenance'
 import { journalInputOrder } from './journal-input-order'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import { JournalWriteProjection } from './journal-write-projection'
@@ -58,6 +59,7 @@ import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import { journalThreadGoalSource } from './journal-thread-goal-source'
+import { adoptJournalStoreState } from './journal-store-open'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
@@ -112,10 +114,8 @@ export class AgentSessionJournal {
       state: () => this.state,
       readOnly: () => this.database.readOnly,
       cursor: this.cursor,
-      adopt: (loaded) => {
-        journalInputOrder(loaded.state).carryRecovery(journalInputOrder(this.state))
-        this.state = loaded.state
-      },
+      adopt: (loaded) =>
+        adoptJournalStoreState(this.state, loaded, (state) => (this.state = state)),
       publish: () => this.onCommitted?.(),
       prepare: (db, rows, savedAt) => {
         this.queuedMessages.inputState()
@@ -172,7 +172,7 @@ export class AgentSessionJournal {
   async open(): Promise<void> {
     await this.restore()
     this.openedThrough = this.cursor()
-    journalInputOrder(this.state).markOpeningRecovery()
+    await finishJournalStepsAsync(journalInputOrder(this.state).markOpeningRecoverySteps())
   }
 
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */

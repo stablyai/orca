@@ -137,10 +137,21 @@ export function applyJournalMaintenance(
     return { more: after > 0 && after < before, valid: true }
   }
   if (unit.kind === 'retired') {
+    const identity = db
+      .prepare('SELECT session_id, epoch FROM journal_outcome_generations WHERE generation = ?')
+      .get(unit.generation)
+    if (typeof identity?.session_id !== 'string' || typeof identity.epoch !== 'string') {
+      return { more: false, valid: false }
+    }
+    const current = db
+      .prepare('SELECT epoch, generation FROM journal_outcome_epochs WHERE session_id = ?')
+      .get(identity.session_id)
     if (
-      db
-        .prepare('SELECT 1 FROM journal_outcome_epochs WHERE generation = ? LIMIT 1')
-        .get(unit.generation)
+      current &&
+      (typeof current.epoch !== 'string' ||
+        typeof current.generation !== 'number' ||
+        current.epoch === identity.epoch ||
+        current.generation === unit.generation)
     ) {
       return { more: false, valid: false }
     }

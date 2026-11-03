@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   queryInputContext,
   type JournalInputCard,
@@ -24,6 +25,14 @@ export class JournalInputDomainIndex {
     actionable: boolean,
     handoff: boolean
   ): void {
+    finishJournalSteps(this.setSteps(card, source, actionable, handoff))
+  }
+  *setSteps(
+    card: QueuedMessageRow,
+    source: JournalInputCard,
+    actionable: boolean,
+    handoff: boolean
+  ): Generator<void> {
     if (!source.baseline) {
       return
     }
@@ -31,7 +40,7 @@ export class JournalInputDomainIndex {
       low = 0,
       high = LIMIT
     while (true) {
-      node.index.set(card, actionable, handoff, source.baseline.coordinate)
+      yield* node.index.setSteps(card, actionable, handoff, source.baseline.coordinate)
       if (high - low <= 1) {
         break
       }

@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { journalInputOrder } from './journal-input-order'
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
@@ -14,7 +15,7 @@ import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
 import { journalInputAcceptance } from './journal-input-provenance'
 import {
-  applyJournalRow,
+  applyJournalRowSteps,
   createJournalReducerState,
   type JournalReducerState
 } from './journal-reducer'
@@ -130,6 +131,10 @@ export function startJournalRowFold(
     entry: { seq: number; rowJson: string; ts?: number },
     parsed?: ReturnType<typeof parseJournalRow>
   ) => boolean
+  addSteps: (
+    entry: { seq: number; rowJson: string; ts?: number },
+    parsed?: ReturnType<typeof parseJournalRow>
+  ) => Generator<void, boolean>
   finish: () => JournalLoad
 } {
   journalInputOrder(state).beginReconstruction()
@@ -139,10 +144,10 @@ export function startJournalRowFold(
   let newer: { sequence: number } | null = null
   let empty = true
 
-  const add = (
+  const addSteps = function* (
     entry: { seq: number; rowJson: string; ts?: number },
     parsed = parseJournalRow(entry.rowJson)
-  ): boolean => {
+  ): Generator<void, boolean> {
     empty = false
     if (!parsed.ok && parsed.unreadable) {
       newer = { sequence: entry.seq }
@@ -173,7 +178,7 @@ export function startJournalRowFold(
       return true
     }
     anchored = true
-    applyJournalRow(state, row, entry.ts)
+    yield* applyJournalRowSteps(state, row, entry.ts)
     return true
   }
   const finish = (): JournalLoad => {
@@ -194,7 +199,16 @@ export function startJournalRowFold(
     return { state, newer, damage: newer ? null : found }
   }
   return {
-    add: input.untilDamage ? (entry, parsed) => add(entry, parsed) && damage === null : add,
+    add: (
+      entry: { seq: number; rowJson: string; ts?: number },
+      parsed?: ReturnType<typeof parseJournalRow>
+    ) => finishJournalSteps(addSteps(entry, parsed)) && (!input.untilDamage || damage === null),
+    addSteps: function* (
+      entry: { seq: number; rowJson: string; ts?: number },
+      parsed?: ReturnType<typeof parseJournalRow>
+    ) {
+      return (yield* addSteps(entry, parsed)) && (!input.untilDamage || damage === null)
+    },
     finish
   }
 }

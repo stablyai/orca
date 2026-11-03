@@ -78,9 +78,9 @@ describe('streaming journal replay', () => {
     const initial = process.memoryUsage().heapUsed
     let peak = initial
     let applied = 0
-    const apply = reducer.applyJournalRow
-    const spy = vi.spyOn(reducer, 'applyJournalRow')
-    spy.mockImplementation((state, row) => {
+    const apply = reducer.applyJournalRowSteps
+    const spy = vi.spyOn(reducer, 'applyJournalRowSteps')
+    spy.mockImplementation(function* (state, row) {
       // Retaining spy arguments would invalidate the heap measurement.
       spy.mockClear()
       applied += 1
@@ -88,7 +88,7 @@ describe('streaming journal replay', () => {
         gc()
         peak = Math.max(peak, process.memoryUsage().heapUsed)
       }
-      apply(state, row)
+      yield* apply(state, row)
     })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.items.size).toBe(1)
@@ -103,13 +103,13 @@ describe('streaming journal replay', () => {
     for (let seq = 2; seq <= 300; seq++) {
       put(revision(seq))
     }
-    const apply = reducer.applyJournalRow
+    const apply = reducer.applyJournalRowSteps
     const checkpoints: { busy: number }[] = []
-    vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
+    vi.spyOn(reducer, 'applyJournalRowSteps').mockImplementation(function* (state, row) {
       if (row.seq === 2 || row.seq === 200) {
         checkpoints.push(...(opened.db.pragma('wal_checkpoint(PASSIVE)') as { busy: number }[]))
       }
-      apply(state, row)
+      yield* apply(state, row)
     })
     const loaded = replayJournal(opened.db, sessionId)!
     expect(loaded.state.lastSequence).toBe(300)

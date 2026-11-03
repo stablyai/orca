@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 // Overlay collections leave the live containers untouched until their transaction commits.
 
 export type JournalEntryChange = {
@@ -12,7 +13,8 @@ export type JournalDraftAccess = {
   wrap: <T>(value: T, changed: () => void, path: string) => T
   assign: (value: unknown) => void
   finish: <T>(value: T) => T
-  defer: (apply: () => void) => void
+  finishSteps: <T>(value: T) => Generator<void, T>
+  defer: (apply: () => Generator<void>) => void
 }
 
 export class JournalDraftMap<K, V> extends Map<K, V> {
@@ -110,13 +112,20 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
   }
 
   changes(reset = false): JournalEntryChange[] {
-    const changes = [...this.pending].map((key) => ({
-      path: this.path,
-      key,
-      deleted: !this.has(key),
-      reinsert: this.recreated.has(key),
-      value: this.get(key)
-    }))
+    return finishJournalSteps(this.changesSteps(reset))
+  }
+  *changesSteps(reset = false): Generator<void, JournalEntryChange[]> {
+    const changes: JournalEntryChange[] = []
+    for (const key of this.pending) {
+      changes.push({
+        path: this.path,
+        key,
+        deleted: !this.has(key),
+        reinsert: this.recreated.has(key),
+        value: this.get(key)
+      })
+      yield
+    }
     if (reset) {
       this.pending.clear()
       this.recreated.clear()
@@ -125,19 +134,28 @@ export class JournalDraftMap<K, V> extends Map<K, V> {
   }
 
   finish(): Map<K, V> {
-    const changes = [...this.touched].map((key) => ({
-      key,
-      reinsert: this.inserted.has(key),
-      kept: this.has(key) ? { value: this.access.finish(this.draft(key)) } : null
-    }))
-    this.access.defer(() => {
+    return finishJournalSteps(this.finishSteps())
+  }
+  *finishSteps(): Generator<void, Map<K, V>> {
+    const changes: { key: K; reinsert: boolean; kept: { value: V } | null }[] = []
+    for (const key of this.touched) {
+      changes.push({
+        key,
+        reinsert: this.inserted.has(key),
+        kept: this.has(key) ? { value: yield* this.access.finishSteps(this.draft(key)) } : null
+      })
+      yield
+    }
+    const source = this.source
+    this.access.defer(function* () {
       for (const { key, reinsert, kept } of changes) {
         if (!kept || reinsert) {
-          this.source.delete(key)
+          source.delete(key)
         }
         if (kept) {
-          this.source.set(key, kept.value)
+          source.set(key, kept.value)
         }
+        yield
       }
     })
     return this.source
@@ -235,33 +253,46 @@ export class JournalDraftSet<T> extends Set<T> {
     }
   }
   changes(reset = false): JournalEntryChange[] {
-    const changes = [...this.pending].map((key) => ({
-      path: this.path,
-      key,
-      deleted: !this.has(key),
-      reinsert: this.recreated.has(key),
-      value: key
-    }))
+    return finishJournalSteps(this.changesSteps(reset))
+  }
+  *changesSteps(reset = false): Generator<void, JournalEntryChange[]> {
+    const changes: JournalEntryChange[] = []
+    for (const key of this.pending) {
+      changes.push({
+        path: this.path,
+        key,
+        deleted: !this.has(key),
+        reinsert: this.recreated.has(key),
+        value: key
+      })
+      yield
+    }
     if (reset) {
       this.pending.clear()
       this.recreated.clear()
     }
     return changes
   }
+
   finish(): Set<T> {
-    const changes = [...this.touched].map((value) => ({
-      value,
-      deleted: !this.has(value),
-      reinsert: this.inserted.has(value)
-    }))
-    this.access.defer(() => {
+    return finishJournalSteps(this.finishSteps())
+  }
+  *finishSteps(): Generator<void, Set<T>> {
+    const changes: { value: T; deleted: boolean; reinsert: boolean }[] = []
+    for (const value of this.touched) {
+      changes.push({ value, deleted: !this.has(value), reinsert: this.inserted.has(value) })
+      yield
+    }
+    const source = this.source
+    this.access.defer(function* () {
       for (const { value, deleted, reinsert } of changes) {
         if (deleted || reinsert) {
-          this.source.delete(value)
+          source.delete(value)
         }
         if (!deleted) {
-          this.source.add(value)
+          source.add(value)
         }
+        yield
       }
     })
     return this.source

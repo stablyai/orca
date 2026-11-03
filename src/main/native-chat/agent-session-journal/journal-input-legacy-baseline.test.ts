@@ -58,15 +58,15 @@ it.each([10, 40])(
       }
     })
     let inspecting = true
-    const set = JournalInputDomainIndex.prototype.set
+    const set = JournalInputDomainIndex.prototype.setSteps
     const domainSets = vi
-      .spyOn(JournalInputDomainIndex.prototype, 'set')
-      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
+      .spyOn(JournalInputDomainIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputDomainIndex, ...args) {
         cost.sets++
         if (inspecting) {
           inspect(this['root'])
         }
-        set.apply(this, args)
+        yield* set.apply(this, args)
         if (inspecting) {
           inspect(this['root'])
         }
@@ -78,7 +78,7 @@ it.each([10, 40])(
         cost.queries++
         return query.apply(this, args)
       })
-    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
+    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'setSteps')
     const release = journalInputHistoryProbe()
     try {
       const { epoch, sequence } = journal.cursor()

@@ -61,7 +61,7 @@ export function createFixture() {
   }
 
   async function replace(input: {
-    items: ReturnType<Parameters<typeof replaceJournalEpoch>[1]>['items']
+    items: Awaited<ReturnType<Parameters<typeof replaceJournalEpoch>[1]>>['items']
     onPublished?: (loaded: JournalLoad) => void
   }): Promise<void> {
     await replaceJournalEpoch(database, () => ({

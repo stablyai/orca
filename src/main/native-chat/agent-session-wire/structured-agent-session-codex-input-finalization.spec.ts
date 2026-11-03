@@ -119,13 +119,11 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
       await vi.waitFor(() => expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true))
       if (failure === 'crash') {
-        await vi.waitFor(() =>
-          expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true)
-        )
         expect(await row(id)).toMatchObject({ dispatchState: 'pending' })
         await assertInputRecoveredAfterSnapshot(id)
       }
       if (failure === 'exit') {
+        await vi.waitFor(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
         const failed = sessions.get(SESSION)!.child!
         const owner = structuredAgentSessionHandingOver(journal).get(id)?.input?.owner
         const flight = runtimeState.startFlights.get(SESSION)!

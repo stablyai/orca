@@ -5,7 +5,7 @@ import { JournalSqlOwner, type JournalReadConnection } from './journal-sql-owner
 import { JournalPersistencePlan } from './journal-persistence-plan'
 import { JournalNativeService } from './journal-native-service'
 import { JournalReaders, type JournalReadLease } from './journal-readers'
-import { journalUnitPackets } from './journal-unit-transfer'
+import { journalTransferBatches, journalUnitPackets } from './journal-unit-transfer'
 import { restoreJournalSqlFailure } from './journal-sql-protocol'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type { JournalMaintenanceUnit } from './journal-maintenance-unit'
@@ -144,8 +144,8 @@ export class JournalHostDatabase {
         return result
       }
       await this.owner.request({ type: 'discard' })
-      for (const packet of journalUnitPackets(plan.effects)) {
-        await this.owner.request({ type: 'upload', packet })
+      for (const packets of journalTransferBatches(journalUnitPackets(plan.effects))) {
+        await this.owner.request({ type: 'upload', packets })
       }
       const reply = await this.owner.request({
         type: 'unit',
@@ -157,7 +157,7 @@ export class JournalHostDatabase {
       }
       const failures: unknown[] = []
       try {
-        plan.settle(reply.values)
+        await plan.settle(reply.values)
       } catch (error) {
         failures.push(error)
       }

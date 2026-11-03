@@ -1,3 +1,4 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
@@ -104,6 +105,12 @@ export function queuedCardFromChange(
 }
 
 export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow): void {
+  finishJournalSteps(foldJournalQueueRowSteps(state, row))
+}
+export function* foldJournalQueueRowSteps(
+  state: JournalReducerState,
+  row: JournalRow
+): Generator<void> {
   if (row.kind === 'queue') {
     applyQueueRow(state, row)
   } else if (row.kind === 'submission') {
@@ -129,7 +136,7 @@ export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow)
       settleHandOffInDoubt(state, row.clientMessageId)
     }
   } else if (row.kind === 'item' || row.kind === 'lifecycle-batch') {
-    spendReportedCommandCards(state)
+    yield* spendReportedCommandCardsSteps(state)
   }
 }
 
@@ -194,7 +201,7 @@ function settleHandOffInDoubt(state: JournalReducerState, clientMessageId: strin
 }
 
 // Command turns already show their refusal; returned cards would block following work.
-function spendReportedCommandCards(state: JournalReducerState): void {
+function* spendReportedCommandCardsSteps(state: JournalReducerState): Generator<void> {
   for (const card of state.queue.cards.values()) {
     if (
       card.state === 'returned' &&
@@ -204,6 +211,7 @@ function spendReportedCommandCards(state: JournalReducerState): void {
     ) {
       setCard(state, { ...card, state: 'withdrawn' })
     }
+    yield
   }
 }
 

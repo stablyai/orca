@@ -16,6 +16,7 @@ import {
 } from './journal-outcome-format-1'
 import { decodeOutcomeFormat1Onto } from './journal-outcome-format-1-decode'
 import { AgentSessionJournalError } from './journal-write-guards'
+import { finishJournalSteps, sortJournalSteps } from './journal-reconstruction-steps'
 
 export type JournalOutcome = {
   seq: number
@@ -47,19 +48,35 @@ export function encodeJournalOutcomes(
   before: Record<string, unknown>,
   untracked: (key: string, value: unknown) => unknown
 ): { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> } {
+  return finishJournalSteps(encodeJournalOutcomeSteps(state, changes, before, untracked))
+}
+
+export function* encodeJournalOutcomeSteps(
+  state: JournalReducerState,
+  changes: readonly JournalEntryChange[],
+  before: Record<string, unknown>,
+  untracked: (key: string, value: unknown) => unknown
+): Generator<
+  void,
+  { values: Omit<JournalOutcome, 'ordinal'>[]; scalars: Record<string, unknown> }
+> {
   const next = scalars(state)
-  const values = changes.map((entry) => ({
-    seq: state.lastSequence,
-    field: entry.path,
-    key: JSON.stringify(entry.key),
-    format: JOURNAL_OUTCOME_FORMAT_2,
-    json: entry.deleted
-      ? 'null'
-      : entry.path === 'items'
-        ? JSON.stringify(entry.value, untracked)
-        : journalEntryJson(entry.key, entry.value, untracked),
-    deleted: entry.deleted
-  }))
+  const values: Omit<JournalOutcome, 'ordinal'>[] = []
+  for (const entry of changes) {
+    values.push({
+      seq: state.lastSequence,
+      field: entry.path,
+      key: JSON.stringify(entry.key),
+      format: JOURNAL_OUTCOME_FORMAT_2,
+      json: entry.deleted
+        ? 'null'
+        : entry.path === 'items'
+          ? JSON.stringify(entry.value, untracked)
+          : journalEntryJson(entry.key, entry.value, untracked),
+      deleted: entry.deleted
+    })
+    yield
+  }
   for (const [key, value] of Object.entries(next)) {
     // The sequence is the record's own, and the epoch's coverage on read; it is never stored.
     if (key !== 'lastSequence' && JSON.stringify(value) !== JSON.stringify(before[key])) {
@@ -78,6 +95,7 @@ export function encodeJournalOutcomes(
     if (admitOutcomeFormat2(value) === 'unknown') {
       throw new Error(`journal outcome format 2 does not store ${value.field} ${value.key}`)
     }
+    yield
   }
   return { values, scalars: next }
 }
@@ -184,6 +202,15 @@ export class JournalOutcomeFold {
     through: number,
     baseline?: JournalReducerState
   ): JournalReducerState {
+    return finishJournalSteps(this.finishSteps(sessionId, epoch, through, baseline))
+  }
+
+  *finishSteps(
+    sessionId: string,
+    epoch: string,
+    through: number,
+    baseline?: JournalReducerState
+  ): Generator<void, JournalReducerState> {
     const scalars: [string, unknown][] = [
       ...[...(this.values.get('$')?.values() ?? [])].map((value): [string, unknown] => [
         String(value.entryKey),
@@ -198,7 +225,9 @@ export class JournalOutcomeFold {
       }
       // Canonical ordinals compare bytewise, as SQLite's BINARY collation orders them; the prefix
       // ordinal sorts before every appended one.
-      const ordered = [...entries.values()].sort((a, b) => (a.ordinal < b.ordinal ? -1 : 1))
+      const ordered = yield* sortJournalSteps(entries.values(), (a, b) =>
+        a.ordinal < b.ordinal ? -1 : a.ordinal > b.ordinal ? 1 : 0
+      )
       for (const value of ordered) {
         decodingOutcome(() => {
           if (value.deleted || value.ordinal !== JOURNAL_PREFIX_ORDINAL) {
@@ -208,6 +237,7 @@ export class JournalOutcomeFold {
             decode.entry(field, value.kept)
           }
         })
+        yield
       }
     }
     const state = decode.finish()
@@ -215,13 +245,14 @@ export class JournalOutcomeFold {
       if (!isNativeOutcomeField(field)) {
         continue
       }
-      const ordered = [...entries.values()].sort((a, b) =>
+      const ordered = yield* sortJournalSteps(entries.values(), (a, b) =>
         a.ordinal < b.ordinal ? -1 : a.ordinal > b.ordinal ? 1 : 0
       )
       for (const value of ordered) {
         decodingOutcome(() =>
           decodeNativeOutcome(state, field, value.entryKey, value.kept, value.deleted)
         )
+        yield
       }
     }
     if (state.sessionId !== sessionId || state.epoch !== epoch) {

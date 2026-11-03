@@ -11,7 +11,8 @@ import type { JournalLoad } from './journal-open'
 import { JournalQueuedMessages } from './journal-queued-messages'
 import { JournalStopMarks } from './journal-stop-marks'
 import { JournalStopAcceptor } from './journal-stop-acceptance'
-import { journalQueuePauseRestatement } from './queued-message-pause'
+import { journalQueuePauseRestatementSteps } from './queued-message-pause'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReducerState } from './journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from './journal-row-writer'
 import { JournalStepWriter } from './journal-step-writer'
@@ -36,7 +37,7 @@ export type JournalStoreHost = {
   state: () => JournalReducerState
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
-  adopt: (loaded: JournalLoad) => void
+  adopt: (loaded: JournalLoad) => void | Promise<void>
   publish: () => void
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: (rows: readonly JournalRow[], savedAt: number) => void
@@ -96,13 +97,15 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
     state: host.state,
-    queuePauseRestatement: () =>
-      journalQueuePauseRestatement(
-        host.state().queuePauseMarks,
-        host.state().latestAcceptedTurnSequence,
-        host.journal().queuedMessages.pauses()
+    queuePauseRestatement: async () =>
+      finishJournalStepsAsync(
+        journalQueuePauseRestatementSteps(
+          host.state().queuePauseMarks,
+          host.state().latestAcceptedTurnSequence,
+          await host.journal().queuedMessages.pausesAsync()
+        )
       ),
-    queueRestatement: () => host.journal().queuedMessages.restatement(),
+    queueRestatement: () => host.journal().queuedMessages.restatementAsync(),
     cursor: host.cursor,
     adopt: host.adopt,
     publish: host.publish

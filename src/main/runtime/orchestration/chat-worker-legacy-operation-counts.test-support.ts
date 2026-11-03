@@ -9,10 +9,7 @@ export const emptyLegacyCounts = () => ({
   restoredRows: 0,
   ownerClassifications: 0,
   cardConstructions: 0,
-  handoffVisits: 0,
-  identityEntries: 0,
-  sourceIdEntries: 0,
-  overlayEntries: 0,
+  sourceVisits: 0,
   overlayVisits: 0,
   priorOverlayVisits: 0,
   rebuildVisits: 0,
@@ -72,41 +69,17 @@ function countValues<K, V>(map: Map<K, V>, visit: () => void) {
   })
 }
 
-function countMap<T>(array: readonly T[], visit: () => void) {
-  const map = array.map.bind(array)
-  Object.defineProperty(array, 'map', {
-    configurable: true,
-    value: <U>(
-      callback: (value: T, index: number, array: readonly T[]) => U,
-      thisArg?: unknown
-    ): U[] =>
-      map((value, index, source) => {
-        visit()
-        return callback.call(thisArg, value, index, source)
-      })
-  })
-}
-
-function countFlatMap<T>(
-  array: readonly T[],
-  visit: () => void,
-  result?: (values: readonly unknown[]) => void
-) {
-  const flatMap = array.flatMap.bind(array)
-  Object.defineProperty(array, 'flatMap', {
-    configurable: true,
-    value: <U, This = undefined>(
-      callback: (this: This, value: T, index: number, array: readonly T[]) => U | readonly U[],
-      thisArg?: This
-    ): U[] => {
-      const values = flatMap<U, This>(function (value, index, source) {
-        visit()
-        return callback.call(this, value, index, source)
-      }, thisArg)
-      result?.(values)
-      return values
+function observeAdvances<T>(steps: Generator<void, T>, enter: () => () => void) {
+  const next = steps.next.bind(steps)
+  steps.next = (...args) => {
+    const leave = enter()
+    try {
+      return next(...args)
+    } finally {
+      leave()
     }
-  })
+  }
+  return steps
 }
 
 /** Count delegated passes at their real boundaries, including upstream before publication. */
@@ -154,8 +127,8 @@ export function countLegacyFailureDisplay() {
     }
   }
   const index = JournalInputCardIndex.prototype
-  const overlay = index.overlay
-  vi.spyOn(index, 'overlay').mockImplementation(function (
+  const overlay = index.overlaySteps
+  vi.spyOn(index, 'overlaySteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     rows
@@ -163,26 +136,22 @@ export function countLegacyFailureDisplay() {
     watchIndexMap(this['overlays'])
     if (!overlays.has(rows)) {
       overlays.add(rows)
-      countMap(rows, () => {
-        if (overlaying) {
-          counts[phase].overlayEntries++
-        }
-      })
       countIteration(rows, () => {
         if (overlaying) {
           counts[phase].overlayVisits++
         }
       })
     }
-    overlaying = true
-    try {
-      return overlay.call(this, state, rows)
-    } finally {
-      overlaying = false
-    }
+    return yield* observeAdvances(overlay.call(this, state, rows), () => {
+      const previous = overlaying
+      overlaying = true
+      return () => {
+        overlaying = previous
+      }
+    })
   })
-  const update = index.indexCard
-  vi.spyOn(index, 'indexCard').mockImplementation(function (
+  const update = index.indexCardSteps
+  vi.spyOn(index, 'indexCardSteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     card
@@ -195,10 +164,10 @@ export function countLegacyFailureDisplay() {
     } else {
       counts[phase].pointIndexUpdates++
     }
-    return update.call(this, state, card)
+    return yield* update.call(this, state, card)
   })
-  const ensure = index.ensure
-  vi.spyOn(index, 'ensure').mockImplementation(function (
+  const ensure = index.ensureSteps
+  vi.spyOn(index, 'ensureSteps').mockImplementation(function* (
     this: JournalInputCardIndex,
     state,
     floor
@@ -206,12 +175,13 @@ export function countLegacyFailureDisplay() {
     watchIndexMap(this['overlays'])
     watchIndexMap(state.queue.cards)
     const before = this['index']
-    ensuring = true
-    try {
-      ensure.call(this, state, floor)
-    } finally {
-      ensuring = false
-    }
+    yield* observeAdvances(ensure.call(this, state, floor), () => {
+      const previous = ensuring
+      ensuring = true
+      return () => {
+        ensuring = previous
+      }
+    })
     if (this['index'] !== before) {
       counts[phase].indexRebuilds++
     }
@@ -229,42 +199,33 @@ export function countLegacyFailureDisplay() {
             return rows
           }
           instrumentedSources.add(rows)
-          countMap(rows, () => counts[phase].sourceIdEntries++)
-          countFlatMap(
-            rows,
-            () => counts[phase].ownerClassifications++,
-            (cards) => {
-              if (classifying) {
-                const duringClassification = (key: 'handoffVisits' | 'identityEntries') => () => {
-                  if (classifying) {
-                    counts[phase][key]++
-                  }
-                }
-                countFlatMap(cards, duringClassification('handoffVisits'))
-                countMap(cards, duringClassification('identityEntries'))
-              }
+          countIteration(rows, () => {
+            if (classifying) {
+              counts[phase].ownerClassifications++
             }
-          )
+            counts[phase].sourceVisits++
+          })
           return rows
         }
-      }
-
-      override cards() {
-        classifying = true
-        try {
-          const cards = super.cards()
-          const handedOff = this['viewed']?.handedOff
-          if (handedOff && !handoffs.has(handedOff)) {
-            handoffs.add(handedOff)
-            countIteration(handedOff, () => counts[phase].handoffApplications++)
-          }
-          return cards
-        } finally {
-          classifying = false
+        const steps = this['cardSteps'].bind(this)
+        this['cardSteps'] = function* () {
+          return yield* observeAdvances(steps(), () => {
+            const previous = classifying
+            classifying = true
+            return () => {
+              classifying = previous
+            }
+          })
         }
       }
 
       override displayState() {
+        this.cards()
+        const handedOff = this['viewed']?.handedOff
+        if (handedOff && !handoffs.has(handedOff)) {
+          handoffs.add(handedOff)
+          countIteration(handedOff, () => counts[phase].handoffApplications++)
+        }
         const previous = phase
         if (phase !== 'publication') {
           phase = 'failure'

@@ -1,7 +1,8 @@
 // Claim checks and deletion marks arbitrate with sends in the same journal database.
 // Retain claimed uploads while any recorded chat holds them; resume interrupted deletions on later sweeps.
 
-import { readdir, stat, lstat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
+import { sweepAttachmentClaims } from './agent-session-attachment-claim-sweep'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
@@ -88,50 +89,7 @@ export async function sweepAgentSessionAttachments(
     await write({ kind: 'finish', uploadId })
     removed.push(uploadDir)
   }
-  const db = database()
-  if (db) {
-    const failure = await db.transaction(async (plan) => {
-      const pairs: { uploadId: string; sessionId: string }[] = []
-      let failure: { error: unknown } | undefined
-      try {
-        const ids = facts.recordedSessionIds()
-        for await (const page of plan.read.pages(
-          'SELECT upload_id, session_id FROM agent_session_attachment_claims',
-          []
-        )) {
-          for (const row of page) {
-            if (typeof row.upload_id !== 'string' || typeof row.session_id !== 'string') {
-              continue
-            }
-            let gone = ids !== null && !ids.has(row.session_id)
-            if (!gone) {
-              try {
-                await lstat(join(store.rootDir, row.upload_id))
-              } catch (error) {
-                if (!isDefinitiveAbsence(error)) {
-                  throw error
-                }
-                gone = true
-              }
-            }
-            if (gone) {
-              pairs.push({ uploadId: row.upload_id, sessionId: row.session_id })
-            }
-          }
-        }
-      } catch (error) {
-        failure = { error }
-      }
-      // Preserve proven pruning progress even when a later claim cannot be inspected.
-      if (pairs.length) {
-        plan.add({ kind: 'sweep', operation: { kind: 'prune', pairs } })
-      }
-      return failure
-    })
-    if (failure) {
-      throw failure.error
-    }
-  }
+  await sweepAttachmentClaims(store, facts)
   return { removed }
 }
 

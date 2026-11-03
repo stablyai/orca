@@ -54,14 +54,14 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     })
   )
   let visits = 0
-  const flatMap = Array.prototype.flatMap
-  const scans = vi.spyOn(Array.prototype, 'flatMap')
-  scans.mockImplementation(function (this: { messageId?: string }[], callback, thisArg) {
-    const legacy = this.length === size && this[0]?.messageId === 'waiting-0'
-    return flatMap.call(this, (...args) => {
-      visits += legacy ? 1 : 0
-      return callback.apply(thisArg, args)
-    })
+  const rowsSource = journal.queuedMessages['legacy']['rows']()
+  const iterate = rowsSource[Symbol.iterator].bind(rowsSource)
+  const scans = vi.spyOn(rowsSource, Symbol.iterator).mockImplementation(function* () {
+    for (const row of { [Symbol.iterator]: iterate }) {
+      visits++
+      yield row
+    }
+    return undefined
   })
   try {
     const turn = { provider: 'codex' as const, threadId: 'progress', turnId: 't', ordinal: 0 }

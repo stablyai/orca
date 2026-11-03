@@ -1,17 +1,20 @@
+import { finishJournalSteps } from './journal-reconstruction-steps'
 import {
   readJournalInputPlace,
-  restoreJournalInputPlaces,
+  restoreJournalInputPlacesSteps,
   currentJournalInputIdentity,
   journalInputOrderChanged,
   isJournalInputOverride,
-  journalInputsNeedingAcceptance
+  journalInputsNeedingAcceptance,
+  journalInputAcceptanceIdsSteps,
+  prepareJournalInputRow,
+  refreshJournalInputRow
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
 import { JournalSubmissionLinks } from './journal-submission-links'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -65,63 +68,58 @@ export class JournalInputOrder {
   needsAcceptance(ids: readonly string[]): string[] {
     return journalInputsNeedingAcceptance(this.state, this.originals, ids)
   }
+  acceptanceIdsSteps(): Generator<void, string[]> {
+    return journalInputAcceptanceIdsSteps(this.state, this.originals)
+  }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
-    if (row.kind === 'dispatch' && row.keptAsQueuedMessageId) {
-      const place = this.place(row.clientMessageId)
-      if (place && !this.lineage.cards.has(row.keptAsQueuedMessageId)) {
-        this.lineage.cards.set(row.keptAsQueuedMessageId, {
-          introduced: place.context.cut,
-          baseline: { coordinate: place.coordinate }
-        })
-      }
-    }
     this.receiptCount = state.receipts.size
     this.queueRevision = state.queue.revision
-    if (row.kind === 'epoch' && row.inputOrderLineage) {
-      this.lineage.load(row.inputOrderLineage)
-    }
-    this.lineage.observe(row.seq)
-    if (row.kind !== 'submission' || !row.handoverRecorded || row.queuedMessageId !== undefined) {
-      return
-    }
-    if (this.state.inputEntries.has(row.clientMessageId)) {
-      return
-    }
-    const place = this.cards.admission(state, row, this.originalAcceptance)
-    if (place.context.basis === 'legacy') {
+    if (prepareJournalInputRow(this, state, this.state, row, this.originalAcceptance)) {
       this.legacyPlaces++
     }
-    this.state.inputEntries.set(row.clientMessageId, {
-      context: place.context,
-      ...(place.witnessCardId ? { witnessCardId: place.witnessCardId } : {})
-    })
   }
 
   // A streaming prefix cannot establish the last legacy consumer.
   beginReconstruction(): void {
+    finishJournalSteps(this.beginReconstructionSteps())
+  }
+  *beginReconstructionSteps(): Generator<void> {
     this.reconstructing = true
     this.legacyPlaces = 0
     for (const entry of this.state.inputEntries.values()) {
       if (entry.context.basis === 'legacy') {
         this.legacyPlaces++
       }
+      yield
     }
   }
   finishReconstruction(state: JournalReducerState): void {
+    finishJournalSteps(this.finishReconstructionSteps(state))
+  }
+  *finishReconstructionSteps(state: JournalReducerState): Generator<void> {
+    this.legacyPlaces = yield* restoreJournalInputPlacesSteps(state, (id) =>
+      this.originals.delete(id)
+    )
     this.reconstructing = false
     if (this.legacyPlaces === 0) {
-      this.releaseHistory(state)
+      yield* this.releaseHistorySteps(state)
     }
   }
 
   restore(state: JournalReducerState): void {
-    this.legacyPlaces = restoreJournalInputPlaces(state)
-    this.cards.ensure(state)
+    finishJournalSteps(this.restoreSteps(state))
+  }
+  *restoreSteps(state: JournalReducerState): Generator<void> {
+    this.legacyPlaces = yield* restoreJournalInputPlacesSteps(state, (id) =>
+      this.originals.delete(id)
+    )
+    yield* this.cards.ensureSteps(state)
     for (const id of state.submissions.keys()) {
-      this.refresh(state, id)
+      yield* this.refreshSteps(state, id)
+      yield
     }
-    this.lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
+    yield* this.lineage.restoreFrontierSteps(state.lastSequence, state.inputEntries.values())
   }
 
   linkedVersion = (): number => this.links.version()
@@ -129,17 +127,35 @@ export class JournalInputOrder {
     return this.links.to(id)
   }
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
-    this.cards.overlay(state, rows)
+    finishJournalSteps(this.overlaySteps(state, rows))
   }
-  introduceOverlays(state: JournalReducerState): void {
-    this.cards.introduceOverlays((card) => this.queueChanged(state, undefined, card))
+  *overlaySteps(state: JournalReducerState, rows: readonly QueuedMessageRow[]): Generator<void> {
+    yield* this.cards.overlaySteps(state, rows)
+  }
+  *introduceOverlaysSteps(state: JournalReducerState): Generator<void> {
+    if (this.cards.hasUnintroduced()) {
+      yield* this.cards.ensureSteps(state)
+    }
+    yield* this.cards.introduceOverlaysSteps((card) => this.queueChanged(state, undefined, card))
+  }
+  *prepareRowSteps(state: JournalReducerState, row: JournalRow): Generator<void> {
+    if (
+      row.kind === 'queue' ||
+      (row.kind === 'submission' &&
+        row.handoverRecorded &&
+        row.queuedMessageId === undefined &&
+        !state.inputEntries.has(row.clientMessageId))
+    ) {
+      yield* this.cards.ensureSteps(state)
+    }
   }
 
-  markOpeningRecovery(): void {
+  *markOpeningRecoverySteps(): Generator<void> {
     for (const entry of this.unsettled.values()) {
       if (isQueuedAgentJournalSubmission(entry)) {
         this.markRecoveryPending(entry.clientMessageId)
       }
+      yield
     }
   }
 
@@ -154,11 +170,12 @@ export class JournalInputOrder {
   recoveryPending(id: string): boolean {
     return this.recoveryOwed.has(id)
   }
-  carryRecovery(previous: JournalInputOrder): void {
+  *carryRecoverySteps(previous: JournalInputOrder): Generator<void> {
     for (const id of previous.recoveryOwed) {
       if (this.queued.has(id)) {
         this.markRecoveryPending(id)
       }
+      yield
     }
   }
 
@@ -224,32 +241,10 @@ export class JournalInputOrder {
     if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
-    if (row.kind === 'submission' || row.kind === 'dispatch') {
-      this.refresh(state, row.clientMessageId)
-    } else if (row.kind === 'tombstone' && row.retireSubmission) {
-      this.refreshItem(state, row.itemId)
-    } else if (row.kind === 'item') {
-      this.refreshItem(state, state.aliases.get(row.itemId) ?? row.itemId)
-    } else if (row.kind === 'lifecycle-batch') {
-      for (const mutation of row.mutations) {
-        this.refreshItem(state, state.aliases.get(mutation.itemId) ?? mutation.itemId)
-      }
-    } else if (row.kind === 'queue') {
-      const id = state.queue.cards.get(row.messageId)?.consumedAs
-      if (id) {
-        this.refresh(state, id)
-      }
-    }
+    refreshJournalInputRow(state, row, (id) => finishJournalSteps(this.refreshSteps(state, id)))
   }
 
-  private refreshItem(state: JournalReducerState, itemId: string): void {
-    const identity = parseAgentJournalItemKey(itemId)
-    if (identity?.provider === 'orca') {
-      this.refresh(state, identity.clientMessageId)
-    }
-  }
-
-  private refresh(state: JournalReducerState, id: string): void {
+  private *refreshSteps(state: JournalReducerState, id: string): Generator<void> {
     const entry = state.submissions.get(id)
     this.links.refresh(id, entry, state.items)
     if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
@@ -262,7 +257,7 @@ export class JournalInputOrder {
       this.pending = undefined
       this.revision++
     }
-    if (entry?.dispatchState !== 'pending') {
+    if (entry?.dispatchState !== 'pending' && !this.reconstructing) {
       this.releasePlace(state, id)
     }
     if (entry && isQueuedAgentJournalSubmission(entry)) {
@@ -286,7 +281,7 @@ export class JournalInputOrder {
     if (entry?.queuedMessageId) {
       const card = state.queue.cards.get(entry.queuedMessageId)
       if (card?.consumedAs === id) {
-        this.cards.indexCard(state, card)
+        yield* this.cards.indexCardSteps(state, card)
         if (
           !this.reconstructing &&
           this.legacyPlaces === 0 &&
@@ -313,7 +308,10 @@ export class JournalInputOrder {
   }
 
   private releaseHistory(state: JournalReducerState): void {
-    this.lineage.releaseHistory((id) => this.currentIdentity(state, id))
+    finishJournalSteps(this.releaseHistorySteps(state))
+  }
+  private *releaseHistorySteps(state: JournalReducerState): Generator<void> {
+    yield* this.lineage.releaseHistorySteps((id) => this.currentIdentity(state, id))
     this.cards.releaseHistory()
   }
 

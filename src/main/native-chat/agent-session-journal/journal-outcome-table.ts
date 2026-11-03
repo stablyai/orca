@@ -1,18 +1,20 @@
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 import type { JournalReadConnection } from './journal-sql-owner'
 import { journalInputOrder } from './journal-input-order'
 import {
   detachJournalNativePrefix,
+  detachJournalNativePrefixSteps,
   restoreJournalNativeState,
   restoreJournalNativeStateAsync
 } from './journal-input-conversion'
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
-import { applyJournalRow } from './journal-reducer'
+import { applyJournalRowSteps } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import type { JournalRow } from './journal-row-schema'
 import { journalRowReadBack } from './journal-row-table'
 import {
-  encodeJournalOutcomes,
+  encodeJournalOutcomeSteps,
   journalOutcomeScalars,
   JournalOutcomeFold
 } from './journal-outcome-codec'
@@ -56,49 +58,80 @@ function* prepareJournalOutcomeSteps(
   rows: readonly JournalRow[],
   savedAt?: number,
   upgradeNative = false,
-  finish?: (state: JournalReducerState) => void,
+  finish?: (state: JournalReducerState) => void | Generator<void>,
   acceptance?: (id: string) => AgentJournalCursor | undefined
 ): Generator<
   void,
-  { state: JournalReducerState; adopt: () => JournalReducerState; values: JournalEncodedOutcome[] }
+  {
+    state: JournalReducerState
+    adopt: () => JournalReducerState
+    adoptPrivate: () => Promise<JournalReducerState>
+    values: JournalEncodedOutcome[]
+  }
 > {
   const values: JournalEncodedOutcome[] = []
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
-  journalInputOrder(transition.state).introduceOverlays(transition.state)
+  yield* journalInputOrder(transition.state).introduceOverlaysSteps(transition.state)
   let examined = 0,
     bytes = 0
   for (const row of rows) {
+    yield* journalInputOrder(transition.state).prepareRowSteps(transition.state, row)
     // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
     // unusable never reaches the model, so it is never refused by the strict record encoder.
     const { stored } = journalRowReadBack(state.sessionId, row)
-    const apply = () => {
-      applyJournalRow(transition.state, stored, savedAt ?? row.ts)
-      if (row === rows.at(-1)) {
-        finish?.(transition.state)
+    const applying = applyJournalRowSteps(transition.state, stored, savedAt ?? row.ts)
+    for (;;) {
+      const next = () => applying.next()
+      const result = acceptance
+        ? journalInputOrder(transition.state).withAcceptance(acceptance, next)
+        : next()
+      if (result.done) {
+        break
+      }
+      yield
+    }
+    if (row === rows.at(-1) && finish) {
+      const steps = finish(transition.state)
+      if (steps) {
+        for (;;) {
+          const next = () => steps.next()
+          const result = acceptance
+            ? journalInputOrder(transition.state).withAcceptance(acceptance, next)
+            : next()
+          if (result.done) {
+            break
+          }
+          yield
+        }
       }
     }
-    if (acceptance) {
-      journalInputOrder(transition.state).withAcceptance(acceptance, apply)
-    } else {
-      apply()
-    }
-    const changes = transition.changes(true)
+    const changes = yield* transition.changesSteps(true)
     if (upgradeNative) {
       for (const path of ['inputEntries', 'inputCards'] as const) {
-        const changed = new Set(
-          changes.filter((change) => change.path === path).map((change) => change.key)
-        )
+        const changed = new Set<unknown>()
+        for (const change of changes) {
+          if (change.path === path) {
+            changed.add(change.key)
+          }
+          yield
+        }
         for (const [key, value] of transition.state[path]) {
           if (!changed.has(key)) {
             changes.push({ path, key, value, deleted: false, reinsert: true })
           }
+          yield
         }
       }
       upgradeNative = false
     }
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
-    const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
+    const encoded = yield* encodeJournalOutcomeSteps(
+      transition.state,
+      changes,
+      scalar,
+      transition.untracked
+    )
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
       // Each change's record is at its own index; the scalar records after them match no change.
@@ -110,13 +143,19 @@ function* prepareJournalOutcomeSteps(
         reinsert: Boolean(change?.reinsert),
         changed: Boolean(change)
       })
+      yield
     }
     if (++examined >= 128 || bytes >= 256 * 1024) {
       examined = bytes = 0
       yield
     }
   }
-  return { state: transition.state, adopt: transition.adopt, values }
+  return {
+    state: transition.state,
+    adopt: transition.adopt,
+    adoptPrivate: transition.adoptPrivate,
+    values
+  }
 }
 
 export function prepareJournalOutcomeRows(...input: Parameters<typeof prepareJournalOutcomeSteps>) {
@@ -131,14 +170,7 @@ export function prepareJournalOutcomeRows(...input: Parameters<typeof prepareJou
 export async function prepareJournalOutcomeRowsAsync(
   ...input: Parameters<typeof prepareJournalOutcomeSteps>
 ) {
-  const steps = prepareJournalOutcomeSteps(...input)
-  for (;;) {
-    const next = steps.next()
-    if (next.done) {
-      return next.value
-    }
-    await new Promise<void>((resolve) => setImmediate(resolve))
-  }
+  return finishJournalStepsAsync(prepareJournalOutcomeSteps(...input))
 }
 
 /** Direct native contracts use the same encoder and SQL ordinal decisions. */
@@ -164,13 +196,15 @@ export async function readJournalOutcomesAsync(
   source: JournalOutcomeSource,
   baseline?: JournalReducerState
 ): Promise<JournalReducerState> {
-  const prefix = detachJournalNativePrefix(baseline)
+  const prefix = await finishJournalStepsAsync(detachJournalNativePrefixSteps(baseline))
   const fold = new JournalOutcomeFold()
   let after = { field: '', key: '' }
   for (;;) {
     const rows = await read.outcomes(source.generation, source.through, after.field, after.key)
     if (!rows.length) {
-      const state = fold.finish(sessionId, epoch, source.through, baseline)
+      const state = await finishJournalStepsAsync(
+        fold.finishSteps(sessionId, epoch, source.through, baseline)
+      )
       await restoreJournalNativeStateAsync(read, state, source.format, fold, prefix)
       return state
     }

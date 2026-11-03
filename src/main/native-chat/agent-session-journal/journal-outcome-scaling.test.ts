@@ -1,3 +1,5 @@
+import { journalBatchEncodingWork } from './journal-batch-encoding-test-support'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import { observeNativeJournalSql } from './journal-native-test-instrumentation'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,7 +16,8 @@ import type { SqliteStatement } from '../../sqlite/sqlite-statement'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  publishTestJournalEpoch
 } from './journal-host-database-test-support'
 import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
@@ -413,19 +416,22 @@ it('encodes a settlement batch with the same work per mutation up to the mutatio
     const watched = watch(database)
     const stringify = vi.spyOn(JSON, 'stringify')
     await rig.writer.enqueue(batchOf(size))
-    const calls = stringify.mock.calls.length
+    const inputs = stringify.mock.calls.map(([value]) => value)
+    stringify.mockRestore()
+    const encoding = journalBatchEncodingWork(inputs)
     const work = watched.take()
     watched.stop()
     expect(rig.state().items.has(`batch-${size - 1}`)).toBe(true)
-    return { calls, statements: work.statements.length }
+    return { ...encoding, statements: work.statements.length }
   }
   // Schemas compile on their first parse; that one-time work is not the batch's.
   await measure(10)
   const few = await measure(20)
   const more = await measure(110)
   const most = await measure(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
-  // Linear in the batch: each further 90 mutations add the same work.
+  // Canonical encoding is linear; bounded transport adds one packet per 128 values.
   expect(most.calls - more.calls).toBe(more.calls - few.calls)
+  expect([more.otherPackets, most.otherPackets]).toEqual([few.otherPackets, few.otherPackets])
   expect(most.statements).toBe(few.statements)
 })
 
@@ -747,11 +753,13 @@ it('runs a sweep pass with nothing to retire without reading history at N and 10
 it('sweeps a retired generation one bounded page per transaction at N and 10N', async () => {
   const measure = async (size: number) => {
     const { database } = await outcomeChat(size, `sweep-${size}`)
-    // A replacement generation retires the published one.
-    database.db.exec(`INSERT INTO journal_outcome_generations (session_id, epoch)
-      VALUES ('${sessionId}', '${epoch}')`)
-    database.db.exec(`UPDATE journal_outcome_epochs SET generation =
-      (SELECT MAX(generation) FROM journal_outcome_generations)`)
+    // A real new epoch retires the published generation, preserving its registry identity.
+    database.fixtureTransaction((db) => {
+      publishTestJournalEpoch(db, sessionId, 'replacement')
+      publishJournalOutcomeEpoch(db, sessionId, 'replacement', [
+        { ...projectionEpochRow, epoch: 'replacement' }
+      ])
+    })
     const watched = watch(database)
     expect(await sweepJournalOutcomePage(database)).toBe(true)
     const work = watched.take()
@@ -787,7 +795,11 @@ it('sweeps a retired generation numbered after N and 10N live chats without resc
     // ones it passes are those numbered above that position.
     const positions: number[] = []
     const stop = observeNativeJournalSql(database, (entry) => {
-      if (entry.sql.includes('LEFT JOIN journal_outcome_epochs') && entry.position !== undefined) {
+      if (
+        entry.method === 'iterate' &&
+        entry.sql.includes('WHERE generation > ?') &&
+        entry.position !== undefined
+      ) {
         positions.push(entry.position)
       }
     })
@@ -795,17 +807,18 @@ it('sweeps a retired generation numbered after N and 10N live chats without resc
       // One bounded page per call.
     }
     stop()
-    const passed = database.db.prepare(
-      'SELECT COUNT(*) AS n FROM journal_outcome_epochs WHERE generation > ?'
-    )
-    return positions.map((position) => Number(passed.get(position)?.n))
+    return positions
   }
-  const small = await measure(N)
-  const large = await measure(10 * N)
-  // Four record pages and the page that drops the generation row; only a pass's first page walks
-  // the live chats, as an idle pass does.
-  expect(small).toEqual([N, 0, 0, 0, 0])
-  expect(large).toEqual([10 * N, 0, 0, 0, 0])
+  for (const size of [N, 10 * N]) {
+    const positions = await measure(size)
+    expect(positions[0]).toBe(0)
+    // Candidate selection advances across retained32-entry pages, then keeps the retired frontier.
+    expect(positions.slice(0, Math.floor(size / 32) + 1)).toEqual(
+      Array.from({ length: Math.floor(size / 32) + 1 }, (_, index) => index * 32)
+    )
+    expect(positions.length).toBeLessThanOrEqual(Math.ceil((size + 1) / 32) + 5)
+    expect(positions.at(-1)).toBe(size + 1)
+  }
 })
 
 it('catches a wire client up from outcomes reading only the groups it asks for at N and 10N', async () => {

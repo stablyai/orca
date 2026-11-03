@@ -29,10 +29,12 @@ export class JournalEpochController {
       readOnly: () => boolean
       highestFence: () => number
       state: () => JournalReducerState
-      queuePauseRestatement: () => JournalQueuePauseRestatement
-      queueRestatement: () => JournalQueueRestatement
+      queuePauseRestatement: () =>
+        | JournalQueuePauseRestatement
+        | Promise<JournalQueuePauseRestatement>
+      queueRestatement: () => JournalQueueRestatement | Promise<JournalQueueRestatement>
       cursor: () => AgentJournalCursor
-      adopt: (loaded: JournalLoad) => void
+      adopt: (loaded: JournalLoad) => void | Promise<void>
       publish: () => void
     }
   ) {}
@@ -42,14 +44,14 @@ export class JournalEpochController {
     fence: number,
     expectedEpoch: string | null
   ): Promise<void> {
-    return publishNewEpoch(this.deps.database(), () => ({
+    return publishNewEpoch(this.deps.database(), async () => ({
       expectedEpoch,
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
       fence,
       now: this.deps.now(),
-      queue: this.deps.queueRestatement(),
+      queue: await this.deps.queueRestatement(),
       onPublished: this.deps.adopt,
       publish: this.deps.publish
     }))
@@ -73,7 +75,7 @@ export class JournalEpochController {
     return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       assertJournalFence(fence, this.deps.highestFence())
-      await replaceJournalEpoch(this.deps.database(), () => ({
+      await replaceJournalEpoch(this.deps.database(), async () => ({
         identity: this.deps.identity,
         reason,
         fence,
@@ -82,8 +84,8 @@ export class JournalEpochController {
         previous: this.deps.state(),
         claimAttachments: this.deps.claimAttachments,
         isLiveGoal: this.deps.isLiveGoal,
-        queuePause: this.deps.queuePauseRestatement(),
-        queue: this.deps.queueRestatement(),
+        queuePause: await this.deps.queuePauseRestatement(),
+        queue: await this.deps.queueRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
         onPublished: this.deps.adopt,

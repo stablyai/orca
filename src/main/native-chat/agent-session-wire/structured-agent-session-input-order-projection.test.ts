@@ -114,14 +114,14 @@ it.each([10, 30])(
       })
     const stackLimit = Error.stackTraceLimit
     Error.stackTraceLimit = 40
-    const indexCard = JournalInputCardIndex.prototype.indexCard
+    const indexCard = JournalInputCardIndex.prototype.indexCardSteps
     const indexed = vi
-      .spyOn(JournalInputCardIndex.prototype, 'indexCard')
-      .mockImplementation(function (this: JournalInputCardIndex, ...args) {
+      .spyOn(JournalInputCardIndex.prototype, 'indexCardSteps')
+      .mockImplementation(function* (this: JournalInputCardIndex, ...args) {
         if (selecting) {
           seam().indexedCards++
         }
-        return indexCard.apply(this, args)
+        return yield* indexCard.apply(this, args)
       })
     const next = JournalQueuedMessages.prototype.nextInputCard
     const head = vi
@@ -218,9 +218,11 @@ it.each([10, 30])(
           }
         }
       })
-    const encode = outcomes.encodeJournalOutcomes
-    const encoded = vi.spyOn(outcomes, 'encodeJournalOutcomes').mockImplementation((...args) => {
-      const result = encode(...args)
+    const encode = outcomes.encodeJournalOutcomeSteps
+    const encoded = vi.spyOn(outcomes, 'encodeJournalOutcomeSteps').mockImplementation(function* (
+      ...args
+    ) {
+      const result = yield* encode(...args)
       for (const value of result.values) {
         if (value.field === 'inputEntries') {
           metric().nativeEntries++
@@ -258,14 +260,13 @@ it.each([10, 30])(
         boundaryCalls[phase] = (boundaryCalls[phase] ?? 0) + 1
         return predecessor.apply(this, args)
       })
-    const set = JournalInputPlaceIndex.prototype.set
-    const indexSet = vi.spyOn(JournalInputPlaceIndex.prototype, 'set').mockImplementation(function (
-      this: JournalInputPlaceIndex,
-      ...args
-    ) {
-      metric().sets++
-      set.apply(this, args)
-    })
+    const set = JournalInputPlaceIndex.prototype.setSteps
+    const indexSet = vi
+      .spyOn(JournalInputPlaceIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputPlaceIndex, ...args) {
+        metric().sets++
+        yield* set.apply(this, args)
+      })
     const query = JournalInputPlaceIndex.prototype.query
     const indexQuery = vi
       .spyOn(JournalInputPlaceIndex.prototype, 'query')
@@ -273,14 +274,13 @@ it.each([10, 30])(
         metric().queries++
         return query.apply(this, args)
       })
-    const domainSet = JournalInputDomainIndex.prototype.set
-    const domain = vi.spyOn(JournalInputDomainIndex.prototype, 'set').mockImplementation(function (
-      this: JournalInputDomainIndex,
-      ...args
-    ) {
-      metric().domains++
-      return domainSet.apply(this, args)
-    })
+    const domainSet = JournalInputDomainIndex.prototype.setSteps
+    const domain = vi
+      .spyOn(JournalInputDomainIndex.prototype, 'setSteps')
+      .mockImplementation(function* (this: JournalInputDomainIndex, ...args) {
+        metric().domains++
+        return yield* domainSet.apply(this, args)
+      })
     const change = JournalInputLineageOwner.prototype.change
     const line = vi
       .spyOn(JournalInputLineageOwner.prototype, 'change')
@@ -571,9 +571,9 @@ it.each([10, 30])(
       for (let pass = 0; pass < 2; pass++) {
         for (const name of [`replacement-${pass}`, `output-replay-${pass}`]) {
           // The builder and isolated publisher each initialize two trees from K cards;
-          // their first card also takes the ordinary affected-ID update. Keyed replay builds once.
+          // preparation initializes before the first card, avoiding its redundant update. Keyed replay builds once.
           expect(phases[name].sets, name).toBe(
-            name.startsWith('replacement') ? 4 * (2 * n + 3) : 2 * (2 * n + 2)
+            name.startsWith('replacement') ? 4 * (2 * n + 2) : 2 * (2 * n + 2)
           )
           // One fold query per admitted input; each actual consumer boundary call adds one point query.
           expect(phases[name].queries, name).toBeLessThanOrEqual(n + (boundaryCalls[name] ?? 0))

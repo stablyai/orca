@@ -112,12 +112,14 @@ port.on('message', async ({ id, command }: JournalSqlRequest) => {
       return
     }
     if (command.type === 'upload') {
-      const { index, effect } = command.packet
-      const current = upload.get(index)
-      if (current) {
-        appendJournalUnitPacket(current, effect)
-      } else {
-        upload.set(index, effect)
+      for (const { index, effect } of command.packets) {
+        const current = upload.get(index)
+        if (current) {
+          appendJournalUnitPacket(current, effect)
+        } else {
+          // Packets in one message can share defaults; merging must not mutate later packets.
+          upload.set(index, structuredClone(effect))
+        }
       }
       port.postMessage({ type: 'done', id } satisfies JournalSqlResponse)
       return

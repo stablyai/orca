@@ -4,7 +4,7 @@ const PACKET_BYTES = 256 * 1024
 export type JournalUnitPacket = { index: number; effect: JournalPersistenceEffect }
 
 /** Atomic units stage bounded packets before BEGIN; one indivisible encoded value can exceed target. */
-export function* journalTransferBatches<T>(values: readonly T[]): Generator<T[]> {
+export function* journalTransferBatches<T>(values: Iterable<T>): Generator<T[]> {
   let batch: T[] = [],
     bytes = 0
   for (const value of values) {

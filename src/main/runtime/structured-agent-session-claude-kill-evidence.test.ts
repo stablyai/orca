@@ -135,10 +135,14 @@ it('settles a real failed acquisition with exact kill evidence and rejects dispa
   await forceTime()
   await fixture.drain()
   await killEvidence()
-  const journal = await fixture.host.journalSnapshot(SESSION)
   if (!pending.ok) {
     throw new Error('send refused')
   }
+  vi.useRealTimers()
+  expect(
+    await fixture.host.waitForSendSettlement(SESSION, pending.value.clientMessageId)
+  ).toBeDefined()
+  const journal = await fixture.host.journalSnapshot(SESSION)
   expect(
     journal.submissions.find((row) => row.clientMessageId === pending.value.clientMessageId)
       ?.dispatchState
@@ -228,6 +232,10 @@ it.each(['identity', 'spawn-return'] as const)(
     if (!pending.ok) {
       throw new Error('send refused')
     }
+    vi.useRealTimers()
+    expect(
+      await fixture.host.waitForSendSettlement(SESSION, pending.value.clientMessageId)
+    ).toBeDefined()
     expect(
       (await fixture.host.journalSnapshot(SESSION)).submissions.find(
         (row) => row.clientMessageId === pending.value.clientMessageId
@@ -255,6 +263,7 @@ it.each(['prove-owner', 'journal-attach'] as const)(
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const pending = fixture.host.attach(fixture.caller, fixture.params()).catch((error) => error)
     await vi.waitFor(() => expect(fixture.connections).toHaveLength(1))
+    await vi.waitFor(() => expect(fixture.children[0]!.stdin.writableEnded).toBe(true))
     await forceTime()
     expect(await pending).not.toMatchObject({ ok: true })
     await fixture.drain()

@@ -18,6 +18,7 @@ import { prepareJournalAcceptance } from './journal-input-provenance'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { iterateJournalEpochRowsAsync } from './journal-row-table'
 import { parseJournalRow } from './journal-row-schema'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
 
 export async function restoreJournalAsync(
   read: JournalReadConnection,
@@ -64,7 +65,7 @@ async function foldJournalFromStateAsync(
   deferNativeCleanup = false
 ): Promise<JournalLoad> {
   const fold = startJournalRowFold(
-    { sessionId: state.sessionId, epoch: state.epoch, deferNativeCleanup },
+    { sessionId: state.sessionId, epoch: state.epoch, deferNativeCleanup: true },
     state
   )
   const owner = journalInputOrder(state)
@@ -83,29 +84,40 @@ async function foldJournalFromStateAsync(
       state.sessionId,
       journalOutcomeAcceptanceIds(state, rows)
     )
-    const more = owner.withAcceptance(acceptance, () => {
-      for (const [index, entry] of page.entries()) {
-        if (!fold.add(entry, parsed[index])) {
-          return false
-        }
+    let more = true
+    for (const [index, entry] of page.entries()) {
+      const row = parsed[index]
+      if (row.ok) {
+        await finishJournalStepsAsync(owner.prepareRowSteps(state, row.row))
       }
-      return true
-    })
+      if (
+        !(await finishJournalStepsAsync(fold.addSteps(entry, row), (next) =>
+          owner.withAcceptance(acceptance, next)
+        ))
+      ) {
+        more = false
+        break
+      }
+    }
     if (!more) {
       break
     }
     await new Promise<void>((resolve) => setImmediate(resolve))
   }
   if (!deferNativeCleanup) {
-    const ids = owner.needsAcceptance([...state.inputEntries.keys()])
+    const ids = await finishJournalStepsAsync(owner.acceptanceIdsSteps())
     const acceptance = await prepareJournalAcceptance(read, state.sessionId, ids)
     const cards = await readJournalLegacyCardsAsync(read, state)
-    owner.withAcceptance(acceptance, () => {
+    function* finish(): Generator<void> {
       for (const id of ids) {
         owner.place(id)
+        yield
       }
-      owner.overlay(state, cards)
-    })
+      yield* owner.overlaySteps(state, cards)
+      yield* owner.finishReconstructionSteps(state)
+      yield* owner.lineage.restoreFrontierSteps(state.lastSequence, state.inputEntries.values())
+    }
+    await finishJournalStepsAsync(finish(), (next) => owner.withAcceptance(acceptance, next))
   }
   return fold.finish()
 }

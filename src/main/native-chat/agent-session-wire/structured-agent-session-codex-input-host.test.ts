@@ -338,6 +338,7 @@ it.each(['config', 'order', 'initial'] as const)(
     order?.release()
     await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
     const acquiring = codex.connections[1]!
+    await vi.waitFor(() => expect(host['sessions'].get(SESSION)?.child).toBeTruthy())
     const replacement = host['sessions'].get(SESSION)!.child!
     expect(replacement.fence).toBe(host['deps'].store.getRecord(SESSION)!.lease.runtimeFence)
     await vi.waitFor(() =>

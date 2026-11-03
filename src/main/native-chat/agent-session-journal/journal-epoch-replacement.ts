@@ -1,10 +1,7 @@
+import { finishJournalStepsAsync, sortJournalSteps } from './journal-reconstruction-steps'
 import { journalInputOrder } from './journal-input-order'
 import { publishJournalOutcomeEpochAsync } from './journal-outcome-write'
-import {
-  journalItemEchoFields,
-  journalItemEchoRestatement,
-  type JournalItemEcho
-} from './journal-item-echo'
+import { journalItemEchoFields, journalItemEchoRestatement } from './journal-item-echo'
 
 import { sameJournalConversation } from './journal-history-origin'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -13,107 +10,76 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
-import type { JournalLoad } from './journal-open'
-import {
-  applyJournalRow,
-  createJournalReducerState,
-  type JournalReducerState
-} from './journal-reducer'
+import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import {
   buildJournalItemRow,
   buildJournalSubmissionRow,
   journalRowBase
 } from './journal-row-builders'
 import { buildJournalQueueRow } from './journal-queue-events'
-import type { JournalQueueRestatement } from './journal-queued-messages'
 import {
   buildJournalQueueReopenRow,
   buildJournalQueueClearRow,
   buildJournalQueueResumeRow,
   buildJournalStopEventRow
 } from './journal-stop-and-resume-rows'
-import type { JournalQueuePauseRestatement } from './queued-message-pause'
-import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
+import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence } from './journal-write-guards'
-import { settleJournalCommit, type JournalOperationReceipt } from './journal-row-writer'
+import { settleJournalCommitAsync } from './journal-row-writer'
 
-import type { JournalAttachmentClaim } from './journal-submission-hook'
-import { copyJournalNativeState } from './journal-input-conversion'
+import { copyJournalNativeStateSteps } from './journal-input-conversion'
 import {
   prepareJournalAcceptance,
-  journalQueueRebaseWithAcceptance
+  prepareJournalQueueRebaseWithAcceptance
 } from './journal-input-provenance'
 
-export type JournalReplacementItem = AgentJournalProducerLinkage & {
-  echoOf?: JournalItemEcho['echoOf']
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-  observedAt?: number
-  /** Derive absent legacy scopes from timeline position before persisting them. */
-  turnScope?: AgentJournalTurnScope
-  /** Preserve original execution provenance; history replacement is not new work. */
-  ownerFence: number
-  executionOwner?: number
-}
-
-/** Survivors are restated from the open chat. That loses nothing another build wrote: a chat holding
- * a key this build does not declare refuses to open, so no handle can reach here. */
-export type JournalEpochReplacementInput = {
-  identity: AgentSessionJournalIdentity
-  reason: AgentJournalEpochReason
-  fence: number
-  items: readonly JournalReplacementItem[]
-  /** The caller's completion receipt writes after the new epoch's records, in the same
-   * transaction, so it can restore the replaced conversation on `db`. */
-  receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
-  isLiveGoal?: (id: string) => boolean
-  claimAttachments?: JournalAttachmentClaim
-  previous?: JournalReducerState
-  /** Preserve Stop/Resume state so rewinds cannot release held cards or resurrect lifted pauses. */
-  queuePause: JournalQueuePauseRestatement
-  /** Restate cards before carried submissions relink their handoffs. */
-  queue: JournalQueueRestatement
-  now: () => number
-  mintEpoch: () => string
-  /** Adopt committed state before fallible follow-up work. */
-  onPublished: (loaded: JournalLoad) => void
-  publish?: () => void
-}
+export type { JournalReplacementItem } from './journal-epoch-replacement-contracts'
+import type { JournalEpochReplacementInput } from './journal-epoch-replacement-contracts'
 
 export function replaceJournalEpoch(
   database: JournalHostDatabase,
-  prepare: () => JournalEpochReplacementInput
+  prepare: () => JournalEpochReplacementInput | Promise<JournalEpochReplacementInput>
 ): Promise<void> {
   return database
     .transaction(
       async (db) => {
-        const input = prepare()
-        const queued = [...(input.previous?.submissions.values() ?? [])]
-          .filter(isQueuedAgentJournalSubmission)
-          .sort((a, b) => a.submittedSequence! - b.submittedSequence!)
-        const acceptance = await prepareJournalAcceptance(
-          db,
-          input.identity.sessionId,
-          queued.map((submission) => submission.clientMessageId)
-        )
+        const input = await prepare()
+        function* queuedSubmissions() {
+          const values: AgentJournalSubmission[] = []
+          for (const submission of input.previous?.submissions.values() ?? []) {
+            if (isQueuedAgentJournalSubmission(submission)) {
+              values.push(submission)
+            }
+            yield
+          }
+          return yield* sortJournalSteps(
+            values,
+            (a, b) => a.submittedSequence! - b.submittedSequence!
+          )
+        }
+        const queued = await finishJournalStepsAsync(queuedSubmissions())
+        const ids: string[] = []
+        let work = 0
+        const rest = async () => {
+          if (++work === 128) {
+            work = 0
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
+        }
+        for (const submission of queued) {
+          ids.push(submission.clientMessageId)
+          await rest()
+        }
+        const acceptance = await prepareJournalAcceptance(db, input.identity.sessionId, ids)
         const epoch = input.mintEpoch()
         const state = createJournalReducerState(input.identity.sessionId, epoch)
         if (input.previous) {
-          copyJournalNativeState(input.previous, state)
+          await finishJournalStepsAsync(copyJournalNativeStateSteps(input.previous, state))
         }
-        journalInputOrder(state).beginReconstruction()
+        await finishJournalStepsAsync(journalInputOrder(state).beginReconstructionSteps())
         const providerHandle = agentSessionJournalProviderHandle(input.identity)
         const previousOrigin = input.previous?.historyOrigin
         const restate =
@@ -134,6 +100,7 @@ export function replaceJournalEpoch(
         const rows: JournalRow[] = [epochRow]
         applyJournalRow(state, epochRow)
         for (const item of input.items) {
+          await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           const row = buildJournalItemRow({
             state,
             identity: item.identity,
@@ -159,6 +126,7 @@ export function replaceJournalEpoch(
           assertJournalFence(row.fence, state.highestFence)
           journalInputOrder(state).withAcceptance(acceptance, () => applyJournalRow(state, row))
           rows.push(row)
+          await rest()
         }
         const appendQueue = (
           messageId: string,
@@ -176,6 +144,7 @@ export function replaceJournalEpoch(
         }
         const rebuilt = new Map<string, number>()
         for (const submission of queued) {
+          await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           const body = input.previous?.items.get(
             agentJournalSubmissionKey(submission.clientMessageId)
           )?.body
@@ -194,18 +163,22 @@ export function replaceJournalEpoch(
           journalInputOrder(state).withAcceptance(acceptance, () => applyJournalRow(state, row))
           rows.push(row)
           rebuilt.set(submission.clientMessageId, row.seq)
+          await rest()
         }
-        const rebase = journalQueueRebaseWithAcceptance(
+        const rebase = await prepareJournalQueueRebaseWithAcceptance(
           acceptance,
           epoch,
           input.previous?.epoch,
           queued,
-          rebuilt
+          rebuilt,
+          input.queue.cards
         )
         for (const { messageId, change } of input.queue.cards) {
+          await rest()
           if (!change) {
             continue
           }
+          await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           const prior = input.previous?.queue.cards.get(messageId)
           const queuedAt = change.op === 'queued' ? rebase(change.queuedAt) : null
           appendQueue(
@@ -249,13 +222,17 @@ export function replaceJournalEpoch(
           rows.push(row)
         }
 
-        journalInputOrder(state).restore(state)
-        journalInputOrder(state).finishReconstruction(state)
+        const order = journalInputOrder(state)
+        await finishJournalStepsAsync(order.restoreSteps(state), (next) =>
+          order.withAcceptance(acceptance, next)
+        )
+        await finishJournalStepsAsync(order.finishReconstructionSteps(state))
         const { sessionId } = input.identity
         const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
         const claimsCommitted: (() => void)[] = []
         state.oldestSequence = 1
         for (const row of rows) {
+          await rest()
           const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
           if (
             body?.kind === 'message' &&
@@ -289,12 +266,14 @@ export function replaceJournalEpoch(
       false,
       ({ input, publication, receipt, claimsCommitted }) => {
         const state = publication.adopt()
-        settleJournalCommit(
-          () => input.onPublished({ state, newer: null, damage: null }),
-          ...claimsCommitted,
-          () => input.queue.receipt.committed(),
-          () => receipt?.committed(),
-          () => input.publish?.()
+        return settleJournalCommitAsync(
+          (function* () {
+            yield () => input.onPublished({ state, newer: null, damage: null })
+            yield* claimsCommitted
+            yield () => input.queue.receipt.committed()
+            yield () => receipt?.committed()
+            yield () => input.publish?.()
+          })()
         )
       }
     )

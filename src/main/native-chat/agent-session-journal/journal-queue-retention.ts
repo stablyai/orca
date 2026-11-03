@@ -2,20 +2,30 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalQueueCardChange, JournalQueuedChange } from './journal-queue-events'
 import type { QueuedMessageRow } from './queued-message-table'
+import { finishJournalSteps } from './journal-reconstruction-steps'
 
 /** Restate waiting/returned cards and unhanded submissions before deleting their epoch; preserve refusals. */
 export function retainedQueueFacts(
   cards: readonly QueuedMessageRow[],
   submissions: ReadonlyMap<string, AgentJournalSubmission>
 ): JournalQueueCardChange[] {
-  return cards.flatMap((card) => {
+  return finishJournalSteps(retainedQueueFactSteps(cards, submissions))
+}
+
+export function* retainedQueueFactSteps(
+  cards: readonly QueuedMessageRow[],
+  submissions: ReadonlyMap<string, AgentJournalSubmission>
+): Generator<void, JournalQueueCardChange[]> {
+  const result: JournalQueueCardChange[] = []
+  for (const card of cards) {
+    yield
     const handOff = card.consumedAs === null ? undefined : submissions.get(card.consumedAs)
     const unsent =
       card.state === 'dispatched' &&
       handOff !== undefined &&
       isQueuedAgentJournalSubmission(handOff)
     if (card.state !== 'waiting' && card.state !== 'returned' && !unsent) {
-      return []
+      continue
     }
     const change: JournalQueuedChange = {
       ...queuedChangeOf(card),
@@ -32,8 +42,9 @@ export function retainedQueueFacts(
           }
         : {})
     }
-    return [{ messageId: card.messageId, change }]
-  })
+    result.push({ messageId: card.messageId, change })
+  }
+  return result
 }
 
 export function queuedChangeOf(

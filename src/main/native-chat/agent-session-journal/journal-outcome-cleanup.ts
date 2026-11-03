@@ -29,19 +29,49 @@ export async function sweepJournalOutcomePage(
           )?.generation ?? 0
         )
       }
-      const candidate = await read
-        .prepare(`SELECT a.generation FROM journal_outcome_generations a LEFT JOIN journal_outcome_epochs e
-        ON e.session_id = a.session_id AND e.epoch = a.epoch AND e.generation = a.generation
-        WHERE e.session_id IS NULL AND a.generation > ? AND a.generation <= ? ORDER BY a.generation LIMIT 1`)
-        .get(position.after, position.upper)
-      if (typeof candidate?.generation !== 'number') {
-        return { position, generation: null, rows: [] }
+      const candidates = await read
+        .prepare(`SELECT generation, session_id, epoch FROM journal_outcome_generations
+          WHERE generation > ? AND generation <= ? ORDER BY generation LIMIT 32`)
+        .all(position.after, position.upper)
+      let generation: number | null = null
+      let after = position.after
+      for (const candidate of candidates) {
+        if (typeof candidate.generation !== 'number') {
+          continue
+        }
+        after = candidate.generation
+        if (typeof candidate.session_id !== 'string' || typeof candidate.epoch !== 'string') {
+          continue
+        }
+        const current = await read
+          .prepare('SELECT epoch, generation FROM journal_outcome_epochs WHERE session_id = ?')
+          .get(candidate.session_id)
+        if (
+          current &&
+          (typeof current.epoch !== 'string' ||
+            typeof current.generation !== 'number' ||
+            current.epoch === candidate.epoch ||
+            current.generation === after)
+        ) {
+          continue
+        }
+        generation = after
+        break
+      }
+      if (generation === null) {
+        return {
+          position: { ...position, after },
+          generation,
+          rows: [],
+          more: candidates.length > 0
+        }
       }
       const found = await read
         .prepare(
-          `SELECT rowid, length(CAST(value_json AS BLOB)) AS bytes FROM journal_outcomes WHERE generation = ? ORDER BY rowid LIMIT 32`
+          `SELECT rowid, length(CAST(value_json AS BLOB)) AS bytes FROM journal_outcomes
+            WHERE generation = ? ORDER BY seq, field, entry_key LIMIT 32`
         )
-        .all(candidate.generation)
+        .all(generation)
       const rows = journalMaintenancePage(
         found.flatMap((row) =>
           typeof row.rowid === 'number' && typeof row.bytes === 'number'
@@ -49,14 +79,18 @@ export async function sweepJournalOutcomePage(
             : []
         )
       )
-      return { position, generation: candidate.generation, rows }
+      return { position, generation, rows, more: true }
     } finally {
       charge(performance.now() - started)
     }
   })
   if (discovered.generation === null) {
-    sweepPositions.delete(database)
-    return false
+    if (discovered.more) {
+      sweepPositions.set(database, discovered.position)
+    } else {
+      sweepPositions.delete(database)
+    }
+    return discovered.more
   }
   const result = await database.maintenance({
     kind: 'retired',

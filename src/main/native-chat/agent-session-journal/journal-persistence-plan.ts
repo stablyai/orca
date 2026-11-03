@@ -5,6 +5,8 @@ import type { JournalOutcome } from './journal-outcome-codec'
 import type { JournalReadConnection } from './journal-sql-owner'
 import type { CommandReceiptRead } from './command-receipt-table'
 import type { JournalReducerState } from './journal-reducer'
+import { finishJournalStepsAsync } from './journal-reconstruction-steps'
+import { settleJournalCommitAsync } from './journal-row-writer'
 
 export type JournalEncodedOutcome = Omit<JournalOutcome, 'ordinal'> & {
   reinsert: boolean
@@ -68,14 +70,21 @@ export class JournalPersistencePlan {
     this.results.push(result)
   }
 
-  source(sessionId: string, epoch: string) {
-    if (
-      this.effects.some(
-        (effect) =>
-          effect.kind === 'epoch' && effect.sessionId === sessionId && effect.epoch === epoch
-      )
-    ) {
-      return Promise.resolve(null)
+  async source(sessionId: string, epoch: string) {
+    const effects = this.effects
+    const created = await finishJournalStepsAsync(
+      (function* () {
+        for (const effect of effects) {
+          if (effect.kind === 'epoch' && effect.sessionId === sessionId && effect.epoch === epoch) {
+            return true
+          }
+          yield
+        }
+        return false
+      })()
+    )
+    if (created) {
+      return null
     }
     return this.read.source(sessionId, epoch)
   }
@@ -86,7 +95,12 @@ export class JournalPersistencePlan {
     ids: readonly string[]
   ): Promise<Map<string, CommandReceiptRead>> {
     const values = await this.read.receipts(scope, ids)
+    let work = 0
     for (const effect of this.effects) {
+      if (++work === 128) {
+        work = 0
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
       if (effect.kind !== 'receipt' || !values.has(effect.receipt.operationId)) {
         continue
       }
@@ -100,20 +114,14 @@ export class JournalPersistencePlan {
     return values
   }
 
-  settle(values: JournalEffectResult[]): void {
-    const failures: unknown[] = []
-    this.results.forEach((receive, index) => {
-      try {
-        receive(values[index] ?? null)
-      } catch (error) {
-        failures.push(error)
-      }
-    })
-    if (failures.length === 1) {
-      throw failures[0]
-    }
-    if (failures.length) {
-      throw new AggregateError(failures, 'journal committed effects failed')
-    }
+  settle(values: JournalEffectResult[]): Promise<void> {
+    const results = this.results
+    return settleJournalCommitAsync(
+      (function* () {
+        for (let index = 0; index < results.length; index++) {
+          yield () => results[index](values[index] ?? null)
+        }
+      })()
+    )
   }
 }

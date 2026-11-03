@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../native-chat/agent-session-wire/agent-session-subscriber-test-support'
 import '../native-chat/agent-session-journal/journal-host-database-test-support'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
@@ -156,11 +157,13 @@ describe('the chat strip and the session list read the same host child records',
         }
       }
     })
-    // Journal writes land asynchronously; let each frame's rows publish before the next.
     const settle = async () => {
-      for (let tick = 0; tick < 5; tick += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      }
+      await host
+        .collaboratorsForTests()
+        .sessions.get(SESSION)!
+        .journal.readInOrder(() => {})
+      await host.flushStreamedEvents(SESSION)
+      await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     }
     const notify = async (method: string, params: Record<string, unknown>) => {
       connections[0]?.onNotification?.(method, params)

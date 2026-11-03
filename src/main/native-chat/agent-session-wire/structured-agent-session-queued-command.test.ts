@@ -171,17 +171,21 @@ describe('/clear', () => {
     await rig.settleAccepted(working, 'a')
     expect(await command('clear')).toMatchObject({ ok: true })
     expect(await rig.sendNow(draftId, hostTestOperationId())).toMatchObject({ ok: true })
-    await eventually(async () => expect(await rig.handoff(draftId)).toBeDefined())
+    await eventually(async () => expect((await rig.handoff(draftId))?.handedOverAt).toBeDefined())
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const sent = journal.submissions().findLast((entry) => entry.queuedMessageId === draftId)!
     await eventually(() =>
-      expect(activeProviderContext(rig.store.getRecord(SESSION)!).head).not.toBeNull()
+      expect(
+        rig.dispatch.mock.calls.some(([input]) => input.clientMessageId === sent.clientMessageId)
+      ).toBe(true)
     )
+    const child = rig.host.collaboratorsForTests().sessions.get(SESSION)!.child!
+    expect(journal.submission(sent.clientMessageId)?.fence).toBe(child.fence)
     const thread = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
     await journal.appendItem(
       { provider: 'codex', threadId: thread, turnId: 'turn-echo', ordinal: 0 },
       hostTestMessage('waiting text'),
-      { fence: sent.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: child.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const floor = journal.context.floor()!.sequence
     expect(
