@@ -198,6 +198,7 @@ export function claudeStructuredSessionOptionsFrom(
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
+      reportedModel: session.reportedOptions.reportedModel,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),

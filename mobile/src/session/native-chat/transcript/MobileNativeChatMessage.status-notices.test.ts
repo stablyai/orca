@@ -125,6 +125,35 @@ describe('MobileNativeChatMessage status notices', () => {
     )[0]!
   }
 
+  it.each([
+    ['en', 'Claude switched models: Claude Opus 5.5 → Claude Opus 4.8.'],
+    ['ru', 'Claude переключил модель: Claude Opus 5.5 → Claude Opus 4.8.']
+  ] as const)(
+    'renders a saved fallback notice in %s without a raw JSON card',
+    async (locale, words) => {
+      await activateMobileUiLocale(locale)
+      const head = JSON.stringify({
+        type: 'fallback',
+        from: { model: 'claude-opus-5-5' },
+        to: { model: 'claude-opus-4-8' }
+      })
+      const text = renderNotice(
+        {
+          kind: 'status',
+          text: 'Claude sent content Orca cannot display yet',
+          providerFrame: {
+            provider: 'claude',
+            kind: 'message:assistant:content:fallback',
+            payload: { head, byteLength: head.length, digest: 'fixture', truncated: false }
+          }
+        },
+        { hostName: null }
+      )
+      expect(text.props.children).toBe(words)
+      expect(renderer!.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
+    }
+  )
+
   it('names the Orca host an Orca stop came from, in desktop words', () => {
     const text = renderNotice(
       {
