@@ -31,7 +31,7 @@ import {
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
-import { initializeHomeWorkspace } from './initial-home-workspace'
+import { createInitialHomeWorkspaceState } from './initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -124,16 +124,18 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    this.state = normalized.state
+    let initialState = normalized.state
+    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
+    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
+      initialState = createInitialHomeWorkspaceState(initialState)
+      this.runtime.loadNeedsSave = true
+    }
+    this.state = initialState
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
       this.runtime.dataFile,
       this.state.ui?.activeView
     )
-    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
-    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
-      initializeHomeWorkspace(this)
-    }
     const adaptedProjectGroups = this.domains.adaptation.adaptFlatFolderScanProjectGroups()
     this.domains.adaptation.hydrateFolderWorkspaceDiffComments()
     // Removal paths require registration; load must sweep residue whose owning repo is already gone.

@@ -1,5 +1,4 @@
-import type * as ProfileIndexStoreModule from '../../orca-profiles/profile-index-store'
-import type * as ProfileTelemetryConsentSeedModule from '../../orca-profiles/profile-telemetry-consent-seed'
+import type * as NewProfileStateModule from '../../orca-profiles/new-profile-state'
 import type * as ProfileCloudCapabilityRefreshModule from '../../orca-profiles/profile-cloud-capability-refresh'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -40,19 +39,12 @@ vi.mock('../../tray/system-tray', () => ({
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   createLocalOrcaProfile: vi.fn(),
   getOrcaProfileListState: vi.fn(),
-  seedNewOrcaProfileTelemetryConsent: vi.fn(),
   setActiveOrcaProfile: vi.fn()
 }))
 
-vi.mock('../../orca-profiles/profile-telemetry-consent-seed', async (importOriginal) => {
-  const facadeMocks = await vi.importMock<typeof ProfileIndexStoreModule>(
-    '../../orca-profiles/profile-index-store'
-  )
-  return {
-    ...(await importOriginal<typeof ProfileTelemetryConsentSeedModule>()),
-    seedNewOrcaProfileTelemetryConsent: facadeMocks.seedNewOrcaProfileTelemetryConsent
-  }
-})
+vi.mock('../../orca-profiles/new-profile-state', () => ({
+  initializeNewOrcaProfileState: vi.fn()
+}))
 
 vi.mock('../../orca-profiles/profile-project-transfer', () => ({
   transferOrcaProfileProject: vi.fn()
@@ -187,5 +179,9 @@ describe('registerOrcaProfileHandlers auth channels', () => {
       orgId: 'org-1',
       name: 'Acme'
     })
+    const initialState = await vi.importMock<typeof NewProfileStateModule>(
+      '../../orca-profiles/new-profile-state'
+    )
+    expect(initialState.initializeNewOrcaProfileState).toHaveBeenCalledWith('cloud-1', undefined)
   })
 })
