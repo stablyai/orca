@@ -63,7 +63,10 @@ it.each(['ci-notifier', 'orca-bg-wake'])(
     expect(screen.getByText(address).closest('button')).toBeNull()
     expect(container.querySelectorAll('.lucide-terminal')).toHaveLength(1)
     expect(screen.queryByText('an agent')).toBeNull()
-    expect(screen.getAllByRole('button', { name: 'Go to agent' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Review worker' })).toHaveAttribute(
+      'title',
+      'Go to agent'
+    )
     expect(screen.getByText('Review worker')).toBeInTheDocument()
   }
 )
