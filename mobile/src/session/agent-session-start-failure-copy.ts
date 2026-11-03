@@ -8,7 +8,7 @@ export const START_FAILURE_COPY = {
   savedConversationMissing: (values) =>
     translate(
       'session.failure.savedConversationMissing',
-      "{{agent}} couldn't find this chat's saved conversation.",
+      "{{agent}} couldn't find this chat's saved conversation. Any messages saved by Orca remain in this chat. Use Hand Off to Another Agent on desktop to start a new session from that context.",
       values
     ),
   theAgent: (values) => translate('session.failure.theAgent', 'The agent', values),

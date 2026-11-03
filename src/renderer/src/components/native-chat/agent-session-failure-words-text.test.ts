@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 describe('desktop words for a failure fact', () => {
-  it('gives new-chat guidance while keeping a missing conversation diagnostic private', () => {
+  it('points to the desktop hand-off while keeping a missing conversation diagnostic private', () => {
     expect(
       agentSessionFailureSentence(
         {
@@ -33,7 +33,9 @@ describe('desktop words for a failure fact', () => {
         { agentName: 'Claude' },
         sayAgentSessionFailureTranslated
       )
-    ).toBe("Claude couldn't find this chat's saved conversation. Start a new chat to continue.")
+    ).toBe(
+      "Claude couldn't find this chat's saved conversation. Any messages saved by Orca remain in this chat. Use Hand Off to Another Agent on desktop to start a new session from that context."
+    )
   })
 
   it.each([

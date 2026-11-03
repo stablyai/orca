@@ -18411,7 +18411,7 @@
       "failureWords": {
         "theAgent": "에이전트",
         "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
-        "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다.",
+        "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다. Orca가 저장한 메시지는 이 채팅에 그대로 남아 있습니다. 데스크톱에서 '다른 에이전트에게 인계'를 사용해 이 맥락으로 새 세션을 시작하세요.",
         "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
         "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
         "sendAgainToTryOnceMore": "메시지를 다시 보내 한 번 더 시도하세요.",

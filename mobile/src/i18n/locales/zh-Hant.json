@@ -1907,7 +1907,7 @@
       "providerRetrying": "{{agent}} 遇到暫時性問題，正在重試。",
       "providerRetryingQuoted": "{{agent}} 正在重試：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
-      "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。Orca 儲存的訊息仍保留在此聊天中。請在桌面版使用「移交給另一個代理程式」，以該上下文開始新的工作階段。",
       "queueFull": "等待代理程式處理的訊息過多，因此此訊息未傳送。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "runCommandAgain": "請重新執行 /{{command}}。",

@@ -152,7 +152,7 @@ describe('MobileNativeChatMessage status notices', () => {
       { hostName: null, agentName: 'Claude' }
     )
     expect(text.props.children).toBe(
-      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Les messages enregistrés par Orca restent dans ce chat. Utilisez « Transférer à un autre Agent » sur ordinateur pour démarrer une nouvelle session avec ce contexte.'
     )
   })
 

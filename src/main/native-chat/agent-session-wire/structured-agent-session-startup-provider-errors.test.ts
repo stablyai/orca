@@ -196,7 +196,7 @@ it.each(['result', 'stderr exit', 'result then exit', 'stderr exit then result']
     expect(claude.connections).toHaveLength(1)
     expect(errors).toHaveLength(1)
     expect(errors[0]?.body).toMatchObject({
-      text: "Claude couldn't find this chat's saved conversation. Start a new chat to continue.",
+      text: "Claude couldn't find this chat's saved conversation. Any messages saved by Orca remain in this chat. Use Hand Off to Another Agent on desktop to start a new session from that context.",
       failure: {
         kind: 'savedConversationMissing',
         detail: { text: expect.stringContaining(MISSING_TEXT), audience: 'log' }
