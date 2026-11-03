@@ -1,3 +1,4 @@
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -90,27 +91,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
-      const {
-        startupPlan,
-        backendStartup,
-        telemetry: quickTelemetry,
-        prompt: quickPrompt,
-        draftPrompt: quickDraftPrompt
-      } = await prepareQuickComposerStartup({
-        agent,
-        linkedWorkItem: submitLinkedWorkItem,
-        note: trimmedNote,
-        settings,
-        launchHost: selectedRepoAgentLaunchFact,
-        shell: selectedRepoStartupShell,
-        isRemote: selectedRepoIsRemote,
-        telemetrySource,
-        repoId,
-        executionHostId: selectedRepoExecutionHostId
-      })
-      if (isSubmissionCancelled()) {
-        return
-      }
+      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+
+      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -165,6 +149,24 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           }))
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
+      const quickStartup = await prepareQuickComposerStartup({
+        agent,
+        linkedWorkItem: submitLinkedWorkItem,
+        note: trimmedNote,
+        repoId,
+        executionHostId: selectedRepoExecutionHostId,
+        settings,
+        launchHost: selectedRepoAgentLaunchFact,
+        shell: selectedRepoStartupShell,
+        isRemote: selectedRepoIsRemote,
+        telemetrySource,
+        route: agentLaunchRoute,
+        launchInputs: options?.launchInputs
+      })
+
+      if (isSubmissionCancelled()) {
+        return
+      }
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,
@@ -189,6 +191,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         pushTarget: submitPushTarget,
         agent,
         agentLaunchRoute,
+        launchInputs: options?.launchInputs,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
@@ -214,7 +217,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedGitLabMR,
         linkedGitLabIssue,
         includeGitLabLinks: smartGitHubResolution.kind === 'none',
-        startup: structuredLaunch ? undefined : backendStartup,
+        startup: structuredLaunch ? undefined : quickStartup.backendStartup,
         hookPreparation: ephemeralVmRecipe
           ? {
               ...hookPreparation,
@@ -224,11 +227,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           : hookPreparation,
         pendingFirstAgentMessageRename,
         note: trimmedNote,
-        startupPlan,
+        startupPlan: quickStartup.startupPlan,
         quickPrompt,
         launchDraftPrompt: quickDraftPrompt,
         promptDelivery,
-        quickTelemetry,
+        quickTelemetry: quickStartup.telemetry,
         suppressTerminalFocusOnCompletion: createMultiple,
         setupOnly: options?.setupOnly === true
       })

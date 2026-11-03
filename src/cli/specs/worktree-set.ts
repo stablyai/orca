@@ -26,6 +26,7 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
   ],
   notes: [
     'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
+    'Pass --comment "" (or --comment=) to clear the comment.',
     'Pass --linear-issue null to clear the Linear issue link.',
     'Pass --clickup-task null to clear the ClickUp task link.',
     'Pass --pr null, --gitlab-issue null, or --gitlab-mr null to clear only the matching link.',
@@ -34,6 +35,7 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
   examples: [
     'orca worktree set --worktree active --linear-issue STA-335 --json',
     'orca worktree set --worktree active --linear-issue null --json',
+    'orca worktree set --worktree active --comment "" --json',
     'orca worktree set --worktree active --workspace-status in-review --unread --json'
   ]
 }

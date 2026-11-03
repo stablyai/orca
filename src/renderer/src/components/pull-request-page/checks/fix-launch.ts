@@ -44,6 +44,8 @@ export async function startFixChecksFromDialog(args: {
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  preferredSurface?: 'chat'
   launchChoice?: Parameters<typeof launchWorkItemDirect>[0]['launchChoice']
   agentLaunchPreferences?: Parameters<typeof launchWorkItemDirect>[0]['agentLaunchPreferences']
   sessionOptionsYieldToAgentArgs?: true
@@ -64,7 +66,17 @@ export async function startFixChecksFromDialog(args: {
     agentLaunchPreferences: args.agentLaunchPreferences,
     agentArgs: args.agentArgs,
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
-    ...(args.launchChoice ? { launchChoice: args.launchChoice } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: args.chatSessionOptions }
+      : {}),
+    ...(args.launchChoice || args.preferredSurface
+      ? {
+          launchChoice: {
+            ...args.launchChoice,
+            ...(args.preferredSurface ? { preferredSurface: args.preferredSurface } : {})
+          }
+        }
+      : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
       toast.error(

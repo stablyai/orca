@@ -19,8 +19,13 @@ vi.mock('./gh-utils', () => ({
   release: releaseMock
 }))
 
-vi.mock('../git/runner', () => ({
-  extractExecError: vi.fn(() => ({ stdout: '', stderr: '' })),
+vi.mock('../git/exec-error', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  extractExecError: vi.fn(() => ({ stdout: '', stderr: '' }))
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 

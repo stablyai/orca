@@ -16,7 +16,7 @@ import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar
 import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   safeRemoveOverlay
-} from '../pty/overlay-mirror'
+} from '../pty/scrollback/overlay-mirror'
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 

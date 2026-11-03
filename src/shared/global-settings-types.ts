@@ -8,7 +8,7 @@ import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
-import type { TaskProvider } from './task-providers'
+import type { TaskProviderVisibilitySettings } from './task-provider-visibility-settings'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control-ai-types'
@@ -50,7 +50,7 @@ export type { WorktreeVisibilityDefaults } from './repo-types'
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type GlobalSettings = GlobalSettingsBase & {
+export type GlobalSettings = GlobalSettingsBase & TaskProviderVisibilitySettings & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -81,6 +81,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
+  editorFormatOnSave?: boolean
+  /** Days a release must be public before Orca offers it; absent/0 offers releases immediately. */
+  updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
@@ -205,6 +208,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   nativeChatResumeWorkOnRestart?: boolean
   /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
+  /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
+   *  you left off." once the limit resets, unless that chat was told not to. */
+  nativeChatAutoContinueAfterUsageLimit?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */
@@ -343,14 +349,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
-  /** Persisted last-used task source so Tasks reopens to the same provider instead of defaulting to GitHub. */
-  defaultTaskSource: TaskProvider
-  /** Persisted visible task providers; hides unused providers from Tasks chrome and sidebar shortcuts. */
-  visibleTaskProviders: TaskProvider[]
-  /** Why: one-shot guard to make Jira visible for existing profiles once, without re-adding after a later opt-out. */
-  visibleTaskProvidersDefaultedForJira: boolean
-  /** One-shot stamp: ClickUp was revealed once for profiles saved before it shipped. */
-  visibleTaskProvidersDefaultedForClickUp: boolean
   /** Repo selection: null includes all present/future repos; arrays freeze a subset, dropping ineligible ids on load and treating empty as null. */
   defaultRepoSelection: string[] | null
   /** Linear team selection: null includes all; arrays freeze selected team IDs, matching defaultRepoSelection. */
@@ -445,6 +443,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
+  experimentalOrchestrationPanel?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */
@@ -496,6 +496,4 @@ export type GlobalSettings = GlobalSettingsBase & {
   aiVaultSearch?: AiVaultSearchSettings
 }
 
-// Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
-export type { GhosttyImportPreview } from './ghostty-import-preview'
 export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

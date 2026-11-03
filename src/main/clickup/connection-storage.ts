@@ -8,7 +8,7 @@ import {
   credentialFileHasContent,
   readStoredCredentialToken,
   writeEncryptedCredential
-} from '../integration-credential-file'
+} from '../credentials/integration-credential-file'
 import type {
   ClickUpViewer,
   ClickUpWorkspace,

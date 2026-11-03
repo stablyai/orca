@@ -13,19 +13,20 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-/** The editor template with its script moved to `editor/main.ts`, which imports `./sync.ts`. */
+/** The editor template behind an HTML page that loads `editor/main.ts`, which imports `./sync.ts`. */
 async function editorPlugin(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-editor-check-'))
   roots.push(root)
   const dir = join(root, 'notes')
   await createPluginFromTemplate({ dir, template: 'editor', publisher: 'acme' })
-  const html = join(dir, 'editor', 'index.html')
   await writeFile(
-    html,
-    (await readFile(html, 'utf8')).replace(
-      /<script>[\s\S]*<\/script>/,
-      '<script type="module" src="./main.ts"></script>'
-    )
+    join(dir, 'editor', 'index.html'),
+    '<!doctype html>\n<html>\n<body>\n<script type="module" src="./main.ts"></script>\n</body>\n</html>\n'
+  )
+  const manifestPath = join(dir, 'orca-plugin.json')
+  await writeFile(
+    manifestPath,
+    (await readFile(manifestPath, 'utf8')).replace('editor/main.ts', 'editor/index.html')
   )
   await writeFile(
     join(dir, 'editor', 'main.ts'),

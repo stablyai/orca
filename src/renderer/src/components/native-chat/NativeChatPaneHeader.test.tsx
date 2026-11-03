@@ -56,12 +56,11 @@ function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
   return source
 }
 
-it('offers the terminal header action order and targets Resume and Close at the displayed chat', () => {
+it('offers chat actions without a duplicate close button and targets Resume at the displayed chat', () => {
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
-    'Split Chat Right',
-    'Close tab'
+    'Split Chat Right'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
@@ -80,11 +79,6 @@ it('offers the terminal header action order and targets Resume and Close at the 
       agent: 'codex'
     })
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Close tab' }))
-  expect(mocks.close).toHaveBeenCalledExactlyOnceWith({
-    type: 'close',
-    target: { kind: 'tab', worktreeId: source.worktreeId, tabId: source.id }
-  })
 })
 
 async function splitTooltipText(): Promise<string | null> {

@@ -7,6 +7,7 @@ import {
   resolveMobileTouchClickPoint
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from '../electron-debugger-lease'
+import { assertExpectedPageUrlForStep } from '../browser-expected-page-url'
 import { sendGuestCdpCommand } from '../guest-cdp-command'
 import { touchEmulationParams } from '../guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
@@ -45,6 +46,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
           // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
+          assertExpectedPageUrlForStep()
           // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
           this.browserManager.creditPageInput(target.webContentsId)
           const point =

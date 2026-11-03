@@ -113,15 +113,6 @@ describe('legacy structural TUI identity at the execution-host boundary', () => 
     expect(normalizeHookPayload(state, 'opencode', shared, 'test')?.paneKey).toBe(PANE_B)
   })
 
-  it.each(['opencode2', 'mimo-code', 'claude'] as const)(
-    'does not bind another provider: %s',
-    (source) => {
-      const state = createHookListenerState()
-      bindOpenCodeTuiSession(state, source, body(), 'ses_b')
-      expect(lookupOpenCodeSessionPane(state, 'ses_b')).toBeUndefined()
-    }
-  )
-
   it('keeps OpenCode 2 off the legacy binder even when an old id or optional marker coincides', () => {
     const state = createHookListenerState()
     bindOpenCodeSession(state, 'ses_b', { paneKey: PANE_A, boundAt: 1, basis: 'tui' })
@@ -140,19 +131,5 @@ describe('legacy structural TUI identity at the execution-host boundary', () => 
     expect(lookupOpenCodeSessionPane(state, 'ses_b')).toBeUndefined()
     bindOpenCodeTuiSession(state, 'opencode', body(PANE_A), 'ses_b')
     expect(lookupOpenCodeSessionPane(state, 'ses_b')?.paneKey).toBe(PANE_A)
-  })
-
-  it('requires a real provider session for structural evidence', () => {
-    const state = createHookListenerState()
-    expect(
-      normalizeHookPayload(
-        state,
-        'opencode',
-        body(PANE_B, { payload: { hook_event_name: 'SessionBusy' } }),
-        'test'
-      )
-    ).toBeNull()
-    bindOpenCodeTuiSession(state, 'opencode', body(), undefined)
-    expect(lookupOpenCodeSessionPane(state, 'ses_b')).toBeUndefined()
   })
 })

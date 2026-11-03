@@ -4,6 +4,7 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/workers/pl
 import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import type { PluginService } from './plugin-service'
 import { installPluginHookRunner } from './hooks/plugin-hook-participants'
+import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
 import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
@@ -52,6 +53,7 @@ export function bindPluginRuntime(
   const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
+  installPluginResidentWorkerWarmer(service)
   return delegate
 }
 

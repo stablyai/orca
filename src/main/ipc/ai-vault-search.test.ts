@@ -8,7 +8,7 @@ const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoi
   sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
   runtimeSearch: vi.fn()
 }))
-vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', () => ({
   clearSessionSearchInService: clearSearch
 }))
 vi.mock('electron', () => ({

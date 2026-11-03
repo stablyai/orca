@@ -273,7 +273,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill'], '/tmp/repo')
 
     expect(process.exitCode).toBe(1)
-    expect(errorSpy).toHaveBeenCalledWith('--skill requires a value; it was passed with none.')
+    expect(errorSpy).toHaveBeenCalledWith('Flag --skill requires a value.')
   })
 
   it('lists updatable skills when no --skill/--all is given', async () => {

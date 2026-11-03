@@ -19,7 +19,7 @@ import { wslMoveReleasedSessionFocusPatch } from '../persistence/moving-wsl-proj
 import { applyWslMoveSessionFocus } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
-import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
+import { wasWslHostKeptForPeers } from '../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
   stopWslMoveHostAutomations,
   wslMoveMovedAutomationIds,
@@ -27,7 +27,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { connectWslMoveHostService, wslHostRemovalPending } from './wsl-move-host-connect'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
 import {
   disableWslHostAutomations,
   readWslHostAutomationStates,

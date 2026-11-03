@@ -2,10 +2,8 @@ import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
 import { useCallback, useMemo } from 'react'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
 import type { Repo } from '../../../../shared/repo-types'
-import {
-  getTaskPageRepoSourceContext,
-  getTaskSourceHostAvailabilityForHost
-} from './task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'

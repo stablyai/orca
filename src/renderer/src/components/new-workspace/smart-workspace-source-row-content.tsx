@@ -10,24 +10,10 @@ import {
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
-import { cn } from '@/lib/utils'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import type { JiraSite } from '../../../../shared/jira/jira-types'
 import type { RowEntry, SmartWorkspaceNameSelection } from './smart-workspace-name-field-model'
-
-const ROW_ITEM_CLASS_NAME = 'gap-2 px-3 py-2 text-xs'
-
-function isTypedTextSourceRow(row: RowEntry): boolean {
-  return row.kind === 'use-name' || row.kind === 'create-branch'
-}
-
-export function getRowItemClassName(row: RowEntry, options?: { pinnedAction?: boolean }): string {
-  return cn(
-    ROW_ITEM_CLASS_NAME,
-    options?.pinnedAction && isTypedTextSourceRow(row) && 'bg-muted/35'
-  )
-}
 
 export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
@@ -123,7 +109,7 @@ export function RowLabel({
           )}
           values={{ name: row.name }}
           components={{
-            name: <span className="font-mono text-[11px] font-medium text-foreground" />
+            name: <span className="font-mono text-2xs font-medium text-foreground" />
           }}
         />
       </span>
@@ -149,7 +135,7 @@ export function RowLabel({
     )
   }
   if (row.kind === 'branch') {
-    return <span className="min-w-0 truncate font-mono text-[11px]">{row.refName}</span>
+    return <span className="min-w-0 truncate font-mono text-2xs">{row.refName}</span>
   }
   if (row.kind === 'jira') {
     const siteLabel = jiraSite

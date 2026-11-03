@@ -1,4 +1,5 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
+import { runWithRequestedPageUrl } from '../browser/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import type { RuntimeBrowserCommands } from './browser/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
@@ -130,12 +131,17 @@ function bindPrefixedMethods<T extends object>(
   return bound as Partial<PublicMethods<T>>
 }
 
-function bindNamedMethods<T extends object>(
+function bindBrowserMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
 ): Partial<PublicMethods<T>> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fromEntries loses the key type of the names it was built from.
   return Object.fromEntries(
-    names.map((name) => [name, (instance[name] as (...args: unknown[]) => unknown).bind(instance)])
+    names.map((name) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every name in BROWSER_COMMAND_NAMES is checked against RuntimeBrowserCommands, whose members are all methods.
+      const method = (instance[name] as (...args: unknown[]) => unknown).bind(instance)
+      return [name, (...args: unknown[]) => runWithRequestedPageUrl(args[0], () => method(...args))]
+    })
   ) as Partial<PublicMethods<T>>
 }
 
@@ -161,11 +167,11 @@ export class RuntimeEdgeCommandController {
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spreads bind every public method of the command classes RuntimeEdgeCommandSurface is built from; the binders' return types cannot spell the prefixed keys.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
       ...bindPrefixedMethods(this.clickUp, 'clickUp'),
-      ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
+      ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface

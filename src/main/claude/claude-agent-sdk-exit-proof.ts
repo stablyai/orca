@@ -2,9 +2,12 @@ import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
-} from '../pty-descendant-exit-verification'
-import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
-import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+} from '../pty/process-retirement/pty-descendant-exit-verification'
+import {
+  captureDescendantSnapshot,
+  type DescendantSnapshot
+} from '../pty/process-retirement/pty-descendant-termination'
+import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 import { terminateClaudeRoot } from './claude-child-root-termination'
 import { killProviderWriter } from '../provider-process/provider-process-teardown'

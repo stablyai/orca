@@ -1,32 +1,35 @@
 import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
+import { noteWslHostUserAction } from '../wsl/host-lifecycle/wsl-host-user-actions'
 import type { WslHostAddResult, WslHostCapability } from '../../shared/wsl-host-types'
 import type { Store } from '../persistence/loading-store/store'
-import { createWslHostConnector } from '../wsl/wsl-host-connector'
-import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
+import { createWslHostConnector } from '../wsl/host-lifecycle/wsl-host-connector'
+import {
+  releaseUnwantedWslHolders,
+  wslHolderKeepPolicy
+} from '../wsl/host-lifecycle/wsl-orphan-holder-release'
 import {
   createFakeWslHostConnector,
   readFakeWslHostsConfig
-} from '../wsl/wsl-host-e2e-fake-connector'
+} from '../wsl/host-lifecycle/wsl-host-e2e-fake-connector'
 import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
-import { WslHostService } from '../wsl/wsl-host-service'
+import { WslHostService } from '../wsl/host-lifecycle/wsl-host-service'
 import { WslHostVisibleWorkByWindow } from './wsl-host-visible-work-windows'
-import type { WslHostAutomationWake } from '../wsl/wsl-host-automation-wake'
+import type { WslHostAutomationWake } from '../wsl/host-lifecycle/wsl-host-automation-wake'
 import { createWslHostAutomationWake } from './wsl-host-automation-wake-wiring'
-import { wslHostsAcceptNewWork, wslHostsServing } from '../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork, wslHostsServing } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   publishWslHostStatus,
   pushWslHostCapabilityOnNewWorkChange
 } from './wsl-host-window-broadcast'
-import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
+import { wslHostAddRefusal } from '../wsl/host-lifecycle/wsl-host-add-admission'
 import {
   getWslHostService,
   setWslHostPhoneGate,
   setWslHostService
-} from '../wsl/wsl-host-service-instance'
-import { WslHostPhoneGate } from '../wsl/wsl-host-phone-reach'
-import { readWslHostRecordsQuietly } from '../wsl/wsl-host-connection-record'
+} from '../wsl/host-lifecycle/wsl-host-service-instance'
+import { WslHostPhoneGate } from '../wsl/host-lifecycle/wsl-host-phone-reach'
+import { readWslHostRecordsQuietly } from '../wsl/host-lifecycle/wsl-host-connection-record'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
@@ -35,14 +38,14 @@ import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { reconcileWslHostBridgePorts } from '../../shared/runtime-environment-wsl-host-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
-import type { WslHostRuntimeAccess } from '../wsl/wsl-host-server-stop'
+import type { WslHostRuntimeAccess } from '../wsl/host-lifecycle/wsl-host-server-stop'
 import {
   changesWslHostAccounts,
   pushWslOrcadHostAccountEnv
-} from '../wsl/wsl-orcad-host-account-push'
-import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
-import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
-import { wireWslNodeRuntimePrefetch } from '../wsl/wsl-node-runtime-prefetch'
+} from '../wsl/orcad/wsl-orcad-host-account-push'
+import { wslOrcadHostSupports } from '../wsl/orcad/wsl-orcad-host-environments'
+import { wslHostConnectOptions } from '../wsl/host-lifecycle/wsl-host-connect-request'
+import { wireWslNodeRuntimePrefetch } from '../wsl/execution/wsl-node-runtime-prefetch'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',
@@ -109,7 +112,8 @@ function createService(args: WslHostHandlerArgs): WslHostService | null {
   if (!wslHostsServing()) {
     return null
   }
-  const fake = readFakeWslHostsConfig()
+  // Inline literal so non-e2e builds fold `fake` to null and drop the fake connector module.
+  const fake = import.meta.env.MODE === 'e2e' ? readFakeWslHostsConfig() : null
   if (process.platform !== 'win32' && !fake) {
     return null
   }
@@ -182,7 +186,11 @@ function startService(args: WslHostHandlerArgs): WslHostService | null {
     return null
   }
   setWslHostService(created)
-  if (process.platform === 'win32' && !readFakeWslHostsConfig() && created.hasServerFiles()) {
+  if (
+    process.platform === 'win32' &&
+    !(import.meta.env.MODE === 'e2e' && readFakeWslHostsConfig()) &&
+    created.hasServerFiles()
+  ) {
     wireWslNodeRuntimePrefetch({ store: args.store, userDataPath: args.getUserDataPath() })
   }
   args.store.onSettingsChanged((updates, settings) => {

@@ -2,12 +2,10 @@ import { appendFile, mkdir, stat, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
-import { resetCursorChatMetaIndexCacheForTests } from '../ai-vault/session-scanner-cursor-chat-meta'
+import { parseAgentSessionFileCached } from '../ai-vault/parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
+import { resetCursorChatMetaIndexCacheForTests } from '../ai-vault/scanners/cursor/session-scanner-cursor-chat-meta'
 import { SessionSearchEngine } from './session-search-engine'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
@@ -16,7 +14,7 @@ import {
 } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
 import { sessionCandidate } from './session-search-transcript-fixtures'
-import { readWholeTranscript } from '../ai-vault/session-transcript-reader'
+import { readWholeTranscript } from '../ai-vault/transcripts/session-transcript-reader'
 
 let index: SessionSearchIndexFile
 let store: SessionSearchStore

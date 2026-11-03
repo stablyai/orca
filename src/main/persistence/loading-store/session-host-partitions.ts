@@ -13,16 +13,16 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import { readTerminalScrollbackSnapshotSync } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   hasTerminalScrollbackSnapshotSync,
   readTerminalScrollbackSnapshot,
   statTerminalScrollbackSnapshotSize
-} from '../../terminal-scrollback-snapshot-nonblocking-reads'
+} from '../../pty/scrollback/terminal-scrollback-snapshot-nonblocking-reads'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
 import {
   removeWorkspaceSessionOwner,

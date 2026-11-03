@@ -32,6 +32,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "チャット UI はオンです",
+        "off": "チャット UI はオフです",
+        "agents": "Agent ごとのデフォルト起動モード",
+        "agentsDescription": "各 Agent をチャット UI と CLI のどちらで開くか選択します。",
+        "chatDescription": "新しい Agent はデフォルトでチャットモードで起動します。",
+        "cliDescription": "新しい Agent はデフォルトで CLI として起動します。",
+        "turnOn": "オンにする",
+        "turnOff": "オフにする",
+        "toggle": "デフォルトでチャット UI を使用"
+      },
       "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",
       "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
@@ -171,7 +182,7 @@
         "inheritFont": "IDE と同じフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
-        "title": "チャット",
+        "title": "チャット UI",
         "textSize": "テキストサイズ",
         "textSizeDescription": "メッセージ、ツールの動作、メッセージ入力欄。チャット内の {{increase}} / {{decrease}} でも変更できます。",
         "codeTextSize": "コードのテキストサイズ",
@@ -2116,8 +2127,6 @@
         "25690a3855": "PR からワークスペースを開始する",
         "a459866967": "PR に紐づくワークスペースを再開",
         "347034903a": "GitHub リンクをコピーする",
-        "5a01ca7253": "表示された状態を GitHub と同期できませんでした。",
-        "996a1897d2": "この PR の表示状態を同期できません。",
         "e0b15c793f": "GitHub リンクのコピーに失敗しました",
         "992e799227": "GitHub リンクがコピーされました",
         "61bfc81ada": "この PR に添付されたワークスペースを開けません。",
@@ -7435,7 +7444,6 @@
           "9d3e56ca36": "変更を適用する",
           "f96688b6bc": "キャンセル",
           "b7ddae600c": "完了",
-          "e4bda7ce6f": "このシステムには Ghostty 構成が見つかりません。",
           "b58d4c9051": "サポートされていないキー",
           "674b5ccd6b": "インポートする新規設定はありません。現在の設定はすでに一致しています。",
           "a4c5dec640": "更新する設定",
@@ -18411,6 +18419,7 @@
       "failureWords": {
         "theAgent": "Agent",
         "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+        "savedConversationMissing": "{{agent}} はこのチャットの保存された会話を見つけられませんでした。",
         "runCommandAgain": "/{{command}} をもう一度実行してください。",
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
         "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",
@@ -18464,6 +18473,7 @@
         "attachmentNotAFile": "このメッセージの画像がファイルではないため、メッセージは送信されませんでした。",
         "attachmentNoSource": "このメッセージの画像に送信するファイルがないため、メッセージは送信されませんでした。",
         "attachmentInvalid": "このメッセージの添付ファイルは Agent に送信できません。",
+        "attachmentsExpired": "{{names}} は期限切れです。",
         "attachmentUnreadable": "このメッセージの添付ファイルを読み取れなかったため、メッセージは送信されませんでした。",
         "emptyMessage": "このメッセージは空のため、送信されませんでした。",
         "commandUnavailable": "このコマンドは {{agent}} のチャットでは使用できないため、送信されませんでした。",
@@ -18551,6 +18561,7 @@
         "recordFailed": "Orca はこれをチャットの履歴に保存できませんでした。",
         "attachmentExpired": "この添付ファイルは期限切れです。",
         "reattachFile": "削除してから、もう一度添付してください。",
+        "reattachFiles": "削除してから、もう一度添付してください。",
         "conversationCleared": "この会話はクリアされました。",
         "openCurrentConversation": "続けるには、現在の会話を開いてください。",
         "clearUnfinished": "前回の /clear は完了しませんでした。",
@@ -18812,7 +18823,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
+        "exitUnconfirmed": "{{agent}} は別のターミナルでこの会話を実行しています。そちらで終了するか、そのターミナルを閉じてから、もう一度お試しください。"
       },
       "state": {
         "loading": {
@@ -19304,6 +19316,13 @@
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
+        "openSetting": "上限がリセットされたら自動的に続ける",
+        "cancelled": "Orca はこのチャットを自動的には続けません。",
+        "scheduled": "Orca は {{time}} にこのチャットを続けます。",
+        "cancel": "続けない"
       }
     },
     "tab": {
@@ -19697,7 +19716,12 @@
         "queueSearchSteer": "今すぐ送信",
         "shellEnvSearchVariables": "環境変数",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "プロキシ"
+        "shellEnvSearchProxy": "プロキシ",
+        "usageLimitContinueTitle": "使用量の上限がリセットされたらチャットを自動的に続ける",
+        "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
+        "usageLimitContinueSearchLimit": "使用量の上限",
+        "usageLimitContinueSearchReset": "リセット",
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
       }
     },
     "agentChildRow": {
@@ -19841,6 +19865,9 @@
         "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
         "keepOpen": "開いたままにする"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL で実行: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -20319,7 +20346,10 @@
       "title": "{{distro}} をホストとして実行（推奨）",
       "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
       "accept": "ホストとして実行",
-      "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。"
+      "projectNotFound": "移動する追加済みのプロジェクトが見つかりませんでした。サイドバーのプロジェクトで「{{distro}} ホストへ移動…」を使用してください。",
+      "existingTitle": "{{distro}} ホストに追加（推奨）",
+      "existingWhy": "{{distro}} はすでにホストとして実行中のため、Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
+      "existingAccept": "ホストに追加"
     }
   },
   "editor": {
@@ -21957,6 +21987,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 読み取れるバックアップがないため、空の状態から始まります。",
+      "sectionKeptCurrent": "{{section}}：現在の実行履歴は保持されます",
       "sectionRestored": "{{section}}: {{time}} に保存されたバックアップから復元されます。",
       "projectsForgotten": "Orca はプロジェクトとそのワークスペースの詳細を忘れます。ディスク上のファイルには影響しません。",
       "newerProjectsRemoved": "そのバックアップ以降に追加したプロジェクトは、ワークスペースの詳細とともに Orca から削除されます。ディスク上のファイルには影響しません。",
@@ -21999,7 +22030,7 @@
       "noneFound": "（見つかりません）",
       "sqlitePath": "SQLite パス: {{path}}",
       "sectionsDamaged": "このプロファイルの保存状態の一部が破損しています: {{sections}}。それ以外はすべて正常です。",
-      "repairCommand": "Orca を終了し、`{{command}}` を実行すると、破損した部分だけをバックアップから置き換え、それ以外をすべて維持できます。Orca は破損したファイルのコピーを保持します。",
+      "repairCommand": "Orca を終了してから `{{command}}` を実行すると、破損した部分だけを修復し、他のデータを保持します。Orca は破損したファイルのコピーを保存します。",
       "restoreWholeBackup": "代わりにバックアップ全体を復元するには、`{{exportsCommand}}`、次に `{{rollbackCommand}}` を実行してください。",
       "sqliteUnreadable": "SQLite の状態を読み取れないため、Orca はアクティブなプロファイルを安全に開けません。",
       "legacyJsonPath": "従来の JSON パス: {{path}}",
@@ -22285,6 +22316,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
+    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
+    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
+    "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "Agent と設定を検索…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
@@ -22298,7 +22335,10 @@
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル"
+    "legacyModelCount": "{{total}} 個のモデル",
+    "select": "Agent を選択",
+    "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
+    "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },
   "wslMove": {
     "entry": {
@@ -22328,7 +22368,8 @@
       "changed": "以前に移動した後、古いバージョンの Orca によってここで変更されました。再び移動されることはありません。",
       "chatsStay": "既存のチャットはこのコンピューターに残ります。このプロジェクトの新しいチャットは WSL ホストで開始されます。",
       "browserLoginsConflict": "ホストのブラウザープロファイルがすでに使用中のため、ブラウザーのサインイン状態は引き継がれません。移動後、ホストのブラウザータブで再度サインインしてください。",
-      "browserLoginsNotCarried": "ブラウザーのサインイン状態はこのホストに引き継がれません。移動後、そのブラウザータブで再度サインインしてください。"
+      "browserLoginsNotCarried": "ブラウザーのサインイン状態はこのホストに引き継がれません。移動後、そのブラウザータブで再度サインインしてください。",
+      "why": "作業はファイルと同じ Linux 内で実行されるため、ターミナル、Git、ファイルの変更がより速く安定します。プロジェクトは変わらず、「このコンピューターで再び使用」でいつでも元に戻せます。"
     },
     "cancel": "キャンセル",
     "progress": {

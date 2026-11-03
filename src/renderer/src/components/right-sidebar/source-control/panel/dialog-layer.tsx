@@ -1,7 +1,7 @@
 import React from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { BaseRefPicker } from '@/components/source-control/BaseRefPicker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

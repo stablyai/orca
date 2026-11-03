@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listWorktreesStrict } from '../git/worktree'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
 
-vi.mock('../git/worktree', () => ({ listWorktreesStrict: vi.fn() }))
+vi.mock('../git/worktrees/catalog/worktree-listing', () => ({
+  listWorktreesStrict: vi.fn()
+}))
 
 describe('scanLocalRepoWorktreesForResolution', () => {
   beforeEach(() => {

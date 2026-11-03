@@ -3,7 +3,7 @@ import { normalizeGitRemoteUrl } from '../../shared/git-remote-identity'
 import { isShowRefNoMatchError } from '../../shared/git-show-ref-no-match'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
-import { runGitProbeOnHost } from '../repo-git-remote-identity'
+import { runGitProbeOnHost } from '../workspaces/catalog/repo-git-remote-identity'
 
 type GitProbe = (args: string[]) => Promise<string>
 

@@ -21,7 +21,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

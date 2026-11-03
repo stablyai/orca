@@ -171,7 +171,7 @@
         "inheritFont": "IDE와 같은 글꼴",
         "fontPreviewLabel": "채팅 글꼴 미리보기",
         "fontPreview": "이 문장에서 채팅 글꼴을 미리 볼 수 있습니다.",
-        "title": "채팅",
+        "title": "채팅 UI",
         "textSize": "텍스트 크기",
         "textSizeDescription": "메시지, 도구 활동 및 메시지 입력란. 채팅에서 {{increase}} / {{decrease}} 키로도 변경할 수 있습니다.",
         "codeTextSize": "코드 텍스트 크기",
@@ -2116,8 +2116,6 @@
         "25690a3855": "PR에서 워크스페이스 시작",
         "a459866967": "PR에 연결된 워크스페이스 재개",
         "347034903a": "GitHub 링크 복사",
-        "5a01ca7253": "조회된 상태를 GitHub와 동기화하지 못했습니다.",
-        "996a1897d2": "이 PR에 대해 본 상태를 동기화할 수 없습니다.",
         "e0b15c793f": "GitHub 링크를 복사하지 못했습니다.",
         "992e799227": "GitHub 링크가 복사되었습니다.",
         "61bfc81ada": "이 PR에 연결된 워크스페이스를 열 수 없습니다.",
@@ -7435,7 +7433,6 @@
           "9d3e56ca36": "변경 사항 적용",
           "f96688b6bc": "취소",
           "b7ddae600c": "완료",
-          "e4bda7ce6f": "이 시스템에는 Ghostty 구성이 없습니다.",
           "b58d4c9051": "지원되지 않는 키",
           "674b5ccd6b": "가져올 새 설정이 없습니다. 현재 설정이 이미 일치합니다.",
           "a4c5dec640": "업데이트할 설정",
@@ -9224,7 +9221,7 @@
               "terminal": "터미널",
               "chat": "채팅",
               "click": "클릭",
-              "actions": "행위",
+              "actions": "작업",
               "popover": "팝오버",
               "menu": "메뉴",
               "disable": "비활성화"
@@ -13777,7 +13774,7 @@
                       "a1b2c3d4e5": "코드 분석",
                       "b2c3d4e5f6": "코드 라인",
                       "7f3e1a9c24": "{{value0}} — 생성됨: {{value1}}줄 추가, {{value2}}줄 삭제",
-                      "c8d5b21e07": "원천",
+                      "c8d5b21e07": "소스 코드",
                       "7a04c6f8b3": "생성됨"
                     }
                   }
@@ -17854,7 +17851,7 @@
           "size": "크기",
           "updated": "업데이트됨",
           "expires": "만료",
-          "actions": "행위"
+          "actions": "작업"
         },
         "ArtifactsPageSkeleton": {
           "loading": "아티팩트 로드 중"
@@ -18411,6 +18408,7 @@
       "failureWords": {
         "theAgent": "에이전트",
         "providerStartFailed": "{{agent}}이(가) 시작을 마치기 전에 중지되었습니다.",
+        "savedConversationMissing": "{{agent}}에서 이 채팅의 저장된 대화를 찾을 수 없습니다.",
         "runCommandAgain": "/{{command}}을(를) 다시 실행하세요.",
         "sendToTryAgain": "다시 시도하려면 메시지를 보내세요.",
         "sendAgainToTryOnceMore": "메시지를 다시 보내 한 번 더 시도하세요.",
@@ -18464,6 +18462,7 @@
         "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
         "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
         "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+        "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
         "attachmentUnreadable": "이 메시지의 첨부 파일을 읽을 수 없어 메시지가 전송되지 않았습니다.",
         "emptyMessage": "이 메시지가 비어 있어 전송되지 않았습니다.",
         "commandUnavailable": "이 명령은 {{agent}} 채팅에서 사용할 수 없어 전송되지 않았습니다.",
@@ -18551,6 +18550,7 @@
         "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
         "attachmentExpired": "이 첨부 파일이 만료되었습니다.",
         "reattachFile": "제거한 후 다시 첨부하세요.",
+        "reattachFiles": "제거한 후 다시 첨부하세요.",
         "conversationCleared": "이 대화는 지워졌습니다.",
         "openCurrentConversation": "계속하려면 현재 대화를 여세요.",
         "clearUnfinished": "마지막 /clear가 완료되지 않았습니다.",
@@ -18812,7 +18812,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
-        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요."
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
+        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이 대화를 실행 중입니다. 그곳에서 종료하거나 해당 터미널을 닫은 후 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -19304,6 +19305,13 @@
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
         "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
+        "openSetting": "한도가 재설정되면 자동으로 계속하기",
+        "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
+        "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
+        "cancel": "계속하지 않기"
       }
     },
     "tab": {
@@ -19423,7 +19431,7 @@
           "reviewPresence": "PR / 씨",
           "reviewProvider": "공급자",
           "ticketPresence": "연계티켓",
-          "host": "주인",
+          "host": "호스트",
           "repo": "저장소",
           "pathPrefix": "경로는 다음으로 시작됩니다.",
           "blockerMode": "블로커 매치",
@@ -19463,7 +19471,7 @@
             "name": "워크스페이스",
             "repo": "저장소",
             "path": "길",
-            "host": "주인",
+            "host": "호스트",
             "workspaceStatus": "상태",
             "agent": "에이전트",
             "git": "Git",
@@ -19484,7 +19492,7 @@
           "agent": {
             "working": "작업 중",
             "permission": "당신을 기다리고 있습니다",
-            "idle": "게으른"
+            "idle": "유휴 상태"
           },
           "review": {
             "open": "열림",
@@ -19697,7 +19705,12 @@
         "queueSearchSteer": "지금 보내기",
         "shellEnvSearchVariables": "환경 변수",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "프록시"
+        "shellEnvSearchProxy": "프록시",
+        "usageLimitContinueTitle": "사용 한도가 재설정되면 채팅을 자동으로 계속하기",
+        "usageLimitContinueCopy": "한도가 재설정되면 Orca가 \"Continue where you left off.\"를 보냅니다. 재설정 시간을 알 수 있는 모든 채팅에 적용됩니다.",
+        "usageLimitContinueSearchLimit": "사용 한도",
+        "usageLimitContinueSearchReset": "재설정",
+        "usageLimitContinueToggleLabel": "사용 한도 재설정 시 채팅 계속하기 전환"
       }
     },
     "agentChildRow": {
@@ -19841,6 +19854,9 @@
         "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
         "keepOpen": "열어 두기"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL에서 실행: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -20319,7 +20335,10 @@
       "title": "{{distro}}을(를) 호스트로 실행(권장)",
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
       "accept": "호스트로 실행",
-      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요."
+      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요.",
+      "existingTitle": "{{distro}} 호스트에 추가(권장)",
+      "existingWhy": "{{distro}}이(가) 이미 호스트로 실행 중이므로 Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
+      "existingAccept": "호스트에 추가"
     }
   },
   "editor": {
@@ -21957,6 +21976,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: 읽을 수 있는 백업이 없어 빈 상태로 시작합니다.",
+      "sectionKeptCurrent": "{{section}}: 현재 실행 기록이 유지됩니다",
       "sectionRestored": "{{section}}: {{time}}에 저장된 백업에서 복원됩니다.",
       "projectsForgotten": "Orca가 프로젝트와 해당 워크스페이스 세부정보를 잊습니다. 디스크의 파일은 변경되지 않습니다.",
       "newerProjectsRemoved": "해당 백업 이후에 추가한 프로젝트는 워크스페이스 세부정보와 함께 Orca에서 제거됩니다. 디스크의 파일은 변경되지 않습니다.",
@@ -21999,7 +22019,7 @@
       "noneFound": "(찾을 수 없음)",
       "sqlitePath": "SQLite 경로: {{path}}",
       "sectionsDamaged": "이 프로필의 저장된 상태 중 일부가 손상되었습니다: {{sections}}. 나머지는 모두 정상입니다.",
-      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하면 손상된 부분만 백업에서 교체하고 나머지는 모두 유지할 수 있습니다. Orca는 손상된 파일의 사본을 보관합니다.",
+      "repairCommand": "Orca를 종료한 다음 `{{command}}`를 실행하여 손상된 부분만 복구하고 나머지는 유지하세요. Orca는 손상된 파일의 복사본을 보관합니다.",
       "restoreWholeBackup": "대신 백업 전체를 복원하려면 `{{exportsCommand}}`를 실행한 다음 `{{rollbackCommand}}`를 실행하세요.",
       "sqliteUnreadable": "SQLite 상태를 읽을 수 없어 Orca가 활성 프로필을 안전하게 열 수 없습니다.",
       "legacyJsonPath": "기존 JSON 경로: {{path}}",
@@ -22285,6 +22305,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
+    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "에이전트 및 설정 검색…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
@@ -22298,7 +22324,10 @@
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개"
+    "legacyModelCount": "모델 {{total}}개",
+    "select": "에이전트 선택",
+    "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
+    "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"
   },
   "wslMove": {
     "entry": {
@@ -22328,7 +22357,8 @@
       "changed": "이전에 이동된 후 이전 버전의 Orca가 여기에서 변경했습니다. 다시 이동하지 않습니다.",
       "chatsStay": "기존 채팅은 이 컴퓨터에 남습니다. 이 프로젝트의 새 채팅은 WSL 호스트에서 시작됩니다.",
       "browserLoginsConflict": "호스트의 브라우저 프로필이 이미 사용 중이므로 브라우저 로그인은 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요.",
-      "browserLoginsNotCarried": "브라우저 로그인은 이 호스트로 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요."
+      "browserLoginsNotCarried": "브라우저 로그인은 이 호스트로 옮겨지지 않습니다. 이동 후 호스트의 브라우저 탭에서 다시 로그인하세요.",
+      "why": "작업이 파일과 같은 Linux 안에서 실행되므로 터미널, Git, 파일 변경이 더 빠르고 안정적입니다. 프로젝트는 바뀌지 않으며, 어떤 프로젝트든 \"이 컴퓨터에서 다시 사용\"으로 되돌릴 수 있습니다."
     },
     "cancel": "취소",
     "progress": {

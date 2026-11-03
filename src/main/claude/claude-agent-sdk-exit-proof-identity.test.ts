@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
-import { collectDescendantRows } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 

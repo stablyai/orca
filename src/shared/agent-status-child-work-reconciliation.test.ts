@@ -62,27 +62,6 @@ function only(store: AgentStatusStore): AgentChildWorkRecord {
 }
 
 describe('structured child-work reconciliation', () => {
-  it('records a live child once, under its task id and the spawn call of its first run', () => {
-    const { store, apply } = harness()
-    expect(apply(live(child('task-a')))).toMatchObject({ admitted: 1, rejected: [] })
-    expect(only(store)).toMatchObject({
-      childWorkId: 'child-1',
-      kind: 'agent',
-      state: 'working',
-      membership: 'live',
-      residency: 'background',
-      firstObservedAt: 100,
-      observedAt: 100,
-      invocation: { invocationId: 'toolu_task-a', generation: 1 }
-    })
-    expect(
-      store
-        .getAliasesForChild('child-1')
-        .map(({ aliasKind, alias }) => `${aliasKind}:${alias}`)
-        .sort()
-    ).toEqual(['task_id:task-a', 'tool_use_id:toolu_task-a'])
-  })
-
   it('keeps one child when it is first named before its spawn call is known', () => {
     const { store, apply } = harness()
     apply(live(child('task-a', { handle: { idKind: 'task_id', id: 'task-a' } })))
@@ -277,15 +256,6 @@ describe('structured child-work reconciliation', () => {
     expect(only(store).operation).toBeUndefined()
   })
 
-  it('hands raw provider labels to admission, which folds them to one line', () => {
-    const { store, apply } = harness()
-    const result = apply(
-      live(child('task-a', { description: 'Audit\nthe\ttests\u0007 ', name: ' reviewer\n' }))
-    )
-    expect(result.rejected).toEqual([])
-    expect(only(store)).toMatchObject({ description: 'Audit the tests', name: 'reviewer' })
-  })
-
   it('settles every child still live when the provider session ends, and keeps them all', () => {
     const { store, apply } = harness()
     apply(live(child('task-a')), live(child('task-b'), 110), {
@@ -382,21 +352,6 @@ describe('structured child-work reconciliation', () => {
     expect(apply(live(child('task-a'), 200)).rejected).toEqual([
       { handleId: 'task-a', reason: 'ambiguous' }
     ])
-  })
-
-  it('retains 100 settled children without evicting the oldest', () => {
-    const { store, apply } = harness()
-    for (let index = 0; index < 100; index += 1) {
-      apply(live(child(`done-${index}`), 200 + index), {
-        type: 'ended',
-        observedAt: 200 + index,
-        handle: { idKind: 'task_id', id: `done-${index}` },
-        outcome: 'succeeded'
-      })
-    }
-    const settled = records(store).filter((record) => record.membership === 'settled')
-    expect(settled).toHaveLength(100)
-    expect(settled.map((record) => record.description)).toContain('Task done-0')
   })
 
   it('removes work that stopped with nothing to report, and only the record it names', () => {

@@ -11,18 +11,18 @@ import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useSettingsPageEffects } from '../settings/use-settings-page-effects'
-import { resolveSettingsHostScope } from '../settings/settings-host-scope'
-import { renderAgentsSettingsSection } from '../settings/settings-capability-section-renderers'
-import { ActiveSettingsSectionProvider } from '../settings/SettingsSection'
-import type { SettingsRenderContext } from '../settings/settings-render-context'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
+import { useSettingsPageEffects } from '../settings/page/use-settings-page-effects'
+import { resolveSettingsHostScope } from '../settings/host-scope/settings-host-scope'
+import { renderAgentsSettingsSection } from '../settings/page/settings-capability-section-renderers'
+import { ActiveSettingsSectionProvider } from '../settings/section-layout/SettingsSection'
+import type { SettingsRenderContext } from '../settings/page/settings-render-context'
+import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents/agents-search'
 import { chatDemoRevealTokens, getChatDemoCopy } from './chat-ui-here-feature-tip-demo'
 import { FeatureTipActions } from './FeatureTipActions'
 import FeatureTipsModal from './FeatureTipsModal'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('../settings/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
+vi.mock('../settings/agents/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,

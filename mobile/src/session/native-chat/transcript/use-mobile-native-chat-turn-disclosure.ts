@@ -12,7 +12,7 @@ import type {
   NativeChatSettledTurns,
   NativeChatTurnStatus
 } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../../src/shared/native-chat-live-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../../src/shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal

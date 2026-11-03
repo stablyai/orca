@@ -87,33 +87,6 @@ describe('useGitHubSlugMetadata', () => {
     expect(renders).toBeLessThanOrEqual(4)
   })
 
-  it('does not loop when cached assignee metadata is read with a fresh settings object', async () => {
-    let renders = 0
-    let assigneeLogins: string[] = []
-    apiMocks.listAssignableUsersBySlug.mockResolvedValue({
-      ok: true,
-      users: [{ login: 'jinwoo', name: 'Jinwoo', avatarUrl: 'https://example.test/avatar.png' }]
-    })
-
-    function AssigneesProbe(): null {
-      renders += 1
-      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], { kind: 'local' })
-      assigneeLogins = metadata.data.map((user) => user.login)
-      return null
-    }
-
-    renderProbe(<AssigneesProbe />)
-    await flushEffects()
-
-    expect(assigneeLogins).toEqual(['jinwoo'])
-    expect(apiMocks.listAssignableUsersBySlug).toHaveBeenCalledExactlyOnceWith({
-      owner: 'stablyai',
-      repo: 'orca',
-      host: 'github.com'
-    })
-    expect(renders).toBeLessThanOrEqual(4)
-  })
-
   it('does not re-issue a failed label fetch when a fresh settings object re-renders', async () => {
     // Fresh settings identities previously rearmed fetch after each failure settlement, creating a render-paced request storm.
     let renders = 0

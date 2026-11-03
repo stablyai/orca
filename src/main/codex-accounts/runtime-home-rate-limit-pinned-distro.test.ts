@@ -10,7 +10,9 @@ import {
   testState
 } from './runtime-home-service-test-harness'
 
-vi.mock('../wsl/wsl-background-exec-gate', () => ({ blockedWslDistroForExec: async () => null }))
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
+  blockedWslDistroForExec: async () => null
+}))
 vi.mock('electron', () => ({ app: { getPath: () => testState.userDataDir } }))
 vi.mock(import('node:os'), async (importOriginal) => ({
   ...(await importOriginal()),
@@ -62,7 +64,7 @@ describe('Codex quota poll home with a gated, pinned WSL distro (E9)', () => {
     setupRuntimeHomeTest()
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome

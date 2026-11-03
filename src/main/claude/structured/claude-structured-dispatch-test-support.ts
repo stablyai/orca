@@ -6,6 +6,7 @@ import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
 import { createClaudeInitProof } from './claude-structured-init-proof'
+import { createClaudeStartupOutcome } from './claude-structured-startup-outcome'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
@@ -48,7 +49,8 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
       claudeConfigDir: '/claude-home',
       cwd: '/work',
       history: { leafUuid: null, covered: true, contextActivity: 0 },
-      onLateRefusal: () => {}
+      onLateRefusal: () => {},
+      startup: createClaudeStartupOutcome()
     }
   }
 }

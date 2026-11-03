@@ -2,21 +2,21 @@ import { Fragment, useState } from 'react'
 import { Trans } from 'react-i18next'
 import {
   AzureDevOpsIntegrationCard,
-  BitbucketIntegrationCard,
-  GiteaIntegrationCard,
+  GiteaIntegrationCard
+} from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { BitbucketIntegrationCard } from '@/components/integrations/source-control/bitbucket-integration-card'
+import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
-} from '@/components/settings/source-control-integration-cards'
-import {
-  ClickUpIntegrationCard,
-  JiraIntegrationCard,
-  LinearIntegrationCard
-} from '@/components/settings/task-tracker-integration-cards'
+} from '@/components/integrations/source-control/cli-source-control-integration-cards'
+import { ClickUpIntegrationCard } from '@/components/integrations/task-trackers/clickup-integration-card'
+import { JiraIntegrationCard } from '@/components/integrations/task-trackers/jira-integration-card'
+import { LinearIntegrationCard } from '@/components/integrations/task-trackers/linear-integration-card'
 import {
   IntegrationCardGroup,
   IntegrationCardPresentationProvider
-} from '@/components/settings/integration-card-presentation'
-import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
+} from '@/components/integrations/presentation/integration-card-presentation'
+import { useIntegrationProviderStatusRefresh } from '@/hooks/use-integration-provider-status-refresh'
 import { IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,

@@ -79,6 +79,8 @@ export function replaceJournalEpoch(input: {
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
+  /** The caller's completion receipt writes after the new epoch's records, in the same
+   * transaction, so it can restore the replaced conversation on `db`. */
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   isLiveGoal?: (id: string) => boolean
   claimAttachments?: JournalAttachmentClaim
@@ -122,6 +124,17 @@ export function replaceJournalEpoch(input: {
   }
   const rows: JournalRow[] = [epochRow]
   applyJournalRow(state, epochRow)
+  const { lifted, liveStop, reopened, failureHeld } = input.queuePause
+  const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
+  const resume = () => {
+    const row = buildJournalQueueResumeRow(place())
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+  // A rebuild preserves a failure hold without re-holding a queue the person already resumed.
+  if (lifted && failureHeld) {
+    resume()
+  }
   for (const item of input.items) {
     const row = buildJournalItemRow({
       state,
@@ -200,12 +213,8 @@ export function replaceJournalEpoch(input: {
         : change
     )
   }
-  const { lifted, liveStop, reopened } = input.queuePause
-  const place = () => ({ state, seq: state.lastSequence + 1, fence: input.fence, ts: input.now() })
-  if (lifted) {
-    const row = buildJournalQueueResumeRow(place())
-    applyJournalRow(state, row)
-    rows.push(row)
+  if (lifted && !failureHeld) {
+    resume()
   }
   if (liveStop) {
     const row = buildJournalStopEventRow({ ...place(), event: liveStop })
@@ -257,8 +266,15 @@ export function replaceJournalEpoch(input: {
       }
       input.queue.receipt.write(db)
       publishJournalSessionEpoch(db, input.identity, epoch)
+      const publication = publishJournalOutcomeEpoch(
+        db,
+        sessionId,
+        state.epoch,
+        rows,
+        input.previous
+      )
       receipt?.write(db)
-      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows, input.previous)
+      return publication
     },
     false,
     (publication) => {
