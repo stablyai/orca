@@ -3287,7 +3287,6 @@
       "pipelineJobs_one": "{{count}} trabajo",
       "pipelineJobs_other": "{{count}} trabajos",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "subIssueTitle": "Título del sub-issue",
       "subIssues": "Sub-issues"
     },
@@ -3521,7 +3520,6 @@
       "requestReview": "Solicitar revisión",
       "requestReviewers": "Solicitar revisores",
       "rerunAll": "Reejecutar todos",
-      "rerunFailed": "Reejecutar fallidos",
       "reviewers": "Revisores",
       "viewFile": "Ver"
     },

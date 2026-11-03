@@ -3287,7 +3287,6 @@
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer les vérifications échouées",
       "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
     },
@@ -3521,7 +3520,6 @@
       "requestReview": "Demander une revue",
       "requestReviewers": "Demander des reviewers",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer celles en échec",
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },

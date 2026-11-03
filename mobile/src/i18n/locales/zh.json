@@ -3194,7 +3194,6 @@
       "pipelineJobs_one": "{{count}} 个作业",
       "pipelineJobs_other": "{{count}} 个作业",
       "rerunAll": "重新运行全部",
-      "rerunFailed": "重新运行失败项",
       "subIssueTitle": "子议题标题",
       "subIssues": "子议题"
     },
@@ -3425,7 +3424,6 @@
       "requestReview": "请求评审",
       "requestReviewers": "邀请评审人",
       "rerunAll": "全部重新运行",
-      "rerunFailed": "重新运行失败项",
       "reviewers": "评审人",
       "viewFile": "查看"
     },

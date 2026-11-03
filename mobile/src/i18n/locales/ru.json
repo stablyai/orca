@@ -3376,7 +3376,6 @@
       "pipelineJobs_one": "{{count}} задание",
       "pipelineJobs_other": "{{count}} задания",
       "rerunAll": "Повторить все",
-      "rerunFailed": "Повторить неуспешные",
       "subIssueTitle": "Название подзадачи",
       "subIssues": "Подзадачи"
     },
@@ -3613,7 +3612,6 @@
       "requestReview": "Запросить проверку",
       "requestReviewers": "Укажите рецензентов",
       "rerunAll": "Перезапустить все",
-      "rerunFailed": "Перезапустить неудачные",
       "reviewers": "Рецензенты",
       "viewFile": "Просмотреть"
     },

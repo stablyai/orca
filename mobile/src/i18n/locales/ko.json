@@ -3194,7 +3194,6 @@
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
     },
@@ -3425,7 +3424,6 @@
       "requestReview": "리뷰 요청",
       "requestReviewers": "리뷰어 요청",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },

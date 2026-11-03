@@ -3194,7 +3194,6 @@
       "pipelineJobs_one": "{{count}} 件のジョブ",
       "pipelineJobs_other": "{{count}} 件のジョブ",
       "rerunAll": "すべて再実行",
-      "rerunFailed": "失敗分を再実行",
       "subIssueTitle": "サブ Issue のタイトル",
       "subIssues": "サブ Issue"
     },
@@ -3425,7 +3424,6 @@
       "requestReview": "レビューを依頼",
       "requestReviewers": "レビューの依頼先",
       "rerunAll": "すべて再実行",
-      "rerunFailed": "失敗分を再実行",
       "reviewers": "レビュアー",
       "viewFile": "表示"
     },

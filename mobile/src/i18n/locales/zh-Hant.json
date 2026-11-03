@@ -3194,7 +3194,6 @@
       "pipelineJobs_one": "{{count}} 項作業",
       "pipelineJobs_other": "{{count}} 項作業",
       "rerunAll": "全部重新執行",
-      "rerunFailed": "重新執行失敗項目",
       "subIssueTitle": "子議題標題",
       "subIssues": "子議題"
     },
@@ -3425,7 +3424,6 @@
       "requestReview": "請求審查",
       "requestReviewers": "邀請審查人",
       "rerunAll": "全部重新執行",
-      "rerunFailed": "重新執行失敗項目",
       "reviewers": "審查人",
       "viewFile": "檢視"
     },

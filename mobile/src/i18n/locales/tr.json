@@ -3198,7 +3198,6 @@
       "pipelineJobs_one": "{{count}} iş",
       "pipelineJobs_other": "{{count}} iş",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "subIssueTitle": "Alt sorun başlığı",
       "subIssues": "Alt sorunlar"
     },
@@ -3429,7 +3428,6 @@
       "requestReview": "İnceleme iste",
       "requestReviewers": "İnceleme istenecek kişiler",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "reviewers": "İnceleyenler",
       "viewFile": "Görüntüle"
     },
