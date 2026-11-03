@@ -41,7 +41,7 @@ function markDirty(row: 'NEW' | 'OLD', trigger: (typeof HISTORY_TRIGGERS)[number
         ]
       : [])
   ]
-  return `INSERT OR IGNORE INTO temp.agent_sender_dirty (kind, key)
+  return `INSERT OR IGNORE INTO agent_sender_dirty (kind, key)
   SELECT kind, key FROM (${keys.join(' UNION ALL ')}) AS changed WHERE key IS NOT NULL AND EXISTS (
     SELECT 1 FROM temp.agent_sender_tracked AS tracked
     WHERE tracked.kind = changed.kind AND tracked.key = changed.key);`
@@ -76,14 +76,14 @@ ${HISTORY_TRIGGERS.flatMap((trigger) => {
       marks
     }) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_${trigger.table}_${name}
 ${event} ON main.${trigger.table}
-BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; ${marks.join(' ')} END;`
+BEGIN UPDATE agent_sender_generation SET history = history + 1; ${marks.join(' ')} END;`
   )
 }).join('\n')}
 ${['insert', 'delete', 'update']
   .map(
     (name) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_federated_dispatches_${name}
 AFTER ${name === 'update' ? 'UPDATE OF environment_id' : name.toUpperCase()} ON main.federated_dispatches
-BEGIN UPDATE temp.agent_sender_generation SET principals = principals + 1; END;`
+BEGIN UPDATE agent_sender_generation SET principals = principals + 1; END;`
   )
   .join('\n')}`
 
