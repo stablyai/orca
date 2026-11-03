@@ -33,6 +33,10 @@ export function sessionTerminalGestureMountAdapters(
         typeof import('../../../session/use-mobile-session-terminal-input')
       >('mobile/src/session/use-mobile-session-terminal-input.ts').useMobileSessionTerminalInput
 
+      const { terminalInputSend } = modules.load<
+        typeof import('../../../terminal/mobile-terminal-operations')
+      >('mobile/src/terminal/mobile-terminal-operations.ts')
+
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
       const queues = { current: new Map<string, TerminalGestureInputQueue>() }
       const inFlight = { current: new Set<string>() }
@@ -41,6 +45,7 @@ export function sessionTerminalGestureMountAdapters(
         input = useTerminalInput(
           mountFixture<Parameters<typeof useTerminalInput>[0]>({
             client,
+            sendTerminalOrderedInput: terminalInputSend.request,
             connState: 'connected',
             activeHandle: HANDLE,
             clientRef: { current: client },
