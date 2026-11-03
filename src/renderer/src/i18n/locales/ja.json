@@ -17296,7 +17296,7 @@
           "hostMismatch": "保存された実行ホストが、このプロジェクトの設定と一致しなくなりました。"
         },
         "launchSettings": {
-          "needsFreshSession": "エージェントの起動設定を使うには、実行ごとに新しいセッションが必要です。"
+          "needsFreshSession": "起動設定を使うには、実行ごとに新しいセッションが必要です。"
         }
       },
       "agent": {
