@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import {
-  savedRewindKeys,
   isAgentSessionRewindTarget,
   type AgentSessionRewindReason,
   type AgentSessionRewindResult,
@@ -24,7 +23,7 @@ import type {
   StructuredAgentSessionWriteOutcome
 } from './use-structured-agent-session-mutate'
 import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
-import { nativeChatRewindOffered } from './native-chat-rewind-eligibility'
+import { nativeChatRewindOffered, rewindKeysAdmit } from './native-chat-rewind-eligibility'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
 import {
   agentSessionContextFloorSequence,
@@ -78,12 +77,12 @@ function rewindFailureReason(failure: AgentSessionWriteFailure): string | undefi
 
 function isRewindTarget(input: RewindInput, itemId: string): boolean {
   const opener = turnOpeners(input.state.items)
-  const keys = savedRewindKeys(input.state.submissions)
+  const admits = rewindKeysAdmit(input.state.submissions, input.support)
   return input.state.items.some(
     (item) =>
       item.itemId === itemId &&
       item.sequence > rewindContextFloor(input) &&
-      (keys.nativeIdentity(itemId) !== null || !keys.hasSubmission(itemId)) &&
+      admits(itemId) &&
       isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
   )
 }
@@ -299,18 +298,18 @@ export function useNativeChatRewind(input: RewindInput) {
   const floor = rewindContextFloor(input)
   const eligibleItemIds = useMemo(() => {
     const opener = turnOpeners(input.state.items)
-    const keys = savedRewindKeys(input.state.submissions)
+    const admits = rewindKeysAdmit(input.state.submissions, input.support)
     return new Set(
       input.state.items
         .filter(
           (item) =>
             item.sequence > floor &&
-            (keys.nativeIdentity(item.itemId) !== null || !keys.hasSubmission(item.itemId)) &&
+            admits(item.itemId) &&
             isAgentSessionRewindTarget(item, (turn) => opener.get(turn))
         )
         .map((item) => item.itemId)
     )
-  }, [floor, input.state.items, input.state.submissions])
+  }, [floor, input.state.items, input.state.submissions, input.support])
   // Memoize row actions and omit them entirely for providers without rewind.
   const surface = useMemo<NativeChatRewindSurface | undefined>(
     () => (offered ? { disabledReason, request, eligibleItemIds } : undefined),

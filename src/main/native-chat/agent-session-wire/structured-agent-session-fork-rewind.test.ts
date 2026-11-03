@@ -73,17 +73,19 @@ beforeEach(async () => {
   nameProviderConversation.mockClear()
   forkForRewind.mockReset()
   closeSession.mockClear()
-  forkForRewind.mockImplementation(async ({ record, beforeMessage }) => ({
-    ok: true,
-    fork: {
-      ...FORK,
-      sessionId:
-        beforeMessage.uuid === 'prompt-2' ? FORK.sessionId : '33333333-3333-4333-8333-333333333333',
-      ...(beforeMessage.uuid === 'prompt-1' ? { resumeCursor: undefined } : {}),
-      replacesSessionId: agentSessionProviderHandleChainHead(record.providerHandleChain)!.handle
-        .nativeId
+  forkForRewind.mockImplementation(async ({ record, beforeMessage }) => {
+    const uuid = 'uuid' in beforeMessage ? beforeMessage.uuid : undefined
+    return {
+      ok: true,
+      fork: {
+        ...FORK,
+        sessionId: uuid === 'prompt-2' ? FORK.sessionId : '33333333-3333-4333-8333-333333333333',
+        ...(uuid === 'prompt-1' ? { resumeCursor: undefined } : {}),
+        replacesSessionId: agentSessionProviderHandleChainHead(record.providerHandleChain)!.handle
+          .nativeId
+      }
     }
-  }))
+  })
   directory = await mkdtemp(join(tmpdir(), 'orca-fork-rewind-'))
   store = await openTestAgentSessionRecordStore(directory)
   const adapter = startsWhenPublished(

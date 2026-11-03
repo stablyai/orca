@@ -94,7 +94,7 @@ export const claudeForkForRewind: NonNullable<
   StructuredAgentSessionAdapter['forkForRewind']
 > = async ({ record, beforeMessage, rewindOperationId }) => {
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
-  if (!head) {
+  if (!head || !('uuid' in beforeMessage)) {
     return { ok: false, reason: 'invalid-target' }
   }
   const router = getClaudeProfileRouter()

@@ -9,6 +9,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { pendingAgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import {
   checkAgentCliVersion,
@@ -176,9 +177,12 @@ export function piRpcLaunchPart(
       ) {
         throw new Error('Pi resume handle is not a host session file')
       }
-      const source = previous.handle.nativeId
+      // A saved rewind continues in its fork, even before the chat records the fork as its head.
+      const fork = pendingAgentSessionRewindFork(record.rewind, previous.handle.nativeId)
+      const source = fork?.sessionId ?? previous.handle.nativeId
       const header = await readPiSessionHeader(source)
       if (
+        !fork &&
         previous.origin === 'adopted' &&
         (!header ||
           header.id !== sessionIdFromFileName(source) ||
@@ -188,7 +192,10 @@ export function piRpcLaunchPart(
           reason: 'transcriptNotFound'
         })
       }
-      if (header === null) {
+      if (fork && header === null) {
+        // Pi saves a fork that keeps no messages with its next answer; resume starts it at that path.
+        sessionFile = source
+      } else if (header === null) {
         replacement = previous.origin === 'created' ? 'unsaved' : 'restore-failed'
       } else if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source

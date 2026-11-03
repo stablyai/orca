@@ -14,6 +14,8 @@ import { providerSpawnedProcessIdentity } from '../provider-process/provider-spa
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
 import { piStartExitError } from './rpc-exit-classification'
 import { compactPiRpcSession } from './rpc-compaction'
+import { awaitPiStoppedRequestEnd } from './rpc-stop-checkpoint'
+import { forkLivePiRpcSessionForRewind, PI_REWIND_SUPPORT } from './rpc-rewind-fork'
 import { buildPiRpcLaunch } from './rpc-launch'
 import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
 import { PiRpcSession, type PiRpcSessionDeps, type PiRpcConnection } from './rpc-session'
@@ -140,6 +142,11 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) =>
     compactPiRpcSession(this.session(input.sessionId, input.fence), input.command)
 
+  readonly forksThroughAgent = true
+  rewindSupport = () => PI_REWIND_SUPPORT
+  forkForRewind: NonNullable<StructuredAgentSessionAdapter['forkForRewind']> = async (input) =>
+    forkLivePiRpcSessionForRewind(this.sessions.get(input.record.sessionId), input)
+
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
     const turnId = input.resolveLiveTurnId ? input.resolveLiveTurnId() : session.lane.openTurnId
@@ -155,36 +162,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
     return { cancelled: true, ...(turnId ? { turnId } : {}) }
   }
   awaitStoppedRequestEnd: NonNullable<StructuredAgentSessionAdapter['awaitStoppedRequestEnd']> =
-    async (id, at) => {
-      const session = this.sessions.get(id)
-      const turn = session?.lane.openTurnId
-      if (!session) {
-        return
-      }
-      let timer: ReturnType<typeof setTimeout> | undefined
-      try {
-        if (turn) {
-          await Promise.race([
-            session.lane.whenTurnLeaves(turn),
-            new Promise<void>((resolve) => {
-              timer = setTimeout(resolve, Math.max(0, at + 2_000 - Date.now()))
-              timer.unref()
-            })
-          ])
-        }
-      } finally {
-        clearTimeout(timer)
-      }
-      try {
-        await session.connection.request('get_state', {}, { timeoutMs: 1_000 })
-      } catch (error) {
-        this.deps.logger.warn('Pi checkpoint could not be read before stopping', {
-          scope: 'pi-stop-checkpoint',
-          sessionId: id,
-          error
-        })
-      }
-    }
+    async (id, at) => awaitPiStoppedRequestEnd(this.sessions.get(id), id, at, this.deps.logger)
   routePromptCancel(): { kind: 'dismiss' } {
     return { kind: 'dismiss' }
   }

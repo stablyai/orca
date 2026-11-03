@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
@@ -13,9 +14,19 @@ import {
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
-function rewindProviderChain(
-  record: AgentSessionRecord,
-  rewind: AgentSessionRewindRecord,
+const LINK_ID_TOKEN = /^[A-Za-z0-9_-]{1,128}$/
+
+/** Link ids are short tokens; a fork named by a file path (Pi) is named by its digest instead. */
+function rewindLinkId(forkSessionId: string): string {
+  const id = `rewind-${forkSessionId}`
+  return LINK_ID_TOKEN.test(id)
+    ? id
+    : `rewind-${createHash('sha256').update(forkSessionId).digest('hex').slice(0, 40)}`
+}
+
+export function rewindProviderChain(
+  record: Pick<AgentSessionRecord, 'providerHandleChain'>,
+  rewind: Pick<AgentSessionRewindRecord, 'providerFork'>,
   fence: number
 ) {
   const fork = rewind.providerFork
@@ -27,7 +38,7 @@ function rewindProviderChain(
     throw new Error('agent_session_rewind:stale-provider')
   }
   return appendAgentSessionProviderHandleLink(record.providerHandleChain, {
-    linkId: `rewind-${fork.sessionId}`,
+    linkId: rewindLinkId(fork.sessionId),
     handle: {
       transport: head.transport,
       agent: head.agent,
