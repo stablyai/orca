@@ -5,7 +5,7 @@ import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-run
 import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
-import { getWslGuestEnvironment } from '../wsl/wsl-guest-environment'
+import { getWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
 import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
 import { ClaudeProfileRouter } from './claude-profile-router'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
