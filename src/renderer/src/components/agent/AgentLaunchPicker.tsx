@@ -96,7 +96,7 @@ export const AgentLaunchPicker = memo(
       selected ?? agent ?? undefined
     )
     const entries = suppliedEntries ?? observedEntries
-    const catalogAgent = open && suppliedEntries ? (selected ?? agent ?? undefined) : undefined
+    const catalogAgent = open && suppliedEntries ? (agent ?? undefined) : undefined
     useEffect(() => {
       if (catalogAgent) {
         onCatalogOpen?.(catalogAgent)
@@ -167,7 +167,12 @@ export const AgentLaunchPicker = memo(
                 mode="select"
                 disabled={disabled}
                 setupDisabled={setupDisabled}
-                onSelectAgent={setSelected}
+                onSelectAgent={(agent) => {
+                  setSelected(agent)
+                  if (suppliedEntries) {
+                    onCatalogOpen?.(agent)
+                  }
+                }}
                 runLaunch={(row, draft, entry, surface) =>
                   onPick(
                     row.agent,

@@ -33,7 +33,8 @@ export function removeSourceControlAiArgumentFlag(
       const end = found.index + found.consumed
       const value = found.value
       const separator = value?.indexOf('=') ?? -1
-      const matchesKey = !flag.configKey || value?.slice(0, separator).trim() === flag.configKey
+      const matchesKey =
+        !flag.configKey || (separator >= 0 && value?.slice(0, separator).trim() === flag.configKey)
       const malformedKey = flag.configKey && value?.trim() === flag.configKey
       if (matchesKey || malformedKey || value === undefined) {
         if (

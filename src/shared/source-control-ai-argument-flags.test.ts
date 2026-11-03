@@ -85,3 +85,28 @@ it('removes each text CLI model/effort spelling without changing unrelated Argum
     unrecognized: false
   })
 })
+
+it('requires an equals delimiter before treating a Codex config operand as an owned field', () => {
+  const spec = COMMIT_MESSAGE_AGENT_SPECS.codex!
+  for (const [field, nearMatch, key] of [
+    ['model', '-c models --verbose', 'model'],
+    ['effort', '--config model_reasoning_efforts --verbose', 'model_reasoning_effort']
+  ] as const) {
+    expect(removeSourceControlAiArgumentFlag(nearMatch, spec, field)).toEqual({
+      agentArgs: nearMatch,
+      unrecognized: false
+    })
+    const mixed = `-c '${key}s' --config '${key} = high' --verbose`
+    expect(removeSourceControlAiArgumentFlag(mixed, spec, field)).toEqual({
+      agentArgs: `-c '${key}s'  --verbose`,
+      unrecognized: false
+    })
+    for (const operand of [key, `${key}=`]) {
+      const agentArgs = `--config '${operand}' --verbose`
+      expect(removeSourceControlAiArgumentFlag(agentArgs, spec, field)).toEqual({
+        agentArgs,
+        unrecognized: true
+      })
+    }
+  }
+})

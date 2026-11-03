@@ -361,7 +361,8 @@ const TextActionPicker = memo(
           },
           onCatalogOpen: discovery.discover,
           onPick: (agent, draft, entry) => {
-            if (props.agent !== agent) {
+            const inherited = draft && props.agent === null && agent === activeAgent
+            if (props.agent !== agent && !inherited) {
               props.onAgentChange(agent)
             }
             if (!draft || !entry || !draft.textChanges?.length) {
