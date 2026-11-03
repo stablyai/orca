@@ -103,9 +103,11 @@ describe('the record store slot', () => {
 
 it('publishes source installation and release even when opening an empty record store', async () => {
   const observed: unknown[] = []
-  const stop = sessionCrewChanges.subscribe(() =>
+  const facets: string[][] = []
+  const stop = sessionCrewChanges.subscribe((changed) => {
     observed.push(peekOpenedAgentSessionRecordStore())
-  )
+    facets.push([...changed].sort())
+  })
   try {
     const first = await openAgentSessionRecordStoreOnce(location())
     expect(observed).toEqual([first.store])
@@ -113,6 +115,10 @@ it('publishes source installation and release even when opening an empty record 
     expect(observed).toEqual([first.store])
     const released = await releaseAgentSessionRecordStore()
     expect(observed).toEqual([first.store, null])
+    expect(facets).toEqual([
+      ['records', 'topology'],
+      ['records', 'topology']
+    ])
     released?.journalDatabase.close()
   } finally {
     stop()
