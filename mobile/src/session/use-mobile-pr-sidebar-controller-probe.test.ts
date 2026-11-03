@@ -56,11 +56,13 @@ async function flush(): Promise<void> {
 
 function probeClient(): RpcClient {
   // Connection for these tests is the connState prop. The client still has to accept the sidebar's subscription.
-  return {
+  const client = {
     sendRequest: vi.fn(),
     getState: () => 'disconnected',
     onStateChange: () => () => {}
-  } as unknown as RpcClient
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these tests call only sendRequest, getState, and onStateChange; connection changes come from the connState prop.
+  return client as unknown as RpcClient
 }
 
 describe('useMobilePrSidebarController repo probe', () => {
