@@ -129,7 +129,6 @@ export function MobileSessionActiveContent({
     },
     [controller.router, hostId, executionHost]
   )
-  )
   const openSender = useMobileAgentMessageNavigation(
     client,
     navigateToSender,
