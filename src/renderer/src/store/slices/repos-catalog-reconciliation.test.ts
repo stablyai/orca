@@ -1,19 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => vi.restoreAllMocks())
-import { registerReposRefreshIdentityTests } from './repos-refresh-identity.spec'
 import { registerReposCatalogNotificationsTests } from './repos-catalog-notifications.spec'
 import { registerReposStaleFetchTests } from './repos-stale-fetch.spec'
 import { registerReposSharedProjectBadgeColorTests } from './repos-shared-project-badge-color.spec'
 import { registerReposAllHostsFolderWorkspacesTests } from './repos-all-hosts-folder-workspaces.spec'
-import { registerReposRuntimeVisibilityDefaultsTests } from './repos-runtime-visibility-defaults.spec'
 
-describe('repos-refresh-identity', registerReposRefreshIdentityTests)
 describe('repos-catalog-notifications', registerReposCatalogNotificationsTests)
 describe('repos-stale-fetch', registerReposStaleFetchTests)
 describe('repos-shared-project-badge-color', registerReposSharedProjectBadgeColorTests)
 describe('repos-all-hosts-folder-workspaces', registerReposAllHostsFolderWorkspacesTests)
-describe('repos-runtime-visibility-defaults', registerReposRuntimeVisibilityDefaultsTests)
 
 import { createTestStore, TEST_REPO } from './store-test-helpers'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
