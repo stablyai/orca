@@ -30,6 +30,8 @@ type PaneScan = {
   /** Output still allowed to finish painting a dialog whose keyword was seen. */
   pendingBytes: number
   resolvingAgent?: boolean
+  /** Receipt stamp of the agentless card that locks Send while the agent is identified. */
+  holdReceivedAt?: number
   /** The waiting row we published, identified by its receipt stamp like hook-silence rechecks. */
   owned?: { agent: 'claude' | 'codex'; receivedAt: number }
   /** Keys our card sends; republished when the terminal moves the cursor. */
@@ -126,6 +128,7 @@ export class TrustDialogStatusObserver {
       this.publishWaiting(ptyId, pane, agent, emulator)
       return
     }
+    this.hold(ptyId, pane, emulator)
     this.identifyAndPublish(ptyId, pane)
   }
 
@@ -136,6 +139,7 @@ export class TrustDialogStatusObserver {
       pane.resolvingAgent = false
       const current = this.deps.getEmulator(ptyId)
       if (this.panes.get(ptyId) !== pane || !current || !isTrustDialogOnScreen(current)) {
+        this.release(ptyId, pane)
         return
       }
       const agent = identified ?? this.deps.getPaneAgent(ptyId)
@@ -150,8 +154,35 @@ export class TrustDialogStatusObserver {
         return
       }
       this.publishWaiting(ptyId, pane, agent, current)
+      if (!pane.owned) {
+        this.release(ptyId, pane)
+      }
+      pane.holdReceivedAt = undefined
     }
     void Promise.resolve(this.deps.identifyUnownedAgent(ptyId)).then(resolved, () => resolved())
+  }
+
+  private hold(ptyId: string, pane: PaneScan, emulator: HeadlessEmulator): void {
+    const before = this.deps.readStatus(ptyId)
+    if (before?.observation?.origin === 'hook' && !before.providerSessionOnly) {
+      return
+    }
+    this.deps.publish(ptyId, {
+      state: 'waiting',
+      prompt: '',
+      interactivePrompt: buildNativeChatFolderTrustPrompt(trustChoiceKeys(emulator))
+    })
+    pane.holdReceivedAt = this.deps.readStatus(ptyId)?.receivedAt
+  }
+
+  /** Clears the agentless hold unless a writer replaced it; only Claude and Codex keep a card. */
+  private release(ptyId: string, pane: PaneScan): void {
+    const receivedAt = pane.holdReceivedAt
+    pane.holdReceivedAt = undefined
+    const row = this.deps.readStatus(ptyId)
+    if (receivedAt !== undefined && row?.state === 'waiting' && row.receivedAt === receivedAt) {
+      this.deps.publish(ptyId, { state: 'done', prompt: '', sessionBoundary: true })
+    }
   }
 
   forget(ptyId: string): void {

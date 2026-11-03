@@ -108,7 +108,8 @@ describe('TrustDialogStatusObserver', () => {
       }
     )
     await write(recording)
-    expect(published).toEqual(['waiting'])
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
     expect(runtime['ptysById'].get(TRANSCRIPT_PANE_PTY_ID)?.foregroundAgent).not.toBe('claude')
   })
 
@@ -123,7 +124,8 @@ describe('TrustDialogStatusObserver', () => {
     )
     await write(recording)
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(published).toEqual(['waiting'])
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
   })
 
   it('still publishes when the shared probe answers after every retry window', async () => {
@@ -138,7 +140,43 @@ describe('TrustDialogStatusObserver', () => {
     }
     await write(recording)
     await vi.advanceTimersByTimeAsync(5_000)
+    // The agentless hold, then the identified card.
+    expect(published).toEqual(['waiting', 'waiting'])
+  })
+
+  // Why: Send is otherwise unlocked while the probe runs, and a chat message would type into the dialog.
+  it('holds the composer with the card while a hand-typed agent is still being identified', async () => {
+    const { runtime, rows, published, prompts, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: 'claude' }
+    )
+    let answer: (agent: 'claude' | null) => void = () => {}
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve))
+    )
+    await write(recording)
+    const card = parseInteractivePrompt(prompts[0])
     expect(published).toEqual(['waiting'])
+    expect(card?.kind === 'approval' && card.approval.holdsComposer).toBe(true)
+
+    answer('claude')
+    await vi.advanceTimersByTimeAsync(0)
+    expect([...rows.values()].at(-1)?.agentType).toBe('claude')
+  })
+
+  it('releases the held composer when the dialog belongs to no Claude or Codex', async () => {
+    const { runtime, published, recording, write } = await pane(
+      'claude-dialog-trust-workspace',
+      'claude',
+      { launchAgent: undefined, confirmedForegroundProcess: null }
+    )
+    vi.spyOn(runtime['ptyForegroundAgent'], 'identifyUnowned').mockReturnValueOnce(
+      Promise.resolve(null)
+    )
+    await write(recording)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(published).toEqual(['waiting', 'done'])
   })
 
   // Keys verified against Claude Code 2.1.316: digits do nothing, Down+Enter trusts, Enter alone exits.
