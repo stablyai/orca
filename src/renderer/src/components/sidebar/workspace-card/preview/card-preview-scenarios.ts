@@ -17,15 +17,23 @@ function agents(): Record<'working' | 'blocked' | 'done', CardPreviewAgent> {
       title: CLAUDE,
       state: 'working',
       message: sample('working', 'Rebuilding the card template compiler'),
-      ago: '2m'
+      ago: '2m',
+      agoMs: 2 * 60_000
     },
     blocked: {
       title: CODEX,
       state: 'blocked',
       message: sample('blocked', 'Allow running pnpm test?'),
-      ago: '1m'
+      ago: '1m',
+      agoMs: 60_000
     },
-    done: { title: CLAUDE, state: 'done', message: sample('done', 'Opened the PR'), ago: '12m' }
+    done: {
+      title: CLAUDE,
+      state: 'done',
+      message: sample('done', 'Opened the PR'),
+      ago: '12m',
+      agoMs: 12 * 60_000
+    }
   }
 }
 
@@ -50,6 +58,32 @@ type ScenarioInput = Partial<Omit<CardPreviewScenario, 'id' | 'title' | 'facts'>
   facts?: Parameters<typeof previewFacts>[0]
 }
 
+function activityFacts(
+  agents: readonly CardPreviewAgent[],
+  status: string
+): CardPreviewScenario['facts']['activity'] {
+  const now = Date.now()
+  const count = (state: CardPreviewAgent['state']) =>
+    agents.filter((agent) => agent.state === state).length
+  return {
+    status,
+    needsInput: status === 'permission',
+    counts: {
+      working: count('working'),
+      blocked: count('blocked'),
+      done: count('done'),
+      idle: count('idle')
+    },
+    agents: agents.map((agent) => ({
+      title: agent.title,
+      agent: agent.title.toLowerCase(),
+      state: agent.state,
+      message: agent.message,
+      since: now - agent.agoMs
+    }))
+  }
+}
+
 function scenario(id: string, title: string, input: ScenarioInput): CardPreviewScenario {
   const prDisplay = input.review ?? null
   return {
@@ -65,6 +99,7 @@ function scenario(id: string, title: string, input: ScenarioInput): CardPreviewS
     repoColor: input.repoColor ?? '#7c3aed',
     facts: previewFacts({
       ...input.facts,
+      activity: activityFacts(input.agents ?? [], input.status ?? 'inactive'),
       ...(prDisplay
         ? {
             review: {

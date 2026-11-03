@@ -21,6 +21,10 @@ export const CARD_ELEMENT_PROPS = {
   Text: ['text', 'size', 'tone', 'muted', 'weight', 'mono', 'truncate'],
   Badge: ['text', 'tone'],
   Icon: ['name', 'tone'],
+  /** Draws its children once per item of a list fact (`items`), as `item.*`. */
+  Each: ['items', 'limit'],
+  /** A time such as `5m ago` that Orca keeps current; `at` is epoch milliseconds. */
+  RelativeTime: ['at', 'format', 'tone'],
   Title: ['dimWhenRead', 'tooltip'],
   RepoChip: [],
   SshControl: ['iconOnly'],

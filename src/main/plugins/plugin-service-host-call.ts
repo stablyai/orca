@@ -1,3 +1,4 @@
+import type { PluginCardFieldsState } from './cards/plugin-card-fields-state'
 import { capabilityKinds } from '../../shared/plugins/capabilities/plugin-capabilities'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginAuditLog } from './plugin-audit-log'
@@ -72,7 +73,8 @@ export function resolvePluginServiceHostCallPolicy(input: {
   pluginsDataDir: string
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
-  statusBar?: PluginStatusBarState | null
+  /** What workers draw into Orca's windows: status bar items and card fields. */
+  drawn: { statusBar?: PluginStatusBarState; cardFields?: PluginCardFieldsState }
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
@@ -87,11 +89,13 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
-          statusBar: input.statusBar,
+          statusBar: input.drawn.statusBar,
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
             (item) => item.id
           ),
-          statusBarRevision: plugin ? pluginStatusBarRevision(plugin) : undefined
+          statusBarRevision: plugin ? pluginStatusBarRevision(plugin) : undefined,
+          cardFields: input.drawn.cardFields,
+          hasSidebarCards: (plugin?.manifest.contributes.sidebarCards.length ?? 0) > 0
         })
       : null,
     audit: input.audit,

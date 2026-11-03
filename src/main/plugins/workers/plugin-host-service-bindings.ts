@@ -3,6 +3,7 @@ import type { PluginHostServices } from './plugin-host-methods'
 import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
 import type { PluginPanelBridgeServices } from './plugin-host-panel-method-bindings'
 import type { PluginStatusBarState } from '../status-bar/plugin-status-bar-state'
+import type { PluginCardFieldsState } from '../cards/plugin-card-fields-state'
 import type { PluginRuntimeRpc } from './plugin-host-workspace-method-bindings'
 import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import {
@@ -63,6 +64,9 @@ export function bindPluginHostServices(input: {
   /** Ids of the calling plugin's `contributes.statusBarItems`, and its install's revision. */
   declaredStatusBarItemIds?: readonly string[]
   statusBarRevision?: string
+  cardFields?: PluginCardFieldsState | null
+  /** The calling plugin contributes sidebar cards, which are what read fields. */
+  hasSidebarCards?: boolean
 }): PluginHostServices {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
@@ -71,6 +75,13 @@ export function bindPluginHostServices(input: {
     panels: input.panels ?? null,
     statusBar: input.statusBar
       ? statusBarServices(input.statusBar, input.declaredStatusBarItemIds, input.statusBarRevision)
+      : null,
+    cardFields: input.cardFields
+      ? cardFieldsServices(
+          input.cardFields,
+          input.hasSidebarCards === true,
+          input.statusBarRevision
+        )
       : null,
     runtimeRpc: delegate.callRuntime ?? null,
     renderer: input.renderer ?? null,
@@ -132,6 +143,22 @@ export function bindPluginHostServices(input: {
           ? { ok: false, error: `${itemKey} ${issue}` }
           : new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
       }
+    }
+  }
+}
+
+function cardFieldsServices(
+  state: PluginCardFieldsState,
+  hasSidebarCards: boolean,
+  revision = ''
+): NonNullable<PluginHostServices['cardFields']> {
+  return {
+    set: (pluginKey, workspaceId, fields) => {
+      if (!hasSidebarCards) {
+        return false
+      }
+      state.set(pluginKey, revision, workspaceId, fields)
+      return true
     }
   }
 }

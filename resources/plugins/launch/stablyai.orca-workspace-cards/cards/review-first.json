@@ -3,46 +3,138 @@
   "facts": 1,
   "vars": {
     "checkTone": "review.status == 'failure' ? 'danger' : review.status == 'pending' ? 'warning' : 'success'",
-    "reviewState": "review.state == 'merged' ? 'merged' : review.state == 'closed' ? 'closed' : 'open'"
+    "reviewState": "review.state == 'merged' ? t('merged') : review.state == 'closed' ? t('closed') : t('open')"
   },
   "root": {
     "el": "Row",
-    "props": { "fill": true, "gap": "xs", "align": "start", "marker": "parent-content" },
+    "props": {
+      "fill": true,
+      "gap": "xs",
+      "align": "start",
+      "marker": "parent-content"
+    },
     "children": [
-      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "StatusLane",
+        "props": {
+          "unreadAction": true
+        }
+      },
       {
         "el": "Stack",
-        "props": { "grow": true, "gap": "sm", "overflow": "visible" },
+        "props": {
+          "grow": true,
+          "gap": "sm",
+          "overflow": "visible"
+        },
         "children": [
           {
             "el": "Row",
-            "props": { "align": "center", "gap": "md" },
+            "props": {
+              "align": "center",
+              "gap": "md"
+            },
             "children": [
-              { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
-              { "el": "Title" },
-              { "el": "ConflictBadge", "when": "git.conflictOperation != null" }
+              {
+                "el": "SshControl",
+                "when": "host.kind == 'ssh'",
+                "props": {
+                  "iconOnly": true
+                }
+              },
+              {
+                "el": "Title"
+              },
+              {
+                "el": "ConflictBadge",
+                "when": "git.conflictOperation != null"
+              }
             ]
           },
           {
             "el": "Row",
             "when": "review != null",
-            "props": { "align": "center", "gap": "md", "inset": "end" },
+            "props": {
+              "align": "center",
+              "gap": "md",
+              "inset": "end"
+            },
             "children": [
-              { "el": "Text", "props": { "text": "='#' + review.number", "size": "meta", "muted": true, "mono": true } },
-              { "el": "Text", "props": { "text": "=review.title", "size": "meta", "truncate": true } },
-              { "el": "Badge", "props": { "text": "=vars.reviewState", "tone": "=vars.checkTone" } }
+              {
+                "el": "Text",
+                "props": {
+                  "text": "='#' + review.number",
+                  "size": "meta",
+                  "muted": true,
+                  "mono": true
+                }
+              },
+              {
+                "el": "Text",
+                "props": {
+                  "text": "=review.title",
+                  "size": "meta",
+                  "truncate": true
+                }
+              },
+              {
+                "el": "Badge",
+                "props": {
+                  "text": "=vars.reviewState",
+                  "tone": "=vars.checkTone"
+                }
+              }
             ]
           },
           {
             "el": "Text",
             "when": "review == null && ws.kind == 'git'",
-            "props": { "text": "='No pull request · ' + ws.branch", "size": "meta", "muted": true, "truncate": true }
+            "props": {
+              "text": "=t('noReview') + ' \u00b7 ' + ws.branch",
+              "size": "meta",
+              "muted": true,
+              "truncate": true
+            }
           },
-          { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
-          { "el": "Agents" },
-          { "el": "ChildToggle", "when": "lineage.toggleable" }
+          {
+            "el": "RemoteBranchConflict",
+            "when": "git.remoteBranchConflict != null"
+          },
+          {
+            "el": "Agents"
+          },
+          {
+            "el": "ChildToggle",
+            "when": "lineage.toggleable"
+          }
         ]
       }
     ]
+  },
+  "strings": {
+    "en": {
+      "noReview": "No pull request",
+      "merged": "merged",
+      "closed": "closed",
+      "open": "open"
+    },
+    "ja": {
+      "noReview": "\u30d7\u30eb\u30ea\u30af\u30a8\u30b9\u30c8\u306a\u3057",
+      "merged": "\u30de\u30fc\u30b8\u6e08\u307f",
+      "closed": "\u30af\u30ed\u30fc\u30ba",
+      "open": "\u30aa\u30fc\u30d7\u30f3"
+    },
+    "es": {
+      "noReview": "Sin pull request",
+      "merged": "fusionada",
+      "closed": "cerrada",
+      "open": "abierta"
+    },
+    "zh": {
+      "noReview": "\u6ca1\u6709\u62c9\u53d6\u8bf7\u6c42",
+      "merged": "\u5df2\u5408\u5e76",
+      "closed": "\u5df2\u5173\u95ed",
+      "open": "\u6253\u5f00"
+    }
   }
 }

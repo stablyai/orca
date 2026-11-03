@@ -16,7 +16,11 @@ const CARD = {
     checkTone:
       "review.status == 'failure' ? 'danger' : review.status == 'pending' ? 'warning' : 'success'",
     reviewState:
-      "review.state == 'merged' ? 'merged' : review.state == 'closed' ? 'closed' : 'open'"
+      "review.state == 'merged' ? t('merged') : review.state == 'closed' ? t('closed') : t('open')"
+  },
+  // Text the card shows, by language; t(name) picks the person's, falling back to en.
+  strings: {
+    en: { noReview: 'No pull request', merged: 'merged', closed: 'closed', open: 'open' }
   },
   frame: { singleLine: false, statusLane: false },
   root: {
@@ -57,7 +61,7 @@ const CARD = {
             el: 'Text',
             when: "review == null && ws.kind == 'git'",
             props: {
-              text: "='No pull request · ' + ws.branch",
+              text: "=t('noReview') + ' · ' + ws.branch",
               size: 'meta',
               muted: true,
               truncate: true

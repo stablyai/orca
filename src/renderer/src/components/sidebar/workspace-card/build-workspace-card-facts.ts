@@ -5,6 +5,7 @@ import type {
   WorkspaceCardShowOptions
 } from '../../../../../shared/workspace-cards/workspace-card-facts'
 import type { WorktreeCardController } from '../use-worktree-card-controller'
+import { NO_ACTIVITY_FACTS } from './build-workspace-card-activity-facts'
 
 const showOptionsCache = new WeakMap<readonly WorktreeCardProperty[], WorkspaceCardShowOptions>()
 
@@ -51,10 +52,18 @@ export function workspaceCardOptionFacts(input: {
 
 /** Projects the card controller into the documented fact model a template reads. */
 const NO_CARD_OPTIONS: WorkspaceCardFacts['cardOptions'] = {}
+const NO_FIELDS: WorkspaceCardFacts['fields'] = {}
+
+/** What only some cards read, gathered by the caller when the template reads it. */
+export type WorkspaceCardFactExtras = {
+  cardOptions?: WorkspaceCardFacts['cardOptions']
+  activity?: WorkspaceCardFacts['activity']
+  fields?: WorkspaceCardFacts['fields']
+}
 
 export function buildWorkspaceCardFacts(
   card: WorktreeCardController,
-  cardOptions: WorkspaceCardFacts['cardOptions'] = NO_CARD_OPTIONS
+  extras: WorkspaceCardFactExtras = {}
 ): WorkspaceCardFacts {
   const { worktree, repo, hoverReview } = card
   const runtimeHost = !repo?.connectionId && card.parsedRepoHost?.kind === 'runtime'
@@ -138,6 +147,8 @@ export function buildWorkspaceCardFacts(
     },
     options: workspaceCardOptionFacts(card),
     env: { projectGroups: card.projectGroups.length > 0 },
-    cardOptions
+    activity: extras.activity ?? NO_ACTIVITY_FACTS,
+    fields: extras.fields ?? NO_FIELDS,
+    cardOptions: extras.cardOptions ?? NO_CARD_OPTIONS
   }
 }

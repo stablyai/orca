@@ -89,6 +89,23 @@ past that, that card draws as Orca's card and the reason is logged.
 Expressions are capped at 2 KiB and nesting depth 32. `orca plugin check` reports every problem
 with its path.
 
+## Lists, times and text
+
+- **`Each`** draws its children once per item of a list fact, reading the item as `item.*`:
+  `{ "el": "Each", "props": { "items": "=activity.agents", "limit": 4 }, "children": [...] }`.
+  At most 20 items.
+- **`RelativeTime`** shows a time such as `5m ago` (`format`: `short`, `long` or `duration`).
+  Orca keeps it current, so templates never read a clock.
+- **`strings`** holds the template's own text by language, read with `t('key')`. The person's
+  language is used, then its base language, then `en`:
+  `"strings": { "en": { "noReview": "No pull request" }, "ja": { "noReview": "プルリクエストなし" } }`.
+- **`fields`** are values the plugin's own worker sets for a workspace with
+  `cards.setFields({ workspaceId, fields })`: strings, numbers, booleans and null, at most 32 keys
+  and 4 KiB per workspace, redrawn at most 4 times a second. The template reads `fields.<key>`.
+
+A path the fact model does not have (a typo such as `ws.brnach`) is an error in `orca plugin check`
+and at load, never a silent empty value.
+
 ## Expressions
 
 The grammar:
@@ -155,6 +172,9 @@ only the state its facts say: a template chooses where a part goes, never what i
 | `DetailsHover`                                                                  | The workspace hover card around its one layout child; it names the workspace itself |
 | `Agents` (`tight`)                                                              | Agent rows, with subagents                                                          |
 | `LinearSetupPrompt`, `ChildToggle`                                              | The Linear setup prompt, and the child workspace toggle                             |
+
+On a plugin card, Orca's frame marks a workspace whose agent needs input, whatever the template
+draws, and a collapsed list section still shows the workspaces that need the person.
 
 Orca keeps what surrounds the content: selection, drag, click and double-click, the context menu,
 the delete overlay, sleeping dim, and where child workspaces nest.

@@ -115,6 +115,7 @@ A workspace card to draw before install.
 | `template.facts` | `1` | yes |  |  |
 | `template.vars` | object | no |  |  |
 | `template.defs` | object | no |  |  |
+| `template.strings` | object | no |  |  |
 | `template.frame` | object | no |  |  |
 | `template.frame.singleLine` | string \| number \| boolean \| null | no |  |  |
 | `template.frame.statusLane` | string \| number \| boolean \| null | no |  |  |

@@ -9,7 +9,13 @@ import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
 import { useSelectedPluginCard, type SelectedPluginCard } from '@/store/plugin-sidebar-cards'
+import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { usePluginCardFields } from '@/store/plugin-card-fields'
+import { buildWorkspaceCardActivityFacts } from './workspace-card/build-workspace-card-activity-facts'
+import { WorktreeCardFrameNeedsInput } from './worktree-card-frame-needs-input'
 import {
+  compiledPluginCard,
   pluginCardRevisionKey,
   renderDefaultWorkspaceCard,
   renderPluginWorkspaceCard,
@@ -53,8 +59,26 @@ function PluginCardSurface({
   isSleeping: boolean
   selected: SelectedPluginCard
 }): React.JSX.Element {
-  return renderWorktreeCardSurface(card, isSleeping, (rootAttrs) =>
-    renderPluginWorkspaceCard(card, selected.entry, rootAttrs, selected.options)
+  const roots = compiledPluginCard(selected.entry)?.roots
+  // Agent rows and fields are subscribed only by cards whose template reads them.
+  const agentRows = useWorktreeAgentRows(card.worktree.id, roots?.has('activity') === true)
+  const status = useWorktreeActivityStatus(card.worktree.id)
+  const fields = usePluginCardFields(
+    selected.entry.pluginKey,
+    card.worktree.id,
+    roots?.has('fields') === true
+  )
+  return renderWorktreeCardSurface(
+    card,
+    isSleeping,
+    (rootAttrs) =>
+      renderPluginWorkspaceCard(card, selected.entry, rootAttrs, {
+        cardOptions: selected.options,
+        activity: buildWorkspaceCardActivityFacts(agentRows, status),
+        fields
+      }),
+    // Why the frame draws it: a plugin card must not be able to hide that an agent needs input.
+    status === 'permission'
   )
 }
 
@@ -63,7 +87,8 @@ function PluginCardSurface({
 function renderWorktreeCardSurface(
   card: WorktreeCardController,
   isSleeping: boolean,
-  drawContent: DrawCardContent
+  drawContent: DrawCardContent,
+  frameNeedsInput = false
 ): React.JSX.Element {
   const {
     worktree,
@@ -153,6 +178,7 @@ function renderWorktreeCardSurface(
       aria-busy={isDeleting}
       style={cardStyle}
     >
+      {frameNeedsInput ? <WorktreeCardFrameNeedsInput /> : null}
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">

@@ -1,8 +1,10 @@
 import React from 'react'
 import { PluginDeclarativeBadge } from '@/components/plugins/declarative/PluginDeclarativeDisplay'
 import { PluginDeclarativeIconGlyph } from '@/components/plugins/declarative/plugin-declarative-icons'
+import { PluginDeclarativeRelativeTimeText } from '@/components/plugins/declarative/PluginDeclarativeRelativeTime'
 import type { PluginDeclarativeTone } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { cn } from '@/lib/utils'
+import { PLUGIN_RELATIVE_TIME_FORMATS } from '../../../../../shared/plugins/declarative/plugin-declarative-relative-time'
 import { CARD_ELEMENT_PROPS } from '../../../../../shared/workspace-cards/card-element-catalog'
 import { cardElement, type CardHostElement } from './card-template-compiler'
 
@@ -113,7 +115,8 @@ function text(props: Props): React.ReactNode {
         props.weight === 'medium' && 'font-medium',
         props.weight === 'semibold' && 'font-semibold',
         props.mono === true && 'font-mono',
-        props.truncate === true && 'truncate'
+        // Text that does not truncate keeps its width, so a truncating sibling gives way first.
+        props.truncate === true ? 'truncate' : 'shrink-0'
       )}
     >
       {toText(props.text)}
@@ -135,11 +138,30 @@ function icon(props: Props): React.ReactNode {
   )
 }
 
+function relativeTime(props: Props): React.ReactNode {
+  const at = typeof props.at === 'number' && Number.isFinite(props.at) ? props.at : null
+  if (at === null) {
+    return null
+  }
+  return (
+    <span className={cn('shrink-0 text-2xs', pick(TONE, props.tone) ?? 'text-muted-foreground')}>
+      <PluginDeclarativeRelativeTimeText
+        at={at}
+        format={PLUGIN_RELATIVE_TIME_FORMATS.find((format) => format === props.format) ?? 'short'}
+      />
+    </span>
+  )
+}
+
 /** Primitives draw from props alone, so they work under any context. */
 export const CARD_PRIMITIVES = {
   Row,
   Stack,
   Text: cardElement<unknown>(CARD_ELEMENT_PROPS.Text, text),
   Badge: cardElement<unknown>(CARD_ELEMENT_PROPS.Badge, badge),
-  Icon: cardElement<unknown>(CARD_ELEMENT_PROPS.Icon, icon)
+  Icon: cardElement<unknown>(CARD_ELEMENT_PROPS.Icon, icon),
+  // Drawn by the compiler itself; listed so templates may name it.
+  Each: cardElement<unknown>(CARD_ELEMENT_PROPS.Each, () => null),
+  // Orca owns the clock, so templates stay pure while the words stay current.
+  RelativeTime: cardElement<unknown>(CARD_ELEMENT_PROPS.RelativeTime, relativeTime)
 }

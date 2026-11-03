@@ -1,4 +1,5 @@
 import React from 'react'
+import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { withCardEvaluationBudget } from '../../../../../../shared/workspace-cards/card-expression'
 import {
@@ -10,20 +11,31 @@ import { compileCardTemplate, type CompiledCardTemplate } from '../card-template
 import { CARD_PREVIEW_ELEMENTS } from './card-preview-elements'
 import type { CardPreviewScenario } from './card-preview-scenario'
 
-const compiled = new WeakMap<CardTemplate, CompiledCardTemplate<CardPreviewScenario> | null>()
+type CompiledPreview = CompiledCardTemplate<CardPreviewScenario> | null
+// By template, then language: `t()` strings are resolved when a template compiles.
+const compiled = new WeakMap<CardTemplate, Map<string, CompiledPreview>>()
 
-function compiledPreview(template: CardTemplate): CompiledCardTemplate<CardPreviewScenario> | null {
-  if (!compiled.has(template)) {
+function compiledPreview(template: CardTemplate): CompiledPreview {
+  const locale = getIntlLocale()
+  let byLocale = compiled.get(template)
+  if (!byLocale) {
+    byLocale = new Map()
+    compiled.set(template, byLocale)
+  }
+  if (!byLocale.has(locale)) {
     try {
-      compiled.set(
-        template,
-        compileCardTemplate(template, CARD_PREVIEW_ELEMENTS, PLUGIN_CARD_TEMPLATE_LIMITS)
+      byLocale.set(
+        locale,
+        compileCardTemplate(template, CARD_PREVIEW_ELEMENTS, {
+          caps: PLUGIN_CARD_TEMPLATE_LIMITS,
+          locale
+        })
       )
     } catch {
-      compiled.set(template, null)
+      byLocale.set(locale, null)
     }
   }
-  return compiled.get(template) ?? null
+  return byLocale.get(locale) ?? null
 }
 
 /** One card drawn from a scenario, inside a copy of the card frame. It reads nothing from the app
