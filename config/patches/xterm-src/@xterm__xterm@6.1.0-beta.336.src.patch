@@ -1308,6 +1308,29 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
 +    preedit.replaceChildren(...nodes);
    }
  }
+diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..d118a7ba20b0f4a7dc03a38130621cd0e01f8516 100644
+--- a/src/browser/renderer/dom/DomRendererRowFactory.ts
++++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
+@@ -354,6 +354,18 @@ export class DomRendererRowFactory {
+         bgColorMode = temp2;
+       }
+ 
++      // An explicit default RGB is still the terminal backdrop, not an opaque highlight.
++      if (!isInverse && this._optionsService.rawOptions.allowTransparency && (colors.background.rgba & 0xFF) < 0xFF) {
++        const defaultRgb = colors.background.rgba >>> 8;
++        if (
++          (bgColorMode === Attributes.CM_RGB && bg === defaultRgb) ||
++          ((bgColorMode === Attributes.CM_P16 || bgColorMode === Attributes.CM_P256) && colors.ansi[bg].rgba >>> 8 === defaultRgb)
++        ) {
++          bg = 0;
++          bgColorMode = Attributes.CM_DEFAULT;
++        }
++      }
++
+       // Apply any decoration foreground/background overrides, this must happen after inverse has
+       // been applied
+       let bgOverride: IColor | undefined;
 diff --git a/src/browser/renderer/dom/WidthCache.ts b/src/browser/renderer/dom/WidthCache.ts
 index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e35373864b822a4 100644
 --- a/src/browser/renderer/dom/WidthCache.ts
