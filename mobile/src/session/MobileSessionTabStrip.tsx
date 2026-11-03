@@ -33,12 +33,14 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   controller,
   inTopBar,
   details,
-  actionsCollapsed = false
+  actionsCollapsed = false,
+  tabTitles
 }: {
   controller: MobileSessionController
   inTopBar: boolean
   details: SessionTitleCard['tabDetails']
   actionsCollapsed?: boolean
+  tabTitles?: ReadonlyMap<string, string>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -93,7 +95,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
       visibleTabs.map((tab) => {
         const identity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
         return {
-          title: getMobileSessionTabTitle(tab, identity),
+          title: tabTitles?.get(tab.id) ?? getMobileSessionTabTitle(tab, identity),
           agentId:
             tab.type === 'agent-session'
               ? tab.agent
@@ -102,7 +104,7 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
                 : null
         }
       }),
-    [visibleTabs, terminals, t]
+    [visibleTabs, terminals, t, tabTitles]
   )
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {

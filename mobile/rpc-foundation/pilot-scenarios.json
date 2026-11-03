@@ -17370,7 +17370,7 @@
         {
           "complete": "terminal.list#1",
           "params": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "includePreview": false,
             "worktree": "id:workspace-1"
           },
@@ -17409,7 +17409,7 @@
         {
           "complete": "terminal.list#1",
           "params": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "includePreview": false,
             "worktree": "id:workspace-1"
           },
@@ -17448,7 +17448,7 @@
         {
           "complete": "terminal.list#1",
           "params": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "includePreview": false,
             "worktree": "id:workspace-1"
           },
@@ -17479,7 +17479,7 @@
         {
           "complete": "terminal.list#1",
           "params": {
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "includePreview": false,
             "worktree": "id:workspace-1"
           },

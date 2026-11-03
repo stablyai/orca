@@ -114,11 +114,13 @@ export function getMobileSessionTabTitle(
     return tab.title || translate('session.terminalTabAgent.chat', 'Chat')
   }
   // Strip status glyphs when showing provider icons; glyph-only iOS titles otherwise leave stray colored boxes.
-  if (resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)) {
-    return (
+  const agent = resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
+  if (agent) {
+    const title =
       stripLeadingAgentTitleDecorationOrEmpty(tab.title) ||
       translate('session.terminalTabAgent.terminal', 'Terminal')
-    )
+    // Cursor's animated working suffix is status, not the task name.
+    return agent === 'cursor' ? title.replace(/ - ⏳ Working(?: [.·]{1,3})?$/u, '') : title
   }
   return tab.title || translate('session.terminalTabAgent.terminal', 'Terminal')
 }

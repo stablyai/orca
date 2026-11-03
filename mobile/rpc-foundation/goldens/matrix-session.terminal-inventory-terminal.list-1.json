@@ -4,7 +4,7 @@
   "family": "session.terminal-inventory",
   "namedDeltas": [],
   "values": {
-    "14a430a3a1d8": {
+    "05c817253549": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -16,40 +16,7 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "35d7b6bba435": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -71,7 +38,7 @@
         }
       }
     },
-    "388035b7e5f3": {
+    "12490ec4193b": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -83,7 +50,91 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "21ef0bc9cc5e": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminals": [
+              {
+                "handle": "terminal-1",
+                "title": "one"
+              },
+              {
+                "handle": "terminal-2",
+                "title": "two"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "24bb13cd7fe9": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -108,7 +159,7 @@
         }
       }
     },
-    "3a81bbc23680": {
+    "2d25f94f709e": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -120,7 +171,83 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3231b21d8323": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "45f44db37595": {
+      "name": "terminal.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":true,\"includePreview\":false}}"
+    },
+    "65b77b28e4f6": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -144,11 +271,6 @@
           "ok": false
         }
       }
-    },
-    "475f23d61c0e": {
-      "name": "terminal.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.list\",\"params\":{\"worktree\":\"id:workspace-1\",\"includeVisualLayouts\":false,\"includePreview\":false}}"
     },
     "66f849b2483e": {
       "name": "prune-live-input",
@@ -193,13 +315,7 @@
         }
       ]
     },
-    "7ed3d39f0607": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": false
-    },
-    "7f0b8dfaa8ab": {
+    "74fcb984b404": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -211,46 +327,7 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "831f677b9b45": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -275,13 +352,13 @@
         }
       }
     },
-    "84e5ca07cb7a": {
+    "7ed3d39f0607": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
-      "value": true
+      "value": false
     },
-    "8603cded4ca5": {
+    "8098a47863e7": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -293,83 +370,7 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "8d0d6d7c8b3b": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": ["terminal-1", "terminal-2"]
-    },
-    "b0ac4558f32f": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includePreview": false,
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "b1c05000c17a": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -393,7 +394,18 @@
         }
       }
     },
-    "ea8f0bd05dca": {
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "8d0d6d7c8b3b": {
+      "name": "default-live-input",
+      "ordinal": 4,
+      "value": ["terminal-1", "terminal-2"]
+    },
+    "b57c9b4dab06": {
       "name": "terminal.list#1",
       "ordinal": 1,
       "args": [
@@ -405,7 +417,40 @@
           "name": "params",
           "value": {
             "includePreview": false,
-            "includeVisualLayouts": false,
+            "includeVisualLayouts": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "d10c7236975e": {
+      "name": "terminal.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "includePreview": false,
+            "includeVisualLayouts": true,
             "worktree": "id:workspace-1"
           }
         },
@@ -428,51 +473,6 @@
           }
         }
       }
-    },
-    "ee68ebc5fb96": {
-      "name": "terminal.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includePreview": false,
-            "includeVisualLayouts": false,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "terminals": [
-              {
-                "handle": "terminal-1",
-                "title": "one"
-              },
-              {
-                "handle": "terminal-2",
-                "title": "two"
-              }
-            ]
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -481,8 +481,8 @@
       {
         "id": "session-terminal-list-merged.normal:listed",
         "observation": {
-          "sender": ["ee68ebc5fb96"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["21ef0bc9cc5e"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "84e5ca07cb7a"
           },
@@ -493,8 +493,8 @@
       {
         "id": "session-terminal-list-merged.result-absent:listed",
         "observation": {
-          "sender": ["14a430a3a1d8"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["b57c9b4dab06"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -505,8 +505,8 @@
       {
         "id": "session-terminal-list-merged.result-null:listed",
         "observation": {
-          "sender": ["ea8f0bd05dca"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["d10c7236975e"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -517,8 +517,8 @@
       {
         "id": "session-terminal-list-merged.inner-ok-missing:listed",
         "observation": {
-          "sender": ["b1c05000c17a"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["8098a47863e7"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -529,8 +529,8 @@
       {
         "id": "session-terminal-list-merged.inner-false-string-error:listed",
         "observation": {
-          "sender": ["388035b7e5f3"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["24bb13cd7fe9"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -541,8 +541,8 @@
       {
         "id": "session-terminal-list-merged.inner-false-object-error:listed",
         "observation": {
-          "sender": ["7f0b8dfaa8ab"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["12490ec4193b"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -553,8 +553,8 @@
       {
         "id": "session-terminal-list-merged.outer-refused:listed",
         "observation": {
-          "sender": ["3a81bbc23680"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["65b77b28e4f6"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -565,8 +565,8 @@
       {
         "id": "session-terminal-list-merged.outer-refused-no-message:listed",
         "observation": {
-          "sender": ["8603cded4ca5"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["2d25f94f709e"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -577,8 +577,8 @@
       {
         "id": "session-terminal-list-merged.method-not-found:listed",
         "observation": {
-          "sender": ["831f677b9b45"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["74fcb984b404"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -589,8 +589,8 @@
       {
         "id": "session-terminal-list-merged.transport-rejection:listed",
         "observation": {
-          "sender": ["b0ac4558f32f"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["3231b21d8323"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },
@@ -601,8 +601,8 @@
       {
         "id": "session-terminal-list-merged.transport-rejection-no-message:listed",
         "observation": {
-          "sender": ["35d7b6bba435"],
-          "payloads": ["475f23d61c0e"],
+          "sender": ["05c817253549"],
+          "payloads": ["45f44db37595"],
           "settlements": {
             "fetch": "7ed3d39f0607"
           },

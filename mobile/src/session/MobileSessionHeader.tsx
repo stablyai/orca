@@ -17,6 +17,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useMobileSessionTabTitles } from './use-mobile-session-tab-titles'
 
 export function MobileSessionHeader({
   controller,
@@ -29,6 +30,8 @@ export function MobileSessionHeader({
   const t = useMobileTranslation()
   const {
     hostId,
+    worktreeId,
+    desktopTabTitles,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     presentedConnState,
@@ -56,12 +59,19 @@ export function MobileSessionHeader({
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
   const sourceControlInBar =
     !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
+  // Why: the strip remounts when it moves into or out of the top bar; names held here survive that.
+  const tabTitles = useMobileSessionTabTitles(
+    visibleTabs,
+    JSON.stringify([hostId, worktreeId]),
+    desktopTabTitles
+  )
   const tabStrip = hasTabs ? (
     <MobileSessionTabStrip
       controller={controller}
       inTopBar={tabsInTopBar}
       details={details.tabDetails}
       actionsCollapsed={actionsCollapsed}
+      tabTitles={tabTitles}
     />
   ) : null
   const leading = (
