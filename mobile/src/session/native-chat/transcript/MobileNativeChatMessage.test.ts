@@ -11,6 +11,8 @@ import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
+import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
+import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
@@ -39,6 +41,25 @@ function toolMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
 
 describe('MobileNativeChatMessage', () => {
   let renderer: ReactTestRenderer | null = null
+
+  it('shows and copies clean orchestration content on the translated phone card', async () => {
+    await activateMobileUiLocale('es')
+    const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
+    try {
+      const tree = render(message)
+      const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
+      expect(markdown.map((node) => node.props.content)).toContain(
+        'Review complete\n\nThe **result** is ready.'
+      )
+      expect(textIn(tree.root)).toContain('Review worker')
+      expect(textIn(tree.root)).not.toMatch(/Subject:|──── From:|orchestration reply/)
+      expect(mobileNativeChatDisplayCopyText(message)).toBe(
+        'Review complete\n\nThe **result** is ready.'
+      )
+    } finally {
+      await activateMobileUiLocale('en')
+    }
+  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
