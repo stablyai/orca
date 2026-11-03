@@ -17,6 +17,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.ackPendingOutputOverflowed = false
     stream.ackRecoverySnapshotInFlight = false
     stream.ackRecoveryHistoryOwed = false
+    stream.mobileSnapshotPreparation?.abortRendererMountWait()
     stream.unsubscribeData()
     answerUndeliveredYieldedQueries(runtime, stream)
     stream.unsubscribeResize()
@@ -28,7 +29,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     // Delete before abort so the released exit-waiter's catch cannot re-detach.
     stream.exitWaiterAbort.abort()
     if (stream.isMobile && stream.client?.id) {
-      runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
+      stream.mobileRegistration?.releaseSilently()
     } else if (
       releaseRemoteDesktopDriver &&
       stream.registeredRemoteDesktopDriver &&

@@ -30,9 +30,10 @@ export function createTerminalWebViewPendingMessages() {
       pendingWriteCodeUnits > MAX_PENDING_WEB_WRITE_CODE_UNITS ||
       pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES
     ) {
-      const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
+      const dropIndex = pending.findIndex(
+        (candidate) => candidate.type === 'write' && candidate.receipt === undefined
+      )
       if (dropIndex === -1) {
-        resetCounters()
         return
       }
       const [dropped] = pending.splice(dropIndex, 1)

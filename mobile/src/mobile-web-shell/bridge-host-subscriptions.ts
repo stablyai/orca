@@ -1,3 +1,10 @@
+import { requestsTerminalApplicationReceipts } from '../transport/terminal-output-application'
+import type {
+  OpenSubscription,
+  UnackedFrame,
+  BridgeTerminalBacklogReport,
+  BridgeDroppedBinaryFrame
+} from './bridge-host-subscription-record'
 import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
 import {
@@ -23,31 +30,6 @@ export type BridgeEndReason = Extract<BridgeHostMessage, { type: 'end' }>['reaso
 // Native enqueue proves no delivery; bound unacknowledged frames so a stalled reader cannot grow the native queue until process death.
 export const BRIDGE_MAX_UNACKED_FRAMES = 256
 export const BRIDGE_MAX_UNACKED_BYTES = 4 * 1024 * 1024
-
-type UnackedFrame = { seq: number; bytes: number }
-
-type OpenSubscription = {
-  unsubscribe: () => void
-  seq: number
-  unacked: UnackedFrame[]
-  unackedBytes: number
-  droppedFrames: number
-  backlog: BridgeTerminalOutputBacklog | null
-}
-
-export type BridgeTerminalBacklogReport = {
-  id: string
-  coalescedFrames: number
-  deliveredFrames: number
-  peakPendingBytes: number
-  ended: TerminalBacklogEnd | null
-}
-
-export type BridgeDroppedBinaryFrame = {
-  id: string
-  bytes: number
-  droppedOnStream: number
-}
 
 // Never silently drop terminal bytes to preserve a stream; report termination so the page can resubscribe rather than render a corrupt transcript.
 export class BridgeHostSubscriptions {
@@ -85,19 +67,22 @@ export class BridgeHostSubscriptions {
     wantsBinary = false,
     envelope?: RpcEnvelopeFields
   ): void {
+    const applicationReceipts = requestsTerminalApplicationReceipts(method, params)
     const record: OpenSubscription = {
       unsubscribe: () => undefined,
       seq: 0,
       unacked: [],
       unackedBytes: 0,
       droppedFrames: 0,
-      backlog: holdsTerminalOutput(method)
-        ? new BridgeTerminalOutputBacklog({
-            // No acknowledgement within the silence bound means the page stopped answering, rather than merely draining slowly.
-            onAckSilence: () => this.endHeldStream(id, 'ack-silence'),
-            timers: this.options.terminalTimers
-          })
-        : null
+      applicationReceipts,
+      backlog:
+        holdsTerminalOutput(method) && !applicationReceipts
+          ? new BridgeTerminalOutputBacklog({
+              // No acknowledgement within the silence bound means the page stopped answering, rather than merely draining slowly.
+              onAckSilence: () => this.endHeldStream(id, 'ack-silence'),
+              timers: this.options.terminalTimers
+            })
+          : null
     }
     this.open.set(id, record)
     const onBinaryFrame = wantsBinary
@@ -137,6 +122,7 @@ export class BridgeHostSubscriptions {
         break
       }
       record.unackedBytes -= frame.bytes
+      frame.applied?.()
       acked += 1
     }
     record.unacked.splice(0, acked)
@@ -151,6 +137,10 @@ export class BridgeHostSubscriptions {
       return
     }
     this.open.delete(id)
+    for (const frame of record.unacked) {
+      frame.rejected?.()
+    }
+    record.unacked = []
     this.reportBacklog(id, record, null)
     try {
       record.unsubscribe()
@@ -169,7 +159,7 @@ export class BridgeHostSubscriptions {
     }
   }
 
-  private deliver(id: string, payload: unknown): void {
+  private deliver(id: string, payload: unknown): void | Promise<void> {
     const record = this.open.get(id)
     if (record === undefined) {
       return
@@ -190,6 +180,14 @@ export class BridgeHostSubscriptions {
       // End unserializable streams visibly; silently skipping their frame would corrupt the reader’s state.
       this.cancel(id, 'closed')
       return
+    }
+    if (record.applicationReceipts) {
+      return new Promise<void>((resolve, reject) => {
+        this.sendEvent(id, record, seq, json, false, {
+          applied: resolve,
+          rejected: () => reject(new Error('Terminal bridge application ended'))
+        })
+      })
     }
     this.sendEvent(id, record, seq, json, false)
   }
@@ -307,7 +305,8 @@ export class BridgeHostSubscriptions {
     record: OpenSubscription,
     seq: number,
     json: string,
-    binary: boolean
+    binary: boolean,
+    receipt?: Pick<UnackedFrame, 'applied' | 'rejected'>
   ): void {
     const bytes = utf8ByteLength(json)
     // Every event must fit one frame. Held terminals bypass only the byte window for a single oversized chunk, never the frame cap (C0.3).
@@ -318,10 +317,11 @@ export class BridgeHostSubscriptions {
         return
       }
       this.cancel(id, 'overflow')
+      receipt?.rejected?.()
       return
     }
     record.seq = seq
-    record.unacked.push({ seq, bytes })
+    record.unacked.push({ seq, bytes, ...receipt })
     record.unackedBytes += bytes
     this.options.post(json)
   }

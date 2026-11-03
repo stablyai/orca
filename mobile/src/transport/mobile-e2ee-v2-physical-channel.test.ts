@@ -196,7 +196,7 @@ describe('mobile E2EE v2 physical channel', () => {
 
     const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
     const text = serverFrame(new TextEncoder().encode('later'), 'text', 2n, ctx.schedule)
-    const first = ctx.channel.handleMessage({ delayedBlob: true })
+    const first = ctx.channel.handleMessage(new Blob([binary]))
     const second = ctx.channel.handleMessage(Buffer.from(text).toString('base64'))
     await Promise.resolve()
     expect(ctx.events).toEqual([])
@@ -276,7 +276,7 @@ describe('mobile E2EE v2 physical channel', () => {
 
     const binary = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
     const text = serverFrame(new TextEncoder().encode('retired'), 'text', 2n, ctx.schedule)
-    const first = ctx.channel.handleMessage({ delayedBlob: true })
+    const first = ctx.channel.handleMessage(new Blob([binary]))
     const second = ctx.channel.handleMessage(Buffer.from(text).toString('base64'))
     await Promise.resolve()
     ctx.channel.dispose()
@@ -318,6 +318,29 @@ describe('mobile E2EE v2 physical channel', () => {
     expect(ctx.sent).toHaveLength(2)
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it.each([1, 10])(
+    'retires ordered inbound traffic at %ix load when conversion cannot drain',
+    async (load) => {
+      let release!: (bytes: Uint8Array) => void
+      const decoded = new Promise<Uint8Array>((resolve) => {
+        release = resolve
+      })
+      const ctx = setup(() => decoded)
+      await authenticate(ctx)
+      ctx.events.length = 0
+      const encrypted = serverFrame(new Uint8Array([7]), 'binary', 1n, ctx.schedule)
+      const active = ctx.channel.handleMessage(new Blob([encrypted]))
+      await Promise.resolve()
+      const pending = Array.from({ length: load * 8 }, () =>
+        ctx.channel.handleMessage(new Uint8Array(8 * 1024 * 1024))
+      )
+      expect(ctx.onError).toHaveBeenCalledOnce()
+      release(encrypted)
+      await Promise.all([active, ...pending])
+      expect(ctx.events).toEqual([])
+    }
+  )
 })
 
 class RetentionSocket {
@@ -374,7 +397,9 @@ describe('relay inbound payload disposal', () => {
     ['link', 'close'],
     ['link', 'failure'],
     ['pairing', 'close'],
-    ['pairing', 'failure']
+    ['pairing', 'failure'],
+    ['link', 'overflow'],
+    ['pairing', 'overflow']
   ] as const)(
     'releases queued %s payloads on %s while conversion is blocked',
     async (owner, mode) => {
@@ -470,7 +495,9 @@ describe('relay inbound payload disposal', () => {
       const blocked = new Promise<ArrayBuffer>((resolve) => {
         release = resolve
       })
-      socket.receive({ arrayBuffer: () => blocked })
+      const blob = new Blob([new Uint8Array(1)])
+      vi.spyOn(blob, 'arrayBuffer').mockReturnValue(blocked)
+      socket.receive(blob)
       await nextInboundTurn()
       const refs = Array.from({ length: 8 }, () => receiveRetainedPayload(socket))
       try {
@@ -478,8 +505,13 @@ describe('relay inbound payload disposal', () => {
         expect(refs.filter((ref) => ref.deref() !== undefined)).toHaveLength(8)
         if (mode === 'close') {
           transport.close()
-        } else {
+        } else if (mode === 'failure') {
           socket.onclose?.({ code: 1006 })
+        } else {
+          for (let i = 0; i < 8; i++) {
+            socket.receive(new Uint8Array(8 * 1024 * 1024))
+          }
+          expect(socket.readyState).toBe(3)
         }
         await collectInboundPayloads()
         expect(refs.filter((ref) => ref.deref() !== undefined)).toHaveLength(0)

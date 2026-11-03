@@ -11,7 +11,7 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
-import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { MobileWsInboundMessageQueue } from './mobile-ws-inbound-message-queue'
 
 // Native WebSockets normally emit close immediately after error or a relay-hello
 // refusal; bound the missing-close case so recovery is never left pending.
@@ -54,7 +54,7 @@ export class MobileRelayE2eeLink {
   private closed = false
   private rejectedHelloCode: number | null = null
   private closeGraceTimer: ReturnType<typeof setTimeout> | null = null
-  private readonly inbound: WsInboundMessageQueue
+  private readonly inbound: MobileWsInboundMessageQueue
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
@@ -79,7 +79,7 @@ export class MobileRelayE2eeLink {
       onBinary: options.onBinary,
       onError: (error) => this.fail(error)
     })
-    this.inbound = new WsInboundMessageQueue(
+    this.inbound = new MobileWsInboundMessageQueue(
       async (raw) => {
         if (this.closed || this.rejectedHelloCode !== null) {
           return

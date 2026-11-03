@@ -40,11 +40,12 @@ export function isTerminalCoveredByNativeChat(
 
 export function mobileNativeChatTerminalCapabilities(covered: boolean): {
   terminalBinaryStream: 1
+  ackOutput?: 1
   mobileInputLeaseOnly?: 1
 } {
   return covered
     ? { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
-    : { terminalBinaryStream: 1 }
+    : { terminalBinaryStream: 1, ackOutput: 1 }
 }
 
 // Omit phone dims from input-only leases so native chat cannot resize the desktop PTY.

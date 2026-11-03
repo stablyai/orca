@@ -7,7 +7,7 @@ import {
   pairedE2EEV2TokenAuth
 } from '../../../src/shared/paired-e2ee-client-handshake'
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
-import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { MobileWsInboundMessageQueue } from './mobile-ws-inbound-message-queue'
 import { inflateCompressedFrame } from './compressed-frame-inflate'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
@@ -29,7 +29,7 @@ export type MobileE2EEV2Socket = {
 export class MobileE2EEV2PhysicalChannel {
   private state: ChannelState = 'awaiting-ready'
   private generation = 0
-  private readonly inbound: WsInboundMessageQueue
+  private readonly inbound: MobileWsInboundMessageQueue
   private readonly outboundQueue: WsOutboundBackpressureQueue<OutboundItem>
 
   constructor(
@@ -45,9 +45,12 @@ export class MobileE2EEV2PhysicalChannel {
       onError: (error: Error) => void
     }
   ) {
-    this.inbound = new WsInboundMessageQueue(
+    this.inbound = new MobileWsInboundMessageQueue(
       (raw) => this.processMessage(raw, this.generation),
-      (error) => args.onError(error instanceof Error ? error : new Error(String(error)))
+      (error) => {
+        this.dispose()
+        args.onError(error instanceof Error ? error : new Error(String(error)))
+      }
     )
     this.outboundQueue = createWsOutboundBackpressureQueue<OutboundItem>({
       // Why: encryption happens only when an admitted item reaches the wire,

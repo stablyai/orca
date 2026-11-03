@@ -17,7 +17,7 @@ import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import {
   markYieldedQueriesDiscardedInFrames,
-  replaySnapshotCoveredStatelessQueries
+  replaySnapshotCoveredQueries
 } from './terminal-multiplex-yielded-queries'
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
@@ -41,7 +41,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
-        carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0
+        carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0,
+        stream.snapshotByteBudget
       )
       if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
         return
@@ -93,7 +94,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       }
       stream.ackPendingOutputOverflowed = false
       stream.ackRecoveryHistoryOwed = !carriesHistory
-      replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
+      replaySnapshotCoveredQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
         return

@@ -22,7 +22,7 @@ import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop
 import {
   answerUndeliveredYieldedQueries,
   discardPendingMultiplexOutput,
-  replaySnapshotCoveredStatelessQueries
+  replaySnapshotCoveredQueries
 } from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
@@ -239,7 +239,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         const pendingOutput = stream.pendingOutput.splice(0)
         if (shouldFlushPendingOutput) {
           if (typeof requestId !== 'number') {
-            replaySnapshotCoveredStatelessQueries(
+            replaySnapshotCoveredQueries(
               state,
               stream,
               pendingOutput,

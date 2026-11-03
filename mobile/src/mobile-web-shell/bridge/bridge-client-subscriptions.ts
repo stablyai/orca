@@ -1,3 +1,4 @@
+import { requestsTerminalApplicationReceipts } from '../../transport/terminal-output-application'
 import type { BrowserScreencastFrame } from '../../transport/browser-screencast-protocol'
 import type { RpcEnvelopeFields } from '../../transport/rpc-envelope-fields'
 import {
@@ -23,11 +24,13 @@ export function bridgeStreamError(message: string, error?: unknown): BridgeStrea
 }
 
 type OpenStream = {
-  onData: (result: unknown) => void
+  onData: (result: unknown) => unknown
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
   lastSeq: number
   unackedFrames: number
   unackedBytes: number
+  applicationReceipts: boolean
+  applicationTail: Promise<void>
 }
 
 type SubscriptionsOptions = {
@@ -53,11 +56,20 @@ export class BridgeClientSubscriptions {
     id: string,
     method: string,
     params: unknown,
-    onData: (result: unknown) => void,
+    onData: (result: unknown) => unknown,
     onBinaryFrame?: (frame: BrowserScreencastFrame) => void,
     envelope?: RpcEnvelopeFields
   ): boolean {
-    this.streams.set(id, { onData, onBinaryFrame, lastSeq: 0, unackedFrames: 0, unackedBytes: 0 })
+    const applicationReceipts = requestsTerminalApplicationReceipts(method, params)
+    this.streams.set(id, {
+      onData,
+      onBinaryFrame,
+      lastSeq: 0,
+      unackedFrames: 0,
+      unackedBytes: 0,
+      applicationReceipts,
+      applicationTail: Promise.resolve()
+    })
     const sent = this.options.send({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'subscribe',
@@ -79,6 +91,29 @@ export class BridgeClientSubscriptions {
   deliver(message: BridgeEventMessage, bytes: number): void {
     const stream = this.streams.get(message.id)
     if (stream === undefined) {
+      return
+    }
+    if (stream.applicationReceipts && 'payload' in message) {
+      try {
+        const applied = Promise.resolve(stream.onData(message.payload)).catch((error) => {
+          this.abandon(message.id, 'Terminal application failed', error)
+        })
+        stream.applicationTail = stream.applicationTail
+          .then(() => applied)
+          .then(() => {
+            if (this.streams.get(message.id) === stream) {
+              this.options.send({
+                v: BRIDGE_PROTOCOL_VERSION,
+                type: 'ack',
+                id: message.id,
+                seq: message.seq
+              })
+            }
+          })
+          .catch(() => this.abandon(message.id, 'Terminal application failed'))
+      } catch {
+        this.abandon(message.id, 'Terminal application failed')
+      }
       return
     }
     stream.lastSeq = message.seq

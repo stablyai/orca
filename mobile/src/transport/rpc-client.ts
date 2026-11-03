@@ -14,7 +14,7 @@ type SubscribeOptions = {
   envelope?: RpcEnvelopeFields
 }
 
-type StreamingListener = (result: unknown) => void
+type StreamingListener = (result: unknown) => unknown
 
 // Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
 export type RpcClient = UnvalidatedRpcRequestPort & {

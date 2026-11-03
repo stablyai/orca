@@ -4,12 +4,7 @@ import {
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal-stream-protocol'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
-import {
-  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
-  scanTerminalReplyQuerySequences,
-  type TerminalReplyQueryScanState,
-  type TerminalReplyQuerySequence
-} from '../../../../../shared/terminal-reply-query-scan'
+import { createTerminalInitialQueryReplay } from './terminal-initial-query-replay'
 import { TERMINAL_MULTIPLEX_PENDING_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
 import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 import { createTerminalOutputBatcher, type TerminalOutputBatcher } from './terminal-output-batcher'
@@ -23,7 +18,6 @@ import type { TerminalOutputChunk } from './terminal-stream-types'
 import { publishTerminalSubscribeBinarySnapshot } from './terminal-subscribe-binary-snapshot'
 import { activateTerminalSubscribeBinaryLive } from './terminal-subscribe-binary-live'
 import { registerTerminalSubscribeBinaryControlFrames } from './terminal-subscribe-binary-control-frames'
-const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
   const { runtime, registration, sendBinary, ptyId, clientId, isMobile } = args
   if (!sendBinary) {
@@ -42,10 +36,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   let desktopClaimTail: Promise<boolean> = Promise.resolve(true)
   let pendingOutputBytes = 0
   let pendingOutputOverflowed = false
-  let pendingQueryScanState: TerminalReplyQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
-  const pendingQuerySequences: TerminalReplyQuerySequence[] = []
-  let pendingQueryChars = 0
-  let pendingQueryOverflowed = false
+  const initialQueryReplay = createTerminalInitialQueryReplay()
   let unsubscribeData = (): void => {}
   let unsubscribeResize = (): void => {}
   let unsubscribeFit = (): void => {}
@@ -125,29 +116,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
       return
     }
     if (buffering) {
-      const rawLength = meta?.rawLength
-      if (
-        typeof meta?.seq === 'number' &&
-        typeof rawLength === 'number' &&
-        rawLength === data.length
-      ) {
-        const scan = scanTerminalReplyQuerySequences(
-          data,
-          meta.seq - rawLength,
-          pendingQueryScanState
-        )
-        pendingQueryScanState = scan.state
-        for (const query of scan.queries) {
-          if (pendingQueryChars + query.data.length > TERMINAL_QUERY_REPLAY_MAX_CHARS) {
-            pendingQueryOverflowed = true
-            break
-          }
-          pendingQuerySequences.push(query)
-          pendingQueryChars += query.data.length
-        }
-      } else {
-        pendingQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
-      }
+      initialQueryReplay.record(data, meta)
       const remainingBudget = Math.max(1, TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - pendingOutputBytes)
       const measurement = measureTerminalStreamByteLength(data, {
         stopAfterBytes: remainingBudget
@@ -222,13 +191,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     set pendingOutputOverflowed(value) {
       pendingOutputOverflowed = value
     },
-    pendingQuerySequences,
-    get pendingQueryOverflowed() {
-      return pendingQueryOverflowed
-    },
-    set pendingQueryOverflowed(value) {
-      pendingQueryOverflowed = value
-    },
+    initialQueryReplay,
     get lateRendererReadyPromise() {
       return lateRendererReadyPromise
     },

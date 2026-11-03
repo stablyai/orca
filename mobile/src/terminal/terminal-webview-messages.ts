@@ -3,7 +3,7 @@ import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link
 
 export type TerminalFrame = { width: number; height: number }
 
-export type TerminalWebViewCommand =
+export type TerminalWebViewCommand = { receipt?: number } & (
   | { type: 'set-interaction-active'; active: boolean }
   | { type: 'ping'; id?: number }
   | { type: 'write'; id?: number; data: string }
@@ -30,3 +30,4 @@ export type TerminalWebViewCommand =
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+)

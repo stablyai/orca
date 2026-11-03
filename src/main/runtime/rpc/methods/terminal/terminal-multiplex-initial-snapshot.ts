@@ -1,3 +1,5 @@
+import { prepareMobileTerminalSnapshot } from './mobile-terminal-snapshot-preparation'
+import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
 import {
   isTerminalSnapshotForcedUnavailable,
   sendSnapshotFrames,
@@ -18,7 +20,7 @@ import {
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import {
   discardPendingMultiplexOutput,
-  replaySnapshotCoveredStatelessQueries
+  replaySnapshotCoveredQueries
 } from './terminal-multiplex-yielded-queries'
 
 export type MultiplexPublishedInitialState = {
@@ -42,8 +44,34 @@ export async function publishMultiplexInitialSnapshot(
   const firstRows = isMovedPaneHistorySessionId(ptyId)
     ? MOVED_PANE_SUBSCRIBE_SCROLLBACK_ROWS
     : MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
-  let read = await runtime.readTerminal(request.terminal)
-  let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
+  const preparation = stream.mobileSnapshotPreparation
+  const prepared = preparation
+    ? await prepareMobileTerminalSnapshot(
+        { ...preparation, runtime, params: request, ptyId },
+        preparation,
+        stream.mobileRegistration?.signal ?? stream.exitWaiterAbort.signal,
+        stream.snapshotByteBudget,
+        firstRows
+      )
+    : {
+        read: await runtime.readTerminal(request.terminal),
+        serialized: await serializeBudgetedMobileSnapshot(
+          runtime,
+          ptyId,
+          stream.snapshotByteBudget,
+          firstRows
+        ),
+        rendererSeed: null
+      }
+  if (!prepared) {
+    return null
+  }
+  let { read, serialized } = prepared
+  if (prepared.rendererSeed) {
+    void deepenHeadlessCopyToDesktopDepth(runtime, ptyId, prepared.rendererSeed, () =>
+      isMultiplexStreamAttached(state, stream)
+    )
+  }
   if (!isMultiplexStreamAttached(state, stream)) {
     return null
   }
@@ -51,7 +79,12 @@ export async function publishMultiplexInitialSnapshot(
   if (stream.pendingOutputOverflowed) {
     discardPendingMultiplexOutput(stream)
     read = await runtime.readTerminal(request.terminal)
-    serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, undefined, firstRows)
+    serialized = await serializeBudgetedMobileSnapshot(
+      runtime,
+      ptyId,
+      stream.snapshotByteBudget,
+      firstRows
+    )
     if (!isMultiplexStreamAttached(state, stream)) {
       return null
     }
@@ -130,16 +163,20 @@ export async function publishMultiplexInitialSnapshot(
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)
-  replaySnapshotCoveredStatelessQueries(
+  const initialQueries =
+    stream.initialQueryReplay?.covered(snapshotOutputSeq, initialOutputOverflowed) ?? []
+  stream.initialQueryReplay = undefined
+  replaySnapshotCoveredQueries(
     state,
     stream,
     pendingOutput,
     snapshotOutputSeq,
-    serialized?.pendingEscapeTailAnsi
+    serialized?.pendingEscapeTailAnsi,
+    initialQueries
   )
   if (!initialOutputOverflowed) {
     for (const chunk of pendingOutput) {
-      const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq)
+      const uncovered = getOutputAfterSnapshotSeq(chunk, snapshotOutputSeq, initialQueries)
       if (uncovered) {
         stream.outputBatcher.push(uncovered.data, uncovered.meta)
       }

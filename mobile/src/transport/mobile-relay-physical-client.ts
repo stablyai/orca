@@ -9,7 +9,7 @@ import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
-import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
+import { MobileWsInboundMessageQueue } from './mobile-ws-inbound-message-queue'
 export { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
@@ -103,7 +103,7 @@ export function connectMobileRelayForPairing(args: {
       })
     )
   }
-  const inbound = new WsInboundMessageQueue(
+  const inbound = new MobileWsInboundMessageQueue(
     async (raw) => {
       if (closed) {
         return

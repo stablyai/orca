@@ -4,7 +4,10 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-  decodeTerminalStreamText
+  decodeTerminalStreamText,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  type TerminalStreamFrame
 } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
@@ -29,73 +32,111 @@ const request: RpcRequest = {
 }
 
 describe('terminal subscribe mount replay', () => {
-  it('includes the restored idle screen when a missing model is background-mounted', async () => {
-    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const registry = createSubscriptionRegistryDouble()
-    let mounted = false
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      subscribeToPtyExit: vi.fn(() => vi.fn()),
-      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      hasHeadlessTerminalState: vi.fn(() => mounted),
-      requestRendererTerminalTabMount: vi.fn(() => true),
-      getRendererTerminalSerializerGenerationForHandle: vi.fn(() => 3),
-      getRendererTerminalSerializerGeneration: vi.fn(() => 3),
-      getPtyOutputSequence: vi.fn(() => (mounted ? 4 : 0)),
-      replaceHeadlessTerminalFromRendererSnapshotForRecovery: vi.fn(),
-      waitForRendererTerminalSerializer: vi.fn(async (_ptyId, afterGeneration) => {
-        expect(afterGeneration).toBe(3)
-        mounted = true
-        return true
-      }),
-      handleMobileSubscribe: vi.fn().mockResolvedValue(true),
-      handleMobileUnsubscribe: vi.fn(),
-      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
-      registerRemoteTerminalViewSubscriber: vi.fn(() => vi.fn()),
-      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
-      serializeTerminalBuffer: vi.fn(async () =>
-        mounted
-          ? { data: 'idle prompt $ ', cols: 80, rows: 24, seq: 4 }
-          : { data: '', cols: 80, rows: 24, seq: 1 }
-      ),
-      serializeRendererTerminalBuffer: vi.fn(async () =>
-        mounted ? { data: 'idle prompt $ ', cols: 80, rows: 24, seq: 4 } : null
-      ),
-      getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
-      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
-      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-      isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
-      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
-      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
-      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
-      cleanupSubscription: vi.fn(registry.cleanupSubscription),
-      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  it.each(['legacy', 'multiplex'] as const)(
+    'includes the restored idle screen over %s when a missing model is background-mounted',
+    async (protocol) => {
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const registry = createSubscriptionRegistryDouble()
+      let mounted = false
+      const runtime = asRuntime({
+        getRuntimeId: () => 'test-runtime',
+        subscribeToPtyExit: vi.fn(() => vi.fn()),
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        getPtyExecutionHostMetadata: vi.fn(() => ({})),
+        getTerminalLaunchResult: vi.fn(),
+        hasHeadlessTerminalState: vi.fn(() => mounted),
+        requestRendererTerminalTabMount: vi.fn(() => true),
+        getRendererTerminalSerializerGenerationForHandle: vi.fn(() => 3),
+        getRendererTerminalSerializerGeneration: vi.fn(() => 3),
+        getPtyOutputSequence: vi.fn(() => (mounted ? 4 : 0)),
+        replaceHeadlessTerminalFromRendererSnapshotForRecovery: vi.fn(),
+        waitForRendererTerminalSerializer: vi.fn(async (_ptyId, afterGeneration) => {
+          expect(afterGeneration).toBe(3)
+          mounted = true
+          return true
+        }),
+        handleMobileSubscribe: vi.fn().mockResolvedValue(true),
+        handleMobileUnsubscribe: vi.fn(),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        registerRemoteTerminalViewSubscriber: vi.fn(() => vi.fn()),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn(async () =>
+          mounted
+            ? { data: 'idle prompt $ ', cols: 80, rows: 24, seq: 4 }
+            : { data: '', cols: 80, rows: 24, seq: 1 }
+        ),
+        serializeRendererTerminalBuffer: vi.fn(async () =>
+          mounted ? { data: 'idle prompt $ ', cols: 80, rows: 24, seq: 4 } : null
+        ),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
-    const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
-      connectionId: 'conn-phone',
-      sendBinary: (bytes) => {
-        binaryFrames.push(bytes)
-      },
-      registerBinaryStreamHandler: vi.fn(() => vi.fn())
-    })
+      const handlers = new Map<number, (frame: TerminalStreamFrame) => void>()
+      const abort = new AbortController()
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        protocol === 'legacy' ? request : { ...request, method: 'terminal.multiplex', params: {} },
+        vi.fn(),
+        {
+          connectionId: 'conn-phone',
+          signal: abort.signal,
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          },
+          registerBinaryStreamHandler: (id, handler) => {
+            handlers.set(id, handler)
+            return () => {
+              handlers.delete(id)
+            }
+          }
+        }
+      )
+      if (protocol === 'multiplex') {
+        await vi.waitFor(() => expect(handlers.has(0)).toBe(true))
+        handlers.get(0)?.(
+          decodeTerminalStreamFrame(
+            encodeTerminalStreamFrame({
+              streamId: 0,
+              opcode: TerminalStreamOpcode.Subscribe,
+              seq: 0,
+              payload: encodeTerminalStreamJson({
+                terminal: 'terminal-1',
+                client: { id: 'phone-1', type: 'mobile' },
+                streamId: 7,
+                capabilities: { ackOutput: 1 }
+              })
+            })
+          )!
+        )
+      }
 
-    await vi.waitFor(() => expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalled())
-    await vi.waitFor(() =>
-      expect(
-        binaryFrames
-          .map((bytes) => decodeTerminalStreamFrame(bytes))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
-          .map((frame) => decodeTerminalStreamText(frame!.payload))
-          .join('')
-      ).toContain('idle prompt $ ')
-    )
+      await vi.waitFor(() => expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalled())
+      await vi.waitFor(() =>
+        expect(
+          binaryFrames
+            .map((bytes) => decodeTerminalStreamFrame(bytes))
+            .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+            .map((frame) => decodeTerminalStreamText(frame!.payload))
+            .join('')
+        ).toContain('idle prompt $ ')
+      )
 
-    runtime.cleanupSubscription('terminal-1:phone-1')
-    await dispatchPromise
-  })
+      runtime.cleanupSubscription('terminal-1:phone-1')
+      runtime.cleanupSubscription('terminal-multiplex:conn-phone')
+      abort.abort()
+      await dispatchPromise
+    }
+  )
 
   it('prefers restored history when phone-fit creates suffix-only headless state', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []

@@ -11,11 +11,8 @@ import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import { RpcClientSocketCloseController } from './rpc-client-socket-close-controller'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { RpcClientSocketSession } from './rpc-client-socket-session'
-import {
-  RpcClientStreamRegistry,
-  type RpcStreamingListener,
-  type RpcStreamSubscribeOptions
-} from './rpc-client-stream-registry'
+import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
+import type { RpcStreamingListener, RpcStreamSubscribeOptions } from './rpc-client-stream-record'
 import {
   DECISIVE_PROBE_TIMEOUT_MS,
   livenessProbeFrame,
@@ -66,7 +63,8 @@ export class DirectRpcClient implements RpcClient {
     this.streams = new RpcClientStreamRegistry({
       nextId: () => this.nextId(),
       getState: () => this.connectionState.get(),
-      sendFrame: (frame) => this.sendFrame(frame)
+      sendFrame: (frame) => this.sendFrame(frame),
+      sendBinary: (bytes) => this.socketSession?.sendBinary(bytes) ?? false
     })
     this.requests = new RpcClientRequestTracker({
       nextId: () => this.nextId(),

@@ -31,6 +31,7 @@ describe('terminal multiplex RPC', () => {
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn(resolveLeaf),
       resolveLiveLeafForHandle: vi.fn(resolveLeaf),
+      requestRendererTerminalTabMount: vi.fn().mockReturnValue(false),
       waitForLeafPtyId: vi.fn(
         () =>
           new Promise<string>((resolve) => {

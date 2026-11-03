@@ -33,7 +33,7 @@ export function isLogicalClientCutoverError(error: unknown): boolean {
 type SubscriptionRecord = {
   method: string
   params: unknown
-  listener: (result: unknown) => void
+  listener: (result: unknown) => unknown
   options?: Parameters<RpcClient['subscribe']>[3]
   disposePhysical: (() => void) | null
   cancelled: boolean
@@ -307,7 +307,7 @@ export function createStableLogicalRpcClient(
       record.params,
       (result) => {
         if (!closed && !record.cancelled && generation === subscriptionGeneration) {
-          record.listener(result)
+          return record.listener(result)
         }
       },
       record.options

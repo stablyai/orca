@@ -75,6 +75,7 @@ export function connectMobileRelayRpcSession(args: {
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
+    sendBinary: (bytes) => !closed && link.sendBinary(bytes),
     waitForConnected: () => connectWaiters.wait(requestTimeoutMs)
   })
 

@@ -1,7 +1,8 @@
 import { isStatelessRendererReplyCsiQuery } from '../../../../../shared/terminal-reply-query-extraction'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
-  scanTerminalReplyQuerySequences
+  scanTerminalReplyQuerySequences,
+  type TerminalReplyQuerySequence
 } from '../../../../../shared/terminal-reply-query-scan'
 import type { RuntimeTerminalDataMeta } from '../../../orca-runtime'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
@@ -26,14 +27,11 @@ export function recordYieldedTerminalQueries(
   data: string,
   meta: RuntimeTerminalDataMeta | undefined
 ): void {
-  if (
-    stream.isMobile ||
-    typeof meta?.seq !== 'number' ||
-    !runtime.isSoleRemoteTerminalQueryOwner(stream.ptyId)
-  ) {
+  if (typeof meta?.seq !== 'number' || !runtime.isSoleRemoteTerminalQueryOwner(stream.ptyId)) {
     stream.yieldedQueryScan = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
     return
   }
+  stream.initialQueryReplay?.record(data, meta)
   // Why: frames split large events with per-slice seqs, so settle by each query's own end seq; transformed text can't map offsets to seq.
   const mapsToSeq = (meta.rawLength ?? data.length) === data.length
   const { queries, state } = scanTerminalReplyQuerySequences(
@@ -136,19 +134,20 @@ function purgeQueuedSnapshotQueryReplays(stream: TerminalMultiplexStream): void 
   markYieldedQueriesDiscardedInFrames(stream, purged)
 }
 
-/** Snapshots preserve cells, not queries; replay covered stateless queries through the viewer's ordered parser. */
-export function replaySnapshotCoveredStatelessQueries(
+/** Initial mobile queries retain legacy reply ownership; later snapshots replay only stateless queries. */
+export function replaySnapshotCoveredQueries(
   connection: TerminalMultiplexConnection,
   stream: TerminalMultiplexStream,
   chunks: readonly TerminalOutputChunk[],
   snapshotSeq: number | undefined,
-  pendingEscapeTailAnsi?: string
+  pendingEscapeTailAnsi?: string,
+  initialQueries: readonly TerminalReplyQuerySequence[] = []
 ): void {
   if (typeof snapshotSeq !== 'number') {
     return
   }
   purgeQueuedSnapshotQueryReplays(stream)
-  if (stream.yieldedQueries.length === 0) {
+  if (stream.yieldedQueries.length === 0 && initialQueries.length === 0) {
     return
   }
   const isDiscardedCovered = (query: YieldedTerminalQuery): boolean =>
@@ -191,6 +190,12 @@ export function replaySnapshotCoveredStatelessQueries(
       }
     }
   }
+  for (const query of initialQueries) {
+    if (!replays.some((replay) => replay.seq === query.endSeq && replay.data === query.data)) {
+      replays.push({ seq: query.endSeq, data: query.data })
+    }
+  }
+  replays.sort((a, b) => a.seq - b.seq)
   if (replays.length === 0) {
     return
   }
@@ -203,7 +208,10 @@ export function replaySnapshotCoveredStatelessQueries(
       replayedQuery: query
     }
   })
-  if (pendingEscapeTailAnsi) {
+  if (
+    pendingEscapeTailAnsi &&
+    !initialQueries.some((query) => query.startSeq < snapshotSeq && query.endSeq > snapshotSeq)
+  ) {
     // Cancel only the snapshot's partial parser command around queries, then restore it for the untouched live suffix.
     frames.push({
       bytes: encodeTerminalStreamText(pendingEscapeTailAnsi),

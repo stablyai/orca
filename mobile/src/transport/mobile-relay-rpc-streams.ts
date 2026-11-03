@@ -1,3 +1,9 @@
+import {
+  unsubscribeSlot,
+  type StreamRecord,
+  type StreamManagerOptions,
+  type StreamUnsubscribe
+} from './mobile-relay-rpc-stream-record'
 import { decodeBrowserScreencastFrame } from './browser-screencast-protocol'
 import {
   handleTerminalBinaryFrame,
@@ -12,45 +18,9 @@ import {
 import { buildReadyStreamUnsubscribe, isReadyIdStream } from './rpc-client-server-subscription'
 import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import type { RpcClient } from './rpc-client'
-import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
+import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { RpcResponse, RpcSuccess } from './types'
-
-type StreamRecord = {
-  method: string
-  params: unknown
-  envelope?: RpcEnvelopeFields
-  listener?: (result: unknown) => void
-  onBinaryFrame?: Parameters<RpcClient['subscribe']>[3] extends
-    | { onBinaryFrame?: infer Listener }
-    | undefined
-    ? Listener
-    : never
-  streamIds: Set<number>
-  subscriptionId?: string
-  cancelled: boolean
-  /** Position in this session's send order, or null while unsent. */
-  sendOrder: number | null
-  receivedSnapshot?: boolean
-}
-
-type StreamUnsubscribe = { method: string; params: Record<string, unknown> }
-
-// Include the whole envelope in cleanup-slot identity; sort keys so equivalent routing names the same slot.
-function unsubscribeSlot(
-  { method, params }: StreamUnsubscribe,
-  envelope: RpcEnvelopeFields | undefined
-): string | null {
-  if (!('subscriptionId' in params)) {
-    return null
-  }
-  const client =
-    'client' in params && typeof params.client === 'object' && params.client !== null
-      ? params.client
-      : null
-  const clientId = client && 'id' in client ? client.id : null
-  const routing = envelope ? Object.entries(envelope).sort(([a], [b]) => (a < b ? -1 : 1)) : null
-  return JSON.stringify([method, params.subscriptionId, clientId, routing])
-}
+import { MobileTerminalMultiplexer } from './mobile-terminal-multiplexer'
 
 function buildParamsUnsubscribe(
   method: string,
@@ -64,13 +34,6 @@ function buildParamsUnsubscribe(
   return buildStreamUnsubscribe(method, params, requestId)
 }
 
-type StreamManagerOptions = {
-  nextId: () => string
-  // A stream's envelope rides its subscribe and unsubscribes alike, so routing reaches one host.
-  sendFrame: (frame: RpcRequestFrame) => boolean
-  waitForConnected: () => Promise<void>
-}
-
 export class MobileRelayRpcStreams {
   private readonly streams = new Map<string, StreamRecord>()
   private readonly cancelledSubscriptions = new Map<
@@ -82,13 +45,33 @@ export class MobileRelayRpcStreams {
   private readonly unreadableTerminalFrames = new TerminalUnreadableFrameResets()
   private activeBrowserStream: StreamRecord | null = null
   private sendCount = 0
+  private readonly multiplexer: MobileTerminalMultiplexer | null
 
-  constructor(private readonly options: StreamManagerOptions) {}
+  constructor(private readonly options: StreamManagerOptions) {
+    this.multiplexer = options.sendBinary
+      ? new MobileTerminalMultiplexer({
+          subscribe: (...args) => this.subscribeStream(...args),
+          sendBinary: options.sendBinary
+        })
+      : null
+  }
 
   subscribe(
     method: string,
     params: unknown,
-    listener: (result: unknown) => void,
+    listener: (result: unknown) => unknown,
+    subscribeOptions?: Parameters<RpcClient['subscribe']>[3]
+  ): () => void {
+    return (
+      this.multiplexer?.subscribe(method, params, listener, subscribeOptions?.envelope) ??
+      this.subscribeStream(method, params, listener, subscribeOptions)
+    )
+  }
+
+  private subscribeStream(
+    method: string,
+    params: unknown,
+    listener: (result: unknown) => unknown,
     subscribeOptions?: Parameters<RpcClient['subscribe']>[3]
   ): () => void {
     const id = this.options.nextId()
@@ -122,6 +105,7 @@ export class MobileRelayRpcStreams {
   }
 
   updateTerminalViewport(terminal: string, viewport: { cols: number; rows: number }): void {
+    this.multiplexer?.updateTerminalViewport(terminal, viewport)
     updateTerminalSubscriptionViewport(this.streams.values(), terminal, viewport)
   }
 
@@ -194,6 +178,9 @@ export class MobileRelayRpcStreams {
   }
 
   handleBinary(bytes: Uint8Array): void {
+    if (this.multiplexer?.handleBinary(bytes)) {
+      return
+    }
     const browserFrame = decodeBrowserScreencastFrame(bytes)
     if (browserFrame && this.activeBrowserStream?.onBinaryFrame) {
       this.activeBrowserStream.onBinaryFrame(browserFrame)
@@ -207,6 +194,7 @@ export class MobileRelayRpcStreams {
   }
 
   clear(): void {
+    this.multiplexer?.reset()
     for (const [id, stream] of this.streams) {
       stream.cancelled = true
       this.remove(id)

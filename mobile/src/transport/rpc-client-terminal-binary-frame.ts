@@ -7,11 +7,16 @@ import {
 } from '../../../src/shared/terminal-stream-protocol'
 import type { TerminalUnreadableFrameResets } from './terminal-unreadable-frame-resets'
 import { translate } from '../i18n/mobile-i18n'
+import {
+  REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
+  REMOTE_RUNTIME_MAX_PENDING_REQUESTS
+} from '../../../src/shared/remote-runtime/remote-runtime-memory-limits'
 
 export type TerminalSnapshotState = {
   streamId: number
   meta: Record<string, unknown>
   chunks: string[]
+  bytes: number
 }
 
 type StreamingListener = (result: unknown) => void
@@ -65,7 +70,8 @@ export function handleTerminalBinaryFrame(
     options.terminalSnapshots.set(frame.streamId, {
       streamId: frame.streamId,
       meta,
-      chunks: []
+      chunks: [],
+      bytes: 0
     })
     return
   }
@@ -74,6 +80,26 @@ export function handleTerminalBinaryFrame(
     if (!snapshot) {
       return
     }
+    const retainedBytes = Array.from(options.terminalSnapshots.values()).reduce(
+      (total, held) => total + held.bytes,
+      0
+    )
+    if (
+      retainedBytes + frame.payload.byteLength * 2 > REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES ||
+      snapshot.chunks.length >= REMOTE_RUNTIME_MAX_PENDING_REQUESTS
+    ) {
+      options.terminalSnapshots.delete(frame.streamId)
+      listener({
+        type: 'error',
+        streamId: frame.streamId,
+        message: translate(
+          'connection.rpcClientStreamRegistry.interrupted',
+          'Connection interrupted'
+        )
+      })
+      return
+    }
+    snapshot.bytes += frame.payload.byteLength * 2
     snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
     return
   }

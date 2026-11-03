@@ -12,11 +12,12 @@ import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
-import { resetWriteQueue } from './write-queue'
+import { enqueueWriteBoundary, pumpWrites, resetWriteQueue } from './write-queue'
 
 export type TerminalHostMessage = {
   active?: boolean
   id?: number
+  receipt?: number
   type?: string
   cols?: number
   rows?: number
@@ -154,5 +155,18 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
         repositionOverlay(scope)
       } catch {}
     }
+  }
+  if (typeof msg.receipt === 'number' && msg.type === 'clear') {
+    const applied = () => notify(scope, { type: 'applied', receipt: msg.receipt })
+    // The reset discarded queued writes; the parser may still own its active write.
+    if (scope.term) {
+      scope.term.write('', applied)
+    } else {
+      applied()
+    }
+  }
+  if (typeof msg.receipt === 'number' && (msg.type === 'write' || msg.type === 'init')) {
+    enqueueWriteBoundary(scope, () => notify(scope, { type: 'applied', receipt: msg.receipt }))
+    pumpWrites(scope, scope.terminalGeneration)
   }
 }

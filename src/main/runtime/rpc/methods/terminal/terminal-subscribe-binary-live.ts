@@ -1,3 +1,4 @@
+import { readLateMobileRendererSnapshot } from './mobile-terminal-snapshot-preparation'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson
@@ -5,8 +6,7 @@ import {
 import {
   mobileSnapshotByteBudget,
   sendMobileResizeRestream,
-  sendSnapshotFrames,
-  serializeStableMobileRendererSnapshot
+  sendSnapshotFrames
 } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
 import type {
@@ -31,10 +31,11 @@ export function activateTerminalSubscribeBinaryLive(
         state.outputBatcher?.flush()
         // Share frame metadata with the budget; differing recovery reasons previously undercounted the frame.
         const recoveryFrame = { kind: 'resized', reason: 'renderer-mount-ready' } as const
-        const recovery = await serializeStableMobileRendererSnapshot(
+        const recovery = await readLateMobileRendererSnapshot(
           runtime,
           ptyId,
-          mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
+          mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame),
+          () => !state.closed
         )
         if (state.closed) {
           return
@@ -42,11 +43,6 @@ export function activateTerminalSubscribeBinaryLive(
         if (!recovery?.data.length) {
           return
         }
-        // Without buffered-output gating, only exact renderer high-water can reset the client without erasing live bytes.
-        if (recovery.seq !== runtime.getPtyOutputSequence(ptyId)) {
-          return
-        }
-        runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
         // Shipped clients apply resized snapshots in place, recovering blank xterm without resubscribe.
         const recoveryStats = sendSnapshotFrames(state.sendFrame, {
           ...recoveryFrame,

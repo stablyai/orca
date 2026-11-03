@@ -25,12 +25,27 @@ describe.each([
   { parserState: 'CSI', pending: '\x1b[31', suffix: 'mAFTER', soleOwner: true },
   { parserState: 'OSC', pending: '\x1b]777;payload', suffix: 'end\x07AFTER', soleOwner: true },
   { parserState: 'DCS', pending: '\x1bP1qpayload', suffix: 'end\x1b\\AFTER', soleOwner: true },
+  { parserState: 'mobile ground', pending: '', suffix: 'AFTER', soleOwner: true, mobile: true },
+  {
+    parserState: 'mobile CSI',
+    pending: '\x1b[31',
+    suffix: 'mAFTER',
+    soleOwner: true,
+    mobile: true
+  },
+  {
+    parserState: 'mobile query cutoff',
+    pending: '\x1b[6',
+    suffix: 'nAFTER',
+    soleOwner: true,
+    mobile: true
+  },
   { parserState: 'ground with another owner', pending: '', suffix: 'AFTER', soleOwner: false }
 ])(
   'multiplex snapshot-covered queries with $parserState parser state',
-  ({ pending, suffix, soleOwner }) => {
+  ({ pending, suffix, soleOwner, mobile = false }) => {
     it.each(['initial', 'requested'] as const)(
-      'preserves DA1 ownership across the %s snapshot without replaying stale CPR',
+      'preserves query ownership across the %s snapshot and limits CPR to initial mobile replay',
       async (kind) => {
         vi.useFakeTimers()
         let output: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
@@ -47,6 +62,8 @@ describe.each([
         const answerYieldedTerminalQueries = vi.fn()
         const harness = startDesktopMultiplexSubscribe({
           isSoleRemoteTerminalQueryOwner: () => soleOwner,
+          handleMobileSubscribe: vi.fn().mockResolvedValue(true),
+          handleMobileUnsubscribe: vi.fn(),
           answerYieldedTerminalQueries,
           serializeTerminalBuffer: vi.fn(async () => {
             if (!holdSnapshot) {
@@ -69,7 +86,11 @@ describe.each([
         })
         try {
           await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-          sendDesktopMultiplexSubscribe(harness.handlers)
+          sendDesktopMultiplexSubscribe(
+            harness.handlers,
+            { ackOutput: 1 },
+            { id: 'viewer', type: mobile ? 'mobile' : 'desktop' }
+          )
           await vi.waitFor(() => expect(output).toBeDefined())
           if (kind === 'requested') {
             await vi.waitFor(() =>
@@ -116,9 +137,13 @@ describe.each([
           const live = frames
             .slice(snapshotEnd + 1)
             .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+          const initialCpr = mobile && kind === 'initial'
+          const crossesQuery = pending === '\x1b[6'
+          const replayed = initialCpr ? `\x1b[6n\x1b[c${crossesQuery ? '\x1b[6n' : ''}` : '\x1b[c'
+          const remaining = initialCpr && crossesQuery ? 'AFTER' : `${pending}${suffix}`
           expect(
             live.map((frame) => frame && decodeTerminalStreamText(frame.payload)).join('')
-          ).toBe(soleOwner ? `${pending ? '\x18' : ''}\x1b[c${pending}${suffix}` : suffix)
+          ).toBe(soleOwner ? `${pending ? '\x18' : ''}${replayed}${remaining}` : suffix)
           if (soleOwner) {
             expect(live[0]?.seq).toBe(0)
           }
@@ -139,7 +164,15 @@ describe.each([
                 await parsed
               }
             }
-            expect(replies).toEqual(soleOwner ? ['\x1b[?1;2c'] : [])
+            expect(replies).toEqual(
+              soleOwner
+                ? [
+                    ...(initialCpr ? ['\x1b[1;1R'] : []),
+                    '\x1b[?1;2c',
+                    ...(crossesQuery ? ['\x1b[1;1R'] : [])
+                  ]
+                : []
+            )
             expect(terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('AFTER')
           } finally {
             terminal.dispose()

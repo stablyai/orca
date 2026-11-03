@@ -33,7 +33,8 @@ function finalizeResolvedMultiplexPty(
 
 export function resolveMultiplexSubscribePty(
   state: TerminalMultiplexConnection,
-  request: MultiplexSubscribeRequest
+  request: MultiplexSubscribeRequest,
+  onRendererMountRequested: () => void
 ): string | null | Promise<string | null> {
   const {
     runtime,
@@ -86,7 +87,9 @@ export function resolveMultiplexSubscribePty(
         return null
       }
       // Mount the exact never-viewed tab to create its graph leaf and PTY without activating its workspace.
-      runtime.requestRendererTerminalTabMount(request.terminal)
+      if (runtime.requestRendererTerminalTabMount(request.terminal)) {
+        onRendererMountRequested()
+      }
       const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, waitController.signal)
       leaf = { ptyId }
     } catch {

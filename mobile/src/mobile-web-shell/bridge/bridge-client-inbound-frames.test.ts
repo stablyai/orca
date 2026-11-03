@@ -27,6 +27,47 @@ afterEach(() => {
 })
 
 describe('bridge client refusals and send failures', () => {
+  it('retires a failed terminal application while an earlier parser callback is still pending', async () => {
+    const page = createPageClient()
+    page.start()
+    const failed: unknown[] = []
+    page.client.subscribe(
+      'terminal.subscribe',
+      { terminal: 't1', capabilities: { ackOutput: 1 } },
+      (event) => {
+        const data = event
+        if (!data || typeof data !== 'object' || !('type' in data)) {
+          throw new Error('Invalid event')
+        }
+        if (data.type === 'error') {
+          failed.push(data)
+          return
+        }
+        return 'chunk' in data && data.chunk === 'held'
+          ? new Promise<void>(() => {})
+          : Promise.reject(new Error('document lost'))
+      }
+    )
+    const id = idOf(page, 0)
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'event',
+      id,
+      seq: 1,
+      payload: { type: 'data', chunk: 'held' }
+    })
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'event',
+      id,
+      seq: 2,
+      payload: { type: 'data', chunk: 'failed' }
+    })
+    await vi.waitFor(() => expect(failed).toHaveLength(1))
+    expect(page.frames().filter((frame) => frame.type === 'ack')).toEqual([])
+    expect(page.frames().at(-1)).toMatchObject({ type: 'cancel', id, target: 'subscription' })
+  })
+
   it('reports a frame its own reader will not take, and changes nothing', () => {
     const page = createPageClient()
     page.start()

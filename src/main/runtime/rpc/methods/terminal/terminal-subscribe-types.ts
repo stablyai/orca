@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
-import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
+import type { createTerminalInitialQueryReplay } from './terminal-initial-query-replay'
 import type { TerminalOutputChunk } from './terminal-stream-types'
 import type { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
@@ -38,8 +38,7 @@ export type TerminalSubscribeBinaryState = {
   pendingOutput: TerminalOutputChunk[]
   pendingOutputBytes: number
   pendingOutputOverflowed: boolean
-  readonly pendingQuerySequences: TerminalReplyQuerySequence[]
-  pendingQueryOverflowed: boolean
+  readonly initialQueryReplay: ReturnType<typeof createTerminalInitialQueryReplay>
   lateRendererReadyPromise: Promise<boolean> | null
   abortRendererMountWait: () => void
   outputBatcher: TerminalOutputBatcher

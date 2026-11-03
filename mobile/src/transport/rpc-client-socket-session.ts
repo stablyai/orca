@@ -88,6 +88,18 @@ export class RpcClientSocketSession {
     this.socket.close()
   }
 
+  sendBinary(bytes: Uint8Array): boolean {
+    if (!this.authenticated || this.socket.readyState !== WebSocket.OPEN || !this.framing) {
+      return false
+    }
+    try {
+      return this.framing.sendBinary(bytes)
+    } catch {
+      this.options.onForcedClose(this)
+      return false
+    }
+  }
+
   clearTimers(): void {
     if (this.connectTimer) {
       clearTimeout(this.connectTimer)

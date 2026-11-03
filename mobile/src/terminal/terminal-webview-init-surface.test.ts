@@ -1,3 +1,4 @@
+import type { TerminalHostMessage } from './document/host-message-router'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
@@ -163,6 +164,34 @@ describe('terminal WebView init surface replacement', () => {
     animationFrames.shift()?.()
 
     expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
+  })
+
+  it('receipts follow parser completion and retire with a superseded document generation', () => {
+    const post = window.ReactNativeWebView!.postMessage
+    const deliver = (message: TerminalHostMessage) =>
+      window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(message) }))
+    const applied = () =>
+      vi
+        .mocked(post)
+        .mock.calls.map(([json]) => JSON.parse(json))
+        .filter((event) => event.type === 'applied')
+        .map((event) => event.receipt)
+    deliver({ type: 'init', cols: 45, rows: 20, initialData: 'snapshot', receipt: 1 })
+    animationFrames.shift()?.()
+    expect(applied()).toEqual([])
+    writeCallbacks.shift()?.()
+    expect(applied()).toEqual([1])
+    deliver({ type: 'write', data: 'first', receipt: 2 })
+    deliver({ type: 'write', data: 'second', receipt: 3 })
+    expect(applied()).toEqual([1])
+    writeCallbacks.shift()?.()
+    expect(applied()).toEqual([1, 2])
+    deliver({ type: 'init', cols: 45, rows: 20, initialData: 'replacement', receipt: 4 })
+    animationFrames.splice(0).forEach((frame) => frame())
+    writeCallbacks.shift()?.()
+    expect(applied()).toEqual([1, 2])
+    writeCallbacks.shift()?.()
+    expect(applied()).toEqual([1, 2, 4])
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {

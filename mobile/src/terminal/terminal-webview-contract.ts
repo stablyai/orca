@@ -110,11 +110,13 @@ export type TerminalInit = {
   frame: TerminalFrame | null
 }
 
+export type TerminalApplicationReceipt = (error?: Error) => void
+
 export type TerminalWebViewHandle = {
   // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
-  write: (data: string) => void
-  init: (init: TerminalInit) => void
+  write: (data: string, applied?: TerminalApplicationReceipt) => void
+  init: (init: TerminalInit, applied?: TerminalApplicationReceipt) => void
   resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.
   reflow: (cols: number, rows: number, frame: TerminalFrame | null) => void

@@ -1,3 +1,5 @@
+import type { TerminalApplicationReceipt } from './terminal-webview-contract'
+
 // Batch busy output because each postMessage pays bridge, WebKit IPC and paint overhead.
 export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 48
 export const TERMINAL_INTERACTIVE_WRITE_WINDOW_MS = 16
@@ -6,8 +8,11 @@ export const TERMINAL_INTERACTIVE_WRITE_DURATION_MS = 180
 // Bound UTF-16 units as backup to server ack flow control; an upstream bug must not grow this buffer forever.
 export const TERMINAL_WRITE_MAX_PENDING_UNITS = 512 * 1024
 
-export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
+export function createTerminalWriteCoalescer(
+  deliver: (data: string, applied?: TerminalApplicationReceipt) => void
+) {
   let pendingChunks: string[] = []
+  let pendingReceipts: TerminalApplicationReceipt[] = []
   let pendingUnits = 0
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let flushDeadline = Number.POSITIVE_INFINITY
@@ -29,10 +34,15 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
       return
     }
     const data = pendingChunks.join('')
+    const receipts = pendingReceipts
+    pendingReceipts = []
     pendingChunks = []
     pendingUnits = 0
     lastFlushAt = Date.now()
-    deliver(data)
+    deliver(
+      data,
+      receipts.length ? (error) => receipts.forEach((applied) => applied(error)) : undefined
+    )
   }
 
   const flushWindow = () =>
@@ -61,17 +71,21 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
     }
   }
 
-  const write = (data: string) => {
+  const write = (data: string, applied?: TerminalApplicationReceipt) => {
     if (data === '') {
+      applied?.()
       return
     }
     const now = Date.now()
     if (pendingChunks.length === 0 && now - lastFlushAt >= flushWindow()) {
       lastFlushAt = now
-      deliver(data)
+      deliver(data, applied)
       return
     }
     pendingChunks.push(data)
+    if (applied) {
+      pendingReceipts.push(applied)
+    }
     pendingUnits += data.length
     if (pendingUnits > TERMINAL_WRITE_MAX_PENDING_UNITS) {
       flushNow()
@@ -85,9 +99,12 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
   const clear = () => {
     cancelTimer()
     pendingChunks = []
+    const receipts = pendingReceipts
+    pendingReceipts = []
     pendingUnits = 0
     lastFlushAt = Number.NEGATIVE_INFINITY
     interactiveUntil = Number.NEGATIVE_INFINITY
+    return receipts
   }
 
   return { clear, flushNow, markInteractive, write }

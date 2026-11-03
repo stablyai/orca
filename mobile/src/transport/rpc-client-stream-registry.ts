@@ -1,7 +1,10 @@
-import {
-  decodeBrowserScreencastFrame,
-  type BrowserScreencastFrame
-} from './browser-screencast-protocol'
+import type {
+  StreamRequest,
+  StreamRegistryOptions,
+  RpcStreamingListener,
+  RpcStreamSubscribeOptions
+} from './rpc-client-stream-record'
+import { decodeBrowserScreencastFrame } from './browser-screencast-protocol'
 import {
   buildRequestStreamUnsubscribe,
   updateTerminalSubscriptionViewport
@@ -14,45 +17,41 @@ import {
   isTerminalSubscribedResult
 } from './rpc-subscription-result-shapes'
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
+import { MobileTerminalMultiplexer } from './mobile-terminal-multiplexer'
 import * as sessionTabsStream from './rpc-client-session-tabs-stream'
-import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
-import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
+import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { RpcResponse, RpcSuccess } from './types'
 import { translate } from '../i18n/mobile-i18n'
-
-export type RpcStreamingListener = (result: unknown) => void
-
-export type RpcStreamSubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  envelope?: RpcEnvelopeFields
-}
-
-type StreamRequest = {
-  method: string
-  params: unknown
-  envelope?: RpcEnvelopeFields
-  listener?: RpcStreamingListener
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-  subscriptionId?: string
-  cancelled?: boolean
-  sent?: boolean
-  receivedSnapshot?: boolean
-}
-
-type StreamRegistryOptions = {
-  nextId: () => string
-  getState: () => ConnectionState
-  sendFrame: (frame: RpcRequestFrame) => boolean
-}
 
 export class RpcClientStreamRegistry {
   private readonly streams = new Map<string, StreamRequest>()
   private readonly terminalRouter = new RpcClientTerminalStreamRouter()
   private activeBrowserRequestId: string | null = null
   private pendingBrowserRequestId: string | null = null
+  private readonly multiplexer: MobileTerminalMultiplexer | null
 
-  constructor(private readonly options: StreamRegistryOptions) {}
+  constructor(private readonly options: StreamRegistryOptions) {
+    this.multiplexer = options.sendBinary
+      ? new MobileTerminalMultiplexer({
+          subscribe: (...args) => this.subscribeStream(...args),
+          sendBinary: options.sendBinary
+        })
+      : null
+  }
 
   subscribe(
+    method: string,
+    params: unknown,
+    listener: RpcStreamingListener,
+    subscribeOptions?: RpcStreamSubscribeOptions
+  ): () => void {
+    return (
+      this.multiplexer?.subscribe(method, params, listener, subscribeOptions?.envelope) ??
+      this.subscribeStream(method, params, listener, subscribeOptions)
+    )
+  }
+
+  private subscribeStream(
     method: string,
     params: unknown,
     listener: RpcStreamingListener,
@@ -104,7 +103,7 @@ export class RpcClientStreamRegistry {
         this.pendingBrowserRequestId = id
         this.activeBrowserRequestId = null
       }
-      this.resetTerminalRouting(id)
+      this.terminalRouter.reset(id)
       if (this.send(id, stream)) {
         stream.sent = true
       } else {
@@ -115,6 +114,7 @@ export class RpcClientStreamRegistry {
   }
 
   markForReplay(): void {
+    this.multiplexer?.reset()
     this.activeBrowserRequestId = null
     this.pendingBrowserRequestId = null
     for (const [id, stream] of this.streams) {
@@ -122,7 +122,7 @@ export class RpcClientStreamRegistry {
       stream.receivedSnapshot = false
       // The id named a registration on the closed socket; the replay's ready brings the new one.
       stream.subscriptionId = undefined
-      this.resetTerminalRouting(id)
+      this.terminalRouter.reset(id)
     }
   }
 
@@ -160,15 +160,24 @@ export class RpcClientStreamRegistry {
   }
 
   handleBinary(bytes: Uint8Array): void {
+    if (this.multiplexer?.handleBinary(bytes)) {
+      return
+    }
     const browserFrame = decodeBrowserScreencastFrame(bytes)
     if (browserFrame) {
-      this.handleBrowserFrame(browserFrame)
+      const stream = this.activeBrowserRequestId
+        ? this.streams.get(this.activeBrowserRequestId)
+        : undefined
+      if (stream && !stream.cancelled && stream.method === 'browser.screencast') {
+        stream.onBinaryFrame?.(browserFrame)
+      }
       return
     }
     this.terminalRouter.handle(bytes)
   }
 
   updateTerminalViewport(terminal: string, viewport: { cols: number; rows: number }): void {
+    this.multiplexer?.updateTerminalViewport(terminal, viewport)
     updateTerminalSubscriptionViewport(this.streams.values(), terminal, viewport)
   }
 
@@ -291,7 +300,7 @@ export class RpcClientStreamRegistry {
     const stream = this.streams.get(id)
     this.streams.delete(id)
     this.clearBrowserRequest(id)
-    this.resetTerminalRouting(id)
+    this.terminalRouter.reset(id)
     if (stream?.method === 'browser.screencast') {
       stream.cancelled = true
     }
@@ -304,21 +313,6 @@ export class RpcClientStreamRegistry {
     if (this.pendingBrowserRequestId === id) {
       this.pendingBrowserRequestId = null
     }
-  }
-
-  private resetTerminalRouting(id: string): void {
-    this.terminalRouter.reset(id)
-  }
-
-  private handleBrowserFrame(frame: BrowserScreencastFrame): void {
-    if (!this.activeBrowserRequestId) {
-      return
-    }
-    const stream = this.streams.get(this.activeBrowserRequestId)
-    if (!stream || stream.cancelled || stream.method !== 'browser.screencast') {
-      return
-    }
-    stream.onBinaryFrame?.(frame)
   }
 
   /** Removed first, so neither the listener's dispose nor a replay can name a host-ended stream. */

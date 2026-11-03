@@ -32,7 +32,8 @@ export function appendPendingMultiplexOutput(
 
 export function getOutputAfterSnapshotSeq(
   chunk: TerminalOutputChunk,
-  snapshotSeq: number | undefined
+  snapshotSeq: number | undefined,
+  replayedQueries: readonly TerminalReplyQuerySequence[] = []
 ): TerminalOutputChunk | null {
   if (
     typeof snapshotSeq !== 'number' ||
@@ -52,12 +53,19 @@ export function getOutputAfterSnapshotSeq(
     return null
   }
   const offset = snapshotSeq - chunkStartSeq
+  const data = stripSnapshotBoundaryQuerySuffixes(
+    chunk.data.slice(offset),
+    snapshotSeq,
+    snapshotSeq,
+    replayedQueries
+  )
   return {
-    data: chunk.data.slice(offset),
+    data,
     bytes: chunk.bytes,
     meta: {
       ...chunk.meta,
-      rawLength: chunk.meta.rawLength - offset
+      rawLength:
+        chunk.meta.rawLength === chunk.data.length ? data.length : chunk.meta.rawLength - offset
     }
   }
 }
@@ -66,7 +74,7 @@ export function stripSnapshotBoundaryQuerySuffixes(
   data: string,
   dataStartSeq: number,
   snapshotSeq: number,
-  queries: TerminalReplyQuerySequence[]
+  queries: readonly TerminalReplyQuerySequence[]
 ): string {
   let output = ''
   let offset = 0

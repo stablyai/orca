@@ -3,7 +3,11 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalInit, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+import type {
+  TerminalApplicationReceipt,
+  TerminalInit,
+  TerminalWebViewHandle
+} from '../terminal/terminal-webview-contract'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
@@ -70,10 +74,12 @@ function harness(phone: Terminal) {
   const pending: Promise<void>[] = []
   const terminal: TerminalWebViewHandle = {
     prepareForForegroundRecovery: vi.fn(),
-    write: vi.fn((data: string) => void pending.push(writeSync(phone, data))),
-    init: vi.fn(({ initialData = '' }: TerminalInit) => {
+    write: vi.fn((data: string, applied?: TerminalApplicationReceipt) => {
+      pending.push(writeSync(phone, data).then(() => applied?.()))
+    }),
+    init: vi.fn(({ initialData = '' }: TerminalInit, applied?: TerminalApplicationReceipt) => {
       phone.reset()
-      pending.push(writeSync(phone, initialData))
+      pending.push(writeSync(phone, initialData).then(() => applied?.()))
     }),
     resize: vi.fn(),
     reflow: vi.fn(),
@@ -152,7 +158,10 @@ function harness(phone: Terminal) {
   })
   return {
     subscribeCount: () => fields.client.subscribe.mock.calls.length,
-    emit: (frame: unknown) => act(() => handlers.at(-1)!(frame)),
+    emit: (frame: unknown) =>
+      act(() => {
+        void handlers.at(-1)!(frame)
+      }),
     initCount: () => vi.mocked(terminal.init).mock.calls.length,
     flush: () => Promise.all(pending.splice(0))
   }

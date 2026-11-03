@@ -14,7 +14,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalGestureInputInFlightRef,
     terminalRefs,
     terminalUnsubsRef,
-    initializedHandlesRef,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
@@ -84,7 +83,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         wasAlreadyReady,
         handle === activeHandleRef.current
       )
-      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+      if (wasAlreadyReady) {
         // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
         if (visibleTerminalHandlesRef.current.includes(handle)) {

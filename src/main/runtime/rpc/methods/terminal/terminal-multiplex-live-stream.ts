@@ -1,4 +1,6 @@
-import { sendMobileResizeRestream } from './terminal-snapshot-publication'
+import { readLateMobileRendererSnapshot } from './mobile-terminal-snapshot-preparation'
+import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
+import { sendMobileResizeRestream, sendSnapshotFrames } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
 import {
   isMultiplexStreamAttached,
@@ -17,6 +19,48 @@ export function activateMultiplexStream(
   const { runtime, streams, emit } = state
   const { ptyId } = stream
   const { isMobile, size } = published
+  const preparation = stream.mobileSnapshotPreparation
+  const lateRendererReady = preparation?.lateRendererReadyPromise
+  if (preparation) {
+    preparation.lateRendererReadyPromise = null
+  }
+  if (lateRendererReady) {
+    void lateRendererReady
+      .then(async (ready) => {
+        if (!ready || !isMultiplexStreamAttached(state, stream)) {
+          return
+        }
+        stream.outputBatcher.flush()
+        const frame = { kind: 'resized', reason: 'renderer-mount-ready' } as const
+        const recovery = await readLateMobileRendererSnapshot(
+          runtime,
+          ptyId,
+          stream.snapshotByteBudget && { ...stream.snapshotByteBudget, frame },
+          () => isMultiplexStreamAttached(state, stream)
+        )
+        if (!recovery) {
+          return
+        }
+        sendSnapshotFrames(
+          (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
+          {
+            ...frame,
+            cols: recovery.cols,
+            rows: recovery.rows,
+            displayMode: runtime.getMobileDisplayMode(ptyId),
+            source: recovery.source,
+            truncated: false,
+            truncatedByByteBudget: recovery.truncatedByByteBudget,
+            data: recovery.data
+          }
+        )
+        stream.lastResizeCols = recovery.cols
+        await deepenHeadlessCopyToDesktopDepth(runtime, ptyId, recovery, () =>
+          isMultiplexStreamAttached(state, stream)
+        )
+      })
+      .catch(() => {})
+  }
   if (!isMobile) {
     stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
       const mode =
@@ -71,7 +115,11 @@ export function activateMultiplexStream(
         (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
         event,
         () =>
-          isMultiplexStreamAttached(state, stream) && stream.resizeGeneration === resizeGeneration
+          isMultiplexStreamAttached(state, stream) && stream.resizeGeneration === resizeGeneration,
+        stream.snapshotByteBudget && {
+          ...stream.snapshotByteBudget,
+          frame: { ...event, kind: 'resized' }
+        }
       )
         .then((restreamed) => {
           if (

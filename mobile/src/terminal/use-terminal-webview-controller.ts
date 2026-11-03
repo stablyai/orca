@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
 import type {
+  TerminalApplicationReceipt,
   TerminalInit,
   TerminalWebViewHandle,
   TerminalWebViewProps
@@ -14,7 +15,7 @@ import { createTerminalWebViewPendingMessages } from './terminal-webview-pending
 import { dispatchTerminalWebViewNotification } from './terminal-webview-notification-dispatch'
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
-import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { createTerminalApplicationWriter } from './terminal-application-writer'
 import { isTerminalGestureInput } from './terminal-gesture-input'
 
 // Share readiness, queues, coalescing and imperative handles across hosts; only document command/notify transport differs.
@@ -93,10 +94,7 @@ export function useTerminalWebViewController(
   )
 
   // Coalesce busy PTY output to avoid paying bridge/IPC/paint overhead for every stream frame.
-  const writeCoalescer = useMemo(
-    () => createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data })),
-    [postMessage]
-  )
+  const writeCoalescer = useMemo(() => createTerminalApplicationWriter(postMessage), [postMessage])
 
   useEffect(() => {
     return () => {
@@ -147,7 +145,9 @@ export function useTerminalWebViewController(
         writeCoalescer.markInteractive()
       }
 
-      if (msg.type === 'web-ready') {
+      if (writeCoalescer.receive(msg)) {
+        return
+      } else if (msg.type === 'web-ready') {
         cellBoxRef.current = readTerminalCellBox(msg)
         confirmWebReady(true)
       } else if (
@@ -246,26 +246,31 @@ export function useTerminalWebViewController(
         armWebReadyWatchdog()
         pendingPingIdRef.current = sendToDocument({ type: 'ping' })
       },
-      write(data: string) {
-        writeCoalescer.write(data)
+      write(data: string, applied?: TerminalApplicationReceipt) {
+        writeCoalescer.write(data, applied)
       },
-      init({ cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit) {
+      init(
+        { cols, rows, initialData, preserveScroll, oscLinks, kittyFlags, frame }: TerminalInit,
+        applied?: TerminalApplicationReceipt
+      ) {
         // Arm ready before posting init so a synchronous reply cannot be lost.
         promises.armReady()
         // The init snapshot supersedes buffered chunks; replaying them afterward would duplicate old output.
-        writeCoalescer.clear()
-        postMessage({
-          type: 'init',
-          cols,
-          rows,
-          initialData,
-          oscLinks,
-          kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
-          terminalTheme,
-          fontScale: textScale,
-          preserveScroll,
-          frame
-        })
+        writeCoalescer.snapshot(
+          {
+            type: 'init',
+            cols,
+            rows,
+            initialData,
+            oscLinks,
+            kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(kittyFlags),
+            terminalTheme,
+            fontScale: textScale,
+            preserveScroll,
+            frame
+          },
+          applied
+        )
       },
       resize(cols: number, rows: number, frame: TerminalFrame | null) {
         // Flush prior writes before resize/reflow so terminal bytes stay ordered.
@@ -277,8 +282,7 @@ export function useTerminalWebViewController(
         postMessage({ type: 'reflow', cols, rows, frame })
       },
       clear() {
-        writeCoalescer.clear()
-        postMessage({ type: 'clear' })
+        writeCoalescer.snapshot({ type: 'clear' })
       },
       fitDimensions,
       scrollToBottom() {

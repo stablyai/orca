@@ -1,3 +1,4 @@
+import type { MobileSnapshotPreparationState } from './mobile-terminal-snapshot-preparation'
 import type { TerminalOscLinkRange } from '../../../../../shared/terminal-osc-link-ranges'
 import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/terminal-snapshot-unavailability'
 import type {
@@ -6,7 +7,10 @@ import type {
 } from '../../terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal-reply-query-scan'
+import type { MobileSnapshotByteBudget } from './terminal-snapshot-publication'
+import type { TerminalSubscriptionRegistration } from './terminal-subscription-registration'
 import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'
+import type { createTerminalInitialQueryReplay } from './terminal-initial-query-replay'
 
 export type SnapshotFrameOptions = {
   kind: 'scrollback' | 'resized'
@@ -64,6 +68,14 @@ export type TerminalMultiplexStream = {
   ptyId: string
   client: TerminalViewportClient | undefined
   isMobile: boolean
+  initialQueryReplay?: ReturnType<typeof createTerminalInitialQueryReplay>
+  snapshotByteBudget?: MobileSnapshotByteBudget
+  mobileRegistration?: TerminalSubscriptionRegistration
+  mobileSnapshotPreparation?: MobileSnapshotPreparationState & {
+    missingHeadlessStateBeforeMobileFit: boolean
+    rendererMountRequestedBeforePty: boolean
+    serializerGenerationBeforeMobileFit: number
+  }
   ackOutput: boolean
   ackInFlightBytes: number
   ackWindowBytes: number

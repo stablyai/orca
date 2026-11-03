@@ -74,7 +74,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         state.closeMultiplex,
         connectionId
       )
-      emit({ type: 'ready' })
+      emit({ type: 'ready', capabilities: { mobileTerminalOutputCredits: 1 } })
       await multiplexClosed
     }
   })

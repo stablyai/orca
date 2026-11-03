@@ -28,7 +28,8 @@ export function isTerminalSnapshotForcedUnavailable(): boolean {
 export async function serializeBudgetedRequestedSnapshot(
   runtime: OrcaRuntimeService,
   ptyId: string,
-  scrollbackRows: number | undefined
+  scrollbackRows: number | undefined,
+  snapshotByteBudget?: MobileSnapshotByteBudget
 ): Promise<SerializedSnapshot> {
   if (isTerminalSnapshotForcedUnavailable()) {
     return null
@@ -46,11 +47,13 @@ export async function serializeBudgetedRequestedSnapshot(
         ? serialized.scrollbackAnsi
         : ''
     const data = scrollbackAnsi + serialized.data
-    const overByteBudget = terminalStreamByteLengthExceeds(data, REQUESTED_SNAPSHOT_BYTE_BUDGET)
+    const overByteBudget = snapshotByteBudget
+      ? overMobileSnapshotBudget(data, serialized, snapshotByteBudget)
+      : terminalStreamByteLengthExceeds(data, REQUESTED_SNAPSHOT_BYTE_BUDGET)
     if (!overByteBudget || rows === 0) {
       return {
         ...serialized,
-        data,
+        data: overByteBudget && snapshotByteBudget ? '' : data,
         scrollbackRows: rows,
         truncatedByByteBudget: rows < requestedRows || overByteBudget
       }

@@ -12,6 +12,7 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
     })
     .optional(),
   viewport: TerminalViewport.optional(),
+  snapshotByteBudget: z.number().int().positive().optional(),
   capabilities: z
     .object({
       ackOutput: z.literal(1).optional(),

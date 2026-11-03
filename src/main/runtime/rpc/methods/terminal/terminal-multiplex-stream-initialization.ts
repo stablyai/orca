@@ -17,12 +17,18 @@ import {
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import { subscribeToPtyEndpointLoss } from '../../../terminal/pty-endpoint-loss-signal'
+import { registerTerminalSubscription } from './terminal-subscription-registration'
+import { createTerminalInitialQueryReplay } from './terminal-initial-query-replay'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
   request: MultiplexSubscribeRequest,
   ptyId: string,
-  onInstalled: (stream: TerminalMultiplexStream) => void
+  onInstalled: (stream: TerminalMultiplexStream) => void,
+  mobileMount: {
+    rendererMountRequestedBeforePty: boolean
+    serializerGenerationBeforeAnyMount: number
+  }
 ): Promise<TerminalMultiplexStream | null> {
   const { runtime, connectionId, streams, registerBinaryStreamHandler } = state
   const isMobile = request.client?.type === 'mobile'
@@ -33,6 +39,15 @@ export async function initializeMultiplexStream(
     ptyId,
     client: request.client,
     isMobile,
+    initialQueryReplay: isMobile ? createTerminalInitialQueryReplay() : undefined,
+    snapshotByteBudget:
+      request.snapshotByteBudget === undefined
+        ? undefined
+        : {
+            bytes: request.snapshotByteBudget,
+            streamId: request.streamId,
+            frame: { kind: 'scrollback', reason: 'ack-pending-overflow' }
+          },
     ackOutput: request.capabilities?.ackOutput === 1,
     ackInFlightBytes: 0,
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
@@ -84,6 +99,29 @@ export async function initializeMultiplexStream(
     unregisterBinaryHandler: () => {},
     exitWaiterAbort: new AbortController()
   }
+  if (isMobile) {
+    const missingHeadlessStateBeforeMobileFit =
+      mobileMount.rendererMountRequestedBeforePty ||
+      runtime.hasHeadlessTerminalState?.(ptyId) === false
+    stream.mobileSnapshotPreparation = {
+      ...mobileMount,
+      missingHeadlessStateBeforeMobileFit,
+      serializerGenerationBeforeMobileFit: mobileMount.rendererMountRequestedBeforePty
+        ? mobileMount.serializerGenerationBeforeAnyMount
+        : missingHeadlessStateBeforeMobileFit
+          ? runtime.getRendererTerminalSerializerGeneration(ptyId)
+          : 0,
+      get closed() {
+        return !isMultiplexStreamAttached(state, stream)
+      },
+      get pendingOutput() {
+        return stream.pendingOutput
+      },
+      lateRendererReadyPromise: null,
+      abortRendererMountWait: () => {}
+    }
+    runtime.sidebarFacts?.terminalUse.noteTerminalUse(ptyId, Date.now())
+  }
   streams.set(request.streamId, stream)
   stream.unregisterBinaryHandler = registerBinaryStreamHandler(request.streamId, (frame) =>
     state.handleSlotFrame(stream, frame)
@@ -126,7 +164,17 @@ export async function initializeMultiplexStream(
   }
 
   if (isMobile && request.client?.id) {
-    await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
+    const registration = registerTerminalSubscription({
+      runtime,
+      subscriptionId: `${request.terminal}:${request.client.id}`,
+      connectionId,
+      requestId: `multiplex:${request.streamId}`,
+      requestSignal: state.signal,
+      emit: () => state.emit({ type: 'end', streamId: request.streamId })
+    })
+    stream.mobileRegistration = registration
+    registration.setTeardown(() => state.detachStream(request.streamId, null))
+    await registration.addMobilePresence(ptyId, request.client.id, request.viewport)
   } else if (request.client?.id && request.viewport) {
     // Subscribe records cleanup/geometry without ownership; later activity claims it.
     stream.registeredRemoteDesktopDriver = true

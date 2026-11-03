@@ -15,7 +15,14 @@ export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnectio
       return
     }
     const request = parsed.data
-    const resolution = resolveMultiplexSubscribePty(state, request)
+    const serializerGenerationBeforeAnyMount =
+      request.client?.type === 'mobile'
+        ? (state.runtime.getRendererTerminalSerializerGenerationForHandle?.(request.terminal) ?? 0)
+        : 0
+    let rendererMountRequestedBeforePty = false
+    const resolution = resolveMultiplexSubscribePty(state, request, () => {
+      rendererMountRequestedBeforePty = true
+    })
     const ptyId =
       typeof resolution === 'string' || resolution === null ? resolution : await resolution
     if (!ptyId) {
@@ -25,9 +32,18 @@ export function installMultiplexSubscribeFrame(state: TerminalMultiplexConnectio
     let stream: TerminalMultiplexStream | null = null
     let installedStream: TerminalMultiplexStream | null = null
     try {
-      stream = await initializeMultiplexStream(state, request, ptyId, (installed) => {
-        installedStream = installed
-      })
+      stream = await initializeMultiplexStream(
+        state,
+        request,
+        ptyId,
+        (installed) => {
+          installedStream = installed
+        },
+        {
+          rendererMountRequestedBeforePty,
+          serializerGenerationBeforeAnyMount
+        }
+      )
     } catch (error) {
       if (!installedStream) {
         throw error
