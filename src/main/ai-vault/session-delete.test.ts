@@ -24,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock
 }))
 
-vi.mock('../wsl-unc-delete', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-delete', () => ({
   tryDeleteWslUncPath: tryDeleteWslUncPathMock,
   WslDeleteValidationError: WslDeleteValidationErrorMock
 }))

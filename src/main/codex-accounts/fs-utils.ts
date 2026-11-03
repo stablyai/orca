@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { grantDirAcl } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
 import {
   copyFileWithWindowsRetry,

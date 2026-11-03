@@ -1,6 +1,6 @@
 import { nativeChatQueueFollowUpsRead } from '../transport/settings-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
-import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 
 const projections = new WeakMap<RpcClient, MobileNativeChatFollowUpPreference>()
 

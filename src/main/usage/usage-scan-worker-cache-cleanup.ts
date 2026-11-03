@@ -1,5 +1,8 @@
-import type { WorkerRequestTransport, WorkerThreadFactory } from '../lazy-worker-thread-host'
-import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import type {
+  WorkerRequestTransport,
+  WorkerThreadFactory
+} from '../worker-threads/worker-thread-transport'
+import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import type { UsageScanWorkerRequest } from './usage-scan-worker-protocol'
 import { usageSourceCachePath } from './usage-source-cache-file'
 

@@ -1,7 +1,6 @@
-import { useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
-import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandInput,
@@ -11,11 +10,14 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from '../settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
+import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
 import {
   agentPickerPanelArguments,
   agentPickerSpeedValue,
@@ -25,7 +27,6 @@ import {
 import { agentPickerSpeedIsOpaque } from '../../../../shared/agent-launch-picker-speed'
 import { editAgentPickerPermission } from '../../../../shared/agent-launch-picker-permission'
 import {
-  agentPickerButtonOrder,
   agentPickerArgumentsKnown,
   agentPickerDraft,
   agentPickerEffectiveChoices,
@@ -41,17 +42,24 @@ import {
 export function AgentLaunchSetupPanel({
   entry,
   initial,
+  value,
   disabled,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
   initial?: AgentPickerDraft
+  value?: AgentPickerDraft
   disabled?: boolean
   onDraftChange?: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => void
+  // Returning false (or a promise of it) refuses the launch; a caller with no answer, as before, accepts.
+  onUse:
+    | ((draft: AgentPickerDraft) => void)
+    | ((draft: AgentPickerDraft) => boolean | Promise<boolean>)
 }) {
-  const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
+  const footer = useRef<AgentLaunchSetupFooterHandle>(null)
+  const [localDraft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
+  const draft = value ?? localDraft
   const setDraft = (next: AgentPickerDraft) => {
     updateDraft(next)
     onDraftChange?.(next)
@@ -161,15 +169,26 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
-  const use = (surface: AgentPickerSurface) => onUse({ ...draft, surface })
+  const use = (surface: AgentPickerSurface) => footer.current?.launch(surface)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
       className="flex w-full flex-col"
+      onKeyDownCapture={(event) => {
+        if (isScreenSubmitShortcut(event)) {
+          event.preventDefault()
+          event.stopPropagation()
+          const alternate = entry.surfaces.find((surface) => surface !== entry.defaultSurface)
+          if (alternate && !disabled && !event.repeat) {
+            use(alternate)
+          }
+        }
+      }}
       onKeyDown={(event) => {
         event.stopPropagation()
         if (
           !disabled &&
+          !isImeOwnedKeyboardEvent(event) &&
           event.key === 'Enter' &&
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
@@ -184,6 +203,7 @@ export function AgentLaunchSetupPanel({
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
+            !isImeOwnedKeyboardEvent(event) &&
             event.key === 'Enter' &&
             event.currentTarget.querySelector(
               '[cmdk-item][data-selected="true"][data-current="true"]'
@@ -201,6 +221,7 @@ export function AgentLaunchSetupPanel({
         }}
       >
         <CommandInput
+          autoFocus
           disabled={modelDisabled}
           value={modelQuery}
           onValueChange={setModelQuery}
@@ -209,7 +230,7 @@ export function AgentLaunchSetupPanel({
             agent: entry.label
           })}
         />
-        <CommandList className="max-h-56">
+        <CommandList className="max-h-56" data-focus-behavior="page">
           <CommandEmpty>
             {translate('agentPicker.noModels', 'No models match your search.')}
           </CommandEmpty>
@@ -360,25 +381,12 @@ export function AgentLaunchSetupPanel({
           </div>
         ) : null}
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-        {agentPickerButtonOrder(entry).map((surface) => (
-          <Button
-            key={surface}
-            type="button"
-            size="xs"
-            disabled={disabled}
-            variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-            onClick={() => use(surface)}
-          >
-            {surface === 'chat'
-              ? translate('agentPicker.launchChat', 'Launch chat')
-              : translate('agentPicker.launchTerminal', 'Launch terminal')}
-            {surface === entry.defaultSurface ? (
-              <CornerDownLeft className="size-3 opacity-60" />
-            ) : null}
-          </Button>
-        ))}
-      </div>
+      <AgentLaunchSetupFooter
+        ref={footer}
+        entry={entry}
+        disabled={disabled}
+        onLaunch={(surface, prompt) => onUse({ ...draft, surface, ...(prompt ? { prompt } : {}) })}
+      />
     </div>
   )
 }

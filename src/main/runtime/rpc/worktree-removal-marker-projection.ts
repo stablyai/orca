@@ -7,7 +7,7 @@ import type {
 import {
   projectPendingWorktreeRemovals,
   type PendingWorktreeRemovals
-} from '../../worktree-removal-listing'
+} from '../../workspaces/removal/worktree-removal-listing'
 import type { RpcContext } from './core'
 
 // Without negotiation, CLI/host readers act on rows; omit deleting checkouts they cannot use.

@@ -46,7 +46,7 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
-vi.mock('../app-relaunch', () => ({
+vi.mock('../startup/quit/app-relaunch', () => ({
   relaunchApp: relaunchAppMock
 }))
 

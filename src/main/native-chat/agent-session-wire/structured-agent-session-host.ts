@@ -1,3 +1,4 @@
+import * as usageLimit from './structured-agent-session-host-background'
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
@@ -35,7 +36,7 @@ export class StructuredAgentSessionHost {
   private readonly sessions = createStructuredAgentSessionPublicationWiring({
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
-    opened: (id) => this.queued.onOpened(id),
+    opened: (id) => usageLimit.opened(this.usageLimitContinue, this.queued, id),
     logger: () => this.deps.logger,
     now: () => this.now()
   })
@@ -50,7 +51,8 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.backgroundTasks.publish(sessionId),
     (sessionId) => this.backgroundTasks.read(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
-    this.sessions
+    this.sessions,
+    (sessionId) => this.usageLimitContinue?.readState(sessionId)
   )
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
@@ -62,6 +64,8 @@ export class StructuredAgentSessionHost {
   private readonly backgroundTasks: BackgroundTasks
   readonly restartResume: resume.StructuredAgentSessionRestartResume
   private readonly recovery
+
+  readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
@@ -95,6 +99,7 @@ export class StructuredAgentSessionHost {
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Retire at rest; the next start refreshes login and permission mode.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
+      stopPermissionTransitionChild: (id) => this.lifetime.stopAgent(id, { cause: 'evict' }),
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
@@ -131,6 +136,7 @@ export class StructuredAgentSessionHost {
       childWorkOpen: this.clientDelivery.childWorkOpen
     })
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
+    this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
     this.recovery = transientRecovery.wireTransientRecovery(this, this.sessions)
@@ -199,12 +205,8 @@ export class StructuredAgentSessionHost {
   agentDefinitions = this.reads.agentDefinitions
   knownAgentIds = this.reads.knownAgentIds
 
-  private readonly tabs = createTabs(
-    this,
-    this.sessions,
-    this.clientDelivery.forgetStatus,
-    this.clientDelivery.publishSavedStatusGroup,
-    (ids) => this.startup.recover(ids)
+  private readonly tabs = createTabs(this, this.sessions, this.clientDelivery, (ids) =>
+    this.startup.recover(ids)
   )
   listSessionTabs = this.tabs.listSessionTabs
   isSessionTabVisible = this.tabs.isSessionTabVisible
@@ -235,9 +237,8 @@ export class StructuredAgentSessionHost {
   /** Quit stops delivery, queued-card handover, and automatic continuation. */
   stopDelivery = () => {
     this.sessions.endPublications()
-    this.conversationDelivery.dispose()
-    this.queued.drain.dispose()
-    this.recovery.dispose()
+    ;[this.conversationDelivery, this.queued.drain, this.recovery].forEach((d) => d.dispose())
+    this.usageLimitContinue.dispose()
   }
 
   async flushAllStreamedEvents(options?: { trigger?: 'quit' | 'update' }): Promise<void> {
@@ -307,8 +308,10 @@ export class StructuredAgentSessionHost {
     ...args
   ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  queuedSendAnswer = (sessionId: string, messageId: string) =>
-    this.backgroundTasks.queuedSendAnswer(sessionId, messageId)
+  queuedSendAnswer = this.reads.queuedSendAnswer
+  /** What became of one send, answered by key, for callers that follow many sends. */
+  sendAnswer = this.reads.sendAnswer
+  wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
   private readonly startJournal = structuredAgentStartJournal(
     () => this.deps,

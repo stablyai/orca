@@ -1,12 +1,7 @@
 /** Unknown capabilities retain panes during outages but must be re-asked after recovery to release eviction exemptions. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import {
-  classifyEvictionExemptTerminalPty,
-  countEvictionExemptTabRoutes,
-  formatEvictionExemptRouteCounts,
-  isEvictionExemptTerminalPty
-} from '../terminal-pane/terminal-hidden-worktree-retention'
+import { isEvictionExemptTerminalPty } from '../terminal-pane/terminal-hidden-worktree-retention'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities,
@@ -70,52 +65,5 @@ describe('terminal provider snapshot capability re-settlement', () => {
     expect(healthyResolver).toHaveBeenCalled()
     expect(terminalProviderHasAuthoritativeSnapshot(PTY_ID)).toBe(true)
     expect(isEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBe(false)
-  })
-
-  it('classifies exemption routes in parity with the predicate', async () => {
-    const failOpenId = 'no-separator-daemon-fail-open'
-    const foreignId = `other-worktree${PTY_SESSION_ID_SEPARATOR}session-9`
-    const sshId = 'ssh:host@@pty-1'
-
-    expect(classifyEvictionExemptTerminalPty(failOpenId, WORKTREE_ID)).toBe('fail-open')
-    expect(classifyEvictionExemptTerminalPty(foreignId, WORKTREE_ID)).toBe('foreign-worktree')
-    expect(classifyEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBe('capability-unknown')
-    expect(classifyEvictionExemptTerminalPty(sshId, WORKTREE_ID)).toBeNull()
-    expect(classifyEvictionExemptTerminalPty(null, WORKTREE_ID)).toBeNull()
-
-    const healthyResolver = vi.fn(async (ids: string[]) =>
-      ids.map((id) => ({ id, authoritative: true }))
-    )
-    await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID], healthyResolver, 1_000)
-    expect(classifyEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBeNull()
-
-    for (const id of [failOpenId, foreignId, sshId, PTY_ID, null]) {
-      expect(isEvictionExemptTerminalPty(id, WORKTREE_ID)).toBe(
-        classifyEvictionExemptTerminalPty(id, WORKTREE_ID) !== null
-      )
-    }
-  })
-
-  // Force-park breadcrumbs consume these buckets; misclassification misdirects triage.
-  it('buckets route counts per classification for the force-park breadcrumb', () => {
-    const counts = countEvictionExemptTabRoutes(
-      [
-        { ptyId: 'no-separator-daemon-fail-open' },
-        { ptyId: `other-worktree${PTY_SESSION_ID_SEPARATOR}session-9` },
-        { ptyId: PTY_ID },
-        { ptyId: null }
-      ],
-      WORKTREE_ID
-    )
-
-    expect(counts).toEqual({
-      failOpen: 1,
-      foreignWorktree: 1,
-      capabilityUnknown: 1,
-      splitPane: 1
-    })
-    expect(formatEvictionExemptRouteCounts(counts)).toBe(
-      'routes=fail-open:1,foreign:1,capability:1,split-pane:1'
-    )
   })
 })

@@ -14,7 +14,7 @@ import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { ACP_COMPACT_PROMPT } from './acp-compaction-turn'
+import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
@@ -92,11 +92,29 @@ export class AcpStructuredTurns {
     return this.withdrawSteers()
   }
 
-  whenIdle(): Promise<void> {
-    if (!this.active) {
+  /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
+  interruptForPermissionTransition(): void {
+    if (this.active) {
+      this.cancelForSteer()
+    } else if (this.deps.lane.openTurnId !== null) {
+      this.deps.withdrawRequests()
+      void this.deps.connection.cancel().catch(() => undefined)
+    }
+  }
+
+  whenIdle(signal?: AbortSignal): Promise<void> {
+    if (!this.active || signal?.aborted) {
       return Promise.resolve()
     }
-    return new Promise((resolve) => this.idleWaiters.add(resolve))
+    return new Promise((resolve) => {
+      const wake = (): void => {
+        this.idleWaiters.delete(wake)
+        signal?.removeEventListener('abort', wake)
+        resolve()
+      }
+      this.idleWaiters.add(wake)
+      signal?.addEventListener('abort', wake, { once: true })
+    })
   }
 
   dispatch(send: Send): void {
@@ -117,7 +135,7 @@ export class AcpStructuredTurns {
     const { lane } = this.deps
     const send: Send = {
       clientMessageId: command.clientMessageId,
-      prompt: [...ACP_COMPACT_PROMPT],
+      prompt: acpCompactPrompt(command.instructions),
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)

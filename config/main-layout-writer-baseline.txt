@@ -73,4 +73,4 @@
 2 src/main/runtime/workspaces/workspace-file-session-targets.ts
 1 src/main/ssh/orcad-migration-source-retention.ts
 1 src/main/ssh/targets/ssh-target-id-migration.ts
-2 src/main/terminal-scrollback-snapshots.ts
+2 src/main/pty/scrollback/terminal-scrollback-snapshots.ts

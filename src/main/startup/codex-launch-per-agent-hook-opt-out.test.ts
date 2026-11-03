@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => '/tmp/orca-user-data') } }))
-vi.mock('../agent-trust-presets', () => ({ markCodexProjectTrusted: vi.fn(async () => {}) }))
+vi.mock('../agent-launch/trust/agent-trust-presets', () => ({
+  markCodexProjectTrusted: vi.fn(async () => {})
+}))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: {
     prepareRuntimeHomeForLaunch: mocks.prepareRuntimeHomeForLaunch,
@@ -37,7 +39,7 @@ vi.mock(
   '../agent-hooks/managed-agent-hook-controls',
   async () => await import('../../shared/agent-status-hooks-setting')
 )
-vi.mock('../wsl', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
 vi.mock('../codex/codex-home-paths', () => ({
   getSystemCodexHomePath: () => SYSTEM_HOME,
   getOrcaManagedCodexHomePath: () => '/managed/.codex'

@@ -19,10 +19,12 @@ import {
 
 afterEach(() => vi.useRealTimers())
 
-it('unsubscribes its completion listener exactly once on disposal', () => {
+it('unsubscribes its completion and setting listeners exactly once on disposal', () => {
   const { host } = hostTestState()
   const subscribe = host.subscribeTurnCompletions.bind(host)
   const stopped = vi.fn()
+  const stopSettings = vi.fn()
+  host.deps.transientRecovery = { enabled: () => true, onDisabled: () => stopSettings }
   const spy = vi.spyOn(host, 'subscribeTurnCompletions').mockImplementation((subscriber) => {
     const unsubscribe = subscribe(subscriber)
     return () => {
@@ -35,6 +37,7 @@ it('unsubscribes its completion listener exactly once on disposal', () => {
     recovery.dispose()
     recovery.dispose()
     expect(stopped).toHaveBeenCalledOnce()
+    expect(stopSettings).toHaveBeenCalledOnce()
   } finally {
     spy.mockRestore()
   }
@@ -129,7 +132,17 @@ it('continues with the failed send options instead of the saved session model', 
   expect((await host.journalSnapshot(SESSION)).submissions.at(-1)?.options).toEqual(options)
 })
 
-it.each(['disabled', 'manual-send', 'stop', 'close', 'quota', 'dispatch-owned', 'option', 'goal'])(
+it.each([
+  'disabled',
+  'manual-send',
+  'stop',
+  'close',
+  'shutdown',
+  'quota',
+  'dispatch-owned',
+  'option',
+  'goal'
+])(
   'does not auto-send after %s',
   async (action) => {
     await attach()
@@ -149,6 +162,9 @@ it.each(['disabled', 'manual-send', 'stop', 'close', 'quota', 'dispatch-owned', 
     }
     if (action === 'close') {
       await host.close(SESSION, 'user-close')
+    }
+    if (action === 'shutdown') {
+      host.stopDelivery()
     }
     if (action === 'option') {
       const fields = { key: 'model', value: 'another-model' }

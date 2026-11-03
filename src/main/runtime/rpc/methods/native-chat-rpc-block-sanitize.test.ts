@@ -3,7 +3,7 @@ import {
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   parseAgentStatusPayload
 } from '../../../../shared/agent-status-types'
-import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import {
   parseAskFromStatus,
   parseAskFromToolInput

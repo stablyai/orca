@@ -6,7 +6,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-live-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {

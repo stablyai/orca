@@ -1,5 +1,5 @@
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { waitForProcessExitUntil } from './provider-process-exit-deadline'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from './provider-process-supervisor'
 import type { ProviderProcessTeardownVerdict } from './provider-process-teardown'

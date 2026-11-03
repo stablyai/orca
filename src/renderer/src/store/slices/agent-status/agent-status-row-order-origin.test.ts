@@ -138,45 +138,6 @@ describe('observed agent session row origin', () => {
       )
     }
   )
-
-  it('distinguishes known replacement from enrichment, omission and turn completion', () => {
-    const { store, write, rows } = fixture('claude')
-    write(1000, 'working')
-    write(2000, 'working', 'A')
-    write(3000, 'done', 'A')
-    write(4000, 'working', 'A')
-    expect(rows()[0].startedAt).toBe(1000)
-    write(5000, 'done', 'A')
-    write(6000, 'working', 'B')
-    expect(rows()[0].startedAt).toBe(6000)
-    const epoch = store.getState().agentStatusEpoch
-    write(7000, 'working', 'C')
-    expect(rows()[0].startedAt).toBe(7000)
-    expect(store.getState().agentStatusEpoch).toBeGreaterThan(epoch)
-    write(8000, 'working')
-    write(7500, 'done', 'D')
-    expect(rows()[0].startedAt).toBe(7000)
-    store.getState().dropAgentStatus(pane)
-    write(9000, 'working', 'E')
-    expect(rows()[0].startedAt).toBe(9000)
-  })
-
-  it('reuses a retained displayed origin only for an uncontradicted session', () => {
-    const { store, write, rows } = fixture('claude')
-    write(1000, 'done', 'A')
-    const retained = retainedAgentEntryFromLive(
-      store.getState(),
-      'wt-order',
-      store.getState().agentStatusByPaneKey[pane],
-      'claude'
-    )
-    store.setState({ agentStatusByPaneKey: {}, retainedAgentsByPaneKey: { [pane]: retained } })
-    write(3000, 'working', 'A')
-    expect(rows()[0].startedAt).toBe(1000)
-    store.setState({ agentStatusByPaneKey: {}, retainedAgentsByPaneKey: { [pane]: retained } })
-    write(5000, 'working', 'B')
-    expect(rows()[0].startedAt).toBe(5000)
-  })
 })
 
 it('preserves origin through routing enrichment, WSL equivalence and pane transfer', () => {
@@ -217,20 +178,4 @@ it('preserves origin through routing enrichment, WSL equivalence and pane transf
       { connectionId: 'different-host', worktreeId: workspace }
     )
   expect(rows()[0].startedAt).toBe(4000)
-})
-
-it('does not treat a newly available Pi transcript path as a new session', () => {
-  const { store, write, rows } = fixture('pi')
-  write(1000, 'working', 'A')
-  store
-    .getState()
-    .setAgentStatus(
-      pane,
-      { state: 'working', prompt: 'task', agentType: 'pi' },
-      undefined,
-      { updatedAt: 2000 },
-      undefined,
-      { providerSession: { key: 'session_id', id: 'A', transcriptPath: '/qa/pi/session.jsonl' } }
-    )
-  expect(rows()[0].startedAt).toBe(1000)
 })

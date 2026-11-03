@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { PtyStartupIngress } from '../../../shared/pty-startup-ingress'
 import type { TerminalViewRgb } from '../../../shared/terminal-view-attributes'
 import { HeadlessEmulator } from '../../daemon/headless-emulator'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getShellLaunchConfig } from './local-pty-shell-ready'
 import { setTestUserDataPath } from './local-pty-shell-ready-test-harness'
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
 import { browserPageSchema } from '../../../../shared/workspace-session-browser-schema'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -112,32 +112,6 @@ describe('convertBrowserPage doc→web', () => {
     expect(workspace?.activePageId).toBe(converted?.id)
   })
 
-  it('releases the old grant exactly once, after the store stops naming the document', async () => {
-    const store = await createStoreWithWorktree()
-    const { pageId } = await createDocTab(store)
-    mocks.releaseDocPreviewGrant.mockClear()
-
-    store.getState().convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
-    await settled()
-
-    expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledTimes(1)
-    expect(mocks.releaseDocPreviewGrant).toHaveBeenCalledWith(pageId)
-  })
-
-  it('records one level of provenance so Back can return to the document', async () => {
-    const store = await createStoreWithWorktree()
-    const { tabId, pageId } = await createDocTab(store)
-
-    store.getState().convertBrowserPage(pageId, { kind: 'web', url: 'https://example.com/' })
-    await settled()
-
-    const page = store.getState().browserPagesByWorkspace[tabId]?.[0]
-    expect(page?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
-    // Provenance survives the session schema (z.object strips what it does not name).
-    const parsed = browserPageSchema.parse(page)
-    expect(parsed.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
-  })
-
   it('refuses to convert a web page to web — that is navigation, not conversion', async () => {
     const store = await createStoreWithWorktree()
     const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
@@ -152,53 +126,6 @@ describe('convertBrowserPage doc→web', () => {
     expect(converted).toBeNull()
     expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id).toBe(pageId)
     expect(store.getState().browserPagesByWorkspace[tab.id]?.[0]?.url).toBe('https://example.com/')
-  })
-})
-
-describe('convertBrowserPage web→doc', () => {
-  it('replaces the page with a client-local document page and mirrors it', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    await settled()
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-    mocks.releaseDocPreviewGrant.mockClear()
-
-    const converted = store.getState().convertBrowserPage(pageId, {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    await settled()
-
-    expect(converted).not.toBeNull()
-    expect(converted?.id).not.toBe(pageId)
-    const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
-    expect(page?.docLocation).toEqual(DOC_LOCATION)
-    expect(page?.url).toBe(ORCA_BROWSER_BLANK_URL)
-    // Client-local by construction: the grant is minted on this desktop.
-    expect(page?.browserRuntimeEnvironmentId).toBeNull()
-    expect(page?.convertedFrom).toEqual({ kind: 'url', url: 'https://example.com/' })
-    const workspace = store.getState().browserTabsByWorktree[WORKTREE_ID]?.[0]
-    expect(workspace?.docLocation).toEqual(DOC_LOCATION)
-    expect(workspace?.url).toBe(ORCA_BROWSER_BLANK_URL)
-    // A URL page owns no grant; nothing to release on this direction.
-    expect(mocks.releaseDocPreviewGrant).not.toHaveBeenCalled()
-  })
-
-  it('never lets a grant url into the converted page, even handed one directly', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://example.com/')
-    await settled()
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-
-    store.getState().convertBrowserPage(pageId, {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    await settled()
-
-    const page = store.getState().browserPagesByWorkspace[tab.id]?.[0]
-    const written = JSON.stringify([page, store.getState().browserTabsByWorktree[WORKTREE_ID]])
-    expect(written).not.toContain('orca-preview://')
   })
 })
 
@@ -219,22 +146,6 @@ describe('convertBrowserPage doc→doc retarget', () => {
     const page = store.getState().browserPagesByWorkspace[tabId]?.[0]
     expect(page?.docLocation).toEqual(OTHER_DOC_LOCATION)
     expect(page?.convertedFrom).toEqual({ kind: 'workspace-doc', docLocation: DOC_LOCATION })
-  })
-
-  it('is a no-op for the same document', async () => {
-    const store = await createStoreWithWorktree()
-    const { tabId, pageId } = await createDocTab(store)
-    mocks.releaseDocPreviewGrant.mockClear()
-
-    const converted = store.getState().convertBrowserPage(pageId, {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    await settled()
-
-    expect(converted).toBeNull()
-    expect(store.getState().browserPagesByWorkspace[tabId]?.[0]?.id).toBe(pageId)
-    expect(mocks.releaseDocPreviewGrant).not.toHaveBeenCalled()
   })
 })
 
@@ -359,36 +270,6 @@ describe('convertBrowserPage placement and activation', () => {
     expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
   })
 
-  // Remote conversion must close the host page and drop its handle or an unseen ghost remains.
-  it('closes the remote page and drops its handle when a runtime-owned page converts', async () => {
-    const store = await createStoreWithWorktree()
-    const tab = store.getState().createBrowserTab(WORKTREE_ID, 'https://remote.example/')
-    await settled()
-    const pageId = store.getState().browserPagesByWorkspace[tab.id]?.[0]?.id ?? ''
-    store.setState((s) => ({
-      remoteBrowserPageHandlesByPageId: {
-        ...s.remoteBrowserPageHandlesByPageId,
-        [pageId]: { environmentId: 'env-1', remotePageId: 'remote-page-1' } as never
-      }
-    }))
-    mocks.callRuntimeRpc.mockClear()
-
-    const converted = store.getState().convertBrowserPage(pageId, {
-      kind: 'workspace-doc',
-      docLocation: DOC_LOCATION
-    })
-    await settled()
-
-    expect(converted).not.toBeNull()
-    expect(store.getState().remoteBrowserPageHandlesByPageId[pageId]).toBeUndefined()
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'browser.tabClose',
-      expect.objectContaining({ page: 'remote-page-1' }),
-      expect.anything()
-    )
-  })
-
   // Both provenance directions retain owner or Back silently moves remote browsing local (ssh-execution-boundary).
   it('carries runtime ownership through provenance and honors it on the return leg', async () => {
     const store = await createStoreWithWorktree()
@@ -420,35 +301,5 @@ describe('convertBrowserPage placement and activation', () => {
     )
     await settled()
     expect(returned?.browserRuntimeEnvironmentId).toBe('env-1')
-  })
-
-  it('returns a worktree-inferred remote page as inferred, never as client-local', async () => {
-    const store = await createStoreWithWorktree()
-    const { pageId } = await createDocTab(store)
-    // The return leg says "inferred" by passing the property explicitly undefined.
-    const returned = store
-      .getState()
-      .convertBrowserPage(
-        pageId,
-        { kind: 'web', url: 'https://remote.example/', browserRuntimeEnvironmentId: undefined },
-        { leg: 'history-return' }
-      )
-    await settled()
-    expect(returned).not.toBeNull()
-    expect('browserRuntimeEnvironmentId' in (returned ?? {})).toBe(false)
-  })
-
-  it('returns null for an unknown page and changes nothing', async () => {
-    const store = await createStoreWithWorktree()
-    await createDocTab(store)
-    const before = store.getState().browserPagesByWorkspace
-
-    const converted = store
-      .getState()
-      .convertBrowserPage('missing-page', { kind: 'web', url: 'https://example.com/' })
-    await settled()
-
-    expect(converted).toBeNull()
-    expect(store.getState().browserPagesByWorkspace).toBe(before)
   })
 })

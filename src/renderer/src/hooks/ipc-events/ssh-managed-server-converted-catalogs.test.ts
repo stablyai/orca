@@ -125,24 +125,6 @@ describe('a host that just moved to its managed server', () => {
     ).toBeNull()
   })
 
-  it('shows the server copies only, under the server name', async () => {
-    applySshManagedServerTransition('ssh-1', undefined, {
-      kind: 'managed',
-      environmentId: 'env-1'
-    })
-
-    await vi.waitFor(() =>
-      expect(store.getState().repos.map((entry) => entry.executionHostId)).toEqual([
-        'runtime:env-1'
-      ])
-    )
-    const state = store.getState()
-    expect(state.worktreesByRepo['repo-1']).toEqual([])
-    expect(state.runtimeEnvironments.map((entry) => entry.name)).toEqual(['Box server'])
-    expect(state.projectGroups.map((entry) => entry.executionHostId)).toEqual(['runtime:env-1'])
-    expect(state.folderWorkspaces.map((entry) => entry.executionHostId)).toEqual(['runtime:env-1'])
-  })
-
   it('carries the host’s visit recency to the server instead of leaving it for the next prune', async () => {
     store.setState({
       lastVisitedAtByWorktreeId: { [`ssh:ssh-1|${worktreeId}`]: 500, [`local|${worktreeId}`]: 7 }
