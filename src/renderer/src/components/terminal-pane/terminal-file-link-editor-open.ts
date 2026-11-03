@@ -44,13 +44,17 @@ export function openLinkedFileInEditor(
   isCurrentRequest: () => boolean
 ): EditorOpenResult | null {
   const language = detectLanguage(file.filePath)
+  const existingViews = useAppStore.getState().unifiedTabsByWorktree?.[file.worktreeId] ?? []
   // Why on shown: a layout-owner build draws a new view only with main's frame.
   const reveal = (shown: EditorOpenResult | null): void => {
     if (!shown) {
       return
     }
     // Why: a link to an already-active tab otherwise changes nothing on screen.
-    if (isCurrentRequest()) {
+    if (
+      isCurrentRequest() &&
+      existingViews.some((tab) => tab.id === shown.viewStateId && tab.entityId === shown.fileId)
+    ) {
       flashRevealedEditorView(shown.viewStateId)
     }
     if (position.line === null) {

@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 type ResumeParams = { envelope: { clientOperationId: string } }
 
@@ -90,7 +90,7 @@ afterEach(() => {
 })
 
 describe("the header row's pause", () => {
-  it.each(['stopped', 'cleared', 'some-newer-reason'])(
+  it.each(['stopped', 'failed', 'cleared', 'some-newer-reason'])(
     "names the reason the host holds the queue for ('%s')",
     (reason) => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a newer host may publish a reason this client's type does not list.

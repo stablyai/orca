@@ -1,5 +1,5 @@
 import { webContents } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { browserManager } from '../browser-manager'

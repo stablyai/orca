@@ -1,139 +1,47 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { discoverAndroidSdk } from './android-sdk-discovery'
-import type { DiscoverAndroidSdkOptions } from './android-sdk-discovery'
 
-const existsIn = (paths: Iterable<string>): ((path: string) => boolean) => {
-  const set = new Set(paths)
-  return (path: string) => set.has(path)
+const home = '/home/dev'
+const defaultRoot = join(home, 'Android', 'Sdk')
+const adbIn = (root: string): string => join(root, 'platform-tools', 'adb')
+const emulatorIn = (root: string): string => join(root, 'emulator', 'emulator')
+
+function discover(files: string[], env: NodeJS.ProcessEnv = {}, pathAdb: string | null = null) {
+  const present = new Set(files)
+  return discoverAndroidSdk({
+    env,
+    platform: 'linux',
+    homedir: home,
+    exists: (path) => present.has(path),
+    findAdbOnPath: () => pathAdb
+  })
 }
 
-const adbFor = (sdkRoot: string, win32: boolean): string =>
-  join(sdkRoot, 'platform-tools', win32 ? 'adb.exe' : 'adb')
-
-const emulatorFor = (sdkRoot: string, win32: boolean): string =>
-  join(sdkRoot, 'emulator', win32 ? 'emulator.exe' : 'emulator')
-
-const sdkToolsFor = (sdkRoot: string, win32: boolean): string[] => [
-  adbFor(sdkRoot, win32),
-  emulatorFor(sdkRoot, win32)
-]
-
 describe('discoverAndroidSdk', () => {
-  it('prefers ANDROID_HOME when its adb exists', () => {
-    const sdkRoot = '/opt/android-home'
-    const options: DiscoverAndroidSdkOptions = {
-      env: { ANDROID_HOME: sdkRoot, ANDROID_SDK_ROOT: '/opt/android-sdk-root' },
-      platform: 'linux',
-      homedir: '/home/erik',
-      exists: existsIn(sdkToolsFor(sdkRoot, false))
-    }
-
-    expect(discoverAndroidSdk(options)).toEqual({
-      sdkRoot,
-      adb: join(sdkRoot, 'platform-tools', 'adb'),
-      emulator: join(sdkRoot, 'emulator', 'emulator'),
-      avdmanager: join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
+  it('accepts an SDK root with platform-tools but no emulator package', () => {
+    expect(discover([adbIn(defaultRoot)])).toEqual({
+      sdkRoot: defaultRoot,
+      adb: adbIn(defaultRoot),
+      emulator: null
     })
   })
 
-  it('falls back to ANDROID_SDK_ROOT when ANDROID_HOME adb is missing', () => {
-    const sdkRoot = '/opt/android-sdk-root'
-    const result = discoverAndroidSdk({
-      env: { ANDROID_HOME: '/opt/android-home', ANDROID_SDK_ROOT: sdkRoot },
-      platform: 'linux',
-      homedir: '/home/erik',
-      exists: existsIn(sdkToolsFor(sdkRoot, false))
-    })
-
-    expect(result?.sdkRoot).toBe(sdkRoot)
+  it('prefers a full SDK over an earlier adb-only root', () => {
+    const adbOnly = '/opt/platform-tools-only'
+    expect(
+      discover([adbIn(adbOnly), adbIn(defaultRoot), emulatorIn(defaultRoot)], {
+        ANDROID_HOME: adbOnly
+      })
+    ).toEqual({ sdkRoot: defaultRoot, adb: adbIn(defaultRoot), emulator: emulatorIn(defaultRoot) })
   })
 
-  it('ignores empty ANDROID_HOME / ANDROID_SDK_ROOT values', () => {
-    const home = '/home/erik'
-    const sdkRoot = join(home, 'Android', 'Sdk')
-    const result = discoverAndroidSdk({
-      env: { ANDROID_HOME: '', ANDROID_SDK_ROOT: '' },
-      platform: 'linux',
-      homedir: home,
-      exists: existsIn(sdkToolsFor(sdkRoot, false))
+  it('falls back to a standalone adb on PATH when no SDK root has one', () => {
+    expect(discover([], {}, '/usr/bin/adb')).toEqual({
+      sdkRoot: null,
+      adb: '/usr/bin/adb',
+      emulator: null
     })
-
-    expect(result?.sdkRoot).toBe(sdkRoot)
-  })
-
-  it('uses the darwin default SDK location with unsuffixed tools', () => {
-    const home = '/Users/erik'
-    const sdkRoot = join(home, 'Library', 'Android', 'sdk')
-    const result = discoverAndroidSdk({
-      env: {},
-      platform: 'darwin',
-      homedir: home,
-      exists: existsIn(sdkToolsFor(sdkRoot, false))
-    })
-
-    expect(result).toEqual({
-      sdkRoot,
-      adb: join(sdkRoot, 'platform-tools', 'adb'),
-      emulator: join(sdkRoot, 'emulator', 'emulator'),
-      avdmanager: join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')
-    })
-  })
-
-  it('uses the linux default SDK location', () => {
-    const home = '/home/erik'
-    const sdkRoot = join(home, 'Android', 'Sdk')
-    const result = discoverAndroidSdk({
-      env: {},
-      platform: 'linux',
-      homedir: home,
-      exists: existsIn(sdkToolsFor(sdkRoot, false))
-    })
-
-    expect(result?.sdkRoot).toBe(sdkRoot)
-    expect(result?.avdmanager).toBe(join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager'))
-  })
-
-  it('uses the win32 default with LOCALAPPDATA and .exe/.bat tools', () => {
-    const localAppData = 'C:\\Users\\erik\\AppData\\Local'
-    const sdkRoot = join(localAppData, 'Android', 'Sdk')
-    const result = discoverAndroidSdk({
-      env: { LOCALAPPDATA: localAppData },
-      platform: 'win32',
-      homedir: 'C:\\Users\\erik',
-      exists: existsIn(sdkToolsFor(sdkRoot, true))
-    })
-
-    expect(result).toEqual({
-      sdkRoot,
-      adb: join(sdkRoot, 'platform-tools', 'adb.exe'),
-      emulator: join(sdkRoot, 'emulator', 'emulator.exe'),
-      avdmanager: join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager.bat')
-    })
-  })
-
-  it('falls back to AppData\\Local on win32 when LOCALAPPDATA is unset', () => {
-    const home = 'C:\\Users\\erik'
-    const sdkRoot = join(home, 'AppData', 'Local', 'Android', 'Sdk')
-    const result = discoverAndroidSdk({
-      env: {},
-      platform: 'win32',
-      homedir: home,
-      exists: existsIn(sdkToolsFor(sdkRoot, true))
-    })
-
-    expect(result?.sdkRoot).toBe(sdkRoot)
-    expect(result?.adb).toBe(join(sdkRoot, 'platform-tools', 'adb.exe'))
-  })
-
-  it('returns null when no candidate adb exists', () => {
-    const result = discoverAndroidSdk({
-      env: { ANDROID_HOME: '/opt/a', ANDROID_SDK_ROOT: '/opt/b' },
-      platform: 'linux',
-      homedir: '/home/erik',
-      exists: () => false
-    })
-
-    expect(result).toBeNull()
+    expect(discover([])).toBeNull()
   })
 })

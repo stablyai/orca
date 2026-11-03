@@ -39,7 +39,6 @@ import {
   type NewWorkspaceComposerCardProps
 } from './new-workspace/new-workspace-composer-card-props'
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
-import { getSetupDecisionLabels } from './new-workspace/setup-decision-labels'
 import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
 import { buildDefaultAgentSettingsUpdate } from '../../../shared/default-agent-settings'
@@ -146,7 +145,6 @@ export default function NewWorkspaceComposerCard(
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
       : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
-  const setupDecisionLabels = getSetupDecisionLabels(setupConfig)
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -371,7 +369,6 @@ export default function NewWorkspaceComposerCard(
           onSparseEditingChange={setSparseEditing}
           sparseEditing={sparseEditing}
           branchNameInputId={branchNameInputId}
-          {...setupDecisionLabels}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
           onParentWorktreeIdChange={onParentWorktreeIdChange}

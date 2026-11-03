@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,6 +26,22 @@ import {
 } from './runtime-rpc-mobile-ws-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -145,7 +163,15 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     // The mobile allowlist applies, including to sync itself.
     await expect(
       sendRemoteRuntimeRequest(pairedRuntimeConnectionFromOffer(phone), 'worktree.list', {}, 5_000)
-    ).resolves.toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    ).resolves.toMatchObject({ ok: true, result: { worktrees: expect.any(Array) } })
+    await expect(
+      sendRemoteRuntimeRequest(
+        pairedRuntimeConnectionFromOffer(phone),
+        'settings.getAgentLaunch',
+        {},
+        5_000
+      )
+    ).resolves.toMatchObject({ ok: true, result: { settings: expect.any(Object) } })
     await expect(
       sendRemoteRuntimeRequest(
         pairedRuntimeConnectionFromOffer(phone),

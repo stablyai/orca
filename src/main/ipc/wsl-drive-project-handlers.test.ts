@@ -17,15 +17,21 @@ const conversion = vi.hoisted(() => ({
   previewWslDriveProjectWindowsGit: vi.fn(async () => ({ blockers: [] })),
   convertWslDriveProjectToWindowsGit: vi.fn(async () => ({ ok: false, blockers: [] }))
 }))
-vi.mock('../wsl/wsl-drive-project-windows-git', () => conversion)
+vi.mock('../wsl/filesystem/wsl-drive-project-windows-git', () => conversion)
 vi.mock('./wsl-drive-unc-conversion-handlers', () => ({
   registerWslDriveUncConversionHandlers: vi.fn()
 }))
 
 import { registerWslDriveProjectHandlers, readWorktreeLinks } from './wsl-drive-project-handlers'
+import {
+  noteWslHostsLivePolicyBlock,
+  resetWslHostsGateForTests
+} from '../wsl/host-lifecycle/wsl-host-gate'
 
 const invoke = (channel: string, request?: unknown) => handlers.get(channel)?.({}, request)
 const originalPlatform = process.platform
+
+const settings: { experimentalWslHosts?: boolean } = {}
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -36,10 +42,12 @@ beforeEach(() => {
   setPlatform('win32')
   conversion.previewWslDriveProjectWindowsGit.mockClear()
   conversion.convertWslDriveProjectToWindowsGit.mockClear()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The conversion is mocked; the handler only builds deps.
-  registerWslDriveProjectHandlers({} as never, {} as never)
+  settings.experimentalWslHosts = true
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The conversion is mocked; the handler only builds deps and reads the setting.
+  registerWslDriveProjectHandlers({ getSettings: () => settings } as never, {} as never)
 })
 afterEach(() => {
+  resetWslHostsGateForTests()
   vi.unstubAllEnvs()
   setPlatform(originalPlatform)
 })
@@ -56,6 +64,18 @@ describe('WSL drive project IPC', () => {
       invoke('wslDriveProject:convert', { projectId: 'p1', alignLineEndings: true })
     ).rejects.toThrow('wsl_drive_project_unavailable')
     expect(conversion.previewWslDriveProjectWindowsGit).not.toHaveBeenCalled()
+    expect(conversion.convertWslDriveProjectToWindowsGit).not.toHaveBeenCalled()
+  })
+
+  // Opt-in: the setting off, or a block learned this run, stops a conversion before it starts.
+  it.each([
+    ['the WSL hosts setting is off', () => (settings.experimentalWslHosts = false)],
+    ['a live policy block landed', () => noteWslHostsLivePolicyBlock()]
+  ])('refuses a conversion when %s', async (_case, stop) => {
+    stop()
+    await expect(
+      invoke('wslDriveProject:convert', { projectId: 'p1', alignLineEndings: true })
+    ).rejects.toThrow('wsl_drive_project_unavailable')
     expect(conversion.convertWslDriveProjectToWindowsGit).not.toHaveBeenCalled()
   })
 

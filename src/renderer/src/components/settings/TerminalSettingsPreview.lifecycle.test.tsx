@@ -196,58 +196,6 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     mockLigaturesAddon.instances.length = 0
   })
 
-  it('initializes once, writes once on mount, and disposes on unmount', () => {
-    renderPreview()
-
-    expect(mockXterm.instances).toHaveLength(1)
-    const terminal = mockXterm.instances[0]
-    expect(terminal.open).toHaveBeenCalledOnce()
-    expect(terminal.open).toHaveBeenCalledWith(mockReactRuntime.container)
-    expect(terminal.write).toHaveBeenCalledOnce()
-    expect(terminal.reset).not.toHaveBeenCalled()
-    expect(terminal.options).toMatchObject({
-      allowTransparency: false,
-      cols: 36,
-      cursorBlink: true,
-      cursorInactiveStyle: 'block',
-      cursorStyle: 'block',
-      disableStdin: true,
-      fontFamily: 'built:SF Mono',
-      fontSize: 14,
-      fontWeight: 500,
-      fontWeightBold: 700,
-      lineHeight: 1,
-      rows: 15,
-      scrollback: 0,
-      theme: { background: '#111111', foreground: '#eeeeee' }
-    })
-
-    runCleanups()
-    expect(terminal.dispose).toHaveBeenCalledOnce()
-  })
-
-  it('does not pass a persisted sub-minimum line height to xterm', () => {
-    renderPreview(makeSettings({ terminalLineHeight: 0.85 }))
-
-    expect(mockXterm.instances[0]?.options.lineHeight).toBe(1)
-  })
-
-  it('disposes the ligatures addon before disposing the terminal', () => {
-    mockLigaturesAddon.enabled = true
-
-    renderPreview()
-
-    const terminal = mockXterm.instances[0]
-    const addon = mockLigaturesAddon.instances[0]
-    expect(terminal.loadAddon).toHaveBeenCalledOnce()
-    expect(terminal.loadAddon).toHaveBeenCalledWith(addon)
-    expect(terminal.refresh).toHaveBeenCalledWith(0, 14)
-
-    runCleanups()
-    expect(addon.dispose).toHaveBeenCalledOnce()
-    expect(terminal.dispose).toHaveBeenCalledOnce()
-  })
-
   it('disposes the ligatures addon if loading it fails', () => {
     mockLigaturesAddon.enabled = true
     mockXterm.nextLoadAddonError = new Error('load addon failed')

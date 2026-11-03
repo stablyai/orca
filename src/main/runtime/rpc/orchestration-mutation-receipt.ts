@@ -194,7 +194,8 @@ export function getPendingWorkerStartRecovery(
   method: string,
   receipt: string | null
 ): { dispatchId: string } | undefined {
-  if (method !== 'orchestration.workerStart' || !receipt) {
+  // A send to a finished worker accepts a follow-up worker-start the same way.
+  if ((method !== 'orchestration.workerStart' && method !== 'orchestration.send') || !receipt) {
     return undefined
   }
   try {

@@ -1,3 +1,4 @@
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
@@ -24,13 +25,15 @@ const mocks = vi.hoisted(() => ({
     checkLinearConnection: vi.fn(),
     linearStatus: { connected: false, viewer: null, selectedWorkspaceId: 'focused-workspace' },
     linearStatusChecked: true,
+    linearStatusContextKey: 'local#0',
     settings: null,
     preflightStatus: null,
     preflightStatusChecked: true,
     preflightStatusContextKey: 'test',
     refreshPreflightStatus: vi.fn(),
+    listLinearIssues: vi.fn(async () => ({ items: [] })),
     searchLinearIssues: vi.fn<
-      (query: string, limit: number, options: unknown) => Promise<LinearIssue[]>
+      (query: string, limit: number, options: { workspaceId?: string }) => Promise<LinearIssue[]>
     >(async () => [])
   }
 }))
@@ -40,7 +43,17 @@ vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
   lookupGitLabWorkItemByPathForSource: vi.fn()
 }))
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+  useAppStore: Object.assign(
+    (selector: (state: unknown) => unknown) =>
+      selector({
+        ...mocks.state,
+        listLinearIssues: (...args: Parameters<typeof mocks.state.listLinearIssues>) =>
+          linearIssueReadFixture(() => mocks.state.listLinearIssues(...args)),
+        searchLinearIssues: (...args: Parameters<typeof mocks.state.searchLinearIssues>) =>
+          linearIssueReadFixture(() => mocks.state.searchLinearIssues(...args))
+      }),
+    { getState: () => mocks.state, subscribe: () => () => {} }
+  )
 }))
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalPreflightContext: () => ({}),
@@ -81,11 +94,21 @@ function props(context?: TaskSourceContext): NormalizedWorkItemSourceSearchProps
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
 describe('smart workspace explicit source connection', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.state.searchLinearIssues.mockResolvedValue([])
+    mocks.state.listLinearIssues.mockResolvedValue({ items: [] })
     mocks.readStatus.mockResolvedValue({ connected: false, viewer: null })
     mocks.state.linearStatus = {
       connected: false,
@@ -157,6 +180,123 @@ describe('smart workspace explicit source connection', () => {
     expect(mocks.readStatus).toHaveBeenCalledWith(source)
     expect(mocks.state.checkLinearConnection).not.toHaveBeenCalled()
     expect(mocks.state.linearStatus.connected).toBe(false)
+  })
+
+  it('lists and searches all workspaces by default, with a composer-only override scoped to its source', async () => {
+    const first = referenceLinearIssue({ id: 'first', workspaceId: 'first' })
+    const second = referenceLinearIssue({ id: 'second', workspaceId: 'second' })
+    mocks.readStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'first'
+    })
+    mocks.state.searchLinearIssues.mockImplementation(async (_query, _limit, options) =>
+      options.workspaceId === 'all'
+        ? [first, second]
+        : [first, second].filter((issue) => issue.workspaceId === options.workspaceId)
+    )
+    const fieldProps = props(source)
+    const { result, rerender, unmount } = renderHook(
+      ({ context, query }) => {
+        return useWorkItemSourceSearch({
+          ...fieldProps,
+          linearSourceContext: context,
+          value: query,
+          defaultLinearWorkspaceId: 'all'
+        })
+      },
+      { initialProps: { context: source, query: '' } }
+    )
+    act(() => result.current.setMode('linear'))
+    await waitFor(() =>
+      expect(mocks.state.listLinearIssues).toHaveBeenCalledWith(
+        { kind: 'list', filter: 'assigned', limit: 12 },
+        { sourceContext: source, workspaceId: 'all' }
+      )
+    )
+    rerender({ context: source, query: 'launch' })
+    await waitFor(() => expect(result.current.linearIssues).toEqual([first, second]))
+    const pendingSecond = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValueOnce(pendingSecond.promise)
+    act(() => result.current.setLinearWorkspaceId('second'))
+    expect(result.current.linearLoading).toBe(true)
+    expect(result.current.searchResultRows).toEqual([])
+    await act(async () => pendingSecond.resolve([second]))
+    expect(result.current.searchResultRows).toMatchObject([{ kind: 'linear', issue: second }])
+    expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('launch', 12, {
+      sourceContext: source,
+      workspaceId: 'second'
+    })
+    expect(result.current.linearStatus.selectedWorkspaceId).toBe('first')
+    expect(mocks.state.linearStatus.selectedWorkspaceId).toBe('focused-workspace')
+
+    act(() => result.current.setLinearWorkspaceId('all'))
+    await waitFor(() => expect(result.current.linearIssues).toEqual([first, second]))
+    const pendingAll = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValueOnce(pendingAll.promise)
+    rerender({ context: source, query: 'launch later' })
+    await waitFor(() =>
+      expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('launch later', 12, {
+        sourceContext: source,
+        workspaceId: 'all'
+      })
+    )
+    expect(result.current.linearIssues).toEqual([first, second])
+    expect(result.current.linearLoading).toBe(true)
+    expect(result.current.searchResultRows).toMatchObject([
+      { kind: 'linear', issue: first },
+      { kind: 'linear', issue: second }
+    ])
+    act(() => result.current.setLinearWorkspaceId('first'))
+    await waitFor(() => expect(result.current.linearIssues).toEqual([first]))
+    const replacementSecond = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValueOnce(replacementSecond.promise)
+    act(() => result.current.setLinearWorkspaceId('second'))
+    expect(result.current.searchResultRows).toEqual([])
+    expect(result.current.linearLoading).toBe(true)
+    await act(async () => replacementSecond.resolve([second]))
+    await act(async () => pendingAll.resolve([first, second]))
+    expect(result.current.searchResultRows).toMatchObject([{ kind: 'linear', issue: second }])
+    expect(result.current.linearLoading).toBe(false)
+    const otherHost: TaskSourceContext = { ...source, hostId: 'runtime:other-host' }
+    const otherHostReplacement = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValue(otherHostReplacement.promise)
+    rerender({ context: otherHost, query: 'launch' })
+    await waitFor(() =>
+      expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('launch', 12, {
+        sourceContext: otherHost,
+        workspaceId: 'all'
+      })
+    )
+    expect(result.current.linearIssues).toEqual([])
+    expect(result.current.searchResultRows).toEqual([])
+    expect(result.current.linearLoading).toBe(true)
+    await act(async () => otherHostReplacement.resolve([first, second]))
+    expect(result.current.linearIssues).toEqual([first, second])
+    expect(result.current.linearLoading).toBe(false)
+    const emptyReplacement = deferred<LinearIssue[]>()
+    mocks.state.searchLinearIssues.mockReturnValueOnce(emptyReplacement.promise)
+    rerender({ context: otherHost, query: 'nothing matches' })
+    await waitFor(() =>
+      expect(mocks.state.searchLinearIssues).toHaveBeenLastCalledWith('nothing matches', 12, {
+        sourceContext: otherHost,
+        workspaceId: 'all'
+      })
+    )
+    expect(result.current.linearLoading).toBe(true)
+    expect(result.current.searchResultRows).toMatchObject([
+      { kind: 'linear', issue: first },
+      { kind: 'linear', issue: second }
+    ])
+    await act(async () => emptyReplacement.resolve([]))
+    expect(result.current.linearIssues).toEqual([])
+    expect(result.current.searchResultRows).toEqual([])
+    expect(result.current.linearLoading).toBe(false)
+    unmount()
+    const reopened = renderHook(() =>
+      useWorkItemSourceFoundation({ ...props(source), defaultLinearWorkspaceId: 'all' })
+    )
+    expect(reopened.result.current.linearWorkspaceIdOverride).toBe('all')
   })
 
   it('shows GitLab workspace search rows without fetching an advertised probe page', async () => {

@@ -2,10 +2,7 @@
 
 import type { Editor } from '@tiptap/react'
 import { describe, expect, it } from 'vitest'
-import {
-  handleRichMarkdownTerminalPathPaste,
-  shouldPasteTerminalWindowsPathAsPlainText
-} from './rich-markdown-terminal-path-paste'
+import { handleRichMarkdownTerminalPathPaste } from './rich-markdown-terminal-path-paste'
 
 type InsertTransaction = { text: string }
 
@@ -43,31 +40,6 @@ function makeEditor(): { editor: Editor; inserted: string[] } {
 }
 
 describe('rich markdown terminal path paste', () => {
-  it('detects terminal-style HTML links that would lose a Windows path', () => {
-    expect(
-      shouldPasteTerminalWindowsPathAsPlainText({
-        plainText: 'Read C:\\Users\\neil\\.claude\\CLAUDE.md before editing.',
-        htmlText:
-          '<span>Read C:\\Users\\neil\\.claude\\</span><a href="http://CLAUDE.md">CLAUDE.md</a>'
-      })
-    ).toBe(true)
-  })
-
-  it('does not claim ordinary links or non-Windows paths', () => {
-    expect(
-      shouldPasteTerminalWindowsPathAsPlainText({
-        plainText: 'Open CLAUDE.md at https://example.test/CLAUDE.md',
-        htmlText: '<a href="https://example.test/CLAUDE.md">CLAUDE.md</a>'
-      })
-    ).toBe(false)
-    expect(
-      shouldPasteTerminalWindowsPathAsPlainText({
-        plainText: '/Users/neil/.claude/CLAUDE.md',
-        htmlText: '<a href="http://CLAUDE.md">CLAUDE.md</a>'
-      })
-    ).toBe(false)
-  })
-
   it('inserts the plain clipboard text before TipTap can preserve broken link metadata', () => {
     const { editor, inserted } = makeEditor()
     const text = 'C:\\Users\\neil\\.claude\\CLAUDE.md'

@@ -1,5 +1,5 @@
 // #35559: a serve host restarted without its daemon restores each pane with a new shell; the dead agent's title, status and input modes must not survive.
-import type { Page } from '@stablyai/playwright-test'
+import type { JSHandle, Page } from '@stablyai/playwright-test'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
@@ -26,6 +26,63 @@ async function readPaneState(page: Page, webTabId: string) {
       applicationCursor: pane.terminal.modes.applicationCursorKeysMode,
       runtimeTitle: state?.runtimePaneTitlesByTabId?.[id]?.[pane.id] ?? null,
       content: pane.serializeAddon?.serialize?.() ?? ''
+    }
+  }, webTabId)
+}
+
+// Hold the window where the host still publishes the tab-default title, so the reattach image's title alone must prove the agent.
+async function pinStalePublishedTitle(page: Page, webTabId: string): Promise<JSHandle<() => void>> {
+  return page.evaluateHandle((id) => {
+    const store = window.__store
+    const manager = window.__paneManagers?.get(id)
+    const paneId = (manager?.getActivePane?.() ?? manager?.getPanes?.()[0])?.id
+    if (!store || paneId === undefined) {
+      throw new Error(`Pane for ${id} is not mounted`)
+    }
+    const before = store.getState()
+    const pinnedTitle = before.runtimePaneTitlesByTabId[id]?.[paneId]
+    const pinnedStatus = Object.entries(before.agentStatusByPaneKey).filter(([key]) =>
+      key.startsWith(`${id}:`)
+    )
+    const pin = (): void => {
+      const state = store.getState()
+      const statusKeys = Object.keys(state.agentStatusByPaneKey).filter((key) =>
+        key.startsWith(`${id}:`)
+      )
+      if (
+        state.runtimePaneTitlesByTabId[id]?.[paneId] === 'Terminal 1' &&
+        statusKeys.length === 0
+      ) {
+        return
+      }
+      const agentStatusByPaneKey = { ...state.agentStatusByPaneKey }
+      for (const key of statusKeys) {
+        delete agentStatusByPaneKey[key]
+      }
+      store.setState({
+        agentStatusByPaneKey,
+        runtimePaneTitlesByTabId: {
+          ...state.runtimePaneTitlesByTabId,
+          [id]: { ...state.runtimePaneTitlesByTabId[id], [paneId]: 'Terminal 1' }
+        }
+      })
+    }
+    pin()
+    const unsubscribe = store.subscribe(pin)
+    // Hand back what the client held, so later steps still start from the live agent's title.
+    return () => {
+      unsubscribe()
+      const state = store.getState()
+      store.setState({
+        agentStatusByPaneKey: {
+          ...state.agentStatusByPaneKey,
+          ...Object.fromEntries(pinnedStatus)
+        },
+        runtimePaneTitlesByTabId: {
+          ...state.runtimePaneTitlesByTabId,
+          [id]: { ...state.runtimePaneTitlesByTabId[id], [paneId]: pinnedTitle ?? '' }
+        }
+      })
     }
   }, webTabId)
 }
@@ -104,6 +161,7 @@ test('a serve restart that respawns the shell drops the dead agent title, status
     expect((await readPaneState(page, webTabId))?.runtimeTitle).toContain('Claude Code')
 
     // A serve restart that keeps the daemon reattaches the same live agent, so its modes must survive.
+    const titlePin = await pinStalePublishedTitle(page, webTabId)
     await host.restartServeProcess()
     await expect
       .poll(
@@ -128,6 +186,9 @@ test('a serve restart that respawns the shell drops the dead agent title, status
       focus: true,
       applicationCursor: true
     })
+    await titlePin.evaluate((release) => release())
+    await titlePin.dispose()
+    expect((await readPaneState(page, webTabId))?.runtimeTitle).toContain('Claude Code')
     const before = await readPaneState(page, webTabId)
 
     // The host machine restarted: serve and its daemon both lose every process.

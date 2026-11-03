@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 
 const bindings = vi.hoisted(() => ({ filePath: '' }))
 

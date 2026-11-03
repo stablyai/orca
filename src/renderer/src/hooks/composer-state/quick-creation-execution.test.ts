@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -83,7 +84,7 @@ function renderExecution(
 }
 
 it('carries the accepted route across preparation and retains CLI startup/prompt under chat defaults', async () => {
-  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const settings = { ...getDefaultSettings('/test'), nativeChatProviders: EVERY_AGENT_CHAT }
   const original = useAppStore.getState().settings
   const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
   const { result } = renderExecution(settings, prepare)
@@ -103,7 +104,10 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
         )
       })
       useAppStore.setState({
-        settings: { ...settings, experimentalNativeChat: route === 'terminal-tui' }
+        settings: {
+          ...settings,
+          nativeChatProviders: route === 'terminal-tui' ? EVERY_AGENT_CHAT : {}
+        }
       })
       await act(async () => {
         deferred.resolve(prepared)
@@ -133,7 +137,7 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
 })
 
 it('auto-submits a typed prompt with the linked context as the chat first message', async () => {
-  const settings = { ...getDefaultSettings('/test'), experimentalNativeChat: true }
+  const settings = { ...getDefaultSettings('/test'), nativeChatProviders: EVERY_AGENT_CHAT }
   const original = useAppStore.getState().settings
   useAppStore.setState({ settings })
   const issueUrl = 'https://github.com/acme/app/issues/42'

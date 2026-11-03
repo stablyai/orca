@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -5,6 +6,14 @@ import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { createAgentPromptSubmissionRuntime } from '../agent-prompt-submission-runtime-test-fixture'
 import { TERMINAL_METHODS } from './methods/terminal'
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../../git/worktree', () => ({
   listWorktreesStrict: async () => [

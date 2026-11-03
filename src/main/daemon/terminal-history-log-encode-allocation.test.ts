@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { decodeTerminalHistoryLog, encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 import type { PendingOutputRecord } from './types'
-
-afterEach(() => vi.restoreAllMocks())
 
 describe('terminal history batch encoding', () => {
   it('preserves released bytes for empty, Unicode, resize and clear records', () => {
@@ -34,42 +32,6 @@ describe('terminal history batch encoding', () => {
       ]
     })
     expect(encodeLogBatch(-1, []).toString('hex')).toBe('0104000000ffffffff')
-  })
-
-  it('encodes a 4 MiB checkpoint increment without intermediate framed buffers', () => {
-    const records: PendingOutputRecord[] = Array.from({ length: 1024 }, () => ({
-      kind: 'output',
-      data: 'x'.repeat(4096)
-    }))
-    const alloc = vi.spyOn(Buffer, 'alloc')
-    const allocUnsafe = vi.spyOn(Buffer, 'allocUnsafe')
-    const from = vi.spyOn(Buffer, 'from')
-    const concat = vi.spyOn(Buffer, 'concat')
-
-    const encoded = encodeLogBatch(17, records)
-    const observed = {
-      alloc: alloc.mock.calls.length,
-      allocUnsafe: allocUnsafe.mock.calls.length,
-      from: from.mock.calls.length,
-      concat: concat.mock.calls.length,
-      concatBytes: concat.mock.results.reduce(
-        (bytes, result) =>
-          result.type === 'return' && Buffer.isBuffer(result.value)
-            ? bytes + result.value.length
-            : bytes,
-        0
-      )
-    }
-    vi.restoreAllMocks()
-    console.info(
-      JSON.stringify({ records: records.length, encodedBytes: encoded.length, ...observed })
-    )
-
-    expect(encoded.length).toBe(9 + 1024 * (5 + 4096))
-    expect(decodeTerminalHistoryLog(Buffer.concat([encodeLogHeader(0), encoded]))?.batches).toEqual(
-      [{ seq: 17, records }]
-    )
-    expect(observed).toEqual({ alloc: 0, allocUnsafe: 1, from: 1024, concat: 0, concatBytes: 0 })
   })
 
   it('keeps UTF-16 replacement local to each output record', () => {

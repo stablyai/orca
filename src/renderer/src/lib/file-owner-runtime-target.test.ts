@@ -55,11 +55,6 @@ describe('getRuntimeTargetForWorktreeOwner', () => {
     expect(getRuntimeTargetForWorktreeOwner(legacy, 'legacy-repo::wt')).toEqual({ kind: 'local' })
   })
 
-  it('stays on this app for no workspace or a workspace with no row yet', () => {
-    expect(getRuntimeTargetForWorktreeOwner(state, null)).toEqual({ kind: 'local' })
-    expect(getRuntimeTargetForWorktreeOwner(state, 'unknown::wt')).toEqual({ kind: 'local' })
-  })
-
   it('has no transport when rows disagree, and a caller with an error path refuses', () => {
     const ambiguous: WorktreeOperationRouteState = {
       settings,

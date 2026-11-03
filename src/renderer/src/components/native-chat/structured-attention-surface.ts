@@ -7,11 +7,11 @@ import type {
   AgentAttentionSurfaceSubject
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import type { StructuredTab } from './structured-agent-session-tabs'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 

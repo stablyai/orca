@@ -1,4 +1,4 @@
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { isStaleLocalWorktreeRegistration } from './stale-worktree-registration-preflight'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
@@ -6,14 +6,14 @@ import { OrcaRuntimeWithCreateManagedRemoteWorktree } from './workspace-metadata
 import {
   resolveWorktreeRemovalMetadata,
   resolveWorktreeRemovalRepoOwner
-} from '../../worktree-removal-repo-owner'
+} from '../../workspaces/removal/worktree-removal-repo-owner'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { finishAcceptedWorktreeRemoval } from '../../worktree-background-removal'
+import { finishAcceptedWorktreeRemoval } from '../../workspaces/removal/worktree-background-removal'
 import { preservedBranchCleanupScopeKey } from '../../../shared/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
@@ -24,12 +24,12 @@ import { withWorktreeSpan } from '../../observability/instrumentation'
 import {
   resolveWorktreeRemovalHome,
   resolveWorktreeRemovalRoute
-} from '../../worktree-removal-execution-host-route'
+} from '../../workspaces/removal/worktree-removal-execution-host-route'
 import { listWorktreesOnRemovalRoute } from '../worktree-removal-route-listing'
 import { authorizeUnregisteredWindowsRemoval } from '../../git/windows-worktree-removal'
-import { findRegisteredDeletableWorktree } from '../../worktree-removal-safety'
+import { findRegisteredDeletableWorktree } from '../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from '../runtime-unregistered-worktree-removal'
-import { removeStaleLocalWorktreeRegistration } from '../../local-worktree-removal-recovery'
+import { removeStaleLocalWorktreeRegistration } from '../../workspaces/removal/local-worktree-removal-recovery'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from '../runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
@@ -109,7 +109,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
       force,
       runHooks,
       allowUnverifiedPtyStop,
-      allowFailedArchiveHook
+      allowFailedArchiveHook,
+      deleteBranch: options.deleteBranch
     })
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
@@ -212,7 +213,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           })
         }
         const canonicalWorktreePath = registeredWorktree.path
-        const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+        const deleteBranch = options.deleteBranch ?? removedMeta?.preserveBranchOnDelete !== true
         if (
           await isStaleLocalWorktreeRegistration(
             registeredWorktree,
@@ -259,6 +260,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           allowFailedArchiveHook,
           allowUnverifiedPtyStop,
           deleteBranch,
+          requestedDeleteBranch: options.deleteBranch,
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,
           stopPtys: () =>
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {

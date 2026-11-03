@@ -54,6 +54,33 @@ export async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+/** One REST call for hover previews; skips the review, check and merge metadata a full lookup adds. */
+export async function fetchWorkItemPreview(
+  repoPath: string,
+  ownerRepo: GitHubApiRepository,
+  number: number,
+  type: 'issue' | 'pr',
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<MainWorkItem | null> {
+  const ghOptions = {
+    ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+    ...githubHostExecOptions(ownerRepo)
+  }
+  const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
+  if (type === 'issue') {
+    const { stdout } = await ghExecFileAsync(['api', `${base}/issues/${number}`], ghOptions)
+    const item: Record<string, unknown> = JSON.parse(stdout)
+    // `#N` links point at /issues/N even when N is a PR.
+    if (!('pull_request' in item)) {
+      return mapIssueWorkItem(item)
+    }
+  }
+  const { stdout } = await ghExecFileAsync(['api', `${base}/pulls/${number}`], ghOptions)
+  const pull: Record<string, unknown> = JSON.parse(stdout)
+  return mapPullRequestWorkItem(pull, ownerRepo)
+}
+
 // REST pull data omits latestReviews; retain gh's reviewer fields.
 export const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
 

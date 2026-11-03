@@ -12,13 +12,13 @@ import {
 } from './pty/pane/spawn-reservation'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../shared/agent-session-record.test-fixture'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { forgetRefusedPaneResumeMock } from './pty/pty-ipc-mock-registry'
 import { agentSessionOwners } from './pty/pane/agent-session-owners'
 import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
@@ -42,8 +42,10 @@ vi.mock('../agent-hooks/server', () =>
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../wsl', async (importOriginal) =>
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>

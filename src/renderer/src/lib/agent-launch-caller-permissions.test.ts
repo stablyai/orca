@@ -32,7 +32,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
@@ -99,7 +99,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: null
     })
 
-    expect(queuedStartupCommand(store)).toBe('codex')
+    expect(queuedStartupCommand(store)).toBe("codex '-c' 'disable_paste_burst=true'")
     expect(queuedStartupPayload(store)?.agentArgsOverride).toBeNull()
   })
 
@@ -114,7 +114,9 @@ describe('agent launch caller arguments and permission bypass', () => {
       agentArgs: '--model per-launch'
     })
 
-    expect(queuedStartupCommand(store)).toBe("codex '--model' 'per-launch'")
+    expect(queuedStartupCommand(store)).toBe(
+      "codex '-c' 'disable_paste_burst=true' '--model' 'per-launch'"
+    )
   })
 
   // Composer picks seed structured creates only; terminal fallbacks must not receive them (launch-structured-agent-session tests).
@@ -128,7 +130,7 @@ describe('agent launch caller arguments and permission bypass', () => {
     async (chatUi, storedArgs, expectedArgs) => {
       store.settings = {
         ...store.settings,
-        experimentalNativeChat: chatUi,
+        nativeChatProviders: { codex: chatUi },
         ...(storedArgs === undefined ? {} : { agentDefaultArgs: { codex: storedArgs } }),
         nativeChatSessionOptions: {
           codex: {
@@ -149,7 +151,7 @@ describe('agent launch caller arguments and permission bypass', () => {
       const command = queuedStartupCommand(store)
       expect(command).not.toContain("'-m'")
       expect(command).not.toContain('model_reasoning_effort')
-      expect(command).toBe(`codex '${expectedArgs}'`)
+      expect(command).toBe(`codex '-c' 'disable_paste_burst=true' '${expectedArgs}'`)
     }
   )
 })

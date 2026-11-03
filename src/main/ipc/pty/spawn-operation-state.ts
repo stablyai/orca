@@ -3,7 +3,7 @@ import type { RuntimePtySpawnState, RuntimePtySpawnArgs } from './runtime/spawn-
 import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type PtySpawnOperationState = Pick<
   RuntimePtySpawnState,

@@ -117,8 +117,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             tabId: params.tabId,
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+            // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
+            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
+          }),
+        { wslUserAct: true }
       )
       // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
       if (

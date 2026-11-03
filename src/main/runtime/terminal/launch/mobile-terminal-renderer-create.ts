@@ -63,7 +63,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const pairedCreate = Boolean(opts.clientNavigationId)
     const graphEpoch = this.captureReadyGraphEpoch()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    // The paired client's own create: its user's act, as every start below.
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector, undefined, {
+      wslUserAct: true
+    })
     const worktreeId = workspace.id
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     assertMobileTerminalShellSupported(this.store, workspace, opts.shellOverride, cwd)

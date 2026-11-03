@@ -8,11 +8,11 @@ import { getExperimentalPaneSearchEntries, getExperimentalSearchEntry } from './
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { PromptFirstComposerExperimentalSetting } from './PromptFirstComposerExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
+import { OrchestrationPanelExperimentalSetting } from './OrchestrationPanelExperimentalSetting'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../sidebar/use-wsl-hosts-enabled'
 import {
@@ -39,9 +39,6 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
-  const showNativeChat = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry().nativeChat
-  ])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
   ])
@@ -102,10 +99,6 @@ export function ExperimentalPane({
             />
           </div>
         </SearchableSetting>
-      ) : null}
-
-      {showNativeChat ? (
-        <NativeChatExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showPromptFirstComposer ? (
@@ -280,6 +273,8 @@ export function ExperimentalPane({
       <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       <BrowserExtensionsExperimentalSetting settings={settings} updateSettings={updateSettings} />
+
+      <OrchestrationPanelExperimentalSetting settings={settings} updateSettings={updateSettings} />
 
       {wslHostsAvailable() ? (
         <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />

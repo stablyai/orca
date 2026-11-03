@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from './settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
 
 export const getChatBehaviorTitle = (): string =>
   translate('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -22,16 +23,43 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.resumeSearchRelaunch', 'relaunch')
     ]
   },
+  autoContinueAfterUsageLimit: {
+    targetSectionId: NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID,
+    title: translate(
+      'components.settings.nativeChat.usageLimitContinueTitle',
+      'Continue chats automatically when a usage limit resets'
+    ),
+    description: translate(
+      'components.settings.nativeChat.usageLimitContinueCopy',
+      'Orca sends "Continue where you left off." when the limit resets. Applies to all chats with a known reset time.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.usageLimitContinueSearchLimit', 'usage limit'),
+      translate('components.settings.nativeChat.usageLimitContinueSearchReset', 'reset')
+    ]
+  },
   queueFollowUps: {
     targetSectionId: 'chat-queue-follow-ups',
-    title: translate('components.settings.nativeChat.queueFollowUpsTitle', 'Queue follow-ups'),
+    title: translate('components.settings.nativeChat.followUpBehaviorTitle', 'Queue follow-ups'),
     description: translate(
-      'components.settings.nativeChat.queueFollowUpsCopy',
-      'Messages you send while the agent is working wait as cards you can steer, edit, or delete. Messages with images send right away.'
+      'components.settings.nativeChat.followUpBehaviorCopy',
+      'Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message.'
     ),
     keywords: [
       translate('components.settings.nativeChat.queueSearchQueue', 'queue'),
       translate('components.settings.nativeChat.queueSearchSteer', 'steer')
+    ]
+  },
+  linkPreviews: {
+    targetSectionId: 'chat-link-previews',
+    title: translate('components.settings.nativeChat.linkPreviewsTitle', 'Link previews'),
+    description: translate(
+      'components.settings.nativeChat.linkPreviewsCopy',
+      'Hovering a web link shows a preview card. Orca fetches the page to build it, so the site can see the request.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.linkPreviewsSearchUnfurl', 'unfurl'),
+      translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
     ]
   },
   shellEnvironment: {

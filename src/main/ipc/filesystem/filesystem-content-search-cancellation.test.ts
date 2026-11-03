@@ -1,3 +1,4 @@
+import type * as WslPaths from '../../../shared/wsl-paths'
 import { isAbsolute } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { EventEmitter } from 'node:events'
@@ -38,9 +39,14 @@ vi.mock('../../git/runner', () => ({
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('../../wsl', () => ({
-  parseWslPath: parseWslPathMock,
-  toWindowsWslPath: toWindowsWslPathMock
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
+  parseWslPath: parseWslPathMock
+}))
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPaths>()),
+  ...(await (() => ({
+    toWindowsWslPath: toWindowsWslPathMock
+  }))())
 }))
 
 vi.mock('./filesystem-auth', () => ({
@@ -58,7 +64,7 @@ vi.mock('./filesystem-path-containment', () => ({
   validateGitRelativeFilePath: vi.fn((value: string) => value)
 }))
 
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: vi.fn(async (value: string) => value)
 }))
 

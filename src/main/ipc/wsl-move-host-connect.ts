@@ -5,8 +5,8 @@
  * and a host with a Remove still pending is never touched.
  */
 import { findWslHostDeployment } from '../../shared/runtime-environment-wsl-host-store'
-import type { WslHostService } from '../wsl/wsl-host-service'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import type { WslHostService } from '../wsl/host-lifecycle/wsl-host-service'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 
 export type WslMoveHostConnectMode = 'user' | 'automatic'
 

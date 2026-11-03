@@ -38,9 +38,6 @@ const testState: {
 }))
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: typeof testState.store) => unknown) =>

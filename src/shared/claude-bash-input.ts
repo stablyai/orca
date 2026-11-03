@@ -1,4 +1,4 @@
-import type { NativeChatBlock } from './native-chat-types'
+import type { NativeChatBlock } from './native-chat/native-chat-types'
 
 const BASH_INPUT = /^\s*<bash-input>([\s\S]*)<\/bash-input>\s*$/
 

@@ -8,6 +8,11 @@ import type {
   PluginMarketplaceHostListing
 } from '../../../../../preload/api-types'
 import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import {
+  settlePluginInstallTrust,
+  usePluginInstallTrustStore
+} from '@/store/plugin-install-trust-request'
+import type { PluginInstallTrustPrompt } from '../presentation/plugin-install-trust'
 import { usePluginInstallAction } from './use-plugin-install-action'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
@@ -60,12 +65,12 @@ const codePreview: PluginMarketplaceHostInstallPreview = {
   })
 }
 
-function setup() {
+function setup(isFromInstallLink?: (pluginKey: string) => boolean) {
   const onInstalled = vi.fn().mockResolvedValue(undefined)
   const fetchPreview = vi.fn().mockResolvedValue({ ok: true, preview })
   const hook: { current: ReturnType<typeof usePluginInstallAction> | null } = { current: null }
   function Probe(): null {
-    hook.current = usePluginInstallAction({ fetchPreview, onInstalled })
+    hook.current = usePluginInstallAction({ fetchPreview, onInstalled, isFromInstallLink })
     return null
   }
   act(() => createRoot(document.createElement('div')).render(<Probe />))
@@ -84,7 +89,19 @@ function installResult(on: boolean) {
   }
 }
 
+// Answers every trust ask the way the current test chose, recording what was shown.
+const asked: PluginInstallTrustPrompt[] = []
+let answer = true
+usePluginInstallTrustStore.subscribe(({ pending }) => {
+  if (pending) {
+    asked.push(pending.prompt)
+    queueMicrotask(() => settlePluginInstallTrust(answer))
+  }
+})
+
 beforeEach(() => {
+  asked.length = 0
+  answer = true
   vi.mocked(toast.success).mockClear()
   vi.mocked(applyPluginThemesNow).mockReset().mockResolvedValue(false)
   Object.defineProperty(window, 'api', {
@@ -99,6 +116,19 @@ beforeEach(() => {
 })
 
 describe('usePluginInstallAction', () => {
+  it('labels an install from a page an install link opened, and only that one', async () => {
+    const { hook } = setup((pluginKey) => pluginKey === listing.pluginKey)
+    await act(async () => hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledWith(
+      expect.objectContaining({ fromInstallLink: true })
+    )
+    const plain = setup()
+    await act(async () => plain.hook.current?.install(listing))
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ fromInstallLink: true })
+    )
+  })
+
   it('asks main to turn on a content-only release and leaves nothing pending after', async () => {
     const { hook, onInstalled } = setup()
     await act(async () => hook.current?.install(listing))
@@ -204,5 +234,70 @@ describe('usePluginInstallAction', () => {
       message: 'Download didn’t match the catalog. Nothing installed.'
     })
     expect(onInstalled).not.toHaveBeenCalled()
+  })
+
+  it('asks to trust the publisher of a community theme with the softer copy, then installs', async () => {
+    const { hook } = setup()
+    await act(async () => hook.current?.install(listing))
+    expect(asked).toEqual([
+      {
+        kind: 'theme',
+        trustee: 'acme',
+        publisher: 'acme',
+        repository: 'https://example.invalid/dusk.git',
+        location: 'Catalog',
+        access: []
+      }
+    ])
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledOnce()
+  })
+
+  it('names the repository owner Orca parsed, not the publisher the manifest claims', async () => {
+    const { hook, fetchPreview } = setup()
+    const source = { kind: 'git' as const, url: 'https://github.com/Mallory/dusk.git', ref: 'main' }
+    fetchPreview.mockResolvedValue({ ok: true, preview: { ...preview, source } })
+    await act(async () => hook.current?.install({ ...listing, source }))
+    expect(asked[0]).toMatchObject({
+      trustee: 'Mallory',
+      publisher: 'acme',
+      repository: 'github.com/mallory/dusk'
+    })
+  })
+
+  it('warns that a community code plugin runs its code, with what it may do', async () => {
+    const { hook } = setup()
+    const codeListing = {
+      ...listing,
+      release: { ...listing.release!, execution: 'declarative' as const }
+    }
+    vi.mocked(window.api.plugins.installMarketplacePlugin).mockResolvedValue(installResult(false))
+    await act(async () => hook.current?.install(codeListing, { preview: codePreview }))
+    expect(asked).toHaveLength(1)
+    expect(asked[0]!.kind).toBe('code')
+    expect(asked[0]!.access).toEqual(['Its commands can act for you or your agents'])
+  })
+
+  it('installs nothing when the user cancels, and leaves no error behind', async () => {
+    answer = false
+    const { hook, onInstalled } = setup()
+    await act(async () => hook.current?.install(listing))
+    expect(asked).toHaveLength(1)
+    expect(window.api.plugins.installMarketplacePlugin).not.toHaveBeenCalled()
+    expect(onInstalled).not.toHaveBeenCalled()
+    expect(hook.current?.phaseOf(listing.pluginKey)).toBeNull()
+  })
+
+  it('never asks for an official plugin', async () => {
+    const { hook, fetchPreview } = setup()
+    fetchPreview.mockResolvedValue({ ok: true, preview: { ...preview, official: true } })
+    await act(async () => hook.current?.install({ ...listing, official: true }))
+    expect(asked).toEqual([])
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledOnce()
+  })
+
+  it('asks when only one of listing and preview says official', async () => {
+    const { hook } = setup()
+    await act(async () => hook.current?.install({ ...listing, official: true }))
+    expect(asked).toHaveLength(1)
   })
 })

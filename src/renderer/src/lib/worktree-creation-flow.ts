@@ -2,9 +2,12 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
+  pendingCreationChatDraftScopeKey,
   type WorktreeCreationPhase,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import {
@@ -37,6 +40,28 @@ function startWorktreeCreation(creationId: string, request: WorktreeCreationRequ
   })
 }
 
+// The chat composer shows before the worktree exists, so a linked item's draft starts there.
+function seedPendingChatDraft(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  prior?: WorktreeCreationRequest
+): void {
+  const draft = request.launchDraftPrompt
+  if (
+    !draft ||
+    draft === prior?.launchDraftPrompt ||
+    request.promptDelivery !== 'draft' ||
+    request.agentLaunchRoute !== 'structured-native-chat'
+  ) {
+    return
+  }
+  updateNativeChatComposerDraft(
+    pendingCreationChatDraftScopeKey(creationId),
+    { text: draft, document: promptTextContent(draft) },
+    'immediate'
+  )
+}
+
 function revealPendingCreation(
   creationId: string,
   request: WorktreeCreationRequest,
@@ -56,6 +81,7 @@ function revealPendingCreation(
     loaderVisible: true,
     request
   })
+  seedPendingChatDraft(creationId, request)
   if (options.revealCreationSurface === false) {
     store.setActivePendingWorktreeCreation(previousActiveCreationId)
     return
@@ -108,9 +134,11 @@ export function continueBackgroundWorktreeCreation(
   options: BackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
-  if (!store.pendingWorktreeCreations[creationId]) {
+  const staged = store.pendingWorktreeCreations[creationId]
+  if (!staged) {
     return false
   }
+  seedPendingChatDraft(creationId, request, staged.request)
   // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
   store.updatePendingWorktreeCreation(creationId, {
     phase: getInitialWorktreeCreationPhase(request),

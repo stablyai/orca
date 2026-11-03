@@ -135,6 +135,7 @@ describe('worktree RPC methods', () => {
       createdWithAgent: undefined,
       automationProvenance: undefined,
       allowLocalBaseFallback: true,
+      wslUserAct: true,
       creatorProvenance: { kind: 'host' },
       startup: undefined,
       startupDraft: undefined,

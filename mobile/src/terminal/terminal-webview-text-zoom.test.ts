@@ -85,13 +85,12 @@ describe('TerminalWebView text zoom', () => {
     expect(fontFamily.endsWith(', monospace')).toBe(true)
   })
 
-  it('keeps the SF Mono lead outside iOS WebViews and shares the identical fallback tail', () => {
+  it('keeps the SF Mono lead outside iOS WebViews and adds the bundled symbols only there', () => {
     const androidFontFamily = resolveTerminalFontFamily(ANDROID_NAVIGATOR)
     expect(androidFontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
-    expect(androidFontFamily.endsWith(', monospace')).toBe(true)
-    // Only the lead family differs by platform; preserve the common fallback chain.
     const iosFontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
+    expect(iosFontFamily.endsWith(', monospace')).toBe(true)
     const tailFrom = (family: string) => family.slice(family.indexOf('"Menlo"'))
-    expect(tailFrom(androidFontFamily)).toBe(tailFrom(iosFontFamily))
+    expect(tailFrom(androidFontFamily)).toBe(`${tailFrom(iosFontFamily)}, "Orca Terminal Symbols"`)
   })
 })

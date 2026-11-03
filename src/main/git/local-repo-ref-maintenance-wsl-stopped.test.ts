@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from './runner'
-import type * as WslUncAccessGate from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGate from '../wsl/filesystem/wsl-unc-access-gate'
 import { RepoRefMaintenance } from '../../shared/repo-ref-maintenance'
-import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
+import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 const mocks = vi.hoisted(() => ({
   gitExecFileAsync: vi.fn(),
@@ -12,7 +15,7 @@ vi.mock('./runner', async (importOriginal) => ({
   ...(await importOriginal<typeof GitRunner>()),
   gitExecFileAsync: mocks.gitExecFileAsync
 }))
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGate>()),
   assertWslUncPathRunning: mocks.assertWslUncPathRunning,
   // Off Windows no path maps to a distro; stand in for the WSL repo's UNC root.

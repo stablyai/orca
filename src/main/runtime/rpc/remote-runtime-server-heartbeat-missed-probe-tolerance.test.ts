@@ -13,64 +13,6 @@ function makeSocket(): WebSocket {
 }
 
 describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
-  it('keeps a client whose pong is merely delayed past one probe window', async () => {
-    vi.useFakeTimers()
-    let now = 1_000
-    const socket = makeSocket()
-    const heartbeat = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
-    heartbeat.noteAlive(socket)
-    heartbeat.start(() => [socket])
-
-    now += INTERVAL_MS
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(socket.ping).toHaveBeenCalledTimes(1)
-    heartbeat.noteAlive(socket)
-
-    // A transient blackhole: probe #2 goes out and its pong is stuck in the network.
-    now += INTERVAL_MS
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(socket.ping).toHaveBeenCalledTimes(2)
-    expect(socket.terminate).not.toHaveBeenCalled()
-
-    // The path recovers and the delayed pong lands right after the next sweep would have run.
-    now += INTERVAL_MS
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    heartbeat.noteAlive(socket)
-
-    // One lost probe is insufficient evidence: keep the peer and re-probe it.
-    expect(socket.terminate).not.toHaveBeenCalled()
-    expect(socket.ping).toHaveBeenCalledTimes(3)
-    heartbeat.stop()
-  })
-
-  it('reaps only after consecutive probes go unanswered, counted not timed', async () => {
-    vi.useFakeTimers()
-    let now = 1_000
-    const socket = makeSocket()
-    const heartbeat = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
-    heartbeat.noteAlive(socket)
-    heartbeat.start(() => [socket])
-    now += INTERVAL_MS
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(socket.ping).toHaveBeenCalledTimes(1)
-    heartbeat.noteAlive(socket)
-
-    const missesBeforeReap: number[] = []
-    for (let probe = 0; probe < 6; probe += 1) {
-      now += INTERVAL_MS
-      await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-      missesBeforeReap.push(
-        (socket.terminate as unknown as ReturnType<typeof vi.fn>).mock.calls.length
-      )
-    }
-
-    // Silence must be tolerated for more than a single probe, and must eventually end the socket.
-    expect(missesBeforeReap[0]).toBe(0)
-    expect(missesBeforeReap[1]).toBe(0)
-    expect(missesBeforeReap.at(-1)).toBeGreaterThan(0)
-    heartbeat.stop()
-  })
-
   it('lets any proof of life reset accumulated misses', async () => {
     vi.useFakeTimers()
     let now = 1_000

@@ -1,18 +1,18 @@
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { resolveWindowsShellOverride } from '@/lib/pane-manager/windows-pty-compatibility'
+import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/remote-runtime-pty-shell'
 import { parseExecutionHostId } from '../../../shared/execution-host'
+import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import {
-  canonicalizeWindowsShellOverride,
-  resolveLocalWindowsAgentStartupShell,
-  resolveWindowsShellStartupFamily
-} from '../../../shared/windows-terminal-shell'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { AppState } from '@/store/types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 
 export type AgentResumeLaunchTarget = {
   platform: NodeJS.Platform
+  /** OS that runs the agent; null when its remote host has not reported one. */
+  agentHostPlatform: NodeJS.Platform | null
   /** undefined keeps the platform default: PowerShell on win32, POSIX elsewhere. */
   shell: AgentStartupShell | undefined
 }
@@ -29,20 +29,32 @@ export type AgentResumeLaunchTargetArgs = {
   tabShellOverride?: string | null
   /** OS the SSH execution host reported; null/undefined when unknown. */
   remotePlatform?: NodeJS.Platform | null
+  /** OS a paired Orca server reported; null/undefined when unknown. */
+  runtimeHostPlatform?: NodeJS.Platform | null
+  /** The Windows shell a paired server spawns its terminals in; null/undefined when unreported. */
+  runtimeHostTerminalWindowsShell?: string | null
 }
 
 function isRemoteResumeTarget(args: AgentResumeLaunchTargetArgs): boolean {
   return Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local'
 }
 
-/** Use reported OS only for SSH; paired servers choose Windows shell settings this client cannot see, preserving their prior resume quoting. */
+/** The OS an SSH target reported, else null: a direct `ssh:` host, or one a paired server reaches. */
 export function resolveSshHostReportedPlatform(
   state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
   executionHostId: string | null,
   /** Paired server that owns the SSH target, when it is not this client's own connection. */
-  sshOwnerEnvironmentId: string | null
+  sshOwnerEnvironmentId: string | null,
+  /** A `runtime:` host's nested SSH target, which runs the command instead of the server. */
+  nestedTargetId?: string | null
 ): NodeJS.Platform | null {
   const host = parseExecutionHostId(executionHostId)
+  if (host?.kind === 'runtime' && nestedTargetId) {
+    return (
+      state.sshStateByEnvironment.get(host.environmentId)?.connectionStates.get(nestedTargetId)
+        ?.remotePlatform ?? null
+    )
+  }
   if (host?.kind !== 'ssh') {
     return null
   }
@@ -52,6 +64,42 @@ export function resolveSshHostReportedPlatform(
   return sshState?.remotePlatform ?? null
 }
 
+function lastRuntimeHostStatus(
+  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  executionHostId: string | null
+) {
+  const host = parseExecutionHostId(executionHostId)
+  return host?.kind === 'runtime'
+    ? lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(host.environmentId))
+    : null
+}
+
+/** OS a paired Orca server last reported, for `runtime:` hosts only. */
+export function resolveRuntimeHostReportedPlatform(
+  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  executionHostId: string | null
+): NodeJS.Platform | null {
+  return lastRuntimeHostStatus(state, executionHostId)?.hostPlatform ?? null
+}
+
+/** The Windows shell a paired Orca server last reported for its terminals, for `runtime:` hosts only. */
+export function resolveRuntimeHostTerminalWindowsShell(
+  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  executionHostId: string | null
+): string | null {
+  return lastRuntimeHostStatus(state, executionHostId)?.terminalWindowsShell ?? null
+}
+
+/** The OS a remote host reported: SSH from its connection, a paired server from its status. */
+function reportedRemotePlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform | null {
+  if (args.remotePlatform) {
+    return args.remotePlatform
+  }
+  return !args.connectionId && parseExecutionHostId(args.executionHostId)?.kind === 'runtime'
+    ? (args.runtimeHostPlatform ?? null)
+    : null
+}
+
 function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform {
   if (args.projectRuntime?.status === 'repair-required') {
     return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
@@ -59,43 +107,67 @@ function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
-  if (args.remotePlatform && isRemoteResumeTarget(args)) {
+  const reported = reportedRemotePlatform(args)
+  if (reported && isRemoteResumeTarget(args)) {
     // Why: a WSL UNC cwd on a Windows host still launches inside that distro.
-    return args.remotePlatform === 'win32' && args.worktreePath && isWslUncPath(args.worktreePath)
+    return reported === 'win32' && args.worktreePath && isWslUncPath(args.worktreePath)
       ? 'linux'
-      : args.remotePlatform
+      : reported
   }
-  if (args.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
+  const hostKind = parseExecutionHostId(args.executionHostId)?.kind
+  // Why: an older server omits its OS, but a drive-letter workspace path still proves Windows.
+  if (
+    hostKind === 'runtime' &&
+    !args.connectionId &&
+    args.worktreePath &&
+    isWindowsAbsolutePathLike(args.worktreePath) &&
+    !isWslUncPath(args.worktreePath)
+  ) {
+    return 'win32'
+  }
+  // Why POSIX when a remote host has not reported its OS: such hosts are almost always POSIX, as launches assume.
+  if (
+    args.connectionId ||
+    hostKind === 'ssh' ||
+    hostKind === 'runtime' ||
+    (args.worktreePath && isWslUncPath(args.worktreePath))
+  ) {
     return 'linux'
   }
   return CLIENT_PLATFORM
 }
 
 /** Quote for both host platform and live shell; typing PowerShell quotes into cmd.exe passes literal quotes that agent CLIs reject (#12320). */
+function resolveResumeAgentHostPlatform(
+  args: AgentResumeLaunchTargetArgs,
+  platform: NodeJS.Platform
+): NodeJS.Platform | null {
+  // Why: a remote host that has not reported its OS may be Windows; leave it unknown.
+  return !isRemoteResumeTarget(args) || reportedRemotePlatform(args) ? platform : null
+}
+
 export function resolveAgentResumeLaunchTarget(
   args: AgentResumeLaunchTargetArgs
 ): AgentResumeLaunchTarget {
   const platform = resolveResumeLaunchPlatform(args)
+  const agentHostPlatform = resolveResumeAgentHostPlatform(args, platform)
   const isRemote = isRemoteResumeTarget(args)
-  if (isRemote && platform === 'win32' && args.remotePlatform === 'win32') {
-    // Client shell settings do not describe remote hosts; a remote tab’s explicit shell override does.
-    const override = args.tabShellOverride
-      ? canonicalizeWindowsShellOverride(args.tabShellOverride.trim())
-      : undefined
-    return {
-      platform,
-      shell: override ? resolveWindowsShellStartupFamily(override) : undefined
-    }
-  }
+  const spawnsInServerShell =
+    !REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE &&
+    parseExecutionHostId(args.executionHostId)?.kind === 'runtime'
   return {
     platform,
-    shell: resolveLocalWindowsAgentStartupShell({
+    agentHostPlatform,
+    // Why: a remote host's own shell decides quoting; this client's setting describes only itself.
+    shell: resolveHostAgentStartupShell({
       platform,
       isRemote,
-      terminalWindowsShell: resolveWindowsShellOverride(
-        args.tabShellOverride,
-        args.terminalWindowsShell
-      )
+      tabShellOverride: spawnsInServerShell ? null : args.tabShellOverride,
+      hostTerminalWindowsShell: isRemote
+        ? args.connectionId
+          ? null
+          : args.runtimeHostTerminalWindowsShell
+        : args.terminalWindowsShell
     })
   }
 }

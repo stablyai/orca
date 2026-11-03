@@ -54,8 +54,8 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
 }))
 
-vi.mock('@/lib/http-link-routing', () => ({
-  openHttpLink: (url: string) => {
+vi.mock('@/lib/app-http-link-open', () => ({
+  openAppHttpLink: (url: string) => {
     mockState.openedLinks.push(url)
   }
 }))

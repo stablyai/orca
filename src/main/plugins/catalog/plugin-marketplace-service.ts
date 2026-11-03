@@ -19,6 +19,7 @@ import {
 import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginImageCache } from '../plugin-image-cache'
 import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
+import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import {
   pluginMarketplaceListing,
@@ -44,6 +45,7 @@ export class PluginMarketplaceService {
   private readonly sourceErrors = new Map<string, string>()
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
   private officialSeedRequested = false
+  private readonly communitySeed: CommunityMarketplaceSeed
 
   constructor(options: {
     pluginsDataDir: string
@@ -59,6 +61,9 @@ export class PluginMarketplaceService {
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
     this.fetcher = options.fetcher ?? fetchPluginMarketplace
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
+    this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
+      this.addSource(source)
+    )
   }
 
   async listSources(): Promise<PluginMarketplaceSourceState[]> {
@@ -133,6 +138,11 @@ export class PluginMarketplaceService {
       })
     }
     return this.officialSeedPromise
+  }
+
+  /** Adds the community catalog once by default; see CommunityMarketplaceSeed. */
+  seedCommunitySource(now?: number): Promise<void> {
+    return this.communitySeed.run(now)
   }
 
   async refreshSource(sourceId: string): Promise<PluginMarketplaceSourceState> {
@@ -235,6 +245,7 @@ export class PluginMarketplaceService {
 
   private async waitForOfficialSeed(): Promise<void> {
     await this.officialSeedPromise?.catch(() => undefined)
+    await this.communitySeed.settled()
   }
 
   private async fetchAndValidate(

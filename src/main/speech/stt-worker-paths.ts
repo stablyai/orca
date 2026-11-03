@@ -5,7 +5,10 @@ import {
   SPEECH_RECOGNIZER_DIR_ENV,
   speechRecognizerPackageName
 } from '../../shared/speech-recognizer-package'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 
 /** Mobile maps voice_model_not_ready: to host-supported model setup, including hosts with no recognizer. */
 export const LOCAL_SPEECH_UNAVAILABLE_ERROR = 'voice_model_not_ready:unavailable'

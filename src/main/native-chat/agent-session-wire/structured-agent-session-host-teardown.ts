@@ -2,7 +2,7 @@
 // the shared database last. Queued sends recover on next open.
 
 import { closeStructuredAgentSessionHandovers } from './structured-agent-session-handing-over'
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'

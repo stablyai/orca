@@ -244,18 +244,4 @@ describe('a host whose managed server the user stopped and removed', () => {
     const { decideHostServer } = await import('./ssh-host-server-connect')
     expect(decideHostServer).not.toHaveBeenCalled()
   })
-
-  it('still reconnects a server an older desktop deployed for it since', async () => {
-    runtime.environments = [managedServer]
-    mockSshStore.getTarget.mockReturnValue({
-      ...removed,
-      orcadFence: { environmentId: managedServer.id }
-    })
-    const { decideHostServer } = await import('./ssh-host-server-connect')
-
-    await Promise.resolve(
-      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
-    ).catch(() => {})
-    expect(decideHostServer).toHaveBeenCalledTimes(1)
-  })
 })

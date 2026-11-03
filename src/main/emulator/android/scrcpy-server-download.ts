@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { get } from 'node:https'
 import { pipeline } from 'node:stream/promises'
@@ -48,20 +48,25 @@ export async function ensureScrcpyServerJar(): Promise<string> {
 async function downloadScrcpyServerJar(path: string): Promise<string> {
   emulatorProbe('scrcpy.jar.download.start', { url: DOWNLOAD_URL, dest: path })
   mkdirSync(dirname(path), { recursive: true })
+  const downloadPath = `${path}.download`
   try {
-    await downloadTo(DOWNLOAD_URL, path)
+    await downloadTo(DOWNLOAD_URL, downloadPath)
+    if (statSync(downloadPath).size < MIN_VALID_BYTES) {
+      throw new EmulatorError('emulator_helper_failed', emulatorFailureText('scrcpyServerInvalid'))
+    }
+    renameSync(downloadPath, path)
   } catch (error) {
-    rmSync(path, { force: true })
     emulatorProbeError('scrcpy.jar.download.fail', error, { url: DOWNLOAD_URL })
+    if (error instanceof EmulatorError) {
+      throw error
+    }
     const detail = error instanceof Error ? error.message : 'unknown error'
     throw new EmulatorError(
       'emulator_helper_failed',
       emulatorFailureText('scrcpyDownloadFailed', { detail })
     )
-  }
-  if (!isScrcpyServerJarReady()) {
-    rmSync(path, { force: true })
-    throw new EmulatorError('emulator_helper_failed', emulatorFailureText('scrcpyServerInvalid'))
+  } finally {
+    rmSync(downloadPath, { force: true })
   }
   emulatorProbe('scrcpy.jar.download.ok', { dest: path, bytes: statSync(path).size })
   return path

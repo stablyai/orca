@@ -6,12 +6,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalProducerLinkage,
   AgentJournalRenderItem,
   AgentJournalResolution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
@@ -26,14 +26,14 @@ import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-w
 import { indexedStatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { system, toolUse } from './claude-child-work-producer-harness.test-fixture'
-import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID
-} from './claude-structured-session-test-support'
-import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
+} from './structured/claude-structured-session-test-support'
+import { claudeStartupSettled } from './structured/claude-structured-startup-settled-test-support'
 
 const SESSION = 'session-1'
 const FENCE = 7

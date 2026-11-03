@@ -1,3 +1,8 @@
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-startup-plan-inputs'
 import { ensureAgentStartupInTerminal, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -61,6 +66,7 @@ type SubmitFolderWorkspaceCreateParams = {
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
   autoRenameBranchFromWork: boolean | undefined
+  settings?: AgentStartupSettings
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
@@ -83,6 +89,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   launchChoice,
   autoRenameBranchFromWork,
+  settings,
   agentCmdOverrides,
   agentArgs,
   agentEnv,
@@ -126,10 +133,25 @@ export async function submitFolderWorkspaceCreate({
       ? resolveQuickCreatePrompt({ typedPrompt, linkedWorkItem, note }).prompt
       : [typedPrompt.trim(), note.trim()].filter(Boolean).join('\n\n')
   const useLinkedDraftLaunch = Boolean(quickAgent && linkedWorkItem && !hasTypedPrompt)
+  const preferences =
+    quickAgent && settings
+      ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
+          kind: 'folder',
+          runtimeEnvironmentId,
+          executionHostId: getNewWorkspaceProjectGroupHostId(projectGroup)
+        })
+      : undefined
+  const effectiveSettings = settings
+    ? {
+        ...settings,
+        agentLaunchChoices: preferences?.agentLaunchChoices ?? settings.agentLaunchChoices
+      }
+    : settings
   const startupPlan =
     quickAgent && launchPlatform && linkedWorkItem && useLinkedDraftLaunch
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
+          settings: effectiveSettings,
           linkedWorkItem,
           note,
           agentCmdOverrides,
@@ -141,14 +163,16 @@ export async function submitFolderWorkspaceCreate({
         })
       : quickAgent && launchPlatform
         ? buildAgentStartupPlan({
-            agent: quickAgent,
+            ...resolveAgentStartupPlanInputs({
+              agent: quickAgent,
+              settings: effectiveSettings ?? { agentCmdOverrides },
+              agentArgs: settings ? agentArgs : (agentArgs ?? null),
+              platform: launchPlatform,
+              shell: launchShell,
+              isRemote: launchIsRemote
+            }),
+            ...(agentEnv ? { agentEnv } : {}),
             prompt: submitPrompt,
-            cmdOverrides: agentCmdOverrides ?? {},
-            agentArgs,
-            agentEnv,
-            platform: launchPlatform,
-            shell: launchShell,
-            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true
           })
         : null

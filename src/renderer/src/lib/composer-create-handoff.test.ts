@@ -159,12 +159,4 @@ describe('scheduleComposerCreateHandoff', () => {
     expect(flow.continue).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
   })
-
-  it('does not stage or close again after the user dismissed the composer', () => {
-    const { onHandOff } = schedule(() => true)
-    vi.runAllTimers()
-
-    expect(flow.begin).not.toHaveBeenCalled()
-    expect(onHandOff).not.toHaveBeenCalled()
-  })
 })

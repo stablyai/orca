@@ -105,8 +105,12 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       setDaclSddl: (path, sddl) => raw.setDaclSddl(toNamespacedPath(path), sddl),
       setDaclSddlAsync: (path, sddl) =>
         inPathOrder(path, (namespaced) => raw.setDaclSddlAsync(namespaced, sddl)),
-      createFileWithDacl: (path, sddl, data) =>
-        raw.createFileWithDacl(toNamespacedPath(path), sddl, data),
+      createFileWithDacl: (path, sddl, data, strict) =>
+        raw.createFileWithDacl(toNamespacedPath(path), sddl, data, strict),
+      readFileWithDacl: (path, maxBytes) => raw.readFileWithDacl(toNamespacedPath(path), maxBytes),
+      readGenericCredential: (target) => raw.readGenericCredential(target),
+      writeGenericCredential: (target, user, data) =>
+        raw.writeGenericCredential(target, user, data),
       grantAccess: (path, sid, mask, options) =>
         raw.grantAccess(toNamespacedPath(path), sid, mask, options),
       grantAccessAsync: (path, sid, mask, options) =>
@@ -114,6 +118,7 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       clearStdHandleInheritance: () => raw.clearStdHandleInheritance(),
       spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
         raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
+      isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
       hasNativeExport: (name) => raw.hasNativeExport(name)
     }
   }

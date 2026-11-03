@@ -3,7 +3,7 @@ import type {
   NativeChatMessage,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import {
   buildDiffSummaries,
   normalizedToolEditFiles

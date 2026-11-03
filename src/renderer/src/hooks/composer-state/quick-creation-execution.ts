@@ -1,36 +1,4 @@
-import type { ComposerModel } from './composer-model'
-
-type QuickCreationExecutionInput = Pick<
-  ComposerModel,
-  | 'clearNewWorkspaceDraft'
-  | 'createMultiple'
-  | 'effectivePresetId'
-  | 'ephemeralVmRecipes'
-  | 'ephemeralVmsEnabled'
-  | 'isSubmissionCancelled'
-  | 'linkedGitLabIssue'
-  | 'linkedGitLabMR'
-  | 'normalizedSparseDirectories'
-  | 'onCreated'
-  | 'parentWorktreeId'
-  | 'persistDraft'
-  | 'persistSetupAgentStartupPolicy'
-  | 'prepareQuickSubmit'
-  | 'resetForNextCreate'
-  | 'resolvedInitialWorkspaceStatus'
-  | 'selectedEphemeralVmRecipeId'
-  | 'selectedRepoAgentLaunchFact'
-  | 'selectedRepoExecutionHostId'
-  | 'selectedRepoIsGit'
-  | 'selectedRepoIsRemote'
-  | 'selectedRepoTarget'
-  | 'selectedRepoStartupShell'
-  | 'selectedWorkspaceTarget'
-  | 'settings'
-  | 'sparseEnabled'
-  | 'taskSourceContext'
-  | 'telemetrySource'
->
+import type { QuickCreationExecutionInput } from './composer-model'
 
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -42,8 +10,7 @@ import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
 import { getComposerCreationOptions } from '@/lib/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
-import { resolveQuickCreatePrompt } from '@/lib/quick-create-prompt'
-import { buildQuickComposerStartup } from './quick-startup-plan'
+import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
@@ -123,28 +90,28 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
-      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
-
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } = resolveQuickCreatePrompt({
-        typedPrompt: agent === null ? '' : (options?.typedPrompt ?? ''),
-        linkedWorkItem: promptLinkedWorkItem,
-        note: trimmedNote
-      })
-
       const {
         startupPlan,
         backendStartup,
-        telemetry: quickTelemetry
-      } = buildQuickComposerStartup({
-        agent,
+        telemetry: quickTelemetry,
         prompt: quickPrompt,
-        draftPrompt: quickDraftPrompt,
+        draftPrompt: quickDraftPrompt
+      } = await prepareQuickComposerStartup({
+        agent,
+        linkedWorkItem: submitLinkedWorkItem,
+        note: trimmedNote,
+        typedPrompt: options?.typedPrompt,
         settings,
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
-        telemetrySource
+        telemetrySource,
+        repoId,
+        executionHostId: selectedRepoExecutionHostId
       })
+      if (isSubmissionCancelled()) {
+        return
+      }
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),

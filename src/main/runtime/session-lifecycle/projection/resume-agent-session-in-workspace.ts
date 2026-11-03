@@ -4,7 +4,7 @@ import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   getConnectionExecutionHostId,
@@ -109,7 +109,10 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     }
     let workspace
     try {
-      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+      // A resume the user asked for, as its create below.
+      workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`, undefined, {
+        wslUserAct: true
+      })
     } catch {
       return refuse('no_resume_command')
     }

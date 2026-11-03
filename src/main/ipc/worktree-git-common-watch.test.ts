@@ -11,11 +11,11 @@ import type {
   WatcherProcessCallback,
   WatcherProcessHooks
 } from './filesystem/watcher-process/parcel-watcher-process-subscription'
-import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import type { WorktreeBaseWatchTarget } from './worktrees/creation/worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { startGitCommonWatch } from './worktree-git-common-watch'
 
 vi.mock('./filesystem/watcher-process/parcel-watcher-process', () => ({
@@ -767,16 +767,16 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
         { timeout: 1_000 }
       )
       const stalePendingSubscription = narrowSubscriptions()[1]
+      const beforeReplacement = received.length
       await replaceWorktreesRoot(commonDir, worktreesDir, retainedEntry)
       await vi.advanceTimersByTimeAsync(POLL_MS * RECONCILIATION_TICKS * 4)
       // Timer advancement starts the replacement check; wait separately for its filesystem work.
       await vi.waitFor(
         () => {
-          expect(
-            received
-              .flat()
-              .filter((event) => event.type === 'create' && event.path === worktreesDir)
-          ).toHaveLength(2)
+          expect(received.slice(beforeReplacement).flat()).toContainEqual({
+            type: 'delete',
+            path: worktreesDir
+          })
         },
         { timeout: 2_000 }
       )
