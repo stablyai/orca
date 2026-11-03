@@ -6,7 +6,7 @@ import type {
   RuntimeWorktreeRemovalTarget
 } from '../runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from '../runtime-worktree-removal-target'
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import type { RuntimeStore } from '../runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'

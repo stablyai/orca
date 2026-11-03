@@ -22,7 +22,7 @@ const projectGit = vi.hoisted(() => {
   const value: { wslDistro?: string } = {}
   return value
 })
-vi.mock('../project-runtime-git-options', async (importOriginal) => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getLocalProjectWorktreeGitOptions: () =>
     projectGit.wslDistro ? { wslDistro: projectGit.wslDistro } : {}

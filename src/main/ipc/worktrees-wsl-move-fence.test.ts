@@ -1,3 +1,4 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { mkdtempSync, rmSync } from 'node:fs'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,15 @@ import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees
 import { rememberPreservedBranchCleanupTarget } from './worktrees/removal/preserved-branch-cleanup'
 
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()

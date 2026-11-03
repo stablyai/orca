@@ -12,7 +12,7 @@ import {
 } from '../../../persistence/worktree-sort-order-write'
 import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/branch-rename-failure-output'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
-import { isRemovedFolderWorkspaceInstance } from '../../../folder-workspace-meta-presence'
+import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { resolveWorktreeMetaOwner } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'

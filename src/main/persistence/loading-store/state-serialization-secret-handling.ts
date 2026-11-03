@@ -5,7 +5,7 @@ import {
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
+import { collectFolderWorkspaceDiffComments } from '../../workspaces/catalog/folder-workspace-diff-comments'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot,
