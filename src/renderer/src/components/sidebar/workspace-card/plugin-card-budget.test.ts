@@ -105,7 +105,9 @@ describe('plugin card budget', () => {
   it('draws 300 cards of the worst valid plugin template inside the budget', () => {
     const template = worstCaseTemplate()
     expect(cardTemplateIssues(template)).toEqual([])
-    const compiled = compileCardTemplate(template, registry, PLUGIN_CARD_TEMPLATE_LIMITS)
+    const compiled = compileCardTemplate(template, registry, {
+      caps: PLUGIN_CARD_TEMPLATE_LIMITS
+    })
     const start = performance.now()
     let fellBack = 0
     for (let card = 0; card < 300; card++) {
