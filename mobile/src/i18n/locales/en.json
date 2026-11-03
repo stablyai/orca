@@ -4535,6 +4535,10 @@
     "copy": "Copy prompt",
     "notesNotSent": "Your notes weren't sent to {{agent}}. Answer any dialog in its terminal, then paste your notes.",
     "notesUnconfirmed": "{{agent}} may have received part of your notes. Check its terminal before sending again.",
-    "copyNotes": "Copy notes"
+    "copyNotes": "Copy notes",
+    "moreNotesNotSent_one": "{{count}} more notes not sent",
+    "moreNotesNotSent_other": "{{count}} more notes not sent",
+    "morePromptsNotSent_one": "{{count}} more prompt not sent",
+    "morePromptsNotSent_other": "{{count}} more prompts not sent"
   }
 }

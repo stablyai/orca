@@ -13,6 +13,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useClipboardWriter } from '../platform/clipboard'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostRouteNoticeBanner } from './HostRouteNoticeBanner'
+import {
+  MoreGeneratedInputNoticesRow,
+  OlderGeneratedInputNotices
+} from './OlderGeneratedInputNotices'
 import { useRelayHosts } from '../worktree/relay-hosts-feed'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import { useHostStatusGates } from '../transport/host-status-gates'
@@ -135,16 +139,65 @@ export function GeneratedInputNotices({
       setView({ notices: new Map() })
     }
   }, [client, capable])
+  const [expanded, setExpanded] = useState(false)
+  const t = useMobileTranslation()
   if (!client || !capable) {
+    return null
+  }
+  // The newest notice shows as a banner; the rest wait behind one row, expanded on request.
+  let newest: Shown | undefined
+  let olderNotes = true
+  for (const shown of view.notices.values()) {
+    if (newest) {
+      olderNotes &&= newest.notice.submitted === false
+    }
+    newest = shown
+  }
+  const olderCount = view.notices.size - 1
+  if (!newest) {
     return null
   }
   return (
     <>
-      {Array.from(view.notices.values(), ({ key, notice }) => (
-        <GeneratedInputNoticeBanner key={key} notice={notice} client={client} />
-      ))}
+      <GeneratedInputNoticeBanner key={newest.key} notice={newest.notice} client={client} />
+      {olderCount > 0 ? (
+        <MoreGeneratedInputNoticesRow
+          label={moreNoticesLabel(t, olderCount, olderNotes)}
+          expanded={expanded}
+          onToggle={() => setExpanded((open) => !open)}
+        />
+      ) : null}
+      {olderCount > 0 && expanded ? (
+        <OlderGeneratedInputNotices
+          items={newestFirstOlder(view.notices, olderCount)}
+          keyOf={(shown) => shown.key}
+          render={(shown) => <GeneratedInputNoticeBanner notice={shown.notice} client={client} />}
+        />
+      ) : null}
     </>
   )
+}
+
+/** Every notice but the newest, newest first (built by index: Hermes has no toReversed). */
+function newestFirstOlder(notices: ReadonlyMap<string, Shown>, count: number): Shown[] {
+  const inOrder = Array.from(notices.values())
+  return Array.from({ length: count }, (_, index) => inOrder[count - 1 - index])
+}
+
+/** The row's count: notes wording when every hidden notice is an unsubmitted draft. */
+function moreNoticesLabel(
+  t: ReturnType<typeof useMobileTranslation>,
+  count: number,
+  notes: boolean
+): string {
+  if (notes) {
+    return count === 1
+      ? t('agentPrompt.moreNotesNotSent_one', '{{count}} more notes not sent', { count })
+      : t('agentPrompt.moreNotesNotSent_other', '{{count}} more notes not sent', { count })
+  }
+  return count === 1
+    ? t('agentPrompt.morePromptsNotSent_one', '{{count}} more prompt not sent', { count })
+    : t('agentPrompt.morePromptsNotSent_other', '{{count}} more prompts not sent', { count })
 }
 
 /** Each reachable server's notices, read, copied and dismissed on that server through this
