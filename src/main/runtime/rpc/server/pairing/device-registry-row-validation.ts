@@ -86,6 +86,8 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
       typeof device.callerFingerprint === 'string' && device.callerFingerprint.length > 0
         ? device.callerFingerprint
         : undefined,
+    // Unreadable expiry fails open to today's never-expiring offer.
+    offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
     ...validDeviceKeyFields(device)
   }
 }

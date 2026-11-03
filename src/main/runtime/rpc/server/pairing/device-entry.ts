@@ -35,6 +35,8 @@ export type DeviceEntry = {
   forkedFrom?: string
   // Session-only browser key (memory only); the row is dropped on host restart and after idling.
   ephemeral?: true
+  // A never-seen offer stops authenticating here; absent (older rows, headless offers) never expires.
+  offerExpiresAt?: number
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
@@ -51,6 +53,12 @@ export type DeviceKeyLookup =
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (
     device.lastSeenAt === 0 && device.token !== undefined && device.credentialKind === undefined
+  )
+}
+
+export function isExpiredPairingOffer(device: DeviceEntry, now: number): boolean {
+  return (
+    device.lastSeenAt === 0 && device.offerExpiresAt !== undefined && device.offerExpiresAt <= now
   )
 }
 
@@ -116,10 +124,16 @@ function withPairedParent(
 
 export function findTokenDevice(
   devices: readonly DeviceEntry[],
-  token: string
+  token: string,
+  // Sightings whose persist failed still count, or a connected client would be locked out.
+  seen: ReadonlySet<string> = new Set(),
+  now = Date.now()
 ): DeviceEntry | null {
   const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
-  return device ? withPairedParent(device, devices) : null
+  if (!device || (isExpiredPairingOffer(device, now) && !seen.has(device.deviceId))) {
+    return null
+  }
+  return withPairedParent(device, devices)
 }
 
 export function findPrincipalDevice(
