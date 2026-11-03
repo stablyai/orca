@@ -103,9 +103,6 @@ function words(text: string): string[] {
 }
 
 export function optionName(agent: TuiAgent, token: string): string {
-  if (agent === 'kimi' && /^-[cCy]*y[cCy]*$/.test(token)) {
-    return '-y'
-  }
   if ((agent === 'codex' && /^-[acs].+/.test(token)) || /^-m.+/.test(token)) {
     return token.slice(0, 2)
   }
@@ -190,6 +187,8 @@ export function analyzeAgentChoiceWords(
       : tokens[index + 1]
     const policy =
       inventory.carriers.has(name) ||
+      // Bundles carry yolo without exposing a removable permission-only span.
+      (agent === 'kimi' && /^-[cC]*y/.test(token)) ||
       (agent === 'codex' && ['-c', '--config'].includes(name) && isPermissionConfig(value))
     if (policy) {
       carrierIndices.push(index)

@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import {
+  agentPickerChoiceSeeds,
+  agentPickerDraft,
+  type AgentPickerEntry
+} from './agent-launch-picker'
+import { editAgentPickerPermission } from './agent-launch-picker-permission'
 import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
@@ -33,7 +39,7 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('Kimi permissions in %s',
     expect(result.recorded).toContain('--auto')
   })
 
-  it.each(['--yolo', '-y', '--yes', '--auto-approve', '--auto', '-cy', '-yc', '-Cy'])(
+  it.each(['--yolo', '-y', '--yes', '--auto-approve', '--auto', '-cy', '-yc', '-Cy', '-ymcustom'])(
     'lets explicit Arguments %s own the permission',
     (flag) => {
       const result = launch(
@@ -64,3 +70,24 @@ describe.each(['posix', 'powershell', 'cmd'] as const)('Kimi permissions in %s',
     }
   )
 })
+
+it.each(['-cy', '-Cy', '-ymcustom'])(
+  'keeps bundled Kimi Arguments %s intact when editing permissions',
+  (flag) => {
+    const entry: AgentPickerEntry = {
+      agent: 'kimi',
+      label: 'Kimi',
+      rows: [{ kind: 'terminal', agent: 'kimi' }],
+      surfaces: ['terminal'],
+      defaultSurface: 'terminal',
+      catalog: { origin: 'unknown' },
+      ...agentPickerChoiceSeeds('kimi', {
+        agentPermissionDefault: 'full-access',
+        agentDefaultArgs: { kimi: flag }
+      })
+    }
+    expect(editAgentPickerPermission(entry, agentPickerDraft(entry), 'full-access').arguments).toBe(
+      flag
+    )
+  }
+)

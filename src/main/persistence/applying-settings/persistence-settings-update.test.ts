@@ -504,27 +504,30 @@ describe('Store', () => {
     expect(launched.agentDefaultArgs.claude).toBe('--dangerously-skip-permissions')
   })
 
-  it('migrates the former Kimi Full access preset and preserves later explicit Arguments', async () => {
-    writeDataFile({ settings: { agentDefaultArgs: { kimi: '--yolo' } } })
-    const store = await createStore()
-    expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultArgs.kimi).toBe('--auto')
-    expect(store.getSettings().agentDefaultArgs.kimi).toBe('')
-    store.flush()
-    await closeTestStores()
+  it.each(['-y', '--yolo'])(
+    'migrates the former Kimi Full access preset and preserves later explicit Arguments %s',
+    async (flag) => {
+      writeDataFile({ settings: { agentDefaultArgs: { kimi: '--yolo' } } })
+      const store = await createStore()
+      expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultArgs.kimi).toBe('--auto')
+      expect(store.getSettings().agentDefaultArgs.kimi).toBe('')
+      store.flush()
+      await closeTestStores()
 
-    const reloaded = await createStore()
-    expect(composeAgentLaunchProfile(reloaded.getSettings()).agentDefaultArgs.kimi).toBe('--auto')
-    reloaded.updateSettings({
-      agentDefaultArgs: { ...reloaded.getSettings().agentDefaultArgs, kimi: '-y' }
-    })
-    reloaded.updateSettings({ agentPermissionDefault: 'full-access' })
-    reloaded.flush()
-    await closeTestStores()
+      const reloaded = await createStore()
+      expect(composeAgentLaunchProfile(reloaded.getSettings()).agentDefaultArgs.kimi).toBe('--auto')
+      reloaded.updateSettings({
+        agentDefaultArgs: { ...reloaded.getSettings().agentDefaultArgs, kimi: flag }
+      })
+      reloaded.updateSettings({ agentPermissionDefault: 'full-access' })
+      reloaded.flush()
+      await closeTestStores()
 
-    const explicit = await createStore()
-    expect(explicit.getSettings().agentDefaultArgs.kimi).toBe('-y')
-    expect(composeAgentLaunchProfile(explicit.getSettings()).agentDefaultArgs.kimi).toBe('-y')
-  })
+      const explicit = await createStore()
+      expect(explicit.getSettings().agentDefaultArgs.kimi).toBe(flag)
+      expect(composeAgentLaunchProfile(explicit.getSettings()).agentDefaultArgs.kimi).toBe(flag)
+    }
+  )
 
   it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
     writeFileSync(

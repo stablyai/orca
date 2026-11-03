@@ -1,4 +1,7 @@
 import { expect, it } from 'vitest'
+import { legacyLaunchTextUpdates } from './agent-launch-permission-updates'
+import { resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
+import { resolveAgentPermission } from './tui-agent-permission-choice'
 import { agentLaunchSettingsMutationUpdates } from './agent-launch-settings'
 import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
 
@@ -24,5 +27,28 @@ it.each([
       expect(structuredLaunchSeedOptions(after, agent)).toEqual({ permissionMode: expected })
     }
     expect(updates).not.toHaveProperty('agentNativeChatPermissionModes')
+  }
+)
+
+it.each(['record', 'arguments'] as const)(
+  "keeps an older client's Kimi Full access intent through a %s write",
+  (route) => {
+    const before = {
+      agentPermissionDefault: 'own' as const,
+      agentLaunchChoices: {},
+      agentDefaultArgs: { kimi: '' }
+    }
+    const updates =
+      route === 'record'
+        ? legacyLaunchTextUpdates(before, { agentDefaultArgs: { kimi: '--yolo' } }, 'linux')
+        : agentLaunchSettingsMutationUpdates(
+            before,
+            { type: 'arguments', agent: 'kimi', value: '--yolo' },
+            'linux'
+          )
+    const after = { ...before, ...updates }
+    expect(resolveAgentPermission('kimi', after).choice).toBe('full-access')
+    expect(after.agentDefaultArgs.kimi).toBe('')
+    expect(resolveTuiAgentLaunchArgs('kimi', after)).toBe('--auto')
   }
 )

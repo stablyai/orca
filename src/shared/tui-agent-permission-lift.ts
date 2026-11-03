@@ -19,6 +19,13 @@ import { planAgentCliArgsSuffix, type AgentStartupShell } from './tui-agent-star
 export { agentArgsSetPermission } from './agent-permission-args'
 import type { TuiAgent } from './tui-agent'
 
+/** Older clients stored the Kimi Full access preset as --yolo before it changed meaning. */
+export function migrateLegacyAgentPermissionRecipe(agent: TuiAgent, text: string): string {
+  return agent === 'kimi' && text.trim() === '--yolo'
+    ? agentPermissionArgs(agent, 'full-access')
+    : text
+}
+
 /** Only exact recipes with preserved shell words and CLI ownership become stored intent. */
 export function liftAgentPermissionArgs(
   agent: TuiAgent,
@@ -108,10 +115,6 @@ export function migrateAgentPermissionChoice(
   const args = { ...settings.agentDefaultArgs }
   const env = { ...settings.agentDefaultEnv }
   const typed = hasTypedAgentPermission(settings)
-  // The former exact Kimi preset expressed Full access before permissions had their own field.
-  if (!typed && args.kimi?.trim() === '--yolo') {
-    args.kimi = agentPermissionArgs('kimi', 'full-access')
-  }
   const agentLaunchChoices = normalizeAgentLaunchChoices(settings.agentLaunchChoices)
   if (typed && settings.agentLaunchChoices !== undefined) {
     return {
@@ -128,7 +131,9 @@ export function migrateAgentPermissionChoice(
   for (const agent of PERMISSION_CHOICE_AGENTS) {
     const result = reconcileAgentChoiceArgs({
       agent,
-      userArgs: args[agent] ?? '',
+      userArgs: typed
+        ? (args[agent] ?? '')
+        : migrateLegacyAgentPermissionRecipe(agent, args[agent] ?? ''),
       choices: {
         ...agentLaunchChoices[agent],
         ...(typed ? { permissionMode: resolveAgentPermission(agent, settings).choice } : {})

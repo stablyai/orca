@@ -240,15 +240,7 @@ export function agentLaunchSettingsMutationUpdates(
     case 'launch-choices':
       return agentLaunchChoiceUpdates(settings, mutation.agent, mutation)
     case 'arguments':
-      if (settings.agentLaunchChoices !== undefined) {
-        return agentLaunchChoiceUpdates(
-          settings,
-          mutation.agent,
-          { userArgs: mutation.value },
-          { target: 'terminal', shell }
-        )
-      }
-      if (hasTypedAgentPermission(settings)) {
+      if (settings.agentLaunchChoices !== undefined || hasTypedAgentPermission(settings)) {
         return legacyArgumentsUpdates(settings, mutation.agent, mutation.value, platform)
       }
       return {

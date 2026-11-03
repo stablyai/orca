@@ -28,7 +28,10 @@ import {
   resolveAgentPermission,
   type AgentPermissionChoice
 } from './tui-agent-permission-choice'
-import { liftAgentPermissionArgs } from './tui-agent-permission-lift'
+import {
+  liftAgentPermissionArgs,
+  migrateLegacyAgentPermissionRecipe
+} from './tui-agent-permission-lift'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
@@ -84,6 +87,7 @@ export function legacyArgumentsUpdates(
   value: string,
   platform: NodeJS.Platform | undefined = agentPermissionHostPlatform()
 ): AgentLaunchSettingsSource {
+  const userArgs = migrateLegacyAgentPermissionRecipe(agent, value)
   const shell = resolveStartupShell(
     platform,
     resolveLocalWindowsAgentStartupShell({
@@ -93,17 +97,12 @@ export function legacyArgumentsUpdates(
     })
   )
   if (settings.agentLaunchChoices !== undefined) {
-    return agentLaunchChoiceUpdates(
-      settings,
-      agent,
-      { userArgs: value },
-      { target: 'terminal', shell }
-    )
+    return agentLaunchChoiceUpdates(settings, agent, { userArgs }, { target: 'terminal', shell })
   }
-  if (value.trim() === resolveTuiAgentLaunchArgs(agent, settings, undefined, shell).trim()) {
+  if (userArgs.trim() === resolveTuiAgentLaunchArgs(agent, settings, undefined, shell).trim()) {
     return {}
   }
-  const lifted = liftAgentPermissionArgs(agent, value)
+  const lifted = liftAgentPermissionArgs(agent, userArgs)
   return {
     agentDefaultArgs: normalizeTuiAgentArgsRecord({
       ...settings.agentDefaultArgs,
