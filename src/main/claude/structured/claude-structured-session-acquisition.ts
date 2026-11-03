@@ -283,7 +283,7 @@ export async function acquireClaudeSession({
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
     await withAgentSessionCreatePhase('publish', input.recordPhase, async () => {
-      sessions.set(sessionId, session)
+      callbacks.publish(session)
       attempt.published = true
       for (const event of attempt.buffered.splice(0)) {
         event()

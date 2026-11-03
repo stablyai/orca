@@ -122,14 +122,6 @@ export class AgentSessionStartEndings {
     this.endings.set(sessionId, { generation })
   }
 
-  /** Admits the acquisition an acquire returned, for adapters that record only published ones. */
-  admitting(sessionId: string) {
-    return <T extends { acquisitionGeneration: string }>(acquisition: T): T => {
-      this.admit(sessionId, acquisition.acquisitionGeneration)
-      return acquisition
-    }
-  }
-
   /** The first ending of an admitted acquisition is its verdict; later reports change nothing. */
   record(sessionId: string, generation: string, failure: AgentSessionStartFailure): void {
     const admitted = this.endings.get(sessionId)

@@ -8,6 +8,8 @@ import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adap
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { closeProviderTimelineRigs } from '../agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { findInErrorChain } from '../../provider-process/provider-error-chain'
+import { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import { recordStartedHandle } from './structured-agent-session-start-provider-answer'
 import type * as ProviderAnswer from './structured-agent-session-start-provider-answer'
 import { STRUCTURED_AGENT_SESSION_STARTUP_EXIT_GRACE_MS } from './structured-agent-session-startup-attempt-contract'
@@ -136,6 +138,8 @@ describe("Orca's own refusal during a start", () => {
   it('stays final when an ACP agent prints a sign-in line Orca cannot read before it initializes', async () => {
     const connections: ReturnType<typeof createAcpAgentConnection>[] = []
     const children: ReturnType<typeof createFakePipedChild>[] = []
+    let refusal: Error | undefined
+    let acquireError: unknown
     const rig = await openAcpAdapterRig({
       deps: {
         connect: (launch, options) => {
@@ -151,7 +155,14 @@ describe("Orca's own refusal during a start", () => {
           child.stdin.once('finish', () => child.emit('exit', 0, null))
           const connection = createAcpAgentConnection(
             launch,
-            { ...options, signIn: { read: readAntigravitySignInLine } },
+            {
+              ...options,
+              onClose: (error) => {
+                refusal ??= error
+                options.onClose?.(error)
+              },
+              signIn: { read: readAntigravitySignInLine }
+            },
             () => child
           )
           connections.push(connection)
@@ -168,9 +179,21 @@ describe("Orca's own refusal during a start", () => {
       }
     })
     try {
-      await restartWith((input) => rig.adapter.acquire(input))
+      await restartWith((input) =>
+        rig.adapter.acquire(input).catch((error: unknown) => {
+          acquireError = error
+          throw error
+        })
+      )
       const id = await accept('an agent whose sign-in line Orca cannot read')
       await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+      // The adapter's own final verdict carries Orca's original refusal, not a generic close.
+      expect(refusal?.message).toContain('sign-in link Orca cannot read')
+      const verdict = findInErrorChain(acquireError, (cause) =>
+        cause instanceof AgentSessionStartFailure ? cause : undefined
+      )
+      expect(verdict?.retry).toBe('never')
+      expect(verdict?.cause).toBe(refusal)
       expect(connections).toHaveLength(1)
       expect(acquire).toHaveBeenCalledTimes(1)
       expect(dispatch).not.toHaveBeenCalled()

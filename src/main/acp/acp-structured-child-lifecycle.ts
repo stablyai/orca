@@ -24,7 +24,7 @@ import {
 import { windDownAcpTurn } from './acp-structured-stop'
 import { AcpAgentExitedError } from './acp-errors'
 import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
-import { acpStartFailure } from './acp-startup-outcome'
+import { acpRefusedStart, acpStartFailure } from './acp-startup-outcome'
 
 /** An agent that never ran names its missing CLI or folder; any other end while starting is its exit. */
 function acpStartupEndFailure(session: AcpStructuredChild): SubmissionRejectionFact {
@@ -203,7 +203,11 @@ export class AcpStructuredChildren {
       lost ?? new AcpAgentExitedError(detail, connection.stderrTail()),
       connection.spawnAbsence
     )
-    this.endings.record(sessionId, generation, acpStartFailure(exited))
+    this.endings.record(
+      sessionId,
+      generation,
+      lost ? acpRefusedStart(exited) : acpStartFailure(exited)
+    )
   }
 
   private recordEnding(session: AcpStructuredChild, error: Error): void {

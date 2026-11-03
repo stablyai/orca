@@ -1,8 +1,8 @@
 import {
   agentSessionAcquireFailure,
   agentSessionStartFailure,
-  type AgentSessionStartAnswer,
-  type AgentSessionStartFailure
+  AgentSessionStartFailure,
+  type AgentSessionStartAnswer
 } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import {
   AcpAgentError,
@@ -37,6 +37,11 @@ export const acpStartupAnswer: AgentSessionStartAnswer = (cause) => {
 
 export function acpStartFailure(error: unknown, exited = false): AgentSessionStartFailure {
   return agentSessionStartFailure(error, acpStartupAnswer, exited)
+}
+
+/** Orca closed the connection before the agent exited, refusing what it wrote: final. */
+export function acpRefusedStart(lost: Error): AgentSessionStartFailure {
+  return new AgentSessionStartFailure(lost, 'never')
 }
 
 export function acpAcquireFailure(error: unknown): unknown {

@@ -51,7 +51,8 @@ type AcpConnectionLifecycle = {
   error?: Error
   /** The process's own failure, such as its spawn; it is no refusal by Orca. */
   processError?: Error
-  /** Why the connection closed before the process exited, unless the process itself failed. */
+  /** Why the connection closed before the process exited, unless Orca closed it or the process
+   *  itself failed. Taken when it closed. */
   lost?: Error
   finishExit?: () => void
   outputEndTimer?: ReturnType<typeof setTimeout>
@@ -121,6 +122,14 @@ export class AcpAgentConnection extends AcpSessionRuntime {
         lifecycle.outputEndTimer.unref()
       },
       onClose: (error) => {
+        if (
+          !lifecycle.error &&
+          !lifecycle.closing &&
+          managed.rootVerdict !== 'exited' &&
+          error !== lifecycle.processError
+        ) {
+          lifecycle.lost = error
+        }
         lifecycle.error ??= error
         if (lifecycle.closing || managed.rootVerdict === 'exited') {
           return
@@ -166,7 +175,6 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       super.close(new AcpConnectionClosedError('The agent printed a sign-in link Orca cannot read'))
     child.stderr.on('error', (error) => super.close(error))
     managed.onExit((exit) => {
-      lifecycle.lost = lifecycle.error === lifecycle.processError ? undefined : lifecycle.error
       const expected = lifecycle.closing
       const finish = (): void => {
         clearTimeout(lifecycle.outputEndTimer)
@@ -231,6 +239,12 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   /** First managed exit observation, including processless spawn failure. */
   get exitStatus(): ProviderProcessExit | null {
     return this.managed.exitStatus
+  }
+
+  /** Why the connection closed before the process exited, such as Orca refusing what the agent
+   *  wrote; never the process's own failure or its exit. Kept from the moment it closed. */
+  get lostBeforeExit(): Error | undefined {
+    return this.lifecycle.lost
   }
 
   /** `requested`: Orca was closing the agent when it exited. `lost`: why the connection had

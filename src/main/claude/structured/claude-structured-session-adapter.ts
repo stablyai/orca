@@ -1,7 +1,7 @@
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
 import { claudeAcquireFailure } from '../claude-startup-failure'
-import { openClaudeStart } from './claude-structured-start-ending'
+import { claudeStartPublication, openClaudeStart } from './claude-structured-start-ending'
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionAcquireInput,
@@ -77,6 +77,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.endings.retire(input.identity.sessionId)
     const record = this.deps.namingRecord?.(input.identity.sessionId)
     const naming = this.naming?.acquire(input, record)
+    const start = claudeStartPublication(this.sessions, this.endings, input.identity.sessionId)
     return acquireClaudeSession({
       input,
       deps: this.deps,
@@ -85,6 +86,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       exits: this.exits,
       ...(naming ? { naming } : {}),
       callbacks: {
+        publish: start.publish,
         deliver: (attempt, sessionId, event) => this.deliver(attempt, sessionId, event),
         emit: (session, _events, event) => this.emit(session, event),
         handleExit: (sessionId, attempt, error) =>
@@ -100,12 +102,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         settleExit: (sessionId, exit) =>
           settleClaudeUnexpectedExit(this.exitLifecycle, sessionId, exit)
       }
+    }).catch((error: unknown) => {
+      start.failed()
+      naming?.failed()
+      throw claudeAcquireFailure(error)
     })
-      .then(this.endings.admitting(input.identity.sessionId))
-      .catch((error: unknown) => {
-        naming?.failed()
-        throw claudeAcquireFailure(error)
-      })
   }
 
   private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {

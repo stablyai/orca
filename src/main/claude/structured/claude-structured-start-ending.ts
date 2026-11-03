@@ -12,6 +12,28 @@ import { openClaudeStructuredSession } from './claude-structured-session-open'
 import { claudeStartFailure } from '../claude-startup-failure'
 import type { ClaudeSession, ClaudeSessionExit } from './claude-structured-session-state'
 
+/** Publishes an acquisition's session with its start ending admitted first, so its exit is never
+ *  missed. A failed acquire has no start owner left, so it retires exactly that admission. */
+export function claudeStartPublication(
+  sessions: Map<string, ClaudeSession>,
+  endings: AgentSessionStartEndings,
+  sessionId: string
+): { publish: (session: ClaudeSession) => void; failed: () => void } {
+  let admitted: string | undefined
+  return {
+    publish: (session) => {
+      admitted = session.acquisitionGeneration
+      endings.admit(sessionId, admitted)
+      sessions.set(sessionId, session)
+    },
+    failed: () => {
+      if (admitted !== undefined) {
+        endings.retire(sessionId, admitted)
+      }
+    }
+  }
+}
+
 /** Claude ended on its own: unanswered, unless what ended it was its answer or a refusal. */
 export function claudeExitEnding(error: Error): AgentSessionStartFailure {
   return claudeStartFailure(withObservedProviderExit(new Error(error.message, { cause: error })))
