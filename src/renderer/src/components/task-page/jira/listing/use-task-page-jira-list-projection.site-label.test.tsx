@@ -2,11 +2,11 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { TaskPageLinearBoardModel } from '../linear/use-task-page-linear-board'
-import { useTaskPageJiraListProjection } from '@/components/task-page/jira/use-task-page-jira-list-projection'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import type { JiraIssue, JiraSite } from '../../../../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
+import type { TaskPageLinearBoardModel } from '../../linear/issues/use-task-page-linear-board'
+import { useTaskPageJiraListProjection } from '@/components/task-page/jira/listing/use-task-page-jira-list-projection'
+import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 
 const source: TaskSourceContext = {
   kind: 'task-source',
