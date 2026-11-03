@@ -64,6 +64,87 @@ describe('listChangedFiles', () => {
     rmSync(fixture, { recursive: true, force: true })
   })
 
+  const existingTest = [
+    "import { watch } from './old-owner'",
+    "import type { Snapshot } from './old-types'",
+    "import './old-startup'",
+    '// ast-grep-ignore: test-no-wall-clock -- import declaration only',
+    "import { read } from './old-reader'",
+    'void watch',
+    'void read',
+    'Date.now()',
+    ''
+  ].join('\n')
+  const movedImports = existingTest.replaceAll('./old-', './new-')
+  const createExistingTest = (source = existingTest) => {
+    fixture = mkdtempSync(join(tmpdir(), 'flaky-ratchet-imports-'))
+    git('init', '-q')
+    mkdirSync(join(fixture, 'config'))
+    writeFileSync(join(fixture, 'config/flaky-test-pattern-baseline.txt'), '')
+    writeFileSync(join(fixture, 'existing.test.ts'), source)
+    git('add', '.')
+    git('commit', '-qm', 'base')
+    vi.stubEnv('ORCA_CODE_QUALITY_BASE', git('rev-parse', 'HEAD'))
+    vi.stubEnv('ORCA_FLAKY_TEST_RATCHET_ALL', '')
+  }
+
+  it('does not newly enforce existing debt when only static import paths change', () => {
+    createExistingTest()
+    writeFileSync(join(fixture, 'existing.test.ts'), movedImports)
+    const matches = [{ file: 'existing.test.ts', ruleId: 'test-no-wall-clock' }]
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(main(fixture, undefined, matches)).toBe(0)
+    writeFileSync(join(fixture, 'existing.test.ts'), `${movedImports}Date.now()\n`)
+    expect(main(fixture, undefined, [...matches, ...matches])).toBe(1)
+    writeFileSync(join(fixture, 'existing.test.ts'), movedImports)
+    vi.stubEnv('ORCA_FLAKY_TEST_RATCHET_ALL', '1')
+    expect(main(fixture, undefined, matches)).toBe(1)
+  })
+
+  it.each([
+    ['a new finding', `${movedImports}Date.now()\n`],
+    ['a changed suppression comment', movedImports.replace('declaration only', 'new reason')],
+    ['an import binding change', movedImports.replace('{ watch }', '{ watch as renamed }')],
+    [
+      'an import type flag change',
+      movedImports.replace('import type { Snapshot }', 'import { Snapshot }')
+    ],
+    ['a body change', movedImports.replace('Date.now()', 'performance.now()')],
+    ['a whitespace change', `${movedImports}\n`],
+    ['a parse failure', `${movedImports})\n`]
+  ])('keeps %s in enforcement scope alongside import path changes', (_label, current) => {
+    createExistingTest()
+    writeFileSync(join(fixture, 'existing.test.ts'), current)
+
+    expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
+  })
+
+  it('keeps dynamic imports and export paths in enforcement scope', () => {
+    const source = `${existingTest}void import('./old-dynamic')\nexport { value } from './old-export'\n`
+    createExistingTest(source)
+    writeFileSync(join(fixture, 'existing.test.ts'), source.replaceAll('./old-', './new-'))
+
+    expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
+  })
+
+  it('keeps import-only changes to an unparseable original in enforcement scope', () => {
+    createExistingTest(`${existingTest})\n`)
+    writeFileSync(join(fixture, 'existing.test.ts'), `${movedImports})\n`)
+
+    expect(listChangedFiles(fixture).has('existing.test.ts')).toBe(true)
+  })
+
+  it('keeps added and deleted files in enforcement scope', () => {
+    createExistingTest()
+    rmSync(join(fixture, 'existing.test.ts'))
+    writeFileSync(join(fixture, 'added.test.ts'), movedImports)
+    git('add', '.')
+
+    expect([...listChangedFiles(fixture)].sort()).toEqual(['added.test.ts', 'existing.test.ts'])
+  })
+
   it('enforces findings in tracked files whose names Git quotes', () => {
     fixture = mkdtempSync(join(tmpdir(), 'flaky-ratchet-path-'))
     git('init', '-q')

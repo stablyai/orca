@@ -10,7 +10,7 @@ import {
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import { WORKTREE_BASE_BACKSTOP_TICKS } from './worktree-base-directory-marker-poller'
-import { startGitCommonPrimaryPolling } from '../../worktree-git-common-primary-polling'
+import { startGitCommonPrimaryPolling } from '../git/worktree-git-common-primary-polling'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget

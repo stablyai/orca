@@ -16,7 +16,7 @@ import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from '../../../../main/ipc/pty/pane/spawn-reservation'
-import { acquireWatcherRemovalGate } from '../../../../main/ipc/watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../../../../main/workspaces/removal/watcher-removal-gate'
 
 const renderer = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = {}
