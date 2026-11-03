@@ -74,6 +74,8 @@ function previewTicks(expected: readonly NativeChatMessage[], extra = {}): void 
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000)
   clearPendingSendCacheForTests()
   probe.inputs = []
   probe.shown = []
@@ -81,6 +83,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   clearPendingSendCacheForTests()
   useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
 })
@@ -148,8 +151,8 @@ describe('preview input allocation at realistic history sizes', () => {
 
     const retired = [
       ...caughtUp,
-      { ...message('follow-up', 'user', 'Follow up'), timestamp: Date.now() + 1 },
-      { ...message('next-reply', 'assistant', 'Done'), timestamp: Date.now() + 2 }
+      { ...message('follow-up', 'user', 'Follow up'), timestamp: 1_001 },
+      { ...message('next-reply', 'assistant', 'Done'), timestamp: 1_002 }
     ]
     act(() => {
       probe.session = { ...probe.session!, messages: retired }
