@@ -10,14 +10,13 @@ import {
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 import { requestEditorSaveQuiesce } from './editor-autosave'
-import type { RestoredEditorOwnerResult } from '@/store/slices/editor'
+import type { OpenFile, RestoredEditorOwnerResult } from '@/store/slices/editor'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
 
 export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
 
