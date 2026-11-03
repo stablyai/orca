@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useReducer } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
-import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
+import {
+  onQueuedRestartPaneBound,
+  selectReadyAccountRestartPtyIds
+} from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -228,6 +231,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const queuedRestartPtyIds = useAppStore(
     useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
+  const [paneBoundWake, wakeOnPaneBound] = useReducer((count: number) => count + 1, 0)
+  useEffect(() => onQueuedRestartPaneBound(tabId, wakeOnPaneBound), [tabId])
   useEffect(() => {
     const manager = managerRef.current
     if (!manager || queuedRestartPtyIds.length === 0) {
@@ -252,6 +257,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     panePtyLayoutBindings,
     queuedRestartPtyIds,
     managerRef,
+    paneBoundWake,
     paneTransportsRef
   ])
 

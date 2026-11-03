@@ -4,6 +4,7 @@ import { EMPTY_LAYOUT } from './layout-serialization'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pty-connection/pane-pty-layout-binding'
 import { useExpandCollapseActions } from './expand-collapse'
+import { notifyQueuedRestartPaneBound } from './pane-account-restart-readiness'
 import type { TerminalPaneLayoutController } from './use-terminal-pane-layout-persistence'
 
 export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutController) {
@@ -91,8 +92,11 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
       writePanePtyLayoutBinding(paneId, ptyId, false)
+      if (ptyId) {
+        notifyQueuedRestartPaneBound(tabId, ptyId)
+      }
     },
-    [writePanePtyLayoutBinding]
+    [tabId, writePanePtyLayoutBinding]
   )
   const syncPanePtyLayoutBindingForLeaf = useCallback(
     (leafId: string, ptyId: string | null, sourcePaneId: number): void => {
