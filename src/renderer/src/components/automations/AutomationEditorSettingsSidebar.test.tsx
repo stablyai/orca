@@ -303,7 +303,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     }
     renderSidebar(changed, initial)
     fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
-      target: { value: '--add-dir docs --verbose' }
+      target: { value: '--add-dir docs --add-dir fixtures' }
     })
     const next = changed.mock.calls.at(-1)![0](initial)
     const saved = applyAutomationLaunchSetupPatch(
@@ -311,7 +311,7 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
       initial
     )
     expect(saved.launchPreferences?.model).toBe('sonnet')
-    expect(saved.extraAgentArgs).toBe('--add-dir docs --verbose')
+    expect(saved.extraAgentArgs).toBe('--add-dir docs --add-dir fixtures')
   })
 
   it('sends a legacy argument edit after an earlier surface pick', () => {
