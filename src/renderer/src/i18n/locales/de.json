@@ -3479,16 +3479,7 @@
           "showingIssuesFromRepo": "Angezeigte Issues aus <repo/>"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "Zuständige Person",
-          "b27b7e526c": "Review von",
-          "7f1ba66c3e": "Geprüft von",
-          "9d0f2eda6d": "Label",
-          "01f3f3d161": "Autor",
-          "13b3ac0a84": "Status",
-          "79c54552f7": "Filter",
-          "8a2ffbf9b3": "Filter „{{value0}}“ entfernen",
-          "anyState": "Beliebig",
-          "currentUser": "Aktueller Benutzer"
+          "79c54552f7": "Filter"
         },
         "PRFilterPickers": {
           "472c12ae03": "Zurücksetzen",
@@ -3498,35 +3489,6 @@
           "loading": "Wird geladen…",
           "searchTextTooLarge": "Der Suchtext ist zu lang.",
           "noMatches": "Keine Treffer"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "Keine Benutzer",
-          "0103e1cb18": "Geprüft von",
-          "94b42b0edf": "Review angefordert",
-          "de26e2eb06": "Keine Labels",
-          "458ea3602b": "Keine Autoren",
-          "b69fa4fa20": "Zurück",
-          "30ebb6ca44": "Alle Filter zurücksetzen",
-          "ea3416d646": "Zuständige Person",
-          "b1d9fdea08": "Label",
-          "24754c44ad": "Autor",
-          "764a0b4ce1": "Status",
-          "f0cf6dd591": "aus",
-          "1e9b5244f2": "ein",
-          "b930de7194": "Nur Entwürfe",
-          "e0002f1eba": "ausgewählt",
-          "2b2f019091": "Beliebiger Status",
-          "0fd3249e2e": "Geschlossen",
-          "d78b60b5c2": "Offen",
-          "bd162b7d5a": "Gemergt",
-          "draft": "Entwurf",
-          "labelCount_one": "{{count}} Label",
-          "labelCount_other": "{{count}} Labels",
-          "allStates": "Alle",
-          "filterPullRequests": "Pull Requests filtern",
-          "filterIssues": "Issues filtern",
-          "filterOrTypeLogin": "Filtern oder Anmeldenamen eingeben...",
-          "filterLabels": "Labels filtern..."
         },
         "github": {
           "rate": {

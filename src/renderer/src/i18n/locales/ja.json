@@ -2966,16 +2966,7 @@
           "showingIssuesFromRepo": "<repo/> の Issue を表示中"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "担当者",
-          "b27b7e526c": "からのレビュー",
-          "7f1ba66c3e": "レビュアー",
-          "9d0f2eda6d": "ラベル",
-          "01f3f3d161": "著者",
-          "13b3ac0a84": "状態",
-          "79c54552f7": "フィルター",
-          "8a2ffbf9b3": "{{value0}} フィルターを解除",
-          "anyState": "指定なし",
-          "currentUser": "現在のユーザー"
+          "79c54552f7": "フィルター"
         },
         "PRFilterPickers": {
           "472c12ae03": "クリア",
@@ -2985,34 +2976,6 @@
           "loading": "読み込み中…",
           "searchTextTooLarge": "検索テキストが大きすぎます。",
           "noMatches": "一致なし"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "ユーザーがいません",
-          "0103e1cb18": "レビュアー",
-          "94b42b0edf": "レビュー依頼済み",
-          "de26e2eb06": "ラベルなし",
-          "458ea3602b": "著者がいません",
-          "b69fa4fa20": "戻る",
-          "30ebb6ca44": "すべてのフィルターをクリア",
-          "ea3416d646": "担当者",
-          "b1d9fdea08": "ラベル",
-          "24754c44ad": "著者",
-          "764a0b4ce1": "状態",
-          "f0cf6dd591": "オフ",
-          "1e9b5244f2": "オン",
-          "b930de7194": "ドラフトのみ",
-          "e0002f1eba": "選択中",
-          "2b2f019091": "すべての状態",
-          "0fd3249e2e": "クローズ",
-          "d78b60b5c2": "オープン",
-          "bd162b7d5a": "マージ済み",
-          "draft": "下書き",
-          "labelCount_other": "{{count}} 個のラベル",
-          "allStates": "全て",
-          "filterPullRequests": "PR を絞り込む",
-          "filterIssues": "Issue を絞り込む",
-          "filterOrTypeLogin": "絞り込むかログイン名を入力…",
-          "filterLabels": "ラベルを絞り込む…"
         },
         "github": {
           "rate": {

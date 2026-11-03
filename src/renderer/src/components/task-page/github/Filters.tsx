@@ -1,16 +1,13 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { getGitHubTaskKindPresets } from '@/components/task-page/task-page-localized-options'
 import { cn } from '@/lib/utils'
-import PRFilterDropdowns from '@/components/github/PRFilterDropdowns'
-import { Search, X, Plus, LoaderCircle, RefreshCw } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import TaskQueryInput from '@/components/github/TaskQueryInput'
+import { Plus, LoaderCircle, RefreshCw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { resolveNewIssueOpenSeed } from '@/components/task-page/task-page-new-issue-draft'
 import { useAppStore } from '@/store'
-import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { hasUpstreamCandidateDivergence, hasDivergentSources } from '../task-page-draft-storage'
 import IssueSourceIndicator from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
@@ -33,7 +30,6 @@ export function TaskPageGitHubFilters({
     taskSearchInputRef,
     setActiveTaskPreset,
     setTaskRefreshNonce,
-    perRepoSourceState,
     githubSourceDisplayState,
     handleRefreshGithubTasks,
     setNewIssueOpen,
@@ -45,9 +41,6 @@ export function TaskPageGitHubFilters({
     newIssueTargetRepo,
     activeGithubTaskKind,
     appliedTaskQuery,
-    loadedGitHubAuthorLogins,
-    primaryGithubFilterSlug,
-    applyPRFilterChange,
     handleTaskSearchChange,
     handleSetDefaultTaskPreset,
     handleResetGithubTaskSearch,
@@ -55,18 +48,6 @@ export function TaskPageGitHubFilters({
     githubTasksBusy
   } = model
   const highlightedPreset = deriveGitHubTaskPreset(activeGithubTaskKind, appliedTaskQuery)
-  // Why: filter metadata for the primary slug is read from the host that owns the repo it came from.
-  const primaryGithubFilterSource = perRepoSourceState.find((state) =>
-    activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
-  )
-  const primaryGithubFilterRepoId = primaryGithubFilterSource?.repoId ?? null
-  // Why the host: a twin's two rows share the id, so only the source's row host names one.
-  const primaryGithubFilterHostId = primaryGithubFilterSource?.hostId ?? null
-  const primaryGithubFilterTarget = useAppStore(
-    useShallow((s) =>
-      getGitHubRepoRoutingTarget(s, primaryGithubFilterRepoId, null, primaryGithubFilterHostId)
-    )
-  )
   return (
     // Join filter chrome and table as one surface.
     <div
@@ -108,40 +89,20 @@ export function TaskPageGitHubFilters({
         })}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <PRFilterDropdowns
-          parsed={appliedTaskQuery}
-          kind={activeGithubTaskKind}
-          authorLogins={loadedGitHubAuthorLogins}
-          primarySlug={primaryGithubFilterSlug}
-          ownerTarget={primaryGithubFilterTarget}
-          onChange={(change) => applyPRFilterChange(change)}
+        <TaskQueryInput
+          inputRef={taskSearchInputRef}
+          showClear={Boolean(taskSearchInput || appliedTaskSearch)}
+          onClear={handleResetGithubTaskSearch}
+          data-github-items-search-input
+          value={taskSearchInput}
+          onChange={handleTaskSearchChange}
+          onKeyDown={handleTaskSearchKeyDown}
+          placeholder={
+            activeGithubTaskKind === 'prs'
+              ? translate('auto.components.TaskPage.eee4df4c66', 'Search GitHub PRs...')
+              : translate('auto.components.TaskPage.b15ceb409d', 'Search GitHub issues...')
+          }
         />
-        <div className="relative min-w-0 flex-1 basis-64">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={taskSearchInputRef}
-            data-github-items-search-input
-            value={taskSearchInput}
-            onChange={handleTaskSearchChange}
-            onKeyDown={handleTaskSearchKeyDown}
-            placeholder={
-              activeGithubTaskKind === 'prs'
-                ? translate('auto.components.TaskPage.eee4df4c66', 'Search GitHub PRs...')
-                : translate('auto.components.TaskPage.b15ceb409d', 'Search GitHub issues...')
-            }
-            className="h-8 rounded-md border-border/60 bg-background pl-8 pr-8 text-xs text-foreground shadow-xs"
-          />
-          {taskSearchInput || appliedTaskSearch ? (
-            <button
-              type="button"
-              aria-label={translate('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
-              onClick={handleResetGithubTaskSearch}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-          ) : null}
-        </div>
         <div
           className="flex shrink-0 items-center gap-2"
           data-contextual-tour-target="tasks-actions"

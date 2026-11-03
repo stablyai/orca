@@ -3608,16 +3608,7 @@
           "showingIssuesFromRepo": "Showing issues from <repo/>"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "Assignee",
-          "b27b7e526c": "Review from",
-          "7f1ba66c3e": "Reviewed by",
-          "9d0f2eda6d": "Label",
-          "01f3f3d161": "Author",
-          "13b3ac0a84": "Status",
-          "79c54552f7": "Filters",
-          "8a2ffbf9b3": "Remove {{value0}} filter",
-          "anyState": "Any",
-          "currentUser": "Current user"
+          "79c54552f7": "Filters"
         },
         "PRFilterPickers": {
           "472c12ae03": "Clear",
@@ -3627,35 +3618,6 @@
           "loading": "Loading…",
           "searchTextTooLarge": "Search text is too large.",
           "noMatches": "No matches"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "No users",
-          "0103e1cb18": "Reviewed by",
-          "94b42b0edf": "Review requested",
-          "de26e2eb06": "No labels",
-          "458ea3602b": "No authors",
-          "b69fa4fa20": "Back",
-          "30ebb6ca44": "Clear all filters",
-          "ea3416d646": "Assignee",
-          "b1d9fdea08": "Label",
-          "24754c44ad": "Author",
-          "764a0b4ce1": "Status",
-          "f0cf6dd591": "off",
-          "1e9b5244f2": "on",
-          "b930de7194": "Draft only",
-          "e0002f1eba": "selected",
-          "2b2f019091": "Any state",
-          "0fd3249e2e": "Closed",
-          "d78b60b5c2": "Open",
-          "bd162b7d5a": "Merged",
-          "draft": "Draft",
-          "labelCount_one": "{{count}} label",
-          "labelCount_other": "{{count}} labels",
-          "allStates": "All",
-          "filterPullRequests": "Filter pull requests",
-          "filterIssues": "Filter issues",
-          "filterOrTypeLogin": "Filter or type a login...",
-          "filterLabels": "Filter labels..."
         },
         "github": {
           "rate": {

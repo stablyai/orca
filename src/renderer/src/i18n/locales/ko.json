@@ -2955,16 +2955,7 @@
           "showingIssuesFromRepo": "<repo/>의 이슈 표시 중"
         },
         "PRFilterDropdowns": {
-          "979be3cf6b": "담당자",
-          "b27b7e526c": "리뷰 요청 대상",
-          "7f1ba66c3e": "리뷰한 사람",
-          "9d0f2eda6d": "라벨",
-          "01f3f3d161": "작성자",
-          "13b3ac0a84": "상태",
-          "79c54552f7": "필터",
-          "8a2ffbf9b3": "{{value0}} 필터 제거",
-          "anyState": "상관없음",
-          "currentUser": "현재 사용자"
+          "79c54552f7": "필터"
         },
         "PRFilterPickers": {
           "472c12ae03": "지우기",
@@ -2974,34 +2965,6 @@
           "loading": "로드 중…",
           "searchTextTooLarge": "검색 텍스트가 너무 큽니다.",
           "noMatches": "일치하는 항목 없음"
-        },
-        "PRFilterSections": {
-          "a00830d3f7": "사용자 없음",
-          "0103e1cb18": "리뷰어",
-          "94b42b0edf": "리뷰 요청됨",
-          "de26e2eb06": "라벨 없음",
-          "458ea3602b": "작성자 없음",
-          "b69fa4fa20": "뒤로",
-          "30ebb6ca44": "모든 필터 지우기",
-          "ea3416d646": "담당자",
-          "b1d9fdea08": "라벨",
-          "24754c44ad": "작성자",
-          "764a0b4ce1": "상태",
-          "f0cf6dd591": "꺼짐",
-          "1e9b5244f2": "켜짐",
-          "b930de7194": "초안만",
-          "e0002f1eba": "선택된",
-          "2b2f019091": "모든 상태",
-          "0fd3249e2e": "닫힘",
-          "d78b60b5c2": "열림",
-          "bd162b7d5a": "병합됨",
-          "draft": "초안",
-          "labelCount_other": "라벨 {{count}}개",
-          "allStates": "모두",
-          "filterPullRequests": "PR 필터링",
-          "filterIssues": "이슈 필터링",
-          "filterOrTypeLogin": "필터링하거나 로그인 이름 입력...",
-          "filterLabels": "라벨 필터링..."
         },
         "github": {
           "rate": {

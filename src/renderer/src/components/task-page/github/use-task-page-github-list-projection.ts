@@ -27,7 +27,6 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     countedTotalPages,
     provenPageLimit,
     patchTaskPageWorkItemRows,
-    perRepoSourceState,
     activeGithubTaskKind,
     githubWorkItemMutation
   } = model
@@ -62,39 +61,6 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
   const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
-  const loadedGitHubAuthorLogins = useMemo(() => {
-    const seen = new Set<string>()
-    const logins: string[] = []
-    for (const page of pages) {
-      if (!page) {
-        continue
-      }
-      for (const item of page) {
-        if (
-          !item.author ||
-          (activeGithubTaskKind === 'prs' ? item.type !== 'pr' : item.type !== 'issue')
-        ) {
-          continue
-        }
-        const key = item.author.toLowerCase()
-        if (seen.has(key)) {
-          continue
-        }
-        seen.add(key)
-        logins.push(item.author)
-      }
-    }
-    return logins
-  }, [activeGithubTaskKind, pages])
-  const primaryGithubFilterSlug = useMemo(() => {
-    for (const state of perRepoSourceState) {
-      const source = activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
-      if (source) {
-        return source
-      }
-    }
-    return null
-  }, [activeGithubTaskKind, perRepoSourceState])
   const showPRManagementColumns = activeGithubTaskKind === 'prs'
   const githubTaskGridClass = showPRManagementColumns
     ? GITHUB_PR_TASK_GRID_CLASS
@@ -173,8 +139,6 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     filteredWorkItems: typeof filteredWorkItems
     softHiddenVisibleCount: typeof softHiddenVisibleCount
     showGitHubTaskSkeletons: typeof showGitHubTaskSkeletons
-    loadedGitHubAuthorLogins: typeof loadedGitHubAuthorLogins
-    primaryGithubFilterSlug: typeof primaryGithubFilterSlug
     showPRManagementColumns: typeof showPRManagementColumns
     githubTaskGridClass: typeof githubTaskGridClass
     ensurePRChecksLoaded: typeof ensurePRChecksLoaded
@@ -189,8 +153,6 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   nextModel.filteredWorkItems = filteredWorkItems
   nextModel.softHiddenVisibleCount = softHiddenVisibleCount
   nextModel.showGitHubTaskSkeletons = showGitHubTaskSkeletons
-  nextModel.loadedGitHubAuthorLogins = loadedGitHubAuthorLogins
-  nextModel.primaryGithubFilterSlug = primaryGithubFilterSlug
   nextModel.showPRManagementColumns = showPRManagementColumns
   nextModel.githubTaskGridClass = githubTaskGridClass
   nextModel.ensurePRChecksLoaded = ensurePRChecksLoaded

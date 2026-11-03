@@ -169,6 +169,8 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --color-task-query-highlight: var(--task-query-highlight);
+  --color-task-query-highlight-foreground: var(--task-query-highlight-foreground);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -247,6 +249,8 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --task-query-highlight: color-mix(in srgb, var(--color-blue-600) 12%, transparent);
+  --task-query-highlight-foreground: var(--color-blue-600);
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   /* Use one question hue across surfaces, distinct from working-yellow. */
@@ -367,6 +371,8 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --task-query-highlight: color-mix(in srgb, var(--color-blue-400) 15%, transparent);
+  --task-query-highlight-foreground: var(--color-blue-400);
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);

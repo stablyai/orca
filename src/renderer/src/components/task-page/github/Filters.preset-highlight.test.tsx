@@ -3,8 +3,6 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ComponentProps } from 'react'
-import type PRFilterDropdowns from '@/components/github/PRFilterDropdowns'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import TaskPage from '../TaskPage'
@@ -19,20 +17,6 @@ vi.mock('../Surface', () => ({
       <button onClick={() => model.handleSelectGithubTaskKind('prs')}>PRs</button>
       <TaskPageGitHubFilters model={model} />
     </TooltipProvider>
-  )
-}))
-vi.mock('@/components/github/PRFilterDropdowns', () => ({
-  default: ({ onChange }: ComponentProps<typeof PRFilterDropdowns>) => (
-    <>
-      <button onClick={() => onChange({ labels: ['bug'] })}>Bug label</button>
-      <button onClick={() => onChange({ author: 'hubot' })}>Other author</button>
-      <button onClick={() => onChange({ assignee: '@me' })}>Own assignee</button>
-      <button onClick={() => onChange({ reviewer: { kind: 'requested', login: '@me' } })}>
-        Own reviewer
-      </button>
-      <button onClick={() => onChange({ state: 'closed' })}>Closed</button>
-      <button onClick={() => onChange({ state: 'open' })}>Reopen</button>
-    </>
   )
 }))
 
@@ -89,26 +73,26 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
     click('PRs')
     click('Mine')
     expectActive('Mine')
-    click('Bug label')
+    submitQuery('is:pr is:open author:@me label:bug')
     expectActive('Mine')
-    click('Closed')
+    submitQuery('is:pr is:closed author:@me label:bug')
     expectActive('Mine', false)
     expectActive('Open', false)
-    click('Reopen')
+    submitQuery('is:pr is:open author:@me label:bug')
     expectActive('Mine')
-    click('Other author')
+    submitQuery('is:pr is:open author:hubot label:bug')
     expectActive('Mine', false)
     expectActive('Open', false)
   })
 
   it('recognizes personal issue and review queries without clicking their presets', async () => {
     await renderFilters()
-    click('Own assignee')
+    submitQuery('is:issue is:open assignee:@me')
     expectActive('Assigned to me')
     click('PRs')
-    click('Own reviewer')
+    submitQuery('is:pr is:open review-requested:@me')
     expectActive('Needs review')
-    click('Closed')
+    submitQuery('is:pr is:closed review-requested:@me')
     expectActive('Needs review', false)
   })
 
@@ -155,7 +139,7 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
     await renderFilters()
     submitQuery('is:pr is:open author:@me label:bug')
     expectActive('Mine')
-    click('Bug label')
+    submitQuery('is:pr is:open author:@me label:enhancement')
     expectActive('Mine')
     expect(viewer).toHaveBeenCalledTimes(1)
   })
@@ -197,7 +181,7 @@ describe('GitHub Tasks preset highlight follows the applied query', () => {
       expectActive('Mine')
       expect(useAppStore.getState().taskResumeState?.githubItemsPreset).toBe(preset)
       expect(useAppStore.getState().taskResumeState?.githubItemsQuery).toBe(savedQuery)
-      click('Bug label')
+      submitQuery('is:pr is:open author:@me label:enhancement')
       expectActive('Mine')
       expect(useAppStore.getState().taskResumeState?.githubItemsPreset).toBeNull()
       expect(window.api.ui.set).toHaveBeenCalledWith({

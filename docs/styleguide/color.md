@@ -22,6 +22,8 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `sidebar` (+ variants)                   | The worktree sidebar and its children                       | Other panels                                        |
 | `editor-surface`                         | Background of Monaco / markdown editor panes                | App chrome                                          |
 
+GitHub filter text uses the `task-query-highlight` / `task-query-highlight-foreground` pair for blue syntax emphasis, not pills or application chrome.
+
 The `sidebar` family (`--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, `--sidebar-ring`) is for use inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels.
 
 `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match common editor conventions; reach for it whenever you're rendering an editor pane.
