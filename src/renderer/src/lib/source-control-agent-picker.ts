@@ -3,7 +3,10 @@ import type { AgentLaunchPreferences } from '@/components/settings/use-host-agen
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { readAgentLaunchChoice } from '@/lib/host-chat-program'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
-import type { SourceControlActionId } from '../../../shared/source-control-ai-actions'
+import type {
+  SourceControlActionId,
+  SourceControlActionRecipe
+} from '../../../shared/source-control-ai-actions'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -19,7 +22,9 @@ import type {
   NewTabAgentMenuModel
 } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import type { AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+import { resolveSourceControlActionPreferredSurface } from '../../../shared/source-control-action-launch-preferences'
 
 /** The workspace a Source Control agent picker lists rows for, and the host whose agents it reads. */
 export type SourceControlAgentRows = {
@@ -63,11 +68,14 @@ export function sourceControlRepoAgentRows(
 export function savedSurfaceForPick(
   model: NewTabAgentMenuModel,
   agent: TuiAgent,
-  surface: AgentLaunchSurface | undefined
+  surface: AgentLaunchSurface | undefined,
+  entry?: AgentPickerEntry
 ): AgentLaunchSurface | undefined {
   const hadChoice =
-    model.state === 'settled' &&
-    model.rows.some((row) => row.agent === agent && row.kind === 'chat')
+    entry?.agent === agent
+      ? entry.surfaces.includes('chat') && entry.surfaces.includes('terminal')
+      : model.state === 'settled' &&
+        model.rows.some((row) => row.agent === agent && row.kind === 'chat')
   return hadChoice ? surface : undefined
 }
 
@@ -93,17 +101,24 @@ export function resolveChecksActionAgent(
   repoId: string | undefined,
   workspace: ProspectiveWorkspace,
   detected: readonly TuiAgent[] | null,
-  preferences?: AgentLaunchPreferences
+  preferences?: AgentLaunchPreferences,
+  capturedRecipe?: SourceControlActionRecipe
 ): TuiAgent | null {
   const policy = preferences ?? state.settings
   const repo = state.repos.find((entry) => entry.id === repoId)
-  const savedAgent = readSourceControlLaunchRecipeAgentId(
-    resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId })
-  )
+  const recipe =
+    capturedRecipe ?? resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId })
+  const savedAgent = readSourceControlLaunchRecipeAgentId(recipe)
   const usable = (agent: TuiAgent): boolean =>
     isTuiAgentEnabled(agent, policy?.disabledTuiAgents) &&
     (detected?.includes(agent) === true ||
-      readAgentLaunchChoice(state, agent, workspace, detected).chatEligibility !== 'no')
+      readAgentLaunchChoice(
+        state,
+        agent,
+        workspace,
+        detected,
+        resolveSourceControlActionPreferredSurface(recipe, agent)
+      ).chatEligibility !== 'no')
   if (savedAgent && actionId === 'fixChecks') {
     return usable(savedAgent) ? savedAgent : null
   }

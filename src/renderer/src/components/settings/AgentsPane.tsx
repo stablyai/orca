@@ -19,7 +19,7 @@ import {
   getAgentWorkspaceTrustDescription,
   getAgentWorkspaceTrustTitle
 } from './agent-workspace-trust-copy'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './form-controls/SettingsFormControls'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getAgentsPaneSearchEntries } from './agents-search'
 import {

@@ -5,7 +5,7 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { BaseRefPicker } from '../../BaseRefPicker'
 import { RepoSettingsDraftInput } from '../RepositorySettingsDraftInput'
-import { SearchableSetting } from '../../SearchableSetting'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {

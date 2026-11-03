@@ -25,7 +25,7 @@ import { classifyGitCommand } from '../../../shared/git-command-classification'
 import { createAbortError } from './abort-error'
 import { readCapturedGitBuffer, readCapturedGitString } from './captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './missing-git-spawn-cwd'
-import { trackGitWorktreeMutation } from '../git-worktree-mutation-state'
+import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './local-git-runtime-route'
 import { gitRunsIn } from './git-runs-in'
 

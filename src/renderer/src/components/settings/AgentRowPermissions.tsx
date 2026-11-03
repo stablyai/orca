@@ -2,7 +2,7 @@ import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissio
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { SettingsBadge } from './SettingsFormControls'
+import { SettingsBadge } from './form-controls/SettingsFormControls'
 import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 import { agentPermissionModeLabel } from './agent-permission-mode-label'
 

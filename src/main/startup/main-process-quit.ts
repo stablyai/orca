@@ -19,7 +19,7 @@ import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wirin
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
-import { awaitPackedRefsLockRelease } from '../git/local-repo-ref-maintenance'
+import { awaitPackedRefsLockRelease } from '../git/refs/maintenance/local-repo-ref-maintenance'
 import { stopBackgroundWorktreeRemovals } from '../workspaces/removal/worktree-background-removal'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit/quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'

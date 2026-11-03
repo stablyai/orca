@@ -9,7 +9,8 @@ const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMo
     hostRmMock: vi.fn()
   }))
 
-vi.mock('../../git/runner', () => ({
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -19,10 +20,7 @@ vi.mock('./local-worktree-filesystem', () => ({
 
 vi.mock('../../filesystem/asar-transparent-fs', () => ({ rm: hostRmMock }))
 
-vi.mock('../../git/worktree', () => ({
-  listWorktreesStrict: listWorktreesStrictMock
-}))
-vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
 }))

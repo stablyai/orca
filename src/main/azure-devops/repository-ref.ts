@@ -1,4 +1,4 @@
-import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
+import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
 
 export type AzureDevOpsRepoRef = {
   host: string

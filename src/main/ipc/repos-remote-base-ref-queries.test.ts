@@ -36,7 +36,10 @@ vi.mock('../git/repo', async (importOriginal) =>
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
-vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: reposMocks.listWorktreeGraphMock
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
@@ -51,7 +54,7 @@ vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
 
 import { registerRepoHandlers } from './repos'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
-import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createRepoHandlerHarness } from './repos-remote-test-harness'
 import { getBaseRefDefault, getRemoteCount } from '../git/repo'

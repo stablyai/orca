@@ -1,6 +1,6 @@
-import { worktreePreparationGit } from '../../../git/worktree-create-git-executor'
-import { refreshPreparedWorktreeTip } from '../../../git/worktree-preparation-tip-refresh'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
+import { refreshPreparedWorktreeTip } from '../../../git/worktrees/creation/worktree-preparation-tip-refresh'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import type { PreparationEntry } from './worktree-create-preparation-pool'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 
