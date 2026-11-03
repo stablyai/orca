@@ -99,7 +99,6 @@ type SessionScope = Pick<
   | 'pairedHostClient'
   | 'connState'
   | 'agentSessionHostSupport'
-  | 'setInput'
   | 'activeHandle'
   | 'activeSessionTabId'
   | 'activeSessionTab'
@@ -111,12 +110,10 @@ type SessionScope = Pick<
   | 'setDictationEnabled'
   | 'deviceTokenRef'
   | 'dictationRouteContextRef'
-  | 'commandFieldAnchorRef'
   | 'activeHandleRef'
   | 'flushPendingLiveInputBeforeExternalSend'
   | 'canSend'
   | 'canCompose'
-  | 'liveInputEnabled'
   | 'showToast'
   | 'resetLiveInputFocus'
 >
@@ -161,9 +158,6 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     pairedHostClient: client,
     connState,
     agentSessionHostSupport: structuredAgentSessionHostSupport([]),
-    setInput: (next) => {
-      terminalText = typeof next === 'function' ? next(terminalText) : next
-    },
     activeHandle,
     activeSessionTabId: tab.id,
     activeSessionTab: tab,
@@ -175,12 +169,10 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     setDictationEnabled: () => {},
     deviceTokenRef: useRef('dev'),
     dictationRouteContextRef: useRef(null),
-    commandFieldAnchorRef: useRef(null),
     activeHandleRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: gate.canSend,
     canCompose: gate.canCompose,
-    liveInputEnabled: true,
     showToast: () => {},
     resetLiveInputFocus: () => {}
   }

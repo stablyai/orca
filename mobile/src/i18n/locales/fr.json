@@ -112,13 +112,8 @@
       "tryAgain": "Réessayer"
     },
     "terminalSettings": {
-      "autocomplete": "Complétion et correction automatiques",
-      "autocompleteOff": "Désactivé",
-      "autocompleteOn": "Activé",
       "defaultText": "Par défaut (100 %)",
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "keyboardInputDescription": "La complétion, la correction automatique et les suggestions orthographiques s'appliquent uniquement à la saisie de commandes en mémoire tampon. Utilisez le bouton à double chevron au-dessus du clavier pour quitter la saisie en direct, puis modifiez votre commande avant d'appuyer sur Envoyer. Ces fonctions sont désactivées par défaut pour éviter de modifier les commandes, les options ou les chemins.",
-      "keyboardInputHeading": "SAISIE AU CLAVIER",
       "largeText": "Grand (125 %)",
       "largerText": "Plus grand (150 %)",
       "largestText": "Le plus grand (200 %)",

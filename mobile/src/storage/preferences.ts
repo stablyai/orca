@@ -92,23 +92,6 @@ export async function saveTerminalTextScale(scale: number): Promise<void> {
   await persistMirrored(TEXT_SCALE_KEY, value)
 }
 
-const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
-
-// Default autocorrect off so keyboards cannot alter commands, flags or paths; phone-style typing is opt-in.
-export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
-  try {
-    const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
-    return raw === 'true'
-  } catch {
-    return false
-  }
-}
-
-export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise<void> {
-  const value = String(enabled)
-  await persistMirrored(AUTOCOMPLETE_KEY, value)
-}
-
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
 
 // Caller also caps this tablet/foldable sidebar against the window to preserve detail space.

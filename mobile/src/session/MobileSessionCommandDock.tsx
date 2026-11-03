@@ -1,9 +1,7 @@
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
-import { hostOs } from '../platform/host-os'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
-import { getTerminalLiveInputKeyboardType } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
@@ -107,7 +105,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           smartInsertDelete={false}
           // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
           autoComplete="off"
-          keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+          // Why: ASCII-only keyboard types hide non-Latin IMEs.
+          keyboardType="default"
           returnKeyType="default"
           blurOnSubmit={false}
           editable={canSend}

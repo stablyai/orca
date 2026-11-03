@@ -1,6 +1,5 @@
-import { ActivityIndicator, Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
+import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic } from 'lucide-react-native'
-import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import { colors } from '../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -9,7 +8,6 @@ import {
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
-import { MobileDictationHalo } from './MobileDictationMeter'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -22,8 +20,6 @@ type MobileTerminalDictationButtonProps = {
   readonly dictation: DictationState
   readonly dictationMode: string | undefined
   readonly dictationEnabled?: boolean
-  /** Shows the voice level as a halo behind the mic where no status row carries the meter. */
-  readonly meterHalo?: MobileDictationMeter
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
@@ -101,7 +97,6 @@ function MobileTerminalDictationButton({
   dictation,
   dictationMode,
   dictationEnabled = true,
-  meterHalo,
   buttonStyle,
   activeButtonStyle,
   disabledButtonStyle,
@@ -118,7 +113,7 @@ function MobileTerminalDictationButton({
   const dictationActive = dictation.isStarting || dictation.isRecording
   // Dictation outlives a reconnect, so its stop and cancel must too; only starting needs the connection.
   const micDisabled = !canSend && !dictationActive && !dictation.isProcessing
-  const mic = (
+  return (
     <Pressable
       style={({ pressed }) => [
         buttonStyle,
@@ -165,14 +160,5 @@ function MobileTerminalDictationButton({
         />
       )}
     </Pressable>
-  )
-  return meterHalo ? (
-    // Always wrapped, so the mic never remounts under a held press.
-    <View>
-      {dictation.isRecording ? <MobileDictationHalo meter={meterHalo} size={34} /> : null}
-      {mic}
-    </View>
-  ) : (
-    mic
   )
 }

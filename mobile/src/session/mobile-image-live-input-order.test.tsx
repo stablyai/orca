@@ -94,7 +94,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
     deviceTokenRef: ref('phone'),
     ptyModesRef: ref(new Map()),
     liveInputRef,
-    commandInputRef: ref(null),
     liveInputFocusTimerRef: ref(null),
     sendLiveTerminalInputRef,
     showToast: vi.fn()

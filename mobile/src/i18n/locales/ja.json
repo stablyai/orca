@@ -110,13 +110,8 @@
       "tryAgain": "再試行"
     },
     "terminalSettings": {
-      "autocomplete": "自動補完と自動修正",
-      "autocompleteOff": "オフ",
-      "autocompleteOn": "オン",
       "defaultText": "標準（100%）",
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "keyboardInputDescription": "自動補完、自動修正、スペル候補は、バッファー方式のコマンド入力にのみ適用されます。キーボード上部の二重矢印ボタンでリアルタイム入力から切り替えると、「送信」をタップする前にコマンドを編集できます。コマンド、フラグ、パスが書き換わるのを防ぐため、デフォルトではオフです。",
-      "keyboardInputHeading": "キーボード入力",
       "largeText": "大（125%）",
       "largerText": "特大（150%）",
       "largestText": "最大 (200%)",

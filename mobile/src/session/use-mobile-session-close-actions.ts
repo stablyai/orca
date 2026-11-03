@@ -24,7 +24,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
-    reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
     setActiveHandle,
     setActiveSessionTabId,
@@ -144,7 +143,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           })
         }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
