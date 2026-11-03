@@ -41,6 +41,8 @@ const MAX_WIDTH = 500
 // Why: sit mostly outside the seam so the list scrollbar under the sidebar's right edge stays grabbable.
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME =
   'group absolute -right-2.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-start pl-0.5'
+// Why: an open drawer covers the outer side of the seam, so keep the inner overlap wide enough to grab.
+const WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME = '-right-1.5 justify-center pl-0'
 export const WORKTREE_SIDEBAR_RESIZE_HANDLE_LINE_CLASS_NAME =
   'h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring'
 
@@ -159,10 +161,10 @@ function Sidebar({
   return (
     <TooltipProvider delayDuration={400}>
       {/* Why: the handle lives outside the clipped sidebar so its outer half isn't cut off. */}
-      <div className="relative flex min-h-0 flex-shrink-0">
+      <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
           ref={sidebarRef}
-          className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+          className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
           style={leftSidebarStyle}
           {...dropHandlers}
         >
@@ -242,7 +244,12 @@ function Sidebar({
         {sidebarOpen && (
           <div
             data-sidebar-resize-handle=""
-            className={cn(WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME, isResizing && 'bg-ring/10')}
+            className={cn(
+              WORKTREE_SIDEBAR_RESIZE_HANDLE_CLASS_NAME,
+              (workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)) &&
+                WORKTREE_SIDEBAR_RESIZE_HANDLE_UNDER_DRAWER_CLASS_NAME,
+              isResizing && 'bg-ring/10'
+            )}
             onMouseDown={onResizeStart}
           >
             <div
