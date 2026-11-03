@@ -71,10 +71,18 @@ function bundledDependencyLinks(
 
 function isMaterializedRuntimeCurrent(bundledPackageDir: string, versionDir: string): boolean {
   const nodeModulesDir = join(versionDir, 'node_modules')
-  if (!existsSync(join(nodeModulesDir, 'serve-sim', 'dist', 'serve-sim.js'))) {
+  const packageDir = join(nodeModulesDir, 'serve-sim')
+  if (!existsSync(join(packageDir, 'dist', 'serve-sim.js'))) {
     return false
   }
   try {
+    if (
+      !readFileSync(join(bundledPackageDir, 'package.json')).equals(
+        readFileSync(join(packageDir, 'package.json'))
+      )
+    ) {
+      return false
+    }
     return bundledDependencyLinks(bundledPackageDir, nodeModulesDir).every(
       ({ linkPath, targetPath }) => realpathSync(linkPath) === realpathSync(targetPath)
     )

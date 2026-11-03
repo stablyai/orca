@@ -64,6 +64,7 @@ import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
+import { registerEmulatorControlStreamHandlers } from '../emulator-control-stream'
 import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
 import { registerEmulatorScrcpyKeyboardHandler } from '../emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
@@ -120,9 +121,7 @@ let registered = false
 // Same cap as the restart path's auth preservation: bookkeeping must not hold Restart on a stalled disk.
 const RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS = 2_000
 
-async function closeNotificationDismissalsBeforeRelaunch(
-  runtime: OrcaRuntimeService
-): Promise<void> {
+async function closeNotificationDismissalsBeforeRelaunch(runtime: OrcaRuntimeService) {
   const result = await settleWithinMs(
     runtime.closeNotificationDismissals(),
     RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS
@@ -252,6 +251,7 @@ export function registerCoreHandlers(
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
+  registerEmulatorControlStreamHandlers()
   registerEmulatorScrcpyTouchHandler()
   registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)

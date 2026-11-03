@@ -12,6 +12,8 @@ type StreamSize = {
 }
 
 type EmulatorScreenStreamContentProps = {
+  avccStreamUrl?: string
+  deviceId?: string
   loading: boolean
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
@@ -24,6 +26,8 @@ type EmulatorScreenStreamContentProps = {
 }
 
 export function EmulatorScreenStreamContent({
+  avccStreamUrl,
+  deviceId,
   loading,
   onStreamError,
   onStreamSize,
@@ -35,24 +39,30 @@ export function EmulatorScreenStreamContent({
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
   const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const iosVideo = !androidDeviceId && Boolean(deviceId && avccStreamUrl)
+  const wantsVideo = Boolean(androidDeviceId) || iosVideo
 
   const video = useEmulatorVideoStream(
-    androidDeviceId ?? undefined,
+    androidDeviceId ?? (iosVideo ? deviceId : undefined),
     streamKey,
-    showStream && Boolean(androidDeviceId),
-    onStreamSize
+    showStream && wantsVideo,
+    onStreamSize,
+    iosVideo ? avccStreamUrl : undefined
   )
+  // Keep video enabled after failure: its sticky error owns this session's JPEG fallback.
+  const wantsJpeg = !androidDeviceId && (!iosVideo || Boolean(video.error))
   const frameStream = useEmulatorFrameStream(
-    androidDeviceId ? undefined : previewUrl,
+    wantsJpeg ? previewUrl : undefined,
     streamKey,
-    showStream && Boolean(previewUrl) && !androidDeviceId
+    showStream && Boolean(previewUrl) && wantsJpeg
   )
+  const mediaError = frameStream.error || (androidDeviceId ? video.error : null)
 
   useEffect(() => {
-    if (frameStream.error || video.error) {
+    if (mediaError) {
       onStreamError()
     }
-  }, [frameStream.error, video.error, onStreamError])
+  }, [mediaError, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -60,7 +70,7 @@ export function EmulatorScreenStreamContent({
       ? 'block h-full w-full bg-black object-contain'
       : 'absolute left-1/2 top-1/2 block max-w-none bg-black object-contain'
 
-  if (androidDeviceId && showStream && !video.error) {
+  if (wantsVideo && showStream && !video.error) {
     return (
       <canvas
         ref={video.canvasRef}
@@ -98,8 +108,8 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error && !video.error
-  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
+  const waitingForFrame = showStream && !mediaError
+  const displayError = streamError || Boolean(mediaError)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">

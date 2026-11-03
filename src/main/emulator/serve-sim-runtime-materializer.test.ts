@@ -99,6 +99,42 @@ describe('materializeServeSimRuntime', () => {
     expect(clearQuarantine).toHaveBeenCalledTimes(1)
   })
 
+  it('replaces stale JavaScript and native code when the bundled manifest changes under one app version', async () => {
+    const root = await createRoot()
+    const bundledPackageDir = await createBundledServeSimPackage(root)
+    const nativePath = join('dist', 'native', 'serve-sim-native.node')
+    await mkdir(join(bundledPackageDir, 'dist', 'native'), { recursive: true })
+    await writeFile(join(bundledPackageDir, nativePath), 'old native code')
+    const clearQuarantine = vi.fn()
+    const options = {
+      bundledPackageDir,
+      targetRootDir: join(root, 'runtime'),
+      version: '1.2.3',
+      clearQuarantine
+    }
+    const first = materializeServeSimRuntime(options)
+
+    await writeFile(
+      join(bundledPackageDir, 'package.json'),
+      JSON.stringify({
+        name: 'serve-sim',
+        version: '0.1.49-beta.139.1',
+        dependencies: { ws: '^8' }
+      })
+    )
+    await writeFile(join(bundledPackageDir, 'dist', 'serve-sim.js'), 'updated JavaScript')
+    await writeFile(join(bundledPackageDir, nativePath), 'updated native code')
+
+    const replacement = materializeServeSimRuntime(options)
+
+    expect(replacement).toBe(first)
+    expect(await readFile(join(replacement!, 'dist', 'serve-sim.js'), 'utf8')).toBe(
+      'updated JavaScript'
+    )
+    expect(await readFile(join(replacement!, nativePath), 'utf8')).toBe('updated native code')
+    expect(clearQuarantine).toHaveBeenCalledTimes(2)
+  })
+
   it('prunes runtimes left behind by older app versions', async () => {
     const root = await createRoot()
     const bundledPackageDir = await createBundledServeSimPackage(root)
@@ -132,6 +168,7 @@ describe('materializeServeSimRuntime', () => {
       clearQuarantine: () => {
         mkdirSync(join(winnerPackageDir, 'dist'), { recursive: true })
         writeFileSync(join(winnerPackageDir, 'dist', 'serve-sim.js'), 'winner')
+        cpSync(join(bundledPackageDir, 'package.json'), join(winnerPackageDir, 'package.json'))
         symlinkDir(join(root, 'bundle', 'node_modules', 'ws'), join(winnerNodeModulesDir, 'ws'))
       }
     })

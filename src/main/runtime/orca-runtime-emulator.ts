@@ -157,8 +157,8 @@ export class RuntimeEmulatorCommands {
         configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
       }))
     if (worktreeId) {
-      // Device switch retains slow-boot Android emulators for fast switch-back.
-      await bridge.stopActiveForSwitch(worktreeId)
+      // Refresh only the helper for the same device; retain slow-boot Android devices on switches.
+      await bridge.stopActiveForSwitch(worktreeId, device)
     }
     const lease = await bridge.acquireHelperForDevice(device)
     const { info } = lease

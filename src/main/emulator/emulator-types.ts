@@ -6,6 +6,7 @@ export type EmulatorSessionInfo = {
   deviceUdid: string
   wsUrl: string
   streamUrl: string
+  avccStreamUrl?: string
   axUrl?: string
   helperPid?: number
   streamCodec?: EmulatorStreamCodec

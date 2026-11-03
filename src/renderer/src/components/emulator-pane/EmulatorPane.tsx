@@ -19,6 +19,8 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
   useUiLanguageRevision()
   const {
     devices,
+    deviceId,
+    avccStreamUrl,
     selectedUdid,
     setSelectedUdid,
     loading,
@@ -92,6 +94,8 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            deviceId={deviceId}
+            avccStreamUrl={avccStreamUrl}
             previewUrl={previewUrl}
             wsUrl={wsUrl}
             streamKey={streamKey}

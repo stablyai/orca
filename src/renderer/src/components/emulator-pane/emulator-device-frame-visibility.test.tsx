@@ -34,6 +34,10 @@ beforeEach(() => {
     configurable: true,
     value: {
       emulator: {
+        startControlStream: async () => {},
+        sendControlFrame: () => {},
+        stopControlStream: () => {},
+        onControlStreamStatus: () => () => {},
         startFrameStream,
         stopFrameStream,
         onFrameStreamFrame: (_listener: FrameListener) => () => {},

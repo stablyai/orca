@@ -35,6 +35,8 @@ import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
 
 type EmulatorDeviceFrameProps = {
+  avccStreamUrl?: string
+  deviceId?: string
   previewUrl?: string
   wsUrl?: string
   streamKey?: string
@@ -64,6 +66,8 @@ type ScreenCoordinateEvent = Pick<
 >
 
 export function EmulatorDeviceFrame({
+  avccStreamUrl,
+  deviceId,
   previewUrl,
   wsUrl,
   streamKey,
@@ -101,7 +105,7 @@ export function EmulatorDeviceFrame({
   useEffect(() => {
     setStreamError(false)
     setStreamSize(null)
-  }, [previewUrl, streamKey])
+  }, [avccStreamUrl, deviceId, previewUrl, streamKey])
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>
@@ -112,13 +116,6 @@ export function EmulatorDeviceFrame({
         inputRotation
       ),
     [inputRotation, visualStreamGeometry.size]
-  )
-
-  const sendGesturePoints = useCallback(
-    (points: EmulatorGesturePoint[]) => {
-      void onGesture(points)
-    },
-    [onGesture]
   )
 
   const flushWheelGesture = useCallback(() => {
@@ -137,9 +134,9 @@ export function EmulatorDeviceFrame({
     }
     const points = buildWheelGesturePoints(pending.start, pending.end)
     if (points) {
-      sendGesturePoints(points)
+      void onGesture(points)
     }
-  }, [sendGesturePoints, sendTouch])
+  }, [onGesture, sendTouch])
 
   useEffect(
     () => () => {
@@ -277,7 +274,7 @@ export function EmulatorDeviceFrame({
       if (action.kind === 'tap') {
         void onTap(action.point.x, action.point.y)
       } else {
-        sendGesturePoints(action.points)
+        void onGesture(action.points)
       }
     },
     [
@@ -285,7 +282,7 @@ export function EmulatorDeviceFrame({
       inputRotation,
       mapEventToScreenPoint,
       onTap,
-      sendGesturePoints,
+      onGesture,
       sendTouch,
       visualStreamGeometry
     ]
@@ -390,6 +387,8 @@ export function EmulatorDeviceFrame({
           }}
         >
           <EmulatorScreenSurface
+            avccStreamUrl={avccStreamUrl}
+            deviceId={deviceId}
             frameLayout={frameLayout}
             isLive={isLive}
             keyboardCaptureActive={keyboardCaptureActive}

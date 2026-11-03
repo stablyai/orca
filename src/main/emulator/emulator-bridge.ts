@@ -71,9 +71,15 @@ export class EmulatorBridge {
     return this.sessionRegistry.getActiveForWorktree(worktreeId)
   }
 
-  // Keep slow-booting Android devices alive across switches for fast reattachment.
-  async stopActiveForSwitch(worktreeId: string): Promise<string | null> {
-    const keepAlive = this.backendForActiveWorktree(worktreeId)?.kind === 'android'
+  // Refreshing a helper must preserve the guest; Android also stays alive across device switches.
+  async stopActiveForSwitch(worktreeId: string, nextDevice: string): Promise<string | null> {
+    const backend = this.backendForActiveWorktree(worktreeId)
+    const active = this.getActiveForWorktree(worktreeId)
+    let keepAlive = backend?.kind === 'android' || nextDevice === active?.deviceUdid
+    if (!keepAlive && active && backend) {
+      keepAlive =
+        (await backend.resolveDeviceId(nextDevice).catch(() => null)) === active.deviceUdid
+    }
     return this.stopActiveForWorktreeInternal(worktreeId, { shutdownDevice: !keepAlive })
   }
 
@@ -303,11 +309,7 @@ export class EmulatorBridge {
     device?: string,
     worktreeId?: string
   ): Promise<{ backend: EmulatorBackend; udid: string }> {
-    if (device) {
-      const backend = await this.backendForDevice(device)
-      return { backend, udid: await backend.resolveDeviceId(device) }
-    }
-    const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
+    const { backend, device: resolved } = await this.resolveTarget({ device, worktreeId })
     return { backend, udid: await backend.resolveDeviceId(resolved) }
   }
 
@@ -317,10 +319,7 @@ export class EmulatorBridge {
 
   private backendForActiveWorktree(worktreeId: string): EmulatorBackend | null {
     const key = this.sessionRegistry.getActiveSessionKey(worktreeId)
-    if (!key) {
-      return null
-    }
-    const session = this.sessionRegistry.getSession(key)
+    const session = key ? this.sessionRegistry.getSession(key) : undefined
     return session ? this.backendForKind(session.backend) : null
   }
 
