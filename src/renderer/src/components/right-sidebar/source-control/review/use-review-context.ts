@@ -91,7 +91,8 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     hostedReview,
     hostedReviewCreation,
     hostedReviewEntry,
-    remoteStatus
+    remoteStatus,
+    gitHostWebSchemes: settings?.gitHostWebSchemes ?? null
   })
   const {
     fallbackGitHubPRNumber,
