@@ -1001,7 +1001,7 @@
       "invariant": "Ordinary lifecycle operations durably checkpoint SQLite without rewriting legacy JSON; missing SQLite cannot revive stale JSON; explicit recovery preserves artifacts and selects the named profile without changing active-profile state; the updater refuses JSON-era releases before admitting their feed.",
       "oracle": "Assert unchanged JSON through final flush and maintenance, failure propagation before quit, missing-database refusal after marker publication, archived SQLite and latest committed JSON from inactive-profile conversion, unchanged active database/index/HTTP marker, and zero feed/check calls for incompatible pinned/local builds.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
@@ -1037,7 +1037,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
           "result": "passed",
           "durationSeconds": 33.17,
           "summary": "1,435 tests passed with four skips across 145 passed test files and two skipped files. All three typecheck projects and the CLI build passed separately."
@@ -5205,7 +5205,7 @@
       "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Once a supervised child exits or fails to start, no late handoff completion may signal it or arm force-kill escalation. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
       "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. Force handoff completion to fail after the replacement child exits and require zero later child signals and zero escalation timers. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/updater/serve-update-handoff.test.ts src/main/updater/updater.headless-serve-install.test.ts src/main/updater/mac-install/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
@@ -5213,8 +5213,8 @@
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
       ],
       "testFiles": [
-        "src/main/updater.headless-serve-install.test.ts",
-        "src/main/serve-update-handoff.test.ts",
+        "src/main/updater/updater.headless-serve-install.test.ts",
+        "src/main/updater/serve-update-handoff.test.ts",
         "src/cli/runtime/launch.test.ts",
         "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
@@ -5226,7 +5226,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/main/updater.headless-serve-install.test.ts",
+          "file": "src/main/updater/updater.headless-serve-install.test.ts",
           "assertions": [
             "a ready update in headless serve is deferred before native install, paired-client disconnect, or active-session cleanup",
             "a supervised serve persists handoff after checkpoints but before native quit and uses no native GUI relaunch",
@@ -5251,7 +5251,7 @@
           "assertions": ["late update handoff failure cannot rearm termination after child exit"]
         },
         {
-          "file": "src/main/serve-update-handoff.test.ts",
+          "file": "src/main/updater/serve-update-handoff.test.ts",
           "assertions": [
             "install intent and failure state are written atomically under canonical user data",
             "an injected handoff path outside canonical user data cannot authorize an update",
@@ -19914,7 +19914,7 @@
       "oracle": "Create two isolated offscreen pages and register their WebContents. Close one, block onPageClosed for its stable page ID, and require unregisterGuest to have already removed that page from command routing while the unrelated page remains live. Emit destroyed and require the same exact retirement. Race shutdown with creation, pending retirement, and process-swap destruction; require no replacement session or command after terminal cleanup starts, require shutdown to remain pending until retirement settles, require the swap close command to use the five-second cleanup timeout, and require at most four concurrent close commands. Deliver repeated signals and require every attempt to reach Electron quit; under Windows shared-console semantics require the child to handle Ctrl-C without an immediate child.kill. Advance the supervisor clock through the renderer-acknowledgement and committed teardown deadlines and require no SIGKILL until the bounded scheduling margin elapses. In direct built-CLI serve, inspect exact session/PID/socket identity plus RSS/fd inventory before close and after a five-second grace; reconnect between commands and stop via Ctrl-C. No process-name kill or global sweep is permitted.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts --maxWorkers=2",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser src/main/updater/browser-sidecar-owner.test.ts"
       ],
       "testFiles": [
         "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",

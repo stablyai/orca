@@ -141,14 +141,14 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   getUpdateStatus: vi.fn(),
   quitAndInstall: vi.fn(),
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock
 }))
-vi.mock('../updater/electron-updater-proxy-session', () => ({
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 
