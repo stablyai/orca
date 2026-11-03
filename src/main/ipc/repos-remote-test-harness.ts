@@ -79,8 +79,13 @@ export function electronModuleMock(mocks: ReposIpcMocks): Record<string, unknown
   }
 }
 
+type GitRepoProbeMocks = {
+  isGitRepo: Mock<(path: string) => boolean>
+  getGitRepoRoot: Mock<(path: string) => string>
+}
+
 // Preserve pure Git helpers; mock process and filesystem boundaries.
-export function createGitRepoProbeMocks() {
+export function createGitRepoProbeMocks(): GitRepoProbeMocks {
   return {
     isGitRepo: vi.fn().mockReturnValue(true),
     getGitRepoRoot: vi.fn((path: string) => path)
@@ -89,7 +94,7 @@ export function createGitRepoProbeMocks() {
 
 export function gitRepoModuleMock(
   actual: typeof RepoModule,
-  probes = createGitRepoProbeMocks()
+  probes: GitRepoProbeMocks = createGitRepoProbeMocks()
 ): Record<string, unknown> {
   const { isGitRepo, getGitRepoRoot } = probes
   return {
