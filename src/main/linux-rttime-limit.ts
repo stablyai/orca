@@ -33,3 +33,17 @@ export function allowsRealtimePriority(
   const [, soft, hard] = (limits && /^Max realtime priority\s+(\S+)\s+(\S+)/m.exec(limits)) || []
   return (soft !== undefined && soft !== '0') || (hard !== undefined && hard !== '0')
 }
+
+export type RtPrioOutcome = 'lowered' | 'lowered-partial-tree' | 'not-needed' | 'prlimit-failed'
+
+// Why: the startup breadcrumb rotates out of the 30-entry ring long before a late SIGKILL,
+// so process-gone reports read the outcome from here instead.
+let startupRtPrioOutcome: RtPrioOutcome | null = null
+
+export function setStartupRtPrioOutcome(outcome: RtPrioOutcome | null): void {
+  startupRtPrioOutcome = outcome
+}
+
+export function getStartupRtPrioOutcome(): RtPrioOutcome | null {
+  return startupRtPrioOutcome
+}

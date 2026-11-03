@@ -1,9 +1,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { allowsRealtimePriority, readZeroRtTimeLimit } from '../linux-rttime-limit'
-
-type RtPrioOutcome = 'lowered' | 'lowered-partial-tree' | 'not-needed' | 'prlimit-failed'
+import {
+  allowsRealtimePriority,
+  readZeroRtTimeLimit,
+  setStartupRtPrioOutcome,
+  type RtPrioOutcome
+} from '../linux-rttime-limit'
 
 // Why: complete=false when a live thread's children list is unreadable (e.g. a kernel without
 // CONFIG_PROC_CHILDREN), so the breadcrumb never claims zygotes were lowered that were never seen.
@@ -36,7 +39,7 @@ export function listProcessTree(
   return { pids, complete }
 }
 
-async function lowerRealtimePriorityToZero(pids: number[]): Promise<boolean> {
+async function lowerRealtimePriorityToZero(pids: number[], procRoot: string): Promise<boolean> {
   const results = await Promise.all(
     pids.map((pid) =>
       runProcess({
@@ -50,7 +53,9 @@ async function lowerRealtimePriorityToZero(pids: number[]): Promise<boolean> {
       )
     )
   )
-  return results.every(Boolean)
+  // Why: a short-lived helper that exited after the walk has nothing left to lower, so its
+  // failed prlimit must not make the breadcrumb say the live tree wasn't lowered.
+  return results.every((ok, i) => ok || !existsSync(`${procRoot}/${pids[i]}`))
 }
 
 /**
@@ -72,11 +77,12 @@ export async function refuseRealtimeSchedulingUnderZeroRtTime(
   let rtPrio: RtPrioOutcome = 'not-needed'
   if (allowsRealtimePriority(platform, limitsPath)) {
     const tree = listProcessTree(process.pid, procRoot)
-    if (!(await lowerRealtimePriorityToZero(tree.pids))) {
+    if (!(await lowerRealtimePriorityToZero(tree.pids, procRoot))) {
       rtPrio = 'prlimit-failed'
     } else {
       rtPrio = tree.complete ? 'lowered' : 'lowered-partial-tree'
     }
   }
+  setStartupRtPrioOutcome(rtPrio)
   recordCrashBreadcrumb('linux_rttime_limit', { ...rtTime, rtPrio })
 }

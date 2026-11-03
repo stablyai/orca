@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runProcess, recordCrashBreadcrumb } = vi.hoisted(() => ({
-  runProcess: vi.fn(async () => ({ code: 0 })),
+  runProcess: vi.fn(async (_options: { args: string[] }) => ({ code: 0 })),
   recordCrashBreadcrumb: vi.fn()
 }))
 vi.mock('@orca/process-host', () => ({ runProcess }))
@@ -16,6 +16,7 @@ import {
   listProcessTree,
   refuseRealtimeSchedulingUnderZeroRtTime
 } from './linux-realtime-scheduling-guard'
+import { getStartupRtPrioOutcome, setStartupRtPrioOutcome } from '../linux-rttime-limit'
 
 let dir: string
 let procRoot: string
@@ -24,6 +25,7 @@ beforeEach(() => {
   procRoot = join(dir, 'proc')
   runProcess.mockClear()
   recordCrashBreadcrumb.mockClear()
+  setStartupRtPrioOutcome(null)
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -100,6 +102,31 @@ describe('refuseRealtimeSchedulingUnderZeroRtTime', () => {
       hard: '0',
       rtPrio: 'lowered'
     })
+    // Process-gone reports read this after the startup breadcrumb has rotated out of the ring.
+    expect(getStartupRtPrioOutcome()).toBe('lowered')
+  })
+
+  it('still reports lowered when a short-lived child exited before its prlimit ran', async () => {
+    fakeThread(process.pid, process.pid, '4242 4343 ')
+    fakeThread(4242, 4242, '')
+    fakeThread(4343, 4343, '')
+    runProcess.mockImplementation(async ({ args }) => {
+      if (args[1] === '4343') {
+        rmSync(join(procRoot, '4343'), { recursive: true, force: true })
+        return { code: 1 }
+      }
+      return { code: 0 }
+    })
+    try {
+      await refuseRealtimeSchedulingUnderZeroRtTime('linux', procLimits('95', '0'), procRoot)
+    } finally {
+      runProcess.mockImplementation(async () => ({ code: 0 }))
+    }
+    expect(runProcess).toHaveBeenCalledTimes(3)
+    expect(recordCrashBreadcrumb).toHaveBeenCalledWith(
+      'linux_rttime_limit',
+      expect.objectContaining({ rtPrio: 'lowered' })
+    )
   })
 
   it('does not claim the tree was lowered when child processes could not be enumerated', async () => {
@@ -118,12 +145,14 @@ describe('refuseRealtimeSchedulingUnderZeroRtTime', () => {
   ])(
     'reports a failure instead of claiming the tree was lowered when prlimit %s',
     async (_case, arrange) => {
+      fakeThread(process.pid, process.pid, '')
       arrange()
       await refuseRealtimeSchedulingUnderZeroRtTime('linux', procLimits('95', '0'), procRoot)
       expect(recordCrashBreadcrumb).toHaveBeenCalledWith(
         'linux_rttime_limit',
         expect.objectContaining({ rtPrio: 'prlimit-failed' })
       )
+      expect(getStartupRtPrioOutcome()).toBe('prlimit-failed')
     }
   )
 
