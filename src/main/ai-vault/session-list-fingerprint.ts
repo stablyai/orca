@@ -10,7 +10,16 @@ export function conditionalAiVaultListResult(
     return result
   }
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ ...result, scannedAt: undefined }))
+    // Volatile bookkeeping: scanId changes on every scan and restamps change
+    // with the caller; neither is list content.
+    .update(
+      JSON.stringify({
+        ...result,
+        scannedAt: undefined,
+        scanId: undefined,
+        fingerprint: undefined
+      })
+    )
     .digest('hex')
   return !force && afterFingerprint === fingerprint
     ? { sessions: [], issues: [], scannedAt: result.scannedAt, fingerprint, unchanged: true }

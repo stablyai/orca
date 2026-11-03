@@ -32,7 +32,10 @@ import type {
 } from './session-scanner-types'
 import { AI_VAULT_SCOPE_CWD_SOURCES, scopeWalksAgentFiles } from './session-scope-cwd'
 import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
-import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
+import {
+  candidateFileTime,
+  prioritizeAntigravityTranscriptCandidates
+} from './scanners/antigravity/antigravity-transcript-candidates'
 
 type ScopeScanArgs = {
   inventory: CwdBucketInventory[]
@@ -155,7 +158,19 @@ async function walkInventory(
       all.push(candidate)
     }
   }
-  return { candidates: dropCodexHardlinkAliases(all), seenPaths }
+  // Newest first so the parser's cutoff rule can stop reading stale out-of-scope heads once
+  // the limit is satisfied; discovery's scopeFiles list is traversal order, not recency order.
+  return {
+    candidates: dropCodexHardlinkAliases(
+      prioritizeAntigravityTranscriptCandidates(
+        all,
+        (candidate) => candidate.agent === 'antigravity'
+      )
+    ).sort(
+      (left, right) => (candidateFileTime(right.file) ?? 0) - (candidateFileTime(left.file) ?? 0)
+    ),
+    seenPaths
+  }
 }
 
 async function walkCandidates(

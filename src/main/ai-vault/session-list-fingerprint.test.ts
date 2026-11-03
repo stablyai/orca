@@ -18,6 +18,15 @@ describe('conditional session content replies', () => {
       unchanged: true
     })
   })
+  it('ignores volatile scan IDs when comparing identical list content', () => {
+    const first = conditionalAiVaultListResult({ ...result, scanId: 'scan-1' }, null)
+    const refreshed = conditionalAiVaultListResult(
+      { ...result, scanId: 'scan-2', scannedAt: 'second' },
+      first.fingerprint
+    )
+    expect(refreshed.unchanged).toBe(true)
+    expect(refreshed.fingerprint).toBe(first.fingerprint)
+  })
 
   it('includes all content metadata and does not mistake force for an unchanged scan', () => {
     const first = conditionalAiVaultListResult(result, null)
