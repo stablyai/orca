@@ -521,13 +521,13 @@ it('projects current navigation when a real NodeView changes the accepted model 
   expect(editor.state.selection.to).toBe(8)
 })
 
-it.each(['up', 'outside', 'no-buttons', 'multiple-click'] as const)(
+it.each(['up', 'promoted-up', 'outside', 'no-buttons', 'multiple-click'] as const)(
   'publishes completed native pointer input before notification or consumption (%s)',
   (terminal) => {
     vi.useFakeTimers()
     const editor = surface(
       true,
-      '<p>Before atom</p><p><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></p><p>After atom</p>'
+      '<p>Before atom</p><p><img src="https://example.test/pixel.png"></p><p>After atom</p>'
     )
     try {
       editor.view.focus()
@@ -575,7 +575,7 @@ it.each(['up', 'outside', 'no-buttons', 'multiple-click'] as const)(
       } else {
         fireEvent.mouseUp(terminal === 'outside' ? document.body : paragraph, {
           button: 0,
-          clientX: 20,
+          clientX: terminal === 'promoted-up' ? 80 : 20,
           clientY: 10
         })
         if (terminal === 'multiple-click') {

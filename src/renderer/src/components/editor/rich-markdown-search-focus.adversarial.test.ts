@@ -769,6 +769,7 @@ describe('Find focus with editor-owned selection', () => {
     const editor = new Editor({
       extensions: [
         StarterKit,
+        DragSelectionGuard,
         Node.create({
           name: 'pointerControl',
           group: 'block',
