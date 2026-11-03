@@ -70,8 +70,8 @@ it.each([
   },
   {
     name: 'children',
-    query: CHILDREN_QUERY,
-    variables: { id: issue.id },
+    query: CHILDREN_QUERY(1),
+    variables: { id: issue.id, first: 50 },
     data: { issue: { children: { nodes: [agentProjection] } } }
   }
 ])(
