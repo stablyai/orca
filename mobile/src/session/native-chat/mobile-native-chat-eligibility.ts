@@ -74,16 +74,26 @@ export function resolveMobileNativeChat(
     statusOwnerAgent && tab.agentStatus?.agentType && statusOwnerAgent !== tab.agentStatus.agentType
   )
   const liveSession = nestedGuestStatus ? undefined : tab.agentStatus?.providerSession
-  // A live agent without a session may be a relaunch; only an identity-less frame inherits one.
-  const rememberedSession = !liveAgent && remembered?.agent === agent ? remembered : null
+  const ownerSessionId =
+    nestedGuestStatus && statusOwnerAgent === agent
+      ? tab.agentStatus?.paneOwner?.session?.trim() || null
+      : null
+  // A live agent without a session may be a relaunch; only an identity-less frame or matching paneOwner session inherits remembered transcript metadata.
+  const rememberedSession =
+    (!liveAgent && remembered?.agent === agent) ||
+    (ownerSessionId !== null &&
+      remembered?.agent === agent &&
+      remembered.sessionId === ownerSessionId)
+      ? remembered
+      : null
   return {
     agent,
-    sessionId: liveSession?.id ?? rememberedSession?.sessionId ?? null,
+    sessionId: liveSession?.id ?? ownerSessionId ?? rememberedSession?.sessionId ?? null,
     transcriptPath: liveSession
       ? (liveSession.transcriptPath ?? null)
       : (rememberedSession?.transcriptPath ?? null),
     agentConfirmed: evidenceAgent !== null,
-    sessionLive: liveSession?.id != null
+    sessionLive: liveSession?.id != null || ownerSessionId !== null
   }
 }
 
@@ -132,6 +142,10 @@ export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null
     return tab.sessionId ?? null
   }
   if (tab?.type === 'terminal') {
+    const resolved = resolveMobileNativeChat(tab, true)
+    if (!resolved) {
+      return null
+    }
     const statusOwnerAgent = tab.agentStatus?.paneOwner?.agent
     const nestedGuestStatus = Boolean(
       statusOwnerAgent &&
@@ -140,7 +154,7 @@ export function resolveMobileNativeChatSessionId(tab: MobileNativeChatTab | null
     )
     return (
       (nestedGuestStatus ? undefined : tab.agentStatus?.providerSession?.id) ??
-      resolveMobileNativeChat(tab, true)?.sessionId ??
+      resolved.sessionId ??
       null
     )
   }
