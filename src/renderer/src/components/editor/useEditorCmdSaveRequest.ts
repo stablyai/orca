@@ -8,6 +8,7 @@ import {
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorSaveTargetFile } from './editor-save-target'
 import { isCodeViewTab } from './editor-save-disk-precondition'
+import { isEditorWritableView } from './editor-save-writer-view'
 
 type UseEditorCmdSaveRequestParams = {
   activeFile: OpenFile | null
@@ -46,7 +47,7 @@ export function useEditorCmdSaveRequest({
       const cleanCodeContent =
         state.settings?.editorInsertFinalNewline === true &&
         activeFile.id === saveTargetFile.id &&
-        saveTargetFile.readOnly !== true &&
+        isEditorWritableView(saveTargetFile) &&
         isCodeViewTab(state, saveTargetFile) &&
         loaded &&
         !loaded.isBinary &&

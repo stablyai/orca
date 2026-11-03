@@ -64,6 +64,7 @@ describe('useEditorCmdSaveRequest', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     storeState.editorDrafts = {}
+    storeState.markdownViewMode = {}
     storeState.settings.editorInsertFinalNewline = false
     container = document.body.appendChild(document.createElement('div'))
     root = createRoot(container)
@@ -199,4 +200,45 @@ describe('useEditorCmdSaveRequest', () => {
 
     expect(save).not.toHaveBeenCalled()
   })
+
+  it.each([
+    { csvPreviewOnly: true, shouldSave: false },
+    { csvPreviewOnly: false, shouldSave: true }
+  ])(
+    'handles a clean CSV source view (preview only: $csvPreviewOnly)',
+    ({ csvPreviewOnly, shouldSave }) => {
+      const file: OpenFile = {
+        ...makeFile('csv-preview'),
+        filePath: '/repo/large.csv',
+        relativePath: 'large.csv',
+        language: 'csv',
+        isDirty: false,
+        csvPreviewOnly
+      }
+      const save = vi.fn(async () => true)
+      storeState.settings.editorInsertFinalNewline = true
+      storeState.markdownViewMode = { [file.id]: 'source' }
+      act(() => {
+        root.render(
+          <SaveProbe
+            activeFile={file}
+            enabled
+            onSave={save}
+            fileContents={{ [file.id]: { content: 'name\npartial', isBinary: false } }}
+          />
+        )
+      })
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+        )
+      })
+
+      if (shouldSave) {
+        expect(save).toHaveBeenCalledExactlyOnceWith('name\npartial')
+      } else {
+        expect(save).not.toHaveBeenCalled()
+      }
+    }
+  )
 })

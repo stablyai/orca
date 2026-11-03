@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSwitchRow } from './SettingsFormControls'
-import { translateSearchKeyword } from './settings-search-keywords'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export function getInsertFinalNewlineSearchEntry() {
   return {

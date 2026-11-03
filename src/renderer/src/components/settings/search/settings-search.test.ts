@@ -8,7 +8,7 @@ import {
   scoreSettingsSearch,
   type SettingsSearchEntry
 } from './settings-search'
-import { getGeneralEditorSearchEntries } from './general-editor-search'
+import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 
 describe('settings-search', () => {
   it('finds the final-newline setting by its end-of-file aliases', () => {
