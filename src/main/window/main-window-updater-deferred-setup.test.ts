@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'
-import type { UpdaterSetupOptions } from '../updater'
+import type { UpdaterSetupOptions } from '../updater/lifecycle/updater-setup'
 
 const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
   getMainWindowMock: vi.fn<() => BrowserWindow | null>(() => null),
@@ -11,8 +11,8 @@ const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: {}, ipcMain: {} }))
-vi.mock('../updater', () => ({ setupAutoUpdater: setupMock }))
-vi.mock('../updater/electron-updater-proxy-session', () => ({
+vi.mock('../updater/updater-service', () => ({ setupAutoUpdater: setupMock }))
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 vi.mock('../ipc/ui', () => ({

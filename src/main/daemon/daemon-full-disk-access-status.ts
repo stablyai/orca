@@ -2,7 +2,7 @@ import type { DeveloperPermissionStatus } from '../../shared/developer-permissio
 import { getCurrentDaemonAdapter, getLegacyDaemonAdapters } from './daemon-provider-routing'
 import { getDaemonProvider } from './daemon-provider-state'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { getMacosFullDiskAccessStatus } from '../macos-permissions/macos-full-disk-access-status'
 
 /** Caller gates macOS; all daemon generations must grant access, and any denial wins. */
 export async function getTerminalHostsFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {

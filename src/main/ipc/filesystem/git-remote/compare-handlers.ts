@@ -4,7 +4,7 @@ import type {
   GitCommitCompareResult
 } from '../../../../shared/git-diff-compare-types'
 import { getBranchCompare, getCommitCompare } from '../../../git/status'
-import { resolveRegisteredWorktreePath } from '../../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
 import { validateFullGitObjectId } from '../filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'

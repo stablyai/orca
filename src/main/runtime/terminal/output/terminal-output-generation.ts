@@ -212,4 +212,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   ): () => void {
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
   }
+
+  readRecentTerminalOutput(ptyId: string): string | undefined {
+    return this.recentPtyOutputById.get(ptyId)?.read()
+  }
 }

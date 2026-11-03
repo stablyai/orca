@@ -188,7 +188,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     )
   } catch (error) {
     if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal()
+      return agentSessionAttachmentExpiredRefusal(error)
     }
     throw error
   }

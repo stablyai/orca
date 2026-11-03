@@ -54,7 +54,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 
 describe('registerFilesystemHandlers', () => {
