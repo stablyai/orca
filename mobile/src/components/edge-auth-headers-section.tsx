@@ -3,13 +3,13 @@ import {
   findNodeHandle,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
   type ScrollView
 } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import {
   deleteEndpointAuthHeaders,
@@ -213,7 +213,7 @@ export function EdgeAuthHeadersSection({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   label: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     paddingHorizontal: spacing.md,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {
@@ -275,4 +275,4 @@ const styles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.bodySize
   }
-})
+}))

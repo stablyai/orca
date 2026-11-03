@@ -49,6 +49,7 @@ vi.mock('../transport/endpoint-auth-headers-store', () => ({
 
 import { EdgeAuthHeadersSection, newEdgeAuthRow } from './edge-auth-headers-section'
 import type { ReactTestRenderer } from 'react-test-renderer'
+import { applyMobileColorScheme, paletteForScheme } from '../theme/mobile-theme'
 
 function requireRenderer(value: ReactTestRenderer | null): ReactTestRenderer {
   if (!value) {
@@ -58,6 +59,37 @@ function requireRenderer(value: ReactTestRenderer | null): ReactTestRenderer {
 }
 
 describe('edge auth headers section keyboard', () => {
+  it('keeps credential fields readable when the phone color scheme changes', async () => {
+    let renderer: ReactTestRenderer | null = null
+    const props = {
+      rows: [{ ...newEdgeAuthRow(), name: 'X-Token', value: 'synthetic-secret' }],
+      storedCount: 1,
+      error: null,
+      onRowsChange: () => {},
+      scrollViewRef: { current: scroller }
+    }
+    try {
+      for (const scheme of ['light', 'dark'] as const) {
+        applyMobileColorScheme(scheme)
+        await act(async () => {
+          if (renderer) {
+            renderer.update(createElement(EdgeAuthHeadersSection, props))
+          } else {
+            renderer = create(createElement(EdgeAuthHeadersSection, props))
+          }
+        })
+        const inputs = requireRenderer(renderer).root.findAll(
+          (node) => String(node.type) === 'TextInput'
+        )
+        expect(inputs[0]?.props.style[0].backgroundColor).toBe(paletteForScheme(scheme).bgPanel)
+        expect(inputs[1]?.props.secureTextEntry).toBe(true)
+      }
+    } finally {
+      applyMobileColorScheme('dark')
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('scrolls the focused row into view when the keyboard lands', async () => {
     scroller.scrollResponderScrollNativeHandleToKeyboard.mockClear()
     const scrollViewRef = { current: scroller }

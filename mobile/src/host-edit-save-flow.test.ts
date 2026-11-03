@@ -472,7 +472,7 @@ describe('edit host load() error states', () => {
     dependencies.loadHosts.mockReset().mockRejectedValue(new Error('storage unreadable'))
     const renderer = await renderEditHostRoute()
 
-    expect(findText(renderer, 'Failed to load host or edge authentication.')).toBe(true)
+    expect(findText(renderer, 'Failed to load host.')).toBe(true)
     expect(renderer.root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
 
     act(() => renderer.unmount())
@@ -498,7 +498,7 @@ describe('edit host load() error states', () => {
   it('blocks saves after credential loading fails without displaying the keychain error', async () => {
     dependencies.readEndpointAuthHeaders.mockRejectedValueOnce(new Error('secret-keychain-data'))
     const renderer = await renderEditHostRoute()
-    expect(findText(renderer, 'Failed to load host or edge authentication.')).toBe(true)
+    expect(findText(renderer, 'Failed to load host.')).toBe(true)
     expect(findText(renderer, 'secret-keychain-data')).toBe(false)
     expect(renderer.root.findAll((node) => String(node.type) === 'TextInput')).toHaveLength(0)
     expect(findSaveButton(renderer).props.disabled).toBe(true)
