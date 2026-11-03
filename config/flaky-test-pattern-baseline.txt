@@ -345,7 +345,6 @@
 1 test-no-real-time-wait:src/main/managed-server/lifecycle/orcad-stdio-bridge-provider.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-accept-then-deliver.test.ts
 3 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-at-rest-commands.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-echo-working.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-claude-subagent-row.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-owed-work-release.test.ts
 3 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-queued-command.test.ts
@@ -844,7 +843,6 @@
 4 test-no-wall-clock:src/main/managed-server/install/remote-node-runtime-store-gc.test.ts
 4 test-no-wall-clock:src/main/managed-server/install/remote-node-runtime-store-lock-host-release.test.ts
 3 test-no-wall-clock:src/main/managed-server/install/remote-node-runtime-store-windows.test.ts
-1 test-no-wall-clock:src/main/native-chat/agent-session-attachments/agent-session-attachment-sweep.test.ts
 4 test-no-wall-clock:src/main/native-chat/agent-session-wire/structured-agent-session-claude-stop-ends-session.test.ts
 1 test-no-wall-clock:src/main/native-chat/agent-session-wire/structured-agent-session-close-verdict.test.ts
 1 test-no-wall-clock:src/main/native-chat/structured-chat-naming.test.ts

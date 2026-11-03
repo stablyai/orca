@@ -1,5 +1,12 @@
 import { vi } from 'vitest'
 import { Worker } from 'node:worker_threads'
+type ReconstructionOwner =
+  | typeof Map.prototype
+  | typeof Set.prototype
+  | typeof JSON
+  | typeof Reflect
+  | Iterator<unknown>
+
 export const reconstructionWork = { visit: (_count = 1): void => {} }
 
 /** Count host visits/copies, comparisons, decoding and index steps, including hidden final loops. */
@@ -32,7 +39,7 @@ export async function countReconstructionWork<T>(
   reconstructionWork.visit = charge
   const restore: (() => void)[] = []
   const instrument = (
-    target: object,
+    target: ReconstructionOwner,
     name: string,
     count: (args: unknown[], result: unknown) => number
   ): void => {
@@ -44,7 +51,7 @@ export async function countReconstructionWork<T>(
     Object.defineProperty(target, name, {
       ...descriptor,
       value: function (this: unknown, ...args: unknown[]) {
-        const result: unknown = Reflect.apply(original, this, args)
+        const result: unknown = original.apply(this, args)
         charge(count(args, result))
         return result
       }
@@ -74,7 +81,7 @@ export async function countReconstructionWork<T>(
       ...descriptor,
       value: function (this: unknown[], ...args: unknown[]) {
         charge(this.length)
-        return Reflect.apply(original, this, args)
+        return original.apply(this, args)
       }
     })
     restore.push(() => Object.defineProperty(Array.prototype, name, descriptor))
