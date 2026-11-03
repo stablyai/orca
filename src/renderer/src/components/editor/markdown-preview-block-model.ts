@@ -46,6 +46,19 @@ export function getMarkdownPreviewAnnotationQuote(node: React.ReactNode): string
 export function hasMarkdownPreviewNestedBlock(
   node: MarkdownPreviewPositionNode | undefined
 ): boolean {
-  const blockTags = new Set(['p', 'pre', 'table', 'blockquote', 'ul', 'ol'])
+  const blockTags = new Set([
+    'p',
+    'pre',
+    'table',
+    'blockquote',
+    'ul',
+    'ol',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6'
+  ])
   return Boolean(node?.children?.some((child) => child.tagName && blockTags.has(child.tagName)))
 }
