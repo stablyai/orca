@@ -13,7 +13,7 @@ import {
 } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
-import { PI_THINKING_LEVELS } from './structured-agent-session-effective-effort'
+import { PI_THINKING_LEVELS } from './agent-session/options/structured-agent-session-effective-effort'
 
 export const EXTRA_AGENT_ARGS_MAX_BYTES = 4096
 export const EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED =
