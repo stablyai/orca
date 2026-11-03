@@ -65,6 +65,9 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
       activeViewStateId={file.id}
       model={model as never}
       copiedPathVisible={false}
+      canShowMarkdownCopy={false}
+      canCopyMarkdown={false}
+      onCopyMarkdown={async () => false}
       showMarkdownTableOfContents={false}
       canShowMarkdownFrontmatterToggle={false}
       markdownFrontmatterVisible={false}
