@@ -1,3 +1,4 @@
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../shared/constants'
@@ -34,6 +35,14 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  const facade = await vi.importMock<typeof GitExecFileModule>('../git/runner')
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: facade.gitExecFileAsync
+  }
+})
+
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: {
@@ -67,11 +76,11 @@ vi.mock('../git/repo', () => ({
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
@@ -189,7 +198,7 @@ describe('repos:create', () => {
 
   it('rejects empty names', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
-    expect(result).toEqual({ error: 'Name cannot be empty' })
+    expect(result).toEqual({ error: 'Name cannot be empty', errorCode: 'nameEmpty' })
     expect(mkdirMock).not.toHaveBeenCalled()
   })
 
@@ -216,7 +225,7 @@ describe('repos:create', () => {
 
   it('rejects empty parent path', async () => {
     const result = await callCreate({ parentPath: '   ', name: 'project', kind: 'git' })
-    expect(result).toEqual({ error: 'Parent directory is required' })
+    expect(result).toEqual({ error: 'Parent directory is required', errorCode: 'parentRequired' })
     expect(mkdirMock).not.toHaveBeenCalled()
   })
 
@@ -297,11 +306,14 @@ describe('repos:create', () => {
 
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
     expect(mkdirMock).toHaveBeenNthCalledWith(2, tmpPath('gitproj'), { recursive: false })
-    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], { cwd: tmpPath('gitproj') })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], {
+      cwd: tmpPath('gitproj'),
+      hostGit: true
+    })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['commit', '--allow-empty', '-m', 'Initial commit'],
-      { cwd: tmpPath('gitproj') }
+      { cwd: tmpPath('gitproj'), hostGit: true }
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -320,7 +332,11 @@ describe('repos:create', () => {
 
     expect(rmMock).toHaveBeenCalledWith(tmpPath('broken'), { recursive: true, force: true })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
-    expect(result).toMatchObject({ error: expect.stringContaining('Failed to initialize') })
+    expect(result).toEqual({
+      error: 'Failed to initialize git repository: git init blew up',
+      errorCode: 'gitInitFailed',
+      errorDetail: 'git init blew up'
+    })
   })
 
   it('does NOT rm a pre-existing empty directory when git init fails', async () => {
@@ -420,7 +436,7 @@ describe('repos:create', () => {
 
   it('does NOT rebuild the authorized-roots cache on a validation failure', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: '   ', kind: 'git' })
-    expect(result).toEqual({ error: 'Name cannot be empty' })
+    expect(result).toEqual({ error: 'Name cannot be empty', errorCode: 'nameEmpty' })
     expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
   })
 

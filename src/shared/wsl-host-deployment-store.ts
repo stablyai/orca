@@ -22,6 +22,9 @@ const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 export const WslHostPendingStopSchema = z.object({
   since: z.number().finite(),
   reason: z.string().max(4_096),
+  /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code; older builds drop it and show `reason`. */
+  reasonCode: z.string().max(128).optional(),
+  reasonParams: z.record(z.string(), z.union([z.string().max(4_096), z.number()])).optional(),
   verdict: z.enum(['live', 'unverifiable'])
 })
 
@@ -58,6 +61,8 @@ export type WslHostDeployments = {
   deployments: WslHostDeploymentRecord[]
   /** Environment ids whose record this build cannot read; those environments must not be used. */
   unreadableEnvironmentIds: Set<string>
+  /** The whole file is unreadable (corrupt, or a newer envelope): any server that could be a WSL host is. */
+  fileUnreadable?: boolean
 }
 
 export class WslHostDeploymentStoreInvalidError extends Error {
@@ -166,7 +171,7 @@ export function writeWslHostDeployment(
   )
 }
 
-function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
+export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
   return Boolean(
     environment.orcadDeployment ||
     environment.sshAccess ||
@@ -178,13 +183,13 @@ function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
 /** Overlay WSL links and hide unreadable records’ environments. Ignore stale links that conflict with SSH state or pairing. */
 export function overlayWslHostDeployments(
   environments: readonly KnownRuntimeEnvironment[],
-  { deployments, unreadableEnvironmentIds }: WslHostDeployments
+  { deployments, unreadableEnvironmentIds, fileUnreadable = false }: WslHostDeployments
 ): KnownRuntimeEnvironment[] {
   const byEnvironmentId = new Map(deployments.map((record) => [record.environmentId, record]))
   // Only a loopback pairing with no SSH link can be a WSL host; an unreadable record hides no other.
   const hidden = environments.filter(
     (environment) =>
-      unreadableEnvironmentIds.has(environment.id) &&
+      (fileUnreadable || unreadableEnvironmentIds.has(environment.id)) &&
       !hasNonWslOwner(environment) &&
       getPreferredLoopbackRuntimePort(environment) !== null
   )

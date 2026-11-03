@@ -1,14 +1,14 @@
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), gitOptions: vi.fn() }))
-vi.mock('../../repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/catalog/repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph }))
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: async (path: string) => path
 }))
 vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: vi.fn() }))

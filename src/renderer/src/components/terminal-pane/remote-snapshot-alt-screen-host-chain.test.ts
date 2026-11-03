@@ -114,6 +114,8 @@ type HostStream = {
   ackPendingOutput: unknown[]
   ackPendingOutputBytes: number
   ackPendingOutputOverflowed: boolean
+  yieldedQueries: unknown[]
+  outputBatcher: { push: () => void; flush: () => void; dispose: () => void }
 }
 type HostConnection = {
   runtime: HostRuntime
@@ -307,7 +309,9 @@ async function publishHostRecovery(
     ackOutputSourceRanges: false,
     ackPendingOutput: [],
     ackPendingOutputBytes: 0,
-    ackPendingOutputOverflowed: false
+    ackPendingOutputOverflowed: false,
+    yieldedQueries: [],
+    outputBatcher: { push: vi.fn(), flush: vi.fn(), dispose: vi.fn() }
   }
   const connection: HostConnection = {
     runtime: host,

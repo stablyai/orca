@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -7,6 +7,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
+import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   fileExplorerHasRedo,
   fileExplorerHasUndo,
@@ -47,6 +48,7 @@ export function useFileExplorerKeys(opts: {
   requestDeleteAll: (nodes: TreeNode[]) => void
   scrollToIndex: (index: number) => void
   activeWorktreeId: string | null
+  pathOwner: LocalPathOpenOwner
 }): void {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
@@ -65,6 +67,10 @@ export function useFileExplorerKeys(opts: {
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
+  const pathOwnerRef = useRef(opts.pathOwner)
+  useLayoutEffect(() => {
+    pathOwnerRef.current = opts.pathOwner
+  }, [opts.pathOwner])
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
@@ -210,7 +216,8 @@ export function useFileExplorerKeys(opts: {
         const node =
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
-        if (node) {
+        // Rows listed through an outside folder link are browse-only; main refuses their writes.
+        if (node && !node.outsideProject) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
@@ -224,7 +231,9 @@ export function useFileExplorerKeys(opts: {
           )
           if (wantsDelete) {
             e.preventDefault()
-            const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
+            const selectedNodes = rowProjectionRef.current
+              .getRowsByPaths(selectedPathsRef.current)
+              .filter((selected) => !selected.outsideProject)
             requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
             return
           }
@@ -262,14 +271,14 @@ export function useFileExplorerKeys(opts: {
       if (wantsCopyRelativePath) {
         e.preventDefault()
         window.api.ui.writeClipboardText(
-          formatFileExplorerPathsForClipboard(fallbackNodes, 'relative')
+          formatFileExplorerPathsForClipboard(fallbackNodes, 'relative', pathOwnerRef.current)
         )
         return
       }
       if (wantsCopyPath) {
         e.preventDefault()
         window.api.ui.writeClipboardText(
-          formatFileExplorerPathsForClipboard(fallbackNodes, 'absolute')
+          formatFileExplorerPathsForClipboard(fallbackNodes, 'absolute', pathOwnerRef.current)
         )
       }
     }

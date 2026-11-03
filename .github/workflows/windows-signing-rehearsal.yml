@@ -17,7 +17,19 @@ on:
         default: windows-inner-binaries-zip
 
 jobs:
+  # Ship the same qualified template as release-cut so the reseal over SignPath-rewritten binaries is rehearsed too.
+  orcad-template:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/qualified-orcad-template.yml
+    with:
+      ref: ${{ github.sha }}
+      # SignPath origin verification covers reusable-workflow jobs, so they stay GitHub-hosted.
+      fast_runners: false
+
   rehearse:
+    needs: orcad-template
     # Why: SignPath origin verification requires GitHub-hosted runners, and
     # windows-2022 matches the real release job's build environment.
     runs-on: windows-2022
@@ -25,6 +37,8 @@ jobs:
     permissions:
       actions: read
       contents: read
+    env:
+      ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
 
     steps:
       - name: Checkout
@@ -48,13 +62,19 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-win-
 
@@ -78,6 +98,13 @@ jobs:
         run: pnpm build:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+      # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
+      - name: Download the orcad deployment template
+        uses: actions/download-artifact@v8
+        with:
+          name: orcad-template
+          path: out/orcad-template
 
       # Build full --win: --dir never creates the NSIS uninstaller needed for MDE evidence.
       - name: Package Windows app and export the NSIS uninstaller
@@ -111,6 +138,11 @@ jobs:
             Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
             ForEach-Object {
               $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              # The orcad template's Linux/macOS addons are data for SSH hosts, not PE files.
+              if ($relative -match '^resources[\\/]orcad-template[\\/]targets[\\/](?!win32-)') {
+                $skipped.Add("$relative  <non-Windows orcad template payload>")
+                return
+              }
               $signature = Get-AuthenticodeSignature -FilePath $_.FullName
               if ($signature.Status -eq 'Valid') {
                 $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
@@ -213,6 +245,10 @@ jobs:
             $failures | ForEach-Object { Write-Host "::error::$_" }
             throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
+
+      # Recompute template checksums over the signed bytes, then verify the template as release-cut does.
+      - name: Reseal the orcad template over its signed binaries
+        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
 
       - name: Restore signed uninstaller for the installer rebuild
         shell: pwsh
@@ -454,7 +490,7 @@ jobs:
             # Only elevate.exe is advisory: NSIS pack recopies pristine cache bytes over signed win-unpacked output.
             # With no certificate, CopyElevateHelper.signIf signs nothing; this predates the uninstaller relay.
             # release-cut pre-seeds only Valid, SignPath-signed cache bytes; test certificates deliberately fail that guard.
-            # DO NOT relax it: rehearsal shares electron-builder-win-<lockfile hash> with real releases and would poison
+            # DO NOT relax it: rehearsal shares electron-builder-win-<Electron+builder versions> with real releases and would poison
             # their cache with “Test certificate for Orca agent ide [OSS]”. Fix the UAC helper separately with proper scrutiny.
             if ($relative -eq 'resources\elevate.exe') {
               Test-Signature "installed: $relative" $path -Advisory

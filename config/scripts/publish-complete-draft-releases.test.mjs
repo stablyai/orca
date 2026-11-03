@@ -25,6 +25,9 @@ async function withGitRepo(run) {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
     git(dir, ['config', 'user.email', 'test@example.com'])
+    // Why: global tag.gpgsign turns lightweight fixture tags into annotated ones that need a message.
+    git(dir, ['config', 'commit.gpgsign', 'false'])
+    git(dir, ['config', 'tag.gpgsign', 'false'])
     return await run(dir)
   } finally {
     rmSync(dir, { recursive: true, force: true })

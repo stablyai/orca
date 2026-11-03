@@ -113,6 +113,121 @@ describe('physical session liveness', () => {
     }
   })
 
+  it.each(['app-resume', 'network-change'] as const)(
+    'ends a silent direct socket after one 4s miss on %s',
+    async (reason) => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = sockets[0]
+      if (!socket) {
+        throw new Error('Expected a direct socket')
+      }
+      socket.authenticate()
+
+      try {
+        client.notifyForeground(reason)
+        await vi.advanceTimersByTimeAsync(3_999)
+        expect(client.getState()).toBe('connected')
+        await vi.advanceTimersByTimeAsync(1)
+        expect(socket.close).toHaveBeenCalledOnce()
+        expect(client.getState()).toBe('reconnecting')
+      } finally {
+        client.close()
+      }
+    }
+  )
+
+  it('upgrades a focus probe on resume without letting repeated nudges extend the deadline', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]
+    if (!socket) {
+      throw new Error('Expected a direct socket')
+    }
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('focus')
+      await vi.advanceTimersByTimeAsync(1_000)
+      client.notifyForeground('app-resume')
+      await vi.advanceTimersByTimeAsync(3_000)
+      client.notifyForeground('network-change')
+      expect(client.getState()).toBe('connected')
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('checks a distinct background return after a recently answered network probe', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]
+    if (!socket) {
+      throw new Error('Expected a direct socket')
+    }
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('network-change')
+      const probe: unknown = JSON.parse(socket.sent.at(-1)?.replace(/^encrypted:/, '') ?? 'null')
+      if (!probe || typeof probe !== 'object' || !('id' in probe)) {
+        throw new Error('Expected the network probe')
+      }
+      socket.onmessage?.({
+        data: `encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      client.notifyForeground('app-resume')
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('ends a silent socket after one 4s miss when a caller stopped hearing back', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      // Just heard from, so not suspect yet.
+      const probes = () => socket.sent.filter((frame) => frame.includes('mobile-liveness-'))
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(probes()).toHaveLength(0)
+
+      client.probeLivenessNow?.()
+      expect(probes()).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(3_999)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
+    } finally {
+      client.close()
+    }
+  })
+
+  it('turns a tolerant probe already running into a decisive one', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+
+    try {
+      client.notifyForeground('focus')
+      await vi.advanceTimersByTimeAsync(4_000)
+      client.probeLivenessNow?.()
+      await vi.advanceTimersByTimeAsync(4_000)
+
+      expect(socket.close).toHaveBeenCalledOnce()
+    } finally {
+      client.close()
+    }
+  })
+
   it('counts authenticated terminal binary output as liveness', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
@@ -171,7 +286,7 @@ describe('physical session liveness', () => {
     client.close()
   })
 
-  it('does not let probe replies consume the authentication retry budget', () => {
+  it('does not let probe replies consume the authentication retry budget', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
     socket.authenticate()
@@ -205,6 +320,7 @@ describe('physical session liveness', () => {
           error: { code: 'unauthorized', message: 'Unauthorized' }
         })}`
       })
+      await vi.advanceTimersByTimeAsync(10_000)
     }
 
     expect(client.getState()).toBe('connected')

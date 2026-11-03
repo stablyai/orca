@@ -13,17 +13,20 @@ const TITLES = [
   "You're the president agent coordinating this review"
 ]
 const noop = (): void => {}
-
 function TabWidthFixture({
   count,
   titles = TITLES,
   browserTabs,
+  clientHostedBrowserRows,
   editorFiles,
   tabBarOrder
 }: {
   count: number
   titles?: string[]
-} & Pick<TabBarProps, 'browserTabs' | 'editorFiles' | 'tabBarOrder'>): React.JSX.Element {
+} & Pick<
+  TabBarProps,
+  'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
+>): React.JSX.Element {
   const [activeTabId, setActiveTabId] = useState('tab-0')
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
@@ -47,6 +50,7 @@ function TabWidthFixture({
           worktreeId={WORKSPACE_ID}
           groupId="tab-width-group"
           browserTabs={browserTabs}
+          clientHostedBrowserRows={clientHostedBrowserRows}
           editorFiles={editorFiles}
           tabBarOrder={tabBarOrder}
           expandedPaneByTabId={{}}
@@ -67,9 +71,16 @@ function TabWidthFixture({
   )
 }
 
-export const spacious = defineFixture({
+export const availableWidth = defineFixture({
   width: 1280,
   render: () => <TabWidthFixture count={4} />
+})
+
+export const twoTabs = defineFixture({
+  width: 1280,
+  render: () => (
+    <TabWidthFixture count={2} titles={['Council Branch Review: Zero Regressions', 'Terminal 1']} />
+  )
 })
 
 export const single = defineFixture({
@@ -82,33 +93,9 @@ export const long = defineFixture({
   render: () => <TabWidthFixture count={1} titles={['A very long conversation title '.repeat(8)]} />
 })
 
-export const contentFit = defineFixture({
-  width: 1280,
-  render: () => (
-    <TabWidthFixture
-      count={3}
-      titles={[
-        'Measure the effect of the new tab layout on conversation navigation',
-        'PR implementation approach',
-        'Review the implementation for layout and interaction regressions'
-      ]}
-    />
-  )
-})
-
 export const narrow = defineFixture({
   width: 420,
   render: () => <TabWidthFixture count={4} />
-})
-
-export const mixed = defineFixture({
-  width: 620,
-  render: () => (
-    <TabWidthFixture
-      count={3}
-      titles={['A very long conversation title '.repeat(8), 'Go', 'Notes']}
-    />
-  )
 })
 
 export const overflowing = defineFixture({
@@ -152,15 +139,65 @@ export const mixedTypes = defineFixture({
   )
 })
 
-export const competingTitles = defineFixture({
-  width: 620,
+export const singleBrowser = defineFixture({
+  width: 1000,
   render: () => (
     <TabWidthFixture
-      count={3}
-      titles={[
-        'A very long conversation title '.repeat(12),
-        'Go',
-        'Another long conversation title '.repeat(3)
+      count={0}
+      browserTabs={[
+        {
+          id: 'browser-0',
+          worktreeId: WORKSPACE_ID,
+          url: 'https://example.com',
+          title: 'A browser page with a long descriptive title',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          createdAt: 0
+        }
+      ]}
+    />
+  )
+})
+
+export const singleFile = defineFixture({
+  width: 1000,
+  render: () => (
+    <TabWidthFixture
+      count={0}
+      editorFiles={[
+        {
+          id: 'file-0',
+          worktreeId: WORKSPACE_ID,
+          filePath: '/tmp/notes.md',
+          relativePath: 'notes.md',
+          language: 'markdown',
+          isDirty: true,
+          mode: 'edit'
+        }
+      ]}
+    />
+  )
+})
+
+export const singleHostedPage = defineFixture({
+  width: 1000,
+  render: () => (
+    <TabWidthFixture
+      count={0}
+      clientHostedBrowserRows={[
+        {
+          browserPageId: 'hosted-0',
+          worktreeId: WORKSPACE_ID,
+          url: 'https://example.com',
+          title: 'A page hosted on a paired device',
+          loading: false,
+          browserHostClientId: 'client-0',
+          hostDeviceName: 'Phone',
+          hostAbsent: false
+        }
       ]}
     />
   )

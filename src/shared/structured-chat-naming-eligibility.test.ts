@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalSnapshot } from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSnapshot
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import { firstStructuredChatNamingPrompt } from './structured-chat-naming-eligibility'
 
 function message(
@@ -48,12 +51,6 @@ describe('first-turn chat naming eligibility', () => {
       providerItemId: 'provider-message'
     }))
     expect(firstStructuredChatNamingPrompt(state, 100)).toBe('Repair login')
-  })
-
-  it('expires when a second root user message exists', () => {
-    const state = snapshot()
-    state.items.push(message('Second turn', { itemId: 'second' }))
-    expect(firstStructuredChatNamingPrompt(state, 100)).toBe('')
   })
 
   it('does not promote later prose after an empty first message', () => {

@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import type { GhosttyImportPreview } from '../../../../shared/global-settings-types'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal-config-import-preview'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 import type { DiscoveryState } from './ThemeStep'
@@ -13,7 +13,7 @@ export function GhosttyDiscoveryRow({
   discovery: DiscoveryState
   importing: boolean
   disabled: boolean
-  onImport: (preview: GhosttyImportPreview) => void
+  onImport: (preview: TerminalConfigImportPreview) => void
 }) {
   // Non-Mac discovery remains idle; hide it instead of leaving a permanent looking placeholder.
   if (discovery.status === 'absent' || discovery.status === 'idle') {
@@ -83,7 +83,7 @@ export function GhosttyDiscoveryRow({
         onClick={() => onImport(preview)}
       >
         {importing
-          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing...')
+          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing…')
           : translate('auto.components.onboarding.ThemeStep.248c812283', 'Import')}
       </button>
     </div>

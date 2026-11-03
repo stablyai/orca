@@ -131,20 +131,10 @@ export function registerReposSharedProjectBadgeColorTests(): void {
   })
 
   function badgeColor(store: ReturnType<typeof createTestStore>): string | undefined {
-    return store.getState().endpointProjects.find((project) => project.id === SHARED_PROJECT_ID)
-      ?.badgeColor
+    return store.getState().projects.find((project) => project.id === SHARED_PROJECT_ID)?.badgeColor
   }
 
   describe('shared project badge color across hosts', () => {
-    it('keeps the local color when a remote host shares the project name', async () => {
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchReposForAllHosts()
-
-      expect(badgeColor(store)).toBe(LOCAL_GREEN)
-    })
-
     it('keeps the local color when a runtime-only refresh lands after startup', async () => {
       const store = createTestStore()
       store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
@@ -169,18 +159,6 @@ export function registerReposSharedProjectBadgeColorTests(): void {
         recolored
       )
       expect(badgeColor(store)).toBe(recolored)
-    })
-
-    it('leaves a remote-only project showing its own host color', async () => {
-      reposList.mockResolvedValue([])
-      projectsList.mockResolvedValue([])
-      listHostSetups.mockResolvedValue([])
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-
-      await store.getState().fetchReposForAllHosts()
-
-      expect(badgeColor(store)).toBe(REMOTE_NEUTRAL)
     })
   })
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDropdownItems } from './source-control-dropdown-items'
-import type { DropdownActionInputs, DropdownItem } from './source-control-dropdown-item-types'
+import type {
+  DropdownActionInputs,
+  DropdownItem
+} from '../../../../shared/source-control-dropdown-item-types'
 
 function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionInputs {
   return {

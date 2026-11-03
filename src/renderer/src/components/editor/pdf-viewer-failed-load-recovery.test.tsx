@@ -21,7 +21,11 @@ const localizationResources = vi.hoisted(
   (): { active: boolean; destroy: ReturnType<typeof vi.fn<() => Promise<void>>> }[] => []
 )
 
-vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument }))
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: {},
+  getDocument,
+  PDFDataRangeTransport: class {}
+}))
 vi.mock('pdfjs-dist/web/pdf_viewer.mjs', () => {
   class EventBus {
     listeners = new Map<string, Set<(event: { location?: unknown; scale: number }) => void>>()

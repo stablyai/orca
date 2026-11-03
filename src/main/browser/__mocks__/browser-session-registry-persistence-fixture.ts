@@ -93,6 +93,7 @@ export function installModuleMocks(
     }),
     existsSync: vi.fn((p: string) => fsState.present.has(fsKey(p))),
     mkdirSync: vi.fn(),
+    statSync: vi.fn(() => ({ mtimeMs: 0 })),
     readFileSync: vi.fn((p: string) => {
       const v = fsState.files.get(fsKey(p))
       if (v === undefined) {
@@ -151,34 +152,38 @@ export function installModuleMocks(
       userAgent: CLEAN_USER_AGENT
     })
   }))
-  vi.doMock('../../persistence', () => ({
-    getCanonicalUserDataPath: () => USER_DATA
-  }))
   vi.doMock('../../persistence/loading-store/user-data-path', () => ({
     getCanonicalUserDataPath: () => USER_DATA
   }))
   // Model legacy unmarked stages; real SQLite merges have separate file-backed coverage.
   vi.doMock('../cookies/browser-cookie-staged-import', () => ({
     SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
+    InvalidStagedCookieImportError: class extends Error {},
+    isPermanentStagedCookieImportFailure: vi.fn(() => false),
     applyScopedStagedCookieImport: vi.fn(() => false),
     isScopedStagedCookieImport: vi.fn(() => false),
     removeCookieImportScopeMarker: vi.fn()
   }))
+  const renameFileWithWindowsRetryMock = vi.fn((source: string, target: string) => {
+    const sourceKey = fsKey(source)
+    const targetKey = fsKey(target)
+    if (!fsState.present.has(sourceKey)) {
+      throw new Error('ENOENT')
+    }
+    const value = fsState.files.get(sourceKey)
+    fsState.present.delete(sourceKey)
+    fsState.files.delete(sourceKey)
+    fsState.present.add(targetKey)
+    if (value !== undefined) {
+      fsState.files.set(targetKey, value)
+    }
+  })
+  vi.doMock('../../../shared/windows-retry-file-operations', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    renameFileWithWindowsRetry: renameFileWithWindowsRetryMock
+  }))
   vi.doMock('../../codex-accounts/fs-utils', () => ({
-    renameFileWithWindowsRetry: vi.fn((source: string, target: string) => {
-      const sourceKey = fsKey(source)
-      const targetKey = fsKey(target)
-      if (!fsState.present.has(sourceKey)) {
-        throw new Error('ENOENT')
-      }
-      const value = fsState.files.get(sourceKey)
-      fsState.present.delete(sourceKey)
-      fsState.files.delete(sourceKey)
-      fsState.present.add(targetKey)
-      if (value !== undefined) {
-        fsState.files.set(targetKey, value)
-      }
-    }),
+    renameFileWithWindowsRetry: renameFileWithWindowsRetryMock,
     writeFileAtomically: vi.fn((pathValue: string, data: string) => {
       const key = fsKey(pathValue)
       fsState.files.set(key, data)

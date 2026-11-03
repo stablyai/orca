@@ -5,11 +5,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import {
-  hasLocalSkillRuntimeAuthority,
-  shouldUseSkillFreshness,
-  useActiveProjectSkillRuntime
-} from './useActiveProjectSkillRuntime'
+import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 
 function setPlatform(platform: NodeJS.Platform): void {
   ;(window as unknown as { api: unknown }).api = {
@@ -40,7 +36,7 @@ describe('useActiveProjectSkillRuntime', () => {
       activeRepoId: null,
       activeWorktreeId: null,
       activeWorkspaceExecutionHostId: null,
-      endpointProjects: [],
+      projects: [],
       repos: [],
       worktreesByRepo: {},
       folderWorkspaces: [],
@@ -158,25 +154,5 @@ describe('useActiveProjectSkillRuntime', () => {
     const { result } = renderHook(() => useActiveProjectSkillRuntime())
     expect(result.current.bundledSkillTarget).toEqual({ kind: 'local' })
     expect(result.current.discoveryRuntimeTarget).toEqual({ kind: 'local' })
-  })
-
-  it('limits freshness pills to this machine and paired hosts', () => {
-    expect(shouldUseSkillFreshness({ kind: 'local' }, undefined)).toBe(true)
-    expect(shouldUseSkillFreshness({ kind: 'local' }, { runtime: 'host', label: 'Host' })).toBe(
-      true
-    )
-    expect(shouldUseSkillFreshness({ kind: 'local' }, { runtime: 'wsl', label: 'WSL' })).toBe(false)
-    expect(
-      shouldUseSkillFreshness({ kind: 'environment', environmentId: 'ssh-production' }, undefined)
-    ).toBe(true)
-    expect(shouldUseSkillFreshness(null, undefined)).toBe(false)
-  })
-
-  it('limits the no-project Windows fallback to local runtime authority', () => {
-    expect(hasLocalSkillRuntimeAuthority({ kind: 'local' })).toBe(true)
-    expect(
-      hasLocalSkillRuntimeAuthority({ kind: 'environment', environmentId: 'ssh-production' })
-    ).toBe(false)
-    expect(hasLocalSkillRuntimeAuthority(null)).toBe(false)
   })
 })

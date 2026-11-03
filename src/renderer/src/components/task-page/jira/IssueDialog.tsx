@@ -21,7 +21,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { cn } from '@/lib/utils'
 import {
   Select,
@@ -34,7 +34,7 @@ import { Input } from '@/components/ui/input'
 import {
   getJiraCreateAllowedValueLabel,
   isJiraScalarUserCreateField
-} from '@/components/task-page-jira-create-fields'
+} from '@/components/task-page/jira/task-page-jira-create-fields'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
 import { TaskPageJiraIssueUserField } from './IssueUserField'
 export function TaskPageJiraIssueDialog({
@@ -352,7 +352,9 @@ export function TaskPageJiraIssueDialog({
             </div>
           ) : null}
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>

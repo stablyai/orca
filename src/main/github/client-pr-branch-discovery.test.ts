@@ -208,7 +208,11 @@ describe('getPRForBranch', () => {
 
     expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', undefined)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(pr?.number).toBe(42)
@@ -245,7 +249,11 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'feature/test')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/stablyai/orca/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/stablyai/orca/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({
@@ -277,7 +285,11 @@ describe('getPRForBranch', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      [
+        'api',
+        'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({
@@ -289,6 +301,117 @@ describe('getPRForBranch', () => {
       mergeable: 'MERGEABLE',
       headSha: 'rest-head-oid'
     })
+  })
+
+  // GitHub serves a renamed repository under its old name, but reports the new name in the PR.
+  function primeRenamedOriginBranchLookup(headRepoName: string): void {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'old-widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 44,
+          title: 'Renamed repository lookup',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/44',
+          updated_at: '2026-10-28T00:00:00Z',
+          draft: false,
+          mergeable: true,
+          head: {
+            ref: 'feature/test',
+            sha: 'renamed-head-oid',
+            repo: { name: headRepoName, owner: { login: 'acme' } }
+          },
+          base: { ref: 'main', sha: 'renamed-base-oid' }
+        }
+      ])
+    })
+  }
+
+  it('keeps a same-repository PR when origin still uses the pre-rename URL', async () => {
+    primeRenamedOriginBranchLookup('widgets')
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        'repos/acme/old-widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10',
+        '--include'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({ number: 44, url: 'https://github.com/acme/widgets/pull/44' })
+  })
+
+  it('still rejects a cross-repository head when origin uses the pre-rename URL', async () => {
+    primeRenamedOriginBranchLookup('other-widgets')
+
+    expect(await getPRForBranch('/repo-root', 'feature/test')).toBeNull()
+  })
+
+  it('prefers the open PR over a newer closed PR on the same branch', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 5001,
+          title: 'Abandoned retry',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5001',
+          updated_at: '2026-03-29T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        },
+        {
+          number: 5000,
+          title: 'Reopened original',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/5000',
+          updated_at: '2026-03-30T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        }
+      ])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr).toMatchObject({ number: 5000, state: 'open' })
+  })
+
+  it('falls back to the newest PR when none on the branch is open', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 5001,
+          title: 'Newer closed',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5001',
+          updated_at: '2026-03-29T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        },
+        {
+          number: 5000,
+          title: 'Older closed',
+          state: 'closed',
+          html_url: 'https://github.com/acme/widgets/pull/5000',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          head: { ref: 'feature/test', sha: 'head-oid' },
+          base: { ref: 'main', sha: 'base-oid' }
+        }
+      ])
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.number).toBe(5001)
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {
@@ -332,7 +455,7 @@ describe('getPRForBranch', () => {
         '--repo',
         'acme/widgets',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
       ],
       { cwd: '/repo-root' }
     )

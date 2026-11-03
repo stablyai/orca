@@ -3,6 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
+import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), coherent: false }))
 
@@ -19,17 +20,16 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: vi.fn()
 }))
-vi.mock('@/lib/structured-agent-session-launch-options', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-options', async (original) => ({
+  ...(await original<typeof LaunchOptions>()),
   holdStructuredAgentSessionLaunchOption: vi.fn(),
   getStructuredAgentSessionLaunchSelection: () => null
 }))
 
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionsResult
-} from '../../../../shared/agent-session-wire'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   preloadHostModelCatalogSnapshots,
@@ -100,6 +100,7 @@ function renderNewChat(args: {
   seedOptions?: Record<string, string>
   explicitOptions?: Record<string, string>
   sessionId?: string
+  restored?: boolean
 }) {
   const frames: Pill[] = []
   const view = renderHook(() => {
@@ -115,8 +116,7 @@ function renderNewChat(args: {
       unloadedTurnRevisions: undefined,
       mutate: vi.fn(),
       launch: {
-        kind: 'new',
-        heldOptions: {},
+        kind: args.restored ? 'resume' : 'new',
         worktree: 'id:wt-1',
         ...(args.explicitOptions ? { explicitOptions: args.explicitOptions } : {}),
         ...(args.seedOptions ? { seedOptions: args.seedOptions } : {})
@@ -149,6 +149,90 @@ describe('a new chat picker’s first frame', () => {
     mocks.call.mockReset()
     mocks.coherent = false
     resetHostModelCatalogSnapshotsForTests()
+  })
+
+  it('holds the placeholder after unknown options and renders discovery before its recovery reread answers', async () => {
+    const catalog = deferred<AgentSessionModelCatalogResult>()
+    let reads = 0
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      method === 'agentSession.options'
+        ? ++reads === 1
+          ? Promise.resolve({ models: [], modelsKnown: false, current: { defaulted: [] } })
+          : new Promise(() => {})
+        : method === 'agentSession.modelCatalog'
+          ? catalog.promise
+          : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'pi',
+        sessionId: 'cold-pi',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const model = () => view.result.current.optionSnapshot.find(({ id }) => id === 'model')
+    await waitFor(() =>
+      expect(view.result.current.sendSource.optionStateRef.current.optionsAnswerPresent).toBe(true)
+    )
+    expect(model()).toMatchObject({ settable: false })
+    await act(async () => catalog.resolve(listed([{ id: 'provider/model', label: 'Pi model' }])))
+    await waitFor(() =>
+      expect(model()).toMatchObject({
+        kind: {
+          choices: expect.arrayContaining([
+            expect.objectContaining({ value: 'provider/model', label: 'Pi model' })
+          ])
+        }
+      })
+    )
+    expect(reads).toBeGreaterThan(1)
+    expect(
+      view.result.current.sendSource.optionStateRef.current.record.values.model
+    ).toBeUndefined()
+    view.unmount()
+  })
+
+  it('Pi cached first paint and late precise catalog keep the supported remembered composer value', async () => {
+    const row = {
+      id: 'openai/gpt-5',
+      label: 'GPT-5',
+      isDefault: false,
+      efforts: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map((value) => ({
+        value,
+        label: value
+      }))
+    }
+    const list: Listed = { origin: 'probe', models: [row], fetchedAt: 1 }
+    catalogAnswers(() => Promise.resolve(list))
+    await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['pi'])
+    const remembered = { model: row.id, effort: 'off' }
+    const first = renderNewChat({ agent: 'pi', seedOptions: remembered })
+    expect(first.frames[0]).toMatchObject({ model: row.id, effort: 'minimal' })
+    expect(
+      first.result.current.optionSnapshot.find((option) => option.id === 'effort')
+    ).toMatchObject({ kind: { currentValue: 'minimal', choices: row.efforts } })
+    first.unmount()
+    resetHostModelCatalogSnapshotsForTests()
+    const next = deferred<AgentSessionModelCatalogResult>()
+    catalogAnswers(() => next.promise)
+    const late = renderNewChat({ agent: 'pi', seedOptions: remembered, restored: true })
+    expect(late.frames[0]).toEqual({
+      model: row.id,
+      label: 'Openai GPT 5',
+      effort: 'off',
+      usable: true
+    })
+    await act(async () => next.resolve(list))
+    await waitFor(() => expect(late.frames.at(-1)?.effort).toBe('minimal'))
+    expect(remembered.effort).toBe('off')
+    late.unmount()
   })
 
   it('shows the unlisted action model rather than a saved or listed replacement on every pending frame', async () => {
@@ -216,7 +300,9 @@ describe('a new chat picker’s first frame', () => {
     await waitFor(() => expect(effort()?.settable).toBe(true))
     raw = { ...raw, listingInProgress: true }
     await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
-    expect(effort()?.settable).toBe(false)
+    // A refresh of a list already shown leaves its controls usable.
+    expect(effort()?.settable).toBe(true)
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
     await act(async () =>
       next.resolve({
         ...raw,
@@ -234,6 +320,140 @@ describe('a new chat picker’s first frame', () => {
       model: { value: 'A' },
       effort: { value: 'low' }
     })
+    view.unmount()
+  })
+
+  it('codex: a refresh keeps the CLI-default effort a running chat shows', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' }
+    ]
+    const gpt = {
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      isDefault: true,
+      defaultEffort: 'medium',
+      efforts
+    }
+    let raw: AgentSessionModelCatalogResult = { origin: 'probe', models: [gpt], fetchedAt: 1_000 }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve({ models: [gpt], current: { model: 'gpt-5.5', defaulted: [] } })
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve(raw)
+            : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'codex-default-effort',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const effort = () => view.result.current.optionSnapshot.find((row) => row.id === 'effort')
+    const medium = {
+      settable: true,
+      valueSource: 'default',
+      kind: { currentValue: 'medium' }
+    }
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    // The refresh also lists a model no finished listing has verified for this chat.
+    const unverified = { ...gpt, id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', isDefault: false }
+    raw = { ...raw, models: [gpt, unverified], listingInProgress: true }
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    expect(effort()).toMatchObject(medium)
+    expect(view.result.current.sendSource.optionStateRef.current.verifiedModelIds).toEqual([
+      'gpt-5.5'
+    ])
+    await act(async () => next.resolve({ origin: 'probe', models: [gpt], fetchedAt: 2_000 }))
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    view.unmount()
+  })
+
+  it('grok: a running chat keeps its own effort menu while the picker rejoins a host listing', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'high', label: 'High' },
+      { value: 'low', label: 'Low' }
+    ]
+    const child: AgentSessionOptionsResult = {
+      models: [
+        { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, efforts },
+        { id: 'grok-4.6', label: 'Grok 4.6', isDefault: false, efforts }
+      ],
+      listedModelIds: ['grok-4.7', 'grok-4.6'],
+      current: { model: 'grok-4.6', effort: 'high', defaulted: [] }
+    }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve(child)
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve({ origin: 'unknown', listingInProgress: true })
+            : new Promise(() => {})
+    )
+    const view = renderHook(
+      ({ isVisible }) =>
+        useStructuredAgentSessionOptions({
+          agent: 'grok',
+          sessionId: 'grok-running',
+          target: LOCAL_TARGET,
+          transportEnabled: true,
+          isVisible,
+          providerVisible: true,
+          fence: 1,
+          turnId: null,
+          unloadedTurnRevisions: undefined,
+          mutate: vi.fn()
+        }),
+      { initialProps: { isVisible: true } }
+    )
+    const capabilities = () =>
+      view.result.current.optionSnapshot.filter(({ id }) =>
+        ['effort', 'serviceTier', 'fastMode'].includes(id)
+      )
+    const usable = () => {
+      expect(capabilities().map(({ id }) => id)).toContain('effort')
+      expect(capabilities().every((row) => row.settable)).toBe(true)
+    }
+    await waitFor(() =>
+      expect(
+        mocks.call.mock.calls.some(
+          ([, method, params]) =>
+            method === 'agentSession.modelCatalog' &&
+            typeof params === 'object' &&
+            params !== null &&
+            'waitForListing' in params &&
+            params.waitForListing === true
+        )
+      ).toBe(true)
+    )
+    await waitFor(usable)
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    usable()
+    view.rerender({ isVisible: false })
+    view.rerender({ isVisible: true })
+    await act(async () => {})
+    usable()
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
+    await act(async () => next.resolve({ origin: 'unknown' }))
     view.unmount()
   })
 
@@ -278,43 +498,58 @@ describe('a new chat picker’s first frame', () => {
     unmount()
   })
 
-  it.each(['claude', 'codex', 'grok'] as const)(
-    '%s: a cold account shows the quiet placeholder until the host answers, then the list once',
-    async (agent) => {
+  it.each([
+    ['claude', CLAUDE_LIST, 'Opus (1M context)'],
+    ['codex', CODEX_LIST, 'GPT 5.5'],
+    ['grok', GROK_LIST, 'Grok Build']
+  ] as const)(
+    '%s: a cold account keeps the saved literal until its host label arrives',
+    async (agent, list, expectedLiteralLabel) => {
       const answer = deferred<AgentSessionModelCatalogResult>()
       catalogAnswers(() => answer.promise)
-      const list = agent === 'claude' ? CLAUDE_LIST : agent === 'codex' ? CODEX_LIST : GROK_LIST
       const first = list.models[0]!
       const { frames, unmount } = renderNewChat({ agent, seedOptions: { model: first.id } })
-      expect(frames[0]).toEqual(PLACEHOLDER)
+      expect(frames[0]).toEqual({
+        model: first.id,
+        label: expectedLiteralLabel,
+        effort: null,
+        usable: true
+      })
       answer.resolve(list)
-      await waitFor(() => expect(frames.at(-1)?.usable).toBe(true))
-      const named = frames.filter((frame) => frame.model !== null)
-      expect(new Set(named.map((frame) => frame.label))).toEqual(new Set([first.label]))
-      const beforeNamed = frames.slice(0, frames.indexOf(named[0]!))
-      expect(beforeNamed).toEqual(beforeNamed.map(() => PLACEHOLDER))
+      await waitFor(() => expect(frames.at(-1)?.label).toBe(first.label))
+      expect(frames.every((frame) => frame.model === first.id)).toBe(true)
       unmount()
     }
   )
 
-  it('with nothing saved, the built-in list is usable, naming nothing, until the listing lands', async () => {
+  it('with nothing saved, pending discovery keeps a disabled placeholder until real choices arrive', async () => {
     const listing = deferred<AgentSessionModelCatalogResult>()
     catalogAnswers(
       () => Promise.resolve({ origin: 'unknown', listingInProgress: true }),
       () => listing.promise
     )
-    const { frames, unmount } = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
+    const { frames, unmount } = renderNewChat({ agent: 'codex' })
     expect(frames[0]).toEqual(PLACEHOLDER)
-    await waitFor(() => expect(frames.at(-1)).toEqual({ ...PLACEHOLDER, usable: true }))
-    listing.resolve(CODEX_LIST)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(PLACEHOLDER))).toBe(
+      true
+    )
+    const joined = renderNewChat({ agent: 'codex' })
+    await act(async () => {})
+    expect(
+      joined.frames.every((frame) => JSON.stringify(frame) === JSON.stringify(PLACEHOLDER))
+    ).toBe(true)
+    listing.resolve({ ...CODEX_LIST, listingNamesConfiguredModel: true })
     await waitFor(() => expect(frames.at(-1)?.label).toBe('GPT-5.5 (host)'))
+    await waitFor(() => expect(joined.frames.at(-1)?.label).toBe('GPT-5.5 (host)'))
     expect(frames.some((frame) => frame.model !== null && frame.label !== 'GPT-5.5 (host)')).toBe(
       false
     )
     unmount()
+    joined.unmount()
   })
 
-  it('never paints a saved pick the host list does not name', async () => {
+  it('keeps a saved pick visible when the host list omits it', async () => {
     catalogAnswers(() => Promise.resolve(CODEX_LIST))
     await preloadHostModelCatalogSnapshots(LOCAL_TARGET, ['codex'])
     const { frames, unmount } = renderNewChat({
@@ -322,7 +557,12 @@ describe('a new chat picker’s first frame', () => {
       seedOptions: { model: 'gpt-retired' }
     })
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(frames.every((frame) => frame.model === null && !frame.usable)).toBe(true)
+    expect(frames.length).toBeGreaterThan(0)
+    expect(
+      frames.every(
+        (frame) => frame.model === 'gpt-retired' && frame.label === 'GPT Retired' && frame.usable
+      )
+    ).toBe(true)
     unmount()
   })
 
@@ -344,9 +584,83 @@ describe('a new chat picker’s first frame', () => {
     })
     expect(second.frames[0]).toMatchObject({ label: 'GPT-6.1 Sol', usable: true })
     second.unmount()
-    // A paired host’s cache must never name a model for the unanswered local host.
+    // A local seed must not borrow the paired host’s labels or capabilities.
     const local = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
-    expect(local.frames[0]).toEqual(PLACEHOLDER)
+    expect(local.frames[0]).toEqual({
+      model: 'gpt-5.5',
+      label: 'GPT 5.5',
+      effort: null,
+      usable: true
+    })
     local.unmount()
   })
+})
+
+it('accepts typed literals at an attached fence while options refresh with an empty catalog', async () => {
+  const pending = deferred<AgentSessionOptionsResult>()
+  let reads = 0
+  mocks.call.mockImplementation((_target: unknown, method: string) =>
+    method === 'agentSession.setOption'
+      ? Promise.resolve({ ok: true, value: { options: { model: 'literal' } } })
+      : method === 'agentSession.options'
+        ? ++reads === 1
+          ? Promise.resolve({ models: [], current: {} })
+          : pending.promise
+        : Promise.resolve({ origin: 'unknown' })
+  )
+  const mutate = vi.fn().mockResolvedValue({
+    status: 'accepted',
+    sameFence: true,
+    value: { key: 'model', value: 'literal', options: { model: 'literal' } }
+  })
+  const view = renderHook(
+    ({ fence }) =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'locked-chat',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate
+      }),
+    { initialProps: { fence: 1 } }
+  )
+  await waitFor(() => expect(reads).toBe(1))
+  view.rerender({ fence: 2 })
+  await waitFor(() => expect(reads).toBe(2))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
+  )
+  expect(mutate).not.toHaveBeenCalled()
+  expect(mocks.call.mock.calls.filter((call) => call[1] === 'agentSession.setOption')).toEqual([
+    [
+      LOCAL_TARGET,
+      'agentSession.setOption',
+      {
+        envelope: expect.objectContaining({ sessionId: 'locked-chat', expectedRuntimeFence: 2 }),
+        key: 'model',
+        value: 'literal'
+      },
+      {}
+    ]
+  ])
+  await act(async () => pending.resolve({ models: [], current: {} }))
+  await act(async () =>
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
+  )
+  expect(mocks.call).toHaveBeenCalledWith(
+    LOCAL_TARGET,
+    'agentSession.setOption',
+    {
+      envelope: expect.objectContaining({ sessionId: 'locked-chat', expectedRuntimeFence: 2 }),
+      key: 'model',
+      value: 'literal'
+    },
+    {}
+  )
+  view.unmount()
 })

@@ -1,4 +1,4 @@
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 
 export type ActiveAgentNotesSendStatus =
   | 'sent'

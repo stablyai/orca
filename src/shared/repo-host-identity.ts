@@ -1,8 +1,4 @@
-import {
-  getRepoExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from './execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from './execution-host'
 import type { Repo } from './repo-types'
 
 declare const hostScopedRepoKeyBrand: unique symbol
@@ -31,14 +27,4 @@ export function getRepoRegistrationHostIds(
   repoId: string
 ): Set<ExecutionHostId> {
   return new Set(repos.filter((repo) => repo.id === repoId).map(getRepoExecutionHostId))
-}
-
-export function getRepoSetupOwnerScope(
-  setup: Pick<Repo, 'connectionId' | 'executionHostId'> & { hostId?: string }
-): string {
-  const host = setup.hostId ?? 'local'
-  const execution = setup.connectionId
-    ? toSshExecutionHostId(setup.connectionId)
-    : getRepoExecutionHostId(setup)
-  return execution.startsWith('ssh:') && execution !== host ? `${host}\0${execution}` : host
 }

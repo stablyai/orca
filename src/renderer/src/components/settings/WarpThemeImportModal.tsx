@@ -146,16 +146,15 @@ export function WarpThemeImportModal({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
-                  {preview.themes.length === 1
-                    ? translate(
-                        'auto.components.settings.WarpThemeImportModal.found_theme_one',
-                        'Found 1 theme'
-                      )
-                    : translate(
-                        'auto.components.settings.WarpThemeImportModal.found_theme_other',
-                        'Found {{value0}} themes',
-                        { value0: preview.themes.length }
-                      )}
+                  {translate(
+                    'auto.components.settings.WarpThemeImportModal.found_theme',
+                    'Found {{value0}} themes',
+                    {
+                      value0: preview.themes.length,
+                      count: preview.themes.length,
+                      defaultValue_one: 'Found {{value0}} theme'
+                    }
+                  )}
                   {preview.sourceLabel
                     ? translate(
                         'auto.components.settings.WarpThemeImportModal.found_in_source',
@@ -316,21 +315,20 @@ export function WarpThemeImportModal({
             disabled={!preview?.found || selectedCount === 0 || loading}
             onClick={() => void handleApply()}
           >
-            {selectedCount === 1
+            {selectedCount > 0
               ? translate(
-                  'auto.components.settings.WarpThemeImportModal.import_theme_one',
-                  'Import 1 Theme'
+                  'auto.components.settings.WarpThemeImportModal.import_theme',
+                  'Import {{value0}} Themes',
+                  {
+                    value0: selectedCount,
+                    count: selectedCount,
+                    defaultValue_one: 'Import {{value0}} Theme'
+                  }
                 )
-              : selectedCount > 0
-                ? translate(
-                    'auto.components.settings.WarpThemeImportModal.import_theme_other',
-                    'Import {{value0}} Themes',
-                    { value0: selectedCount }
-                  )
-                : translate(
-                    'auto.components.settings.WarpThemeImportModal.import_themes',
-                    'Import Themes'
-                  )}
+              : translate(
+                  'auto.components.settings.WarpThemeImportModal.import_themes',
+                  'Import Themes'
+                )}
           </Button>
         </DialogFooter>
       </DialogContent>

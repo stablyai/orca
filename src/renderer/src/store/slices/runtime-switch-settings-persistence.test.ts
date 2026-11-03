@@ -1,9 +1,19 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { createTestStore } from './store-test-helpers'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import '@/lib/github-work-item-target-request'
+import '@/components/github/github-work-item-comment-mutations'
+import '../../../../shared/task-source-runtime-capabilities'
+
+beforeEach(() => clearRuntimeCompatibilityCacheForTests())
+afterEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
+  vi.unstubAllGlobals()
+})
 
 function compatibleStatus(runtimeId: string) {
   return {

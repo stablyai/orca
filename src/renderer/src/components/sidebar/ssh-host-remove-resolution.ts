@@ -1,23 +1,20 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
 
-/** Connected hosts can delete remotely; offline hosts can forget local records, and empty hosts need no workspace choice. */
+/** A host's workspaces can only be forgotten here (this app's main serves no ssh: host); empty hosts need no workspace choice. */
 export type SshHostRemoveResolution = {
   targetId: string
-  /** Ids of non-main worktrees on this host that a remote delete would remove. */
+  /** Ids of non-main worktrees on this host. */
   workspaceWorktreeIds: string[]
   /** Repo ids whose main/root workspace lives on this host. */
   hostRepoIds: string[]
   workspaceCount: number
-  isConnected: boolean
 }
 
 export function resolveSshHostRemoval(args: {
   targetId: string
   repos: readonly Pick<Repo, 'id' | 'connectionId'>[]
   worktrees: readonly Pick<Worktree, 'id' | 'repoId' | 'isMainWorktree'>[]
-  sshConnectionStates: ReadonlyMap<string, SshConnectionState>
 }): SshHostRemoveResolution {
   const hostRepoIds = [
     ...new Set(
@@ -35,13 +32,11 @@ export function resolveSshHostRemoval(args: {
         .map((worktree) => worktree.id)
     )
   ]
-  const isConnected = args.sshConnectionStates.get(args.targetId)?.status === 'connected'
   return {
     targetId: args.targetId,
     workspaceWorktreeIds,
     hostRepoIds,
     // A repo's main/root workspace counts too — removing the host drops it.
-    workspaceCount: workspaceWorktreeIds.length + hostRepoIds.length,
-    isConnected
+    workspaceCount: workspaceWorktreeIds.length + hostRepoIds.length
   }
 }

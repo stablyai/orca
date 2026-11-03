@@ -84,4 +84,71 @@ describe('streamed browser page keyboard input', () => {
       ['browser.keyboardInsertText', { ...params, text: 'x' }]
     ])
   })
+
+  it('copies and cuts to the local clipboard, deleting only after the write', async () => {
+    const order: string[] = []
+    const ui = {
+      writeClipboardText: async (text: string) => {
+        order.push(`write ${text}`)
+      },
+      writeTerminalClipboardText: async (text: string) => {
+        order.push(`verified write ${text}`)
+      }
+    }
+    Object.defineProperty(window, 'api', { configurable: true, value: { ui } })
+    const evalResult = (text: string, cutPending: boolean) => async () => {
+      order.push(cutPending ? 'eval cut' : 'eval copy')
+      return { result: JSON.stringify({ text, cutPending }) }
+    }
+    callRuntimeRpc
+      .mockImplementationOnce(evalResult('copied', false))
+      .mockImplementationOnce(evalResult('', false))
+      .mockImplementationOnce(evalResult('cut text', true))
+      .mockImplementationOnce(async () => {
+        order.push('eval delete')
+        return {}
+      })
+    render(<StreamedFrame />)
+    const frame = screen.getByTestId('frame')
+
+    // A cancelled keydown keeps the chord from reaching the host page.
+    expect(fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })).toBe(false)
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.keyDown(frame, { key: 'x', code: 'KeyX', ctrlKey: true })
+
+    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(4))
+    expect(sentInput().every(([method]) => method === 'browser.eval')).toBe(true)
+    // The empty second copy must not clear what the first one wrote.
+    expect(order).toEqual([
+      'eval copy',
+      'write copied',
+      'eval copy',
+      'eval cut',
+      'verified write cut text',
+      'eval delete'
+    ])
+  })
+
+  it('pastes the just-copied text when paste is pressed before the copy finishes', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText: vi.fn(async () => {}) } }
+    })
+    callRuntimeRpc
+      .mockResolvedValueOnce({ result: JSON.stringify({ text: 'NEW', cutPending: false }) })
+      .mockResolvedValueOnce({ result: JSON.stringify({ text: '', cutPending: false }) })
+    render(<StreamedFrame />)
+    const frame = screen.getByTestId('frame')
+
+    // The second copy has nothing selected, so NEW is still what the clipboard holds.
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.paste(frame, { clipboardData: { getData: () => 'OLD' } })
+
+    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(3))
+    expect(sentInput()[2]).toEqual([
+      'browser.keyboardInsertText',
+      { worktree: 'worktree-a', page: 'page-a', text: 'NEW' }
+    ])
+  })
 })

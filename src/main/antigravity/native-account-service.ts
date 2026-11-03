@@ -12,11 +12,16 @@ import type {
 } from './native-account-store'
 
 export type AntigravityCredentialBackend = {
+  parse?(contents: string): AntigravityNativeCredential
   read(): Promise<AntigravityNativeCredential | null>
   write(contents: string, expected: string | null): Promise<void>
 }
 
-function matches(account: StoredAntigravityAccount, current: AntigravityNativeCredential): boolean {
+function matches(
+  account: StoredAntigravityAccount,
+  current: AntigravityNativeCredential,
+  parseCredential = parseAntigravityNativeCredential
+): boolean {
   if (current.identity && account.subject) {
     return account.subject === current.identity.subject && account.authMethod === current.authMethod
   }
@@ -24,7 +29,7 @@ function matches(account: StoredAntigravityAccount, current: AntigravityNativeCr
   if (
     current.refreshToken &&
     account.authMethod === current.authMethod &&
-    parseAntigravityNativeCredential(account.credentials).refreshToken === current.refreshToken
+    parseCredential(account.credentials).refreshToken === current.refreshToken
   ) {
     return true
   }
@@ -51,7 +56,7 @@ export class AntigravityAccountService {
       if (!current) {
         throw new Error('Sign in with agy on this execution host, then save the current account.')
       }
-      if (vault.accounts.some((entry) => matches(entry, current))) {
+      if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
       const identity = current.identity ?? (await this.lookupIdentity(current.accessToken))
@@ -60,7 +65,7 @@ export class AntigravityAccountService {
       }
       const identified = { ...current, identity }
       const latest = this.store.read()
-      if (!latest.accounts.some((entry) => matches(entry, identified))) {
+      if (!latest.accounts.some((entry) => this.matches(entry, identified))) {
         const timestamp = this.now()
         latest.accounts.push({
           id: randomUUID(),
@@ -80,23 +85,24 @@ export class AntigravityAccountService {
 
   selectAccount(id: string): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
-      const { vault, current } = await this.reconcile()
+      const { vault, current } = await this.reconcile(id)
       const selected = vault.accounts.find((account) => account.id === id)
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      parseAntigravityNativeCredential(selected.credentials)
-      if (!current || !matches(selected, current)) {
+      if (!current || !this.matches(selected, current)) {
         await this.backend.write(selected.credentials, current?.contents ?? null)
       }
       const readback = await this.backend.read()
-      if (!readback || !matches(selected, readback)) {
+      if (!readback || !this.matches(selected, readback)) {
         throw new Error(
           'Antigravity account switching could not be verified; refresh before retrying.'
         )
       }
       const latest = this.store.read()
-      if (!latest.accounts.some((account) => account.id === id && matches(account, readback))) {
+      if (
+        !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
+      ) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
       }
       latest.selectedAccountId = id
@@ -113,7 +119,7 @@ export class AntigravityAccountService {
       if (!account) {
         throw new Error('Antigravity account was not found.')
       }
-      if (vault.selectedAccountId === id || (current && matches(account, current))) {
+      if (vault.selectedAccountId === id || (current && this.matches(account, current))) {
         throw new Error('Select another Antigravity account before removing this account.')
       }
       const readback = await this.backend.read()
@@ -122,7 +128,7 @@ export class AntigravityAccountService {
       if (!latestAccount) {
         throw new Error('Antigravity account snapshots changed; refresh before retrying.')
       }
-      if (latest.selectedAccountId === id || (readback && matches(latestAccount, readback))) {
+      if (latest.selectedAccountId === id || (readback && this.matches(latestAccount, readback))) {
         throw new Error('Select another Antigravity account before removing this account.')
       }
       if (readback) {
@@ -141,7 +147,7 @@ export class AntigravityAccountService {
         return
       }
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
-      if (!selected || !current || !matches(selected, current)) {
+      if (!selected || !current || !this.matches(selected, current)) {
         throw new Error(
           'The native Antigravity account changed. Select the account again in Accounts before launching agy.'
         )
@@ -149,10 +155,25 @@ export class AntigravityAccountService {
     })
   }
 
-  private async reconcile() {
+  private matches(
+    account: StoredAntigravityAccount,
+    current: AntigravityNativeCredential
+  ): boolean {
+    return matches(account, current, this.backend.parse)
+  }
+
+  private async reconcile(selectedId?: string) {
     const current = await this.backend.read()
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = this.store.read()
+    if (selectedId !== undefined) {
+      const selected = vault.accounts.find((account) => account.id === selectedId)
+      if (!selected) {
+        throw new Error('Antigravity account was not found.')
+      }
+      const parseCredential = this.backend.parse ?? parseAntigravityNativeCredential
+      parseCredential(selected.credentials)
+    }
     if (current && this.updateSnapshot(vault, current)) {
       this.store.write(vault)
     }
@@ -163,7 +184,7 @@ export class AntigravityAccountService {
     vault: AntigravityAccountVault,
     current: AntigravityNativeCredential
   ): boolean {
-    const account = vault.accounts.find((entry) => matches(entry, current))
+    const account = vault.accounts.find((entry) => this.matches(entry, current))
     if (!account || account.credentials === current.contents) {
       return false
     }
@@ -180,7 +201,9 @@ export class AntigravityAccountService {
     vault: AntigravityAccountVault
     current: AntigravityNativeCredential | null
   }): AntigravityAccountState {
-    const active = current ? vault.accounts.find((entry) => matches(entry, current)) : undefined
+    const active = current
+      ? vault.accounts.find((entry) => this.matches(entry, current))
+      : undefined
     const subject = current?.identity?.subject ?? active?.subject ?? null
     return {
       accounts: vault.accounts.map(({ credentials: _credentials, ...account }) => account),

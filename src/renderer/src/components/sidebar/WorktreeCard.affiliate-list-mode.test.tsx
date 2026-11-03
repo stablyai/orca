@@ -46,6 +46,7 @@ vi.mock('@/store', () => {
     sshConnectionStates: new Map(),
     sshTargetLabels: new Map(),
     tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
     updateWorktreeMeta,
     workspacePortScan: null,
     worktreeCardProperties
@@ -191,7 +192,7 @@ describe('WorktreeCard affiliate list mode', () => {
     )
     expect(surface).not.toBeNull()
     expect(parentContent?.className).toContain('gap-0.5')
-    expect(parentContent?.className).toContain('pl-0')
+    expect(parentContent?.className).not.toMatch(/\bpl-/)
     const statusSlot = container.querySelector<HTMLElement>('[data-worktree-card-status-slot]')
     expect(statusSlot?.className).toContain('px-1')
     expect(container.querySelector('[data-testid="context-menu-wrapper"]')).toBeNull()

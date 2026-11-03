@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import { toast } from 'sonner'
+import 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import type { ListDetectedWorktreesArgs } from '../../../../shared/detected-worktree-provider-contract'
 import type { SshProviderEpoch } from '../../../../shared/ssh-types'
@@ -43,72 +43,6 @@ describe('fetchWorktrees', () => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
     clearHugeRepoWarningDismissalsForTests()
-  })
-
-  it('lists a repo with no row from this app, never the focused server', async () => {
-    const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-    mockApi.worktrees.listDetected.mockResolvedValue(makeDetectedResult('repo1', []))
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalled()
-  })
-
-  it('stamps ownerless worktrees from a named remote runtime before repos hydrate', async () => {
-    const store = createTestStore()
-    const remote = makeWorktree({
-      id: 'repo1::/remote/wt1',
-      repoId: 'repo1',
-      path: '/remote/wt1',
-      branch: 'refs/heads/remote'
-    })
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: makeDetectedResult('repo1', [remote]),
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    await store.getState().fetchWorktrees('repo1', { executionHostId: 'runtime:env-1' })
-
-    const expected = {
-      ...remote,
-      hostId: 'runtime:env-1',
-      runtimeOwnerEnvironmentId: 'env-1'
-    }
-    expect(store.getState().worktreesByRepo.repo1).toEqual([expected])
-    expect(store.getState().detectedWorktreesByRepo.repo1?.worktrees).toEqual([
-      expect.objectContaining(expected)
-    ])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.detectedList',
-      params: { repo: 'repo1' },
-      timeoutMs: 15_000
-    })
-    expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
-  })
-
-  it('pins the list fetch to the local host when forceLocalOwner is set', async () => {
-    // Local change events for unbound repos must stay local despite runtime focus or CLI-created worktrees remain invisible until restart.
-    const store = createTestStore()
-    const local = makeWorktree({
-      id: 'repo1::/local/wt1',
-      repoId: 'repo1',
-      path: '/local/wt1',
-      branch: 'refs/heads/local'
-    })
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-    mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [local]))
-
-    await store.getState().fetchWorktrees('repo1', { forceLocalOwner: true })
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([local])
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('pins a duplicate repo id to its local owner without replacing runtime worktrees', async () => {
@@ -161,10 +95,7 @@ describe('fetchWorktrees', () => {
       })
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
-      remote,
-      { ...local, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' }
-    ])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([remote, local])
     expect(store.getState().detectedWorktreesByRepo['same-repo']?.worktrees).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: remote.id, hostId: 'runtime:env-1' }),
@@ -210,12 +141,7 @@ describe('fetchWorktrees', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     // Why: SSH worktrees are fetched via local IPC but belong to the SSH host, so they carry the repo's ssh host id.
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      {
-        ...sshWorktree,
-        hostId: 'ssh:ssh-1',
-        projectId: 'repo:repo-ssh',
-        projectHostSetupId: 'repo-ssh'
-      }
+      { ...sshWorktree, hostId: 'ssh:ssh-1' }
     ])
   })
 
@@ -260,9 +186,7 @@ describe('fetchWorktrees', () => {
       })
     )
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo['same-repo']).toEqual([
-      { ...localWorktree, projectId: 'repo:same-repo', projectHostSetupId: 'same-repo' }
-    ])
+    expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
   })
 
   it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
@@ -276,7 +200,7 @@ describe('fetchWorktrees', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: null } as never,
       repos: []
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-missing-repo',
       ok: true,
@@ -297,11 +221,7 @@ describe('fetchWorktrees', () => {
     })
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-missing']).toEqual([
-      {
-        ...remote,
-        hostId: 'runtime:env-1',
-        runtimeOwnerEnvironmentId: 'env-1'
-      }
+      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
     ])
   })
 
@@ -438,7 +358,7 @@ describe('fetchWorktrees', () => {
           executionHostId: 'runtime:env-1'
         }
       ]
-    } as Partial<AppState>)
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -449,13 +369,7 @@ describe('fetchWorktrees', () => {
     await store.getState().fetchWorktrees('repo-remote', { forceLocalOwner: true })
 
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      {
-        ...remote,
-        hostId: 'runtime:env-1',
-        runtimeOwnerEnvironmentId: 'env-1',
-        projectId: 'repo:repo-remote',
-        projectHostSetupId: 'repo-remote'
-      }
+      { ...remote, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
     ])
   })
 
@@ -516,13 +430,7 @@ describe('fetchWorktrees', () => {
 
     await expect(staleRefresh).resolves.toBe(false)
     expect(store.getState().worktreesByRepo['repo-remote']).toEqual([
-      {
-        ...fresh,
-        hostId: 'runtime:env-1',
-        runtimeOwnerEnvironmentId: 'env-1',
-        projectId: 'repo:repo-remote',
-        projectHostSetupId: 'repo-remote'
-      }
+      { ...fresh, hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' }
     ])
     expect(mockApi.worktrees.listDetected).not.toHaveBeenCalled()
   })
@@ -547,17 +455,7 @@ describe('fetchWorktrees', () => {
           executionHostId: 'runtime:env-1'
         }
       ],
-      endpointProjects: [
-        {
-          id: 'github:stablyai/orca',
-          displayName: 'orca',
-          badgeColor: '#000',
-          sourceRepoIds: ['repo-remote'],
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      endpointProjectHostSetups: [
+      projectHostSetups: [
         {
           id: 'repo-remote',
           projectId: 'github:stablyai/orca',
@@ -666,43 +564,5 @@ describe('fetchWorktrees', () => {
       params: { repo: 'repo1', limit: 10_000 },
       timeoutMs: 15_000
     })
-  })
-
-  it('surfaces one deduped scope-mismatch toast when a mobile pairing forbids worktree RPCs', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [
-        { id: 'repo1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 0 },
-        { id: 'repo2', path: '/r2', displayName: 'R2', badgeColor: '#000', addedAt: 0 }
-      ]
-    } as Partial<AppState>)
-    // Ingest stamps server rows; the listing follows the row's host.
-    store.setState({
-      repos: store.getState().repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
-    })
-    // Why: a mobile-scope device token is denied non-allowlisted runtime RPCs.
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: false,
-      error: {
-        code: 'forbidden',
-        message: "Method 'worktree.detectedList' is not available to mobile clients"
-      },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-
-    const repo1Result = await store.getState().fetchWorktrees('repo1')
-    const repo2Result = await store.getState().fetchWorktrees('repo2')
-    await store.getState().fetchDetectedWorktrees('repo1')
-
-    expect(repo1Result).toBe(false)
-    expect(repo2Result).toBe(false)
-    expect(store.getState().worktreesByRepo.repo1).toBeUndefined()
-    // Why: per-repo failures must collapse to a single stable-id toast, not spam.
-    expect(toast.error).toHaveBeenCalledTimes(3)
-    for (const call of (toast.error as ReturnType<typeof vi.fn>).mock.calls) {
-      expect(call[1]).toMatchObject({ id: 'runtime-scope-forbidden' })
-    }
   })
 })

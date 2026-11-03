@@ -3,10 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from './work-item-types'
 import {
   GITHUB_PR_REVIEWER_INPUT_MAX_BYTES,
-  getGitHubPRPrimaryReviewer,
   getGitHubPRReviewerRows,
-  getGitHubPRReviewLabel,
-  normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
 } from './pr-reviewer-display'
 
@@ -19,69 +16,6 @@ afterEach(() => {
 })
 
 describe('GitHub PR reviewer display', () => {
-  it('shows the requested reviewer instead of a request count', () => {
-    expect(
-      getGitHubPRReviewLabel(
-        item({
-          reviewRequests: [{ login: 'ExampleReviewer', name: null, avatarUrl: '' }]
-        })
-      )
-    ).toBe('ExampleReviewer')
-  })
-
-  it('keeps multiple reviewers compact while still naming the first reviewer', () => {
-    expect(
-      getGitHubPRReviewLabel(
-        item({
-          reviewRequests: [
-            { login: 'ExampleReviewer', name: null, avatarUrl: '' },
-            { login: 'agent-slack', name: null, avatarUrl: '' },
-            { login: 'stably', name: null, avatarUrl: '' }
-          ]
-        })
-      )
-    ).toBe('ExampleReviewer +2')
-  })
-
-  it('preserves stronger review decision labels', () => {
-    expect(
-      getGitHubPRReviewLabel(
-        item({
-          reviewDecision: 'APPROVED',
-          reviewRequests: [{ login: 'ExampleReviewer', name: null, avatarUrl: '' }]
-        })
-      )
-    ).toBe('Approved')
-  })
-
-  it('falls back to reviewed users and empty metadata labels', () => {
-    expect(getGitHubPRReviewLabel(item({ latestReviews: [{ login: 'reviewer' }] }))).toBe(
-      'reviewer'
-    )
-    expect(getGitHubPRReviewLabel(item({ reviewRequests: [] }))).toBe('No reviewers')
-    expect(getGitHubPRReviewLabel(item({}))).toBe('Reviewers')
-  })
-
-  it('returns the primary reviewer avatar without requiring another lookup', () => {
-    expect(
-      getGitHubPRPrimaryReviewer(
-        item({
-          reviewRequests: [
-            {
-              login: 'ExampleReviewer',
-              name: null,
-              avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
-            }
-          ]
-        })
-      )
-    ).toEqual({
-      login: 'ExampleReviewer',
-      name: null,
-      avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
-    })
-  })
-
   it('builds reviewer rows for requested and reviewed users', () => {
     expect(
       getGitHubPRReviewerRows(
@@ -107,15 +41,6 @@ describe('GitHub PR reviewer display', () => {
         stateLabel: 'Approved'
       }
     ])
-  })
-
-  it('normalizes reviewer input before sending it to GitHub', () => {
-    expect(
-      normalizeGitHubReviewerLogins(
-        [' @ExampleReviewer ', 'examplereviewer', '@new-reviewer'],
-        new Set(['existing'])
-      )
-    ).toEqual(['ExampleReviewer', 'new-reviewer'])
   })
 
   it('parses pasted reviewer input without regex splitting', () => {

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence'
-import type { AgentAwakeService } from '../agent-awake-service'
+import type { Store } from '../persistence/loading-store/store'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import { translateMain } from '../i18n/main-i18n'
 import type {
   SettingsBackupApplyRequest,

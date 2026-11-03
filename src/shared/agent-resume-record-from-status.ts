@@ -3,12 +3,12 @@
 import { agentVerdictFields } from './agent-main-agent-verdict'
 import {
   agentProviderSessionsEqual,
-  getAgentResumeArgv,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from './agent-session-resume'
+} from './agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from './agent-resume-argv'
 import type { AgentStatusEntry } from './agent-status-types'
 import {
   recoveryRecordMatches,

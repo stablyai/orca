@@ -1,6 +1,10 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { translate } from '@/i18n/i18n'
+
+/** A clear confirmation on the copy shown when it opened; `count` stands in once that copy is gone. */
 export type PendingDiffCommentsClear =
-  | { kind: 'all'; worktreeId: string }
-  | { kind: 'file'; worktreeId: string; filePath: string }
+  | { kind: 'all'; worktreeId: string; owner: DiffCommentOwner; count: number }
+  | { kind: 'file'; worktreeId: string; owner: DiffCommentOwner; filePath: string; count: number }
 
 type DiffCommentWithPath = {
   filePath: string
@@ -43,9 +47,16 @@ export function formatPendingDiffCommentsClearDescription(
   if (!pending) {
     return ''
   }
-  const noun = count === 1 ? 'note' : 'notes'
   if (pending.kind === 'all') {
-    return `Clear ${count} ${noun} from this workspace?`
+    return translate(
+      'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',
+      'Clear {{count}} notes from this workspace?',
+      { count, defaultValue_one: 'Clear {{count}} note from this workspace?' }
+    )
   }
-  return `Clear ${count} ${noun} from ${pending.filePath}?`
+  return translate(
+    'auto.components.right.sidebar.SourceControl.clearNotesFromFile',
+    'Clear {{count}} notes from {{path}}?',
+    { count, path: pending.filePath, defaultValue_one: 'Clear {{count}} note from {{path}}?' }
+  )
 }

@@ -5,7 +5,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getSettingsBackupKeyClass } from '../../shared/settings-backup/settings-backup-catalog'
 import { isPlainJsonValue } from '../../shared/settings-backup/settings-backup-canonical-json'
 import type { SettingsRecoveryPointSummary } from '../../shared/settings-backup/settings-backup-types'
-import { durableWriteTempPath, writeFileDurable } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurable } from '../filesystem/durable-file-write'
 
 export const SETTINGS_RECOVERY_POINT_DIR = 'settings-recovery-points'
 export const SETTINGS_RECOVERY_POINT_LIMIT = 10

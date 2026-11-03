@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
-import { writeFileToClipboard, type ClipboardFileDeps } from './clipboard-file-copy'
+import {
+  CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS,
+  writeFileToClipboard,
+  type ClipboardFileDeps
+} from './clipboard-file-copy'
 
 function exited(code: number | null): ProcessResult {
   return { code, signal: null, stdout: '', stderr: '', timedOut: false }
@@ -20,6 +24,7 @@ function makeDeps(overrides: Partial<ClipboardFileDeps> = {}): ClipboardFileDeps
 describe('writeFileToClipboard', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.useRealTimers()
   })
 
   it('rejects relative paths without touching the clipboard', async () => {
@@ -47,6 +52,15 @@ describe('writeFileToClipboard', () => {
         makeDeps({ resolveFilePath: async () => ({ ok: false, reason: 'access-denied' }) })
       )
     ).toEqual({ ok: false, reason: 'access-denied' })
+  })
+
+  it('fails without publishing when path resolution never settles', async () => {
+    vi.useFakeTimers()
+    const deps = makeDeps({ resolveFilePath: () => new Promise(() => undefined) })
+    const result = writeFileToClipboard('/mnt/stale/file.txt', deps)
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS)
+    await expect(result).resolves.toEqual({ ok: false, reason: 'clipboard-write-failed' })
+    expect(deps.writeBuffer).not.toHaveBeenCalled()
   })
 
   it('writes a public.file-url buffer on macOS', async () => {

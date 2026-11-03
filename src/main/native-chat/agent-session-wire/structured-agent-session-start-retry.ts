@@ -3,7 +3,10 @@ import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control
 import { AcpAgentError, AcpRpcError } from '../../acp/acp-errors'
 import { JsonlRpcResponseError } from '../../jsonl-rpc/peer'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
-import { providerExecutableMissing } from '../../provider-process/provider-executable-missing'
+import {
+  providerExecutableMissing,
+  providerLaunchFolderMissing
+} from '../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
@@ -47,7 +50,8 @@ export function retryableStructuredAgentSessionStart(error: unknown): boolean {
     providerRequestTimeoutOf(error) ||
     argumentProblemOf(error) ||
     agentCliInstallationProblemOf(error) ||
-    providerExecutableMissing(error)
+    providerExecutableMissing(error) ||
+    providerLaunchFolderMissing(error)
   ) {
     return false
   }

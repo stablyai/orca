@@ -5,7 +5,6 @@ import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
 } from './ai-vault-resume-command'
-import { canResumeAiVaultSessionOnTarget } from '../../../shared/ai-vault-resume-target'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
@@ -21,10 +20,7 @@ const linuxFile = '/home/example/.gemini/antigravity-ide/brain/copied-id/transcr
 const debianFile =
   '//wsl.localhost/Debian/home/example/.gemini/antigravity-ide/brain/copied-id/transcript_full.jsonl'
 
-function stateFor(
-  host: ExecutionHostId,
-  distro?: string
-): Extract<State, { endpointProjects: unknown }> {
+function stateFor(host: ExecutionHostId, distro?: string): State {
   const worktree = makeWorktree({
     id: 'repo::workspace',
     repoId: 'repo',
@@ -34,6 +30,10 @@ function stateFor(
   return {
     activeRepoId: 'repo',
     activeWorktreeId: worktree.id,
+    detectedWorktreesByRepo: {},
+    sshConnectionStates: new Map(),
+    sshStateByEnvironment: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
     folderWorkspaces: [],
     projectGroups: [],
     settings: null,
@@ -48,21 +48,7 @@ function stateFor(
         executionHostId: host
       }
     ],
-    endpointProjectHostSetups: [
-      {
-        id: 'repo',
-        projectId: 'repo',
-        repoId: 'repo',
-        hostId: host,
-        path: worktree.path,
-        displayName: 'project',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ],
-    endpointProjects: [
+    projects: [
       {
         id: 'repo',
         displayName: 'project',
@@ -130,33 +116,11 @@ describe('Antigravity transcript reference ownership', () => {
     }
   )
 
-  it('preserves legacy WSL ID resume eligibility on SSH', () => {
-    expect(
-      canResumeAiVaultSessionOnTarget({
-        sessionFilePath: debianFile.replace('antigravity-ide', 'antigravity-cli'),
-        sessionExecutionHostId: 'local',
-        targetStatus: 'ssh',
-        targetExecutionHostId: 'ssh:other'
-      })
-    ).toBe(true)
-  })
-
-  it('uses a project runtime override before the workspace UNC distro', () => {
-    const state = stateFor('local', 'Ubuntu')
-    const workspace = state.worktreesByRepo.repo?.[0]
-    if (!workspace) {
-      throw new Error('Missing fixture workspace')
-    }
-    workspace.path = '//wsl.localhost/Debian/home/example/project'
-    expect(getAiVaultResumeWorkspaceWslDistro(state, workspace.id)).toBe('Ubuntu')
-    expect(getAiVaultResumeWorkspaceWslDistro(state, `worktree:${workspace.id}`)).toBe('Ubuntu')
-  })
-
   it('applies the same confinement to folder workspaces', () => {
     const state = stateFor('local')
     state.activeRepoId = null
     state.repos = []
-    state.endpointProjects = []
+    state.projects = []
     state.activeWorktreeId = 'folder:folder-1'
     state.folderWorkspaces = [
       makeFolderWorkspace({ folderPath: '//wsl.localhost/Debian/home/example/project' })
@@ -245,25 +209,6 @@ describe('Antigravity transcript reference ownership', () => {
     ).toBe('ready')
   })
 
-  it('keeps references refused for SSH aliases claiming local WSL ownership', () => {
-    for (const target of [
-      'ssh:localhost',
-      'ssh:127.0.0.1',
-      'ssh:Debian',
-      'ssh:local-wsl'
-    ] as const) {
-      expect(
-        canResumeAiVaultSessionOnTarget({
-          sessionFilePath: debianFile,
-          sessionExecutionHostId: 'local',
-          targetStatus: 'ssh',
-          targetExecutionHostId: target,
-          targetWslDistro: 'Debian'
-        })
-      ).toBe(false)
-    }
-  })
-
   it('uses the target folder owner for both the pane and reference gate with another repo active', () => {
     const state = stateFor('local', 'Ubuntu')
     state.repos[0].path = 'C:/project'
@@ -303,14 +248,6 @@ describe('Antigravity transcript reference ownership', () => {
     }
   })
 
-  it('does not borrow an unrelated active project override for an orphan native folder', () => {
-    const state = stateFor('local', 'Debian')
-    state.folderWorkspaces = [
-      makeFolderWorkspace({ folderPath: 'C:/orphan', projectGroupId: 'orphan-group' })
-    ]
-    expect(getAiVaultResumeWorkspaceWslDistro(state, 'folder:folder-1')).toBeNull()
-  })
-
   it('keeps explicit SSH folder authority ahead of a matching local project path', () => {
     const state = stateFor('local', 'Debian')
     state.repos[0].path = 'C:/project'
@@ -325,7 +262,7 @@ describe('Antigravity transcript reference ownership', () => {
 
   it('refuses local references while the project runtime requires repair', () => {
     const state = stateFor('local')
-    state.endpointProjects[0].localWindowsRuntimePreference = { kind: 'inherit-global' }
+    state.projects[0].localWindowsRuntimePreference = { kind: 'inherit-global' }
     state.settings = createGlobalSettingsFixture({
       localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
     })

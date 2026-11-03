@@ -1,6 +1,4 @@
-/** Chat and terminal agents must receive equivalent preambles, pointers and guides, apart from address and chat wording. */
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+/** Chat and terminal agents must receive equivalent preambles and pointers, apart from address and chat wording. */
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getAppEnvironment,
@@ -17,14 +15,11 @@ import {
   type OrchestrationCliCommand
 } from './cli-command'
 import { OrchestrationDb } from './db'
-import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import {
-  buildDispatchPreamble,
   CHAT_REDISPATCH_PARAGRAPH as CHAT_REDISPATCH,
   TERMINAL_REDISPATCH_PARAGRAPH as TERMINAL_REDISPATCH
 } from './preamble'
-import { ORCA_SESSION_ID_AS_ADDRESS } from '../../../shared/orca-session-id-wording-test-fixture'
 
 const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
 vi.mock('../rpc/methods/orchestration-structured-worker-session', () => ({
@@ -69,21 +64,18 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    | 'getNestedWorkerMaxDepth'
-    | 'getOrchestrationHeartbeatMinutes'
-    | 'getTerminalOrchestrationCliCommand'
-    | 'sendTerminalAgentPrompt'
-  > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
-    {
-      orchestrationSenderNames: { nameOf: () => null },
-      getNestedWorkerMaxDepth: () => 2,
-      getOrchestrationHeartbeatMinutes: () => 5,
-      getTerminalOrchestrationCliCommand: () => 'orca',
-      sendTerminalAgentPrompt: async (handle, text) => {
-        prompts.push(text)
-        return { handle, accepted: true, bytesWritten: text.length }
-      }
+    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
+  > & {
+    orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'snapshotOf'>
+  } = {
+    orchestrationSenderNames: { snapshotOf: () => ({ name: null, agent: null }) },
+    getNestedWorkerMaxDepth: () => 2,
+    getTerminalOrchestrationCliCommand: () => 'orca',
+    sendTerminalAgentPrompt: async (handle, text) => {
+      prompts.push(text)
+      return { handle, accepted: true, bytesWritten: text.length }
     }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preamble delivery reads only the members the fake implements.
   return fake as OrcaRuntimeService
 }
@@ -115,22 +107,23 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
   return worker === 'chat' ? sent.preambles[0]! : prompts[0]!
 }
 
-/** Render the structured-lane pointer for one mailbox message. */
-async function renderChatPointer(mailbox: string): Promise<string> {
+/** Render what the structured lane hands a chat for one mailbox message. */
+async function renderChatMail(mailbox: string): Promise<{ text: string; id: string }> {
   const texts: string[] = []
   const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
     getDb: () => db,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
+    mailboxEnded: () => false,
     getCliCommand: localOrchestrationCliCommand,
-    senderName: () => null,
+    senderSnapshot: () => ({ name: null, agent: null }),
     host: {
-      readSessionFacts: async () => ({ submissions: [] }),
-      hasActionablePromptNow: () => false,
-      isWorkingNow: () => false,
       currentFence: () => 1,
-      currentContextClearOperationId: () => undefined,
+      watchJournal: () => () => {},
+      observe: async () => ({ kind: 'accepted' }),
+      wakeQueue: () => {},
+      withdraw: async () => true,
       send: async (input) => {
         for (const block of input.body.blocks) {
           texts.push(block.type === 'text' ? block.text : '')
@@ -141,9 +134,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   })
   delivery.deliverForHandle(mailbox)
   await vi.waitFor(() => expect(texts).toHaveLength(1))
-  // Mark read as the agent's check does, allowing the next message pointer.
-  db.markAsRead([message.id])
-  return texts[0]!
+  return { text: texts[0]!, id: message.id }
 }
 
 describe('a chat agent and a terminal agent see the same text but for how each is named and called', () => {
@@ -157,7 +148,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
     expect(chat).not.toContain('this terminal')
     expect(withoutRedispatch).not.toBe(chat)
-    expect(withoutRedispatch.split('this chat')).toHaveLength(4)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(2)
     expect(
       withoutRedispatch
         .replace(SELF_LINE, '')
@@ -172,7 +163,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     ['a packaged app', true],
     ['a dev build', false]
   ])(
-    'renders the pointer the PTY lane types into a local terminal, in %s',
+    'names the CLI the PTY lane types into a local terminal in a chat message, in %s',
     async (_label, packaged) => {
       installApp(packaged)
       const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
@@ -184,57 +175,9 @@ describe('a chat agent and a terminal agent see the same text but for how each i
       expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
 
       for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
-        expect(await renderChatPointer(mailbox)).toBe(
-          formatMessagePointer(1, mailbox, terminalCli).trim()
-        )
+        const { text, id } = await renderChatMail(mailbox)
+        expect(text).toContain(`[Reply: ${terminalCli} orchestration reply --id ${id}`)
       }
     }
   )
-})
-
-describe('agent-read text about an Orca session ID', () => {
-  const guideDir = join(process.cwd(), 'skill-guides')
-  const guide = [
-    join(guideDir, 'orchestration.md'),
-    ...readdirSync(join(guideDir, 'orchestration', 'references')).map((name) =>
-      join(guideDir, 'orchestration', 'references', name)
-    )
-  ]
-  // Refusals an agent reads: the string literals of the files that word them.
-  const refusalSources = [
-    'orchestration/orchestration-party.ts',
-    'rpc/orchestration-session-caller.ts',
-    'rpc/methods/orchestration/messaging/session-recipient.ts',
-    'rpc/methods/orchestration/caller-show.ts'
-  ].flatMap(
-    (file) =>
-      readFileSync(join(process.cwd(), 'src', 'main', 'runtime', file), 'utf8').match(
-        /'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g
-      ) ?? []
-  )
-
-  it.each([
-    ['the guide and its references', () => guide.map((file) => readFileSync(file, 'utf8'))],
-    [
-      'the preamble, for every pairing of kinds',
-      () =>
-        [CHAT_ADDRESS, 'term_coord'].flatMap((coordinatorHandle) =>
-          [CHAT_ADDRESS, TERMINAL_HANDLE].map((workerHandle) =>
-            buildDispatchPreamble({
-              taskId: 'task_1',
-              dispatchId: 'ctx_1',
-              taskSpec: 'do it',
-              coordinatorHandle,
-              workerHandle,
-              heartbeatIntervalMinutes: 5
-            })
-          )
-        )
-    ],
-    ['the refusals that name a session', () => refusalSources]
-  ])('never calls it an address in %s', (_where, texts) => {
-    for (const text of texts()) {
-      expect(text).not.toMatch(ORCA_SESSION_ID_AS_ADDRESS)
-    }
-  })
 })

@@ -28,8 +28,11 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {
+  /** Paired-server project removals still owed to their server; optional so older builds ignore it. */
+  pendingRuntimeRepoRemovals?: PendingRuntimeRepoRemoval[]
   jiraSavedFilterState?: JiraSavedFilterState
   jiraQuickFilterState?: JiraQuickFilterState
   lastActiveRepoId: string | null
@@ -107,6 +110,7 @@ export type PersistedUIState = {
   worktreeCardProperties: WorktreeCardProperty[]
   /** One-shot migration flag for deriving card properties from the two worktree card modes. */
   _worktreeCardModeDefaulted?: boolean
+  showAgentModels?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
@@ -180,6 +184,8 @@ export type PersistedUIState = {
   usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** One-time Compact notice; load decides eligibility before filling missing preferences. */
   statusBarCompactChangeNoticeDismissed?: boolean
+  /** User dismissed the Alpha notice at the top of Settings > Plugins. */
+  pluginsAlphaNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA; permanently hides the "Connect AI accounts" prompt even if providers are later disconnected. */
   usageEmptyStateDismissed?: boolean
   /** One-shot toast announcing per-terminal Codex servers; set when shown, so absent means not yet seen. */

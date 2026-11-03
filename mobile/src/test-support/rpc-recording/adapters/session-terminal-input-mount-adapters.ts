@@ -1,3 +1,4 @@
+import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -42,11 +43,9 @@ function mountTerminalClipboard(
   const useTerminalPaste = modules.load<
     typeof import('../../../session/use-mobile-terminal-paste')
   >('mobile/src/session/use-mobile-terminal-paste.ts').useMobileTerminalPaste
-  const takeover = modules.load<typeof import('../../../terminal/worker-terminal-takeover-report')>(
-    'mobile/src/terminal/worker-terminal-takeover-report.ts'
+  const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+    'mobile/src/terminal/mobile-terminal-operations.ts'
   )
-  // The per-client report window is module state; a fresh recording must not inherit one.
-  takeover.resetWorkerTerminalTakeoverReportsForTest()
 
   const ptyModesRef = { current: new Map([[HANDLE, PTY_MODES]]) }
   let selection: ReturnType<typeof useAccessorySelection> | undefined
@@ -73,6 +72,7 @@ function mountTerminalClipboard(
     selection = model
     paste = useTerminalPaste(
       mountFixture<Parameters<typeof useTerminalPaste>[0]>({
+        sendTerminalUserInput: terminalInputSend.request,
         activeHandle: HANDLE,
         activeHandleRef: { current: HANDLE },
         activeSessionTabTypeRef: { current: 'terminal' },
@@ -127,10 +127,7 @@ function mountTerminalClipboard(
       throw new Error(`Unknown terminal clipboard action: ${name}`)
     },
     state: () => ({ connectionId, pasteOutcome, crash: screen.crash() }),
-    dispose: () => {
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
-      screen.unmount()
-    }
+    dispose: () => screen.unmount()
   }
 }
 
@@ -146,10 +143,9 @@ function mountTerminalInputSend(
   const useDrafts = modules.load<typeof import('../../../terminal/use-buffered-terminal-drafts')>(
     'mobile/src/terminal/use-buffered-terminal-drafts.ts'
   ).useBufferedTerminalDrafts
-  const takeover = modules.load<typeof import('../../../terminal/worker-terminal-takeover-report')>(
-    'mobile/src/terminal/worker-terminal-takeover-report.ts'
+  const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+    'mobile/src/terminal/mobile-terminal-operations.ts'
   )
-  takeover.resetWorkerTerminalTakeoverReportsForTest()
 
   const activeHandleRef = { current: HANDLE }
   const sendingRef = { current: false }
@@ -171,6 +167,7 @@ function mountTerminalInputSend(
     drafts = draftState
     actions = useSendActions(
       mountFixture<Parameters<typeof useSendActions>[0]>({
+        sendTerminalUserInput: terminalInputSend.request,
         client,
         activeHandle: HANDLE,
         activeSessionTab,
@@ -225,9 +222,6 @@ function mountTerminalInputSend(
       liveAccepted,
       crash: screen.crash()
     }),
-    dispose: () => {
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
-      screen.unmount()
-    }
+    dispose: () => screen.unmount()
   }
 }

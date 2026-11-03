@@ -3,8 +3,8 @@ import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
 } from '../../shared/worktree/retired-name-registry'
-import { getRemoteRetirementNamespaceKey } from '../worktree-name-retirement'
-import { retirementNamespaceKeysToRead } from '../worktree-retirement-namespace'
+import { getRemoteRetirementNamespaceKey } from '../workspaces/removal/retirement/worktree-name-retirement'
+import { retirementNamespaceKeysToRead } from '../workspaces/removal/retirement/worktree-retirement-namespace'
 import type { TransferProfileState } from './profile-project-state-file'
 
 export function extractRetiredNameRegistriesByNamespace(

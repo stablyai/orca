@@ -20,7 +20,10 @@ export function agentHookRuntimeDeps(
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
-    getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
+    getAgentProviderSessionSnapshot: (tabId) =>
+      tabId === undefined
+        ? server.getStatusSnapshot()
+        : server.getProviderSessionSourceRowsForTab(tabId),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     subscribeAgentProviderSessionChanges: (listener) =>
       server.subscribeProviderSessionChanges(listener),
@@ -28,6 +31,7 @@ export function agentHookRuntimeDeps(
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Structured chats publish here directly because they have no hooks.
     structuredAgentStatusSink: {
+      withSavedStatusGroup: (visit) => server.withSavedStructuredStatusGroup(visit),
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
       publishChildWork: (subject, evidence, provider) =>

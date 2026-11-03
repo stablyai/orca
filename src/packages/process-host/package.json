@@ -20,6 +20,11 @@
       "types": "./dist/process-spec.d.ts",
       "default": "./dist/process-spec.js"
     },
+    "./isolated-detached-spawn": {
+      "orca-source": "./src/isolated-detached-spawn.ts",
+      "types": "./dist/isolated-detached-spawn.d.ts",
+      "default": "./dist/isolated-detached-spawn.js"
+    },
     "./fork-process": {
       "orca-source": "./src/fork-process.ts",
       "types": "./dist/fork-process.d.ts",
@@ -94,6 +99,11 @@
       "orca-source": "./src/child-termination-reporter.ts",
       "types": "./dist/child-termination-reporter.d.ts",
       "default": "./dist/child-termination-reporter.js"
+    },
+    "./wsl-distro-allowlist": {
+      "orca-source": "./src/wsl-distro-allowlist.ts",
+      "types": "./dist/wsl-distro-allowlist.d.ts",
+      "default": "./dist/wsl-distro-allowlist.js"
     }
   },
   "scripts": {

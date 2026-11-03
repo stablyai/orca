@@ -402,8 +402,8 @@ describe('OrcaRuntimeService', () => {
 
       runtimeDefault = { kind: 'wsl', distro: 'Ubuntu' }
       const second = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
-      await Promise.resolve()
-      expect(listWorktrees).toHaveBeenCalledTimes(2)
+      // A WSL runtime scan first asks the stopped-distro gate, one await later.
+      await vi.waitFor(() => expect(listWorktrees).toHaveBeenCalledTimes(2))
 
       secondScan.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
       await second

@@ -1,12 +1,9 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
+import { useProjectHostSetupProjection } from '@/store/selectors'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -24,9 +21,8 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
-import { useProjectHostSetupProjection } from '@/store/selectors'
 import { getFallbackTerminalFonts, mergeFontSuggestions } from './SettingsConstants'
-import { useGhosttyImport } from './useGhosttyImport'
+import { useTerminalConfigImport } from './useTerminalConfigImport'
 import { useWarpThemeImport } from './useWarpThemeImport'
 import { getInitialMountedSectionIds } from './settings-load-performance'
 import {
@@ -36,7 +32,7 @@ import {
   removeSettingsProjectFromAllHosts
 } from './settings-project-list'
 import { resolveSettingsHostScope } from './settings-host-scope'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { useSettingsHostNavigation } from './use-settings-host-navigation'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
@@ -55,8 +51,8 @@ export function useSettingsStoreModel() {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
-  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const removeProject = useAppStore((s) => s.removeProject)
@@ -72,15 +68,15 @@ export function useSettingsStoreModel() {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
 
-  // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
-  const projection = useProjectHostSetupProjection()
+  const projectHostSetupProjection = useProjectHostSetupProjection()
+  // Use navigation’s grouping inputs so pane and navigation lists agree.
   const settingsProjectList = useMemo(
     () =>
       buildSettingsProjectList(repos, {
-        projects: projection.projects,
-        projectHostSetups: projection.setups
+        projects: projectHostSetupProjection.projects,
+        projectHostSetups: projectHostSetupProjection.setups
       }),
-    [repos, projection]
+    [repos, projectHostSetupProjection]
   )
   const repoIdToRepresentative = useMemo(
     () => buildRepoIdToRepresentative(settingsProjectList),
@@ -138,7 +134,7 @@ export function useSettingsStoreModel() {
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
   // Keep import state above sections so remounts cannot close the modal.
-  const ghostty = useGhosttyImport(updateSettings, settings)
+  const terminalConfigImport = useTerminalConfigImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     mergeFontSuggestions([], getFallbackTerminalFonts())
@@ -165,7 +161,13 @@ export function useSettingsStoreModel() {
   const confirm = useConfirmationDialog()
   // Option-click unlocks hidden experiments for this session only.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
-  const [settingsHostChoice, setSettingsHostChoice] = useState<RuntimeClientTarget | null>(null)
+  const {
+    settingsHostChoice,
+    setSettingsHostChoice,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation
+  } = useSettingsHostNavigation(settingsNavigationTarget)
   const defaultScope = defaultScopeHost(settings)
   const defaultRuntimeEnvironmentId =
     defaultScope.kind === 'environment' ? defaultScope.environmentId : null
@@ -235,7 +237,7 @@ export function useSettingsStoreModel() {
     setScrollbackMode,
     prevScrollbackRows,
     setPrevScrollbackRows,
-    ghostty,
+    terminalConfigImport,
     warpThemes,
     fontSuggestions,
     setFontSuggestions,
@@ -267,6 +269,9 @@ export function useSettingsStoreModel() {
     setHiddenExperimentalUnlocked,
     runtimeEnvironments,
     settingsHostScope,
+    nativeAccounts,
+    releaseNativeAccounts,
+    consumeSettingsNavigation,
     setSettingsHostChoice
   }
 }

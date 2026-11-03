@@ -20,7 +20,7 @@ import type {
 import type { AiVaultApi } from './api/ai-vault-api'
 import type { AppApi, E2EApi, PlatformApi } from './api/app-api'
 import type { AutomationsApi } from './api/automation-api'
-import type { BrowserApi } from './api/browser-api'
+import type { BrowserApi } from './api/browser/browser-api'
 import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
@@ -54,6 +54,8 @@ import type { PtyApi } from './api/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
 import type { WslMoveApi } from './api/wsl-move-bridge'
+import type { WslDriveProjectApi } from './api/wsl-drive-project-bridge'
+import type { WslDriveUncConversionApi } from './api/wsl-drive-unc-conversion-bridge'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
@@ -66,6 +68,7 @@ import type { UiWindowApi } from './api/ui-window-api'
 import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
+import type { LinkPreviewApi } from './api/link-preview-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -86,6 +89,7 @@ export type PreloadApi = {
   workspaceCleanup: WorkspaceCleanupApi
   workspaceSpace: WorkspaceSpaceApi
   workspacePorts: WorkspacePortsApi
+  linkPreview: LinkPreviewApi
   pty: PtyApi
   feedback: FeedbackApi
   crashReports: CrashReportsApi
@@ -161,6 +165,8 @@ export type PreloadApi = {
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']
   wslMove: WslMoveApi
+  wslDriveProject: WslDriveProjectApi
+  wslDriveUnc: WslDriveUncConversionApi
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
@@ -178,7 +184,11 @@ export type {
 export type { AiVaultApi } from './api/ai-vault-api'
 export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
 export type { AppApi } from './api/app-api'
-export type { BrowserApi, DetectedBrowserInfo, DetectedBrowserProfileInfo } from './api/browser-api'
+export type {
+  BrowserApi,
+  DetectedBrowserInfo,
+  DetectedBrowserProfileInfo
+} from './api/browser/browser-api'
 export type { EmulatorApi } from './api/emulator-api'
 export type { ExportApi } from './api/filesystem-api'
 export type {
@@ -190,6 +200,9 @@ export type {
   NativeChatSubscriptionFrame
 } from './api/native-chat-api'
 export type {
+  PluginAutoUpdateEvent,
+  PluginHostCustomEditor,
+  PluginHostNewFile,
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,

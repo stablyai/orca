@@ -1,4 +1,3 @@
-import { settleBrowserDialogOnLiveScreencast } from '../browser-dialog-settlement'
 import type { BrowserScreencastResult } from '../../../shared/runtime-types'
 import { BrowserError } from '../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
@@ -92,7 +91,7 @@ export class RuntimeBrowserScreencasts {
       // Hidden host compositors stop producing guest frames when throttled.
       const win = this.host.getAvailableAuthoritativeWindow()
       const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
-      // Active-tab covers hide the guest widget too; its attach-time unthrottle may predate them.
+      // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
         format: params.format,
@@ -176,19 +175,27 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone()
       throw error
     }
-    // Reconnects have new sockets; replace by device identity after joining to avoid stopping an empty stream.
-    if (stream.pairedDeviceId !== undefined) {
+    try {
+      if (!createdPageStream) {
+        if (active.viewportOwnerSubscriptionId === subscriptionId) {
+          await session.updateViewport(viewport)
+        }
+        await applySharedScreencastFrameBudget(active, session)
+      }
+    } catch (error) {
+      this.leaveScreencastSubscriber(active, subscriptionId, session)
+      throw error
+    }
+    // Retire a reconnected device's old socket only after its replacement successfully joins.
+    if (stream.pairedDeviceId !== undefined && active.subscribers.has(subscriptionId)) {
       for (const [candidateId, candidate] of active.subscribers) {
-        if (candidateId !== subscriptionId && candidate.pairedDeviceId === stream.pairedDeviceId) {
+        if (candidateId === subscriptionId) {
+          break
+        }
+        if (candidate.pairedDeviceId === stream.pairedDeviceId) {
           this.leaveScreencastSubscriber(active, candidateId, session)
         }
       }
-    }
-    if (!createdPageStream) {
-      if (active.viewportOwnerSubscriptionId === subscriptionId) {
-        await session.updateViewport(viewport)
-      }
-      await applySharedScreencastFrameBudget(active, session)
     }
     return {
       subscriptionId,
@@ -248,18 +255,5 @@ export class RuntimeBrowserScreencasts {
     }
     // Departed viewers must not pin the shared frame budget.
     void applySharedScreencastFrameBudget(active, session).catch(() => {})
-  }
-
-  settleDialog(
-    browserPageId: string | undefined,
-    accept: boolean,
-    promptText?: string
-  ): Promise<boolean> {
-    return settleBrowserDialogOnLiveScreencast(
-      this.activeScreencastsByPageId,
-      browserPageId,
-      accept,
-      promptText
-    )
   }
 }

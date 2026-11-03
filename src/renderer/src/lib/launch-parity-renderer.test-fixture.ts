@@ -1,7 +1,6 @@
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { useStore } from 'zustand'
 import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
 import type * as CapabilitiesNamespace from '@/runtime/local-runtime-capabilities'
 import {
@@ -32,11 +31,15 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
     return holder.store
   }
   return {
-    useAppStore: {
-      getState: () => live().getState(),
-      setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
-      subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
-    }
+    useAppStore: Object.assign(
+      <T>(selector: (state: ReturnType<LaunchTestStore['getState']>) => T): T =>
+        useStore(live(), selector),
+      {
+        getState: () => live().getState(),
+        setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
+        subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
+      }
+    )
   }
 }
 
@@ -67,7 +70,7 @@ export function launchWorkspaceState(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
   const repoPath = workspace.kind === 'repo' ? workspace.path : workspace.repoPath
-  const repo: Repo | null = repoPath
+  const repo = repoPath
     ? {
         id: LAUNCH_REPO_ID,
         path: repoPath,
@@ -98,17 +101,24 @@ export function launchWorkspaceState(
     sortOrder: 0,
     lastActivityAt: 0
   }
-  const catalog = projectHostSetupProjectionFromRepos(repo ? [repo] : [])
   return {
     settings,
     repos: repo ? [repo] : [],
-    endpointProjects: catalog.projects.map((project) => ({
-      ...project,
-      ...(workspace.projectRuntime
-        ? { localWindowsRuntimePreference: workspace.projectRuntime }
-        : {})
-    })),
-    endpointProjectHostSetups: catalog.setups,
+    projects: repo
+      ? [
+          {
+            id: LAUNCH_REPO_ID,
+            displayName: 'repo',
+            badgeColor: '#000000',
+            sourceRepoIds: [LAUNCH_REPO_ID],
+            createdAt: 0,
+            updatedAt: 0,
+            ...(workspace.projectRuntime
+              ? { localWindowsRuntimePreference: workspace.projectRuntime }
+              : {})
+          }
+        ]
+      : [],
     worktreesByRepo: repo ? { [LAUNCH_REPO_ID]: [worktree] } : {},
     folderWorkspaces:
       workspace.kind === 'folder'

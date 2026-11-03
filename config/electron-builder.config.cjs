@@ -209,12 +209,22 @@ const macUsageDescriptions = {
     'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
   NSBluetoothPeripheralUsageDescription:
     'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+  NSCalendarsUsageDescription:
+    'Orca allows terminal-launched developer tools to access your calendars when you request it.',
+  NSCalendarsFullAccessUsageDescription:
+    'Orca allows terminal-launched developer tools to access your calendars when you request it.',
   NSCameraUsageDescription: "Application requests access to the device's camera.",
+  NSContactsUsageDescription:
+    'Orca allows terminal-launched developer tools to access your contacts when you request it.',
   NSLocationUsageDescription:
     'Orca allows terminal-launched developer tools to access location when you request it.',
   NSLocalNetworkUsageDescription:
     'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
   NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+  NSRemindersUsageDescription:
+    'Orca allows terminal-launched developer tools to access your reminders when you request it.',
+  NSRemindersFullAccessUsageDescription:
+    'Orca allows terminal-launched developer tools to access your reminders when you request it.',
   NSAudioCaptureUsageDescription:
     'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
   NSBonjourServices: ['_http._tcp', '_https._tcp'],
@@ -320,10 +330,16 @@ module.exports = {
     'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
-    'out/main/asar-transparent-fs.js',
-    'out/main/macos-tree-clone.js',
+    'out/main/filesystem/asar-transparent-fs.js',
+    'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
+    'out/main/plugins/plugin-authoring-checks.js',
+    // `orca plugin types` copies the author typings from here in Node mode.
+    'resources/plugins/declarative/orca*.d.ts',
+    // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
+    'resources/plugins/declarative/*.mjs',
+    'resources/plugins/types/*.d.ts',
     'out/main/skills/bundled-skill-install/cli-entry.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
@@ -331,6 +347,7 @@ module.exports = {
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/plugin-host-entry.js',
+    'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
@@ -454,19 +471,28 @@ module.exports = {
     assertPackagedWebClient(resourcesDir)
     assertPackagedServeSelectionEntry(resourcesDir)
     finalizePackagedRipgrep(resourcesDir)
-    await finalizePackagedOrcadTemplate(resourcesDir, {
-      platform: context.electronPlatformName,
-      signMacBinary: (path) =>
-        signMacStandaloneHelper(path, 'orcad template binary', context.packager)
-    })
-    chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
       }
       // Upstream executable bits vary (notably darwin-x64); restore them so packaged execFile works.
       chmodSync(join(resourcesDir, filename), 0o755)
+      // The orcad template hashes this exact file next, so app signing must not rewrite it later.
+      if (context.electronPlatformName === 'darwin') {
+        await signMacStandaloneHelper(
+          join(resourcesDir, filename),
+          filename,
+          context.packager,
+          resolve(__dirname, '../resources/build/entitlements.mac.plist')
+        )
+      }
     }
+    await finalizePackagedOrcadTemplate(resourcesDir, {
+      platform: context.electronPlatformName,
+      signMacBinary: (path) =>
+        signMacStandaloneHelper(path, 'orcad template binary', context.packager)
+    })
+    chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
@@ -564,6 +590,8 @@ module.exports = {
     signIgnore: [
       ...bundledRipgrepMacSignIgnore,
       ...orcadTemplateMacSignIgnore,
+      // afterPack signs it before the orcad template hashes it.
+      '/Contents/Resources/agent-browser-darwin-[^/]+$',
       ...macTerminalHostSignIgnore
     ],
     extendInfo: macUsageDescriptions,

@@ -1,4 +1,4 @@
-const WINDOWS_DRIVE_PATH_PREFIX = /^\/[A-Za-z]:\//
+export const WINDOWS_DRIVE_PATH_PREFIX = /^\/[A-Za-z]:\//
 const UNC_PATH_PREFIX = /^(?:\\\\|\/\/)([^\\/]+)[\\/]+([^\\/]+)(?:[\\/](.*))?$/
 
 function encodePathSegments(path: string): string {

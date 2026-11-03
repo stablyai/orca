@@ -11,15 +11,15 @@ vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: () => doubles.manifest()
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 
-import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
+import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
@@ -255,7 +255,7 @@ describe('a download that reuses the cached generation', () => {
     return { fileSystem, store }
   }
 
-  function runFor(store: GenerationStore) {
+  function runFor(store: GenerationStore, downloads = new Set<AbortController>()) {
     const { events, send } = collect()
     const done = download({
       client: CLIENT,
@@ -269,11 +269,69 @@ describe('a download that reuses the cached generation', () => {
         setTimer: () => () => {}
       },
       startedAt: 0,
-      downloads: new Set(),
+      downloads,
       send
     })
     return done.then(() => events)
   }
+
+  it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    const NEXT = bundle(16)
+    const BLOCKER = deriveHostCacheKey('host-b')
+    let enterBlocker = (): void => {}
+    const blockerEntered = new Promise<void>((resolve) => {
+      enterBlocker = resolve
+    })
+    let releaseBlocker = (): void => {}
+    const blockerReleased = new Promise<void>((resolve) => {
+      releaseBlocker = resolve
+    })
+    const list = fileSystem.list.bind(fileSystem)
+    fileSystem.list = async (uri) => {
+      if (uri.includes(`/${BLOCKER}/`)) {
+        enterBlocker()
+        await blockerReleased
+      }
+      return list(uri)
+    }
+    const writes: string[] = []
+    const writeBytes = fileSystem.writeBytes.bind(fileSystem)
+    fileSystem.writeBytes = async (uri, bytes) => {
+      writes.push(uri)
+      await writeBytes(uri, bytes)
+    }
+    let blocker: Promise<unknown> = Promise.resolve()
+    doubles.fetch = async () => {
+      blocker = store.readActiveGeneration(BLOCKER)
+      await blockerEntered
+      return NEXT
+    }
+    let markQueued = (): void => {}
+    const stageQueued = new Promise<void>((resolve) => {
+      markQueued = resolve
+    })
+    const downloads = new Set<AbortController>()
+    const run = runFor(
+      {
+        ...store,
+        stageGeneration: (...args) => {
+          const staged = store.stageGeneration(...args)
+          markQueued()
+          return staged
+        }
+      },
+      downloads
+    )
+
+    await stageQueued
+    downloads.forEach((controller) => controller.abort())
+    releaseBlocker()
+    await Promise.all([run, blocker])
+
+    expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
+  })
 
   it('commits whole when another mount sweeps the staging trees mid-download', async () => {
     const { fileSystem, store } = await cachedStore()
@@ -291,6 +349,53 @@ describe('a download that reuses the cached generation', () => {
     expect(events.filter((event) => event.type === 'download-failed')).toEqual([])
     const active = await store.readActiveGeneration(HOST)
     expect(active?.buildId).toBe(UPDATE.manifest.buildId)
+    expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
+      new Uint8Array(2)
+    )
+  })
+
+  it('stages from the offered snapshot without reopening its manifest after fetch', async () => {
+    const { fileSystem, store } = await cachedStore()
+    doubles.fetch = async () => {
+      fileSystem.failReadsAt(`${HOST}/generations/${CACHED.manifest.buildId}/manifest.json`)
+      return UPDATE
+    }
+
+    const events = await runFor(store)
+
+    expect(events.some((event) => event.type === 'activated')).toBe(true)
+    expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
+      new Uint8Array(2)
+    )
+  })
+
+  it('finishes when a faster download commits the same build before its fetch returns', async () => {
+    const { fileSystem, store } = await cachedStore()
+    let releaseSlow = (): void => {}
+    const slowReady = new Promise<void>((resolve) => {
+      releaseSlow = resolve
+    })
+    let enteredSlow = (): void => {}
+    const fetching = new Promise<void>((resolve) => {
+      enteredSlow = resolve
+    })
+    let calls = 0
+    doubles.fetch = async () => {
+      calls += 1
+      if (calls === 1) {
+        enteredSlow()
+        await slowReady
+      }
+      return UPDATE
+    }
+    const slow = runFor(store)
+    await fetching
+    const fast = await runFor(store)
+    releaseSlow()
+    const events = await slow
+
+    expect(fast.some((event) => event.type === 'activated')).toBe(true)
+    expect(events.some((event) => event.type === 'activated')).toBe(true)
     expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
       new Uint8Array(2)
     )

@@ -1,8 +1,8 @@
 import type React from 'react'
 import { useEffect, useRef, type RefObject } from 'react'
-import { ChevronRight, Folder, LoaderCircle } from 'lucide-react'
+import { ChevronRight, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
   isRemoteFileBrowserPathResolveTextTooLarge,
   type DirEntry
@@ -50,9 +50,6 @@ export function RemoteFileBrowserEntryList({
       ?.scrollIntoView?.({ block: 'nearest' })
   }, [activeIndex, displayEntries])
 
-  const displayEmptyDirCopy = isPreviewActive
-    ? `${preview!.resolvedPath} is empty`
-    : 'Empty directory'
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
     ? translate(
@@ -90,7 +87,13 @@ export function RemoteFileBrowserEntryList({
           !preview!.error &&
           !preview!.loading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-muted-foreground">{displayEmptyDirCopy}</p>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.RemoteFileBrowserEntryList.pathEmpty',
+                '{{path}} is empty',
+                { path: preview!.resolvedPath }
+              )}
+            </p>
           </div>
         ) : !isPreviewActive && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -129,7 +132,11 @@ export function RemoteFileBrowserEntryList({
                 )}
               >
                 {entry.isDirectory ? (
-                  <Folder className="size-3.5 text-muted-foreground shrink-0" />
+                  <FolderIcon
+                    folderPath={entry.name}
+                    open={false}
+                    className="size-3.5 text-muted-foreground shrink-0"
+                  />
                 ) : (
                   <FileTypeIcon
                     filePath={entry.name}

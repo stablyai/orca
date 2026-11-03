@@ -30,6 +30,14 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
+  'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
+    62,
+    "The mover's own record of which renderer rewrites landed; keyed by move id."
+  ),
+  'src/renderer/src/lib/wsl-drive-unc-renderer-store-rewrites.ts': notApplicableDisposition(
+    62,
+    "A Windows-drive conversion's own record of which renderer rewrites landed; keyed by its id."
+  ),
   'src/renderer/src/lib/desktop-created-server-tabs.ts': notApplicableDisposition(
     60,
     'Tabs this desktop created in a paired server workspace, keyed by that server; a local or WSL project has none.'
@@ -76,6 +84,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
+      'src/renderer/src/lib/document-theme.ts',
       'src/renderer/src/lib/feature-education-telemetry.ts',
       'src/renderer/src/lib/orchestration-setup-state.ts',
       'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
@@ -101,13 +110,14 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
-  'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
-  'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/journal-outcome-format.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
@@ -123,7 +133,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
   'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
-  'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
+  'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
+    'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
@@ -151,6 +162,9 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'agent_session_attachment_claims',
         'agent_session_attachment_sweeps',
         'journal_imports',
+        'journal_outcomes',
+        'journal_outcome_epochs',
+        'journal_outcome_generations',
         'journal_repairs',
         'journal_rows',
         'journal_sessions',
@@ -162,21 +176,37 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'Native chat journal: chats stay local on the desktop (owner decision C), never moved.'
       )
     ),
+    ...tables('orchestration', ['worker_dispatches', 'worker_terminal_resources'], {
+      disposition: 'rewrite-desktop',
+      item: 53,
+      note: "worktree_id of a settled local dispatch becomes the host's id; a live one holds the store until it settles. Chat and federated workers and JSON receipts stay as written."
+    }),
+    ...tables(
+      'orchestration',
+      ['remote_dispatch_attachments'],
+      notApplicableDisposition(
+        53,
+        'What this computer told a remote home as its worker; that home reaches this runtime, which does not serve the host ids.'
+      )
+    ),
+    ...tables(
+      'orchestration',
+      ['federated_dispatches', 'federation_relay_items'],
+      notApplicableDisposition(53, "Another host's worktree ids and relayed messages.")
+    ),
+    ...tables(
+      'orchestration',
+      ['dispatch_contexts', 'runs', 'tasks', 'run_coordinator_handles', 'coordinator_runs'],
+      notApplicableDisposition(
+        53,
+        'Handles, pane keys (tab and leaf ids are kept) and the host scope a process ran in, which stays true of it.'
+      )
+    ),
     ...tables(
       'orchestration',
       [
-        'worker_dispatches',
-        'worker_terminal_resources',
         'worker_terminal_archives',
         'worker_terminal_archives_v39',
-        'remote_dispatch_attachments',
-        'federated_dispatches',
-        'federation_relay_items',
-        'dispatch_contexts',
-        'coordinator_runs',
-        'run_coordinator_handles',
-        'runs',
-        'tasks',
         'decision_gates',
         'deliveries',
         'deliveries_new',
@@ -185,6 +215,15 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'messages_new',
         'question_threads',
         'remote_questions',
+        'attempt_observation_facts',
+        'structured_pointer_operations',
+        'structured_mail_sends'
+      ],
+      notApplicableDisposition(53, 'Keyed by run, task, dispatch, message or handle ids.')
+    ),
+    ...tables(
+      'orchestration',
+      [
         'mutation_receipts',
         'mutation_receipt_ledger',
         'mutation_caller_identities',
@@ -192,17 +231,18 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_compatibility_principals',
         'legacy_mail_receipts',
         'legacy_operation_receipts',
-        'attempt_observation_facts',
-        'structured_pointer_operations',
         'removed_orchestration_work',
-        'removed_orchestration_work_coverage',
-        'won'
+        'removed_orchestration_work_coverage'
       ],
-      {
-        disposition: 'rewrite-desktop',
-        item: 53,
-        note: 'History is rewritten in place; an active run or dispatch in scope blocks the move.'
-      }
+      notApplicableDisposition(
+        53,
+        'Idempotency receipts: a replay returns the bytes first answered.'
+      )
+    ),
+    ...tables(
+      'orchestration',
+      ['won'],
+      notApplicableDisposition(53, "Not a table: the census reads it from migrate.ts's comment.")
     ),
     ...tables('profile-state', ['profile_state_documents'], {
       disposition: 'per-field',

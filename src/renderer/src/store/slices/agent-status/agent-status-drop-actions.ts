@@ -14,6 +14,7 @@ import {
 } from './agent-status-pane-key-tab-binding'
 import { retireAgentPaneAuthorityAliasesByOwnerTab } from '../agent-pane-authority'
 import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 
 function removeAcknowledgement(
   acknowledgements: Record<string, number>,
@@ -37,7 +38,7 @@ export function createAgentStatusDropActions(
   return {
     dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
@@ -53,6 +54,9 @@ export function createAgentStatusDropActions(
         const nextManualUnread = opts?.paneRemoved
           ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
           : s.manuallyUnreadTurnsByPaneKey
+        const nextConversations = opts?.paneRemoved
+          ? removePaneKeys(s.agentConversationsByPaneKey, new Set([paneKey]))
+          : s.agentConversationsByPaneKey
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
@@ -62,6 +66,9 @@ export function createAgentStatusDropActions(
         }
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
           const cleanupPatch = {
+            ...(nextConversations !== s.agentConversationsByPaneKey
+              ? { agentConversationsByPaneKey: nextConversations }
+              : {}),
             ...(hasLaunchConfig ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {}),
             ...(nextAck !== s.acknowledgedAgentsByPaneKey
               ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -77,6 +84,7 @@ export function createAgentStatusDropActions(
         }
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
+          changedPaneKeys.add(paneKey)
           delete nextLive[paneKey]
         }
         const nextRetained = hasRetained
@@ -88,6 +96,7 @@ export function createAgentStatusDropActions(
         const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         return {
           agentStatusByPaneKey: nextLive,
+          agentConversationsByPaneKey: nextConversations,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           retainedAgentsByPaneKey: nextRetained,
           migrationUnsupportedByPtyId: migrationUnsupported.next,
@@ -120,7 +129,7 @@ export function createAgentStatusDropActions(
     dropAgentStatusByTabPrefix: (tabIdPrefix, opts?: DropAgentStatusByTabPrefixOptions) => {
       const retiredAliasPaneKeys = retireAgentPaneAuthorityAliasesByOwnerTab(tabIdPrefix)
       let hadLive = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const dropped = buildAgentStatusTabPrefixDropPatch(
           s,
           tabIdPrefix,
@@ -128,6 +137,9 @@ export function createAgentStatusDropActions(
           opts
         )
         hadLive = dropped.hadLive
+        for (const key of dropped.removedPaneKeys) {
+          changedPaneKeys.add(key)
+        }
         return dropped.patch
       })
       if (hadLive) {
@@ -140,7 +152,7 @@ export function createAgentStatusDropActions(
 
     dropHibernatedAgentStatusPane: (worktreeId, paneKey, opts?: DropHibernatedAgentPaneOptions) => {
       let hadLive = false
-      set((s) => {
+      set((s, changedPaneKeys) => {
         const liveEntry = s.agentStatusByPaneKey[paneKey]
         const hasLive = liveEntry !== undefined
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
@@ -202,6 +214,7 @@ export function createAgentStatusDropActions(
         hadLive = hasLive
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
+          changedPaneKeys.add(paneKey)
           delete nextLive[paneKey]
         }
         const nextLaunchConfigs = hasLaunchConfig

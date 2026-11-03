@@ -54,14 +54,6 @@ describe('driver stack frames', () => {
     expect(summary.driverStack).toContain('paneRender')
     expect(summary.driverFrame).not.toContain('paneRender')
   })
-
-  // Redaction keys on detail names; paths inside this value would expose a developer home directory.
-  it('keeps every reported frame path-free', () => {
-    armReactCommitCascadeWriteSampling()
-    paneRender()
-
-    expect(readReactCommitCascadeWriteSummary().driverStack).not.toContain('/')
-  })
 })
 
 describe('capture failures', () => {

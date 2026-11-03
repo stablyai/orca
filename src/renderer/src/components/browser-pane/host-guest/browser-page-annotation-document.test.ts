@@ -157,13 +157,16 @@ describe('browser annotation document boundaries', () => {
     )
   })
 
-  it('retires geometry for full and same-document main-frame navigation but not subframes', async () => {
+  it('retires geometry for document and in-place route changes but not subframes or fragment updates', async () => {
     const h = await createHarness()
     h.navigation.handleDidStartNavigation(
       navigationEvent('https://example.com/frame', false, false)
     )
-    expect(h.cancelCapture).not.toHaveBeenCalled()
     h.navigation.handleDidStartNavigation(navigationEvent('https://example.com/#new', true))
+    h.navigation.handleDidNavigateInPage({ url: 'https://example.com/#new', isMainFrame: true })
+    expect(h.cancelCapture).not.toHaveBeenCalled()
+    expect(h.store.getState().browserAnnotationMarkerIdsByPageId[h.pageId]).toHaveLength(1)
+    h.navigation.handleDidNavigateInPage({ url: 'https://example.com/?tab=2', isMainFrame: true })
     expect(h.cancelCapture).toHaveBeenCalledOnce()
     h.store.getState().addBrowserPageAnnotation(makeAnnotation(h.pageId, 'fresh'))
     h.navigation.handleDidStartNavigation(navigationEvent('https://example.com/next'))
@@ -179,9 +182,6 @@ describe('browser annotation document boundaries', () => {
     h.navigation.handleFullDidNavigate({ url: 'https://example.org/redirect', isMainFrame: true })
     h.navigation.handleFullDidNavigate({ url: 'https://example.com/', isMainFrame: true })
     expect(h.store.getState().browserAnnotationsByPageId[h.pageId]).toBe(saved)
-    expect(h.store.getState().browserAnnotationMarkerIdsByPageId[h.pageId]).toBeUndefined()
-    h.store.getState().addBrowserPageAnnotation(makeAnnotation(h.pageId, 'fresh'))
-    h.navigation.handleDidNavigateInPage({ url: 'https://example.com/#another', isMainFrame: true })
     expect(h.store.getState().browserAnnotationMarkerIdsByPageId[h.pageId]).toBeUndefined()
   })
 })

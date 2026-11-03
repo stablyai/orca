@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HttpLinkDestinations from '@/lib/http-link-destinations'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
-import { createNativeChatFileHref } from '../../../../shared/native-chat-href-routing'
+import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import {
@@ -55,6 +55,7 @@ function Chat({
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle | null>({
     focus: () => true,
+    insertAgentReferences: () => false,
     insertTypedText: () => true,
     acceptsText: () => acceptsText,
     appendText: mocks.appendText,

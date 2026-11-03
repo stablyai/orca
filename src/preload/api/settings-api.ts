@@ -3,7 +3,11 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type {
+  TerminalConfigImportPreview,
+  TerminalConfigImportSource
+} from '../../shared/terminal-config-import-preview'
 import type {
   SettingsBackupApplyRequest,
   SettingsBackupApplyResult,
@@ -24,7 +28,10 @@ export type SettingsApi = {
   }) => Promise<GlobalSettings>
   updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
-  previewGhosttyImport: () => Promise<GhosttyImportPreview>
+  previewGhosttyImport: (
+    source?: TerminalConfigImportSource
+  ) => Promise<TerminalConfigImportPreview>
+  previewKittyImport: (source?: TerminalConfigImportSource) => Promise<TerminalConfigImportPreview>
   previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
   /** Desktop only: writes chosen settings groups to a file the user picks. Secrets are never included. */
   exportBackup: (request: SettingsBackupExportRequest) => Promise<SettingsBackupExportResult>

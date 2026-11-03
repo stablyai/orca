@@ -4,7 +4,6 @@ import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { selectCanonicalProjects } from '../../src/renderer/src/store/project-host-setup-selector'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -94,8 +93,8 @@ test.describe('Windows project runtime smoke', () => {
     const wslDistro = wsl.distros[0]!
     const wslRepoPath = await createGitRepo('orca-e2e-project-runtime-', 'wsl-runtime-project')
 
-    const catalog = await orcaPage.evaluate(
-      async ({ hostRepoPath, wslRepoPath }) => {
+    const smoke = await orcaPage.evaluate(
+      async ({ hostRepoPath, wslRepoPath, wslDistro }) => {
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available')
@@ -110,61 +109,42 @@ test.describe('Windows project runtime smoke', () => {
           throw new Error('Expected host and WSL smoke repos to be loaded')
         }
 
-        return {
-          repos: state.repos,
-          endpointProjects: state.endpointProjects,
-          endpointProjectHostSetups: state.endpointProjectHostSetups,
-          hostRepo,
-          wslRepo
+        const hostProject = state.projects.find((project) =>
+          project.sourceRepoIds.includes(hostRepo.id)
+        )
+        const wslProject = state.projects.find((project) =>
+          project.sourceRepoIds.includes(wslRepo.id)
+        )
+        if (!hostProject || !wslProject) {
+          throw new Error('Expected host and WSL smoke projects to be loaded')
         }
-      },
-      { hostRepoPath: testRepoPath, wslRepoPath }
-    )
-    const projects = selectCanonicalProjects(catalog)
-    const hostProject = projects.find((project) =>
-      project.sourceRepoIds.includes(catalog.hostRepo.id)
-    )
-    const wslProject = projects.find((project) =>
-      project.sourceRepoIds.includes(catalog.wslRepo.id)
-    )
-    if (!hostProject || !wslProject) {
-      throw new Error('Expected host and WSL smoke projects to be loaded')
-    }
-    const smoke = await orcaPage.evaluate(
-      async ({ hostProjectId, wslProjectId, hostRepoId, wslRepoId, wslDistro }) => {
-        const state = window.__store!.getState()
+
         await state.updateProject(
-          hostProjectId,
+          hostProject.id,
           {
             localWindowsRuntimePreference: { kind: 'windows-host' }
           },
           'local'
         )
         await state.updateProject(
-          wslProjectId,
+          wslProject.id,
           {
             localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
           },
           'local'
         )
 
-        const hostWorktrees = await window.api.worktrees.listDetected({ repoId: hostRepoId })
-        const wslWorktrees = await window.api.worktrees.listDetected({ repoId: wslRepoId })
+        const hostWorktrees = await window.api.worktrees.listDetected({ repoId: hostRepo.id })
+        const wslWorktrees = await window.api.worktrees.listDetected({ repoId: wslRepo.id })
         return {
-          hostRepoId,
-          wslRepoId,
+          hostRepoId: hostRepo.id,
+          wslRepoId: wslRepo.id,
           wslDistro,
           hostWorktreeCount: hostWorktrees.worktrees.length,
           wslWorktreeCount: wslWorktrees.worktrees.length
         }
       },
-      {
-        hostProjectId: hostProject.id,
-        wslProjectId: wslProject.id,
-        hostRepoId: catalog.hostRepo.id,
-        wslRepoId: catalog.wslRepo.id,
-        wslDistro
-      }
+      { hostRepoPath: testRepoPath, wslRepoPath, wslDistro }
     )
 
     expect(smoke.hostWorktreeCount).toBeGreaterThan(0)
@@ -178,32 +158,24 @@ test.describe('Windows project runtime smoke', () => {
     await expect(
       hostSection.getByText(`This project runs in ${smoke.wslDistro} via WSL.`)
     ).toBeVisible()
-    const afterWslCatalog = await orcaPage.evaluate(() => {
+    const hostAfterWslUiSwitch = await orcaPage.evaluate((hostRepoId) => {
       const state = window.__store!.getState()
-      return {
-        repos: state.repos,
-        endpointProjects: state.endpointProjects,
-        endpointProjectHostSetups: state.endpointProjectHostSetups
-      }
-    })
-    const hostAfterWslUiSwitch = selectCanonicalProjects(afterWslCatalog).find((project) =>
-      project.sourceRepoIds.includes(smoke.hostRepoId)
-    )?.localWindowsRuntimePreference
+      const hostProject = state.projects.find((project) =>
+        project.sourceRepoIds.includes(hostRepoId)
+      )
+      return hostProject?.localWindowsRuntimePreference
+    }, smoke.hostRepoId)
     expect(hostAfterWslUiSwitch).toEqual({ kind: 'wsl', distro: smoke.wslDistro })
 
     await chooseProjectRuntime(orcaPage, smoke.hostRepoId, 'Windows')
     await expect(hostSection.getByText('This project runs on Windows.')).toBeVisible()
-    const afterWindowsCatalog = await orcaPage.evaluate(() => {
+    const hostAfterWindowsUiSwitch = await orcaPage.evaluate((hostRepoId) => {
       const state = window.__store!.getState()
-      return {
-        repos: state.repos,
-        endpointProjects: state.endpointProjects,
-        endpointProjectHostSetups: state.endpointProjectHostSetups
-      }
-    })
-    const hostAfterWindowsUiSwitch = selectCanonicalProjects(afterWindowsCatalog).find((project) =>
-      project.sourceRepoIds.includes(smoke.hostRepoId)
-    )?.localWindowsRuntimePreference
+      const hostProject = state.projects.find((project) =>
+        project.sourceRepoIds.includes(hostRepoId)
+      )
+      return hostProject?.localWindowsRuntimePreference
+    }, smoke.hostRepoId)
     expect(hostAfterWindowsUiSwitch).toEqual({ kind: 'windows-host' })
 
     await openRepoSettings(orcaPage, smoke.wslRepoId)

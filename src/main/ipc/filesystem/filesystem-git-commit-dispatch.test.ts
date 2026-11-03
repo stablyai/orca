@@ -1,6 +1,10 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../git/command-runner/git-exec-file'
+import * as gitRepo from '../../git/repo'
+import * as localOptions from '../local-worktree-runtime-options'
 import {
   handlers,
   store,
@@ -14,10 +18,27 @@ import {
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
 
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: facade.listWorktreeGraph,
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
@@ -54,18 +75,20 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 
 describe('registerFilesystemHandlers', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
     resetFilesystemIpcMocks()
     // Drop cached roots between fixtures.
     invalidateAuthorizedRootsCache()
   })
 
-  it('routes local git:commit through commitChanges and returns success', async () => {
+  it('routes commit and URL actions to the registered owner with WSL/range and SSH refusal', async () => {
     commitChangesMock.mockResolvedValue({ success: true })
+    const url = vi.spyOn(gitRepo, 'getRemoteFileUrl').mockResolvedValue(null)
 
     registerFilesystemHandlers(store as never)
 
@@ -79,6 +102,21 @@ describe('registerFilesystemHandlers', () => {
     expect(commitChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'feat: ship commit', {
       admissionTier: 'interactive'
     })
+    vi.spyOn(localOptions, 'getLocalGitOptionsForRegisteredWorktree').mockReturnValue({
+      wslDistro: 'Ubuntu'
+    })
+    const args = {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      relativePath: 'a.ts',
+      line: 10,
+      endLine: 20
+    }
+    await expect(handlers.get('git:remoteFileUrl')!(null, args)).resolves.toBeNull()
+    expect(url).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'a.ts', 10, 20, { wslDistro: 'Ubuntu' })
+    await expect(
+      handlers.get('git:remoteFileUrl')!(null, { ...args, connectionId: 'conn-1' })
+    ).rejects.toThrow('Remote connection dropped')
+    expect(url).toHaveBeenCalledTimes(1)
   })
 
   it('refuses ssh git:commit as not served instead of running local commitChanges', async () => {

@@ -256,6 +256,8 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
       getWorkspaceSession
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     expect(getWorkspaceSession).toHaveBeenCalledTimes(2)

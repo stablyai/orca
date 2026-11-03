@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { isAiVaultSessionRecoverableEmpty } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
-import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
-import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { parseClaudeSessionContent } from './scanners/claude/session-scanner-primary-parsers'
+import { countSubagentTranscripts } from './scanners/claude/session-scanner-subagent-transcripts'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []

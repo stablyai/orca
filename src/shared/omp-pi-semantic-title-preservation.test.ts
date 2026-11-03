@@ -63,7 +63,10 @@ describe('detectAgentStatusFromTitle reads the π state separator', () => {
     ['π > fixing the sidebar', 'idle'],
     ['π ⠋ fixing the sidebar', 'working'],
     ['⠋ π - fixing the sidebar - orca', 'working'],
-    ['π: fixing the sidebar', 'idle']
+    ['π: fixing the sidebar', 'idle'],
+    // Session names are free text; only the synthetic label means permission.
+    ['π - fix action required banner - orca', 'idle'],
+    ['OMP - fix action required banner - orca', 'idle']
   ])('classifies %s as %s', (title, expected) => {
     expect(detectAgentStatusFromTitle(title)).toBe(expected)
   })

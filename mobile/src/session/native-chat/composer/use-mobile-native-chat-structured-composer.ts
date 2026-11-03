@@ -12,16 +12,17 @@ export function useMobileNativeChatStructuredComposer(args: {
   /** The host keeps files a phone uploads; an older one refuses the upload. */
   acceptsFiles: boolean
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined
+  compactInstructions?: boolean | undefined
   files: MobileNativeChatFileAttachments
 }): MobileNativeChatStructuredComposer | null {
-  const { structured, acceptsFiles, files } = args
+  const { structured, acceptsFiles, compactInstructions, files } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
-  const { commands, refresh } = args.sessionCommands
+  const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, removeFiles } = files
   // Memoize commands separately so attachment changes cannot rebuild the menu catalog.
   const catalog = useMemo(
-    () => ({ reported: commands, conversationCommands }),
-    [commands, conversationCommands]
+    () => ({ reported: commands, conversationCommands, compactInstructions }),
+    [commands, compactInstructions, conversationCommands]
   )
   return useMemo(
     () =>
@@ -29,11 +30,21 @@ export function useMobileNativeChatStructuredComposer(args: {
         ? {
             catalog,
             onSlashMenuOpen: refresh,
+            onSlashMenuDemand: setMenuOpen,
             ...(acceptsFiles ? { onAttachFiles: () => void attachFiles() } : {}),
             files: pendingFiles,
             onRemoveFile: (id: string) => removeFiles([id])
           }
         : null,
-    [acceptsFiles, attachFiles, catalog, pendingFiles, refresh, removeFiles, structured]
+    [
+      acceptsFiles,
+      attachFiles,
+      catalog,
+      pendingFiles,
+      refresh,
+      removeFiles,
+      setMenuOpen,
+      structured
+    ]
   )
 }

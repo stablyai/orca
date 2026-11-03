@@ -1,15 +1,17 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import { BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
-import { listSystemFontFamilies } from '../system-fonts'
-import { previewGhosttyImport } from '../ghostty/index'
-import { previewWarpThemeImport } from '../warp-themes'
-import type { AgentAwakeService } from '../agent-awake-service'
+import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
+import { registerSettingsImportHandlers } from './settings-import-handlers'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 import { applySettingsWrite } from './settings-write'
+
+const registryRoot = getRuntimeEnvironmentRegistryRoot
 
 export function registerSettingsHandlers(
   store: Store,
@@ -38,7 +40,7 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('settings:get', () =>
-    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+    readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   )
 
   ipcMain.handle(
@@ -56,7 +58,7 @@ export function registerSettingsHandlers(
 
   // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
   ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
   ipcMain.handle('settings:set', (event, args: Partial<GlobalSettings>) =>
@@ -72,7 +74,7 @@ export function registerSettingsHandlers(
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =
-        requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+        requestedId === null ? null : resolveEnvironment(registryRoot(), requestedId).id
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
         { notifyListeners: true, originWebContentsId: event.sender.id }
@@ -82,14 +84,7 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
-  })
-
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
-    const source = args === undefined ? { kind: 'auto' } : args
-    return previewWarpThemeImport(store, source, event.sender)
-  })
+  registerSettingsImportHandlers(store)
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

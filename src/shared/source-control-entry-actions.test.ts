@@ -1,48 +1,41 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusEntry } from './git-status-types'
-import {
-  canDiscardStatusEntry,
-  canStageStatusEntry,
-  canUnstageStatusEntry
-} from './source-control-entry-actions'
+import { getConflictResolutions } from './source-control-entry-actions'
 
-function entry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
+function conflict(overrides: Partial<GitStatusEntry>): GitStatusEntry {
   return {
-    path: 'file.ts',
-    status: 'modified',
+    path: 'a.txt',
     area: 'unstaged',
+    status: 'modified',
+    conflictKind: 'both_modified',
+    conflictStatus: 'unresolved',
     ...overrides
-  } as GitStatusEntry
+  }
 }
 
-describe('source control entry actions', () => {
-  it('hides Unstage for submodule-internal staged rows but keeps it for normal staged rows', () => {
-    expect(canUnstageStatusEntry(entry({ area: 'staged' }))).toBe(true)
-    expect(canUnstageStatusEntry(entry({ area: 'staged', submoduleRoot: 'vendor/lib' }))).toBe(
-      false
-    )
-    expect(canUnstageStatusEntry(entry({ area: 'unstaged' }))).toBe(false)
+describe('getConflictResolutions', () => {
+  it('offers both sides of a delete/modify conflict while the surviving file is present', () => {
+    expect(getConflictResolutions(conflict({ conflictKind: 'deleted_by_us' }))).toEqual([
+      'keep_file',
+      'keep_deletion'
+    ])
   })
 
-  it('hides Discard for submodule-internal rows and conflict rows, keeps it for normal rows', () => {
-    expect(canDiscardStatusEntry(entry({ area: 'unstaged' }))).toBe(true)
-    expect(canDiscardStatusEntry(entry({ area: 'untracked', status: 'untracked' }))).toBe(true)
-    expect(canDiscardStatusEntry(entry({ area: 'unstaged', submoduleRoot: 'vendor/lib' }))).toBe(
-      false
-    )
-    expect(canDiscardStatusEntry(entry({ area: 'staged' }))).toBe(false)
-    expect(canDiscardStatusEntry(entry({ area: 'unstaged', conflictStatus: 'unresolved' }))).toBe(
-      false
-    )
+  it('offers only the deletion once the worktree file is gone', () => {
     expect(
-      canDiscardStatusEntry(entry({ area: 'unstaged', conflictStatus: 'resolved_locally' }))
-    ).toBe(false)
+      getConflictResolutions(conflict({ conflictKind: 'deleted_by_them', status: 'deleted' }))
+    ).toEqual(['keep_deletion'])
+    expect(
+      getConflictResolutions(conflict({ conflictKind: 'both_modified', status: 'deleted' }))
+    ).toEqual(['keep_deletion'])
   })
 
-  it('hides Stage for submodule-internal rows', () => {
-    expect(canStageStatusEntry(entry({ area: 'unstaged' }))).toBe(true)
-    expect(canStageStatusEntry(entry({ area: 'unstaged', submoduleRoot: 'vendor/lib' }))).toBe(
-      false
-    )
+  it('marks content conflicts resolved as edited', () => {
+    expect(getConflictResolutions(conflict({}))).toEqual(['mark_resolved'])
+  })
+
+  it('offers nothing for resolved rows or rows inside a submodule the parent cannot stage', () => {
+    expect(getConflictResolutions(conflict({ conflictStatus: 'resolved_locally' }))).toEqual([])
+    expect(getConflictResolutions(conflict({ submoduleRoot: 'sub' }))).toEqual([])
   })
 })

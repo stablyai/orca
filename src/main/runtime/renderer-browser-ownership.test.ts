@@ -1,0 +1,217 @@
+import './orca-runtime-test-lifecycle.spec'
+import { expect, it, vi } from 'vitest'
+import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+import type {
+  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../shared/runtime-types'
+
+it('preserves renderer browser ownership across headless reconciliation and close', async () => {
+  const closeSessionTab = vi.fn()
+  const closeTab = vi.fn().mockResolvedValue(undefined)
+  const runtime = new OrcaRuntimeService(store)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test harness mocks partial OffscreenBrowserBackend.
+  runtime.setOffscreenBrowserBackend({ closeTab, ownsTab: () => true } as never)
+  const forgetTabs = vi.spyOn(runtime['clientSessionTabSelections'], 'forgetTabs')
+  runtime.setNotifier({
+    worktreesChanged: vi.fn(),
+    reposChanged: vi.fn(),
+    activateWorktree: vi.fn(),
+    createTerminal: vi.fn(),
+    revealTerminalSession: vi.fn(),
+    splitTerminal: vi.fn(),
+    renameTerminal: vi.fn(),
+    focusTerminal: vi.fn(),
+    closeTerminal: vi.fn(),
+    closeSessionTab,
+    terminalFitOverrideChanged: vi.fn(),
+    terminalDriverChanged: vi.fn()
+  })
+  electronMocks.BrowserWindow.fromId.mockImplementation((id: number) =>
+    id === 1 ? { isDestroyed: () => false } : null
+  )
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, {
+    tabs: [],
+    leaves: [],
+    mobileSessionTabs: [
+      {
+        worktree: TEST_WORKTREE_ID,
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'browser-unified-1',
+        activeTabType: 'browser',
+        tabs: [
+          {
+            type: 'browser',
+            id: 'browser-unified-1',
+            title: 'Browser',
+            browserWorkspaceId: 'browser-workspace-1',
+            browserPageId: 'browser-page-1',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ]
+      }
+    ]
+  })
+
+  await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
+  expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
+  expect(forgetTabs).toHaveBeenCalledWith(TEST_WORKTREE_ID, ['browser-unified-1'])
+  expect(closeTab).not.toHaveBeenCalled()
+
+  const rendererSnapshot = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+  const headlessTab = {
+    type: 'browser',
+    id: 'headless-page-1',
+    title: 'Headless Browser',
+    browserWorkspaceId: 'headless-page-1',
+    browserPageId: 'headless-page-1',
+    url: 'https://headless.example/',
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    isActive: false
+  } satisfies RuntimeMobileSessionSnapshotTab
+  const mergedSnapshot: RuntimeMobileSessionTabsSnapshot = {
+    ...rendererSnapshot,
+    // Why: current getMerged keeps the renderer publisher epoch unchanged.
+    publicationEpoch: rendererSnapshot.publicationEpoch,
+    tabs: [...rendererSnapshot.tabs, headlessTab]
+  }
+  runtime['acceptedRendererMobileSnapshotByWorktree'].set(TEST_WORKTREE_ID, {
+    publicationEpoch: 'epoch-1',
+    rendererVersion: 1,
+    rendererTabCount: rendererSnapshot.tabs.length,
+    rendererTabIdentityKeys: new Set(
+      rendererSnapshot.tabs.flatMap((tab) => [
+        tab.id,
+        tab.type === 'browser' ? tab.browserWorkspaceId : tab.id
+      ])
+    )
+  })
+  runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, mergedSnapshot)
+
+  expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+    expect.objectContaining({ id: 'browser-unified-1' })
+  ])
+
+  runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
+  const reconciled = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+  expect(reconciled.publicationEpoch).toBe('epoch-1')
+  expect(reconciled.tabs).toEqual([expect.objectContaining({ id: 'browser-unified-1' })])
+
+  runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, mergedSnapshot)
+  closeSessionTab.mockClear()
+  await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
+  expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
+  expect(closeTab).not.toHaveBeenCalled()
+
+  closeSessionTab.mockClear()
+  await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'headless-page-1')
+  expect(closeSessionTab).not.toHaveBeenCalled()
+  expect(closeTab).toHaveBeenCalledWith('headless-page-1')
+
+  const afterHeadlessClose = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+  expect(afterHeadlessClose.publicationEpoch).toBe('epoch-1')
+  expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+    expect.objectContaining({ id: 'browser-unified-1' })
+  ])
+
+  closeSessionTab.mockClear()
+  closeTab.mockClear()
+  await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
+  expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
+  expect(closeTab).not.toHaveBeenCalled()
+
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test harness mocks partial AgentBrowserBridge.
+  runtime.setAgentBrowserBridge({
+    tabList: vi.fn(() => ({
+      tabs: [
+        {
+          browserPageId: 'headless-page-1',
+          title: 'Headless Browser',
+          url: 'https://headless.example/'
+        }
+      ]
+    }))
+  } as never)
+  const detachedSnapshot = runtime['buildPreservedHeadlessMobileSessionSnapshot']({
+    ...afterHeadlessClose,
+    publicationEpoch: afterHeadlessClose.publicationEpoch,
+    tabs: [...afterHeadlessClose.tabs, headlessTab]
+  })!
+  runtime['acceptedRendererMobileSnapshotByWorktree'].delete(TEST_WORKTREE_ID)
+  runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, detachedSnapshot)
+  expect(detachedSnapshot.publicationEpoch).toMatch(/^headless-hydrated:/)
+
+  const preservedAgain = runtime['buildPreservedHeadlessMobileSessionSnapshot'](detachedSnapshot)
+  expect(preservedAgain?.publicationEpoch).toBe(detachedSnapshot.publicationEpoch)
+
+  closeSessionTab.mockClear()
+  closeTab.mockClear()
+  await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'headless-page-1')
+  expect(closeSessionTab).not.toHaveBeenCalled()
+  expect(closeTab).toHaveBeenCalledWith('headless-page-1')
+})
+
+it('drops renderer browser rows once the serve desktop window closes', async () => {
+  const runtime = new OrcaRuntimeService(store)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test harness mocks partial OffscreenBrowserBackend.
+  runtime.setOffscreenBrowserBackend({ closeTab: vi.fn(), ownsTab: () => true } as never)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test harness mocks partial AgentBrowserBridge.
+  runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [] }) } as never)
+  electronMocks.BrowserWindow.fromId.mockImplementation((id: number) =>
+    id === 1 ? { isDestroyed: () => false } : null
+  )
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, {
+    tabs: [],
+    leaves: [],
+    mobileSessionTabs: [
+      {
+        worktree: TEST_WORKTREE_ID,
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'browser-unified-1',
+        activeTabType: 'browser',
+        tabs: [
+          {
+            type: 'browser',
+            id: 'browser-unified-1',
+            title: 'Browser',
+            browserWorkspaceId: 'browser-workspace-1',
+            browserPageId: 'browser-page-1',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ]
+      }
+    ]
+  })
+  const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+  expect(listed.tabs).toEqual([expect.objectContaining({ id: 'browser-unified-1' })])
+
+  const pushed: RuntimeMobileSessionTabsSnapshot[] = []
+  runtime.onMobileSessionTabsChanged((snapshot) => {
+    if ('tabs' in snapshot) {
+      pushed.push(snapshot)
+    }
+  })
+
+  runtime.markGraphUnavailable(1)
+  await vi.waitFor(() => expect(pushed.at(-1)?.tabs).toEqual([]))
+  // Desktop and web mirrors drop same-version frames, so the drop must advance the version.
+  expect(pushed.at(-1)?.snapshotVersion).toBeGreaterThan(listed.snapshotVersion)
+  expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+})

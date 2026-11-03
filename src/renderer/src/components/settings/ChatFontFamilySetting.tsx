@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat-appearance-settings'
+import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { translate } from '@/i18n/i18n'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,

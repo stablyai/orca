@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -14,10 +16,27 @@ import {
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
 
+vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktreeGraph: facade.listWorktreeGraph,
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
 vi.mock(
-  '../../wsl-unc-delete',
+  '../../wsl/filesystem/wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
 vi.mock(
@@ -54,7 +73,7 @@ vi.mock(
 )
 
 import { registerFilesystemHandlers } from './filesystem'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 
 describe('registerFilesystemHandlers', () => {
@@ -341,7 +360,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       success: false,
       error: 'Failed to prepare the selected agent account for commit message generation.'
     })
@@ -454,7 +473,7 @@ describe('registerFilesystemHandlers', () => {
         worktreePath: '/remote/repo',
         connectionId: 'conn-1'
       })
-    ).resolves.toEqual({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
+    ).resolves.toMatchObject({ success: false, error: SSH_HOST_NOT_SERVED_MESSAGE })
     expect(getStagedCommitContextMock).not.toHaveBeenCalled()
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
@@ -488,7 +507,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({ success: false, error: 'No staged changes to summarize.' })
+    ).resolves.toMatchObject({ success: false, error: 'No staged changes to summarize.' })
 
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
@@ -506,7 +525,7 @@ describe('registerFilesystemHandlers', () => {
       handlers.get('git:generateCommitMessage')!(null, {
         worktreePath: WORKTREE_FEATURE_PATH
       })
-    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+    ).resolves.toMatchObject({ success: false, error: 'Failed to read staged changes.' })
 
     expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })

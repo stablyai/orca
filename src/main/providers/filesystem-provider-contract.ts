@@ -2,7 +2,9 @@ import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DocPreviewFileAccessRequest,
-  DocPreviewFileAccessResult
+  DocPreviewFileAccessResult,
+  DocPreviewFileChunk,
+  DocPreviewFileTarget
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
@@ -41,6 +43,11 @@ export type IFilesystemProvider = {
   readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
+  readDocPreviewFileChunk?(
+    request: DocPreviewFileTarget,
+    offset: number,
+    length: number
+  ): Promise<DocPreviewFileChunk>
   /** Optional on older hosts; unsupported reads throw instead of transferring whole files per tail chunk.
    * Position/end must be safe nonnegative offsets; length must be positive and within MAX_FILE_RANGE_READ_BYTES. */
   readFileRange?(

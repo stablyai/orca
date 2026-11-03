@@ -11,11 +11,12 @@ import {
   type HostScopedWorktreeKey
 } from '../../../shared/worktree/host-qualified-identity'
 import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
-import { resolveLocalProjectRuntimesForRepos } from '../../project-runtime-git-options'
+import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { getAgentLaunchPlatformForRepo } from '../runtime-agent-launch-resolution'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import type { RuntimeStore } from '../runtime-store-contract'
 import {
+  projectRepoWorktreeRows,
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps,
@@ -81,7 +82,8 @@ export async function scanResolvedWorktreeRepos(
 export function joinResolvedWorktreeScans(
   store: RuntimeStore | null,
   rowDeps: () => RepoWorktreeRowDeps,
-  scans: ResolvedWorktreeRepoScans
+  scans: ResolvedWorktreeRepoScans,
+  projectOnly = false
 ): ResolvedWorktreeScanJoin {
   if (!store) {
     return {
@@ -108,7 +110,12 @@ export function joinResolvedWorktreeScans(
     if (!scan && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
-    const rows = joinRepoWorktreeRows(deps, repo, scan, metaById)
+    const rows = (projectOnly ? projectRepoWorktreeRows : joinRepoWorktreeRows)(
+      deps,
+      repo,
+      scan,
+      metaById
+    )
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {

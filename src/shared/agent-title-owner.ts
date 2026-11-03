@@ -7,11 +7,11 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES,
   type SyntheticAgentTitleProfile
 } from './synthetic-agent-title'
-import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import {
+  isLegacyPiCompatibleTitle,
+  rebrandPiCompatibleTitle
+} from './pi-compatible-synthetic-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
-
-/** The π brand a Pi/OMP title leads with; the owner's label replaces it in place. */
-const LEGACY_PI_BRAND = 'π'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
@@ -135,10 +135,10 @@ export function normalizeCompatibleAgentTitleForOwner(
   if (stateTitle !== null) {
     return stateTitle
   }
-  // Replace only the π brand with launch ownership; retain the agent's session/cwd instead of collapsing its semantic title (#16093).
-  if (isLegacyPiCompatibleTitle(source.sourceTitle)) {
-    // Replace within the matched segment so multiplexer prefixes retain their brand; a prefix parsing as a π title remains an ambiguous match.
-    const ownedSegment = source.sourceTitle.replace(LEGACY_PI_BRAND, ownerProfile.workingLabel)
+  // Replace only the leading brand with launch ownership; retain the agent's session/cwd instead of collapsing its semantic title (#16093).
+  // Replace within the matched segment so multiplexer prefixes retain their brand; a prefix parsing as a π title remains an ambiguous match.
+  const ownedSegment = rebrandPiCompatibleTitle(source.sourceTitle, ownerProfile.workingLabel)
+  if (ownedSegment !== null) {
     const segmentAt = title.lastIndexOf(source.sourceTitle)
     return segmentAt === -1 ? ownedSegment : title.slice(0, segmentAt) + ownedSegment
   }
@@ -199,4 +199,13 @@ export function shareCompatibleTitleIdentityGroup(
   const leftGroup = getSyntheticAgentTitleProfile(left)?.titleIdentityGroup
   const rightGroup = getSyntheticAgentTitleProfile(right)?.titleIdentityGroup
   return Boolean(leftGroup && leftGroup === rightGroup)
+}
+
+/** Whether two reported kinds can name one running agent: equal, one title identity group (a
+ *  Pi-launched terminal whose hook reports OMP), or Claude Code's teams wrapper and Claude itself.
+ *  Only a false answer for two known kinds is evidence; display keeps each kind's own branding. */
+export function sameAgentIdentity(left: AgentType, right: AgentType): boolean {
+  const unwrapped = (kind: AgentType): AgentType =>
+    kind === 'claude-agent-teams' ? 'claude' : kind
+  return shareCompatibleTitleIdentityGroup(unwrapped(left), unwrapped(right))
 }

@@ -8,6 +8,7 @@ import {
   serializeWithAbsoluteCursor
 } from '../../shared/terminal-serialize-absolute-cursor'
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
+import { CONPTY_DA1_RESPONSE } from '../../shared/conpty-device-attributes'
 import { resizeLikeOwnPty } from './conpty-reflow-viewport'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
@@ -57,9 +58,6 @@ type TerminalWithSynchronousWrite = Terminal & {
     }
   }
 }
-
-// Match renderer terminal-capability-replies.ts without importing renderer code.
-const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
   protected terminal: Terminal

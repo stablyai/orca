@@ -15,6 +15,7 @@ import type {
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 const MAX_REQUESTED_REVIEWERS = 15
 
@@ -41,6 +42,7 @@ type ReviewerRequestActionsArgs = {
     options?: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
   scheduleReviewerInputFocus: () => void
 }
 
@@ -110,7 +112,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
       if (!result.ok) {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.2560588245', 'Failed to request reviewer')
         )
         return
@@ -155,6 +157,8 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+      args.onMutated()
     }
   }
 
@@ -211,7 +215,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       }
       if (!result.ok) {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.PullRequestPage.c798fa0ec7', 'Failed to remove reviewer')
         )
         return
@@ -255,6 +259,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      args.onMutated()
     }
   }
 

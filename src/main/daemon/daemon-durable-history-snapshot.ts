@@ -72,10 +72,7 @@ export async function buildDurableCheckpointSnapshot(opts: {
     )
     return {
       ...rebaseOnOlderRows(liveSnapshot, head),
-      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {}),
-      ...(!liveSnapshot.lastTitle && restoreInfo?.lastTitle
-        ? { lastTitle: restoreInfo.lastTitle }
-        : {})
+      ...(!liveSnapshot.cwd && restoreInfo?.cwd ? { cwd: restoreInfo.cwd } : {})
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
@@ -99,9 +96,15 @@ function diskCheckpointWithLiveIdentity(
   info: ColdRestoreInfo,
   live: TerminalSnapshot
 ): TerminalSnapshot {
-  const { terminalOwner: _diskOwner, pendingOutputSeq: _diskSeq, ...disk } = info
+  const {
+    terminalOwner: _diskOwner,
+    pendingOutputSeq: _diskSeq,
+    lastTitle: _diskTitle,
+    ...disk
+  } = info
   return {
     ...disk,
+    ...(live.lastTitle ? { lastTitle: live.lastTitle } : {}),
     // Normal-screen snapshotAnsi already includes scrollback.
     scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
     scrollbackLines:

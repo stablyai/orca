@@ -175,6 +175,41 @@ describe('native chat transcript virtualizer contract', () => {
     expect(virtualizerMock.options.current?.getItemKey).toBe(getItemKey)
   })
 
+  it('skips the per-render scroll-margin offset walk while the pane is hidden', () => {
+    const container = document.createElement('div')
+    const sizer = document.createElement('div')
+    let offsetReads = 0
+    Object.defineProperty(sizer, 'offsetTop', {
+      get: () => {
+        offsetReads += 1
+        return 24
+      }
+    })
+    Object.defineProperty(sizer, 'offsetParent', { get: () => container })
+    const scrollRef = { current: container }
+    const { result, rerender } = renderHook(
+      ({ isVisible }) =>
+        useNativeChatTranscriptWindow({
+          scrollRef,
+          slots: [slot('a')],
+          isVisible,
+          revealIndex: -1
+        }),
+      { initialProps: { isVisible: false } }
+    )
+    result.current.sizerRef(sizer)
+    offsetReads = 0
+
+    for (let render = 0; render < 3; render++) {
+      rerender({ isVisible: false })
+    }
+    expect(offsetReads).toBe(0)
+
+    rerender({ isVisible: true })
+    expect(offsetReads).toBeGreaterThan(0)
+    expect(result.current.scrollMargin).toBe(24)
+  })
+
   it('attributes a clamped fallback landing after content grows before its echo', () => {
     const scrollElement = document.createElement('div')
     let scrollHeight = 1_000

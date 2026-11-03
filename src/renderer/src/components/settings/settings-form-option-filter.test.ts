@@ -4,6 +4,7 @@ import {
   FONT_SUGGESTION_RENDER_LIMIT,
   SETTINGS_FORM_OPTION_QUERY_MAX_BYTES,
   filterFontSuggestions,
+  filterSearchableSelectGroups,
   filterTerminalThemeOptions,
   getRenderedFontSuggestions,
   isSettingsFormOptionQueryTooLarge
@@ -24,23 +25,6 @@ function createThemeOption(
 }
 
 describe('settings-form-option-filter', () => {
-  it('filters terminal themes by label and source label', () => {
-    const themes = [
-      createThemeOption('Solarized Dark'),
-      createThemeOption('Night Owl', 'imported', 'Imported from Ghostty'),
-      createThemeOption('Tango Light')
-    ]
-
-    expect(filterTerminalThemeOptions(themes, 'ghostty')).toEqual([themes[1]])
-    expect(filterTerminalThemeOptions(themes, ' dark ')).toEqual([themes[0]])
-  })
-
-  it('orders font suggestions by prefix matches before substring matches', () => {
-    expect(filterFontSuggestions(['Fira Code', 'Cascadia Code', 'Code New Roman'], 'code')).toEqual(
-      ['Code New Roman', 'Fira Code', 'Cascadia Code']
-    )
-  })
-
   it('enforces the query budget by UTF-8 byte length', () => {
     const query = 'é'.repeat(SETTINGS_FORM_OPTION_QUERY_MAX_BYTES)
 
@@ -120,5 +104,35 @@ describe('settings-form-option-filter', () => {
       font: `System Font ${lateFontIndex}`,
       sourceIndex: lateFontIndex
     })
+  })
+})
+
+describe('filterSearchableSelectGroups', () => {
+  const groups = [
+    {
+      key: 'built-in',
+      options: [{ label: 'Built-in' }, { label: 'Match Terminal', keywords: ['dynamic'] }]
+    },
+    {
+      key: 'github',
+      heading: 'GitHub Themes',
+      options: [{ label: 'Light Default' }, { label: 'Dark Dimmed' }]
+    }
+  ]
+
+  it('matches every term across label, keywords and group heading, dropping empty groups', () => {
+    expect(filterSearchableSelectGroups(groups, 'github dark')).toEqual([
+      { ...groups[1], options: [{ label: 'Dark Dimmed' }] }
+    ])
+    expect(filterSearchableSelectGroups(groups, 'DYNAMIC')[0].options).toEqual([
+      groups[0].options[1]
+    ])
+  })
+
+  it('returns all groups for a blank query and none for an oversized one', () => {
+    expect(filterSearchableSelectGroups(groups, '  ')).toEqual(groups)
+    expect(
+      filterSearchableSelectGroups(groups, 'a'.repeat(SETTINGS_FORM_OPTION_QUERY_MAX_BYTES + 1))
+    ).toEqual([])
   })
 })

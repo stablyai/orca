@@ -113,7 +113,7 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
   },
   {
     id: 'terminal-create-shortcut',
-    caller: 'src/renderer/src/components/use-terminal-create-actions.ts',
+    caller: 'src/renderer/src/components/agent-tab-shortcut-launch.ts',
     args: { agent: 'codex', worktreeId: 'wt-1', groupId: 'group-1', launchSource: 'shortcut' }
   },
   {

@@ -30,6 +30,7 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   /** Explicit request to see the workspace in the list: leave the activity view once activation commits. */
   showWorkspaceList?: boolean
   executionHostId?: ExecutionHostId
+  runtimeEnvironmentId?: string | null
   backendStartupTerminalSpawned?: boolean
   /** Install a preserved fallback startup beside setup/default terminals already seeded. */
   createNewTerminalForStartup?: boolean

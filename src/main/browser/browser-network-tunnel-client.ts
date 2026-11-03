@@ -12,6 +12,7 @@ import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-
 import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS,
+  BROWSER_NETWORK_TUNNEL_MAX_STREAMS,
   validateBrowserNetworkTunnelGeneration
 } from './browser-network-tunnel-stream-state'
 import {
@@ -82,7 +83,7 @@ export class BrowserNetworkTunnelClient {
     if (this.closed) {
       return Promise.reject(new Error('Browser tunnel is closed'))
     }
-    if (this.streams.size >= 32) {
+    if (this.streams.size >= BROWSER_NETWORK_TUNNEL_MAX_STREAMS) {
       return Promise.reject(new Error('Browser tunnel stream limit exceeded'))
     }
     if (this.streamIdsExhausted) {
@@ -158,7 +159,8 @@ export class BrowserNetworkTunnelClient {
       closeTunnel: (error) => this.close(error),
       flushWrites: (target) => this.flushStreamWrites(target),
       claimApplicationBytes: (bytes) => this.claimApplicationBytes(bytes),
-      retire: (target, error) => this.retireStream(target, error)
+      retire: (target, error) => this.retireStream(target, error),
+      fail: (target, error) => this.failStream(target, error)
     })
   }
 
@@ -279,12 +281,13 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream)) {
       return
     }
+    // Retire first so the Error frame's queue claim can use the bytes this stream held.
+    this.retireStream(stream, error)
     this.frameSender.send(
       BrowserNetworkTunnelOpcode.Error,
       stream.id,
       new TextEncoder().encode(error.message)
     )
-    this.retireStream(stream, error)
   }
 
   private retireStream(

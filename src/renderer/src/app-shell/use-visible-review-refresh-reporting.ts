@@ -4,33 +4,30 @@ import type { AppState } from '../store/types'
 import { rightSidebarShowsPullRequestData } from '../lib/right-sidebar-visibility'
 import { findWorktreeById, buildPRRefreshCandidate } from '../store/github/worktree-refresh'
 import { getHostedReviewCacheKey } from '../store/slices/hosted-review-cache-identity'
-import { getIndexedRepoMap } from '../store/worktree-repo-index'
+import { getVisibleHostedReviewWorkspaces } from '../store/github/visible-hosted-review-refresh-targets'
 import { shouldCoordinateVisibleGitHubReview } from '../store/github/visible-hosted-review-refresh-ownership'
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repository-routing'
 import {
   reviewRefreshIntervalMs,
   REVIEW_REFRESH_COOLDOWN_MS
 } from '../../../shared/review-refresh-policy'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 
-export function visibleReviewWorktreeIdsForState(state: AppState): string[] {
+function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])
-  const repos = getIndexedRepoMap(state.repos)
   if (state.activeWorktreeId && rightSidebarShowsPullRequestData(state)) {
     ids.add(state.activeWorktreeId)
   }
-  return Array.from(ids).filter((id) => {
-    const worktree = findWorktreeById(state, id)
-    const repo = worktree && repos.get(worktree.repoId)
-    return (
-      worktree &&
-      repo &&
-      (repo.kind ?? 'git') === 'git' &&
-      !worktree.isBare &&
-      !worktree.isArchived &&
-      Boolean(worktree.branch)
-    )
-  })
+  return [...getVisibleHostedReviewWorkspaces(state, { worktreeIds: [...ids] })].filter(
+    ({ worktree }) => Boolean(worktree.branch)
+  )
+}
+
+export function visibleReviewWorktreeIdsForState(state: AppState): string[] {
+  return [...new Set(visibleReviewWorkspacesForState(state).map(({ worktree }) => worktree.id))]
 }
 
 function reportIdentity(state: AppState): string {
@@ -39,25 +36,19 @@ function reportIdentity(state: AppState): string {
     rightSidebarShowsPullRequestData(state),
     state.sshConnectedGeneration,
     state.prVisibleRefreshGeneration,
-    visibleReviewWorktreeIdsForState(state).map((id) => {
-      const worktree = findWorktreeById(state, id)
-      if (!worktree) {
-        return id
-      }
-      const candidate = buildPRRefreshCandidate(state, worktree)
-      const key =
-        candidate &&
-        getHostedReviewCacheKey(
-          candidate.repoPath,
-          candidate.branch,
-          state.settings,
-          candidate.repoId,
-          candidate.connectionId,
-          candidate.executionHostId,
-          true
-        )
+    visibleReviewWorkspacesForState(state).map(({ worktree, repo, candidate, selected }) => {
+      const key = getHostedReviewCacheKey(
+        candidate.repoPath,
+        candidate.branch,
+        state.settings,
+        candidate.repoId,
+        candidate.connectionId,
+        candidate.executionHostId,
+        true
+      )
       return [
-        id,
+        worktree.id,
+        selected,
         worktree.branch,
         worktree.head,
         worktree.linkedPR,
@@ -65,12 +56,12 @@ function reportIdentity(state: AppState): string {
         worktree.linkedBitbucketPR,
         worktree.linkedAzureDevOpsPR,
         worktree.linkedGiteaPR,
-        candidate?.connectionState,
-        candidate?.executionHostId,
-        candidate?.cacheKey,
-        getIndexedRepoMap(state.repos).get(worktree.repoId)?.gitRemoteIdentity?.canonicalKey,
-        Boolean(candidate && state.prCache[candidate.cacheKey]?.data),
-        key ? state.hostedReviewCache[key]?.data?.provider : null
+        candidate.connectionState,
+        candidate.executionHostId,
+        candidate.cacheKey,
+        repo.gitRemoteIdentity?.canonicalKey,
+        Boolean(state.prCache[candidate.cacheKey]?.data),
+        state.hostedReviewCache[key]?.data?.provider
       ]
     })
   ])
@@ -79,11 +70,16 @@ function reportIdentity(state: AppState): string {
 const REPORT_INPUT_KEYS = [
   'activeView',
   'activeWorktreeId',
+  'activeWorkspaceExecutionHostId',
   'rightSidebarOpen',
   'rightSidebarTab',
   'visibleReviewCardWorktreeIds',
+  'visibleWorkspaceHostIds',
+  'workspaceHostScope',
   'repos',
   'worktreesByRepo',
+  'detectedWorktreesByRepo',
+  'wslHostStatuses',
   'settings',
   'sshConnectionStates',
   'sshConnectedGeneration',
@@ -106,11 +102,16 @@ export function createVisibleReviewReportIdentitySelector(): (state: AppState) =
     previous = {
       activeView: state.activeView,
       activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
       rightSidebarOpen: state.rightSidebarOpen,
       rightSidebarTab: state.rightSidebarTab,
       visibleReviewCardWorktreeIds: state.visibleReviewCardWorktreeIds,
+      visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+      workspaceHostScope: state.workspaceHostScope,
       repos: state.repos,
       worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+      wslHostStatuses: state.wslHostStatuses,
       settings: state.settings,
       sshConnectionStates: state.sshConnectionStates,
       sshConnectedGeneration: state.sshConnectedGeneration,

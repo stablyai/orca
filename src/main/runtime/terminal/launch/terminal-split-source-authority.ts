@@ -1,4 +1,4 @@
-import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { OrcaRuntimeWithSplitPaneInMain } from './terminal-split-in-main'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -21,10 +21,9 @@ import {
 
 export abstract class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRuntimeWithSplitPaneInMain {
   abstract getTerminalHandleForPaneKey(
-    ...args: Parameters<
-      OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']
-    >
-  ): ReturnType<OrcaRuntimeWithPruneMobileSessionTabGroupLayout['getTerminalHandleForPaneKey']>
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): string | null
 
   /** A mounted view can drain its exited process after durable retirement removed the binding. */
   hasTerminalPaneView(worktreeId: string, tabId: string, leafId: string): boolean {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { AppState } from 'react-native'
+import { translate } from '../i18n/mobile-i18n'
 
 // Silent startup/bridge failures may emit no error; a native watchdog must turn the blank pane into a reported failure.
 const WEB_READY_WATCHDOG_MS = 15000
@@ -30,7 +31,10 @@ export function useTerminalWebReadyWatchdog(
         return
       }
       reportEngineError(
-        'Terminal did not initialize - no ready signal from the terminal view',
+        translate(
+          'terminal.webviewReadyWatchdog.initializeFailed',
+          'Terminal did not initialize - no ready signal from the terminal view'
+        ),
         true
       )
     }

@@ -1,4 +1,7 @@
-import { readLaunchPermissionChoice } from '../../../shared/tui-agent-permission-choice'
+import {
+  launchNewTabPromptThroughHost,
+  newTabPromptLaunchesThroughHost
+} from '@/lib/launch-agent-new-tab-host-route'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
 import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
@@ -7,20 +10,12 @@ import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/launch-agent-tab-prompt-paste'
-import {
-  launchNewTabPromptThroughHost,
-  newTabPromptLaunchesThroughHost
-} from '@/lib/launch-agent-new-tab-host-route'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import {
-  agentLaunchPermissionSettings,
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import { readAgentLaunchPreferencesForWorktree } from '@/components/settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
@@ -74,20 +69,6 @@ export function launchAgentInNewTabWithOutcome(
     return null
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
-  const permissionSettings = agentLaunchPermissionSettings(
-    agent,
-    store.settings ?? {},
-    sessionOptions
-  )
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(
-          agent,
-          permissionSettings,
-          readLaunchPermissionChoice(sessionOptions) ? 'own' : undefined
-        )
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, permissionSettings, resolvedLaunchPlatform)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -141,37 +122,24 @@ export function launchAgentInNewTabWithOutcome(
     args.focusIntent?.cancel()
     return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
-  // The saved choice becomes flags that replace conflicting raw ones, unless it yields to them.
-  const terminalOptions = terminalSessionOptionInputs({
-    agent,
-    sessionOptions,
-    yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-    agentArgs: effectiveAgentArgs,
-    shell: terminalShell
-  })
-  const startupPlanBase = {
-    agent,
-    cmdOverrides: store.settings?.agentCmdOverrides ?? {},
-    platform: resolvedLaunchPlatform,
-    shell: queuedShell,
-    isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv,
-    ...terminalOptions
-  }
-  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
-    base: startupPlanBase,
-    prompt: trimmedPrompt,
-    promptDelivery,
-    isFollowupPath
-  })
-  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
-
-  if (!startupPlan) {
-    args.focusIntent?.cancel()
-    return null
-  }
-
+  const buildStartup = (
+    agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
+  ) =>
+    planLaunchAgentStartupPrompt({
+      base: resolveAgentStartupPlanInputs({
+        agent,
+        settings: { ...store.settings, agentLaunchChoices },
+        agentArgs,
+        sessionOptions,
+        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+        platform: resolvedLaunchPlatform,
+        shell: queuedShell,
+        isRemote
+      }),
+      prompt: trimmedPrompt,
+      promptDelivery,
+      isFollowupPath
+    })
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -184,13 +152,11 @@ export function launchAgentInNewTabWithOutcome(
       environmentId: runtimeEnvironmentId,
       groupId,
       cwd: initialCwd,
-      startupPlan,
+      buildStartup,
+      sessionOptions,
       prompt: trimmedPrompt,
       promptDelivery,
-      pastePromptAfterReady: pasteDraftAfterLaunch,
-      submitPastedPrompt,
       agentArgs,
-      // Send the resolved terminal choice explicitly or a paired host could substitute its own chat default.
       viewMode: 'terminal',
       ...(activate === false ? { activate } : {}),
       onPromptDelivered
@@ -198,12 +164,15 @@ export function launchAgentInNewTabWithOutcome(
     return {
       surface: { kind: 'host-published' },
       terminalCompletion: webHostDelivery,
-      startupPlan,
-      pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null,
-      ...(pasteDraftAfterLaunch !== null && promptDelivery === 'submit-after-ready'
-        ? { promptDeliveryResult: webHostDelivery }
-        : {})
+      pasteDraftAfterLaunch: false,
+      ...(hasPrompt ? { promptDeliveryResult: webHostDelivery } : {})
     }
+  }
+
+  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
+  let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
+  if (!startupPlan) {
+    return null
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
@@ -219,10 +188,11 @@ export function launchAgentInNewTabWithOutcome(
       ...(groupId ? { groupId } : {}),
       prompt: trimmedPrompt,
       ...(agentArgs !== undefined ? { agentArgs } : {}),
-      ...(terminalOptions.sessionOptions ? { sessionOptions: terminalOptions.sessionOptions } : {}),
+      ...(sessionOptions ? { sessionOptions } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
+      ...(activate === false ? { activate: false } : {}),
       ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
       pasteContent: pasteDraftAfterLaunch,
       submit: submitPastedPrompt,
@@ -280,13 +250,10 @@ export function launchAgentInNewTabWithOutcome(
       ...(onPromptDelivered ? { onPromptDelivered } : {}),
       ...(onPromptDeliveryUnconfirmed ? { onPromptDeliveryUnconfirmed } : {})
     })
-    if (promptDelivery === 'submit-after-ready') {
-      promptDeliveryResult = deliveryPromise
-    } else {
-      void deliveryPromise.catch((error) =>
-        console.error('Prompt delivery failed after launch', error)
-      )
-    }
+    promptDeliveryResult = deliveryPromise
+    void deliveryPromise.catch((error) =>
+      console.error('Prompt delivery failed after launch', error)
+    )
   } else if (hasPrompt) {
     onPromptDelivered?.()
   }

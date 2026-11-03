@@ -1,8 +1,8 @@
 // Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -12,9 +12,17 @@ import {
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentSessionAccountHomesEqual,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
-  journal: Pick<AgentSessionJournal, 'visitItemsWithLinkage' | 'itemFence' | 'newestTurn'> & {
+  journal: Pick<
+    AgentSessionJournal,
+    'visitItemsWithLinkage' | 'itemFence' | 'newestTurn' | 'itemBody'
+  > & {
     submissions(): readonly Pick<AgentJournalSubmission, 'dispatchState' | 'fence' | 'rejection'>[]
   }
 }
@@ -81,6 +89,36 @@ async function launchedWithOtherPermissionMode(
   )
 }
 
+/** Orca mail notices are not the user's turn: they keep the running process and its choices. */
+function picksNewLaunchModel(
+  session: OutgrownChildReading,
+  next: AgentJournalSubmission | undefined,
+  requiresModelTransitionRestart: ((next: AgentJournalSubmission) => boolean) | undefined
+): boolean {
+  if (!next || !requiresModelTransitionRestart) {
+    return false
+  }
+  const body = session.journal.itemBody(agentJournalSubmissionKey(next.clientMessageId))
+  return (
+    body?.kind === 'message' &&
+    body.from?.orchestration?.message !== 'mail-notice' &&
+    requiresModelTransitionRestart(next)
+  )
+}
+
+/** Loop-free while a start launches under the account `current` reads; a read that throws is no
+ *  answer, so unreadable account evidence replaces nothing. */
+async function launchedUnderOtherAccount(
+  child: OutgrownChildReading['child'],
+  current: (() => Promise<AgentSessionAccountHome | null>) | undefined
+): Promise<boolean> {
+  if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
+    return false
+  }
+  const home = await current().catch(() => null)
+  return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
+}
+
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
@@ -91,6 +129,10 @@ export async function retireOutgrownStructuredAgentSessionChild(
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
+    /** The send about to be handed over; a new model pick may need the requested approval mode. */
+    next?: AgentJournalSubmission
+    requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
     permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
@@ -100,11 +142,13 @@ export async function retireOutgrownStructuredAgentSessionChild(
     !session ||
     !(
       structuredAgentSessionChildReportedSignedOut(session) ||
+      picksNewLaunchModel(session, deps.next, deps.requiresModelTransitionRestart) ||
       (await launchedWithOtherPermissionMode(
         session.child,
         deps.launchPermission,
         deps.permissionRequiresAcquisition
-      ))
+      )) ||
+      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
     ) ||
     structuredAgentSessionChildOwesWork(session.journal, deps.work)
   ) {

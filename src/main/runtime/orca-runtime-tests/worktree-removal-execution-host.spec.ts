@@ -18,12 +18,15 @@ import {
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeStore } from '../runtime-store-contract'
-import type { WorktreeRemovalRecord } from '../../worktree-removal-records'
-import { failedWorktreeRemovals, pendingWorktreeRemovals } from '../../worktree-removal-table'
+import type { WorktreeRemovalRecord } from '../../workspaces/removal/worktree-removal-records'
+import {
+  failedWorktreeRemovals,
+  pendingWorktreeRemovals
+} from '../../workspaces/removal/worktree-removal-table'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests
-} from '../../worktree-background-removal'
+} from '../../workspaces/removal/worktree-background-removal'
 import { RuntimeWorktreeRemovalInFlight } from '../runtime-worktree-removal-in-flight'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
@@ -85,7 +88,7 @@ describe('OrcaRuntimeService worktree removal execution host', () => {
         allowUnverifiedPtyStop: false,
         hostId: 'ssh:target-a'
       })
-    ).rejects.toThrow('Remote connection dropped')
+    ).rejects.toThrow('isn’t served by Orca’s server')
 
     expect(listWorktreesStrict).not.toHaveBeenCalled()
     expect(removeWorktree).not.toHaveBeenCalled()
@@ -179,6 +182,7 @@ class RemovalRuntime extends OrcaRuntimeService {
       { kind: 'local' },
       { id: record.worktreeId, path: record.worktreePath },
       [],
+      {},
       {}
     )
   }

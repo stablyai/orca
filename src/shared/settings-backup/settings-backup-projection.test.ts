@@ -69,12 +69,11 @@ describe('projectSettingsForBackup', () => {
     expect(JSON.stringify(settings)).not.toContain('session=abc')
   })
 
-  it('never exports agent permission grants or the Node download mirror', () => {
+  it('never exports agent or plugin grants or the Node download mirror', () => {
     const { settings } = projectSettingsForBackup(
       settingsWith({
         nativeChatPermissionMode: 'full-access',
-        orchestrationChatErrorEscalationEnabled: false,
-        orchestrationHeartbeatsEnabled: false,
+        pluginExternalHostGrants: { 'acme.viewer': ['example.com'] },
         agentPermissionOverrides: {},
         experimentalConnectors: true,
         nodeDistMirrorUrl: 'https://mirror.example.com/dist/'
@@ -82,8 +81,7 @@ describe('projectSettingsForBackup', () => {
       SETTINGS_BACKUP_SECTIONS
     )
     expect(settings.nativeChatPermissionMode).toBeUndefined()
-    expect(settings.orchestrationChatErrorEscalationEnabled).toBeUndefined()
-    expect(settings.orchestrationHeartbeatsEnabled).toBeUndefined()
+    expect(settings.pluginExternalHostGrants).toBeUndefined()
     expect(settings.agentPermissionOverrides).toBeUndefined()
     expect(settings.experimentalConnectors).toBeUndefined()
     expect(settings.nodeDistMirrorUrl).toBeUndefined()

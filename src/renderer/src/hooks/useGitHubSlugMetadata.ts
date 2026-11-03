@@ -1,3 +1,5 @@
+import { useGitHubOperationScope } from './useGitHubOperationScope'
+import { useMemo } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
@@ -25,9 +27,11 @@ export function useRepoLabelsBySlug(
   host?: string
 ): MetadataListState<string> {
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey =
     repositoryKey && target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}`
@@ -68,22 +72,23 @@ export function useRepoAssigneesBySlug(
 ): MetadataListState<GitHubAssignableUser> {
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey = repositoryKey
     ? target.kind === 'environment'
-      ? `runtime:${target.environmentId}:${repositoryKey}#${seedKey}`
-      : `${repositoryKey}#${seedKey}`
+      ? `runtime:${target.environmentId}:${repositoryKey}`
+      : repositoryKey
     : null
   const args = {
     owner: selectedOwner,
     repo: selectedRepo,
-    host: githubProjectHost(host),
-    ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
+    host: githubProjectHost(host)
   }
 
-  return useMetadataListRequest({
+  const base = useMetadataListRequest({
     cacheKey,
     store: slugAssigneeStore,
     errorFallback: 'Failed to load assignees',
@@ -103,4 +108,19 @@ export function useRepoAssigneesBySlug(
         return res.users
       })
   })
+  const data = useMemo(() => {
+    if (!cacheKey || base.resolvedKey !== cacheKey || !seedKey) {
+      return base.data
+    }
+    const users = [...base.data]
+    const seen = new Set(users.map((user) => user.login))
+    for (const login of seedKey.split(',')) {
+      if (!seen.has(login)) {
+        users.push({ login, name: null, avatarUrl: '' })
+        seen.add(login)
+      }
+    }
+    return users
+  }, [base.data, base.resolvedKey, cacheKey, seedKey])
+  return { data, loading: base.loading, error: base.error }
 }

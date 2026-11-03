@@ -1,13 +1,10 @@
-import {
-  stripAnsiEscapeSequences,
-  TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../shared/ansi-escape-sequences'
 import { aiVaultAgentLabel } from '../shared/ai-vault-types'
 import type {
   AiVaultSearchHit,
   AiVaultSearchResponse,
   AiVaultSearchStatus
 } from '../shared/ai-vault-search-types'
+import { terminalSafeLine } from '../shared/terminal-safe-text'
 
 type SessionSearchResults = Extract<AiVaultSearchResponse, { kind: 'results' }>
 /** Malformed cursors are a caller mistake and leave through the CLI error channel. */
@@ -16,15 +13,8 @@ export type PrintableSessionSearchResponse = Exclude<
   { kind: 'malformed-cursor' }
 >
 
-// Strip terminal controls from untrusted transcripts, including OSC 52 clipboard writes.
-export function terminalSafe(value: string): string {
-  return stripAnsiEscapeSequences(value).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
-}
-
 function oneLine(value: string): string {
-  return terminalSafe(value)
-    .replaceAll(/[\r\n]+/g, ' ')
-    .trim()
+  return terminalSafeLine(value).trim()
 }
 
 function formatHit(hit: AiVaultSearchHit): string {

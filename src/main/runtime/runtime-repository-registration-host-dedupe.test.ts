@@ -6,10 +6,10 @@ import type { Repo } from '../../shared/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 
-vi.mock('../repo-icon-autodetect', () => ({
+vi.mock('../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -135,6 +135,20 @@ describe('project registration dedupes only against rows on the same host', () =
     const added = await controller.add(folderPath, 'folder', 'runtime:env')
 
     expect(added.id).toBe('own')
+    expect(repos).toHaveLength(1)
+  })
+
+  it('two adds of the same new folder at once register it once', async () => {
+    const folderPath = join(root, 'notes')
+    await mkdir(folderPath)
+    const { controller, repos } = createController([])
+
+    const [first, second] = await Promise.all([
+      controller.add(folderPath, 'folder', 'runtime:env'),
+      controller.add(folderPath, 'folder', 'runtime:env')
+    ])
+
+    expect(second.id).toBe(first.id)
     expect(repos).toHaveLength(1)
   })
 })

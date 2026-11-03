@@ -124,8 +124,17 @@ export function sendAndReceive(
   })
 }
 
+const PAINT_PROBE_EXPRESSION =
+  "[performance.getEntriesByType('paint').length > 0, performance.timeOrigin]"
+
+// Hides the first-paint probe every embedded-guest input passes; its own test spies on holdPaint.
 export function getSendCommandCalls(mock: MockWebContents): SendCommandCall[] {
-  return mock.webContents.debugger.sendCommand.mock.calls as unknown as SendCommandCall[]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock records the (method, params, sessionId) it was called with.
+  const calls = mock.webContents.debugger.sendCommand.mock.calls as unknown as SendCommandCall[]
+  return calls.filter(
+    ([method, params]) =>
+      method !== 'Runtime.evaluate' || params?.expression !== PAINT_PROBE_EXPRESSION
+  )
 }
 
 export function getSendCommandMethods(mock: MockWebContents): string[] {

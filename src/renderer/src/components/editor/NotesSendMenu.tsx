@@ -1,3 +1,4 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -23,7 +24,12 @@ import {
 } from '@/lib/notes-send-in-flight'
 import { translate } from '@/i18n/i18n'
 
-const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
+function enabledSendTooltip(): string {
+  return translate(
+    'auto.components.editor.NotesSendMenu.sendNotesToAgent',
+    'Send notes to an agent'
+  )
+}
 
 export type NotesSendMenuScope<TNote> = {
   id: string
@@ -38,6 +44,8 @@ type SendableNotesScope<TNote> = Omit<NotesSendMenuScope<TNote>, 'formatPrompt'>
 }
 
 export type NotesSendMenuProps<TNote> = {
+  /** The copy the notes were read from; null while it is unknown, which disables Send without a message. */
+  owner: DiffCommentOwner | null
   worktreeId: string
   groupId: string
   modeIdParts: readonly string[]
@@ -66,6 +74,7 @@ export function buildNotesSendTargetModeId(modeIdParts: readonly string[]): stri
 }
 
 export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
+  owner,
   worktreeId,
   groupId,
   modeIdParts,
@@ -77,7 +86,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   triggerLabel,
   triggerCount,
   actionLabel,
-  disabledTooltip = 'All notes sent',
+  disabledTooltip,
   iconClassName = 'size-3.5',
   align = 'end',
   openRequestNonce = null,
@@ -94,10 +103,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(() => {
     void inFlightVersion
     return scopes.map(({ formatPrompt, ...scope }) => {
-      const notes = scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(note)))
+      const notes = owner
+        ? scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
+        : []
       return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
     })
-  }, [inFlightVersion, scopes])
+  }, [inFlightVersion, owner, scopes])
   const enabledScopes = useMemo(
     () => sendableScopes.filter((scope) => scope.notes.length > 0),
     [sendableScopes]
@@ -108,9 +119,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   }, [defaultScopeId, enabledScopes])
   const hasDeliverableNotes = enabledScopes.length > 0
   // Notes only on their way to an agent are not sent yet.
-  const disabledTitle = scopes.some((scope) => scope.notes.length > 0)
-    ? translate('components.native-chat.question.sending', 'Sending…')
-    : disabledTooltip
+  const disabledTitle = !owner
+    ? undefined
+    : scopes.some((scope) => scope.notes.length > 0)
+      ? translate('components.native-chat.question.sending', 'Sending…')
+      : (disabledTooltip ??
+        translate('auto.components.editor.NotesSendMenu.allNotesSent', 'All notes sent'))
 
   const markDelivered = useCallback(
     (notes: readonly TNote[]) => {
@@ -120,8 +134,12 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   )
   const holdInFlight = useCallback(
     (notes: readonly TNote[]) => (delivered: Promise<unknown>) =>
-      holdNotesForSend(notes.map(diffCommentSendKey), delivered, () => markDelivered(notes)),
-    [markDelivered]
+      holdNotesForSend(
+        owner ? notes.map((note) => diffCommentSendKey(owner, note)) : [],
+        delivered,
+        () => markDelivered(notes)
+      ),
+    [markDelivered, owner]
   )
 
   const openTargetMode = useCallback(
@@ -209,7 +227,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                 triggerClassName
               )}
               disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTitle}
+              title={hasDeliverableNotes ? enabledSendTooltip() : disabledTitle}
               aria-label={
                 triggerLabel
                   ? translate(
@@ -217,7 +235,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
                       'Send {{value0}} to an agent',
                       { value0: triggerLabel }
                     )
-                  : ENABLED_SEND_TOOLTIP
+                  : enabledSendTooltip()
               }
               onMouseDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
@@ -239,9 +257,11 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTitle}
-        </TooltipContent>
+        {hasDeliverableNotes || disabledTitle ? (
+          <TooltipContent side="bottom" sideOffset={6}>
+            {hasDeliverableNotes ? enabledSendTooltip() : disabledTitle}
+          </TooltipContent>
+        ) : null}
       </Tooltip>
       <DropdownMenuContent
         align={align}

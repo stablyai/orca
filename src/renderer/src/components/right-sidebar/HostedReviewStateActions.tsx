@@ -100,10 +100,10 @@ export function DraftReviewActions({
             <DropdownMenuItem variant="destructive" onSelect={onCloseReview}>
               <GitPullRequestClosed className="size-3.5" />
               {translate(
-                'auto.components.right.sidebar.HostedReviewActions.closeDraft',
-                'Close'
-              )}{' '}
-              {shortLabel}
+                'auto.components.right.sidebar.HostedReviewActions.closeReview',
+                'Close {{review}}',
+                { review: shortLabel }
+              )}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

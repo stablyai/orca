@@ -59,6 +59,7 @@ it.each(['counts-first', 'lists-first'] as const)(
     expect(total).toEqual({ totalCount: 36 * 120, totalPages: 5 })
     expect(api.restSearches).toBe(0)
     expect(api.rejected).toBe(0)
+    expect(api.calls.some(({ args }) => args[0] === 'pr')).toBe(false)
     expect(api.graphqlCalls).toBeLessThanOrEqual(72)
   }
 )

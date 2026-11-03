@@ -12,6 +12,8 @@ import {
 } from '../../../src/shared/github/linked-pr-staleness'
 import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
+import { translate } from '../i18n/mobile-i18n'
+import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -21,6 +23,11 @@ export type PrSidebarData = {
   checksError: string | null
   // Source Control gates pushes on the review's own push target, as desktop does.
   pushTarget: GitPushTarget | null
+}
+
+// PR numbers repeat across repos (forks, relinks), so details and checks belong to repo + number.
+export function prSidebarReviewKey(pr: PRInfo): string {
+  return `${pr.prRepo ? githubRepoIdentityKey(pr.prRepo) : ''}#${pr.number}`
 }
 
 // Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
@@ -197,7 +204,12 @@ export async function loadPrSidebarData(
     }
   } catch (err) {
     // Rejected dependencies must settle as UI errors rather than unhandled rejections.
-    return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
+    return err instanceof Error
+      ? failureState(err.message)
+      : {
+          kind: 'error',
+          message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
+        }
   }
 }
 

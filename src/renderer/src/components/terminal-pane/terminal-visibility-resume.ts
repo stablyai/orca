@@ -113,8 +113,8 @@ export function resumeTerminalVisibility({
       for (const pane of manager.getPanes()) {
         presentPaneViewport(pane)
       }
-      // Rebuild once after attachment/measurement instead of paying a duplicate global atlas reset.
-      manager.scheduleRevealRepaint()
+      // Settled present covers attach/measure races; the shared atlas is still valid (renderers rebuild their model on page-layout changes), so re-rasterizing every glyph is waste.
+      manager.scheduleRevealPresent()
     }
   })
 }

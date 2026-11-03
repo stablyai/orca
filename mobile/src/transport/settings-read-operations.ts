@@ -90,16 +90,20 @@ export const newTabSettingsRead = bindDeferredRpcOperation(
   })
 )
 
-const copyTrimsGutterReader: RpcCompatibleReader<unknown, 'copy-trims-gutter', boolean> = (raw) => {
-  const settings = raw == null ? undefined : settingsMember(raw)
-  const trims: unknown =
-    settings == null ? undefined : settingsField(settings, 'terminalCopyTrimsGutter')
-  return {
-    compatible: true,
-    variant: 'copy-trims-gutter',
-    // Older hosts omit this setting; absence inherits the desktop’s enabled default.
-    value: trims !== false,
-    salvage: { droppedPaths: [], droppedCount: 0 }
+function onByDefaultSettingReader<Variant extends string>(
+  key: string,
+  variant: Variant
+): RpcCompatibleReader<unknown, Variant, boolean> {
+  return (raw) => {
+    const settings = raw == null ? undefined : settingsMember(raw)
+    const value: unknown = settings == null ? undefined : settingsField(settings, key)
+    return {
+      compatible: true,
+      variant,
+      // Older hosts omit these settings; absence inherits the desktop’s enabled default.
+      value: value !== false,
+      salvage: { droppedPaths: [], droppedCount: 0 }
+    }
   }
 }
 
@@ -109,7 +113,31 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
     method: 'settings.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: copyTrimsGutterReader
+    read: onByDefaultSettingReader('terminalCopyTrimsGutter', 'copy-trims-gutter')
+  })
+)
+
+// Missing reports let the caller preserve the older host's existing preference source.
+const followUpBehaviorReader: RpcCompatibleReader<unknown, 'follow-up-behavior', boolean | null> = (
+  raw
+) => {
+  const settings = raw == null ? undefined : settingsMember(raw)
+  const value = settings == null ? undefined : settingsField(settings, 'nativeChatQueueFollowUps')
+  return {
+    compatible: true,
+    variant: 'follow-up-behavior',
+    value: typeof value === 'boolean' ? value : null,
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  }
+}
+
+export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.native-chat-follow-up-behavior-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: followUpBehaviorReader
   })
 )
 

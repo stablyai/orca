@@ -88,8 +88,8 @@ export function openWorkspaceLayoutFrameSync(
 
   /** The moved tabs' selections this flush's writes took. */
   let selectionsTaken: MovedTabSelection[] = []
-  const show = (patch: LayoutFrameBuildPatch): void => {
-    selectionsTaken.push(...showFramePatch(store, patch))
+  const show = (patch: LayoutFrameBuildPatch, rebuiltWorkspaces?: readonly string[]): void => {
+    selectionsTaken.push(...showFramePatch(store, patch, rebuiltWorkspaces))
   }
 
   // Each change against the cache's copy it applies to, before the frame replaces it.
@@ -189,16 +189,14 @@ export function openWorkspaceLayoutFrameSync(
     // One update: a move's or rename's content rekeys with the frame that shows it.
     const rekeyed = shownContentRekeyPatch(state, cache)
     const base: AppState = { ...state, ...rekeyed }
-    show({
-      ...rekeyed,
-      ...layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
-    })
+    const builtKeys = [...fullBuilt, ...workspaceBuilt]
+    const patch = layoutFrameFlushPatch(base, cache, { fullBuilt, workspaceBuilt, rebound }, holds)
+    show({ ...rekeyed, ...patch }, builtKeys)
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }
     showFramePaneStarts(store, changed, cache, paneStartsShown)
     // Run after the apply check: the focus is the user's selection, not the frame's.
-    const builtKeys = [...fullBuilt, ...workspaceBuilt]
     const followHeldTabs = heldTabGroupFocus(base, store, builtKeys, holds.held)
     for (const key of builtKeys) {
       shown.add(key)

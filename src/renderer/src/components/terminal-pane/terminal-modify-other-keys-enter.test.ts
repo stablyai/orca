@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
@@ -13,26 +12,6 @@ const FIXTURE_DIR = join(__dirname, '..', '..', '..', '..', 'main', 'runtime', '
 
 function readFixture(name: string): string {
   return readFileSync(join(FIXTURE_DIR, `${name}.txt`), 'utf8')
-}
-
-/** pi's editor rows: the lines between the last two full-width rules above the footer. */
-async function renderEditorRows(transcript: string): Promise<string[]> {
-  const terminal = new Terminal({ cols: 100, rows: 30, allowProposedApi: true })
-  await new Promise<void>((resolve) => terminal.write(transcript, resolve))
-  const buffer = terminal.buffer.active
-  const rows: string[] = []
-  for (let row = 0; row < terminal.rows; row++) {
-    rows.push(
-      buffer
-        .getLine(buffer.viewportY + row)
-        ?.translateToString(true)
-        .trim() ?? ''
-    )
-  }
-  terminal.dispose()
-  const rules = rows.flatMap((text, index) => (/^─{50,}$/.test(text) ? [index] : []))
-  const [open, close] = rules.slice(-2)
-  return rows.slice(open + 1, close).filter((text) => text.length > 0)
 }
 
 function enter(overrides: Partial<TerminalShortcutEvent>): TerminalShortcutEvent {
@@ -68,25 +47,6 @@ function resolveForPane(event: TerminalShortcutEvent, modes: TerminalKittyKeyboa
 }
 
 describe('modified Enter for an app that armed modifyOtherKeys (STA-7701)', () => {
-  it('reads pi editing semantics from the captured transcripts', async () => {
-    // ESC CR flips meaning with pi's private kitty state, which the pane cannot see.
-    expect(await renderEditorRows(readFixture('pi-0-74-modify-other-keys-esc-cr'))).toEqual(['def'])
-    expect(await renderEditorRows(readFixture('pi-0-74-late-kitty-esc-cr'))).toEqual(['abc', 'def'])
-    // CSI 27 ; mod ; 13 ~ means the same thing in both states.
-    for (const name of [
-      'pi-0-74-modify-other-keys-shift-enter-csi27',
-      'pi-0-74-late-kitty-shift-enter-csi27'
-    ]) {
-      expect(await renderEditorRows(readFixture(name))).toEqual(['abc', 'def'])
-    }
-    for (const name of [
-      'pi-0-74-modify-other-keys-alt-enter-csi27',
-      'pi-0-74-late-kitty-alt-enter-csi27'
-    ]) {
-      expect(await renderEditorRows(readFixture(name))).toEqual(['def'])
-    }
-  })
-
   it('sends xterm modifyOtherKeys Enter chords once pi has armed the mode', () => {
     const modes = new TerminalKittyKeyboardModeTracker()
     modes.scan(readFixture('pi-0-74-modify-other-keys-esc-cr'))

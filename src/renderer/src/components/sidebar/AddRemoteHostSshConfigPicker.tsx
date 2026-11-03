@@ -70,7 +70,7 @@ export function AddRemoteHostSshConfigPicker({
         </DialogTitle>
         <DialogDescription>
           {translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerDescription',
+            'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerImportDescription',
             'Pick a host to fill the form, or add every new host to Orca’s host list.'
           )}
         </DialogDescription>

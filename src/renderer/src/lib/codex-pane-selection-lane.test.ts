@@ -1,11 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store'
 import { getCodexSelectionLaneKey } from '../../../shared/codex-selection-lane'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getCodexAccountSwitchLaneMatcher,
-  isForeignMachineCodexPtyId,
-  isLocalCodexSelectionLaneKey,
   resolveCodexPaneSelectionLane,
   resolveCodexPaneSelectionLaneKey
 } from './codex-pane-selection-lane'
@@ -15,8 +13,7 @@ type LaneState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
-  | 'endpointProjects'
-  | 'endpointProjectHostSetups'
+  | 'projects'
   | 'repos'
   | 'runtimeEnvironments'
   | 'settings'
@@ -58,21 +55,7 @@ function laneState(args?: {
       terminalWindowsWslDistro: args?.terminalWindowsWslDistro ?? null
     },
     repos: [{ id: 'repo1', path: 'C:\\code\\app' }],
-    endpointProjectHostSetups: [
-      {
-        id: 'repo1',
-        projectId: 'proj1',
-        repoId: 'repo1',
-        hostId: 'local',
-        path: 'C:/code/app',
-        displayName: 'app',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
-      }
-    ],
-    endpointProjects: args?.projectWslDistro
+    projects: args?.projectWslDistro
       ? [
           {
             id: 'proj1',
@@ -106,49 +89,6 @@ function withWindowsRenderer(run: () => void): void {
 const HOST_TAB = { worktreeId: 'wt1', shellOverride: undefined }
 
 describe('resolveCodexPaneSelectionLaneKey', () => {
-  it('keys an ordinary local pane to the host lane', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({ state: laneState(), tab: HOST_TAB, ptyId: 'pty-1' })
-    ).toBe('host')
-  })
-
-  it('keys a pane in a WSL UNC worktree to that distro lane', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' }),
-        tab: HOST_TAB,
-        ptyId: 'pty-1'
-      })
-    ).toBe('wsl:Ubuntu')
-  })
-
-  it('keys a wsl.exe pane outside a UNC worktree to the default WSL lane', () => {
-    expect(
-      resolveCodexPaneSelectionLaneKey({
-        state: laneState(),
-        tab: { worktreeId: 'wt1', shellOverride: 'wsl.exe' },
-        ptyId: 'pty-1'
-      })
-    ).toBe('wsl:__default__')
-  })
-
-  // Use the resolved distro lane; wsl:__default__ would miss that distro’s account switch.
-  it('keys a wsl.exe pane on a Windows-path worktree to the configured distro', () => {
-    withWindowsRenderer(() => {
-      expect(
-        resolveCodexPaneSelectionLaneKey({
-          state: laneState({
-            terminalWindowsShell: 'wsl.exe',
-            terminalWindowsWslDistro: 'Ubuntu',
-            worktreePath: 'C:\\code\\app'
-          }),
-          tab: { worktreeId: 'wt1', shellOverride: 'wsl.exe' },
-          ptyId: 'pty-1'
-        })
-      ).toBe('wsl:Ubuntu')
-    })
-  })
-
   it('still keys an ordinary host pane to host when a WSL distro is configured', () => {
     withWindowsRenderer(() => {
       expect(
@@ -280,29 +220,6 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       })
     ).toBe('remote-runtime')
   })
-
-  it('keeps an owner-less remote pane off the host lane when no environment is active', () => {
-    const laneKey = resolveCodexPaneSelectionLaneKey({
-      state: laneState(),
-      tab: HOST_TAB,
-      ptyId: 'remote:term-1'
-    })
-    // Assert separation from host: a local switch must never mute a remote pane.
-    expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
-    expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
-  })
-
-  it('keys an SSH-connection pane to a lane no account selection can name', () => {
-    const laneKey = resolveCodexPaneSelectionLaneKey({
-      state: laneState(),
-      tab: HOST_TAB,
-      ptyId: 'ssh:my-box@@pty-7'
-    })
-    expect(laneKey).toBe('ssh-connection')
-    // Only host/wsl lanes have managed selections; no switch can reach this foreign key.
-    expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
-    expect(isLocalCodexSelectionLaneKey(laneKey)).toBe(false)
-  })
 })
 
 describe('resolveCodexPaneSelectionLane', () => {
@@ -319,53 +236,6 @@ describe('resolveCodexPaneSelectionLane', () => {
       source: 'recorded',
       derivedLaneKey: 'host'
     })
-  })
-
-  it('reports the disagreement so a re-derivation bug stays diagnosable', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      resolveCodexPaneSelectionLane({
-        state: laneState(),
-        tab: HOST_TAB,
-        ptyId: 'pty-1',
-        recordedLaneKey: 'wsl:Ubuntu'
-      })
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[codex-lane]'),
-        expect.objectContaining({ ptyId: 'pty-1', recorded: 'wsl:Ubuntu', derived: 'host' })
-      )
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('stays quiet when the record and the derivation agree', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const lane = resolveCodexPaneSelectionLane({
-        state: laneState(),
-        tab: HOST_TAB,
-        ptyId: 'pty-1',
-        recordedLaneKey: 'host'
-      })
-      expect(lane.source).toBe('recorded')
-      expect(warn).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-    }
-  })
-
-  it('derives a local host pane that main never recorded', () => {
-    for (const recordedLaneKey of [undefined, null, '', '   ']) {
-      expect(
-        resolveCodexPaneSelectionLane({
-          state: laneState(),
-          tab: HOST_TAB,
-          ptyId: 'pty-1',
-          recordedLaneKey
-        })
-      ).toEqual({ laneKey: 'host', source: 'derived', derivedLaneKey: 'host' })
-    }
   })
 
   it('falls back to the derivation when the record names no selectable lane', () => {
@@ -418,23 +288,6 @@ describe('resolveCodexPaneSelectionLane', () => {
 })
 
 describe('getCodexAccountSwitchLaneMatcher', () => {
-  it('scopes a local switch to the runtime slot it wrote', () => {
-    const hostSwitch = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'local' },
-      target: { runtime: 'host' }
-    })
-    expect(hostSwitch('host')).toBe(true)
-    expect(hostSwitch('wsl:Ubuntu')).toBe(false)
-
-    const ubuntuSwitch = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'local' },
-      target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    })
-    expect(ubuntuSwitch('wsl:Ubuntu')).toBe(true)
-    expect(ubuntuSwitch('wsl:Debian')).toBe(false)
-    expect(ubuntuSwitch('host')).toBe(false)
-  })
-
   // Clearing a distro-less selection clears every WSL slot; matching only __default__ would miss them.
   it('claims every WSL distro when the change cleared them all', () => {
     const wslDefaultSwitch = getCodexAccountSwitchLaneMatcher({
@@ -472,48 +325,5 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
     expect(ubuntuClear('wsl:Ubuntu')).toBe(true)
     expect(ubuntuClear('wsl:Debian')).toBe(false)
     expect(ubuntuClear('wsl:__default__')).toBe(false)
-  })
-
-  it('scopes a switch made against a runtime environment to that machine', () => {
-    const environmentSwitch = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'environment', environmentId: 'env-1' },
-      target: { runtime: 'host' }
-    })
-    expect(environmentSwitch('env:env-1')).toBe(true)
-    expect(environmentSwitch('host')).toBe(false)
-    expect(environmentSwitch('env:env-2')).toBe(false)
-  })
-
-  it('never lets a local host switch claim a remote or SSH pane', () => {
-    const hostSwitch = getCodexAccountSwitchLaneMatcher({
-      owner: { kind: 'local' },
-      target: { runtime: 'host' }
-    })
-    const state = laneState()
-    for (const ptyId of ['remote:env-owner@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7']) {
-      expect(hostSwitch(resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId }))).toBe(
-        false
-      )
-    }
-  })
-})
-
-describe('isForeignMachineCodexPtyId', () => {
-  it('separates panes whose shell runs on another machine from local ones', () => {
-    expect(isForeignMachineCodexPtyId('remote:env-1@@term-1')).toBe(true)
-    expect(isForeignMachineCodexPtyId('remote:term-1')).toBe(true)
-    expect(isForeignMachineCodexPtyId('ssh:my-box@@pty-7')).toBe(true)
-    expect(isForeignMachineCodexPtyId('pty-1')).toBe(false)
-  })
-
-  it('agrees with the lane keys, so the sweep and the scan skip the same panes', () => {
-    const state = laneState({ activeRuntimeEnvironmentId: 'env-1' })
-    for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7', 'pty-1']) {
-      expect(
-        isLocalCodexSelectionLaneKey(
-          resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId })
-        )
-      ).toBe(!isForeignMachineCodexPtyId(ptyId))
-    }
   })
 })

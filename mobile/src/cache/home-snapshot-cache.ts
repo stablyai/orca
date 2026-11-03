@@ -1,6 +1,5 @@
 // Seed cold-start/resume cards from persisted last-good snapshot, then update via RPC; avoids ~1s empty flash while reconnecting.
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { AccountsSnapshot } from '../components/AccountUsage'
 // Persist canonical countsProvenAt so rehydrated counts retain freshness evidence.
 import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 
@@ -8,7 +7,6 @@ const STORAGE_KEY = 'orca:home-snapshot:v1'
 
 export type HomeSnapshot = {
   worktreeInfo: Record<string, HostWorktreeInfo>
-  accountsByHost: Record<string, AccountsSnapshot>
   savedAt: number
 }
 
@@ -29,7 +27,7 @@ export async function loadHomeSnapshot(): Promise<HomeSnapshot | null> {
       typeof parsed !== 'object' ||
       parsed === null ||
       typeof parsed.worktreeInfo !== 'object' ||
-      typeof parsed.accountsByHost !== 'object'
+      parsed.worktreeInfo === null
     ) {
       return null
     }

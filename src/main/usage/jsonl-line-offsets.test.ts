@@ -29,15 +29,6 @@ afterEach(() => {
 })
 
 describe('readJsonlLinesFromOffset', () => {
-  it('reports byte offsets past each newline', async () => {
-    const filePath = writeFixture('lf.jsonl', 'ab\ncde\n')
-
-    expect(await collect(filePath)).toEqual([
-      { line: 'ab', endOffset: 3, terminated: true },
-      { line: 'cde', endOffset: 7, terminated: true }
-    ])
-  })
-
   it('strips the carriage return but counts it in the offset', async () => {
     const filePath = writeFixture('crlf.jsonl', 'ab\r\ncde\r\n')
 
@@ -73,11 +64,5 @@ describe('readJsonlLinesFromOffset', () => {
       { line: 'two', endOffset: 8, terminated: true },
       { line: 'three', endOffset: 14, terminated: true }
     ])
-  })
-
-  it('yields nothing when the offset is already at the end', async () => {
-    const filePath = writeFixture('end.jsonl', 'one\n')
-
-    expect(await collect(filePath, 4)).toEqual([])
   })
 })

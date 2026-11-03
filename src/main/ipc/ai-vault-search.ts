@@ -26,7 +26,7 @@ import {
   type ParsedExecutionHost
 } from '../../shared/execution-host'
 import { redactStatusForTransport } from '../../shared/ai-vault-search-transport'
-import { clearSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
+import { clearSessionSearchInService } from '../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'
 import { AI_VAULT_ALL_HOST_TIMEOUT_MS } from './ai-vault-all-host-timeouts'
@@ -43,9 +43,6 @@ export type RuntimeSessionSearchCall = (
 
 export type AiVaultSearchHandlerOptions = {
   callRuntimeSearch?: RuntimeSessionSearchCall
-  bindRuntimeSearch?: (
-    environmentId: string
-  ) => (method: string, params: Record<string, unknown>) => Promise<unknown>
   ensureStructuredSessionOwnership?: () => Promise<void>
 }
 
@@ -169,23 +166,14 @@ function allExecutionHostLegs(): SessionSearchHostLeg[] {
 }
 
 function remoteHostLeg(host: ParsedExecutionHost): SessionSearchHostLeg {
-  try {
-    const client = remoteSearchClient(host, handlerOptions.callRuntimeSearch)
-    return {
-      executionHostId: host.id,
-      timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.search,
-      search: (request) =>
-        client
-          ? client.searchSessions(request)
-          : Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
-    }
-  } catch (error) {
-    return {
-      executionHostId: host.id,
-      search: async () => {
-        throw error
-      }
-    }
+  const client = remoteSearchClient(host, handlerOptions.callRuntimeSearch)
+  return {
+    executionHostId: host.id,
+    timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.search,
+    search: (request) =>
+      client
+        ? client.searchSessions(request)
+        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
   }
 }
 
@@ -226,9 +214,8 @@ function remoteSearchClient(
 ): ReturnType<typeof createSessionSearchClient> | null {
   if (host.kind === 'runtime' && call) {
     const { environmentId } = host
-    const bound = handlerOptions.bindRuntimeSearch?.(environmentId)
     return createSessionSearchClient(
-      bound ?? ((method, params) => call(environmentId, method, params)),
+      (method, params) => call(environmentId, method, params),
       'relay'
     )
   }

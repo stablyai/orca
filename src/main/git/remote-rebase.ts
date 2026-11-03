@@ -30,8 +30,7 @@ async function gitPullRebaseFromBaseUnlocked(
   await runWithGitReadCacheInvalidation(async () => {
     const operationOptions = {
       ...gitOptionsForWorktree(worktreePath, options),
-      terminationBarrier: true,
-      captureWslLoginShellOutput: true
+      terminationBarrier: true
     }
     let rebaseRef: string | null = null
     try {

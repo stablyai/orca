@@ -24,6 +24,7 @@ import {
 } from './tab-bar-windows-shell-launch-test-harness'
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
@@ -55,6 +56,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),
@@ -109,25 +113,11 @@ describe('TabBar PowerShell launch wiring', () => {
   it('hides the WSL terminal row for local host-runtime projects', async () => {
     appStoreSnapshot.activeRepoId = 'repo-1'
     appStoreSnapshot.activeWorktreeId = 'wt-1'
-    appStoreSnapshot.endpointProjects = [
+    appStoreSnapshot.projects = [
       {
         id: 'project-1',
         localWindowsRuntimePreference: { kind: 'windows-host' },
         sourceRepoIds: ['repo-1']
-      }
-    ]
-    appStoreSnapshot.endpointProjectHostSetups = [
-      {
-        id: 'repo-1',
-        repoId: 'repo-1',
-        projectId: 'project-1',
-        hostId: 'local',
-        path: 'C:/repo',
-        displayName: 'project',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
       }
     ]
     appStoreSnapshot.repos = [{ id: 'repo-1' }]
@@ -142,6 +132,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -191,25 +184,11 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('shows only the WSL terminal row for local WSL-runtime projects', async () => {
     appStoreSnapshot.activeRepoId = 'repo-1'
-    appStoreSnapshot.endpointProjects = [
+    appStoreSnapshot.projects = [
       {
         id: 'project-1',
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
         sourceRepoIds: ['repo-1']
-      }
-    ]
-    appStoreSnapshot.endpointProjectHostSetups = [
-      {
-        id: 'repo-1',
-        repoId: 'repo-1',
-        projectId: 'project-1',
-        hostId: 'local',
-        path: 'C:/repo',
-        displayName: 'project',
-        setupMethod: 'legacy-repo',
-        setupState: 'ready',
-        createdAt: 0,
-        updatedAt: 0
       }
     ]
     appStoreSnapshot.repos = [{ id: 'repo-1' }]
@@ -224,6 +203,9 @@ describe('TabBar PowerShell launch wiring', () => {
       ]
     }
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(true),
@@ -272,6 +254,9 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('shows the Git Bash terminal row when shared Windows capabilities find bash.exe', async () => {
     vi.stubGlobal('window', {
+      // The setup prompt's image cache listens for window focus at load.
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       api: {
         wsl: {
           isAvailable: vi.fn().mockResolvedValue(false),
