@@ -66,7 +66,7 @@ export function readClaudeResponseModel(frame: Record<string, unknown>): string 
 export function observeClaudeFrameExecutionModel(
   session: ClaudeSession | null,
   frame: Record<string, unknown>,
-  initModel: string | undefined
+  initModel: string | null | undefined
 ): string | null {
   const model = readClaudeResponseModel(frame) ?? initModel
   return session && model && observeClaudeExecutionModel(session, model) ? model : null
