@@ -19,7 +19,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
-  'src/main/ai-vault/parse-cache/session-parse-cache-devin-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-metadata-checkpoint.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
