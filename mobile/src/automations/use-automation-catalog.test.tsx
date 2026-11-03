@@ -309,7 +309,9 @@ describe('host-owned automation reads', () => {
     expect(read().loaded).toBe(false)
     expect(read().isCurrentSnapshot()).toBe(false)
     expect(port.tracker.size()).toBe(0)
-    await act(async () => vi.advanceTimersByTimeAsync(30000))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
     expect(port.frames).toHaveLength(2)
     await act(async () => {
       void read().refresh(true)
@@ -402,7 +404,9 @@ describe('host-owned automation reads', () => {
       if (listMs === 0) {
         await act(async () => deliver(0))
       }
-      await act(async () => vi.advanceTimersByTimeAsync(Math.max(listMs, statusMs)))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(Math.max(listMs, statusMs))
+      })
       await act(async () => {
         deliver(0)
         deliver(1)
@@ -413,7 +417,9 @@ describe('host-owned automation reads', () => {
       expect(read().capabilities).toEqual(['catalog-ready'])
       expect(read().revision).toBe(1)
       expect(port.send).toHaveBeenCalledTimes(2)
-      await act(async () => vi.advanceTimersByTimeAsync(30000 - Math.max(listMs, statusMs)))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000 - Math.max(listMs, statusMs))
+      })
       expect(port.send).toHaveBeenCalledTimes(4)
     }
   )
