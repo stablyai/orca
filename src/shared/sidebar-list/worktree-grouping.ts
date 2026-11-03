@@ -35,6 +35,7 @@ export function buildOrderedGroups(args: {
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
+  isRunningSection?: (section: WorktreeGroupEntry) => boolean
 }): OrderedGroupEntry[] {
   const {
     groupBy,
@@ -50,7 +51,8 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces = []
+    folderWorkspaces = [],
+    isRunningSection
   } = args
 
   if (groupBy === 'repo') {
@@ -73,7 +75,8 @@ export function buildOrderedGroups(args: {
       ],
       pendingRepoIds: pendingByRepo.keys(),
       repoOrder,
-      projectOrderBy
+      projectOrderBy,
+      isRunningSection
     })
   }
 

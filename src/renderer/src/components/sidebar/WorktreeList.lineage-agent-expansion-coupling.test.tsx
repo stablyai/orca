@@ -255,6 +255,7 @@ function setAgentLineageState(options: {
 
   mockStore.state = {
     collapsedGroups: options.collapsedGroups ?? new Set<string>(),
+    setSidebarCollapsibleGroups: vi.fn(),
     toggleCollapsedGroup: vi.fn((key: string) => {
       // Replace the Set immutably so the list’s identity-keyed memo rebuilds render rows.
       const set = new Set(mockStore.state.collapsedGroups as Set<string>)

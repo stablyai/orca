@@ -50,6 +50,7 @@ import type {
 import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { createRunningSectionTest } from './running-sections'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
@@ -79,6 +80,10 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** Worktree ids with a live terminal; readers without liveness omit it. */
+  runningWorktreeIds?: ReadonlySet<string>
+  /** Lift projects with a live terminal above idle ones; needs runningWorktreeIds. */
+  runningProjectsFirst?: boolean
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -105,8 +110,11 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    runningWorktreeIds,
+    runningProjectsFirst = false
   } = inputs
+  const isRunningSection = createRunningSectionTest(worktrees, runningWorktreeIds)
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
@@ -148,7 +156,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               pendingByRepo,
               repoOrder,
               projectOrderBy,
-              folderWorkspaces: renderableFolderWorkspaces
+              folderWorkspaces: renderableFolderWorkspaces,
+              isRunningSection: runningProjectsFirst ? isRunningSection : undefined
             })
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
@@ -177,6 +186,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     .filter((section) => section.key !== PINNED_GROUP_KEY)
     .map((section) => [section.key, section.group])
   const naturalWorktrees = orderedGroups.flatMap(([, group]) => group.items)
+  const runningSectionKeys = isRunningSection
+    ? new Set(orderedGroups.filter(([, group]) => isRunningSection(group)).map(([key]) => key))
+    : undefined
   const render = (collapsedGroups: Set<string>): Row[] => {
     const result: Row[] = []
     if (groupBy !== 'repo') {
@@ -275,7 +287,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       pendingByRepo,
       mixedWorktreeHostContextLabels,
       noticeHostContextLabelByRepoId,
-      occurrencePlan
+      occurrencePlan,
+      runningSectionKeys,
+      runningProjectsFirst
     }
 
     if (groupBy !== 'repo' || projectGroups.length === 0) {

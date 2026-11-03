@@ -69,6 +69,7 @@ export function setPinnedFixtureState(): void {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarCollapsibleGroups: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
     workspaceHostScope: 'all',

@@ -142,6 +142,7 @@ export function setLineageFixtureState(
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarCollapsibleGroups: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
     // Use the all-host default so host filtering cannot remove fixture rows.
