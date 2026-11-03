@@ -4,6 +4,9 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SidebarHeader from './SidebarHeader'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { makeFolderWorkspace, makeProjectGroup } from './folder-workspace-composer-submit-fixtures'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -14,6 +17,9 @@ const mocks = vi.hoisted(() => {
   return {
     bucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
     openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
+    activateAndRevealFolderWorkspace: vi.fn(),
+    createFolderWorkspace: vi.fn(),
+    toastError: vi.fn(),
     popoverContentProps,
     shortcutLabel,
     toast: vi.fn()
@@ -22,6 +28,14 @@ const mocks = vi.hoisted(() => {
 
 type MockState = {
   repos: { id: string }[]
+  activeWorktreeId: string | null
+  activeWorkspaceKey: string | null
+  activeWorkspaceExecutionHostId: string | null
+  activeRepoId: string | null
+  folderWorkspaces: FolderWorkspace[]
+  projectGroups: ProjectGroup[]
+  createFolderWorkspace: typeof mocks.createFolderWorkspace
+  runtimeStatusByEnvironmentId: Map<string, never>
   groupBy: string
   sidebarBody: 'workspaces' | 'agents'
   sidebarWidth: number
@@ -75,7 +89,11 @@ vi.mock('../contextual-tours/workspace-creation-tour-handoff', () => ({
   openWorkspaceCreationComposerWithTourHandoff: mocks.openWorkspaceCreationComposerWithTourHandoff
 }))
 
-vi.mock('sonner', () => ({ toast: mocks.toast }))
+vi.mock('sonner', () => ({ toast: Object.assign(mocks.toast, { error: mocks.toastError }) }))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
+}))
 
 // Expose open state directly to isolate this header test from Radix portals.
 vi.mock('@/components/ui/popover', () => ({
@@ -109,9 +127,20 @@ beforeEach(() => {
   mocks.bucketCounts = { attention: 0, working: 0, done: 0, idle: 0 }
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
+  mocks.toastError.mockReset()
+  mocks.createFolderWorkspace.mockReset().mockResolvedValue(makeFolderWorkspace())
+  mocks.activateAndRevealFolderWorkspace.mockReset()
   mocks.shortcutLabel.current = '⌘N'
   mockState = {
     repos: [],
+    activeWorktreeId: null,
+    activeWorkspaceKey: null,
+    activeWorkspaceExecutionHostId: null,
+    activeRepoId: null,
+    folderWorkspaces: [],
+    projectGroups: [],
+    createFolderWorkspace: mocks.createFolderWorkspace,
+    runtimeStatusByEnvironmentId: new Map(),
     groupBy: 'repo',
     sidebarBody: 'workspaces',
     sidebarWidth: 280,
@@ -198,6 +227,60 @@ describe('SidebarHeader', () => {
     })
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+  })
+
+  it('keeps the composer path for the current git worktree', async () => {
+    mockState.activeWorkspaceKey = 'worktree:current-worktree'
+    mockState.activeWorktreeId = 'current-worktree'
+    mockState.activeRepoId = 'current-repo'
+    mockState.repos = [{ id: 'other-repo' }, { id: 'current-repo' }]
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
+    expect(mocks.createFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('creates and reveals a default folder workspace in the current folder project', async () => {
+    mockState.projectGroups = [{ ...makeProjectGroup(), executionHostId: 'runtime:folder-host' }]
+    mockState.folderWorkspaces = [makeFolderWorkspace({ executionHostId: 'runtime:folder-host' })]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mockState.activeWorkspaceExecutionHostId = 'runtime:folder-host'
+    mockState.activeWorktreeId = 'previous-git-worktree'
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.createFolderWorkspace).toHaveBeenCalledWith(
+      {
+        projectGroupId: 'group-1',
+        name: 'Platform workspace',
+        connectionId: null,
+        linkedTask: null
+      },
+      { runtimeEnvironmentId: 'folder-host' }
+    )
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      agent: null,
+      runtimeEnvironmentId: 'folder-host'
+    })
+    expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
+    expect(mockState.openModal).not.toHaveBeenCalled()
+  })
+
+  it('shows the existing error toast when direct folder creation fails', async () => {
+    mockState.projectGroups = [makeProjectGroup()]
+    mockState.folderWorkspaces = [makeFolderWorkspace()]
+    mockState.activeWorkspaceKey = 'folder:folder-workspace-1'
+    mocks.createFolderWorkspace.mockRejectedValue(new Error('Folder is unavailable. Try again.'))
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+
+    await act(async () => createButton().click())
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Folder is unavailable. Try again.')
+    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
 })

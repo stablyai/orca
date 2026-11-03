@@ -8,6 +8,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { createFolderWorkspaceFromSidebar } from './folder-workspace-create'
 import type { Repo } from '../../../../shared/repo-types'
 import { openHeaderCreateComposer } from './header-create-workspace-target'
 import {
@@ -187,18 +188,9 @@ const WorktreeList = React.memo(function WorktreeList({
     },
     [openModal]
   )
-  const handleCreateFolderWorkspace = useCallback(
-    (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
-      }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
-    },
-    [openModal]
-  )
+  const handleCreateFolderWorkspace = useCallback((projectGroup: ProjectGroup) => {
+    void createFolderWorkspaceFromSidebar(projectGroup)
+  }, [])
 
   useSidebarRevealRequests({
     groupBy,

@@ -1,7 +1,45 @@
-import { describe, expect, it } from 'vitest'
-import { buildNewWorkspaceShortcutModalData } from './ipc-events/new-workspace-command'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildNewWorkspaceShortcutModalData,
+  openNewWorkspaceFromShortcut
+} from './ipc-events/new-workspace-command'
+
+const mocks = vi.hoisted(() => ({ createFolderWorkspaceFromCurrent: vi.fn() }))
+vi.mock('@/components/sidebar/folder-workspace-create', () => mocks)
+
+beforeEach(() => mocks.createFolderWorkspaceFromCurrent.mockReset())
 
 describe('buildNewWorkspaceShortcutModalData', () => {
+  it('uses the current folder for an ordinary global create shortcut', () => {
+    const openModal = vi.fn()
+    mocks.createFolderWorkspaceFromCurrent.mockReturnValue(true)
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'terminal',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(mocks.createFolderWorkspaceFromCurrent).toHaveBeenCalledTimes(1)
+    expect(openModal).not.toHaveBeenCalled()
+  })
+
+  it('keeps the task-page shortcut on the composer path', () => {
+    const openModal = vi.fn()
+    mocks.createFolderWorkspaceFromCurrent.mockReturnValue(true)
+    openNewWorkspaceFromShortcut({
+      activeModal: 'none',
+      activeView: 'tasks',
+      taskPageData: {},
+      openModal
+    })
+
+    expect(mocks.createFolderWorkspaceFromCurrent).not.toHaveBeenCalled()
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'shortcut'
+    })
+  })
+
   it('carries the active Linear issue into the Cmd+N composer', () => {
     const data = buildNewWorkspaceShortcutModalData({
       activeView: 'tasks',

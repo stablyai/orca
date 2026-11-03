@@ -2,6 +2,7 @@ import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import type { AppState } from '../../store/types'
+import { createFolderWorkspaceFromCurrent } from '@/components/sidebar/folder-workspace-create'
 
 type NewWorkspaceShortcutModalData = {
   telemetrySource: 'shortcut'
@@ -32,5 +33,9 @@ export function openNewWorkspaceFromShortcut(
   if (state.activeModal === 'new-workspace-composer') {
     return
   }
-  state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+  const data = buildNewWorkspaceShortcutModalData(state)
+  if (!data.linkedWorkItem && state.activeView !== 'tasks' && createFolderWorkspaceFromCurrent()) {
+    return
+  }
+  state.openModal('new-workspace-composer', data)
 }
