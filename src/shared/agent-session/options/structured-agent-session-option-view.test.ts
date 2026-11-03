@@ -5,6 +5,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from './agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -270,6 +271,39 @@ describe('what a send carries', () => {
       }
     }
   )
+
+  it('treats older-host policy effort as observation while retaining literal input', () => {
+    const result: AgentSessionOptionsResult = {
+      models: [{ ...SONNET, defaultEffort: 'high', declaredDefaultEffort: 'low' }],
+      current: {
+        model: 'sonnet',
+        effort: 'high',
+        defaulted: [],
+        acceptedInputSources: { model: 'policy', effort: 'policy' }
+      }
+    }
+    const state = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, result)
+    expect(
+      structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')?.kind
+        .currentValue
+    ).toBe('low')
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'sonnet' })
+    expect(structuredAgentSessionSendSelection(state)).toEqual({ model: 'sonnet' })
+    for (const source of ['saved', 'seeded'] as const) {
+      const accepted = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+        ...result,
+        current: {
+          ...result.current,
+          effort: 'vendor/custom',
+          acceptedInputSources: { model: 'policy', effort: source }
+        }
+      })
+      expect(structuredAgentSessionMessageSelection(accepted).effort).toBe('vendor/custom')
+      expect(structuredAgentSessionSendSelection(accepted)?.effort).toBe('vendor/custom')
+    }
+    expect(result.current.effort).toBe('high')
+    expect(result.current.acceptedInputSources?.effort).toBe('policy')
+  })
 
   it('captures literal accepted effort independently of reports, aliases and missing catalog rows', () => {
     const literal = { model: 'opus[1m]', effort: 'vendor/custom' }

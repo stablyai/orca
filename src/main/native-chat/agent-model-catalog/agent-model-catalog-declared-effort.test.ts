@@ -220,6 +220,19 @@ it.each([true, false])(
       resting,
       { newLaunch: true }
     )
+    const olderHost = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState(source.agent, seed),
+      seed,
+      {
+        ...resting,
+        current: {
+          ...resting.current,
+          effort: 'high',
+          acceptedInputSources: { model: 'policy', effort: 'policy' }
+        }
+      },
+      { newLaunch: true }
+    )
     const controls = [
       {
         id: 'effort',
@@ -254,7 +267,7 @@ it.each([true, false])(
       }
     })
     await rig.acquire()
-    for (const [index, state] of [learned, rested].entries()) {
+    for (const [index, state] of [learned, rested, olderHost].entries()) {
       const selection = structuredAgentSessionMessageSelection(state)
       const captured = captureStructuredExecutionOptions(
         {
