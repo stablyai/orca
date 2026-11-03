@@ -12,16 +12,17 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { isSessionHeldByAnotherPane } from '@/lib/claude-session-pane-holders'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
-  resolveTuiAgentLaunchArgs,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
@@ -90,7 +91,12 @@ export function resolveAgentAccountRestartResumeStartup(
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings)
+          ? resolveTuiAgentLaunchRawArgs(
+              agent,
+              state.settings,
+              undefined,
+              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+            )
           : null,
     agentEnv:
       launchConfig !== undefined
@@ -133,6 +139,19 @@ export function buildPaneAccountRestartStartup(
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args)
+  const sessionId = resume?.resumeProviderSession?.id
+  // Why here: a queued restart runs at idle, and another pane may have resumed the session since.
+  if (
+    agent === 'claude' &&
+    sessionId &&
+    isSessionHeldByAnotherPane(
+      useAppStore.getState(),
+      makePaneKey(args.tabId, args.leafId),
+      sessionId
+    )
+  ) {
+    return null
+  }
   return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
 }
 

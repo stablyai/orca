@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -13,6 +14,13 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrictMock
+  }
+})
+
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
@@ -352,10 +360,16 @@ describe('worktree.ps on a degraded repo scan', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     const store = makeStore()
-    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
+    const getWorktreeMetaForHost = vi.fn((id: string, hostId: string) =>
+      hostId === 'local' ? store.getWorktreeMeta(id) : undefined
+    )
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({ ...store, getWorktreeMetaForHost })
+    )
 
     await runtime.getWorktreePs(10_000)
 
+    expect(getWorktreeMetaForHost).toHaveBeenCalledWith(MAIN_WORKTREE_ID, 'local')
     expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 

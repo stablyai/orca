@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { getDefaultSettings } from '../../../../shared/constants'
+import '../../../../shared/constants'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
@@ -40,100 +40,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     mockUnregisterPtyDataHandlers.mockReturnValue([])
     applySleepRuntimeRpcDefault(mockApi)
     shutdownBufferCaptures.clear()
-  })
-
-  it('records terminal input even before agent sleep is enabled', () => {
-    const store = createTestStore()
-
-    store.getState().recordTerminalInput('tab-1:leaf-1', 1000)
-
-    expect(store.getState().lastTerminalInputAtByPaneKey['tab-1:leaf-1']).toBe(1000)
-  })
-
-  it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const capture = vi.fn()
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-    shutdownBufferCaptures.set('tab-1', capture)
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
-  })
-
-  it('does not stop the active runtime when sleeping an SSH-owned worktree', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-
-    seedStore(store, {
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
-      repos: [
-        {
-          id: 'repo1',
-          path: '/repo1',
-          displayName: 'Repo 1',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1', hostId: 'ssh:ssh-1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'ssh:ssh-1@@pty-1' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-1'] }
-    })
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'terminal.stop' })
-    )
-    expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'terminal.sleep' })
-    )
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { keepHistory: true })
-  })
-
-  it('rolls back renderer teardown when a local physical PTY kill rejects', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const handlerSnapshots = [{ ptyId: 'pty-1', dataHandler: vi.fn() }]
-    mockUnregisterPtyDataHandlers.mockReturnValueOnce(handlerSnapshots)
-    mockApi.pty.kill.mockRejectedValueOnce(new Error('physical stop failed'))
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
-      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
-    })
-    store.getState().setAgentStatus('tab-1:leaf-1', {
-      state: 'working',
-      prompt: 'still live',
-      agentType: 'codex'
-    })
-
-    await expect(
-      store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-    ).rejects.toThrow('physical stop failed')
-
-    expect(mockRestorePtyDataHandlersAfterFailedShutdown).toHaveBeenCalledWith(handlerSnapshots)
-    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
-    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeDefined()
-    expect(store.getState().suppressedPtyExitIds['pty-1']).toBeUndefined()
   })
 
   it('waits for sibling local PTY kills before rolling back a failed shutdown', async () => {

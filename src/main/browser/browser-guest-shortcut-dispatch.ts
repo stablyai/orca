@@ -23,6 +23,9 @@ export type GuestShortcutForwardContext = {
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
+  /** False for plugin frames: no address bar, history, find or page zoom, and Close closes the
+   *  active tab rather than a browser source. */
+  browserPage?: boolean
 }
 
 export function forwardGuestShortcutInput(
@@ -41,8 +44,12 @@ export function forwardGuestShortcutInput(
     resolveWorkspaceId,
     forwardBrowserPageZoom
   } = ctx
+  const page = ctx.browserPage !== false
   const keybindings = getKeybindings?.()
   if (action?.type === 'zoom') {
+    if (!page) {
+      return false
+    }
     forwardBrowserPageZoom(event, action.direction)
     return true
   }
@@ -91,31 +98,53 @@ export function forwardGuestShortcutInput(
   }
   // Route floating guests to their own workspace for close/index shortcuts.
   const isFloatingGuest = resolveWorktreeId?.(browserTabId) === FLOATING_TERMINAL_WORKTREE_ID
-  if (keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)) {
+  if (
+    page &&
+    keybindingMatchesAction('browser.focusAddressBar', input, process.platform, keybindings)
+  ) {
     renderer.send('ui:focusBrowserAddressBar', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.showHistory', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.showHistory', input, process.platform, keybindings)
+  ) {
     renderer.send('ui:showBrowserHistory', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.hardReload', input, process.platform, keybindings)
+  ) {
     // The renderer owns the parked webview used for reload.
     renderer.send('ui:hardReloadBrowserPage', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.reload', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.reload', input, process.platform, keybindings)
+  ) {
     // Renderer reload also handles parked-webview eviction.
     renderer.send('ui:reloadBrowserPage', { browserPageId: browserTabId })
-  } else if (keybindingMatchesAction('browser.find', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.find', input, process.platform, keybindings)
+  ) {
     // Target the owning split; client-hosted guests can receive Find without a workspace ID.
     const browserWorkspaceId = resolveWorkspaceId?.(browserTabId) || undefined
     const target: BrowserFindTarget = { browserPageId: browserTabId, browserWorkspaceId }
     renderer.send('ui:findInBrowserPage', target)
   } else if (
     // Client-hosted panes have no workspace or annotation listener; leave the chord to the page.
+    page &&
     resolveWorkspaceId?.(browserTabId) &&
     keybindingMatchesAction('browser.annotateElement', input, process.platform, keybindings)
   ) {
     renderer.send('browser:grabModeToggle', browserTabId, 'annotate')
-  } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.back', input, process.platform, keybindings)
+  ) {
     // macOS side-button remaps can arrive as history keys instead of mouse events.
     renderer.send('ui:browserHistoryNavigate', { browserPageId: browserTabId, direction: 'back' })
-  } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
+  } else if (
+    page &&
+    keybindingMatchesAction('browser.forward', input, process.platform, keybindings)
+  ) {
     renderer.send('ui:browserHistoryNavigate', {
       browserPageId: browserTabId,
       direction: 'forward'
@@ -123,9 +152,11 @@ export function forwardGuestShortcutInput(
   } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
     if (isFloatingGuest) {
       renderer.send('ui:closeFloatingItem', { sourceId: browserTabId })
-    } else {
+    } else if (page) {
       // Guest focus may leave active-tab state stale in splits; close by source ID.
       renderer.send('ui:closeActiveTab', { sourceId: browserTabId })
+    } else {
+      renderer.send('ui:closeActiveTab')
     }
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
@@ -11,9 +11,9 @@ import {
   getRepoName
 } from '../../git/repo'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { findProjectAtSameRealPath } from '../../project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 
 export async function addLocalRepoFromPath(
@@ -29,7 +29,9 @@ export async function addLocalRepoFromPath(
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
     return {
-      error: (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+      error:
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        `Not a valid git repository: ${path}`
     }
   }
 

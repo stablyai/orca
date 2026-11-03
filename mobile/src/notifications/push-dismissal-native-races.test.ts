@@ -7,6 +7,8 @@ import {
   wasPushDismissed
 } from './push-dismissal-watermarks'
 import { foregroundNotificationBehavior } from './push-receive'
+import { presentForegroundPush } from './android-foreground-push'
+import { dismissPresentedPushNotification } from './push-tray-dismissal'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
 const memory = vi.hoisted(() => new Map<string, string>())
@@ -43,7 +45,12 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
-vi.mock('expo-notifications', () => ({ getPresentedNotificationsAsync: async () => [] }))
+const schedule = vi.hoisted(() => vi.fn(async () => 'socket-alert'))
+vi.mock('expo-notifications', () => ({
+  getPresentedNotificationsAsync: async () => [],
+  scheduleNotificationAsync: schedule
+}))
+vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: async () => [{ id: 'host' }] }))
 vi.mock('./push-host-fingerprint', () => ({ resolveHostIdForFingerprint: () => 'host' }))
 vi.mock('../storage/preferences', () => ({
@@ -142,4 +149,25 @@ it('suppresses presentation when dismissal completes during the handler sound re
     shouldPlaySound: false,
     shouldSetBadge: false
   })
+})
+
+it('does not schedule an alert dismissed while final fallback preparation is pending', async () => {
+  let finish: (allowed: boolean) => void = () => {}
+  const prepare = vi.fn(
+    () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve
+      })
+  )
+  const pending = presentForegroundPush(
+    'socket-alert',
+    { title: 'Needs input', body: 'Reply', data: payload, sound: 'default' },
+    prepare
+  )
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce())
+  await dismissPresentedPushNotification(payload.notificationId, payload.hostFingerprint, fence)
+  expect(await wasPushDismissed(payload)).toBe(true)
+  finish(true)
+  await pending
+  expect(schedule).not.toHaveBeenCalled()
 })

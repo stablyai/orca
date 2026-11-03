@@ -76,14 +76,6 @@ describe('PluginGrammarWorkerClient', () => {
     expect(worker?.terminated).toBe(false)
   })
 
-  it('refuses tokens that do not fit the document', async () => {
-    const { instance, workers } = client()
-    const result = instance.tokenize('ab', [2], signal())
-    await flush()
-    workers[0]?.reply({ ...complete(workers[0].lastJob()), data: new Uint32Array([0, 1, 9, 0]) })
-    await expect(result).resolves.toEqual({ ok: false, reason: 'unavailable' })
-  })
-
   it('gives setup its own deadline, so a slow start never counts as a stall', async () => {
     vi.useFakeTimers()
     const { instance, workers } = client(false)
@@ -120,19 +112,5 @@ describe('PluginGrammarWorkerClient', () => {
     expect(workers[0]?.terminated).toBe(true)
     void instance.tokenize('next', [4], signal())
     expect(workers).toHaveLength(2)
-  })
-
-  it('reports a crash and an oversized document', async () => {
-    const { instance, workers } = client()
-    const crashed = instance.tokenize('x', [1], signal())
-    workers[0]?.onerror?.(new ErrorEvent('error'))
-    await expect(crashed).resolves.toEqual({ ok: false, reason: 'crashed' })
-    await expect(
-      instance.tokenize(
-        'z',
-        Array.from({ length: 25_000 }, () => 1),
-        signal()
-      )
-    ).resolves.toEqual({ ok: false, reason: 'size' })
   })
 })

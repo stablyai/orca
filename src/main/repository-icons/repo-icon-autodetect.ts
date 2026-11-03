@@ -1,0 +1,156 @@
+import { readFile, stat } from 'node:fs/promises'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { GitHubRepositoryIdentity } from '../../shared/github/pull-request-types'
+import type { RepoKind } from '../../shared/repo-types'
+import {
+  faviconUrlFromWebsite,
+  githubAvatarIcon,
+  githubAvatarSlug,
+  type RepoIcon
+} from '../../shared/repo-icon'
+import { getRepoSlug, getRepoUpstream } from '../github/client/fetch/repo-slug-upstream'
+import {
+  resolveFilesystemRouteForHost,
+  resolveGitRouteForHost
+} from '../providers/execution-host-provider-dispatch'
+import { detectGitRemoteIdentity } from '../workspaces/catalog/repo-git-remote-identity'
+import { detectRepoFileIcon } from './repo-icon-file-detection'
+import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+
+const WEBSITE_HOSTS_TO_SKIP = new Set([
+  'github.com',
+  'www.github.com',
+  'gitlab.com',
+  'www.gitlab.com',
+  'bitbucket.org',
+  'www.bitbucket.org'
+])
+
+function shouldUseWebsiteFavicon(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl.includes('://') ? rawUrl : `https://${rawUrl}`)
+    return !WEBSITE_HOSTS_TO_SKIP.has(url.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
+function packageHomepageIcon(packageJson: unknown): RepoIcon | null {
+  if (!packageJson || typeof packageJson !== 'object') {
+    return null
+  }
+  const homepage = (packageJson as { homepage?: unknown }).homepage
+  if (typeof homepage !== 'string' || !shouldUseWebsiteFavicon(homepage)) {
+    return null
+  }
+  const src = faviconUrlFromWebsite(homepage)
+  return src ? { type: 'image', src, source: 'favicon', label: 'Website favicon' } : null
+}
+
+async function detectLocalPackageHomepageIcon(repoPath: string): Promise<RepoIcon | null> {
+  try {
+    const packageJsonPath = joinWorktreeRelativePath(repoPath, 'package.json')
+    const info = await stat(packageJsonPath)
+    if (!info.isFile() || info.size > 128 * 1024) {
+      return null
+    }
+    return packageHomepageIcon(JSON.parse(await readFile(packageJsonPath, 'utf8')))
+  } catch {
+    return null
+  }
+}
+
+// Runtime hosts must be refused: a null connection would read this machine's paths.
+function repoRemoteReadConnection(
+  executionHostId: ExecutionHostId
+): { kind: 'refuse' } | { kind: 'dial'; connectionId: string | null } {
+  const route = resolveGitRouteForHost(executionHostId)
+  switch (route.kind) {
+    case 'local':
+      return { kind: 'dial', connectionId: null }
+    case 'ssh':
+      return { kind: 'dial', connectionId: route.connectionId }
+    case 'runtime':
+      return { kind: 'refuse' }
+  }
+}
+
+export async function detectGitHubAvatarIcon(
+  repoPath: string,
+  executionHostId: ExecutionHostId,
+  upstream?: GitHubRepositoryIdentity | null
+): Promise<RepoIcon | null> {
+  try {
+    const target = repoRemoteReadConnection(executionHostId)
+    if (target.kind === 'refuse') {
+      return null
+    }
+    const slug = githubAvatarSlug(await getRepoSlug(repoPath, target.connectionId), upstream)
+    return slug ? githubAvatarIcon(slug) : null
+  } catch {
+    return null
+  }
+}
+
+export async function detectRepoIcon({
+  repoPath,
+  kind,
+  executionHostId,
+  upstream
+}: {
+  repoPath: string
+  kind: RepoKind
+  executionHostId: ExecutionHostId
+  upstream?: GitHubRepositoryIdentity | null
+}): Promise<RepoIcon | undefined> {
+  try {
+    const route = resolveFilesystemRouteForHost(executionHostId)
+    const fileIcon = await detectRepoFileIcon(repoPath, route)
+    if (fileIcon) {
+      return fileIcon
+    }
+
+    const homepageIcon =
+      route.kind === 'local' ? await detectLocalPackageHomepageIcon(repoPath) : null
+    if (homepageIcon) {
+      return homepageIcon
+    }
+
+    if (kind === 'git') {
+      return (await detectGitHubAvatarIcon(repoPath, executionHostId, upstream)) ?? undefined
+    }
+  } catch {
+    // Icon failures must not prevent repo creation.
+  }
+  return undefined
+}
+
+// A null upstream marks a resolved non-fork and prevents repeated probes.
+export async function detectRepoIconAndUpstream({
+  repoPath,
+  kind,
+  executionHostId
+}: {
+  repoPath: string
+  kind: RepoKind
+  executionHostId: ExecutionHostId
+}) {
+  const remoteRead = repoRemoteReadConnection(executionHostId)
+  const upstream =
+    kind === 'git' && remoteRead.kind === 'dial'
+      ? await getRepoUpstream(repoPath, remoteRead.connectionId)
+      : null
+  const gitRemoteIdentity =
+    kind === 'git'
+      ? await detectGitRemoteIdentity(repoPath, executionHostId, {
+          // Host Git on purpose: this runs while the project is being added, before it exists.
+          hostGit: true
+        })
+      : null
+  const repoIcon = await detectRepoIcon({ repoPath, kind, executionHostId, upstream })
+  return {
+    ...(repoIcon ? { repoIcon } : {}),
+    ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),
+    ...(kind === 'git' ? { upstream: upstream ?? null } : {})
+  }
+}

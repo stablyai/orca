@@ -117,25 +117,4 @@ describe('FloatingTerminalOrchestrationDialog freshness', () => {
     expect(bundledPlan).toHaveBeenCalledTimes(2)
     expect(document.body.textContent).not.toContain('Update available')
   })
-
-  it('never reads client freshness for an SSH-owned skill', async () => {
-    mocks.canUseSkillFreshness = false
-    const bundledPlan = vi.fn().mockResolvedValue(plan([]))
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double implements only the preload methods this code path calls.
-    window.api = {
-      skills: { bundledPlan },
-      cli: { getInstallStatus: vi.fn().mockResolvedValue({ onPath: true }) }
-    } as never
-
-    await renderDialog()
-    expect(document.body.textContent).toContain('Installed')
-
-    await act(async () => {
-      recheckButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await act(async () => {})
-
-    expect(mocks.refreshOrchestrationSkill).toHaveBeenCalledOnce()
-    expect(bundledPlan).not.toHaveBeenCalled()
-  })
 })

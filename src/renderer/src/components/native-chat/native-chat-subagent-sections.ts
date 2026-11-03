@@ -1,13 +1,13 @@
 // Retained roster metadata names windowed-out spawns; place children under loaded roster entries, their parent section or their first conversation row.
 
-import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalPosition } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   isSubagentGroupBlock,
   type NativeChatMessage,
   type NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
-import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
-import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
+} from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import { compareMessages } from './native-chat-session-assembler'
 
 export type NativeChatSubagentRosterPlace = {

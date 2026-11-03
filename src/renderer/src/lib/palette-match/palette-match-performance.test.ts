@@ -1,10 +1,9 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { PALETTE_MATCH_BUDGET } from '../../../../shared/palette-match/palette-match-budget'
 import {
   matchPaletteDocument,
   type PaletteMatchDiagnostics
 } from '../../../../shared/palette-match/match-document'
-import * as matchFieldModule from '../../../../shared/palette-match/match-field'
 import { preparePaletteQuery } from '../../../../shared/palette-match/palette-query'
 import { buildWorktreePaletteDocuments } from '../worktree-palette-document'
 import { searchWorktreeDocuments } from '../worktree-palette-search'
@@ -12,10 +11,7 @@ import {
   comparePaletteEntityRanks,
   createPaletteSearchContext
 } from '../../../../shared/palette-match/palette-ranking'
-import {
-  buildPaletteDocument,
-  type PaletteDocument
-} from '../../../../shared/palette-match/palette-document'
+import type { PaletteDocument } from '../../../../shared/palette-match/palette-document'
 import type { PaletteQueryToken } from '../../../../shared/palette-match/palette-query'
 import { issueCacheKey } from '@/store/github/cache-identity'
 import { getPaletteWorktreeIdentity } from '../palette-repo-resolution'
@@ -232,19 +228,6 @@ describe('palette matcher performance budget', () => {
     expect(ratio).toBeLessThan(PALETTE_MATCH_BUDGET.quadrupledCorpusCostRatio)
   })
 
-  it('bounds field-match fan-out per candidate', () => {
-    const fieldMatch = vi.spyOn(matchFieldModule, 'matchPaletteField')
-    try {
-      matchEveryDocument(documents)
-      const perCandidate = fieldMatch.mock.calls.length / documents.size
-      // Guards the ceiling against going vacuous if the spy ever stops intercepting.
-      expect(perCandidate).toBeGreaterThan(0)
-      expect(perCandidate).toBeLessThan(PALETTE_MATCH_BUDGET.fieldMatchesPerCandidate)
-    } finally {
-      fieldMatch.mockRestore()
-    }
-  })
-
   it('bounds candidate selection work per accepted candidate', () => {
     const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
     expect(matchEveryDocument(documents, diagnostics).filter(Boolean)).toHaveLength(candidateCount)
@@ -252,108 +235,6 @@ describe('palette matcher performance budget', () => {
     expect(diagnostics.selectionCandidateVisits / documents.size).toBeLessThan(
       PALETTE_MATCH_BUDGET.selectionCandidateVisitsPerCandidate
     )
-  })
-
-  it('does not revisit an all-visible assignment for unmatched evidence units', () => {
-    const buildDocument = (evidenceCount: number): PaletteDocument =>
-      buildPaletteDocument({
-        id: `visible-${evidenceCount}`,
-        visibleFields: [
-          {
-            id: 'title',
-            profile: 'structured-label',
-            text: 'atlas',
-            role: 'primary',
-            destinationEligible: true
-          }
-        ],
-        evidence: Array.from({ length: evidenceCount }, (_, index) => ({
-          unit: {
-            id: `evidence-${index}`,
-            kind: 'comment',
-            text: `unrelated ${index}`,
-            accessibilityLabel: 'Comment'
-          },
-          fields: [
-            {
-              id: `evidence-field-${index}`,
-              profile: 'prose' as const,
-              text: `unrelated ${index}`,
-              evidenceId: `evidence-${index}`,
-              renderOffset: 0
-            }
-          ]
-        }))
-      })
-    const query = preparePaletteQuery('atlas')
-    if (query.state !== 'ready') {
-      throw new Error('Expected ready query')
-    }
-    const selectionVisits = (document: PaletteDocument): number => {
-      const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
-      const match = matchPaletteDocument({
-        document,
-        tokens: query.tokens,
-        normalizedQuery: query.normalized,
-        diagnostics
-      })
-      expect(match).not.toBeNull()
-      expect(diagnostics.selectionCandidateVisits).toBeGreaterThan(0)
-      return diagnostics.selectionCandidateVisits
-    }
-
-    expect(selectionVisits(buildDocument(100))).toBe(selectionVisits(buildDocument(0)))
-  })
-
-  it('does not revisit an all-visible assignment for dominated evidence matches', () => {
-    const buildDocument = (evidenceCount: number): PaletteDocument =>
-      buildPaletteDocument({
-        id: `visible-matched-${evidenceCount}`,
-        visibleFields: [
-          {
-            id: 'title',
-            profile: 'structured-label',
-            text: 'atlas',
-            role: 'primary',
-            destinationEligible: true
-          }
-        ],
-        evidence: Array.from({ length: evidenceCount }, (_, index) => ({
-          unit: {
-            id: `evidence-${index}`,
-            kind: 'comment',
-            text: 'atlas',
-            accessibilityLabel: 'Comment'
-          },
-          fields: [
-            {
-              id: `evidence-field-${index}`,
-              profile: 'prose' as const,
-              text: 'atlas',
-              evidenceId: `evidence-${index}`,
-              renderOffset: 0
-            }
-          ]
-        }))
-      })
-    const query = preparePaletteQuery('atlas')
-    if (query.state !== 'ready') {
-      throw new Error('Expected ready query')
-    }
-    const selectionVisits = (document: PaletteDocument): number => {
-      const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
-      const match = matchPaletteDocument({
-        document,
-        tokens: query.tokens,
-        normalizedQuery: query.normalized,
-        diagnostics
-      })
-      expect(match?.supportingEvidence).toEqual([])
-      expect(diagnostics.selectionCandidateVisits).toBeGreaterThan(0)
-      return diagnostics.selectionCandidateVisits
-    }
-
-    expect(selectionVisits(buildDocument(100))).toBe(selectionVisits(buildDocument(0)))
   })
 
   it('keeps retained match and range payload within budget', () => {

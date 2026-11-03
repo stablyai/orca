@@ -1,3 +1,5 @@
+import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
+import { projectAgentPaneConversation } from '../agent-pane-conversation'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -17,6 +19,7 @@ export type AgentStatusStateUpdate =
   | ((state: AppState, changedPaneKeys: Set<string>) => AppState | Partial<AppState>)
 
 export type AgentStatusRuntime = {
+  projectConversation: typeof projectAgentPaneConversation
   get: () => AppState
   subscribeAgentStatusChanges: (listener: AgentStatusChangeListener) => () => void
   set: (update: AgentStatusStateUpdate) => void
@@ -114,6 +117,20 @@ export function createAgentStatusRuntime(
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
+  let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
+  const projectConversation: typeof projectAgentPaneConversation = (state, entry) =>
+    projectAgentPaneConversation(state, entry, (entries) => {
+      if (!batchedAgentStatusState) {
+        return { ...entries }
+      }
+      const next =
+        entries === conversationDraft
+          ? entries
+          : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
+      conversationDraft = next
+      return next
+    })
+
   // Omit replace from this write type so no slice call can request replacement the batch cannot express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
@@ -171,28 +188,7 @@ export function createAgentStatusRuntime(
       return false
     }
     const revisionBeforeUpdate = batchedAgentStatusRevision
-    const actions = getActions()
-    if (update.kind === 'providerSession') {
-      actions.recordAgentProviderSession(
-        update.paneKey,
-        update.agent,
-        update.providerSession,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    } else if (update.kind === 'programStatus') {
-      actions.setAgentProgramStatus(update.paneKey, update.programStatus)
-    } else {
-      actions.setAgentStatus(
-        update.paneKey,
-        update.payload,
-        update.terminalTitle,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    }
+    applyAgentStatusBatchUpdate(getActions(), update)
     return batchedAgentStatusRevision !== revisionBeforeUpdate
   }
 
@@ -224,6 +220,7 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft = null
       batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
@@ -248,6 +245,7 @@ export function createAgentStatusRuntime(
       }
       return result
     } finally {
+      conversationDraft = null
       batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
@@ -292,6 +290,7 @@ export function createAgentStatusRuntime(
   }
 
   return {
+    projectConversation,
     subscribeAgentStatusChanges,
     get,
     set,

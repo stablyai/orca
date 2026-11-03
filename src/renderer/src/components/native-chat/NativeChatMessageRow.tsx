@@ -2,12 +2,13 @@ import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+} from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
@@ -50,6 +51,7 @@ export type MessageRowProps = {
   subagentDisclosure?: NativeChatSubagentDisclosure
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
@@ -102,8 +104,23 @@ export const MessageRow = memo(function MessageRow(
   const { scrollToTop, returnToView } = useNativeChatRowNavigation(rowRef, onScrollMessageToTop)
 
   // Return after all hooks to preserve hook order when content disappears.
-  if (run === undefined && !rowHasContent(content)) {
+  if (run === undefined && !rowHasContent(content) && !message.agentStart) {
     return null
+  }
+
+  if (message.agentStart && message.from) {
+    return (
+      <div ref={rowRef} data-native-chat-message-id={message.id}>
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          runtimeContext={runtimeContext}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+          onRefolded={returnToView}
+        />
+      </div>
+    )
   }
 
   const notice = isSystem ? nativeChatNoticeBlock(blocks) : undefined
@@ -140,6 +157,7 @@ export const MessageRow = memo(function MessageRow(
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         runtimeContext={runtimeContext}
+        structuredAttachments={props.structuredAttachments}
         rewind={rewind}
         deliveryNotice={deliveryNotice}
       />

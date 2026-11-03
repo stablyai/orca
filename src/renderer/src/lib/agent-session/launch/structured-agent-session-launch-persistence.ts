@@ -1,4 +1,4 @@
-import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   validRecord,
   parseStructuredLaunchSurfaceAddress,

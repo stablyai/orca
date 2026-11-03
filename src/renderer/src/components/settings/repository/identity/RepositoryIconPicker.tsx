@@ -3,8 +3,10 @@ import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/constants'
-import { normalizeRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  normalizeRepoBadgeColor
+} from '../../../../../../shared/repo-badge-color'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'

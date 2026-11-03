@@ -8,7 +8,7 @@ import {
 import {
   collectSourceControlTreeFileEntries,
   type SourceControlTreeNode
-} from '../../source-control-tree'
+} from '../../../../../../shared/source-control-tree'
 import type { SourceControlSectionArea } from '../../../../../../shared/source-control-section-order'
 
 export type GitStatusSourceControlTreeNode = SourceControlTreeNode<

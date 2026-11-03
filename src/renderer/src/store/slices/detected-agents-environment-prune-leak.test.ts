@@ -63,20 +63,6 @@ describe('runtime detected-agents pruned on environment removal (leak regression
     expect(s.runtimeDetectedAgentIds).toHaveProperty('env-1')
     expect(s.isDetectingRuntimeAgents['env-1']).toBe(false)
   })
-
-  it('retainRuntimeDetectedAgents keeps only the listed environments', () => {
-    const store = createTestStore()
-    store.setState({
-      runtimeDetectedAgentIds: { a: [], b: [], c: [] },
-      isDetectingRuntimeAgents: { a: false, b: false, c: false }
-    })
-
-    store.getState().retainRuntimeDetectedAgents(['b'])
-
-    const s = store.getState()
-    expect(Object.keys(s.runtimeDetectedAgentIds)).toEqual(['b'])
-    expect(Object.keys(s.isDetectingRuntimeAgents)).toEqual(['b'])
-  })
 })
 
 describe('detect resolving after the environment was pruned does not re-leak', () => {

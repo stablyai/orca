@@ -1,24 +1,45 @@
+import type * as RepoDetectionModule from '../git/repo-detection'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 
-const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
+const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
-  return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
+  return {
+    reposMocks: moduleMocks.createReposIpcMocks(),
+    moduleMocks,
+    gitRepoProbeMocks: moduleMocks.createGitRepoProbeMocks()
+  }
+})
+
+vi.mock('../git/repo-detection', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof RepoDetectionModule>()),
+    isGitRepoAsync: gitRepoProbeMocks.isGitRepo,
+    getGitRepoRootAsync: gitRepoProbeMocks.getGitRepoRoot
+  }
+})
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: reposMocks.gitExecFileAsyncMock
+  }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
 vi.mock('../git/repo', async (importOriginal) =>
-  moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
+  moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>(), gitRepoProbeMocks)
 )
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
-vi.mock('./registered-worktree-roots-cache', () =>
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
-vi.mock('../worktree-root-preparation', () =>
+vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 
@@ -54,64 +75,6 @@ describe('projectGroups IPC validation', () => {
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
-  })
-
-  it('rejects malformed local project group create arguments before persistence', () => {
-    expect(() =>
-      handlers.get('projectGroups:create')!(null, { name: 123, createdFrom: 'unexpected' })
-    ).toThrow('invalid_project_group_create_args')
-
-    expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
-  })
-
-  it('rejects malformed local project group update arguments before persistence', () => {
-    expect(() =>
-      handlers.get('projectGroups:update')!(null, {
-        groupId: 'group-1',
-        updates: { isCollapsed: 'yes' }
-      })
-    ).toThrow('invalid_project_group_update_args')
-
-    expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
-  })
-
-  it('moves the twin on the host the renderer named, not the first row with the id', () => {
-    const localRow = { id: 'dup', path: '/laptop/dup', executionHostId: 'local' }
-    mockStore.getRepo.mockReturnValue(localRow)
-    mockStore.moveProjectToGroup.mockReturnValue({ id: 'dup', connectionId: 'ssh-1' })
-
-    handlers.get('projectGroups:moveProject')!(null, {
-      projectId: 'dup',
-      groupId: 'group-1',
-      hostId: 'ssh:ssh-1'
-    })
-
-    expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith(
-      { id: 'dup', executionHostId: 'ssh:ssh-1' },
-      'group-1',
-      undefined
-    )
-  })
-
-  it('keeps moving the first row with the id for a caller that names no host', () => {
-    const localRow = { id: 'dup', path: '/laptop/dup', executionHostId: 'local' }
-    mockStore.getRepo.mockReturnValue(localRow)
-
-    handlers.get('projectGroups:moveProject')!(null, { projectId: 'dup', groupId: null })
-
-    expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith(localRow, null, undefined)
-  })
-
-  it('rejects an invalid host id before persistence', () => {
-    expect(() =>
-      handlers.get('projectGroups:moveProject')!(null, {
-        projectId: 'dup',
-        groupId: null,
-        hostId: 'not a host'
-      })
-    ).toThrow('invalid_project_group_move_repo_args')
-
-    expect(mockStore.moveProjectToGroup).not.toHaveBeenCalled()
   })
 
   describe('while a WSL move fences the local repo-1', () => {

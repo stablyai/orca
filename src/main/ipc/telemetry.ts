@@ -11,7 +11,7 @@ import {
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
 import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 
@@ -30,7 +30,6 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
   'plugin_installed',
-  'plugin_uninstalled',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',
   'ssh_host_server_conversion',

@@ -1,9 +1,9 @@
-import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import type { WorktreeBaseWatchTarget } from './worktrees/creation/worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { startGitCommonNarrowWatch } from './worktree-git-common-narrow-watch'
 import { startGitCommonPrimaryWatch } from './worktree-git-common-primary-watch'
 import { startGitCommonPolling } from './worktree-git-common-polling'

@@ -1,14 +1,12 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
@@ -51,13 +49,17 @@ export function finish(
   updateStructuredAgentSessionPendingSend(entry.sessionId, entry.clientMessageId, keep ?? null)
 }
 
-function returnToComposer(entry: StructuredAgentSessionPendingSend): boolean {
+function returnToComposer(
+  entry: StructuredAgentSessionPendingSend,
+  expiredUploadIds?: ReadonlySet<string>
+): boolean {
   try {
     handBackStructuredAgentSessionMessage(
       entry.sessionId,
       entry.clientMessageId,
       entry.body,
-      entry.imageConnectionIds
+      entry.imageConnectionIds,
+      expiredUploadIds
     )
     return true
   } catch (error) {
@@ -68,13 +70,17 @@ function returnToComposer(entry: StructuredAgentSessionPendingSend): boolean {
 
 export function handBack(
   entry: StructuredAgentSessionPendingSend,
-  notice: readonly AgentSessionWriteNoticePart[] | null
+  notice: readonly AgentSessionWriteNoticePart[] | null,
+  expiredUploadIds?: ReadonlySet<string>
 ): void {
   try {
     if (entry.callerKeepsText) {
       return
     }
-    const parts: readonly AgentSessionWriteNoticePart[] | null = returnToComposer(entry)
+    const parts: readonly AgentSessionWriteNoticePart[] | null = returnToComposer(
+      entry,
+      expiredUploadIds
+    )
       ? notice
       : [...(notice ?? []), 'messageNotSaved']
     if (parts) {
@@ -110,13 +116,29 @@ export function settleRecorded(
 }
 
 /** Unconfirmed rewind blocks sends until the host checks it again; use the rewind-specific refusal words. */
-export function refusedSendParts(failure: AgentSessionWriteFailure): AgentSessionWriteNoticePart[] {
+function refusedSendParts(failure: AgentSessionWriteFailure): AgentSessionWriteNoticePart[] {
   return failure.kind === 'refused' && failure.details?.reason === 'rewindUnconfirmed'
     ? [
         { text: nativeChatRewindReasonCopy('outcome-unknown') },
         ...agentSessionWriteNotDoneParts('composer-send')
       ]
     : agentSessionWriteNoticeParts(failure, 'composer-send')
+}
+
+/** Return a refused message, marking any image the host said expired. */
+export function handBackRefused(
+  entry: StructuredAgentSessionPendingSend,
+  failure: AgentSessionWriteFailure
+): void {
+  const expired =
+    failure.kind === 'refused' && failure.code === 'agent_session_operation_invalid'
+      ? failure.details?.expiredAttachments
+      : undefined
+  handBack(
+    entry,
+    refusedSendParts(failure),
+    expired && new Set(expired.map(({ uploadId }) => uploadId))
+  )
 }
 
 function onDeadline(sessionId: string, clientMessageId: string): void {

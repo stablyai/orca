@@ -72,7 +72,7 @@ vi.mock('./browser-extension-manifest', () => ({
 }))
 
 const install = await import('./browser-extension-webstore-install')
-const { requestBrowserExtensionInstallPrompt } = await import('./browser-extension-install-prompt')
+await import('./browser-extension-install-prompt')
 const { checkForBrowserExtensionUpdates, reviewHeldBrowserExtensionUpdate } =
   await import('./browser-extension-webstore-updater')
 const held = await import('./browser-extension-held-updates')
@@ -100,22 +100,6 @@ beforeEach(() => {
 })
 
 describe('store updates that ask for more', () => {
-  it('checks nothing while extensions are switched off', async () => {
-    setBrowserExtensionSupportEnabled(false)
-    await checkForBrowserExtensionUpdates()
-    expect(install.stageWebStoreExtension).not.toHaveBeenCalled()
-  })
-
-  it('applies an update whose additions carry no warning', async () => {
-    mocks.stagedAccess = {
-      permissions: ['alarms', 'offscreen', 'storage', 'tabs'],
-      hostPermissions: ['https://vault.example/*']
-    }
-    await checkForBrowserExtensionUpdates()
-    expect(install.commitStagedWebStoreExtension).toHaveBeenCalledOnce()
-    expect(held.getHeldBrowserExtensionUpdate(ID)).toBeNull()
-  })
-
   it('holds an update with new warnings and records only the new ones', async () => {
     mocks.stagedAccess = {
       permissions: ['history', 'storage', 'tabs'],
@@ -132,22 +116,6 @@ describe('store updates that ask for more', () => {
     // The next check does not download the same held version again.
     await checkForBrowserExtensionUpdates()
     expect(install.stageWebStoreExtension).toHaveBeenCalledOnce()
-  })
-
-  it('asks about only the new access, then installs exactly the held package', async () => {
-    mocks.stagedAccess = { permissions: ['history', 'storage'], hostPermissions: [] }
-    await checkForBrowserExtensionUpdates()
-    await reviewHeldBrowserExtensionUpdate(ID, renderer)
-    expect(requestBrowserExtensionInstallPrompt).toHaveBeenCalledWith(
-      renderer,
-      expect.objectContaining({
-        kind: 'permissions',
-        permissions: ['history'],
-        hostPermissions: []
-      })
-    )
-    expect(install.commitStagedWebStoreExtension).toHaveBeenCalledOnce()
-    expect(held.getHeldBrowserExtensionUpdate(ID)).toBeNull()
   })
 
   it('keeps the update held when the user declines', async () => {

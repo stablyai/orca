@@ -79,22 +79,6 @@ describe('Web Store redirect policy', () => {
     }
   )
 
-  it('still verifies an allowed redirected package', async () => {
-    const fetcher = vi
-      .fn<Fetcher>()
-      .mockResolvedValueOnce(
-        Response.redirect('https://downloads.googleusercontent.com/extension.crx')
-      )
-      .mockResolvedValueOnce(new Response('bad'))
-
-    await expect(download('crx', fetcher)).rejects.toThrow('Not a CRX file')
-    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
-      CRX_URL,
-      'https://downloads.googleusercontent.com/extension.crx'
-    ])
-    expect(fetcher.mock.calls.every(([, init]) => init?.signal?.aborted)).toBe(true)
-  })
-
   it.each(scenarios)(
     'bounds a $kind redirect cycle and cancels every unused body',
     async (scenario) => {

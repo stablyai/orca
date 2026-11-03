@@ -38,7 +38,7 @@ export function resolveWindowsShellStartupFamily(
 /** The shell a command typed into a new pane runs in on its host: the tab's override, then that
  *  host's own Windows shell setting, then the platform default (undefined for a remote host). */
 export function resolveHostAgentStartupShell(args: {
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform | null | undefined
   isRemote: boolean
   tabShellOverride?: string | null
   /** The executing host's setting: this client's for a local host, the reported one for a remote host. */
@@ -55,7 +55,7 @@ export function resolveHostAgentStartupShell(args: {
 }
 
 export function resolveLocalWindowsAgentStartupShell(args: {
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform | null | undefined
   isRemote: boolean
   terminalWindowsShell?: string | null
 }): AgentStartupShell | undefined {

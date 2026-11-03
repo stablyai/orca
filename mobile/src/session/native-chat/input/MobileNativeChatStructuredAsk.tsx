@@ -1,5 +1,5 @@
-import type { AgentJournalQuestion } from '../../../../../src/shared/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session-question-answer'
+import type { AgentJournalQuestion } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session/agent-session-question-answer'
 import {
   structuredQuestionAnswers,
   structuredQuestionCard

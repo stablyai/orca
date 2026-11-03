@@ -58,35 +58,25 @@ function ghOptions(
 }
 
 async function findOpenPullRequestsForBranch(
-  repoPath: string,
   repository: GitHubApiRepository,
   branch: string,
-  connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {},
+  execOptions: ReturnType<typeof ghOptions>,
   base?: string
 ): Promise<GitHubStackPullRequest[]> {
   const head = encodeURIComponent(`${repository.owner}:${branch}`)
   const baseQuery = base ? `&base=${encodeURIComponent(base)}` : ''
   const endpoint = `repos/${repository.owner}/${repository.repo}/pulls?head=${head}${baseQuery}&state=open&per_page=2`
-  const { stdout } = await ghExecFileAsync(
-    ['api', endpoint],
-    ghOptions(repoPath, repository, connectionId, options)
-  )
+  const { stdout } = await ghExecFileAsync(['api', endpoint], execOptions)
   return parseGitHubStackPullRequests(stdout)
 }
 
 async function getStacksForPullRequest(
-  repoPath: string,
   repository: GitHubApiRepository,
   pullRequestNumber: number,
-  connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  execOptions: ReturnType<typeof ghOptions>
 ): Promise<GitHubStack[]> {
   const endpoint = `repos/${repository.owner}/${repository.repo}/stacks?pull_request=${pullRequestNumber}`
-  const { stdout } = await ghExecFileAsync(
-    ['api', endpoint],
-    ghOptions(repoPath, repository, connectionId, options)
-  )
+  const { stdout } = await ghExecFileAsync(['api', endpoint], execOptions)
   return parseGitHubStacks(stdout)
 }
 
@@ -121,6 +111,7 @@ export async function prepareGitHubStackedPullRequest(
   }
   // `gh` runs on this client whatever the host; only the git reads under it are routed.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
+  const context = githubRepoContext(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
   const repository = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
@@ -128,6 +119,11 @@ export async function prepareGitHubStackedPullRequest(
   )
   if (!repository || !isDefaultGitHubHost(repository.host)) {
     return stackedReviewFailure('stack_github_com_only')
+  }
+  const execOptions = {
+    ...ghRepoExecOptions(context),
+    ...githubHostExecOptions(repository),
+    timeout: 60_000
   }
   const base = normalizeHostedReviewBaseRef(input.base).trim()
   const head = input.head ? normalizeHostedReviewHeadRef(input.head).trim() : ''
@@ -138,8 +134,8 @@ export async function prepareGitHubStackedPullRequest(
   await acquire()
   try {
     const [parentPullRequests, currentPullRequests] = await Promise.all([
-      findOpenPullRequestsForBranch(repoPath, repository, base, connectionId, options),
-      findOpenPullRequestsForBranch(repoPath, repository, head, connectionId, options, base)
+      findOpenPullRequestsForBranch(repository, base, execOptions),
+      findOpenPullRequestsForBranch(repository, head, execOptions, base)
     ])
     if (parentPullRequests.length === 0) {
       return stackedReviewFailure('stack_parent_without_review', { base })
@@ -153,9 +149,9 @@ export async function prepareGitHubStackedPullRequest(
     const parentReview = parentPullRequests[0]
     const currentReview = currentPullRequests[0] ?? null
     const [parentStacks, currentStacks] = await Promise.all([
-      getStacksForPullRequest(repoPath, repository, parentReview.number, connectionId, options),
+      getStacksForPullRequest(repository, parentReview.number, execOptions),
       currentReview
-        ? getStacksForPullRequest(repoPath, repository, currentReview.number, connectionId, options)
+        ? getStacksForPullRequest(repository, currentReview.number, execOptions)
         : Promise.resolve([])
     ])
     if (
@@ -219,23 +215,12 @@ export async function registerGitHubStackedPullRequest(args: {
 }): Promise<CreateStackedHostedReviewResult> {
   const options = args.options ?? {}
   const connectionId = hostedReviewSshConnectionId(args.executionHostId)
+  const execOptions = ghOptions(args.repoPath, args.repository, connectionId, options)
   await acquire()
   try {
     const [parentStacks, currentStacks] = await Promise.all([
-      getStacksForPullRequest(
-        args.repoPath,
-        args.repository,
-        args.parentReview.number,
-        connectionId,
-        options
-      ),
-      getStacksForPullRequest(
-        args.repoPath,
-        args.repository,
-        args.currentReview.number,
-        connectionId,
-        options
-      )
+      getStacksForPullRequest(args.repository, args.parentReview.number, execOptions),
+      getStacksForPullRequest(args.repository, args.currentReview.number, execOptions)
     ])
     const existingStackNumber = registeredStackNumber(
       args.parentReview,
@@ -274,7 +259,7 @@ export async function registerGitHubStackedPullRequest(args: {
       command.push('-F', `pull_requests[]=${pullRequest}`)
     }
     const { stdout } = await ghExecFileAsync(command, {
-      ...ghOptions(args.repoPath, args.repository, connectionId, options),
+      ...execOptions,
       idempotent: false
     })
     const stackNumber = Number((JSON.parse(stdout) as { number?: unknown }).number)

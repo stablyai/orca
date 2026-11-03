@@ -1,7 +1,7 @@
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import type { AgentChoiceCliForm } from './agent-launch-choices'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
-import { agentRequiredValueOptions } from './agent-session-option-agent-args'
+import { agentRequiredValueOptions } from './agent-session/options/agent-session-option-agent-args'
 import { agentPermissionArgs, agentPermissionChoices } from './tui-agent-permission-choice'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 import type { TuiAgent } from './tui-agent'
@@ -23,6 +23,40 @@ const CLAUDE_PERMISSION_OPTIONS = [
   '--allowed-tools',
   '--disallowedTools',
   '--disallowed-tools'
+]
+// Zero-operand switches from Claude's CLI help; optional-value options remain uncertain.
+const CLAUDE_SWITCHES = [
+  '--allow-dangerously-skip-permissions',
+  '--ax-screen-reader',
+  '--bg',
+  '--background',
+  '--bare',
+  '--brief',
+  '--chrome',
+  '-c',
+  '--continue',
+  '--dangerously-skip-permissions',
+  '--desktop',
+  '--disable-slash-commands',
+  '--exclude-dynamic-system-prompt-sections',
+  '--fork-session',
+  '--forward-subagent-text',
+  '-h',
+  '--help',
+  '--ide',
+  '--include-hook-events',
+  '--include-partial-messages',
+  '--no-chrome',
+  '--no-session-persistence',
+  '-p',
+  '--print',
+  '--replay-user-messages',
+  '--restricted',
+  '--safe-mode',
+  '--strict-mcp-config',
+  '--verbose',
+  '-v',
+  '--version'
 ]
 const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   claude: CLAUDE_PERMISSION_OPTIONS,
@@ -96,7 +130,9 @@ export function permissionOptionInventory(agent: TuiAgent): PermissionOptionInve
   })
   const carriers = new Set(EXTRA_CARRIERS[agent])
   const values = new Set(agent === 'codex' ? CODEX_VALUES : [])
-  const switches = new Set<string>()
+  const switches = new Set<string>(
+    agent === 'claude' || agent === 'claude-agent-teams' ? CLAUDE_SWITCHES : []
+  )
   for (const { token, next } of recipes) {
     if (!token.startsWith('-')) {
       continue

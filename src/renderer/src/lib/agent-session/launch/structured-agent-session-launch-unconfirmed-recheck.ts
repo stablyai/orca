@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store/index'
-import { retryStructuredAgentSessionLaunch } from '../../structured-agent-session-launch'
+import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   getStructuredAgentSessionLaunchOwner,

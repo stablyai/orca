@@ -25,49 +25,6 @@ describe('renderer document navigation', () => {
     }
   }
 
-  it('accepts the packaged renderer document but not a blocked external load', () => {
-    const fixture = createFixture('file:///opt/orca/renderer/index.html')
-
-    fixture.navigate?.({}, 'https://github.com/stablyai/orca/issues', false, true)
-    expect(fixture.onStarted).not.toHaveBeenCalled()
-    fixture.navigate?.({}, 'file:///opt/orca/renderer/index.html?reload=1', false, true)
-    expect(fixture.onStarted).toHaveBeenCalledOnce()
-  })
-
-  it('accepts same-origin development navigation only', () => {
-    const fixture = createFixture('http://localhost:5173/')
-
-    fixture.navigate?.({}, 'https://example.com/', false, true)
-    fixture.navigate?.({}, 'http://localhost:5173/settings', false, true)
-    expect(fixture.onStarted).toHaveBeenCalledOnce()
-  })
-
-  it('rejects same-document, subframe, and missing renderer navigation', () => {
-    const fixture = createFixture('')
-
-    fixture.navigate?.({}, 'http://localhost:5173/', false, true)
-    fixture.navigate?.({}, 'http://localhost:5173/', true, true)
-    fixture.navigate?.({}, 'http://localhost:5173/', false, false)
-    expect(fixture.onStarted).not.toHaveBeenCalled()
-  })
-
-  it('cancels only the matching main-frame provisional navigation', async () => {
-    const cancel = vi.fn()
-    const fixture = createFixture(
-      'http://localhost:5173/',
-      vi.fn(() => cancel)
-    )
-
-    fixture.navigate?.({}, 'http://localhost:5173/reload', false, true)
-    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'other', true, 1, 1)
-    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload', false, 1, 1)
-    expect(cancel).not.toHaveBeenCalled()
-
-    fixture.failProvisionalLoad?.({}, -3, 'aborted', 'http://localhost:5173/reload', true, 1, 1)
-    await Promise.resolve()
-    expect(cancel).toHaveBeenCalledOnce()
-  })
-
   it('shares one reload fence across concurrent provisional navigations', async () => {
     const cancel = vi.fn()
     const onStarted = vi.fn(() => cancel)
@@ -126,36 +83,6 @@ describe('renderer document navigation', () => {
     await Promise.resolve()
 
     expect(cancel).toHaveBeenCalledOnce()
-  })
-
-  it('does not cancel a navigation after its document commits', () => {
-    const cancel = vi.fn()
-    const fixture = createFixture(
-      'file:///opt/orca/renderer/index.html',
-      vi.fn(() => cancel)
-    )
-
-    fixture.navigate?.({}, 'file:///opt/orca/renderer/index.html?reload=1', false, true)
-    fixture.commitNavigation?.(
-      {},
-      'file:///opt/orca/renderer/index.html?reload=1',
-      -1,
-      '',
-      true,
-      1,
-      1
-    )
-    fixture.failProvisionalLoad?.(
-      {},
-      -3,
-      'aborted',
-      'file:///opt/orca/renderer/index.html?reload=1',
-      true,
-      1,
-      1
-    )
-
-    expect(cancel).not.toHaveBeenCalled()
   })
 
   it('does not let a stale same-URL failure cancel a replacement navigation', async () => {

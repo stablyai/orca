@@ -3,7 +3,6 @@ import { AppearanceChatSection } from './AppearanceChatSection'
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { ChatNamingSetting } from './ChatNamingSetting'
 import { NativeChatInlineVisualsSetting } from './NativeChatInlineVisualsSetting'
-import { NativeChatProvidersSetting } from './NativeChatProvidersSetting'
 import { SettingsSection } from './SettingsSection'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
@@ -14,6 +13,10 @@ import { useAppStore } from '../../store'
 import { Card, CardContent } from '../ui/card'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
+import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
+import { ChatAgentLaunchSettings } from './ChatAgentLaunchSettings'
+import { getChatLaunchEntriesByKey } from './chat-launch-search'
+import { SearchableSetting } from './SearchableSetting'
 
 export function ChatSettingsSection({
   settings,
@@ -39,13 +42,11 @@ export function ChatSettingsSection({
   searchEntries: SettingsSearchEntry[]
   showDesktopOnlySettings: boolean
   isMounted: boolean
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (settings.experimentalNativeChat !== true) {
-    return null
-  }
-  const title = translate('settings.appearance.chat.title', 'Chat')
+  const title = translate('settings.appearance.chat.title', 'Chat UI')
   const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
+  const launchEntries = getChatLaunchEntriesByKey()
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },
     { title: getChatBehaviorTitle() }
@@ -61,6 +62,26 @@ export function ChatSettingsSection({
     >
       {isMounted ? (
         <div className="space-y-5">
+          {showDesktopOnlySettings ? (
+            <>
+              <SearchableSetting
+                {...launchEntries.default}
+                id={launchEntries.default.targetSectionId}
+                className="max-w-none"
+                forceVisible={matchesSettingsSearch(query, [{ title }])}
+              >
+                <AgentDefaultSurfaceSection settings={settings} presentation="switch" />
+              </SearchableSetting>
+              <SearchableSetting
+                {...launchEntries.agents}
+                id={launchEntries.agents.targetSectionId}
+                className="max-w-none"
+                forceVisible={matchesSettingsSearch(query, [{ title }])}
+              >
+                <ChatAgentLaunchSettings settings={settings} updateSettings={updateSettings} />
+              </SearchableSetting>
+            </>
+          ) : null}
           {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries()]) ? (
             <section id="chat-appearance" className="space-y-3">
               <SettingsSubsectionHeader title={appearanceTitle} />
@@ -79,13 +100,6 @@ export function ChatSettingsSection({
                 </CardContent>
               </Card>
             </section>
-          ) : null}
-          {showDesktopOnlySettings ? (
-            <NativeChatProvidersSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={matchesSettingsSearch(query, [{ title }])}
-            />
           ) : null}
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting

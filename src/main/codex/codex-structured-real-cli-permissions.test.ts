@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { resolveCodexCommand } from '../codex-cli/command'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
