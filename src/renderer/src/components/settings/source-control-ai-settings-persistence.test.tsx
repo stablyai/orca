@@ -670,7 +670,19 @@ it.each(
           }
         }))
       )
-      const projection = projectSourceControlActionLaunch(read()!, agent, { basePrompt: 'fix' })
+      const saved = read()
+      if (!saved || saved.commandInputTemplate === null || saved.agentArgs === null) {
+        throw new Error('Saved fixture recipe must have non-null template and Arguments')
+      }
+      const projection = projectSourceControlActionLaunch(
+        {
+          ...saved,
+          commandInputTemplate: saved.commandInputTemplate,
+          agentArgs: saved.agentArgs
+        },
+        agent,
+        { basePrompt: 'fix' }
+      )
       const plan = planAgentSessionLaunch(useAppStore.getState(), {
         requestId: 'saved-route-effect',
         agent,

@@ -25,7 +25,9 @@ const entry: AgentPickerEntry = {
   catalog: {
     origin: 'probe',
     fetchedAt: 1,
-    models: [{ id: 'astra', label: 'Astra', efforts: [{ value: 'low', label: 'Low' }] }]
+    models: [
+      { id: 'astra', label: 'Astra', isDefault: false, efforts: [{ value: 'low', label: 'Low' }] }
+    ]
   }
 }
 let root: Root
@@ -115,7 +117,7 @@ it.each([
     catalog = {
       origin: 'probe',
       fetchedAt: 1,
-      models: [{ id, label: 'Different live friendly label', efforts: [] }]
+      models: [{ id, label: 'Different live friendly label', isDefault: false, efforts: [] }]
     }
     act(() => publish())
     expectCaption()
