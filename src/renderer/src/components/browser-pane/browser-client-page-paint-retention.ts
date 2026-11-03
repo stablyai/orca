@@ -29,11 +29,11 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
         : '1px',
     opacity: interactive ? '' : viewed ? '0' : '',
     visibility: blank && !viewed ? 'hidden' : '',
-    pointerEvents: interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
+    'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
   }
-  for (const [property, value] of Object.entries(style) as [keyof typeof style, string][]) {
-    if (page.host.style[property] !== value) {
-      page.host.style[property] = value
+  for (const [property, value] of Object.entries(style)) {
+    if (page.host.style.getPropertyValue(property) !== value) {
+      page.host.style.setProperty(property, value)
     }
   }
   page.host.inert = !interactive

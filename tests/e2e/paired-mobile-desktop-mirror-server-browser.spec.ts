@@ -4,7 +4,6 @@ import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileSocket } from './helpers/paired-mobile-client'
 import { z } from 'zod'
 import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { RuntimeRpcEnvelopeSchema } from '../../src/shared/runtime-rpc-envelope'
 import { startRuntimeCapabilityProbe } from '../../mobile/src/transport/runtime-capability-probe'
 import { buildMobileBrowserScreencastRequest } from '../../mobile/src/browser/browser-screencast-request'
@@ -179,6 +178,7 @@ test('phone paired with a desktop sees and streams a browser page running on its
 test('phone streams and drives a desktop-hosted page and creates on the same desktop', async ({
   testRepoPath
 }, testInfo) => {
+  // Pairing two isolated Electron processes and closing real streams needs a bounded startup budget.
   test.setTimeout(240_000)
   const { host, desktop, phone, dispose } = await launchPhoneMirrorTopology(
     { phoneTo: 'desktop', withoutBrowser: true },
@@ -194,7 +194,11 @@ test('phone streams and drives a desktop-hosted page and creates on the same des
   })
   try {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Fixture did not bind a TCP port')
+    }
+    const url = `http://127.0.0.1:${address.port}/`
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await host.client.call('terminal.create', {
       worktree: `path:${testRepoPath}`,
@@ -219,7 +223,10 @@ test('phone streams and drives a desktop-hosted page and creates on the same des
           if (!('ok' in response)) {
             throw new Error('Unexpected keepalive')
           }
-          expect(response._meta?.runtimeId).toBe(direct.runtimeId)
+          if (!response.ok) {
+            throw new Error(response.error.message)
+          }
+          expect(response._meta.runtimeId).toBe(direct.runtimeId)
           return response
         }
       },
@@ -275,8 +282,7 @@ test('phone streams and drives a desktop-hosted page and creates on the same des
     await expect
       .poll(() =>
         desktop.page.evaluate(async (url) => {
-          for (const view of document.querySelectorAll('webview')) {
-            const guest = view as Electron.WebviewTag
+          for (const guest of document.querySelectorAll<Electron.WebviewTag>('webview')) {
             if (guest.getURL().startsWith(url)) {
               return guest.executeJavaScript('document.querySelector("#marker")?.textContent')
             }
@@ -394,13 +400,13 @@ test('phone streams and drives a desktop-hosted page and creates on the same des
       .poll(() =>
         desktop.page
           .locator(`[data-browser-client-page-id="${created.browserPageId}"]`)
-          .evaluate((el) => (el as HTMLElement).style.width)
+          .evaluate((el) => el.style.width)
       )
       .toBe('1px')
     expect(
       await desktop.page
         .locator(`[data-browser-client-page-id="${hosted.remotePageId}"]`)
-        .evaluate((el) => (el as HTMLElement).inert)
+        .evaluate((el) => el instanceof HTMLElement && el.inert)
     ).toBe(false)
     const blank = await call(
       socket,
@@ -439,7 +445,7 @@ test('phone streams and drives a desktop-hosted page and creates on the same des
       .poll(() =>
         desktop.page
           .locator(`[data-browser-client-page-id="${blank.browserPageId}"]`)
-          .evaluate((el) => (el as HTMLElement).style.width)
+          .evaluate((el) => el.style.width)
       )
       .toBe('1px')
     socket.send(
