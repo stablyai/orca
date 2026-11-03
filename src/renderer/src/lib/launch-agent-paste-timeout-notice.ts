@@ -50,9 +50,12 @@ export function showGeneratedInputNotice(args: {
       label: notes
         ? translate('agentPrompt.copyNotes', 'Copy notes')
         : translate('agentPrompt.copy', 'Copy prompt'),
+      // Copy never dismisses: the notice keeps the text until the user dismisses it. The desktop
+      // clipboard goes through the main process, as every other Copy does; the page's own
+      // clipboard write can be refused.
       onClick: (event) => {
         event.preventDefault()
-        void navigator.clipboard.writeText(args.text).catch(() => {})
+        void window.api.ui.writeClipboardText(args.text).catch(() => {})
       }
     }
   })

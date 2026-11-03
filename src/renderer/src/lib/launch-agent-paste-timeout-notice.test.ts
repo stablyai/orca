@@ -10,11 +10,17 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace('{{agent}}', args?.agent ?? '')
 }))
 
-it('keeps exact prompt text available after Copy until explicit dismissal', async () => {
-  const writeText = vi.fn(async () => {})
-  vi.stubGlobal('navigator', { clipboard: { writeText } })
+// Q1: the page's clipboard write is refused in the app (NotAllowedError); Copy goes through the
+// main process, as every other Copy does.
+it('copies the exact multiline text through the desktop clipboard, and Copy never dismisses', async () => {
+  const pageWrite = vi.fn(async () => {
+    throw new DOMException('Write permission denied.', 'NotAllowedError')
+  })
+  vi.stubGlobal('navigator', { clipboard: { writeText: pageWrite } })
+  const writeClipboardText = vi.fn(async (_text: string) => {})
+  vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
   const dismiss = vi.fn()
-  showGeneratedInputNotice({ agent: 'claude', text: 'exact\ntext', onDismiss: dismiss })
+  showGeneratedInputNotice({ agent: 'claude', text: 'exact\r\n  text\n', onDismiss: dismiss })
   expect(toast.message).toHaveBeenCalledWith(
     expect.stringContaining('Claude'),
     expect.objectContaining({ duration: Infinity, closeButton: true, onDismiss: dismiss })
@@ -32,7 +38,8 @@ it('keeps exact prompt text available after Copy until explicit dismissal', asyn
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this action only consumes preventDefault; no DOM event fields are accessed.
   options.action.onClick(event as unknown as MouseEvent<HTMLButtonElement>)
   await Promise.resolve()
-  expect(writeText).toHaveBeenCalledExactlyOnceWith('exact\ntext')
+  expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('exact\r\n  text\n')
+  expect(pageWrite).not.toHaveBeenCalled()
   expect(event.preventDefault).toHaveBeenCalledOnce()
   expect(dismiss).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
