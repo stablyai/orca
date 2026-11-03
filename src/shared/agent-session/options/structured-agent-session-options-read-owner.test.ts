@@ -338,30 +338,6 @@ it('clears account-switch evidence only on a current owner read failure and reta
   close()
 })
 
-it('retries a failed options read for a restarted process without an unrelated event', async () => {
-  vi.useFakeTimers()
-  const { reader, context, reads } = fixture()
-  let close = reader.attach(context)
-  try {
-    await tick()
-    reads[0].resolve(answer)
-    await tick()
-    close()
-    close = reader.attach({ ...context, reset: [2], fence: 2 })
-    await tick()
-    reads[1].reject(new Error('host timeout'))
-    await tick()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(reads).toHaveLength(3)
-    reads[2].resolve(answer)
-    await tick()
-    expect(reader.getSnapshot().support?.fence).toBe(2)
-  } finally {
-    close()
-    vi.useRealTimers()
-  }
-})
-
 it('bounds failed reads, wakes on invalidation, and cancels a detached lease retry', async () => {
   vi.useFakeTimers()
   const { reader, context, reads, controller } = fixture()

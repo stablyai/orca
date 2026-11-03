@@ -143,7 +143,7 @@ vi.mock('./pty/provider/state-cleanup', () => ({
 }))
 vi.mock('./pty/provider/registry', () => ({ getLocalPtyProvider: getLocalPtyProviderMock }))
 
-vi.mock('../terminal-history-deletion', () => ({
+vi.mock('../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 

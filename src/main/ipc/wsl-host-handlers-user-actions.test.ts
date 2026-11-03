@@ -20,8 +20,8 @@ vi.mock('electron', () => ({
     handle: (channel: string, handler: Handler) => handlers.set(channel, handler)
   }
 }))
-vi.mock('../wsl/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
-vi.mock('../wsl/wsl-host-e2e-fake-connector', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-connector', () => ({ createWslHostConnector: vi.fn() }))
+vi.mock('../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
@@ -55,7 +55,7 @@ const service = vi.hoisted(() => ({
   hasServerFiles: vi.fn(() => true),
   recordForEnvironment: vi.fn(() => ({ distro: 'Ubuntu', environmentId: 'wsl:Ubuntu' }))
 }))
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => service,
   setWslHostService: vi.fn()
 }))
@@ -66,9 +66,12 @@ import {
   noteWslHostsLivePolicyBlock,
   resetWslHostsGateForTests,
   wslHostsServing
-} from '../wsl/wsl-host-gate'
+} from '../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOST_CAPABILITY_CHANNEL } from '../../shared/wsl-host-types'
-import { onWslHostUserAction, type WslHostUserAction } from '../wsl/wsl-host-user-actions'
+import {
+  onWslHostUserAction,
+  type WslHostUserAction
+} from '../wsl/host-lifecycle/wsl-host-user-actions'
 
 function register(): void {
   registerWslHostHandlers({

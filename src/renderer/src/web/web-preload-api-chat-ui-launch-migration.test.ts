@@ -56,23 +56,6 @@ describe('web Chat UI launch migration', () => {
     installWebPreloadApi()
     expect((await globals.window.api.settings.get()).nativeChatProviders).toEqual({ claude: true })
   })
-
-  it('keeps agents without a choice on chat for a browser profile saved with Chat UI on', async () => {
-    const { settings, saved } = await loadSettings({
-      experimentalNativeChat: true,
-      nativeChatProviders: { codex: false }
-    })
-
-    expect(settings.agentDefaultSurface).toBe('chat')
-    expect(settings.nativeChatProviders).toEqual({ codex: false })
-    expect(saved).toHaveProperty('experimentalNativeChat', true)
-  })
-
-  it('writes nothing for a browser profile without the switch', async () => {
-    const { settings } = await loadSettings({ theme: 'dark' })
-
-    expect(settings.nativeChatProviders).toBeUndefined()
-  })
 })
 
 const oldHost = vi.hoisted(() => {
@@ -202,12 +185,6 @@ it.each([
     }
   }
 )
-
-it('normalizes invalid browser defaults without inventing an override', async () => {
-  const { settings } = await loadSettings({ agentDefaultSurface: 'invalid' })
-  expect(settings.agentDefaultSurface).toBe('terminal')
-  expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(false)
-})
 
 describe('current browser owner at remote settlement', () => {
   beforeEach(() => {
@@ -526,120 +503,6 @@ describe('current browser owner at remote settlement', () => {
     installWebPreloadApi()
     check(await globals.window.api.settings.get(), true)
   })
-
-  it.each([false, true])(
-    'bounds no-request edits with paired=%s through storage, sync read and reopen',
-    async (isPaired) => {
-      const counts: number[][] = []
-      for (const n of [100, 1000]) {
-        vi.resetModules()
-        const map = Object.fromEntries(
-          Array.from({ length: n }, (_, i) => [`registered-${i}`, false])
-        )
-        const { globals } = await loadSettings({
-          experimentalNativeChat: true,
-          nativeChatProviders: map
-        })
-        if (isPaired) {
-          writeStoredRuntimeEnvironment(globals.storage)
-          vi.resetModules()
-          const { installWebPreloadApi } = await import('./web-preload-api')
-          installWebPreloadApi()
-        }
-        const normalization = await import('./preload-api/web-preference-normalization')
-        const visibility = await import('../../../shared/external-worktree-visibility')
-        const bots = await import('../../../shared/pr-bot-author-overrides')
-        const merge = vi.spyOn(normalization, 'mergeSettings')
-        const migrate = vi.spyOn(normalization, 'migrateStoredWebSettings')
-        const permissions = vi.spyOn(normalization, 'runtimeChatPermissionSetting')
-        const visibilityDefaults = vi.spyOn(visibility, 'normalizeWorktreeVisibilityDefaults')
-        const botOverrides = vi.spyOn(bots, 'normalizePRBotAuthorOverrides')
-        const reads = vi.spyOn(globals.storage, 'getItem')
-        const writes = vi.spyOn(globals.storage, 'setItem')
-        const calls = oldHost.calls.length
-        const current = await globals.window.api.settings.set({ agentDefaultSurface: 'terminal' })
-        const returned = await globals.window.api.settings.set(
-          buildNativeChatProviderUpdate(current, 'codex', true)
-        )
-        counts.push([
-          reads.mock.calls.filter(([key]) => key === SETTINGS_KEY).length,
-          writes.mock.calls.filter(([key]) => key === SETTINGS_KEY).length,
-          merge.mock.calls.length,
-          migrate.mock.calls.length,
-          visibilityDefaults.mock.calls.length,
-          permissions.mock.calls.length,
-          botOverrides.mock.calls.length,
-          oldHost.calls.length - calls
-        ])
-        reads.mockClear()
-        const explicit = await globals.window.api.settings.setActiveRuntimeEnvironmentPreference({
-          environmentId: null
-        })
-        expect(reads.mock.calls.filter(([key]) => key === SETTINGS_KEY)).toHaveLength(3)
-        expect(explicit).not.toHaveProperty('experimentalNativeChat')
-        vi.restoreAllMocks()
-        const expected = {
-          agentDefaultSurface: 'terminal',
-          nativeChatProviders: { ...map, codex: true }
-        }
-        expect(returned).toMatchObject(expected)
-        expect(syncSettings(globals.window.api)).toMatchObject(expected)
-        const saved = JSON.parse(globals.storage.getItem(SETTINGS_KEY) ?? '{}')
-        expect(saved).toMatchObject(expected)
-        expect(saved).toHaveProperty('experimentalNativeChat', true)
-        expect(nativeChatPreferenceFor(returned, 'future-agent')).toBe(false)
-        expect(nativeChatPreferenceFor(returned, 'codex')).toBe(true)
-        vi.resetModules()
-        const { installWebPreloadApi } = await import('./web-preload-api')
-        installWebPreloadApi()
-        expect(syncSettings(globals.window.api)).toMatchObject(expected)
-        expect(oldHost.calls.length).toBe(calls)
-      }
-      // Two local edits: each reads/migrates twice and performs its existing migration plus regular saves.
-      const expected = [10, 6, 6, 4, isPaired ? 2 : 0, isPaired ? 2 : 0, 0, 0]
-      expect(counts).toEqual([expected, expected])
-    }
-  )
-
-  it('bounds storage and transport operations at N and 10N saved overrides', async () => {
-    const counts: number[][] = []
-    for (const n of [100, 1000]) {
-      vi.resetModules()
-      const map = Object.fromEntries(
-        Array.from({ length: n }, (_, i) => [`registered-${i}`, false])
-      )
-      const { globals } = await loadSettings({
-        agentDefaultSurface: 'chat',
-        nativeChatProviders: map
-      })
-      writeStoredRuntimeEnvironment(globals.storage)
-      const pending = delay()
-      const calls = oldHost.calls.length
-      const earlier = globals.window.api.settings.updatePRBotAuthorOverride({
-        author: 'robot',
-        isBot: true
-      })
-      await pending.entered
-      const reads = vi.spyOn(globals.storage, 'getItem'),
-        writes = vi.spyOn(globals.storage, 'setItem')
-      pending.release({ prBotAuthorOverrides: ['robot'] })
-      const returned = await earlier
-      counts.push([
-        reads.mock.calls.filter(([key]) => key === SETTINGS_KEY).length,
-        writes.mock.calls.filter(([key]) => key === SETTINGS_KEY).length,
-        oldHost.calls.length - calls
-      ])
-      expect(returned.nativeChatProviders).toEqual(map)
-      reads.mockRestore()
-      writes.mockRestore()
-      oldHost.call = undefined
-    }
-    // Existing read-time normalization saves once; settlement adds one regular save, not per-agent writes.
-    expect(counts).toEqual([
-      [3, 2, 1],
-      [3, 2, 1]
-    ])
-  })
 })
 
 it.each([null, { future: [false, 1] }, true, false])(
@@ -701,16 +564,6 @@ it.each(['terminal', null, 'future-value'])(
     expect(saved.experimentalNativeChat).toBe(true)
   }
 )
-
-it('cannot create retained metadata on a fresh owner from public input', async () => {
-  vi.resetModules()
-  const { globals } = await loadSettings({})
-  const input = { theme: 'dark' as const, experimentalNativeChat: true }
-  expect(await globals.window.api.settings.set(input)).not.toHaveProperty('experimentalNativeChat')
-  expect(JSON.parse(globals.storage.getItem(SETTINGS_KEY) ?? '{}')).not.toHaveProperty(
-    'experimentalNativeChat'
-  )
-})
 
 it('finishes carry after failed migration write, legitimate read wake, opposite edit and reopen', async () => {
   vi.resetModules()

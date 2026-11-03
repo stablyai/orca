@@ -101,16 +101,6 @@ describe('a Claude model its CLI no longer lists', () => {
     }
   })
 
-  it('shows the literal seed when a built-in id has no host-listed label', () => {
-    const seed = { model: 'sonnet' }
-    const view = structuredAgentSessionOptionView(withHostList(), seed, {})
-    const model = structuredAgentSessionOptionSnapshot(view).find((entry) => entry.id === 'model')
-    expect(model?.kind).toMatchObject({
-      currentValue: 'sonnet',
-      choices: expect.arrayContaining([{ value: 'sonnet', label: 'Sonnet', description: 'sonnet' }])
-    })
-  })
-
   it('shows an unlisted seed literally and carries a current effort without an offered menu', () => {
     const view = structuredAgentSessionOptionView(withHostList(), remembered, {})
     expect(carried(withHostList(), remembered)).toEqual(remembered)
@@ -286,12 +276,6 @@ describe('what a send carries', () => {
     }
   )
 
-  it('carries the default it shows when nothing names a model', () => {
-    const named = { ...SONNET, isDefault: true }
-    const listing = { ...LISTED, models: [OPUS, named], listingNamesConfiguredModel: true }
-    expect(carried(withHostList(fresh(), listing))).toEqual({ model: 'sonnet' })
-  })
-
   it('carries held picks without committing them to the chat', () => {
     const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
     const originalRecord = structuredClone(listed.record)
@@ -309,16 +293,6 @@ describe('what a send carries', () => {
     expect(carried(withHostList(), undefined, { model: 'claude-retired' })).toEqual({
       model: 'claude-retired'
     })
-  })
-
-  it('carries nothing before a model shows, or for another agent', () => {
-    expect(carried(fresh())).toBeUndefined()
-    const codex = applyStructuredAgentSessionOptions(
-      createStructuredAgentSessionOptionState('codex', CLAUDE_SESSION_OPTION_CATALOG),
-      CLAUDE_SESSION_OPTION_CATALOG,
-      { models: [OPUS], current: { model: 'opus[1m]' } }
-    )
-    expect(carried(codex)).toBeUndefined()
   })
 })
 

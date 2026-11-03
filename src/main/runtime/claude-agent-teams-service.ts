@@ -4,7 +4,7 @@ import {
   splitTmuxCommand
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
-import { resolvePathEnvKey } from '../pty/windows-environment-path'
+import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,

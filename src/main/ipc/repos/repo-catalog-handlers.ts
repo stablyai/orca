@@ -24,7 +24,7 @@ import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-
 import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,

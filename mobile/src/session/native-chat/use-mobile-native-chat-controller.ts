@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useMobileNativeChatDrafts } from './composer/use-mobile-native-chat-drafts'
 import { useMobileNativeChatWorkspaceCatalog } from './composer/use-mobile-native-chat-workspace-catalog'
 import { useMobileNativeChatMessageSend } from './transcript/use-mobile-native-chat-message-send'
@@ -14,6 +14,7 @@ import type {
 import { useMobileBridgeChatPromptWrites } from '../use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatPromptController } from '../use-mobile-native-chat-prompt-controller'
+import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 
 export function useMobileNativeChatController(
@@ -135,12 +136,29 @@ export function useMobileNativeChatController(
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
     latestPendingId: chatPending.at(-1)?.id ?? null,
+    pending: chatPending,
     hasPromptCard,
     scopeKey: streamIdentity,
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
   const nativeChatAgentWorking = activeTurn.isWorking
+  const workingEpoch = terminalTurn.workingEpoch
+  const placedChatPending = useMemo(
+    () =>
+      chatPending.map((entry) => ({
+        ...entry,
+        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
+      })),
+    [chatPending, workingEpoch]
+  )
+  const captureTerminalSendOrigin = useCallback(
+    (text: string, sentAt?: number) => {
+      const origin = captureSendOrigin(text, sentAt)
+      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
+    },
+    [captureSendOrigin, workingEpoch]
+  )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
 
@@ -158,7 +176,7 @@ export function useMobileNativeChatController(
     deviceTokenRef,
     agentRef: activeChatAgentRef,
     commandSendRef: recordSessionOptionCommandRef,
-    captureSendOrigin,
+    captureSendOrigin: captureTerminalSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
@@ -222,7 +240,7 @@ export function useMobileNativeChatController(
     chatDraftKey,
     setChatComposerText,
     getChatComposerEditGeneration,
-    chatPending,
+    chatPending: placedChatPending,
     chatImagePreviewsByMessageId: activeChatStructured
       ? structuredNativeChat.imagePreviewsByMessageId
       : chatImagePreviewsByMessageId,

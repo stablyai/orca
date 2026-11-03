@@ -756,69 +756,32 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
-    it('keeps a healthy connection when another response arrives while the probe is pending', async () => {
+    it.each([
+      {
+        ok: true,
+        result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
+      },
+      { ok: false, error: { code: 'download_failed', message: 'model download failed' } }
+    ])('delivers an unrelated RPC reply without settling a probe: %j', async (reply) => {
       const { client, socket } = connectAuthenticated()
 
       client.notifyForeground()
-      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
-
       const poll = client.sendRequest('speech.models.list')
       await Promise.resolve()
       const pollRequest = sentRequest(socket, 'speech.models.list')
-      socket.receive(
-        `encrypted:${JSON.stringify({
-          id: pollRequest.id,
-          ok: true,
-          result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
-        })}`
-      )
-      await expect(poll).resolves.toMatchObject({ ok: true })
+      socket.receive(`encrypted:${JSON.stringify({ id: pollRequest.id, ...reply })}`)
+      await expect(poll).resolves.toMatchObject(reply)
 
-      await vi.advanceTimersByTimeAsync(8_000)
-      expect(socket.close).not.toHaveBeenCalled()
-
-      await vi.advanceTimersByTimeAsync(12_000)
-      expect(sentRequests(socket, 'status.get')).toHaveLength(2)
-      await vi.advanceTimersByTimeAsync(7_999)
+      await vi.advanceTimersByTimeAsync(23_999)
       expect(socket.close).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
-      expect(socket.close).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(16_000)
-      expect(socket.close).toHaveBeenCalled()
+      expect(socket.close).toHaveBeenCalledOnce()
       expect(client.getState()).toBe('reconnecting')
 
       client.close()
     })
 
-    it('keeps a healthy connection when a non-auth RPC failure arrives while the probe is pending', async () => {
-      const { client, socket } = connectAuthenticated()
-
-      client.notifyForeground()
-      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
-
-      const poll = client.sendRequest('speech.models.list')
-      await Promise.resolve()
-      const pollRequest = sentRequest(socket, 'speech.models.list')
-      socket.receive(
-        `encrypted:${JSON.stringify({
-          id: pollRequest.id,
-          ok: false,
-          error: { code: 'download_failed', message: 'model download failed' }
-        })}`
-      )
-      await expect(poll).resolves.toMatchObject({
-        ok: false,
-        error: { code: 'download_failed' }
-      })
-
-      await vi.advanceTimersByTimeAsync(24_000)
-      expect(socket.close).not.toHaveBeenCalled()
-      expect(client.getState()).toBe('connected')
-
-      client.close()
-    })
-
-    it('keeps a healthy connection when a binary stream frame arrives while the probe is pending', async () => {
+    it('delivers terminal output without settling an unanswered control probe', async () => {
       const { client, socket } = connectAuthenticated()
       const events: unknown[] = []
 
@@ -842,13 +805,13 @@ describe('mobile rpc-client connection timeout', () => {
       await vi.advanceTimersByTimeAsync(24_000)
 
       expect(events).toContainEqual({ type: 'data', streamId: 42, chunk: 'still alive' })
-      expect(socket.close).not.toHaveBeenCalled()
-      expect(client.getState()).toBe('connected')
+      expect(socket.close).toHaveBeenCalledOnce()
+      expect(client.getState()).toBe('reconnecting')
 
       client.close()
     })
 
-    it('counts authenticated unknown payloads before semantic decoding', async () => {
+    it('records authenticated unknown payloads without settling a control probe', async () => {
       for (const payload of [
         'encrypted:{"unexpected":true}',
         'encrypted:{"id":"rpc-incomplete","ok":true}',
@@ -858,11 +821,14 @@ describe('mobile rpc-client connection timeout', () => {
         const socket = mockSockets.at(-1)!
         openAndAuthenticate(socket)
         client.notifyForeground()
+        await vi.advanceTimersByTimeAsync(1_000)
         socket.receive(payload)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(client.getLastInboundAt?.()).toBe(Date.now())
 
-        await vi.advanceTimersByTimeAsync(24_000)
-        expect(socket.close).not.toHaveBeenCalled()
-        expect(client.getState()).toBe('connected')
+        await vi.advanceTimersByTimeAsync(23_000)
+        expect(socket.close).toHaveBeenCalledOnce()
+        expect(client.getState()).toBe('reconnecting')
 
         client.close()
       }

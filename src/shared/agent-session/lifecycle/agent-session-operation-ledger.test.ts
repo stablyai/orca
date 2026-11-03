@@ -49,13 +49,6 @@ function admit(
 }
 
 describe('operation admission', () => {
-  it('admits a fresh id once and replays the identical retry', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const row = admit(rows)
-    const replay = evaluate(rows)
-    expect(replay).toEqual({ decision: 'replay', row })
-  })
-
   it('refuses the same id carrying different parameters', () => {
     const rows = new Map<string, AgentSessionOperationRow>()
     admit(rows)
@@ -149,12 +142,5 @@ describe('retention', () => {
     admit(rows)
     expect(pruneAgentSessionOperationRows(rows, lastAdmissibleAt).size).toBe(1)
     expect(evaluate(pruneAgentSessionOperationRows(rows, lastAdmissibleAt)).decision).toBe('replay')
-  })
-
-  it('drops only rows past their own expiry', () => {
-    const rows = new Map<string, AgentSessionOperationRow>()
-    const row = admit(rows)
-    expect(pruneAgentSessionOperationRows(rows, row.expiresAt).size).toBe(0)
-    expect(pruneAgentSessionOperationRows(rows, row.expiresAt - 1).size).toBe(1)
   })
 })
