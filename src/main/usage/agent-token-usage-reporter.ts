@@ -9,23 +9,12 @@ import { isTelemetryEnabled, track } from '../telemetry/client'
 import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'
 
-const legacyStateSchema = z
+const stateSchema = z
   .object({
     schemaVersion: z.literal(1),
     snapshots: z.array(agentTokenUsageSchema)
   })
   .strict()
-
-const currentStateSchema = z
-  .object({
-    schemaVersion: z.literal(2),
-    snapshots: z.array(agentTokenUsageSchema),
-    acceptedRevisions: z.array(
-      z.tuple([z.uuidv4(), z.number().int().positive().max(Number.MAX_SAFE_INTEGER)])
-    )
-  })
-  .strict()
-const stateSchema = z.discriminatedUnion('schemaVersion', [legacyStateSchema, currentStateSchema])
 
 /** Cumulative snapshots: consumers select the highest revision per provider/session, never sum retries. */
 export class AgentTokenUsageReporter {
@@ -93,7 +82,9 @@ export class AgentTokenUsageReporter {
     }
     // Persist revisions before capture so a restart can only retry the same snapshot or a newer one.
     if (changed) {
-      await this.persist(next)
+      await this.writer.write(() =>
+        JSON.stringify({ schemaVersion: 1, snapshots: [...next.values()] })
+      )
     }
     this.snapshots = next
     for (const snapshot of next.values()) {
@@ -106,12 +97,6 @@ export class AgentTokenUsageReporter {
       // Queue acceptance only deduplicates this process; restart must retry undelivered snapshots.
       this.acceptedRevisions.set(snapshot.analytics_session_id, snapshot.revision)
     }
-  }
-
-  private async persist(snapshots: Map<string, AgentTokenUsage>): Promise<void> {
-    await this.writer.write(() =>
-      JSON.stringify({ schemaVersion: 1, snapshots: [...snapshots.values()] })
-    )
   }
 
   private async load(): Promise<Map<string, AgentTokenUsage>> {
@@ -133,17 +118,6 @@ export class AgentTokenUsageReporter {
       state.snapshots.some((snapshot) => snapshot.provider !== this.provider)
     ) {
       throw new Error('Invalid agent token usage state')
-    }
-    // Validate old v2 markers, but do not treat queue acceptance as durable delivery.
-    const acceptedRevisions = new Map(state.schemaVersion === 2 ? state.acceptedRevisions : [])
-    if (
-      (state.schemaVersion === 2 && acceptedRevisions.size !== state.acceptedRevisions.length) ||
-      [...acceptedRevisions].some(([id, revision]) => {
-        const snapshot = snapshots.get(id)
-        return !snapshot || revision > snapshot.revision
-      })
-    ) {
-      throw new Error('Invalid agent token usage acceptance state')
     }
     return snapshots
   }

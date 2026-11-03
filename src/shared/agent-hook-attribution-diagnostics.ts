@@ -1,5 +1,3 @@
-import { BoundedMap } from './bounded-map'
-
 type AttributionReason = 'unknown_tab_id' | 'empty_pane_key'
 type PaneOwner = { paneKey: string; connectionId?: string | null; worktreeId?: string }
 
@@ -8,26 +6,23 @@ const MAX_OWNERS = 128
 
 /** Diagnostic admission only: unresolved observations must still be queued and retried. */
 export class AgentHookAttributionDiagnostics {
-  private readonly reported = new BoundedMap<string, number>({ maxEntries: MAX_OWNERS })
+  private readonly reported = new Map<string, number>()
   private readonly overflowAt: Partial<Record<AttributionReason, number>> = {}
-  private nextSweepAt = 0
 
   shouldReport(reason: AttributionReason, owner?: PaneOwner): boolean {
     const now = Date.now()
-    if (now >= this.nextSweepAt) {
-      for (const [key, at] of this.reported.entries()) {
-        if (now - at >= COOLDOWN_MS) {
-          this.reported.delete(key)
-        }
+    // Entries stay in report-time order; stop as soon as the oldest survivor is still cooling down.
+    for (const [key, at] of this.reported) {
+      if (now - at < COOLDOWN_MS) {
+        break
       }
-      this.nextSweepAt = now + COOLDOWN_MS
+      this.reported.delete(key)
     }
     const key = this.key(reason, owner)
-    const previous = this.reported.peek(key)
-    if (previous !== undefined && now - previous < COOLDOWN_MS) {
+    if (this.reported.has(key)) {
       return false
     }
-    if (previous === undefined && this.reported.size >= MAX_OWNERS) {
+    if (this.reported.size >= MAX_OWNERS) {
       // Avoid eviction churn when a flood cycles through more owners than fit in memory.
       const overflow = this.overflowAt[reason]
       if (overflow !== undefined && now - overflow < COOLDOWN_MS) {
@@ -41,7 +36,9 @@ export class AgentHookAttributionDiagnostics {
   }
 
   resolved(owner: PaneOwner): void {
-    this.reported.delete(this.key('unknown_tab_id', owner))
+    if (this.reported.size > 0) {
+      this.reported.delete(this.key('unknown_tab_id', owner))
+    }
   }
 
   private key(reason: AttributionReason, owner?: PaneOwner): string {

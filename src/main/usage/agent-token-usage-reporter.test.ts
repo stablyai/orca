@@ -149,21 +149,24 @@ describe('agent token usage', () => {
     expect(captures()[0]).toMatchObject({ revision: 1 })
   })
 
-  it('retries rate-limited snapshots without incrementing their revision', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
-    const instance = reporter()
-    for (let count = 1; count <= 31; count++) {
-      await instance.report([{ ...row, input_tokens: count }])
+  it.each(['same process', 'restart'])(
+    'retries rate-limited snapshots after %s without incrementing their revision',
+    async (retry) => {
+      vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+      const instance = reporter()
+      for (let count = 1; count <= 31; count++) {
+        await instance.report([{ ...row, input_tokens: count }])
+      }
+      expect(captures()).toHaveLength(30)
+      resetBurstCapsForSession()
+      const next = retry === 'restart' ? reporter() : instance
+      await next.report([{ ...row, input_tokens: 31 }])
+      expect(captures()).toHaveLength(31)
+      expect(captures().at(-1)).toMatchObject({ revision: 31, input_tokens: 31 })
+      await next.report([{ ...row, input_tokens: 31 }])
+      expect(captures()).toHaveLength(31)
     }
-    expect(captures()).toHaveLength(30)
-    resetBurstCapsForSession()
-    const restarted = reporter()
-    await restarted.report([{ ...row, input_tokens: 31 }])
-    expect(captures()).toHaveLength(31)
-    expect(captures().at(-1)).toMatchObject({ revision: 31, input_tokens: 31 })
-    await restarted.report([{ ...row, input_tokens: 31 }])
-    expect(captures()).toHaveLength(31)
-  })
+  )
 
   it('deduplicates acceptance in memory when only part of a batch is accepted', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
@@ -238,49 +241,33 @@ describe('agent token usage', () => {
     }
   )
 
-  it.each([1, 2])(
-    'retries saved v%s snapshots without rewriting unchanged history',
-    async (schemaVersion) => {
-      const { providerSessionId: _, ...counts } = row
-      const state = {
-        schemaVersion,
-        snapshots: [{ ...counts, provider: 'claude', analytics_session_id: ID, revision: 7 }],
-        ...(schemaVersion === 2 ? { acceptedRevisions: [[ID, 7]] } : {})
-      }
-      const persisted = JSON.stringify(state)
-      writeFileSync(file, persisted)
-      const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
-      const instance = reporter()
-      await instance.report([row])
-      await instance.report([])
-      await instance.flush()
-      expect(captures()).toEqual([expect.objectContaining({ revision: 7 })])
-      expect(write).not.toHaveBeenCalled()
-      expect(readFileSync(file, 'utf8')).toBe(persisted)
-      await instance.report([{ ...row, output_tokens: 21 }])
-      expect(captures()[1]).toMatchObject({ revision: 8, output_tokens: 21 })
-      expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ schemaVersion: 1 })
-    }
-  )
+  it('retries saved snapshots without rewriting unchanged history', async () => {
+    const { providerSessionId: _, ...counts } = row
+    const persisted = JSON.stringify({
+      schemaVersion: 1,
+      snapshots: [{ ...counts, provider: 'claude', analytics_session_id: ID, revision: 7 }]
+    })
+    writeFileSync(file, persisted)
+    const write = vi.spyOn(UsageCacheSnapshotWriter.prototype, 'write')
+    const instance = reporter()
+    await instance.report([row])
+    await instance.report([])
+    await instance.flush()
+    expect(captures()).toEqual([expect.objectContaining({ revision: 7 })])
+    expect(write).not.toHaveBeenCalled()
+    expect(readFileSync(file, 'utf8')).toBe(persisted)
+    await instance.report([{ ...row, output_tokens: 21 }])
+    expect(captures()[1]).toMatchObject({ revision: 8, output_tokens: 21 })
+  })
 
-  it.each(['ahead', 'unknown', 'duplicate', 'wrong-provider'])(
-    'rejects %s acceptance state without overwriting the file or capturing',
+  it.each(['duplicate', 'wrong-provider'])(
+    'rejects %s snapshots without overwriting the file or capturing',
     async (invalid) => {
       await reporter().report([row])
       telemetry.mock.capture.mockClear()
-      const state = {
-        ...JSON.parse(readFileSync(file, 'utf8')),
-        schemaVersion: 2,
-        acceptedRevisions: [[ID, 1]]
-      }
-      if (invalid === 'ahead') {
-        state.acceptedRevisions[0][1] = 2
-      }
-      if (invalid === 'unknown') {
-        state.acceptedRevisions[0][0] = '00000000-0000-4000-8000-000000000002'
-      }
+      const state = JSON.parse(readFileSync(file, 'utf8'))
       if (invalid === 'duplicate') {
-        state.acceptedRevisions.push(state.acceptedRevisions[0])
+        state.snapshots.push(state.snapshots[0])
       }
       if (invalid === 'wrong-provider') {
         state.snapshots[0].provider = 'codex'
