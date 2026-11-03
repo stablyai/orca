@@ -31,6 +31,7 @@ export type IssueCommandReadResult = {
   effectiveContent: string | null
   localFilePath: string
   source: 'local' | 'shared' | 'none'
+  localUntracked?: true
   /** A stopped WSL distro refused the read (E9); the content is unknown, not empty. */
   refusedWslDistro?: string
 }
