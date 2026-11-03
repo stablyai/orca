@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+import {
+  readGuestShortcutReplayFields,
+  requestBrowserAnnotationSendMenu,
+  routeSendNotesShortcut
+} from '@/lib/browser-annotation-send-shortcut'
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -308,5 +313,113 @@ describe('website annotations handed to a send', () => {
 
     render(<AnnotationTrayHarness />)
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+})
+
+describe('send notes shortcut ownership', () => {
+  it('opens only the focused page menu and keeps delivery pending', () => {
+    const mounted = renderHook(() =>
+      useBrowserPageAnnotationSend({
+        browserTabId: 'page-1',
+        worktreeId: 'folder-1',
+        workspaceId: 'browser-1',
+        chromeShortcutScope: 'focused'
+      })
+    )
+    act(() => {
+      expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-2' })).toBeNull()
+    })
+    expect(mode).toBeUndefined()
+    act(() => {
+      expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-1' })).toBe(
+        'opened'
+      )
+    })
+    expect(mode?.id).toBe('browser-annotations:page-1:tray')
+    expect(mode?.worktreeId).toBe('folder-1')
+    expect(mode?.prompt).toContain('Fix this button')
+    expect(notes()).toHaveLength(1)
+    mounted.unmount()
+    expect(requestBrowserAnnotationSendMenu({ target: null, browserPageId: 'page-1' })).toBeNull()
+  })
+
+  it('does not fall back to review notes for an empty focused browser', () => {
+    store.getState().clearBrowserPageAnnotations('page-1')
+    renderHook(() =>
+      useBrowserPageAnnotationSend({
+        browserTabId: 'page-1',
+        worktreeId: 'folder-1',
+        chromeShortcutScope: 'focused'
+      })
+    )
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBe('empty')
+    expect(mode).toBeUndefined()
+  })
+
+  it('ignores inactive panes and notes already in flight', () => {
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: 'focused' | 'inactive' }) =>
+        useBrowserPageAnnotationSend({
+          browserTabId: 'page-1',
+          worktreeId: 'folder-1',
+          chromeShortcutScope: scope
+        }),
+      { initialProps: { scope: 'inactive' } }
+    )
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBeNull()
+    rerender({ scope: 'focused' })
+    act(() => result.current.handleBrowserAnnotationsHandedOff(new Promise(() => {})))
+    expect(requestBrowserAnnotationSendMenu({ target: null })).toBe('empty')
+    expect(mode).toBeUndefined()
+  })
+
+  describe('routing', () => {
+    const inside = (html: string): Element => {
+      const host = document.createElement('div')
+      host.innerHTML = html
+      document.body.append(host)
+      return host.querySelector('[data-target]')!
+    }
+
+    it.each([
+      ['Monaco', '<div class="monaco-editor"><textarea data-target></textarea></div>'],
+      ['the diff editor', '<div class="diff-editor"><div data-target></div></div>'],
+      [
+        'a rich markdown editor',
+        '<div class="rich-markdown-editor" contenteditable="true"><p data-target></p></div>'
+      ]
+    ])('keeps review notes for focus in %s', (_name, html) => {
+      expect(routeSendNotesShortcut({ target: inside(html) })).toBe('review-notes')
+    })
+
+    it.each([
+      ['an input', '<input data-target />'],
+      ['a text area', '<textarea data-target></textarea>'],
+      ['editable content', '<div contenteditable="true" data-target></div>']
+    ])('ignores the shortcut for focus in %s', (_name, html) => {
+      expect(routeSendNotesShortcut({ target: inside(html) })).toBe('ignored')
+    })
+
+    it('uses review notes when no browser owns the request, except for a guest request', () => {
+      expect(routeSendNotesShortcut({ target: null })).toBe('review-notes')
+      expect(routeSendNotesShortcut({ target: null, browserPageId: 'page-9' })).toBe('ignored')
+    })
+
+    it('reads guest replay fields and rejects unknown modifiers', () => {
+      const event = new KeyboardEvent('keydown')
+      expect(readGuestShortcutReplayFields(event)).toEqual({
+        browserPageId: undefined,
+        doubleTapModifier: undefined
+      })
+      expect(
+        readGuestShortcutReplayFields(
+          Object.assign(event, { browserPageId: 'page-1', doubleTapModifier: 'Shift' })
+        )
+      ).toEqual({ browserPageId: 'page-1', doubleTapModifier: 'Shift' })
+      expect(
+        readGuestShortcutReplayFields(Object.assign(event, { doubleTapModifier: 'Mod' }))
+          .doubleTapModifier
+      ).toBeUndefined()
+    })
   })
 })

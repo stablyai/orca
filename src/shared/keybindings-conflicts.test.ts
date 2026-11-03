@@ -171,6 +171,17 @@ describe('keybindings', () => {
     )
   })
 
+  it('flags the global send-review-notes command against browser chords that win in a guest', () => {
+    expect(
+      findKeybindingConflicts('darwin', { 'sourceControl.sendReviewNotes': ['Mod+R'] })
+    ).toContainEqual(
+      expect.objectContaining({
+        binding: 'Mod+R',
+        actionIds: expect.arrayContaining(['browser.reload', 'sourceControl.sendReviewNotes'])
+      })
+    )
+  })
+
   it('ignores selected actions when checking shortcut conflicts', () => {
     expect(
       findKeybindingConflicts(

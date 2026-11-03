@@ -118,7 +118,10 @@ const STATIC_TITLE_COPY = {
   'editor.addReviewNote': () =>
     translate('keybindings.title.editorAddReviewNote', 'Add Review Note'),
   'sourceControl.sendReviewNotes': () =>
-    translate('keybindings.title.sourceControlSendReviewNotes', 'Send Review Notes to Agent'),
+    translate(
+      'keybindings.title.sourceControlSendReviewNotes',
+      'Send Review or Browser Notes to Agent'
+    ),
   'fileExplorer.undo': () => translate('keybindings.title.fileExplorerUndo', 'Undo file operation'),
   'fileExplorer.redo': () => translate('keybindings.title.fileExplorerRedo', 'Redo file operation'),
   'fileExplorer.copyPath': () =>

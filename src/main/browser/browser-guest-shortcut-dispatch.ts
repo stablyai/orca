@@ -22,10 +22,16 @@ export type GuestShortcutForwardContext = {
   getKeybindings?: () => KeybindingOverrides | undefined
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
+  hasEditableFocus: () => Promise<boolean>
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
   /** False for plugin frames: no address bar, history, find or page zoom, and Close closes the
    *  active tab rather than a browser source. */
   browserPage?: boolean
+}
+
+function toBrowserPageTabShortcut(input: GuestShortcutInput): BrowserPageTabShortcut {
+  const { key, code, alt, meta, control, shift, doubleTapModifier } = input
+  return { key, code, alt, meta, control, shift, doubleTapModifier }
 }
 
 export function forwardGuestShortcutInput(
@@ -42,10 +48,14 @@ export function forwardGuestShortcutInput(
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
+    hasEditableFocus,
     forwardBrowserPageZoom
   } = ctx
   const page = ctx.browserPage !== false
   const keybindings = getKeybindings?.()
+  const sendNotesShortcut =
+    Boolean(resolveWorkspaceId?.(browserTabId)) &&
+    keybindingMatchesAction('sourceControl.sendReviewNotes', input, process.platform, keybindings)
   if (action?.type === 'zoom') {
     if (!page) {
       return false
@@ -204,17 +214,18 @@ export function forwardGuestShortcutInput(
     )
   ) {
     // Why: replay into the renderer's own tab-shortcut handler so a page answers tab chords exactly as the rest of Orca does.
-    const { key, code, alt, meta, control, shift, doubleTapModifier } = input
-    const shortcut: BrowserPageTabShortcut = {
-      key,
-      code,
-      alt,
-      meta,
-      control,
-      shift,
-      doubleTapModifier
-    }
-    renderer.send('ui:browserPageTabShortcut', shortcut)
+    renderer.send('ui:browserPageTabShortcut', toBrowserPageTabShortcut(input))
+  } else if (sendNotesShortcut) {
+    // Why: before-input-event cannot wait for the page, so the key stays with the page and editable focus keeps it.
+    void hasEditableFocus().then((editable) => {
+      if (!editable) {
+        resolveRenderer(browserTabId)?.send('ui:browserPageTabShortcut', {
+          ...toBrowserPageTabShortcut(input),
+          browserPageId: browserTabId
+        })
+      }
+    })
+    return false
   } else {
     return false
   }

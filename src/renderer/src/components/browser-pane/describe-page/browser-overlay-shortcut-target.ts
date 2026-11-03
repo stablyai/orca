@@ -17,7 +17,7 @@ export function browserOverlayOwnsShortcutTarget(
 /** Whether a pane in this shortcut scope should answer a chrome-focus chord. */
 export function browserChromeShortcutOwnsEvent(
   chromeShortcutScope: BrowserChromeShortcutScope,
-  event: Event,
+  event: Pick<Event, 'target'>,
   workspaceId: string
 ): boolean {
   return (

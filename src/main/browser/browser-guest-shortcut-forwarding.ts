@@ -11,6 +11,7 @@ import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
+import { guestHasEditableFocus } from './browser-guest-editable-focus'
 import type { ResolveRenderer } from './browser-guest-renderer-target'
 import { consumeRecentGuestWheelZoom } from './browser-guest-wheel-zoom'
 import {
@@ -61,6 +62,7 @@ export function setupGuestShortcutForwarding(args: {
   const forwardContext: GuestShortcutForwardContext = {
     browserTabId,
     resolveRenderer,
+    hasEditableFocus: () => guestHasEditableFocus(guest),
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,

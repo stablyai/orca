@@ -1,3 +1,7 @@
+import {
+  readGuestShortcutReplayFields,
+  routeSendNotesShortcut
+} from '@/lib/browser-annotation-send-shortcut'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -240,9 +244,13 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      // Run this unbound alias after built-ins; claim it only when unsent review notes exist.
+      // Keep one configurable action for the focused browser and review notes.
       if (canRevealRightSidebar && matchShortcut('sourceControl.sendReviewNotes')) {
-        if (actions.openDiffNotesSendMenuForActiveWorktree()) {
+        const route = routeSendNotesShortcut(input)
+        if (
+          route === 'opened' ||
+          (route === 'review-notes' && actions.openDiffNotesSendMenuForActiveWorktree())
+        ) {
           input.preventDefault()
           notifyTerminalCapture('sourceControl.sendReviewNotes')
         }
@@ -279,6 +287,7 @@ export function useGlobalKeybindings(args: {
         return
       }
       dispatchShortcutInput({
+        ...readGuestShortcutReplayFields(e),
         isComposing: e.isComposing,
         altGraph: e.getModifierState('AltGraph'),
         key: e.key,

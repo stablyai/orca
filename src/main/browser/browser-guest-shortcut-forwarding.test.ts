@@ -261,6 +261,76 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
+  describe('send notes shortcut', () => {
+    const notesInput = { key: '9', code: 'Digit9', alt: true, shift: true }
+
+    function setupNotes(options: {
+      editable?: boolean | Error
+      bindings?: string[]
+      owned?: boolean
+    }) {
+      const { editable = false, bindings = ['Mod+Alt+Shift+9'], owned = true } = options
+      const executeJavaScript =
+        editable instanceof Error
+          ? vi.fn().mockRejectedValue(editable)
+          : vi.fn().mockResolvedValue(editable)
+      setupGuestShortcutForwarding({
+        browserTabId,
+        guest: { ...makeGuest(), executeJavaScript } as unknown as Electron.WebContents,
+        resolveRenderer: () => makeRenderer(),
+        resolveWorkspaceId: () => (owned ? 'workspace-1' : null),
+        getKeybindings: () => ({ 'sourceControl.sendReviewNotes': bindings })
+      })
+      return executeJavaScript
+    }
+
+    it('opens from a non-editable workspace guest and leaves the key with the page', async () => {
+      setupNotes({})
+      expect(triggerBeforeInput(notesInput)).not.toHaveBeenCalled()
+      await vi.waitFor(() =>
+        expect(rendererSendMock).toHaveBeenCalledWith(
+          'ui:browserPageTabShortcut',
+          expect.objectContaining({ browserPageId: browserTabId, code: 'Digit9' })
+        )
+      )
+    })
+
+    it.each([
+      ['an editable focus', true],
+      ['a failed focus check', new Error('guest destroyed')]
+    ])('leaves the key with the page for %s', async (_name, editable) => {
+      const executeJavaScript = setupNotes({ editable })
+      expect(triggerBeforeInput(notesInput)).not.toHaveBeenCalled()
+      expect(executeJavaScript).toHaveBeenCalledOnce()
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(rendererSendMock).not.toHaveBeenCalled()
+    })
+
+    it('ignores guests outside a workspace and key repeats', () => {
+      const unowned = setupNotes({ owned: false })
+      expect(triggerBeforeInput(notesInput)).not.toHaveBeenCalled()
+      expect(unowned).not.toHaveBeenCalled()
+      guestOnMock.mockClear()
+      const repeated = setupNotes({})
+      expect(triggerBeforeInput({ ...notesInput, isAutoRepeat: true })).not.toHaveBeenCalled()
+      expect(repeated).not.toHaveBeenCalled()
+    })
+
+    it('forwards a double-tap binding with its modifier and page ID', async () => {
+      setupNotes({ bindings: ['DoubleTap+Shift'] })
+      const shift = { key: 'Shift', code: 'ShiftLeft', alt: false, meta: false, control: false }
+      for (const type of ['keyDown', 'keyUp', 'keyDown'] as const) {
+        triggerBeforeInput({ ...shift, type, shift: type === 'keyDown' })
+      }
+      await vi.waitFor(() =>
+        expect(rendererSendMock).toHaveBeenCalledWith(
+          'ui:browserPageTabShortcut',
+          expect.objectContaining({ browserPageId: browserTabId, doubleTapModifier: 'Shift' })
+        )
+      )
+    })
+  })
+
   it('uses customized zoom keybindings when forwarding guest shortcuts', () => {
     setupGuestShortcutForwarding({
       browserTabId,
