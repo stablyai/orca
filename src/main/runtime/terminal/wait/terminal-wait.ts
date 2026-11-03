@@ -1,4 +1,5 @@
 import type {
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalWait as RuntimeTerminalWaitResult,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-terminal-contracts'
@@ -51,6 +52,9 @@ type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void
+  getFreshExplicitAgentStatus?: (
+    handle: string
+  ) => { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
 }
 
 export class RuntimeTerminalWait {
@@ -84,12 +88,29 @@ export class RuntimeTerminalWait {
       throw buildPtyTerminalWaitExitError(pty)
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.
-    const verdict = condition === 'tui-idle' ? this.evaluate(pty, waitText) : null
-    if (verdict?.kind === 'blocked') {
-      return buildPtyTerminalWaitBlockedResult(handle, condition, pty, verdict.reason)
+    const explicitStatus = this.deps.getFreshExplicitAgentStatus?.(handle)
+    const isPermission =
+      pty.lastAgentStatus === 'permission' || explicitStatus?.status === 'permission'
+    const isWorkingOrIdle =
+      explicitStatus?.status === 'working' ||
+      explicitStatus?.status === 'idle' ||
+      (pty.lastAgentStatus === 'working' && explicitStatus?.status !== 'permission')
+    if (condition === 'waiting' && isPermission) {
+      return buildPtyTerminalWaitBlockedResult(handle, condition, pty, 'agent-interactive-prompt')
     }
-    if (verdict?.kind === 'ready-strong') {
+    // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.
+    const verdict =
+      condition === 'tui-idle' || condition === 'waiting' ? this.evaluate(pty, waitText) : null
+    if (verdict?.kind === 'blocked') {
+      if (condition === 'waiting') {
+        if (!isWorkingOrIdle) {
+          return buildPtyTerminalWaitBlockedResult(handle, condition, pty, verdict.reason)
+        }
+      } else {
+        return buildPtyTerminalWaitBlockedResult(handle, condition, pty, verdict.reason)
+      }
+    }
+    if (verdict?.kind === 'ready-strong' && condition === 'tui-idle' && !isPermission) {
       return buildPtyTerminalWaitResult(handle, condition, pty)
     }
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -97,7 +118,7 @@ export class RuntimeTerminalWait {
       const effectiveTimeoutMs =
         typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
           ? options.timeoutMs
-          : condition === 'tui-idle'
+          : condition === 'tui-idle' || condition === 'waiting'
             ? this.deps.defaultTimeoutMs
             : 0
       const waiter: TerminalWaiter = {

@@ -1,5 +1,6 @@
 import { isShellProcess } from '../../../../shared/agent-detection'
 import type {
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
@@ -47,6 +48,9 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
+  getFreshExplicitAgentStatus?: (
+    handle: string
+  ) => { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
 }
 
 type IdlePollEntry = {
@@ -82,7 +86,7 @@ export class RuntimeTerminalIdlePolls {
       this.sweepTimer = setInterval(() => this.sweep(), this.deps.intervalMs)
     }
     // Probe weak ready immediately; short automation waits may expire before the next sweep.
-    if (verdict?.kind === 'ready-weak') {
+    if (verdict?.kind === 'ready-weak' && waiter.condition !== 'waiting') {
       void this.tick(entry)
     } else if (verdict) {
       this.armRecheck(entry, verdict)
@@ -126,8 +130,9 @@ export class RuntimeTerminalIdlePolls {
         launchReadiness: entry.waiter.launchReadiness
       }),
       ptyId: pty.ptyId,
-      ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
-      blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
+      ready: () => buildPtyTerminalWaitResult(handle, entry.waiter.condition, pty),
+      blocked: (reason) =>
+        buildPtyTerminalWaitBlockedResult(handle, entry.waiter.condition, pty, reason),
       isQuiet: (lane) =>
         isQuietForQuiescence(outputClockOf(this.deps, pty), this.deps.quiescenceMs, lane, () =>
           this.deps.hasCommandPainted(pty.ptyId)
@@ -143,12 +148,60 @@ export class RuntimeTerminalIdlePolls {
     try {
       const sample = this.sample(entry)
       const { verdict, ptyId } = sample
+      const explicitStatus = this.deps.getFreshExplicitAgentStatus?.(entry.waiter.handle)
+      const isPermission =
+        entry.pty.lastAgentStatus === 'permission' || explicitStatus?.status === 'permission'
+      const isWorkingOrIdle =
+        explicitStatus?.status === 'working' ||
+        explicitStatus?.status === 'idle' ||
+        (entry.pty.lastAgentStatus === 'working' && explicitStatus?.status !== 'permission')
+      if (entry.waiter.condition === 'waiting' && isPermission) {
+        this.settle(entry, sample.blocked('agent-interactive-prompt'))
+        return
+      }
       if (verdict.kind === 'blocked') {
-        this.settle(entry, sample.blocked(verdict.reason))
+        if (entry.waiter.condition === 'waiting') {
+          if (!isWorkingOrIdle) {
+            this.settle(entry, sample.blocked(verdict.reason))
+            return
+          }
+        } else {
+          this.settle(entry, sample.blocked(verdict.reason))
+          return
+        }
+      }
+      if (entry.waiter.condition === 'waiting') {
+        if (
+          verdict.kind === 'working' ||
+          verdict.kind === 'ready-strong' ||
+          isWorkingOrIdle ||
+          entry.screenReadInFlight
+        ) {
+          this.armRecheck(entry, verdict)
+          return
+        }
+        const screenRead = this.readScreenBlockedReason(entry, ptyId)
+        const screenBlockedReason = screenRead ? await screenRead : null
+        if (!this.entries.has(entry)) {
+          return
+        }
+        const recheckVerdict = this.sample(entry).verdict
+        const recheckExplicit = this.deps.getFreshExplicitAgentStatus?.(entry.waiter.handle)
+        const recheckWorkingOrIdle =
+          recheckVerdict.kind === 'working' ||
+          recheckVerdict.kind === 'ready-strong' ||
+          recheckExplicit?.status === 'working' ||
+          recheckExplicit?.status === 'idle' ||
+          (entry.pty.lastAgentStatus === 'working' && recheckExplicit?.status !== 'permission')
+        if (screenBlockedReason && !recheckWorkingOrIdle) {
+          this.settle(entry, sample.blocked(screenBlockedReason))
+          return
+        }
+        this.armRecheck(entry, verdict)
         return
       }
       // Strong readiness outranks unscoped dialog wording elsewhere on the screen.
-      if (verdict.kind === 'ready-strong') {
+      if (verdict.kind === 'ready-strong' && !isPermission) {
         this.settle(entry, sample.ready())
         return
       }
