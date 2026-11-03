@@ -16572,6 +16572,21 @@
           "tooLarge": "{{value0}} es demasiado grande para abrirse en {{value1}} ({{value2}}; el límite es {{value3}}).",
           "unsupported": "{{value0}} no puede leer este archivo desde donde está almacenado. Actualiza el servidor de Orca que lo aloja o cambia a Código fuente.",
           "readFailed": "No se pudo leer {{value0}} para {{value1}}. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "Nuevo archivo",
+          "description": "Ponle nombre al archivo y elige una carpeta. Déjalo vacío para usar el nombre sugerido.",
+          "name": "Nombre",
+          "folder": "Carpeta",
+          "browse": "Explorar carpetas",
+          "browseUnavailable": "El selector de carpetas no está disponible para archivos remotos",
+          "cancel": "Cancelar",
+          "create": "Crear",
+          "nameHasSeparators": "El nombre no puede contener separadores de ruta",
+          "folderEmpty": "La ruta de la carpeta no puede estar vacía",
+          "folderOutsideWorkspace": "La carpeta debe estar dentro del espacio de trabajo actual",
+          "nameTaken": "Ya existe un archivo con ese nombre",
+          "createFailed": "No se pudo crear el archivo."
         }
       },
       "diff": {
@@ -22601,7 +22616,8 @@
       "terminalSplitDown": "Dividir terminal hacia abajo",
       "terminalSwitchInputSource": "Cambiar fuente de entrada / idioma (nativo)",
       "newAgentTab": "Nueva pestaña de {{agent}}",
-      "viewPlugins": "Abrir plugins"
+      "viewPlugins": "Abrir plugins",
+      "tabNewFile": "Nuevo archivo…"
     },
     "group": {
       "global": "Global",

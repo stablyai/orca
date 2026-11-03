@@ -16169,6 +16169,21 @@
           "tooLarge": "{{value0}}은(는) 너무 커서 {{value1}}에서 열 수 없습니다({{value2}}, 한도는 {{value3}}).",
           "unsupported": "{{value0}}은(는) 이 파일이 저장된 위치에서 읽을 수 없습니다. 파일을 호스팅하는 Orca 서버를 업데이트하거나 소스로 전환하세요.",
           "readFailed": "{{value1}}에서 사용할 {{value0}}을(를) 읽을 수 없습니다. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "새 파일",
+          "description": "파일 이름을 입력하고 폴더를 선택하세요. 이름을 비워 두면 제안된 이름이 사용됩니다.",
+          "name": "이름",
+          "folder": "폴더",
+          "browse": "폴더 찾아보기",
+          "browseUnavailable": "원격 파일에서는 폴더 선택기를 사용할 수 없습니다",
+          "cancel": "취소",
+          "create": "만들기",
+          "nameHasSeparators": "이름에 경로 구분 문자를 포함할 수 없습니다",
+          "folderEmpty": "폴더 경로는 비워 둘 수 없습니다",
+          "folderOutsideWorkspace": "폴더는 현재 워크스페이스 안에 있어야 합니다",
+          "nameTaken": "같은 이름의 파일이 이미 있습니다",
+          "createFailed": "파일을 만들지 못했습니다."
         }
       },
       "diff": {
@@ -21922,7 +21937,8 @@
       "terminalSplitDown": "터미널 아래로 분할",
       "terminalSwitchInputSource": "입력 소스/언어 전환(네이티브)",
       "newAgentTab": "새 {{agent}} 탭",
-      "viewPlugins": "플러그인 열기"
+      "viewPlugins": "플러그인 열기",
+      "tabNewFile": "새 파일…"
     },
     "group": {
       "global": "글로벌",

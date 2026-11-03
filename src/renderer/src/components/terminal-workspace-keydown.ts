@@ -184,6 +184,16 @@ export function handleTerminalWorkspaceKeyDown(
     void handleNewFile()
     return
   }
+  if (!event.repeat && matchShortcut('tab.newFile')) {
+    // Why: the floating workspace has no real worktree directory to create the file in.
+    if (floatingWorkspaceFocused) {
+      return
+    }
+    event.preventDefault()
+    notifyTerminalCapture('tab.newFile')
+    useAppStore.getState().openModal('new-file')
+    return
+  }
   const previewOwnsClose = isAgentTerminalPreviewTarget(event.target)
   if (
     !previewOwnsClose &&

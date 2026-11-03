@@ -13601,6 +13601,21 @@
           "tooLarge": "{{value0}} é grande demais para abrir no {{value1}} ({{value2}}; o limite é {{value3}}).",
           "unsupported": "{{value0}} não consegue ler este arquivo de onde ele está armazenado. Atualize o servidor do Orca que o hospeda ou mude para Código-fonte.",
           "readFailed": "Não foi possível ler {{value0}} para {{value1}}. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "Novo arquivo",
+          "description": "Dê um nome ao arquivo e escolha uma pasta. Deixe o nome vazio para usar o nome sugerido.",
+          "name": "Nome",
+          "folder": "Pasta",
+          "browse": "Procurar pastas",
+          "browseUnavailable": "O seletor de pastas não está disponível para arquivos remotos",
+          "cancel": "Cancelar",
+          "create": "Criar",
+          "nameHasSeparators": "O nome não pode conter separadores de caminho",
+          "folderEmpty": "O caminho da pasta não pode estar vazio",
+          "folderOutsideWorkspace": "A pasta deve estar dentro do workspace atual",
+          "nameTaken": "Já existe um arquivo com esse nome",
+          "createFailed": "Não foi possível criar o arquivo."
         }
       },
       "skills": {
@@ -22574,7 +22589,8 @@
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",
       "newAgentTab": "Nova aba do {{agent}}",
-      "viewPlugins": "Abrir plugins"
+      "viewPlugins": "Abrir plugins",
+      "tabNewFile": "Novo arquivo…"
     },
     "group": {
       "global": "Global",

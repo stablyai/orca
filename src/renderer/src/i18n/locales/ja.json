@@ -16180,6 +16180,21 @@
           "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
           "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
           "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "新規ファイル",
+          "description": "ファイル名とフォルダーを指定してください。名前を空にすると候補の名前が使われます。",
+          "name": "名前",
+          "folder": "フォルダー",
+          "browse": "フォルダーを参照",
+          "browseUnavailable": "リモートファイルではフォルダーの選択を使用できません",
+          "cancel": "キャンセル",
+          "create": "作成",
+          "nameHasSeparators": "名前にパス区切り文字を含めることはできません",
+          "folderEmpty": "フォルダーのパスは空にできません",
+          "folderOutsideWorkspace": "フォルダーは現在のワークスペース内にある必要があります",
+          "nameTaken": "同じ名前のファイルが既に存在します",
+          "createFailed": "ファイルを作成できませんでした。"
         }
       },
       "diff": {
@@ -21933,7 +21948,8 @@
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",
       "newAgentTab": "新規 {{agent}} タブ",
-      "viewPlugins": "プラグインを開く"
+      "viewPlugins": "プラグインを開く",
+      "tabNewFile": "新規ファイル…"
     },
     "group": {
       "global": "グローバル",

@@ -16617,6 +16617,21 @@
           "tooLarge": "{{value0}} 過大，無法在 {{value1}} 中開啟（{{value2}}；上限為 {{value3}}）。",
           "unsupported": "{{value0}} 無法從此檔案的儲存位置讀取它。請更新託管該檔案的 Orca 伺服器，或切換到原始碼。",
           "readFailed": "無法為 {{value1}} 讀取 {{value0}}。{{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "新增檔案",
+          "description": "輸入檔名並選擇資料夾。名稱留空則使用建議的名稱。",
+          "name": "名稱",
+          "folder": "資料夾",
+          "browse": "瀏覽資料夾",
+          "browseUnavailable": "遠端檔案無法使用資料夾選擇器",
+          "cancel": "取消",
+          "create": "建立",
+          "nameHasSeparators": "名稱不能包含路徑分隔符號",
+          "folderEmpty": "資料夾路徑不能為空",
+          "folderOutsideWorkspace": "資料夾必須位於目前的工作區內",
+          "nameTaken": "已存在同名檔案",
+          "createFailed": "無法建立檔案。"
         }
       },
       "diff": {
@@ -21925,7 +21940,8 @@
       "terminalSplitDown": "向下分割終端機",
       "terminalSwitchInputSource": "切換輸入來源／語言（原生）",
       "newAgentTab": "新增 {{agent}} 分頁",
-      "viewPlugins": "開啟外掛程式"
+      "viewPlugins": "開啟外掛程式",
+      "tabNewFile": "新增檔案…"
     },
     "group": {
       "global": "全域",

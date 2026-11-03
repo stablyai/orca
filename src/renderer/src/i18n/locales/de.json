@@ -16842,6 +16842,21 @@
           "tooLarge": "{{value0}} ist zu groß, um in {{value1}} geöffnet zu werden ({{value2}}; das Limit ist {{value3}}).",
           "unsupported": "{{value0}} kann diese Datei an ihrem Speicherort nicht lesen. Aktualisiere den Orca-Server, auf dem sie liegt, oder wechsle zu „Quelle“.",
           "readFailed": "{{value0}} konnte für {{value1}} nicht gelesen werden. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "Neue Datei",
+          "description": "Benenne die Datei und wähle einen Ordner. Ohne Namen wird der vorgeschlagene Name verwendet.",
+          "name": "Name",
+          "folder": "Ordner",
+          "browse": "Ordner durchsuchen",
+          "browseUnavailable": "Ordnerauswahl für Remote-Dateien nicht verfügbar",
+          "cancel": "Abbrechen",
+          "create": "Erstellen",
+          "nameHasSeparators": "Der Name darf keine Pfadtrennzeichen enthalten",
+          "folderEmpty": "Der Ordnerpfad darf nicht leer sein",
+          "folderOutsideWorkspace": "Der Ordner muss im aktuellen Workspace liegen",
+          "nameTaken": "Eine Datei mit diesem Namen existiert bereits",
+          "createFailed": "Die Datei konnte nicht erstellt werden."
         }
       },
       "diff": {
@@ -22414,7 +22429,8 @@
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",
       "newAgentTab": "Neuen Tab für {{agent}} öffnen",
-      "viewPlugins": "Plugins öffnen"
+      "viewPlugins": "Plugins öffnen",
+      "tabNewFile": "Neue Datei…"
     },
     "group": {
       "global": "Global",

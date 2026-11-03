@@ -16828,6 +16828,21 @@
           "tooLarge": "{{value0}}, {{value1}} içinde açılamayacak kadar büyük ({{value2}}; sınır {{value3}}).",
           "unsupported": "{{value0}} bu dosyayı depolandığı yerden okuyamıyor. Dosyayı barındıran Orca sunucusunu güncelleyin veya Kaynak’a geçin.",
           "readFailed": "{{value0}}, {{value1}} için okunamadı. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "Yeni dosya",
+          "description": "Dosyaya bir ad verin ve klasör seçin. Ad boş bırakılırsa önerilen ad kullanılır.",
+          "name": "Ad",
+          "folder": "Klasör",
+          "browse": "Klasörlere göz at",
+          "browseUnavailable": "Uzak dosyalar için klasör seçici kullanılamıyor",
+          "cancel": "İptal",
+          "create": "Oluştur",
+          "nameHasSeparators": "Ad yol ayırıcı içeremez",
+          "folderEmpty": "Klasör yolu boş olamaz",
+          "folderOutsideWorkspace": "Klasör geçerli çalışma alanının içinde olmalıdır",
+          "nameTaken": "Bu ada sahip bir dosya zaten var",
+          "createFailed": "Dosya oluşturulamadı."
         }
       },
       "diff": {
@@ -22240,7 +22255,8 @@
       "terminalSplitDown": "Terminali aşağı böl",
       "terminalSwitchInputSource": "Giriş kaynağını / dilini değiştir (yerel)",
       "newAgentTab": "Yeni {{agent}} sekmesi",
-      "viewPlugins": "Eklentileri Aç"
+      "viewPlugins": "Eklentileri Aç",
+      "tabNewFile": "Yeni dosya…"
     },
     "group": {
       "global": "Genel",

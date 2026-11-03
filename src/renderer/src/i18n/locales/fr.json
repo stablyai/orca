@@ -16796,6 +16796,21 @@
           "tooLarge": "{{value0}} est trop volumineux pour s’ouvrir dans {{value1}} ({{value2}} ; la limite est de {{value3}}).",
           "unsupported": "{{value0}} ne peut pas lire ce fichier depuis son emplacement. Mettez à jour le serveur Orca qui l’héberge ou passez à Source.",
           "readFailed": "Impossible de lire {{value0}} pour {{value1}}. {{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "Nouveau fichier",
+          "description": "Nommez votre fichier et choisissez un dossier. Laissez le nom vide pour utiliser le nom suggéré.",
+          "name": "Nom",
+          "folder": "Dossier",
+          "browse": "Parcourir les dossiers",
+          "browseUnavailable": "Sélecteur de dossier indisponible pour les fichiers distants",
+          "cancel": "Annuler",
+          "create": "Créer",
+          "nameHasSeparators": "Le nom ne peut pas contenir de séparateurs de chemin",
+          "folderEmpty": "Le chemin du dossier ne peut pas être vide",
+          "folderOutsideWorkspace": "Le dossier doit se trouver dans l'espace de travail actuel",
+          "nameTaken": "Un fichier portant ce nom existe déjà",
+          "createFailed": "Impossible de créer le fichier."
         }
       },
       "diff": {
@@ -22601,7 +22616,8 @@
       "terminalSplitDown": "Scinder le terminal vers le bas",
       "terminalSwitchInputSource": "Changer de source de saisie / langue (natif)",
       "newAgentTab": "Nouvel onglet {{agent}}",
-      "viewPlugins": "Ouvrir les plugins"
+      "viewPlugins": "Ouvrir les plugins",
+      "tabNewFile": "Nouveau fichier…"
     },
     "group": {
       "global": "Global",

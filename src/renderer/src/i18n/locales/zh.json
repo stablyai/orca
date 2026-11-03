@@ -16169,6 +16169,21 @@
           "tooLarge": "{{value0}} 过大，无法在 {{value1}} 中打开（{{value2}}；上限为 {{value3}}）。",
           "unsupported": "{{value0}} 无法从此文件的存储位置读取它。请更新托管该文件的 Orca 服务器，或切换到源代码。",
           "readFailed": "无法为 {{value1}} 读取 {{value0}}。{{value2}}"
+        },
+        "NewFileDialog": {
+          "title": "新建文件",
+          "description": "输入文件名并选择文件夹。名称留空则使用建议的名称。",
+          "name": "名称",
+          "folder": "文件夹",
+          "browse": "浏览文件夹",
+          "browseUnavailable": "远程文件无法使用文件夹选择器",
+          "cancel": "取消",
+          "create": "创建",
+          "nameHasSeparators": "名称不能包含路径分隔符",
+          "folderEmpty": "文件夹路径不能为空",
+          "folderOutsideWorkspace": "文件夹必须位于当前工作区内",
+          "nameTaken": "已存在同名文件",
+          "createFailed": "无法创建文件。"
         }
       },
       "diff": {
@@ -21976,7 +21991,8 @@
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",
       "newAgentTab": "新建 {{agent}} 标签页",
-      "viewPlugins": "打开插件"
+      "viewPlugins": "打开插件",
+      "tabNewFile": "新建文件…"
     },
     "group": {
       "global": "全局",

@@ -17145,6 +17145,21 @@
           "isolationOff": "{{value0}} runs only in an isolated frame, and isolated plugin frames are turned off.",
           "heading": "This editor needs the Orca desktop app",
           "openSource": "Open Source"
+        },
+        "NewFileDialog": {
+          "title": "New file",
+          "description": "Name your file and pick a folder. Leave the name empty to use the suggested name.",
+          "name": "Name",
+          "folder": "Folder",
+          "browse": "Browse folders",
+          "browseUnavailable": "Folder picker unavailable for remote files",
+          "cancel": "Cancel",
+          "create": "Create",
+          "nameHasSeparators": "Name cannot contain path separators",
+          "folderEmpty": "Folder path cannot be empty",
+          "folderOutsideWorkspace": "Folder must be inside the current workspace",
+          "nameTaken": "A file with that name already exists",
+          "createFailed": "Couldn't create the file."
         }
       },
       "diff": {
@@ -22890,7 +22905,8 @@
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins"
+      "viewPlugins": "Open Plugins",
+      "tabNewFile": "New file…"
     },
     "group": {
       "global": "Global",

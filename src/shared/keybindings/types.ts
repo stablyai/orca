@@ -67,6 +67,7 @@ export type KeybindingActionId =
   | 'tab.newBrowserSplitRight'
   | 'tab.newSimulator'
   | 'tab.newMarkdown'
+  | 'tab.newFile'
   | 'tab.openMarkdown'
   | 'tab.close'
   | 'tab.closeAll'
