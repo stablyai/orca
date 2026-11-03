@@ -307,13 +307,16 @@ export function readTestQueueChanges(
 
 /** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
  * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
- * rows. An epoch this build founds (rollover, replacement) is written as this build writes it. */
+ * rows. A context this build replaces uses its current writer, including logical replacement. */
 export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
   const projection = journal['projection']
   const prepare = projection.prepare.bind(projection)
   projection.prepare = (db, rows, savedAt) => {
     const state = journal['state']
-    if (journalOutcomeSource(db, state.sessionId, state.epoch)) {
+    if (
+      journalOutcomeSource(db, state.sessionId, state.epoch) ||
+      rows.some((row) => row.kind === 'epoch')
+    ) {
       return prepare(db, rows, savedAt)
     }
     for (const row of rows) {

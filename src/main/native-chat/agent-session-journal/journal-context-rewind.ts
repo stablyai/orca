@@ -13,7 +13,12 @@ import {
   journalRowBase
 } from './journal-row-builders'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
-import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
+import {
+  buildJournalQueueClearRow,
+  buildJournalQueueResumeRow,
+  buildJournalStopEventRow,
+  buildJournalQueueReopenRow
+} from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalQueuedMessages } from './journal-queued-messages'
 import { journalContextCursor, journalContextEpoch } from './journal-context-cursor'
@@ -26,7 +31,7 @@ import type { JournalEpochRow, JournalRow } from './journal-row-schema'
 export async function rewindJournalContext(input: {
   state: () => JournalReducerState
   writer: JournalRowWriter
-  cards?: JournalQueuedMessages
+  cards: JournalQueuedMessages
   floor?: AgentJournalCursor
   boundary?: Pick<JournalEpochRow, 'reason' | 'providerHandle'>
   fence: number
@@ -48,14 +53,11 @@ export async function rewindJournalContext(input: {
       ) {
         throw new Error('agent_session_rewind:stale-context')
       }
-      const pause =
-        floor && input.cards
-          ? journalQueuePauseRestatement(
-              state.queuePauseMarks,
-              state.latestAcceptedTurnSequence,
-              input.cards.pauses()
-            ).cleared
-          : null
+      const { lifted, failureHeld, liveStop, reopened, cleared } = journalQueuePauseRestatement(
+        state.queuePauseMarks,
+        state.latestAcceptedTurnSequence,
+        input.cards.pauses()
+      )
       const queued = new Set(
         journalInputOrder(state)
           .recoverableSubmissions()
@@ -93,6 +95,13 @@ export async function rewindJournalContext(input: {
         revisions.set(itemId, row.revision)
         plan.push((seq, ts) => ({ ...row, seq, ts }))
       }
+      const restatePauses = boundary && input.items.length > 0
+      const resume = () =>
+        plan.push((seq, ts) => buildJournalQueueResumeRow({ state, seq, ts, fence: input.fence }))
+      // Rebuilt failures must stay on the same side of the person's successful Resume.
+      if (restatePauses && lifted && failureHeld) {
+        resume()
+      }
       const scope = new JournalDerivedTurnScope()
       for (const item of input.items) {
         const itemId = agentJournalItemKey(item.identity)
@@ -123,9 +132,20 @@ export async function rewindJournalContext(input: {
           revision
         }))
       }
-      if (pause) {
+      if (restatePauses && lifted && !failureHeld) {
+        resume()
+      }
+      if (restatePauses && liveStop) {
         plan.push((seq, ts) =>
-          buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: pause })
+          buildJournalStopEventRow({ state, seq, ts, fence: input.fence, event: liveStop })
+        )
+      }
+      if (restatePauses && reopened) {
+        plan.push((seq, ts) => buildJournalQueueReopenRow({ state, seq, ts, fence: input.fence }))
+      }
+      if (cleared) {
+        plan.push((seq, ts) =>
+          buildJournalQueueClearRow({ state, seq, ts, fence: input.fence, clear: cleared })
         )
       }
       receipt = input.receipt?.({

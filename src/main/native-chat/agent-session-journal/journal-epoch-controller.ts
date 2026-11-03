@@ -16,6 +16,7 @@ export class JournalEpochController {
   constructor(
     private readonly deps: {
       inputReceipt: Parameters<typeof rewindJournalContext>[0]['inputReceipt']
+      cards: Parameters<typeof rewindJournalContext>[0]['cards']
       identity: AgentSessionJournalIdentity
       now: () => number
       mintEpoch: () => string
@@ -54,6 +55,7 @@ export class JournalEpochController {
     return rewindJournalContext({
       state: this.deps.state,
       writer: this.deps.writer,
+      cards: this.deps.cards,
       fence,
       items,
       receipt,

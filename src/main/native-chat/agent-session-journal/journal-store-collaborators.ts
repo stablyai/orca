@@ -127,6 +127,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     state: host.state,
     writer: rowWriter,
     inputReceipt: rewindReceipt,
+    cards: queuedMessages,
     adopt: host.adopt
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
