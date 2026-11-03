@@ -15,6 +15,10 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  StructuredAgentCreateSupportReason,
+  StructuredAgentCreateSupportReply
+} from '../../shared/agent-session/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch-surface'
@@ -84,15 +88,13 @@ const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeRe
   'client-capability': 'structured_sessions_unavailable'
 }
 
-type HostSupportReason = 'agent' | 'remote' | 'wsl' | 'chat-program'
-type HostLaunchSupport = { supported: boolean; reason?: HostSupportReason }
-
-const HOST_SUPPORT_REASON: Record<HostSupportReason, AgentLaunchDowngradeReason> = {
-  agent: 'structured_unsupported_on_host',
-  remote: 'remote_execution_host',
-  wsl: 'wsl_execution_runtime',
-  'chat-program': 'chat_runtime_not_installed'
-}
+const HOST_SUPPORT_REASON: Record<StructuredAgentCreateSupportReason, AgentLaunchDowngradeReason> =
+  {
+    agent: 'structured_unsupported_on_host',
+    remote: 'remote_execution_host',
+    wsl: 'wsl_execution_runtime',
+    'chat-program': 'chat_runtime_not_installed'
+  }
 
 /** Apply shared feasibility policy to facts available before resolving the workspace. */
 export function decideAgentLaunchMode(args: {
@@ -201,7 +203,7 @@ async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
   agent: TuiAgent | undefined
-): Promise<HostLaunchSupport | null> {
+): Promise<StructuredAgentCreateSupportReply | null> {
   if (!agent || !REGISTERED_STRUCTURED_AGENTS.includes(agent)) {
     return { supported: false, reason: 'agent' }
   }
@@ -217,7 +219,7 @@ async function readStructuredCreateSupport(
 
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
-  support: HostLaunchSupport | null,
+  support: StructuredAgentCreateSupportReply | null,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
