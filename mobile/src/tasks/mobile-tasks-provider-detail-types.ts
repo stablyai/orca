@@ -33,6 +33,7 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  headSha?: string
   isCrossRepository?: boolean
   additions?: number
   deletions?: number

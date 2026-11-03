@@ -1,4 +1,5 @@
 import { createElement, type ReactNode } from 'react'
+import type * as ReactModule from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
@@ -8,7 +9,7 @@ const observed = vi.hoisted((): { rows: { check: PRCheckDetail; initiallyOpen: b
   rows: []
 }))
 vi.mock('react', async (original) => ({
-  ...(await original<typeof import('react')>()),
+  ...(await original<typeof ReactModule>()),
   useEffect: (effect: () => void) => effect()
 }))
 vi.mock('react-native', () => ({

@@ -140,6 +140,15 @@ describe('Azure DevOps client', () => {
       state: 'open',
       url: 'https://dev.azure.com/acme/Project/_git/repo/pullrequest/18',
       status: 'success',
+      checksSummary: {
+        state: 'success',
+        total: 1,
+        passed: 1,
+        failed: 0,
+        cancelled: 0,
+        pending: 0,
+        neutral: 0
+      },
       updatedAt: '2026-05-11T00:00:00Z',
       mergeable: 'MERGEABLE',
       headSha: 'abc123'

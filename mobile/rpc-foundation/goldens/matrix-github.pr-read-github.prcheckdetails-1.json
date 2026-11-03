@@ -4,47 +4,20 @@
   "family": "github.pr-read",
   "namedDeltas": [],
   "values": {
-    "02bec69dee22": {
-      "assignable": {
-        "ok": true,
-        "result": [
-          {
-            "avatarUrl": "",
-            "login": "octocat",
-            "name": "Octo Cat"
-          }
-        ]
-      },
-      "check-details": {
-        "ok": true,
-        "result": {
-          "$rpc": "null"
-        }
-      },
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
+    "0644012ff2a3": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
         "ok": true,
         "result": {
           "autoMergeAllowed": {
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -64,121 +37,6 @@
           "title": "Recorded",
           "updatedAt": "2026-01-01",
           "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
         }
       }
     },
@@ -187,7 +45,7 @@
       "ordinal": 8,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
     },
-    "0dd7a956162d": {
+    "0b2ec372d512": {
       "assignable": {
         "ok": true,
         "result": [
@@ -199,35 +57,8 @@
         ]
       },
       "check-details": {
-        "ok": true,
-        "result": {
-          "annotations": [],
-          "completedAt": {
-            "$rpc": "null"
-          },
-          "conclusion": "success",
-          "detailsUrl": {
-            "$rpc": "null"
-          },
-          "jobs": [],
-          "name": "build",
-          "startedAt": {
-            "$rpc": "null"
-          },
-          "status": "completed",
-          "summary": {
-            "$rpc": "null"
-          },
-          "text": {
-            "$rpc": "null"
-          },
-          "title": {
-            "$rpc": "null"
-          },
-          "url": {
-            "$rpc": "null"
-          }
-        }
+        "error": "Request failed: github.prCheckDetails",
+        "ok": false
       },
       "checks": {
         "ok": true,
@@ -253,6 +84,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -284,6 +118,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -594,9 +431,19 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}"
     },
-    "21061e2ac87d": {
+    "240d2a273cc1": {
+      "assignable": {
+        "ok": true,
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
+          }
+        ]
+      },
       "check-details": {
-        "error": "The host sent a reply this app could not read (github.prCheckDetails)",
+        "error": "",
         "ok": false
       },
       "checks": {
@@ -623,6 +470,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -654,6 +504,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -760,10 +613,22 @@
         }
       }
     },
-    "2847fe80fde4": {
+    "26a21aa88f2c": {
+      "assignable": {
+        "ok": true,
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
+          }
+        ]
+      },
       "check-details": {
-        "error": "Request failed: github.prCheckDetails",
-        "ok": false
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
       },
       "checks": {
         "ok": true,
@@ -789,6 +654,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -820,168 +688,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
+          "checksSummary": {
             "$rpc": "undefined"
           },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
-    "284c7bccbc70": {
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -1128,21 +837,7 @@
         }
       }
     },
-    "32b45a8746f8": {
-      "assignable": {
-        "ok": true,
-        "result": [
-          {
-            "avatarUrl": "",
-            "login": "octocat",
-            "name": "Octo Cat"
-          }
-        ]
-      },
-      "check-details": {
-        "error": "outer refused",
-        "ok": false
-      },
+    "3555b6d07baa": {
       "checks": {
         "ok": true,
         "result": [
@@ -1167,6 +862,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -1198,6 +896,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -1304,7 +1005,7 @@
         }
       }
     },
-    "3b7eaf9931b8": {
+    "3aee2503277b": {
       "assignable": {
         "ok": true,
         "result": [
@@ -1316,8 +1017,35 @@
         ]
       },
       "check-details": {
-        "error": "",
-        "ok": false
+        "ok": true,
+        "result": {
+          "annotations": [],
+          "completedAt": {
+            "$rpc": "null"
+          },
+          "conclusion": "success",
+          "detailsUrl": {
+            "$rpc": "null"
+          },
+          "jobs": [],
+          "name": "build",
+          "startedAt": {
+            "$rpc": "null"
+          },
+          "status": "completed",
+          "summary": {
+            "$rpc": "null"
+          },
+          "text": {
+            "$rpc": "null"
+          },
+          "title": {
+            "$rpc": "null"
+          },
+          "url": {
+            "$rpc": "null"
+          }
+        }
       },
       "checks": {
         "ok": true,
@@ -1343,6 +1071,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -1374,6 +1105,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -1640,57 +1374,19 @@
         }
       }
     },
-    "4bf8f27dd319": {
-      "name": "hostedReview.forBranch#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "hostedReview.forBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "active": true,
-            "branch": "feature",
-            "linkedGitHubPR": 12,
-            "repo": "id:repo-9"
+    "4adb42cc7b0c": {
+      "assignable": {
+        "ok": true,
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
           }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "mergeable": "MERGEABLE",
-            "number": 12,
-            "provider": "github",
-            "state": "open",
-            "title": "Recorded",
-            "updatedAt": "2026-01-01",
-            "url": "https://x/12"
-          }
-        }
-      }
-    },
-    "52504eafec78": {
-      "name": "github.prChecks#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
-    },
-    "57ccac3ae94d": {
+        ]
+      },
       "check-details": {
-        "error": "transport failure",
+        "error": "outer refused",
         "ok": false
       },
       "checks": {
@@ -1717,6 +1413,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -1748,6 +1447,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -1854,45 +1556,55 @@
         }
       }
     },
-    "5a46540568af": {
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
+    "4bf8f27dd319": {
+      "name": "hostedReview.forBranch#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.forBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "active": true,
+            "branch": "feature",
+            "linkedGitHubPR": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
         }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "mergeable": "MERGEABLE",
+            "number": 12,
+            "provider": "github",
+            "state": "open",
+            "title": "Recorded",
+            "updatedAt": "2026-01-01",
+            "url": "https://x/12"
+          }
         }
       }
     },
-    "5b4e0caf4569": {
+    "52504eafec78": {
+      "name": "github.prChecks#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
+    },
+    "53bcb749e0ed": {
       "hosted-review": {
         "ok": true,
         "result": {
@@ -1900,6 +1612,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -1931,6 +1646,120 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      }
+    },
+    "614ba15e89b7": {
+      "check-details": {
+        "error": "",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -2158,10 +1987,37 @@
         }
       }
     },
-    "7db0279e35fd": {
+    "76a2596b21ea": {
       "check-details": {
-        "error": "Unknown method",
-        "ok": false
+        "ok": true,
+        "result": {
+          "annotations": [],
+          "completedAt": {
+            "$rpc": "null"
+          },
+          "conclusion": "success",
+          "detailsUrl": {
+            "$rpc": "null"
+          },
+          "jobs": [],
+          "name": "build",
+          "startedAt": {
+            "$rpc": "null"
+          },
+          "status": "completed",
+          "summary": {
+            "$rpc": "null"
+          },
+          "text": {
+            "$rpc": "null"
+          },
+          "title": {
+            "$rpc": "null"
+          },
+          "url": {
+            "$rpc": "null"
+          }
+        }
       },
       "checks": {
         "ok": true,
@@ -2187,6 +2043,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -2218,6 +2077,676 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "78ae5fbe409b": {
+      "check-details": {
+        "error": "transport failure",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "7d7afa1cb6b7": {
+      "check-details": {
+        "error": "The host sent a reply this app could not read (github.prCheckDetails)",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "855f218e20ec": {
+      "check-details": {
+        "error": "Unknown method",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "87a127779775": {
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -2375,19 +2904,9 @@
         }
       }
     },
-    "9c40b3e4e25e": {
-      "assignable": {
-        "ok": true,
-        "result": [
-          {
-            "avatarUrl": "",
-            "login": "octocat",
-            "name": "Octo Cat"
-          }
-        ]
-      },
+    "995867aaa10f": {
       "check-details": {
-        "error": "The host sent a reply this app could not read (github.prCheckDetails)",
+        "error": "Request failed: github.prCheckDetails",
         "ok": false
       },
       "checks": {
@@ -2414,6 +2933,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -2445,6 +2967,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -2548,6 +3073,47 @@
           "pullRequestId": {
             "$rpc": "undefined"
           }
+        }
+      }
+    },
+    "9a87ba2ee54f": {
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
         }
       }
     },
@@ -2613,199 +3179,6 @@
         "ok": false
       }
     },
-    "a453517e1386": {
-      "check-details": {
-        "ok": true,
-        "result": {
-          "annotations": [],
-          "completedAt": {
-            "$rpc": "null"
-          },
-          "conclusion": "success",
-          "detailsUrl": {
-            "$rpc": "null"
-          },
-          "jobs": [],
-          "name": "build",
-          "startedAt": {
-            "$rpc": "null"
-          },
-          "status": "completed",
-          "summary": {
-            "$rpc": "null"
-          },
-          "text": {
-            "$rpc": "null"
-          },
-          "title": {
-            "$rpc": "null"
-          },
-          "url": {
-            "$rpc": "null"
-          }
-        }
-      },
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
     "a93bcc7122e8": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -2821,208 +3194,7 @@
         ]
       }
     },
-    "af0273d6c23b": {
-      "check-details": {
-        "ok": true,
-        "result": {
-          "$rpc": "null"
-        }
-      },
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
-    "b0b5c628b5c7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      }
-    },
-    "bebec21920ce": {
+    "ada6920c3333": {
       "check-details": {
         "error": "outer refused",
         "ok": false
@@ -3053,6 +3225,9 @@
           "autoMergeEnabled": {
             "$rpc": "undefined"
           },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "headSha": {
             "$rpc": "undefined"
           },
@@ -3082,6 +3257,191 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      },
+      "repo-slug": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "ba923c81c8d7": {
+      "assignable": {
+        "ok": true,
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
+          }
+        ]
+      },
+      "check-details": {
+        "error": "The host sent a reply this app could not read (github.prCheckDetails)",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
+      "hosted-review": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "headSha": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "provider": "github",
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "status": "pending",
+          "title": "Recorded",
+          "updatedAt": "2026-01-01",
+          "url": "https://x/12"
+        }
+      },
+      "pr-for-branch": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -3230,39 +3590,38 @@
         }
       }
     },
-    "cdbefce64e00": {
-      "name": "hostedReview.forBranch#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}"
-    },
-    "d205bc3bdc6b": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "Request failed: github.prCheckDetails",
-        "ok": false
-      }
-    },
-    "d4a62d86d857": {
-      "name": "github.listAssignableUsers#1",
-      "ordinal": 14,
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}"
-    },
-    "d89e7b8ce2a0": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
+    "ca471777d56d": {
+      "assignable": {
         "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      }
-    },
-    "dbe152887fa4": {
+        "result": [
+          {
+            "avatarUrl": "",
+            "login": "octocat",
+            "name": "Octo Cat"
+          }
+        ]
+      },
+      "check-details": {
+        "error": "transport failure",
+        "ok": false
+      },
+      "checks": {
+        "ok": true,
+        "result": [
+          {
+            "checkRunId": 7,
+            "conclusion": "success",
+            "name": "build",
+            "status": "completed",
+            "url": {
+              "$rpc": "null"
+            },
+            "workflowRunId": {
+              "$rpc": "undefined"
+            }
+          }
+        ]
+      },
       "hosted-review": {
         "ok": true,
         "result": {
@@ -3270,6 +3629,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -3301,6 +3663,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -3344,6 +3709,153 @@
           "owner": "orca",
           "repo": "orca"
         }
+      },
+      "work-item": {
+        "ok": true,
+        "result": {
+          "assignees": {
+            "$rpc": "undefined"
+          },
+          "baseSha": {
+            "$rpc": "undefined"
+          },
+          "body": "body",
+          "checks": [],
+          "comments": [],
+          "headSha": "head-sha-1",
+          "item": {
+            "assignees": [],
+            "author": {
+              "$rpc": "null"
+            },
+            "autoMergeEnabled": {
+              "$rpc": "undefined"
+            },
+            "baseRefName": {
+              "$rpc": "undefined"
+            },
+            "branchName": {
+              "$rpc": "undefined"
+            },
+            "checksSummary": {
+              "$rpc": "undefined"
+            },
+            "headSha": {
+              "$rpc": "undefined"
+            },
+            "id": "PR_1",
+            "labels": [],
+            "latestReviews": {
+              "$rpc": "undefined"
+            },
+            "mergeStateStatus": {
+              "$rpc": "undefined"
+            },
+            "mergeable": {
+              "$rpc": "undefined"
+            },
+            "number": 12,
+            "reviewDecision": {
+              "$rpc": "undefined"
+            },
+            "reviewRequests": [],
+            "state": "open",
+            "title": "Recorded",
+            "type": "pr",
+            "updatedAt": "",
+            "url": ""
+          },
+          "participants": [],
+          "pullRequestId": {
+            "$rpc": "undefined"
+          }
+        }
+      }
+    },
+    "cdbefce64e00": {
+      "name": "hostedReview.forBranch#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":12,\"active\":true}}"
+    },
+    "d01444e13d4c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "result": {
+          "autoMergeAllowed": {
+            "$rpc": "undefined"
+          },
+          "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
+          "confirmedContainedHeadOid": {
+            "$rpc": "undefined"
+          },
+          "headDivergedFromMergedPRAtOid": {
+            "$rpc": "undefined"
+          },
+          "headRefName": {
+            "$rpc": "undefined"
+          },
+          "headSha": "head-sha-1",
+          "mergeMethodSettings": {
+            "$rpc": "undefined"
+          },
+          "mergeQueueRequired": {
+            "$rpc": "undefined"
+          },
+          "mergeStateStatus": {
+            "$rpc": "undefined"
+          },
+          "mergeable": "MERGEABLE",
+          "number": 12,
+          "prRepo": {
+            "$rpc": "undefined"
+          },
+          "reviewDecision": {
+            "$rpc": "undefined"
+          },
+          "stack": {
+            "$rpc": "undefined"
+          },
+          "state": "open",
+          "title": "Recorded",
+          "updatedAt": "",
+          "url": "https://x/12"
+        }
+      }
+    },
+    "d205bc3bdc6b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Request failed: github.prCheckDetails",
+        "ok": false
+      }
+    },
+    "d4a62d86d857": {
+      "name": "github.listAssignableUsers#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-9\"}}"
+    },
+    "d89e7b8ce2a0": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "result": {
+          "host": "github.com",
+          "owner": "orca",
+          "repo": "orca"
+        }
       }
     },
     "e23eb2e4b033": {
@@ -3368,20 +3880,12 @@
         ]
       }
     },
-    "e261144ba11d": {
-      "assignable": {
-        "ok": true,
-        "result": [
-          {
-            "avatarUrl": "",
-            "login": "octocat",
-            "name": "Octo Cat"
-          }
-        ]
-      },
+    "e340124ff14c": {
       "check-details": {
-        "error": "transport failure",
-        "ok": false
+        "ok": true,
+        "result": {
+          "$rpc": "null"
+        }
       },
       "checks": {
         "ok": true,
@@ -3407,6 +3911,9 @@
             "$rpc": "undefined"
           },
           "autoMergeEnabled": {
+            "$rpc": "undefined"
+          },
+          "checksSummary": {
             "$rpc": "undefined"
           },
           "headSha": {
@@ -3438,6 +3945,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -3596,349 +4106,7 @@
         "ok": false
       }
     },
-    "f4deb5bc9436": {
-      "assignable": {
-        "ok": true,
-        "result": [
-          {
-            "avatarUrl": "",
-            "login": "octocat",
-            "name": "Octo Cat"
-          }
-        ]
-      },
-      "check-details": {
-        "error": "Request failed: github.prCheckDetails",
-        "ok": false
-      },
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
-    "f56ee50c75d3": {
-      "check-details": {
-        "error": "",
-        "ok": false
-      },
-      "checks": {
-        "ok": true,
-        "result": [
-          {
-            "checkRunId": 7,
-            "conclusion": "success",
-            "name": "build",
-            "status": "completed",
-            "url": {
-              "$rpc": "null"
-            },
-            "workflowRunId": {
-              "$rpc": "undefined"
-            }
-          }
-        ]
-      },
-      "hosted-review": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "headSha": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "provider": "github",
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "status": "pending",
-          "title": "Recorded",
-          "updatedAt": "2026-01-01",
-          "url": "https://x/12"
-        }
-      },
-      "pr-for-branch": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      },
-      "repo-slug": {
-        "ok": true,
-        "result": {
-          "host": "github.com",
-          "owner": "orca",
-          "repo": "orca"
-        }
-      },
-      "work-item": {
-        "ok": true,
-        "result": {
-          "assignees": {
-            "$rpc": "undefined"
-          },
-          "baseSha": {
-            "$rpc": "undefined"
-          },
-          "body": "body",
-          "checks": [],
-          "comments": [],
-          "headSha": "head-sha-1",
-          "item": {
-            "assignees": [],
-            "author": {
-              "$rpc": "null"
-            },
-            "autoMergeEnabled": {
-              "$rpc": "undefined"
-            },
-            "baseRefName": {
-              "$rpc": "undefined"
-            },
-            "branchName": {
-              "$rpc": "undefined"
-            },
-            "checksSummary": {
-              "$rpc": "undefined"
-            },
-            "headSha": {
-              "$rpc": "undefined"
-            },
-            "id": "PR_1",
-            "labels": [],
-            "latestReviews": {
-              "$rpc": "undefined"
-            },
-            "mergeStateStatus": {
-              "$rpc": "undefined"
-            },
-            "mergeable": {
-              "$rpc": "undefined"
-            },
-            "number": 12,
-            "reviewDecision": {
-              "$rpc": "undefined"
-            },
-            "reviewRequests": [],
-            "state": "open",
-            "title": "Recorded",
-            "type": "pr",
-            "updatedAt": "",
-            "url": ""
-          },
-          "participants": [],
-          "pullRequestId": {
-            "$rpc": "undefined"
-          }
-        }
-      }
-    },
-    "f8e404c4c198": {
+    "f218ba7ccb75": {
       "assignable": {
         "ok": true,
         "result": [
@@ -3979,6 +4147,9 @@
           "autoMergeEnabled": {
             "$rpc": "undefined"
           },
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "headSha": {
             "$rpc": "undefined"
           },
@@ -4008,6 +4179,9 @@
             "$rpc": "undefined"
           },
           "checksStatus": "pending",
+          "checksSummary": {
+            "$rpc": "undefined"
+          },
           "confirmedContainedHeadOid": {
             "$rpc": "undefined"
           },
@@ -4203,57 +4377,6 @@
         "ok": false
       }
     },
-    "fb1d74a94e86": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "ok": true,
-        "result": {
-          "autoMergeAllowed": {
-            "$rpc": "undefined"
-          },
-          "autoMergeEnabled": {
-            "$rpc": "undefined"
-          },
-          "checksStatus": "pending",
-          "confirmedContainedHeadOid": {
-            "$rpc": "undefined"
-          },
-          "headDivergedFromMergedPRAtOid": {
-            "$rpc": "undefined"
-          },
-          "headRefName": {
-            "$rpc": "undefined"
-          },
-          "headSha": "head-sha-1",
-          "mergeMethodSettings": {
-            "$rpc": "undefined"
-          },
-          "mergeQueueRequired": {
-            "$rpc": "undefined"
-          },
-          "mergeStateStatus": {
-            "$rpc": "undefined"
-          },
-          "mergeable": "MERGEABLE",
-          "number": 12,
-          "prRepo": {
-            "$rpc": "undefined"
-          },
-          "reviewDecision": {
-            "$rpc": "undefined"
-          },
-          "stack": {
-            "$rpc": "undefined"
-          },
-          "state": "open",
-          "title": "Recorded",
-          "updatedAt": "",
-          "url": "https://x/12"
-        }
-      }
-    },
     "fb4429083480": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -4296,9 +4419,9 @@
           "payloads": ["1f5765918736", "cdbefce64e00"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7"
+            "hosted-review": "0644012ff2a3"
           },
-          "state": "5a46540568af",
+          "state": "9a87ba2ee54f",
           "effects": []
         }
       },
@@ -4309,10 +4432,10 @@
           "payloads": ["1f5765918736", "cdbefce64e00", "1554c8f6753b"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86"
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c"
           },
-          "state": "dbe152887fa4",
+          "state": "53bcb749e0ed",
           "effects": []
         }
       },
@@ -4323,11 +4446,11 @@
           "payloads": ["1f5765918736", "cdbefce64e00", "1554c8f6753b", "0a9f2ff19df4"],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c"
           },
-          "state": "5b4e0caf4569",
+          "state": "87a127779775",
           "effects": []
         }
       },
@@ -4350,12 +4473,12 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033"
           },
-          "state": "284c7bccbc70",
+          "state": "3555b6d07baa",
           "effects": []
         }
       },
@@ -4380,13 +4503,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45"
           },
-          "state": "a453517e1386",
+          "state": "76a2596b21ea",
           "effects": []
         }
       },
@@ -4413,14 +4536,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "1c88fe396b45",
             "assignable": "a93bcc7122e8"
           },
-          "state": "0dd7a956162d",
+          "state": "3aee2503277b",
           "effects": []
         }
       },
@@ -4445,13 +4568,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "f165c11a5545"
           },
-          "state": "21061e2ac87d",
+          "state": "7d7afa1cb6b7",
           "effects": []
         }
       },
@@ -4478,14 +4601,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "f165c11a5545",
             "assignable": "a93bcc7122e8"
           },
-          "state": "9c40b3e4e25e",
+          "state": "ba923c81c8d7",
           "effects": []
         }
       },
@@ -4510,13 +4633,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303"
           },
-          "state": "af0273d6c23b",
+          "state": "e340124ff14c",
           "effects": []
         }
       },
@@ -4543,14 +4666,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303",
             "assignable": "a93bcc7122e8"
           },
-          "state": "02bec69dee22",
+          "state": "26a21aa88f2c",
           "effects": []
         }
       },
@@ -4575,13 +4698,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303"
           },
-          "state": "af0273d6c23b",
+          "state": "e340124ff14c",
           "effects": []
         }
       },
@@ -4608,14 +4731,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303",
             "assignable": "a93bcc7122e8"
           },
-          "state": "02bec69dee22",
+          "state": "26a21aa88f2c",
           "effects": []
         }
       },
@@ -4640,13 +4763,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303"
           },
-          "state": "af0273d6c23b",
+          "state": "e340124ff14c",
           "effects": []
         }
       },
@@ -4673,14 +4796,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303",
             "assignable": "a93bcc7122e8"
           },
-          "state": "02bec69dee22",
+          "state": "26a21aa88f2c",
           "effects": []
         }
       },
@@ -4705,13 +4828,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303"
           },
-          "state": "af0273d6c23b",
+          "state": "e340124ff14c",
           "effects": []
         }
       },
@@ -4738,14 +4861,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "8a5cb8b66303",
             "assignable": "a93bcc7122e8"
           },
-          "state": "02bec69dee22",
+          "state": "26a21aa88f2c",
           "effects": []
         }
       },
@@ -4770,13 +4893,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "1b2778bf67a2"
           },
-          "state": "bebec21920ce",
+          "state": "ada6920c3333",
           "effects": []
         }
       },
@@ -4803,14 +4926,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "1b2778bf67a2",
             "assignable": "a93bcc7122e8"
           },
-          "state": "32b45a8746f8",
+          "state": "4adb42cc7b0c",
           "effects": []
         }
       },
@@ -4835,13 +4958,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "d205bc3bdc6b"
           },
-          "state": "2847fe80fde4",
+          "state": "995867aaa10f",
           "effects": []
         }
       },
@@ -4868,14 +4991,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "d205bc3bdc6b",
             "assignable": "a93bcc7122e8"
           },
-          "state": "f4deb5bc9436",
+          "state": "0b2ec372d512",
           "effects": []
         }
       },
@@ -4900,13 +5023,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "fa93ca01f266"
           },
-          "state": "7db0279e35fd",
+          "state": "855f218e20ec",
           "effects": []
         }
       },
@@ -4933,14 +5056,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "fa93ca01f266",
             "assignable": "a93bcc7122e8"
           },
-          "state": "f8e404c4c198",
+          "state": "f218ba7ccb75",
           "effects": []
         }
       },
@@ -4965,13 +5088,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "a197c20578aa"
           },
-          "state": "57ccac3ae94d",
+          "state": "78ae5fbe409b",
           "effects": []
         }
       },
@@ -4998,14 +5121,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "a197c20578aa",
             "assignable": "a93bcc7122e8"
           },
-          "state": "e261144ba11d",
+          "state": "ca471777d56d",
           "effects": []
         }
       },
@@ -5030,13 +5153,13 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "fb4429083480"
           },
-          "state": "f56ee50c75d3",
+          "state": "614ba15e89b7",
           "effects": []
         }
       },
@@ -5063,14 +5186,14 @@
           ],
           "settlements": {
             "repo-slug": "d89e7b8ce2a0",
-            "hosted-review": "b0b5c628b5c7",
-            "pr-for-branch": "fb1d74a94e86",
+            "hosted-review": "0644012ff2a3",
+            "pr-for-branch": "d01444e13d4c",
             "work-item": "4a5d0ded4e6c",
             "checks": "e23eb2e4b033",
             "check-details": "fb4429083480",
             "assignable": "a93bcc7122e8"
           },
-          "state": "3b7eaf9931b8",
+          "state": "240d2a273cc1",
           "effects": []
         }
       }
