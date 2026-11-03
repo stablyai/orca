@@ -254,7 +254,7 @@ test('keeps a paired client workspace create-with-agent off the other client and
     await expectActiveWorktree(clientB, ids.clientB)
     await expectActiveWorktree(orcaPage, ids.host)
 
-    // Drive creator selection directly; worktree-creation-flow.test.ts and worktree.spec.ts cover composer auto-navigation.
+    // Drive creator selection directly; composer auto-navigation is outside this journey.
     await selectWorktree(clientA, createdWorktreeId)
     await expectActiveWorktree(clientB, ids.clientB)
     await expectActiveWorktree(orcaPage, ids.host)

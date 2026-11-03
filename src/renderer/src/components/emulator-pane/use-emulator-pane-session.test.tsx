@@ -1,3 +1,4 @@
+import * as emulatorPreferences from '@/lib/emulator-opening-preferences-capability'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
 // @vitest-environment happy-dom
@@ -187,6 +188,63 @@ describe('useEmulatorPaneSession', () => {
     expect(latest?.selectedUdid).toBeNull()
     expect(latest?.selectionRequired).toBe('first-use')
     expect(latest?.error).toBeNull()
+  })
+
+  it('retains an explicit session when an older automatic capability lookup finishes', async () => {
+    consumePrelaunchedSimulatorSession(WORKTREE_ID)
+    const capability = createDeferred<boolean>()
+    vi.spyOn(emulatorPreferences, 'supportsEmulatorOpeningPreferences')
+      .mockImplementationOnce(() => capability.promise)
+      .mockResolvedValue(true)
+    let attachCalls = 0
+    vi.mocked(window.api.runtime.call).mockImplementation(async (request) => {
+      if (request.method === 'emulator.listDevices') {
+        return runtimeSuccess(deviceList)
+      }
+      if (++attachCalls > 1) {
+        return runtimeSuccess(await attachDeferred.promise)
+      }
+      return runtimeSuccess({
+        attached: true,
+        info: {
+          deviceUdid: 'device-b',
+          displayName: 'iPhone B',
+          streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',
+          wsUrl: 'ws://127.0.0.1:3200/ws'
+        }
+      })
+    })
+    await act(async () => root.render(<AutoAttachProbe />))
+    await flushEffects()
+    expect(latest?.loading).toBe(true)
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('orca:emulator-auto-attach', {
+          detail: {
+            worktreeId: WORKTREE_ID,
+            info: {
+              deviceUdid: 'device-a',
+              streamUrl: 'http://127.0.0.1:3100/stream.mjpeg'
+            }
+          }
+        })
+      )
+    })
+    await act(async () => {
+      await latest?.attach('device-b')
+    })
+    expect(latest?.isLive).toBe(true)
+    expect(latest?.selectedUdid).toBe('device-b')
+    await act(async () => capability.resolve(true))
+    await flushEffects()
+    expect(latest?.isLive).toBe(true)
+    expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
+    expect(latest?.displayName).toBe('iPhone B')
+    expect(
+      vi
+        .mocked(window.api.runtime.call)
+        .mock.calls.filter(([request]) => request.method === 'emulator.attach')
+    ).toHaveLength(1)
   })
 
   it('shows a connecting state instead of the old live preview while switching devices', async () => {

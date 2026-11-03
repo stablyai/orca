@@ -57,7 +57,6 @@ export function useReadyHostedReviewAction({
           { value0: shortLabel }
         )
       )
-      await onRefreshReview()
     } catch (err) {
       const message =
         err instanceof Error
@@ -71,6 +70,7 @@ export function useReadyHostedReviewAction({
       toast.error(message)
     } finally {
       setReadying(false)
+      await onRefreshReview().catch(() => {})
     }
   }, [
     githubPR?.prRepo,

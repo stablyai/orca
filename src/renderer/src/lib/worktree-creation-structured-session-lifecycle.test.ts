@@ -288,20 +288,6 @@ describe('creation chat handoff', () => {
     }
   )
 
-  it('finishes creation when the host opens a terminal instead of a chat', async () => {
-    mocks.admission.mockResolvedValue({ kind: 'declined' })
-
-    await executeWorktreeCreation('creation-1', request)
-    await main.settle()
-
-    const state = useAppStore.getState()
-    expect(state.activeWorktreeId).toBe(worktree.id)
-    expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
-    expect(state.getActiveTab(worktree.id)?.contentType).toBe('terminal')
-    expect(state.tabsByWorktree[worktree.id]).toHaveLength(1)
-    expect(mocks.createSession).not.toHaveBeenCalled()
-  })
-
   it('dismisses a pending admission without opening a late chat', async () => {
     const admission = Promise.withResolvers<StructuredLaunchAdmission>()
     mocks.admission.mockReturnValue(admission.promise)

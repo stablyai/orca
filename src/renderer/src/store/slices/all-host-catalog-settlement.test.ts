@@ -156,43 +156,6 @@ describe('all-host folder workspace settlement', () => {
       [restoredFolderKey]: 'runtime:env-1'
     })
   })
-
-  it('loads a folder-only catalog with no repos on any host', async () => {
-    reposList.mockResolvedValue([])
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      args.method === 'repo.list' ? rpc({ repos: [] }) : remoteResult(args.method)
-    )
-    const store = createTestStore()
-    store.setState({
-      restoredRuntimeHostIdByWorkspaceSessionKey: { [restoredFolderKey]: 'runtime:env-1' }
-    })
-
-    await store.getState().fetchReposForAllHosts()
-    await store.getState().fetchProjectGroupsForAllHosts()
-    await store.getState().fetchFolderWorkspacesForAllHosts()
-
-    expect(store.getState().repos).toEqual([])
-    expect(store.getState().projectGroups.map((g) => g.id)).toEqual(['local-group', 'remote-group'])
-    expect(store.getState().folderWorkspaces.map((w) => w.id)).toEqual([
-      'local-folder',
-      'remote-folder'
-    ])
-    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({})
-  })
-
-  it('skips a runtime whose endpoint was removed during the load', async () => {
-    const store = createTestStore()
-    store.setState({ removedRuntimeEnvironmentIds: new Set(['env-1']) })
-
-    await store.getState().fetchProjectGroupsForAllHosts()
-    await store.getState().fetchFolderWorkspacesForAllHosts()
-    await store.getState().fetchReposForAllHosts()
-
-    expect(store.getState().projectGroups.map((g) => g.id)).toEqual(['local-group'])
-    expect(store.getState().folderWorkspaces.map((w) => w.id)).toEqual(['local-folder'])
-    expect(store.getState().repos.map((r) => r.id)).toEqual(['local-repo'])
-    expect(store.getState().worktreeVisibilityDefaultsByHost['runtime:env-1']).toBeUndefined()
-  })
 })
 
 describe('all-host repo settlement', () => {

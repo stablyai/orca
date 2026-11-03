@@ -24,6 +24,8 @@ import type { PluginFileMatch } from '../../../../../shared/plugins/contribution
 
 /** A shortcut a plugin binds, by the key as written and the command it runs. */
 export type PluginPageShortcut = { key: string; command: string }
+/** A command that runs in place of a built-in action (`replaces`), named before consent. */
+export type PluginPageReplacement = { command: string; action: string }
 
 /**
  * Whether a fetched preview is the release the page rendered. Preview reads the current catalog,
@@ -160,6 +162,13 @@ export function usePluginPageModel({
         .map((item) => ({ key: item.name, command: item.detail ?? item.name })) ?? null
   }
 
+  const replacingCommands = plugin?.commands ?? shownPreview?.manifest.contributes.commands
+  const replacements: PluginPageReplacement[] | null = replacingCommands
+    ? replacingCommands.flatMap((command) =>
+        command.replaces ? [{ command: command.title, action: command.replaces }] : []
+      )
+    : null
+
   // Extensions and file names the plugin's custom editors open and edit, named in the consent.
   const customEditors: readonly PluginFileMatch[] | undefined = plugin
     ? (plugin.customEditors ?? [])
@@ -188,6 +197,7 @@ export function usePluginPageModel({
     trust,
     capabilities,
     shortcuts,
+    replacements,
     editorFileTypes: editorFileTypes ? [...new Set(editorFileTypes)] : null,
     images
   }

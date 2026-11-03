@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_CONTRIBUTION_SOURCE, describePluginContributions } from './plugin-contributions'
+import {
+  EMPTY_CONTRIBUTION_SOURCE,
+  describePluginContributions,
+  summaryContributionSource
+} from './plugin-contributions'
+import { statusBarItemTitles } from './plugin-contribution-row-labels'
 
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en',
@@ -35,5 +40,29 @@ describe('custom editor rows', () => {
   it('stays quiet for offered-only editors and file types Orca has no viewer for', () => {
     expect(editorRow({ extensions: ['.svg'], priority: 'option' }).tone).toBe('default')
     expect(editorRow({ extensions: ['.excalidraw'], priority: 'default' }).tone).toBe('default')
+  })
+})
+
+describe('status bar item rows', () => {
+  it('lists each item by its text, or its id when it shows only an icon', () => {
+    const source = {
+      ...EMPTY_CONTRIBUTION_SOURCE,
+      statusBarItems: statusBarItemTitles([{ id: 'blocked', text: '0 blocked' }, { id: 'quiet' }])
+    }
+    expect(describePluginContributions(source)).toEqual([
+      expect.objectContaining({
+        key: 'statusBarItems:0',
+        title: '0 blocked',
+        detail: 'Status bar'
+      }),
+      expect.objectContaining({ key: 'statusBarItems:1', title: 'quiet', kind: 'statusBarItems' })
+    ])
+    // Older hosts list no status bar items.
+    expect(statusBarItemTitles(undefined)).toEqual([])
+  })
+
+  it('lists the items a catalog summary names', () => {
+    const source = summaryContributionSource([{ kind: 'statusBarItems', name: '0 blocked' }])
+    expect(source.statusBarItems).toEqual(['0 blocked'])
   })
 })

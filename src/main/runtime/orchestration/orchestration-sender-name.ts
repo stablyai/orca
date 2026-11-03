@@ -44,35 +44,71 @@ export type MirroredTabs = {
 type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
 type MirroredChatTab = Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
 
-/** One read pass's copy of each workspace's mirrored tabs, indexed by tab id on first read. */
+export type SenderNamingLayout = {
+  root: { type: 'leaf' | 'split' } | null
+  titlesByLeafId?: Record<string, string>
+}
+
+export function terminalNameInputs(tab: MirroredTerminalTab): MirroredTerminalTab {
+  const provider = tab.aiVaultTitle
+  return {
+    id: tab.id,
+    title: tab.title,
+    customTitle: tab.customTitle,
+    quickCommandLabel: tab.quickCommandLabel,
+    generatedTitle: tab.generatedTitle,
+    defaultTitle: tab.defaultTitle,
+    aiVaultTitle: provider
+      ? { agent: provider.agent, sessionId: provider.sessionId, title: provider.title }
+      : provider
+  }
+}
+
+export function chatNameInputs(tab: MirroredChatTab): MirroredChatTab {
+  return {
+    contentType: tab.contentType,
+    entityId: tab.entityId,
+    customLabel: tab.customLabel,
+    label: tab.label
+  }
+}
+
+export function layoutNameInputs(layout: SenderNamingLayout): SenderNamingLayout {
+  return {
+    root: layout.root ? { type: layout.root.type } : null,
+    titlesByLeafId: layout.titlesByLeafId ? { ...layout.titlesByLeafId } : undefined
+  }
+}
+
+/** Capture naming values, never workspace buffers or editor drafts. */
 export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs | null | undefined) {
-  const snapshots = new WeakMap<MirroredTabs, MirroredTabs>()
   const workspaces = new Map<string, MirroredTabs | null>()
   const terminalTabs = new Map<string, Map<string, MirroredTerminalTab>>()
   const chatTabs = new Map<string, Map<string, MirroredChatTab>>()
+  const layouts = new Map<string, SenderNamingLayout | undefined>()
   const session = (id: string) => {
     if (!workspaces.has(id)) {
       const live = read(id)
-      let captured = live ? snapshots.get(live) : null
-      if (live && !captured) {
-        captured = structuredClone(live)
-        snapshots.set(live, captured)
+      const terminals = (live?.tabsByWorktree?.[id] ?? []).map(terminalNameInputs)
+      const chats = (live?.unifiedTabs?.[id] ?? []).map(chatNameInputs)
+      for (const tab of terminals) {
+        const layout = live?.terminalLayoutsByTabId?.[tab.id]
+        layouts.set(JSON.stringify([id, tab.id]), layout ? layoutNameInputs(layout) : undefined)
       }
-      workspaces.set(id, captured ?? null)
-      const terminals = new Map<string, MirroredTerminalTab>()
-      for (const tab of captured?.tabsByWorktree?.[id] ?? []) {
-        if (!terminals.has(tab.id)) {
-          terminals.set(tab.id, tab)
-        }
-      }
-      terminalTabs.set(id, terminals)
-      const chats = new Map<string, MirroredChatTab>()
-      for (const tab of captured?.unifiedTabs?.[id] ?? []) {
-        if (tab.contentType === 'agent-session' && !chats.has(tab.entityId)) {
-          chats.set(tab.entityId, tab)
-        }
-      }
-      chatTabs.set(id, chats)
+      workspaces.set(
+        id,
+        live ? { tabsByWorktree: { [id]: terminals }, unifiedTabs: { [id]: chats } } : null
+      )
+      terminalTabs.set(id, new Map(terminals.toReversed().map((tab) => [tab.id, tab])))
+      chatTabs.set(
+        id,
+        new Map(
+          chats
+            .filter((tab) => tab.contentType === 'agent-session')
+            .toReversed()
+            .map((tab) => [tab.entityId, tab])
+        )
+      )
     }
     return workspaces.get(id)
   }
@@ -82,6 +118,14 @@ export function captureMirroredTabs(read: (worktreeId: string) => MirroredTabs |
     chatTab: (worktreeId: string, sessionId: string) => {
       session(worktreeId)
       return chatTabs.get(worktreeId)?.get(sessionId) ?? null
+    },
+    layout: (worktreeId: string, tabId: string) => {
+      const key = JSON.stringify([worktreeId, tabId])
+      if (!layouts.has(key)) {
+        const live = read(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+        layouts.set(key, live ? layoutNameInputs(live) : undefined)
+      }
+      return layouts.get(key)
     }
   }
 }

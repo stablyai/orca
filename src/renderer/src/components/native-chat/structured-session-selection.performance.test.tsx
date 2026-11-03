@@ -2,7 +2,7 @@
 
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createStructuredSessionSelectionController } from '../../../../shared/structured-agent-session-selection-operations'
+import { createStructuredSessionSelectionController } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
 import { useStructuredAgentSessionOptionStamp } from './structured-agent-session-status-hooks'
 import { useAppStore } from '@/store'

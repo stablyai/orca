@@ -162,6 +162,9 @@ export function useEmulatorPaneSession({
           throw deviceRefreshErrorRef.current
         }
         const supportsPreferences = await supportsEmulatorOpeningPreferences()
+        if (request !== attachRequestRef.current) {
+          return
+        }
         if (!supportsPreferences && list.length === 0 && !deviceTarget && !configuredDefaultUdid) {
           throw noEmulatorDevicesError()
         }

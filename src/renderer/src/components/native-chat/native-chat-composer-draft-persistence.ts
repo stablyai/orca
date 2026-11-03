@@ -2,11 +2,12 @@
 
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath } from './native-chat-image-paste'
-import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import {
   dirtyScopes,
   deferredRemovals,
+  isNativeChatSetupDraft,
   hasLocalChange,
   load,
   nextSavedAt,
@@ -112,7 +113,8 @@ function refuse(scopeKey: string, change: UnconfirmedDraftChange, error: unknown
 }
 
 function persist(scopeKey: string): void {
-  const record = records.get(scopeKey)
+  // A refused deliberate setup removal retries only null, even beside new live input.
+  const record = isNativeChatSetupDraft(scopeKey) ? undefined : records.get(scopeKey)
   const draft = record ? savedForm(record) : null
   const change: UnconfirmedDraftChange = { draft, at: draft?.savedAt ?? nextSavedAt() }
   unconfirmed.set(scopeKey, change)
@@ -271,6 +273,9 @@ function adoptForeignChange(message: unknown): void {
     .read(scopeKey)
     .then((value) => {
       if (hasLocalChange(scopeKey)) {
+        return
+      }
+      if (isNativeChatSetupDraft(scopeKey) && value != null) {
         return
       }
       const draft = parseStoredNativeChatComposerDraft(value)

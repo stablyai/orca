@@ -1,6 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import type { WebContents } from 'electron'
 import type { z } from 'zod'
-import type { PluginShotReplayParams } from '../../../shared/rpc-contract/plugins-params'
+import type {
+  PluginShotChromeParams,
+  PluginShotEditorParams,
+  PluginShotReplayParams
+} from '../../../shared/rpc-contract/plugins-params'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -22,6 +27,12 @@ import type {
   PluginShotAct,
   PluginShotActResult
 } from '../../../shared/plugins/view/plugin-shot-acts'
+import {
+  pluginEditorFileTarget,
+  shootPluginEditor,
+  type PluginEditorShotResult
+} from './plugin-view-editor-shot'
+import { shootPluginChrome, type PluginChromeShotResult } from './plugin-view-chrome-shot'
 import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,
@@ -81,6 +92,10 @@ export type PluginViewDesktop = {
   }): Promise<PluginShotResult | PluginShotNotShown>
   /** `shot --scenario`: captures a CLI-rendered tree without opening the plugin's panel. */
   shotReplay(params: z.infer<typeof PluginShotReplayParams>): Promise<PluginShotReplayResult>
+  /** `shot --editor`: opens the file in the plugin's editor and captures that editor. */
+  shotEditor(params: z.infer<typeof PluginShotEditorParams>): Promise<PluginEditorShotResult>
+  /** `shot --status-bar` / `--window`: captures Orca's own chrome, where plugins draw too. */
+  shotChrome(params: z.infer<typeof PluginShotChromeParams>): Promise<PluginChromeShotResult>
 }
 
 export type PluginViewDesktopDeps = {
@@ -96,6 +111,8 @@ export type PluginViewDesktopDeps = {
   guestsOf(pluginKey: string): WebContents[]
   /** `nativeImage.createFromBitmap`, to draw an html panel's guest over the window capture. */
   imageFromBitmap: BitmapImageFactory
+  /** Where `shot --editor --act` copies the file; the OS temp folder when absent. */
+  shotScratchRoot?: () => string
 }
 
 const OPEN_TIMEOUT_MS = 10_000
@@ -135,7 +152,13 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
         const editor = await resolvePluginViewEditor(deps.source, pluginKey, filePath)
         const reply = await requestPluginViewFromRenderer(
           requireContents(),
-          { kind: 'open-editor', pluginKey, editorId: editor.editorId, filePath },
+          {
+            kind: 'open-editor',
+            pluginKey,
+            editorId: editor.editorId,
+            filePath,
+            ...(await pluginEditorFileTarget(filePath))
+          },
           OPEN_TIMEOUT_MS
         )
         const error = failed(reply)
@@ -163,6 +186,9 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
 
+    shotEditor: (params) => shootPluginEditor(deps, requireContents(), params),
+    shotChrome: (params) => shootPluginChrome(deps, requireContents(), params),
+
     shotReplay: (params) =>
       shootPluginReplay({ contents: requireContents(), windowShown: deps.windowShown() }, params),
 
@@ -179,6 +205,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       const actsTimeoutMs = (acts?.length ?? 0) * ACT_TIMEOUT_MS
       const { colorScheme, themeReason } = pluginShotThemeDecision(requested, deps.windowShown())
       const { cursor } = deps.logsSince(pluginKey)
+      const captureId = randomUUID()
       return withPaintingWhileHidden([contents, ...deps.guestsOf(pluginKey)], async () => {
         let restored: boolean | undefined
         const shot = await (async (): Promise<PluginShotResult | PluginShotNotShown> => {
@@ -195,6 +222,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
                   ...(colorScheme === undefined ? {} : { colorScheme }),
                   ...(ifShown ? { ifShown: true } : {}),
                   ...(acts ? { acts } : {}),
+                  captureId,
                   timeoutMs: RENDER_TIMEOUT_MS
                 }
               },
@@ -253,7 +281,7 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
           } finally {
             const ended = await requestPluginViewFromRenderer(
               contents,
-              { kind: 'end-capture' },
+              { kind: 'end-capture', captureId },
               OPEN_TIMEOUT_MS
             ).catch(() => null)
             restored = ended?.ok ? ended.restored : undefined

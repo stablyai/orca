@@ -146,7 +146,7 @@ vi.mock('../gitea/pull-request-creation', () => ({
 }))
 
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { RuntimeHostedReviewCommands } from '../runtime/runtime-hosted-review-commands'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'

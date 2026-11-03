@@ -59,11 +59,11 @@ vi.mock('../source-control/hosted-review', () => ({
   }))
 }))
 
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
 }))
 
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: listRepoWorktreeGraphMock
 }))
 

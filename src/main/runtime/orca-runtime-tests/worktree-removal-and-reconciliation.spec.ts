@@ -35,7 +35,7 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
-import { getLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 

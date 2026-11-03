@@ -5,7 +5,7 @@ import { agentMessageHeading } from '../../../shared/agent-session/agent-message
 import {
   agentSessionConversationView,
   type AgentSessionConversationView
-} from '../../../shared/agent-session-conversation-view'
+} from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

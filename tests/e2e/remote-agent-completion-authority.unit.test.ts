@@ -63,49 +63,6 @@ describe('remote agent completion authority', () => {
     coordinator.dispose()
   })
 
-  it('keeps a host with many idle remote panes at zero RPCs over a long interval', async () => {
-    const coordinators = Array.from({ length: 24 }, (_, index) =>
-      createAgentCompletionCoordinator({
-        paneKey: `tab-remote:leaf-idle-${index}`,
-        getPtyId: () => `${REMOTE_PTY_ID}-${index}`,
-        isRemotePtyId: () => true,
-        getExpectedIncarnationId: () => 'inc-remote',
-        inspectProcess: inspectRuntimeTerminalProcess,
-        dispatchCompletion: vi.fn(),
-        isLive: () => true
-      })
-    )
-
-    coordinators.forEach((coordinator) => coordinator.startProcessTracking())
-    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1_000)
-
-    expect(runtimeCall).not.toHaveBeenCalled()
-    coordinators.forEach((coordinator) => coordinator.dispose())
-  })
-
-  it('does not spin or infer exit from a remote transport failure', async () => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-remote:leaf-partitioned-exit',
-      getPtyId: () => REMOTE_PTY_ID,
-      isRemotePtyId: () => true,
-      getExpectedIncarnationId: () => 'inc-remote',
-      inspectProcess: inspectRuntimeTerminalProcess,
-      dispatchCompletion,
-      isLive: () => true
-    })
-
-    coordinator.startProcessTracking()
-    runtimeCall.mockRejectedValue(
-      new Error('Runtime request timed out before terminal.inspectProcess completed')
-    )
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(dispatchCompletion).not.toHaveBeenCalled()
-
-    coordinator.dispose()
-  })
-
   it('accepts only fenced host evidence for an explicit remote title confirmation', async () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

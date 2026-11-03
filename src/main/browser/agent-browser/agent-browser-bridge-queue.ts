@@ -8,6 +8,7 @@ import type {
 } from './agent-browser-bridge-types'
 import { runWithRemoteCliPageAdmission } from '../remote-cli-page-admission'
 import { runWithActionEffects } from './agent-browser-action-effects'
+import { getRequestedPageUrl, runExpectingPageUrl } from '../browser-expected-page-url'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from '../guest-direct-key-input'
 import { onBrowserJavaScriptDialogOpened } from '../browser-javascript-dialogs'
@@ -102,6 +103,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
     const caller = getActiveRpcCaller()
     // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
     const reportEffects = options.reportEffects === true && agentCommand.agent
+    const expectedUrl = getRequestedPageUrl()
 
     // A dialog blocks the page until it is answered. A command still waiting never runs; one
     // already running answers its caller now and keeps its turn until it ends, so nothing overtakes it.
@@ -144,13 +146,23 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
                   }
                 }
                 running = true
+                // The effects baseline can take seconds, so the check sits inside it, next to the action.
+                const guarded = (): Promise<T> =>
+                  expectedUrl === undefined
+                    ? execute(session, target)
+                    : runExpectingPageUrl(
+                        expectedUrl,
+                        target.browserPageId,
+                        () => this.livePageUrls(target),
+                        () => execute(session, target)
+                      )
                 const act = (): Promise<T> =>
                   reportEffects
                     ? runWithActionEffects(
                         this.actionEffectsHost(worktreeId, pageId, session),
-                        () => execute(session, target)
+                        guarded
                       )
-                    : execute(session, target)
+                    : guarded()
                 return origin.bridged
                   ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
                   : act()

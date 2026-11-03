@@ -232,6 +232,7 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
   from?: AgentMessageSource
   /** Projected creation fact, never a user turn or provider input. */
+  agentStartDispatchId?: string
   agentStart?: true
   /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
   agentHandoff?: true

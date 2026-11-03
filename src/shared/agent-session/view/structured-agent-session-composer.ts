@@ -14,7 +14,7 @@ import {
   structuredComposerFailure,
   type StructuredComposerFailureCode,
   type StructuredComposerFailureParams
-} from '../../structured-agent-session-composer-failure'
+} from '../failures/structured-agent-session-composer-failure'
 
 const MODEL_COMMAND: SlashCommandSuggestion = {
   name: 'model',
@@ -25,6 +25,8 @@ const EFFORT_COMMAND: SlashCommandSuggestion = {
   name: 'effort',
   description: 'Choose reasoning effort'
 }
+
+const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
 
 const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation context' },
@@ -45,8 +47,11 @@ export type StructuredAgentSessionComposerOptions = {
   /** What the running session reported for its `/` menu; undefined until read or on an older host. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** Text after `/compact` reaches the agent; without this it is refused, never dropped. */
+  compactInstructions?: boolean
   runConversationCommand?: (
-    command: AgentSessionConversationCommand
+    command: AgentSessionConversationCommand,
+    instructions?: string
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   setThreadGoalObjective?: (objective: string) => Promise<boolean>
@@ -75,19 +80,33 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!text.startsWith('/')) {
     return null
   }
-  const match = /^\/([^\s]+)(?:\s+(.*))?$/.exec(text.trimEnd())
-  return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
+  const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd())
+  if (!match) {
+    return null
+  }
+  const name = match[1]!.toLowerCase()
+  const argument = match[2]?.trim() ?? ''
+  // Other commands take one line; a longer message that starts with their name is for the agent.
+  return /[\n\r\u2028\u2029]/.test(argument) &&
+    !CONVERSATION_COMMANDS.some((entry) => entry.name === name)
+    ? null
+    : { name, argument }
 }
 
 /** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */
 export function structuredSlashCommands(
   commands: readonly AgentSessionConversationCommand[] = [],
-  agent?: AgentType | null
+  agent?: AgentType | null,
+  compactInstructions = false
 ): readonly SlashCommandSuggestion[] {
   const hostOwned = [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS.filter((entry) =>
       commands.includes(entry.name as AgentSessionConversationCommand)
+    ).map((entry) =>
+      entry.name === 'compact' && compactInstructions
+        ? { ...entry, argumentHint: COMPACT_INSTRUCTIONS_HINT }
+        : entry
     )
   ]
   // No reported catalog must not hide agent-handled commands such as Codex /goal.
@@ -103,9 +122,10 @@ export function structuredSlashCommands(
 export function structuredSessionSlashCommands(
   agent: AgentType,
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
-  reported: readonly AgentSessionSlashCommand[] | undefined
+  reported: readonly AgentSessionSlashCommand[] | undefined,
+  compactInstructions?: boolean
 ): readonly SlashCommandSuggestion[] {
-  const hostOwned = structuredSlashCommands(conversationCommands, agent)
+  const hostOwned = structuredSlashCommands(conversationCommands, agent, compactInstructions)
   if (reported === undefined) {
     return hostOwned
   }
@@ -225,7 +245,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     return { handled: false, accepted: false, error: null }
   }
   if (command.name === 'clear' || command.name === 'compact') {
-    if (command.argument) {
+    if (command.argument && !(command.name === 'compact' && controller.compactInstructions)) {
       return {
         handled: true,
         accepted: false,
@@ -242,7 +262,12 @@ export async function dispatchStructuredAgentSessionComposerCommand(
         ...structuredComposerFailure('commandUnsupportedByHost', { name: command.name })
       }
     }
-    return { handled: true, ...(await controller.runConversationCommand(command.name)) }
+    return {
+      handled: true,
+      ...(await (command.argument
+        ? controller.runConversationCommand(command.name, command.argument)
+        : controller.runConversationCommand(command.name)))
+    }
   }
   if (command.name !== 'model' && command.name !== 'effort') {
     return unavailable(command.name)

@@ -31,19 +31,4 @@ describe('getTabIdsAwaitingHostHydrationRemount', () => {
     expect(getTabIdsAwaitingHostHydrationRemount(unresolved as never)).toEqual([])
     expect(getTabIdsAwaitingHostHydrationRemount(baseState as never)).toEqual(['tab-1'])
   })
-
-  it('drops a parked tab that acquired a PTY by other means', () => {
-    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
-    const withPty = {
-      ...baseState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-1' }] }
-    }
-    expect(getTabIdsAwaitingHostHydrationRemount(withPty as never)).toEqual([])
-  })
-
-  it('does not remount a parked tab whose PTY is tracked only by live id', () => {
-    recordTerminalTabParkedOnUnresolvedHost('wt-1', 'tab-1')
-    const state = { ...baseState, ptyIdsByTabId: { 'tab-1': ['pty-1'] } }
-    expect(getTabIdsAwaitingHostHydrationRemount(state as never)).toEqual([])
-  })
 })

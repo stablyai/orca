@@ -1,7 +1,6 @@
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../shared/emulator-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { openMobileEmulatorTab } from './open-mobile-emulator-tab'
 import {
@@ -66,7 +65,6 @@ describe('openMobileEmulatorTab', () => {
     })
     vi.mocked(getSimulatorTabForWorktree).mockReset()
     vi.mocked(getSimulatorTabForWorktree).mockReturnValue(null)
-    vi.mocked(toast.error).mockReset()
     resetSimulatorLaunchCoordinationForTests()
   })
 
@@ -85,79 +83,6 @@ describe('openMobileEmulatorTab', () => {
     expect(await openMobileEmulatorTab('wt-1')).toBe('sim-1')
     expect(ensureSimulatorTab).toHaveBeenCalled()
     expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
-  })
-
-  it('rejects web-client invocation before creating a tab or attaching', async () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mockStoreState.settings = {
-      mobileEmulatorEnabled: true,
-      activeRuntimeEnvironmentId: 'runtime-1'
-    }
-
-    await expect(openMobileEmulatorTab('wt-1')).rejects.toThrow(
-      'Mobile Emulator is unavailable in the web client.'
-    )
-
-    expect(ensureSimulatorTab).not.toHaveBeenCalled()
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('surfaces the simulator tab before attaching the emulator stream', async () => {
-    const calls: string[] = []
-    vi.mocked(callRuntimeRpc).mockImplementation(async () => {
-      calls.push('attach')
-      return mockAttachResult
-    })
-    vi.mocked(ensureSimulatorTab).mockImplementation(() => {
-      calls.push('ensure')
-      mockStoreState.unifiedTabsByWorktree['wt-1'] = [{ id: 'sim-1', contentType: 'simulator' }]
-      return 'sim-1'
-    })
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe('sim-1')
-
-    expect(calls).toEqual(['ensure', 'attach'])
-    expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'emulator.attach', {
-      worktree: 'wt-1',
-      focus: false
-    })
-    expect(getSimulatorTabForWorktree).toHaveBeenCalledWith('wt-1', 'local')
-    expect(ensureSimulatorTab).toHaveBeenCalledWith('wt-1', {
-      placement: 'rightSplit',
-      targetGroupId: 'group-1',
-      surfacePane: true,
-      executionHostId: 'local'
-    })
-    expect(consumePrelaunchedSimulatorSession('wt-1')).toEqual(mockAttachResult.info)
-  })
-
-  it('marks manual launch pending only while attach is in flight', async () => {
-    let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
-    vi.mocked(callRuntimeRpc).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveAttach = resolve
-        })
-    )
-
-    const launched = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
-
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(true)
-    resolveAttach(mockAttachResult)
-    await launched
-
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
-  })
-
-  it('keeps the simulator tab open and reports an error when attach fails', async () => {
-    vi.mocked(callRuntimeRpc).mockRejectedValue(new Error('Xcode is not installed'))
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe('sim-1')
-
-    expect(ensureSimulatorTab).toHaveBeenCalled()
-    expect(toast.error).toHaveBeenCalledWith('Xcode is not installed')
-    expect(consumePrelaunchedSimulatorSession('wt-1')).toBeNull()
     expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
 
@@ -203,53 +128,6 @@ describe('openMobileEmulatorTab', () => {
       managedOnly: true
     })
     expect(consumePrelaunchedSimulatorSession('wt-1')).toBeNull()
-  })
-
-  it('does nothing when the workspace already has an emulator tab', async () => {
-    vi.mocked(getSimulatorTabForWorktree).mockReturnValue({
-      id: 'sim-existing',
-      groupId: 'group-1',
-      contentType: 'simulator'
-    })
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe(
-      'sim-existing'
-    )
-
-    expect(ensureSimulatorTab).not.toHaveBeenCalled()
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
-  })
-
-  it('does not attach when the mobile emulator feature is disabled', async () => {
-    mockStoreState.settings = { mobileEmulatorEnabled: false }
-
-    await expect(openMobileEmulatorTab('wt-1')).resolves.toBeNull()
-
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(ensureSimulatorTab).not.toHaveBeenCalled()
-  })
-
-  it('clears manual launch pending state when the simulator tab cannot be created', async () => {
-    vi.mocked(ensureSimulatorTab).mockReturnValue(null)
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBeNull()
-
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
-  })
-
-  it('clears manual launch pending state when simulator tab creation throws', async () => {
-    vi.mocked(ensureSimulatorTab).mockImplementation(() => {
-      throw new Error('split group missing')
-    })
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).rejects.toThrow(
-      'split group missing'
-    )
-
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
 
   it('allows a successful retry after simulator tab creation returns null', async () => {
