@@ -6,7 +6,7 @@ import {
   mintDocPreviewGrant,
   revokeAllDocPreviewGrants,
   type DocPreviewOwner
-} from '../browser/doc-preview-grant-registry'
+} from '../browser/document-preview/doc-preview-grant-registry'
 import { isNativeChatVisualGuestLocation } from './native-chat-visual-guest-location'
 
 const scratch = join(process.cwd(), 'profile', 'chat-scratch')

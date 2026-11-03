@@ -3,16 +3,16 @@ import { z } from 'zod'
 import { isChromeExtensionId } from '../../../shared/browser-extension-url'
 import type { BrowserExtensionActionResult } from '../../../shared/browser-extension-types'
 import type { BrowserExtensionToolbarState } from '../../../shared/browser-extension-toolbar-types'
-import { notifyBrowserExtensionActionsChanged } from '../../browser/extensions/browser-extension-action-registry'
-import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/browser-extension-session-loader'
+import { notifyBrowserExtensionActionsChanged } from '../../browser/extensions/actions/browser-extension-action-registry'
+import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
 import {
   activateBrowserExtensionAction,
   emitBrowserExtensionActionEvent,
   getBrowserExtensionPageIcon,
   getBrowserExtensionToolbarState
-} from '../../browser/extensions/browser-extension-toolbar'
-import { setBrowserExtensionPinned } from '../../browser/extensions/browser-extension-toolbar-pins'
+} from '../../browser/extensions/actions/browser-extension-toolbar'
+import { setBrowserExtensionPinned } from '../../browser/extensions/actions/browser-extension-toolbar-pins'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const pageArgs = z.object({ browserPageId: z.string().min(1) })

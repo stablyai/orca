@@ -18,7 +18,7 @@ const {
   clearPendingCookieImportMock: vi.fn()
 }))
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -61,7 +61,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { importCookiesFromBrowser } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 

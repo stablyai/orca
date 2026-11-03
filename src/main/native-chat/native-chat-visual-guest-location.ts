@@ -2,7 +2,7 @@ import { basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isNativeChatVisualFileName } from '../../shared/native-chat/native-chat-visual-directive'
 import { parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
-import { getDocPreviewGrant } from '../browser/doc-preview-grant-registry'
+import { getDocPreviewGrant } from '../browser/document-preview/doc-preview-grant-registry'
 
 /** Presentation identity only; existing file/grant policies still own every read. */
 export function isNativeChatVisualGuestLocation(url: string, scratchRoot: string): boolean {

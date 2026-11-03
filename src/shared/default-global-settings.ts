@@ -56,6 +56,7 @@ export function buildDefaultSettings(args: {
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
     editorFormatOnSave: false,
+    editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.

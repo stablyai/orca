@@ -37,7 +37,7 @@ import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environment
 import { setDesktopBrowserBridgeControl } from './desktop-browser-bridge-reconcile'
 import { markRemoteCliDrivenWorkspace } from '../../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
 import { persistedStore } from '../ssh/ssh-ipc-context'
-import { localSshBrowserTargetIdForSession } from '../../browser/local-ssh-browser-partitions'
+import { localSshBrowserTargetIdForSession } from '../../browser/routing/local-host-partitions/local-ssh-browser-partitions'
 
 const ATTACH_TIMEOUT_MS = 15_000
 const BRIDGE_CLIENT_ID = randomUUID()

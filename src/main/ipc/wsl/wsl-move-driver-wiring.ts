@@ -24,8 +24,8 @@ import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orc
 import type { Store } from '../../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'
 import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
-import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/browser-route-partition-binding-runtime'
-import { wslHostBrowserRouteStorage } from '../../browser/wsl-host-browser-route-partition'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
+import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import type {
   WslMoveDriverDeps,

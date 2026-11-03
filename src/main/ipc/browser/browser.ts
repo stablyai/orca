@@ -1,7 +1,7 @@
 import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../../browser/browser-manager'
 import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
-import { isWorkspaceDocPageId } from '../../browser/doc-preview-guest-policy'
+import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   isLiveBrowserWebContentsId,
@@ -18,14 +18,14 @@ import type { BrowserCertificateProceedResult } from '../../../shared/browser-wo
 import {
   cancelBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest
-} from '../../browser/browser-webauthn-account-picker'
+} from '../../browser/webauthn/browser-webauthn-account-picker'
 import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-webauthn-account'
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
 } from '../../../shared/browser-page-prompt'
-import { respondToBrowserPagePrompt } from '../../browser/browser-page-prompts'
-import { recordActiveBrowserPage } from '../../browser/extensions/browser-extension-tab-model'
+import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
+import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/api/tabs-lifecycle'
 import { registerBrowserExtensionHandlers } from './browser-extensions'
 import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
@@ -126,14 +126,14 @@ export function registerBrowserHandlers(): void {
       }
       const { getSshConnectionStore } = await import('../ssh/ssh')
       const { requireLocalSshBrowserRouteTarget } =
-        await import('../../browser/local-ssh-browser-route')
+        await import('../../browser/routing/local-host-partitions/local-ssh-browser-route')
       requireLocalSshBrowserRouteTarget(
         getSshConnectionStore()?.listTargets(),
         args.targetId,
         args.expectedSshTargetGeneration
       )
       const { prepareLocalSshBrowserPartition } =
-        await import('../../browser/local-ssh-browser-partitions')
+        await import('../../browser/routing/local-host-partitions/local-ssh-browser-partitions')
       return prepareLocalSshBrowserPartition({
         targetId: args.targetId,
         browserProfileId:
