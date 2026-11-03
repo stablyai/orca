@@ -9,9 +9,11 @@ describe('RuntimePtyForegroundAgent.identifyUnowned', () => {
 
   function setup() {
     const reads: ((name: string) => void)[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: identifyForeground only calls getForegroundProcess
     const controller = {
       getForegroundProcess: () => new Promise<string>((resolve) => reads.push(resolve))
     } as unknown as RuntimePtyController
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: identifyUnowned reads only connected and the agent fields
     const pty = { connected: true } as RuntimePtyWorktreeRecord
     const agent = new RuntimePtyForegroundAgent({
       getController: () => controller,

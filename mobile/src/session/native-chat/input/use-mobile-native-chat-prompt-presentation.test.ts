@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useMobileNativeChatPromptPresentation } from './use-mobile-native-chat-prompt-presentation'
 import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
@@ -12,7 +12,7 @@ const permission = (holdsComposer?: true): MobileChatPermission => ({
 })
 
 describe('useMobileNativeChatPromptPresentation', () => {
-  let renderer: ReactTestRenderer | null = null
+  let renderer: ReturnType<typeof create> | null = null
   let state: ReturnType<typeof useMobileNativeChatPromptPresentation> | null = null
 
   beforeEach(() => mobileNativeChatPromptDismissals.clearForTests())
