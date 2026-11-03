@@ -2,14 +2,7 @@ import type React from 'react'
 import { useCallback, useRef, useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '../ui/button'
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator
-} from '../ui/command'
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -52,8 +45,6 @@ type SettingsSearchableSelectProps = {
   actions?: readonly SettingsSearchableSelectAction[]
 }
 
-const ACTION_VALUE_PREFIX = '__settings-searchable-select-action:'
-
 /** A searchable settings dropdown that matches the New Worktree dialog pickers. */
 export function SettingsSearchableSelect({
   ariaLabel,
@@ -68,21 +59,64 @@ export function SettingsSearchableSelect({
 }: SettingsSearchableSelectProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [commandSelection, setCommandSelection] = useState<{
+    value: string
+    selectedValue: string
+    query: string
+  }>(() => ({ value, selectedValue: value, query: '' }))
   const inputRef = useRef<HTMLInputElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const selected = groups.flatMap((group) => group.options).find((option) => option.value === value)
   const visibleGroups = open ? filterSearchableSelectGroups(groups, query) : []
+  const enabledOptions = visibleGroups
+    .flatMap((group) => group.options)
+    .filter((option) => !option.disabled)
+  const selectedValueChanged = commandSelection.selectedValue !== value
+  const defaultCommandValue =
+    (!query.trim() || selectedValueChanged
+      ? enabledOptions.find((option) => option.value === value)?.value
+      : undefined) ??
+    enabledOptions[0]?.value ??
+    ''
+  const commandValue =
+    commandSelection.query === query &&
+    commandSelection.selectedValue === value &&
+    enabledOptions.some((option) => option.value === commandSelection.value)
+      ? commandSelection.value
+      : defaultCommandValue
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       setOpen(next)
       setQuery('')
+      setCommandSelection({ value, selectedValue: value, query: '' })
       onOpenChange?.(next)
     },
-    [onOpenChange]
+    [onOpenChange, value]
   )
 
   const close = (): void => handleOpenChange(false)
+
+  const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (
+      open ||
+      event.defaultPrevented ||
+      event.nativeEvent.isComposing ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey
+    ) {
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      handleOpenChange(true)
+    } else if (event.key.length === 1 && /\S/.test(event.key)) {
+      event.preventDefault()
+      handleOpenChange(true)
+      setQuery(event.key)
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -94,6 +128,7 @@ export function SettingsSearchableSelect({
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
+          onKeyDown={handleTriggerKeyDown}
           className="min-w-[220px] justify-between"
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
@@ -105,7 +140,7 @@ export function SettingsSearchableSelect({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[max(var(--radix-popover-trigger-width),18rem)]"
+        className="flex max-h-(--radix-popover-content-available-height) w-[max(var(--radix-popover-trigger-width),18rem)] flex-col"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           requestAnimationFrame(() => {
@@ -117,16 +152,24 @@ export function SettingsSearchableSelect({
           })
         }}
       >
-        <Command shouldFilter={false} defaultValue={value} label={ariaLabel}>
+        <Command
+          shouldFilter={false}
+          value={commandValue}
+          onValueChange={(next) =>
+            setCommandSelection({ value: next, selectedValue: value, query })
+          }
+          className="min-h-0 flex-1"
+          label={ariaLabel}
+        >
           <CommandInput
             ref={inputRef}
             value={query}
             onValueChange={setQuery}
+            wrapperClassName="shrink-0"
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
           />
-          <CommandList ref={listRef}>
-            {/* Why not CommandEmpty: footer actions are items, so cmdk never sees an empty list. */}
+          <CommandList ref={listRef} className="min-h-0 flex-1">
             {visibleGroups.length === 0 && !status ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 {emptyText ??
@@ -169,30 +212,30 @@ export function SettingsSearchableSelect({
               </CommandGroup>
             ))}
             {status}
-            {actions && actions.length > 0 ? (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  {actions.map((action) => (
-                    <CommandItem
-                      key={action.key}
-                      value={`${ACTION_VALUE_PREFIX}${action.key}`}
-                      onSelect={() => {
-                        close()
-                        action.onSelect()
-                      }}
-                    >
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        {action.icon}
-                        {action.label}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </>
-            ) : null}
           </CommandList>
         </Command>
+        {actions && actions.length > 0 ? (
+          <div className="shrink-0 border-t border-border">
+            {actions.map((action) => (
+              <Button
+                key={action.key}
+                type="button"
+                variant="ghost"
+                size="menu"
+                className="w-full justify-start"
+                onClick={() => {
+                  close()
+                  action.onSelect()
+                }}
+              >
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  {action.icon}
+                  {action.label}
+                </span>
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   )
