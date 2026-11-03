@@ -1541,17 +1541,19 @@
       "coveredProviders": [],
       "coverageNotes": "Actual GeneralPane, update/version and remote-status components with mocked store/API; actual autosave form. Windows runtime on/off simulated. No physical updater, paired host, settings write or native input.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/GeneralPane.tsx"
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/general/GeneralPane.tsx"
       ],
       "invariant": "A matching General settings section retains its owner and state as preceding search results disappear; an actually removed section releases its owner and reloads when shown again.",
       "oracle": "Across 14 matching searches the Updates section keeps the same DOM node and the version-read and remote-refresh counts do not grow, instead of six each. Store-published remote update state still reaches the retained section. Explicit refresh and genuine hide/reopen still read; drafts yield to externally changed saved settings; a removed owner cannot publish its late version.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
       ],
-      "testFiles": ["src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx"],
+      "testFiles": [
+        "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx"
+      ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
+          "file": "src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
           "assertions": [
             "keeps showing store-published remote update state without a remount",
             "keeps explicit remote refresh and true hide/reopen reads",
@@ -1566,6 +1568,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/GeneralPane.section-lifetime.test.tsx",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/general/GeneralPane.section-lifetime.test.tsx",
           "result": "passed",
           "durationSeconds": 1.89,
           "summary": "7 tests/1 suite pass after the shared SettingsSectionStack adoption. Read-count oracles restated as node identity plus non-growing counts; original main fails both retained-section cases, the draft, the release-picker reveal and the late-version publish."
@@ -1693,20 +1696,20 @@
       "coveredProviders": [],
       "coverageNotes": "Actual TerminalPane, ManageSessionsSection, health listener and scrollback form with mocked store/provider and display/action boundaries. Unix/Windows and Mac-client/Windows-host flags simulated; no physical provider, process-stop or native input coverage.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/TerminalPane.tsx"
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/settings/terminal/TerminalPane.tsx"
       ],
       "invariant": "A matching settings section retains its state when preceding sections are filtered away; a section removed from search releases its owner and refreshes when shown again. A retained section still refreshes when another surface invalidates the session inventory. Diagnostic inventory never becomes authority for process death.",
       "oracle": "Across 15 matched search edits the matched section keeps the same DOM node and the inventory/health read counts do not grow, instead of six reads each. A foreign inventory invalidation still reads once on the retained section and not after unmount. A draft and pending target survive matched search; actual hide/reopen reloads, explicit Refresh still reads, and hidden/unmounted health listeners do not fire.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx"
       ],
       "testFiles": [
-        "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
-        "src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx"
+        "src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx",
+        "src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx",
+          "file": "src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx",
           "assertions": [
             "refreshes a retained section when another surface invalidates the inventory",
             "refreshes explicitly, reloads genuinely hidden sections, and removes focus listeners",
@@ -1721,6 +1724,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/TerminalTccAttributionNotice.test.tsx",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/settings/terminal/TerminalPane.section-lifetime.test.tsx src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx",
           "result": "passed",
           "durationSeconds": 1.48,
           "summary": "12 tests/2 suites pass after the shared SettingsSectionStack adoption and the inventory-invalidation subscription. Read-count oracles restated as node identity plus non-growing read counts; original main fails all three simulated platform cases, the draft, the pending target and the foreign-invalidation refresh."
@@ -10641,7 +10645,7 @@
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
       "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser-session-host-selection.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser-session-host-selection.test.ts src/renderer/src/components/settings/browser/profiles/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list/listing/host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
@@ -10655,7 +10659,7 @@
         "src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "src/renderer/src/store/slices/settings.test.ts",
         "src/renderer/src/store/slices/browser-session-host-selection.test.ts",
-        "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
+        "src/renderer/src/components/settings/browser/profiles/browser-session-host-selection.test.ts",
         "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
         "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
         "src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts",
@@ -10711,7 +10715,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/settings/browser-session-host-selection.test.ts",
+          "file": "src/renderer/src/components/settings/browser/profiles/browser-session-host-selection.test.ts",
           "assertions": [
             "a removed transient server override falls back to an available host instead of leaving browser settings on an invalid option"
           ]
@@ -10796,7 +10800,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser-session-host-selection.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser-session-host-selection.test.ts src/renderer/src/components/settings/browser/profiles/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
           "result": "passed",
           "durationSeconds": 6.55,
           "summary": "Ten files and 282 tests passed, including the composed Local -> Windows 2 navigation -> local reveal -> restart regression, dedicated-only preference persistence, removed transient-host fallback, multi-client browser routing, late host-operation suppression, and web pairing/preference separation."
@@ -20879,7 +20883,7 @@
       "invariant": "A packaged macOS daemon runs from the verified signed helper copy for its build, which the updater never touches, and never beside a job that may own the endpoint; the fork fallback still fits the startup gate. A copy is deleted only when lsof proves it unused.",
       "oracle": "Deterministic launch, fallback-deadline, per-build copy, retirement and status tests, plus the signed launcher validation recorded in #25848.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx"
       ],
       "testFiles": [
         "src/main/daemon/macos-daemon-bundle.test.ts",
@@ -20889,7 +20893,7 @@
         "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
         "src/main/daemon/daemon-full-disk-access-status.test.ts",
         "config/scripts/macos-folder-usage-descriptions.test.mjs",
-        "src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx"
+        "src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx"
       ],
       "assertionRefs": [
         {
@@ -20921,7 +20925,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx",
           "result": "passed",
           "durationSeconds": 2.38,
           "summary": "All 82 focused launch, fallback-deadline, per-build copy, retirement, status and packaging tests passed."

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { ProjectUpdateArgs } from '../../../../shared/project-types'
 import type { WslDriveProjectPreview } from '../../../../shared/wsl-drive-project-types'
-import { SettingsRow } from '../settings/SettingsFormControls'
+import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
 import { wslDriveProjectBlockerMessage } from './wsl-drive-project-copy'
 
 type Step =

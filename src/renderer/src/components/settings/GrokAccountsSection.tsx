@@ -7,7 +7,7 @@ import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
