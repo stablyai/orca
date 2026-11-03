@@ -710,9 +710,6 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
 )
 
 afterAll(() => {
-  if (process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF) {
-    return
-  }
   const errors: unknown[] = []
   for (const check of corpusChecks) {
     try {

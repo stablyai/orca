@@ -272,68 +272,67 @@ export function useMobileTasksHostedCommentReviewActions<
     [claimPublication, client, detailPayload, itemReviewersDraft, tryBeginMutation]
   )
 
-  const refreshGitHubChecks = useCallback(
-    async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || item.source.type !== 'pr') {
+  const refreshGitHubChecks = async (
+    item: Extract<TaskItem, { provider: 'github' }>
+  ): Promise<void> => {
+    if (!client || item.source.type !== 'pr') {
+      return
+    }
+    const finish = tryBeginMutation()
+    if (!finish) {
+      return
+    }
+    setError('')
+    const isCurrent = claimPublication(item, detailPayload)
+    try {
+      const reply = await githubPullRequestChecksRead.request(
+        client,
+        {
+          repo: `id:${item.source.repoId}`,
+          prNumber: item.source.number,
+          prRepo: requireGitHubTaskTarget(item.source).repository,
+          headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
+          noCache: true
+        },
+        { timeoutMs: 30_000 }
+      )
+      const checks = githubPullRequestChecksRead.interpret(reply)
+      if (!isCurrent()) {
         return
       }
-      const finish = tryBeginMutation()
-      if (!finish) {
-        return
-      }
-      setError('')
-      const isCurrent = claimPublication(item)
-      try {
-        const reply = await githubPullRequestChecksRead.request(
-          client,
-          {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
-            prRepo: requireGitHubTaskTarget(item.source).repository,
-            headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
-            noCache: true
-          },
-          { timeoutMs: 30_000 }
-        )
-        const checks = githubPullRequestChecksRead.interpret(reply)
-        if (!isCurrent()) {
-          return
-        }
-        const checksSummary = buildGitHubCheckSummary(checks)
-        setDetailPayload((current) =>
-          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
-            ? { ...current, checks }
-            : current
-        )
-        setActionItem((current) =>
-          sameGitHubTask(current, item)
+      const checksSummary = buildGitHubCheckSummary(checks)
+      setDetailPayload((current) =>
+        current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+          ? { ...current, checks }
+          : current
+      )
+      setActionItem((current) =>
+        sameGitHubTask(current, item)
+          ? {
+              ...current,
+              source: { ...current.source, checksSummary }
+            }
+          : current
+      )
+      setItems((current) =>
+        current.map((candidate) =>
+          sameGitHubTask(candidate, item)
             ? {
-                ...current,
-                source: { ...current.source, checksSummary }
+                ...candidate,
+                source: { ...candidate.source, checksSummary }
               }
-            : current
+            : candidate
         )
-        setItems((current) =>
-          current.map((candidate) =>
-            sameGitHubTask(candidate, item)
-              ? {
-                  ...candidate,
-                  source: { ...candidate.source, checksSummary }
-                }
-              : candidate
-          )
-        )
-      } catch (err) {
-        if (!isCurrent()) {
-          return
-        }
-        setError(err instanceof Error ? err.message : 'Failed to refresh checks')
-      } finally {
-        finish()
+      )
+    } catch (err) {
+      if (!isCurrent()) {
+        return
       }
-    },
-    [claimPublication, client, detailPayload, tryBeginMutation]
-  )
+      setError(err instanceof Error ? err.message : 'Failed to refresh checks')
+    } finally {
+      finish()
+    }
+  }
   return Object.assign(model, {
     addHostedItemComment,
     copyTaskLink,
