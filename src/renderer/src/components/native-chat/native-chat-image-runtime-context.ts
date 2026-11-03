@@ -173,6 +173,13 @@ export function resolveNativeChatImageRuntimeContextForOwner(
     worktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'
   }
+  if (route.runtimeEnvironmentId) {
+    const environment = state.runtimeEnvironments.find(
+      (entry) => entry.id === route.runtimeEnvironmentId
+    )
+    context.expectedEnvironmentPairingRevision =
+      environment?.pairingRevision ?? environment?.createdAt
+  }
   if (host.kind === 'ssh') {
     try {
       const expectation = captureDirectSshMutationExpectation(

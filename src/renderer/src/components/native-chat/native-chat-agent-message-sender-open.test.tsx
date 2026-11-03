@@ -182,7 +182,7 @@ it('asks the host, with no dot, for a terminal sender whose terminal exited or w
   await open(terminal())
   expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
     LOCAL,
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     { address: 'term_0' },
     { timeoutMs: 5000 }
   )
@@ -217,7 +217,7 @@ it('reopens a closed chat sender through the host lineage lookup', async () => {
   await open(chat)
   expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
     LOCAL,
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     { address: chat.party.address },
     { timeoutMs: 5000 }
   )
@@ -233,7 +233,7 @@ it('keeps an older host on its own lookup', async () => {
   await open(terminal('term_old'))
   expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
     LOCAL,
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     { address: 'term_old' },
     { timeoutMs: 5000 }
   )
@@ -299,15 +299,20 @@ describe('an older paired host, which publishes no sender locations', () => {
     // A host before the lookup falls back to the card's own handle, under the same rule.
     live('codex', 'term_gone')
     useAppStore.setState({ agentStatusByPaneKey: {} })
-    mocks.callRuntimeRpc.mockRejectedValueOnce(
-      new RuntimeRpcCallError({
-        id: 'rpc',
-        ok: false,
-        error: { code: 'method_not_found', message: 'method_not_found' },
-        _meta: { runtimeId: 'old' }
-      })
-    )
+    const unsupported = new RuntimeRpcCallError({
+      id: 'rpc',
+      ok: false,
+      error: { code: 'method_not_found', message: 'method_not_found' },
+      _meta: { runtimeId: 'old' }
+    })
+    mocks.callRuntimeRpc.mockRejectedValueOnce(unsupported).mockRejectedValueOnce(unsupported)
     await openOld(terminal('term_gone'))
+    expect(mocks.callRuntimeRpc).toHaveBeenLastCalledWith(
+      OLD,
+      'orchestration.partyLocation',
+      { address: 'term_gone' },
+      { timeoutMs: 5000 }
+    )
     expect(mocks.focusRenderer).toHaveBeenCalledWith('term_gone', 'old-host')
   })
 })

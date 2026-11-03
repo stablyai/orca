@@ -137,7 +137,7 @@ it.each([
     }
     expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
       host,
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_worker', messageIds: ['m1'] },
       { timeoutMs: 5000 }
     )

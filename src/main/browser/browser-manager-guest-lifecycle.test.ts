@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const browserMocks = vi.hoisted(() => ({
@@ -269,6 +270,53 @@ describe('browserManager', () => {
     browserManager.unregisterGuest('browser-page-1')
     expect(cancelGrabOp).toHaveBeenCalledWith('browser-page-1', 'evicted')
     cancelGrabOp.mockRestore()
+  })
+
+  it("publishes an offscreen page's top-level address changes, not its subframes'", () => {
+    const stateChanged = vi.fn()
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+    let address = 'https://example.com/'
+    const guest = Object.assign(new EventEmitter(), {
+      id: 515,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      isCurrentlyAudible: vi.fn(() => false),
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      getURL: vi.fn(() => address)
+    })
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'offscreen-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    const navigateInPage = (url: string): void => {
+      address = url
+      guest.emit('did-navigate-in-page', {}, url, true, 1, 1)
+    }
+
+    guest.emit('did-navigate-in-page', {}, 'https://frame.example/#x', false, 1, 2)
+    expect(stateChanged).not.toHaveBeenCalled()
+
+    navigateInPage('https://example.com/#top')
+    expect(stateChanged).toHaveBeenCalledTimes(1)
+    expect(stateChanged).toHaveBeenLastCalledWith('remote-worktree')
+
+    // replaceState without a new address.
+    navigateInPage('https://example.com/#top')
+    expect(stateChanged).toHaveBeenCalledTimes(1)
+
+    address = 'https://example.com/next'
+    guest.emit('did-navigate', {}, address, 200, 'OK')
+    expect(stateChanged).toHaveBeenCalledTimes(2)
+
+    // A full navigation also counts as the address to compare with.
+    navigateInPage('https://example.com/next')
+    expect(stateChanged).toHaveBeenCalledTimes(2)
+
+    browserManager.unregisterGuest('offscreen-page')
+    expect(guest.listenerCount('did-navigate-in-page')).toBe(0)
   })
 
   it('blocks non-web guest navigations after attach', () => {

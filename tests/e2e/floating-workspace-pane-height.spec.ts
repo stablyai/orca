@@ -186,12 +186,12 @@ test('floating tabs keep their preferred width and share constrained space befor
   await openFloatingPanel(orcaPage)
   const panel = orcaPage.locator(OPEN_PANEL_SELECTOR).first()
   await panel.evaluate((element) => {
-    element.style.maxWidth = '720px'
+    element.style.maxWidth = '660px'
   })
   const firstSlot = panel.locator(`[data-tab-strip-slot="${first}"]`)
   const width = (): Promise<number> =>
     firstSlot.evaluate((element) => element.getBoundingClientRect().width)
-  await expect.poll(width).toBeCloseTo(330, 0)
+  await expect.poll(width).toBeCloseTo(300, 0)
   const singleWidth = await width()
   const strip = panel.locator('.terminal-tab-strip').first()
 
@@ -201,12 +201,12 @@ test('floating tabs keep their preferred width and share constrained space befor
   expect(await width()).toBeLessThan(singleWidth)
   const twoTabWidth = await width()
   await panel.evaluate((element) => {
-    element.style.maxWidth = '600px'
+    element.style.maxWidth = '540px'
   })
   await expect.poll(width).toBeLessThan(twoTabWidth)
   expect(await width()).toBeCloseTo((await strip.evaluate((el) => el.clientWidth)) / 2, 0)
   await panel.evaluate((element) => {
-    element.style.maxWidth = '720px'
+    element.style.maxWidth = '660px'
   })
   await expect.poll(width).toBeCloseTo(twoTabWidth, 0)
 
