@@ -3,8 +3,20 @@ import { win32 } from 'node:path'
 
 const UNINSTALLER_NAME = 'Uninstall Orca.exe'
 const INSTALL_DIRECTORIES = new Set(['locales', 'resources'])
-const INSTALL_EXECUTABLES = new Set(['orca.exe', UNINSTALLER_NAME.toLowerCase()])
-const INSTALL_RUNTIME_FILE = /\.(?:dll|pak|bin|dat|json|html|txt|log)$/i
+// Exact names for Electron's non-binary top-level files: a broad .txt/.json/.html/.log match would
+// let user documents pass, and the next RMDir /r of InstallLocation would delete them.
+const INSTALL_FILES = new Set([
+  'orca.exe',
+  UNINSTALLER_NAME.toLowerCase(),
+  'icudtl.dat',
+  'license.electron.txt',
+  'licenses.chromium.html',
+  'snapshot_blob.bin',
+  'v8_context_snapshot.bin',
+  'vk_swiftshader_icd.json'
+])
+// Electron upgrades add/rename runtime libraries and packs; only these binary types are matched by extension.
+const INSTALL_RUNTIME_BINARY = /\.(?:dll|pak)$/i
 
 // The pinned folder becomes InstallLocation, which later updates and uninstalls wipe with RMDir /r;
 // pin only a folder holding nothing but an installed Orca layout so no unrelated files are ever deleted.
@@ -21,8 +33,7 @@ function isDedicatedOrcaInstallDirectory(directory: string): boolean {
       entry.isDirectory()
         ? INSTALL_DIRECTORIES.has(entry.name.toLowerCase())
         : entry.isFile() &&
-          (INSTALL_EXECUTABLES.has(entry.name.toLowerCase()) ||
-            INSTALL_RUNTIME_FILE.test(entry.name))
+          (INSTALL_FILES.has(entry.name.toLowerCase()) || INSTALL_RUNTIME_BINARY.test(entry.name))
     )
   } catch {
     return false

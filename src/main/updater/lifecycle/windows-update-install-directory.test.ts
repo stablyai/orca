@@ -9,7 +9,11 @@ function runNsisInstall(installDirectory: string | undefined): string[] {
   const spawnLog = vi.fn((_cmd: string, _args: string[]) => Promise.resolve(true))
   // Exercise the real updater so an upstream rename of installDirectory fails here.
   NsisUpdater.prototype['doInstall'].call(
-    { installDirectory, installerPath: 'C:\\Temp\\orca-windows-setup.exe', spawnLog },
+    {
+      installDirectory,
+      installerPath: 'C:\\Temp\\orca-windows-setup.exe',
+      spawnLog
+    },
     { isSilent: true, isForceRunAfter: true, isAdminRightsRequired: false }
   )
   return spawnLog.mock.calls[0]?.[1] ?? []
@@ -74,7 +78,12 @@ describe('resolveWindowsUpdateInstallDirectory', () => {
   it.each<[string, string[], string[]]>([
     ['an unpacked copy without the uninstaller', ['Orca.exe', 'ffmpeg.dll'], []],
     ['a folder shared with other programs', INSTALLED_LAYOUT, ['OtherApp']],
-    ['a folder holding user files', [...INSTALLED_LAYOUT, 'notes.docx'], []]
+    ['a folder holding user files', [...INSTALLED_LAYOUT, 'notes.docx'], []],
+    ['a folder holding a user text file', [...INSTALLED_LAYOUT, 'notes.txt'], []],
+    ['a folder holding a user JSON file', [...INSTALLED_LAYOUT, 'settings.json'], []],
+    ['a folder holding a user log file', [...INSTALLED_LAYOUT, 'build.log'], []],
+    ['a folder holding a user HTML file', [...INSTALLED_LAYOUT, 'report.html'], []],
+    ['a folder holding a user data file', [...INSTALLED_LAYOUT, 'save.bin'], []]
   ])('keeps the default install location for %s', (_label, files, directories) => {
     const folder = makeFolder(files, directories)
     const installDirectory = resolveWindowsUpdateInstallDirectory('win32', join(folder, 'Orca.exe'))
