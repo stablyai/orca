@@ -15,15 +15,10 @@ async function openFixture(page: Page, name: string) {
   return bounds
 }
 
-test('a saved opt-in keeps the suspended native chat card hidden and the composer visible', async ({
-  page
-}) => {
-  await page.goto(
-    '/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:tenWorkersShortChatExpanded'
-  )
-  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
-  await expect(page.getByRole('complementary', { name: 'Orchestration' })).toHaveCount(0)
-  await expect(page.getByTestId('composer')).toBeVisible()
+test('in a short native chat the card stops above the composer and scrolls', async ({ page }) => {
+  const card = await openFixture(page, 'tenWorkersShortChatExpanded')
+  const composer = await page.getByTestId('composer').boundingBox()
+  expect(card.y + card.height).toBeLessThanOrEqual(composer!.y)
 })
 
 test('in a short terminal the card keeps the bottom quarter clear and scrolls', async ({
