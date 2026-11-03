@@ -31,6 +31,7 @@ import {
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
+import { initializeHomeWorkspace } from './initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -46,6 +47,7 @@ import type {
 } from './profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
+  initializeHomeWorkspace?: boolean
   serializedState?: string
   collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
   /** Consume the validated startup read without caching a second copy. */
@@ -94,16 +96,21 @@ export class Store {
     this.runtime.flushOrThrow = () => this.flushOrThrow()
     this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
     let loaded: PersistedState
+    let profileDocumentExisted = true
     if (options.profileStateAuthority !== undefined) {
       if (initial !== undefined) {
+        profileDocumentExisted =
+          initial.takeParsedState !== undefined
+            ? parsedState !== undefined
+            : initial.serializedState !== undefined
         loaded =
           initial.takeParsedState !== undefined
             ? this.domains.loader.loadParsedFromAuthority(parsedState)
             : this.domains.loader.loadFromAuthority(initial.serializedState)
       } else {
-        loaded = this.domains.loader.loadFromAuthority(
-          options.profileStateAuthority.readSerializedState()
-        )
+        const serializedState = options.profileStateAuthority.readSerializedState()
+        profileDocumentExisted = serializedState !== undefined
+        loaded = this.domains.loader.loadFromAuthority(serializedState)
       }
     } else if (options.serializedState !== undefined) {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
@@ -123,6 +130,10 @@ export class Store {
       this.runtime.dataFile,
       this.state.ui?.activeView
     )
+    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
+    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
+      initializeHomeWorkspace(this)
+    }
     const adaptedProjectGroups = this.domains.adaptation.adaptFlatFolderScanProjectGroups()
     this.domains.adaptation.hydrateFolderWorkspaceDiffComments()
     // Removal paths require registration; load must sweep residue whose owning repo is already gone.
