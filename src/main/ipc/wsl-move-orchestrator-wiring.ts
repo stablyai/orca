@@ -10,7 +10,7 @@ import {
   type WslMoveOrchestratorRecord,
   type WslMoveOrchestratorUserAction
 } from '../../shared/wsl-move/wsl-move-orchestrator-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { listWslMoveCutoverChain } from '../persistence/moving-wsl-projects/wsl-move-cutover-journal'
 import {
   moveProjectsToWslHost,
@@ -23,8 +23,8 @@ import type {
   WslMoveHostReadiness
 } from '../persistence/moving-wsl-projects/wsl-move-orchestrator-ports'
 import { prepareWslMoveHost } from '../persistence/moving-wsl-projects/wsl-move-host-readiness'
-import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { readConfirmedRunningWslDistros } from '../wsl/discovery/wsl-background-distro-gate'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 import {
   readWslMoveOrchestratorRecords,
   writeWslMoveOrchestratorRecords
@@ -35,12 +35,16 @@ import {
   wslMoveOrchestratorEventProps
 } from '../telemetry/wsl-move-orchestrator-telemetry'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
-import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
-import { wslHostsAcceptNewWork, wslHostsGateOpen, wslHostsOptedIn } from '../wsl/wsl-host-gate'
-import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
-import { runAsWslUserAct } from '../wsl/wsl-unc-access-gate'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
-import { onWslHostUserAction } from '../wsl/wsl-host-user-actions'
+import { readWslDistroRegistrations } from '../wsl/discovery/wsl-distro-registry-id'
+import {
+  wslHostsAcceptNewWork,
+  wslHostsGateOpen,
+  wslHostsOptedIn
+} from '../wsl/host-lifecycle/wsl-host-gate'
+import { wslHostAddRefusal } from '../wsl/host-lifecycle/wsl-host-add-admission'
+import { runAsWslUserAct } from '../wsl/filesystem/wsl-unc-access-gate'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
+import { onWslHostUserAction } from '../wsl/host-lifecycle/wsl-host-user-actions'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from './ui'
 import { onWslMoveReleasedByUser, releaseWslMoveChainHere } from './wsl-move-release-here'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'

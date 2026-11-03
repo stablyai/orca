@@ -8,7 +8,7 @@ import {
   hostTestAttachParams,
   hostTestOperationId
 } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session-record-store-test-harness'
+import { seedTestAgentSessionStoreFromNewerBuild } from '../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
 import { DeviceRegistry } from '../../device-registry'
 import WebSocket from 'ws'

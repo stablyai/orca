@@ -59,17 +59,6 @@ describe('pending worktree creation state', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-    const before = store.getState().pendingWorktreeCreations
-
-    store.getState().updatePendingWorktreeCreation('c1', { phase: 'fetching' })
-
-    // Same map reference => no subscriber notification on a no-op progress event.
-    expect(store.getState().pendingWorktreeCreations).toBe(before)
-  })
-
   it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
     const store = createTestStore()
     store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))

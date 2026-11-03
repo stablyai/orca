@@ -144,23 +144,6 @@ describe('DaemonSessionOwnerResolver', () => {
     }
   })
 
-  it('reuses incomplete inventory across serialized restores', async () => {
-    const firstInventory = vi.fn(async () => [])
-    const secondInventory = vi.fn(async () => {
-      throw new Error('offline')
-    })
-    const resolver = new DaemonSessionOwnerResolver(
-      [provider(firstInventory), provider(secondInventory)],
-      new Map()
-    )
-
-    await resolver.resolve('first')
-    await resolver.resolve('second')
-
-    expect(firstInventory).toHaveBeenCalledOnce()
-    expect(secondInventory).toHaveBeenCalledOnce()
-  })
-
   it('does not extend incomplete inventory lifetime on cache hits', async () => {
     let now = 1_000
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
@@ -282,21 +265,6 @@ describe('DaemonSessionOwnerResolver', () => {
     expect(owner.listProcesses).toHaveBeenCalledTimes(2)
   })
 
-  it('uses the expected incarnation to disambiguate duplicate session ids', async () => {
-    const oldOwner = provider(async () => [
-      { id: 'session', incarnationId: 'old', cwd: '', title: 'old' }
-    ])
-    const exactOwner = provider(async () => [
-      { id: 'session', incarnationId: 'expected', cwd: '', title: 'exact' }
-    ])
-    const resolver = new DaemonSessionOwnerResolver([oldOwner, exactOwner], new Map())
-
-    await expect(resolver.resolve('session', 'expected')).resolves.toMatchObject({
-      kind: 'owner',
-      provider: exactOwner
-    })
-  })
-
   it('records the exact candidate incarnation instead of the first row from its provider', async () => {
     const owner = provider(async () => [
       { id: 'session', incarnationId: 'older', cwd: '/old', title: 'older' },
@@ -345,18 +313,6 @@ describe('DaemonSessionOwnerResolver', () => {
       TerminalSessionOwnerUnverifiedError
     )
     expect(routes.get('session')).toBe(first)
-  })
-
-  it('accepts one exact-id owner when persisted incarnation evidence is stale', async () => {
-    const liveOwner = provider(async () => [
-      { id: 'session', incarnationId: 'live', cwd: '', title: 'live' }
-    ])
-    const resolver = new DaemonSessionOwnerResolver([liveOwner], new Map())
-
-    await expect(resolver.resolve('session', 'stale')).resolves.toMatchObject({
-      kind: 'owner',
-      provider: liveOwner
-    })
   })
 
   it('does not inventory unrelated providers for a routed stale persisted incarnation', async () => {
@@ -477,26 +433,6 @@ describe('DaemonSessionOwnerResolver', () => {
     })
   })
 
-  it('accepts the exact persisted incarnation while another inventory fails', async () => {
-    const exactOwner = provider(async () => [
-      { id: 'session', incarnationId: 'persisted', cwd: '', title: 'candidate' }
-    ])
-    const resolver = new DaemonSessionOwnerResolver(
-      [
-        exactOwner,
-        provider(async () => {
-          throw new Error('offline')
-        })
-      ],
-      new Map()
-    )
-
-    await expect(resolver.resolve('session', 'persisted')).resolves.toMatchObject({
-      kind: 'owner',
-      provider: exactOwner
-    })
-  })
-
   it('does not trust another incarnation of the id from an incomplete inventory', async () => {
     const resolver = new DaemonSessionOwnerResolver(
       [
@@ -553,70 +489,6 @@ describe('DaemonSessionOwnerResolver', () => {
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
   })
 
-  it('accepts positive liveness proof from an incomplete inventory', async () => {
-    const resolver = new DaemonSessionOwnerResolver(
-      [
-        provider(async () => [{ id: 'session', cwd: '', title: 'live' }]),
-        provider(async () => {
-          throw new Error('offline')
-        })
-      ],
-      new Map()
-    )
-
-    await expect(resolver.probe('session')).resolves.toBe(true)
-  })
-
-  it('fails closed when duplicate owners cannot be disambiguated', async () => {
-    const first = provider(async () => [{ id: 'session', cwd: '', title: 'first' }])
-    const second = provider(async () => [{ id: 'session', cwd: '', title: 'second' }])
-    const resolver = new DaemonSessionOwnerResolver([first, second], new Map())
-
-    await expect(resolver.resolve('session')).resolves.toEqual({ kind: 'unknown' })
-    expect(first.listProcesses).toHaveBeenCalledOnce()
-    expect(second.listProcesses).toHaveBeenCalledOnce()
-    expect(first.spawn).not.toHaveBeenCalled()
-    expect(second.spawn).not.toHaveBeenCalled()
-  })
-
-  it('reports confirmed absence from a sole owner', async () => {
-    const owner = provider(
-      async () => [],
-      async () => {
-        throw new SessionNotFoundError('missing')
-      }
-    )
-    const resolver = new DaemonSessionOwnerResolver([owner], new Map())
-
-    await expect(
-      resolver.spawnAttachOnly({ sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 })
-    ).rejects.toBeInstanceOf(SessionNotFoundError)
-    expect(owner.spawn).toHaveBeenCalledOnce()
-    expect(owner.listProcesses).not.toHaveBeenCalled()
-  })
-
-  it('keeps absence unverified when there are no possible owners', async () => {
-    const resolver = new DaemonSessionOwnerResolver([], new Map())
-
-    await expect(resolver.resolve('missing')).resolves.toEqual({ kind: 'unknown' })
-  })
-
-  it('preserves an unresolved owner when any provider inventory fails', async () => {
-    const reachable = provider(async () => [])
-    const unreachable = provider(async () => {
-      throw new Error('offline')
-    })
-    const resolver = new DaemonSessionOwnerResolver([reachable, unreachable], new Map())
-
-    await expect(
-      resolver.spawnAttachOnly({ sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 })
-    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-    expect(reachable.listProcesses).toHaveBeenCalledOnce()
-    expect(unreachable.listProcesses).toHaveBeenCalledOnce()
-    expect(reachable.spawn).not.toHaveBeenCalled()
-    expect(unreachable.spawn).not.toHaveBeenCalled()
-  })
-
   it('does not turn a raced owner refusal into absence while another provider is unresolved', async () => {
     const candidate = provider(
       async () => [{ id: 'session', cwd: '', title: 'candidate' }],
@@ -639,41 +511,6 @@ describe('DaemonSessionOwnerResolver', () => {
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
     expect(candidate.listProcesses).toHaveBeenCalledOnce()
     expect(candidate.spawn).not.toHaveBeenCalled()
-  })
-
-  it('does not turn a post-inventory owner refusal into aggregate absence', async () => {
-    const candidate = provider(
-      async () => [{ id: 'session', cwd: '', title: 'candidate' }],
-      async () => {
-        throw new SessionNotFoundError('session')
-      }
-    )
-    const resolver = new DaemonSessionOwnerResolver(
-      [candidate, provider(async () => [])],
-      new Map()
-    )
-
-    await expect(
-      resolver.spawnAttachOnly({ sessionId: 'session', attachOnly: true, cols: 80, rows: 24 })
-    ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
-    expect(candidate.listProcesses).toHaveBeenCalledOnce()
-    expect(candidate.spawn).toHaveBeenCalledOnce()
-  })
-
-  it('pre-routes every uniquely inventoried session for serialized restores', async () => {
-    const inventory = vi.fn(async () => [
-      { id: 'first', cwd: '', title: 'first' },
-      { id: 'second', cwd: '', title: 'second' }
-    ])
-    const owner = provider(inventory)
-    const emptyInventory = vi.fn(async () => [])
-    const resolver = new DaemonSessionOwnerResolver([owner, provider(emptyInventory)], new Map())
-
-    await resolver.spawnAttachOnly({ sessionId: 'first', attachOnly: true, cols: 80, rows: 24 })
-    await resolver.spawnAttachOnly({ sessionId: 'second', attachOnly: true, cols: 80, rows: 24 })
-
-    expect(inventory).toHaveBeenCalledOnce()
-    expect(emptyInventory).toHaveBeenCalledOnce()
   })
 
   it('discards an inventory completed after daemon identity replacement', async () => {

@@ -9,7 +9,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { settleStaleStructuredAgentSessionState } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

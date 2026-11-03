@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ listRunning: vi.fn() }))
 
-vi.mock('../wsl', () => ({ listRunningWslDistrosAsync: mocks.listRunning }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({
+  listRunningWslDistrosAsync: mocks.listRunning
+}))
 
 import {
   observeWslTranscriptRunningState,

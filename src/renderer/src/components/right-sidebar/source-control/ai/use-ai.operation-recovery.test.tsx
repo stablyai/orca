@@ -198,7 +198,7 @@ describe('AI operation recovery composer', () => {
   )
   it('opens while an unrelated workspace fetch is pending', async () => {
     const { result } = renderHook(() => useSourceControlAi(controllerParams()))
-    useAppStore.getState().beginRemoteOperation('fetch')
+    useAppStore.getState().beginRemoteOperation('fetch', 'wt-2')
     await act(() => result.current.handleResolveConflictsWithAI())
     expect(result.current.resolveConflictsComposerOpen).toBe(true)
     expect(mutationInFlight).toHaveBeenCalledWith({

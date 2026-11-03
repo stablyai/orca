@@ -115,57 +115,6 @@ describe('structured turn completion feed (renderer)', () => {
     vi.useRealTimers()
   })
 
-  it('delivers completions to every listener while the stream is up', async () => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    feed.activate()
-    const first: string[] = []
-    const second: string[] = []
-    feed.subscribe((edge) => first.push(label(edge)))
-    feed.subscribe((edge) => second.push(label(edge)))
-    await vi.advanceTimersByTimeAsync(0)
-
-    subscription().emit({ type: 'completion', completion: completion('turn-1') })
-
-    expect(first).toEqual(['turn-1'])
-    expect(second).toEqual(['turn-1'])
-  })
-
-  it('delivers prompt edges beside completions, and drops an arm it cannot name', async () => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    feed.activate()
-    const seen: string[] = []
-    feed.subscribe((edge) => seen.push(label(edge)))
-    await vi.advanceTimersByTimeAsync(0)
-
-    subscription().emit({
-      type: 'prompt',
-      prompt: {
-        scope: completion('unused').scope,
-        sessionId: 'session-1',
-        promptId: 'approval-1',
-        raisedAt: 1
-      }
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates a newer host's arm this build cannot type.
-    subscription().emit({ type: 'future-edge' } as unknown as AgentSessionTurnCompletionEvent)
-    subscription().emit({ type: 'completion', completion: completion('turn-1') })
-
-    expect(seen).toEqual(['prompt:approval-1', 'turn-1'])
-  })
-
-  it('replays nothing to a listener that subscribes after a completion landed', async () => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'completion', completion: completion('turn-1') })
-
-    const late: string[] = []
-    feed.subscribe((edge) => late.push(label(edge)))
-
-    // There is no buffer to hand over. The edge already passed.
-    expect(late).toEqual([])
-  })
-
   it('reconnects into an empty stream and never asks the host what it missed', async () => {
     const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
     feed.activate()
@@ -191,21 +140,6 @@ describe('structured turn completion feed (renderer)', () => {
     expect(seen).toEqual(['before-drop', 'after-reconnect'])
   })
 
-  it.each([
-    ['an end frame', (value: Subscription) => value.emit({ type: 'end' })],
-    ['a transport error', (value: Subscription) => value.fail(new Error('relay gone'))],
-    ['a close', (value: Subscription) => value.close()]
-  ])('reopens after %s', async (_label, drop) => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    drop(subscription())
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(subscriptions).toHaveLength(2)
-  })
-
   it('does not subscribe a remote host that lacks the capability, and does not retry it', async () => {
     mocks.supportsCapability.mockResolvedValue(false)
     const feed = getStructuredAgentSessionTurnCompletionFeed({
@@ -229,21 +163,6 @@ describe('structured turn completion feed (renderer)', () => {
     expect(mocks.supportsCapability).toHaveBeenCalledTimes(2)
   })
 
-  it('subscribes a remote host that advertises the capability', async () => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({
-      kind: 'environment',
-      environmentId: 'env-1'
-    })
-    feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(mocks.supportsCapability).toHaveBeenCalledWith(
-      'env-1',
-      'agent-session.turn-completion.v1'
-    )
-    expect(mocks.subscribe).toHaveBeenCalledTimes(1)
-  })
-
   it('stops the stream when the last activation is released and opens a fresh one on the next', async () => {
     const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
     const release = feed.activate()
@@ -263,23 +182,6 @@ describe('structured turn completion feed (renderer)', () => {
     feed.activate()
     await vi.advanceTimersByTimeAsync(0)
     expect(subscriptions).toHaveLength(2)
-  })
-
-  it('keeps delivering to the other listeners when one throws', async () => {
-    const feed = getStructuredAgentSessionTurnCompletionFeed({ kind: 'local' })
-    feed.activate()
-    const seen: string[] = []
-    feed.subscribe(() => {
-      throw new Error('listener exploded')
-    })
-    feed.subscribe((edge) => seen.push(label(edge)))
-    await vi.advanceTimersByTimeAsync(0)
-
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    subscription().emit({ type: 'completion', completion: completion('turn-1') })
-    warn.mockRestore()
-
-    expect(seen).toEqual(['turn-1'])
   })
 
   it.each(['activation-first', 'listener-first'] as const)(

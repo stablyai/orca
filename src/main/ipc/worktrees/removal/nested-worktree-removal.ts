@@ -4,16 +4,16 @@ import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { listWorktreesStrict } from '../../../git/worktree'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
   SshHostNotServedError,
   SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE
 } from '../../../providers/ssh-host-not-served-error'
-import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
+import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getNestedWorktreeRemovalPlan,
   assertNestedWorktreeRemovalApproval
-} from '../../../nested-worktree-removal-plan'
+} from '../../../workspaces/removal/nested-worktree-removal-plan'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'

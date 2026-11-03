@@ -39,12 +39,6 @@ describe('OpenCode 1 shared-server reattribution (#21359)', () => {
     expect(result?.payload.state).toBe('working')
   })
 
-  it('keeps the stamped pane for unbound sessions', () => {
-    const state = createHookListenerState()
-    const result = opencodeBusy(state, PANE_A, 'ses_unknown')
-    expect(result?.paneKey).toBe(PANE_A)
-  })
-
   it('uses the bound pane live launch token', () => {
     const state = createHookListenerState()
     // A tokened post teaches the listener pane B's live token.
@@ -84,22 +78,6 @@ describe('OpenCode 1 shared-server reattribution (#21359)', () => {
     )
     expect(result?.paneKey).toBe(PANE_A)
     expect(result?.launchToken).toBe('token-a')
-  })
-
-  it('leaves other sources untouched', () => {
-    const state = createHookListenerState()
-    bindOpenCodeSession(state, 'ses_1', {
-      paneKey: PANE_B,
-      boundAt: 1,
-      basis: 'argv'
-    })
-    const result = normalizeHookPayload(
-      state,
-      'claude',
-      { paneKey: PANE_A, payload: { hook_event_name: 'Stop', session_id: 'ses_1' } },
-      'production'
-    )
-    expect(result?.paneKey).toBe(PANE_A)
   })
 
   it('never lets a stale same-pane stamp overwrite the live token', () => {

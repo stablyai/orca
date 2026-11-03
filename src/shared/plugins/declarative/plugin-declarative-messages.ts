@@ -11,11 +11,21 @@ const revisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGE
 /** The guest document a message belongs to; renders, events and acks never cross a reload. */
 const documentSchema = z.string().min(1).max(64)
 
-export const pluginDeclarativeEventArgSchema = z.union([
+const eventScalarSchema = z.union([
   z.string().max(LIMITS.maxTextLength),
   z.number().refine(Number.isFinite),
   z.boolean(),
   z.null()
+])
+const eventListSchema = z.array(eventScalarSchema).max(LIMITS.maxEventArgItems)
+/** A scalar, a list of scalars (a Slider value, selected keys), or one flat object of either
+ *  (`{ keys }`, `{ column, direction }`): plain JSON a handler can read without checks. */
+export const pluginDeclarativeEventArgSchema = z.union([
+  eventScalarSchema,
+  eventListSchema,
+  z
+    .record(z.string().max(64), z.union([eventScalarSchema, eventListSchema]))
+    .refine((value) => Object.keys(value).length <= 16, 'too many fields')
 ])
 export type PluginDeclarativeEventArg = z.infer<typeof pluginDeclarativeEventArgSchema>
 

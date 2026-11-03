@@ -24,6 +24,8 @@ import { useAppStore } from '@/store'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { errorMessage } from '../../../../../shared/error-message'
+import type { GitLabDiscussionResolveResult } from '../../../../../shared/gitlab-types'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,
@@ -84,20 +86,28 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       }
       if (repo && activeGitLabReview) {
         let previousThreadComments: PRComment[] = []
-        setComments((prev) => {
-          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
-          return markPRCommentThreadResolved(prev, threadId, resolve)
-        })
-        const result = await resolveGitLabMRDiscussionForChecks({
-          repoPath: repo.path,
-          repoId: repo.id,
-          iid: activeGitLabReview.number,
-          discussionId: threadId,
-          resolved: resolve,
-          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
-        })
+        let result: GitLabDiscussionResolveResult
+        try {
+          const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+          setComments((prev) => {
+            previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+            return markPRCommentThreadResolved(prev, threadId, resolve)
+          })
+          result = await resolveGitLabMRDiscussionForChecks({
+            repoPath: repo.path,
+            repoId: repo.id,
+            iid: activeGitLabReview.number,
+            discussionId: threadId,
+            resolved: resolve,
+            repoOwnerExecutionHostId
+          })
+        } catch (error) {
+          result = { ok: false, error: errorMessage(error) }
+        }
         if (!result.ok) {
-          rollbackThread(previousThreadComments)
+          if (previousThreadComments.length > 0) {
+            rollbackThread(previousThreadComments)
+          }
           if (notifyOnFailure) {
             toast.error(codeHostErrorText(result))
           }
@@ -120,19 +130,27 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
         pr?.headSha
       )
       let previousThreadComments: PRComment[] = []
-      setComments((prev) => {
-        previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
-        return markPRCommentThreadResolved(prev, threadId, resolve)
-      })
-      const ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
-        repoId: repo.id,
-        prRepo: pr?.prRepo
-      })
+      let ok: boolean
+      try {
+        const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, activeWorktree)
+        setComments((prev) => {
+          previousThreadComments = prev.filter((comment) => comment.threadId === threadId)
+          return markPRCommentThreadResolved(prev, threadId, resolve)
+        })
+        ok = await resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+          repoId: repo.id,
+          repoOwnerExecutionHostId,
+          prRepo: pr?.prRepo
+        })
+      } catch {
+        ok = false
+      }
       if (!ok) {
         // Why: a head push mid-request must not strand the optimistic state the cache re-read copied in.
         if (
+          previousThreadComments.length > 0 &&
           checksPanelReviewStableKey(asyncResultKeyRef.current) ===
-          checksPanelReviewStableKey(requestKey)
+            checksPanelReviewStableKey(requestKey)
         ) {
           rollbackThread(previousThreadComments)
         }

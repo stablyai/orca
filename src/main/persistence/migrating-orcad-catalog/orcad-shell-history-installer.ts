@@ -22,10 +22,10 @@ import {
   durableWriteTempPath,
   syncDirectoryDurablySync,
   writeFileDurableSync
-} from '../../durable-file-write'
+} from '../../filesystem/durable-file-write'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
-import { readHistoryMeta, resolveShellKind } from '../../terminal-history'
+import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
+import { readHistoryMeta, resolveShellKind } from '../../pty/history/terminal-history'
 import {
   getOrcadMigrationReceivedBlobPath,
   listOrcadMigrationReceivedBlobNames

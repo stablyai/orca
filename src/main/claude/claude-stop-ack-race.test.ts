@@ -15,8 +15,8 @@ import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
-import { stopClaudeBackgroundTasks } from './claude-structured-control-actions'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
+import { stopClaudeBackgroundTasks } from './structured/claude-structured-control-actions'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
 import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')

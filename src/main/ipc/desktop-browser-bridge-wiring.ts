@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { webContents, type BrowserWindow } from 'electron'
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   isDesktopBrowserBridgeMethod
 } from '../../shared/desktop-browser-bridge-protocol'
@@ -134,7 +135,8 @@ export function installDesktopBrowserBridge(options: {
           clientCapabilities: [
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
             DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-            DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY
           ]
         }
       )

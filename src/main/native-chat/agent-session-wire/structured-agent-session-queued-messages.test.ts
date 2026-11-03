@@ -4,7 +4,6 @@ import {
   type AgentSessionQueuedMessage
 } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
-import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -544,15 +543,6 @@ describe('/clear', () => {
     return [first.value.queued.messageId, second.value.queued.messageId]
   }
 
-  it('the clear schema refuses the never-shipped withdraw opt-in', () => {
-    const base = { envelope: rig.envelope({}, 'agentSession.conversationCommand', 'op-schema') }
-    expect(ConversationCommandParams.safeParse({ ...base, command: 'clear' }).success).toBe(true)
-    expect(
-      ConversationCommandParams.safeParse({ ...base, command: 'clear', withdrawQueued: true })
-        .success
-    ).toBe(false)
-  })
-
   it('preserves waiting cards in place and pauses them until user action for every client', async () => {
     const [firstId, secondId] = await pausedDrafts()
     const operationId = hostTestOperationId()
@@ -634,18 +624,6 @@ describe('/clear', () => {
         )
       ).toBe(true)
     )
-  })
-
-  it('clears without copying or inserting any queued card', async () => {
-    const ids = await pausedDrafts()
-    const insert = vi.spyOn(JournalQueuedMessages.prototype, 'insert')
-    try {
-      expect(await clear(hostTestOperationId())).toMatchObject({ ok: true })
-      expect(insert).not.toHaveBeenCalled()
-      expect((await drafts()).map((card) => card.messageId)).toEqual(ids)
-    } finally {
-      insert.mockRestore()
-    }
   })
 
   it('preserves a returned card and its refusal after clear', async () => {

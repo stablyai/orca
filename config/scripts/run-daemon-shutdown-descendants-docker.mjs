@@ -1,3 +1,4 @@
+import { runProcessSync } from '@orca/process-host'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,9 +25,40 @@ const targets = [
   'src/main/daemon/terminal-host.ts',
   'src/main/daemon/terminal-session-teardown.ts',
   'src/main/daemon/terminal-host-session-shutdown.ts',
-  'src/main/pty-descendant-termination.ts',
-  'src/main/pty-descendant-exit-verification.ts'
+  'src/main/pty/process-retirement/pty-descendant-termination.ts',
+  'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
 ]
+
+const relocatedBaselineSources = new Map([
+  [
+    'src/main/pty-descendant-termination.ts',
+    'src/main/pty/process-retirement/pty-descendant-termination.ts'
+  ],
+  [
+    'src/main/pty-shell-job-preservation.ts',
+    'src/main/pty/process-retirement/pty-shell-job-preservation.ts'
+  ],
+  [
+    'src/main/windows-process-tree-kill.ts',
+    'src/main/pty/process-retirement/windows-process-tree-kill.ts'
+  ],
+  [
+    'src/main/windows-pty-root-identity.ts',
+    'src/main/pty/process-retirement/windows-pty-root-identity.ts'
+  ],
+  [
+    'src/main/pty-process-table-parser.ts',
+    'src/main/pty/process-retirement/pty-process-table-parser.ts'
+  ],
+  [
+    'src/main/pty-descendant-fresh-table.ts',
+    'src/main/pty/process-retirement/pty-descendant-fresh-table.ts'
+  ],
+  [
+    'src/main/pty-descendant-exit-verification.ts',
+    'src/main/pty/process-retirement/pty-descendant-exit-verification.ts'
+  ]
+])
 
 const args = process.argv.slice(2)
 const baselineIndex = args.indexOf('--baseline')
@@ -56,17 +88,56 @@ function gitSource(relativePath, ref) {
 }
 
 function baselinePlugin(ref) {
+  const historicalPaths = new Map(
+    [...relocatedBaselineSources].map(([before, after]) => [after, before])
+  )
+  const candidates = targets.flatMap((file) => [file, historicalPaths.get(file)].filter(Boolean))
+  const listed = runProcessSync({
+    program: 'git',
+    args: ['ls-tree', '--name-only', ref, '--', ...candidates],
+    cwd: repo,
+    timeoutMs: 10_000,
+    maxOutputBytes: 64 * 1024,
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+  })
+  if (listed.code !== 0 || listed.outputTruncated) {
+    throw new Error(`Cannot list pinned Docker baseline sources: ${listed.stderr}`)
+  }
+  const available = new Set(listed.stdout.trim().split('\n'))
   const sourceByPath = new Map(
-    targets.map((relativePath) => [resolve(repo, relativePath), gitSource(relativePath, ref)])
+    targets.map((file) => {
+      const historical = historicalPaths.get(file)
+      const source = available.has(file)
+        ? file
+        : historical && available.has(historical)
+          ? historical
+          : null
+      if (!source) {
+        throw new Error(`Pinned Docker baseline source is absent: ${ref}:${file}`)
+      }
+      return [
+        resolve(repo, file),
+        { contents: gitSource(source, ref), resolveDir: dirname(resolve(repo, source)) }
+      ]
+    })
+  )
+  const relocatedImports = new Map(
+    [...relocatedBaselineSources].map(([before, after]) => [
+      resolve(repo, before),
+      resolve(repo, after)
+    ])
   )
   return {
     name: 'git-ref-baseline',
     setup(buildApi) {
+      buildApi.onResolve({ filter: /^\./ }, (args) => {
+        const original = resolve(args.resolveDir, args.path)
+        const destination = relocatedImports.get(original) ?? relocatedImports.get(`${original}.ts`)
+        return destination ? { path: destination } : undefined
+      })
       buildApi.onLoad({ filter: /\.ts$/ }, (args) => {
-        const contents = sourceByPath.get(args.path)
-        return contents === undefined
-          ? undefined
-          : { contents, loader: 'ts', resolveDir: dirname(args.path) }
+        const source = sourceByPath.get(args.path)
+        return source === undefined ? undefined : { ...source, loader: 'ts' }
       })
     }
   }

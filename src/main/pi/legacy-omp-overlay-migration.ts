@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { ORCA_PI_AGENT_STATUS_EXTENSION_FILE } from './agent-status-extension-source'
 import { ORCA_PI_PREFILL_EXTENSION_FILE } from './prefill-extension-source'
 import { ORCA_PI_EXTENSION_FILE } from './titlebar-extension-source'
-import { isSafeDescendCandidate } from '../pty/overlay-mirror'
+import { isSafeDescendCandidate } from '../pty/scrollback/overlay-mirror'
 
 const LEGACY_PI_OVERLAY_MANIFEST_FILE = '.orca-pi-overlay-manifest.json'
 const LEGACY_OMP_OVERLAY_MIGRATION_MARKER_FILE = '.orca-omp-overlay-migration-complete'

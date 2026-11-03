@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { WslMoveCutover } from '../../shared/wsl-move/wsl-move-cutover'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { wslMoveDesktopRewriteContext } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import {
   probeWslMoveHostCopies,
@@ -19,7 +19,7 @@ import { wslMoveReleasedSessionFocusPatch } from '../persistence/moving-wsl-proj
 import { applyWslMoveSessionFocus } from '../persistence/moving-wsl-projects/wsl-move-main-rewrite-stores'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
-import { wasWslHostKeptForPeers } from '../wsl/wsl-host-kept-for-peers'
+import { wasWslHostKeptForPeers } from '../wsl/host-lifecycle/wsl-host-kept-for-peers'
 import {
   stopWslMoveHostAutomations,
   wslMoveMovedAutomationIds,
@@ -27,7 +27,7 @@ import {
 } from '../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
 import { scheduleWslMoveRewriteRetry } from '../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
 import { connectWslMoveHostService, wslHostRemovalPending } from './wsl-move-host-connect'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
 import {
   disableWslHostAutomations,
   readWslHostAutomationStates,

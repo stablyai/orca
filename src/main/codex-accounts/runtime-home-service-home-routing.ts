@@ -1,9 +1,9 @@
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { getCachedWslHome } from '../wsl-home-cache'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { getCachedWslHome } from '../wsl/discovery/wsl-home-cache'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
@@ -246,12 +246,14 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   // A skipped poll needs a distinct result: null routes the fetcher to system default (#STA-4422).
-  prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution {
+  prepareForRateLimitFetch(
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      const wslTarget = this.resolveWslDefaultTarget(target)
       return {
         kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(wslTarget)
+        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
       }
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()

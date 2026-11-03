@@ -122,6 +122,7 @@ describe('createPluginSourceModuleCompiler', () => {
     const transpile = vi.fn(async (_path: string, source: string) => ({
       ok: true as const,
       code: source,
+      mappings: '',
       imports: []
     }))
     const compile = createPluginSourceModuleCompiler({ transpile })

@@ -13,12 +13,12 @@ import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subj
 import { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
-import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './structured/claude-structured-session-adapter'
 import {
   fakeClaude,
   identityFor,
   PROVIDER_SESSION_ID
-} from './claude-structured-session-test-support'
+} from './structured/claude-structured-session-test-support'
 
 export const parent = makeStructuredAgentStatusSubject(
   {

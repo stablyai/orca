@@ -1,6 +1,7 @@
 import type React from 'react'
-import { Zap } from 'lucide-react'
+import { Loader2, Store, Zap } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { PluginThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   editorThemeSlotUpdate,
   MATCH_TERMINAL_APP_THEME,
@@ -8,28 +9,78 @@ import {
 } from '../../../../shared/plugin-theme-settings'
 import { Button } from '../ui/button'
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue
-} from '../ui/select'
+  SettingsSearchableSelect,
+  type SettingsSearchableSelectAction,
+  type SettingsSearchableSelectGroup
+} from './SettingsSearchableSelect'
 import { SettingsSegmentedControl } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
-import { PluginThemeSwatch } from '../plugins/page/PluginThemeSwatch'
+import { PluginThemeSwatch, ThemeColorSwatch } from '../plugins/page/PluginThemeSwatch'
 import {
   isPluginTerminalThemeSelected,
   terminalThemeUpdate
 } from '../plugins/state/plugin-theme-apply'
 import { findCodeEditorTheme } from '@/lib/code-editor-theme'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { requestPluginBrowse } from '@/store/plugin-preview-request'
+import { useCatalogAppThemes } from './use-catalog-app-themes'
 
 type BuiltInTheme = GlobalSettings['theme']
 
 const BUILT_IN = 'built-in'
 const FOLLOW_APP = 'follow-app'
+
+function browseThemesLabel(): string {
+  return translate('auto.components.settings.AppearanceThemeControl.browseThemes', 'Browse themes')
+}
+
+function builtInLabel(): string {
+  return translate(
+    'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
+    'Built-in'
+  )
+}
+
+function searchThemesLabel(): string {
+  return translate('auto.components.settings.AppearanceThemeControl.searchThemes', 'Search themes…')
+}
+
+function noThemesLabel(): string {
+  return translate(
+    'auto.components.settings.AppearanceThemeControl.noThemes',
+    'No themes match your search.'
+  )
+}
+
+/** Desktop only: the web client has no plugin catalog to open. */
+function browseThemesActions(): SettingsSearchableSelectAction[] {
+  return isWebClientLocation()
+    ? []
+    : [
+        {
+          key: 'browse-themes',
+          label: browseThemesLabel(),
+          icon: <Store className="size-3.5" />,
+          onSelect: () => requestPluginBrowse('themes')
+        }
+      ]
+}
+
+function pluginThemeGroups(
+  themes: readonly PluginThemeRegistration[]
+): SettingsSearchableSelectGroup[] {
+  return [...Map.groupBy(themes, (theme) => theme.pluginKey).values()].map((group) => ({
+    key: group[0].pluginKey,
+    heading: group[0].pluginName,
+    options: group.map((theme) => ({
+      value: theme.id,
+      label: theme.label,
+      keywords: [theme.base],
+      icon: <PluginThemeSwatch theme={theme} />
+    }))
+  }))
+}
 
 /** System, Dark or Light; the Light theme and Dark theme slots pick the colors for each. */
 export function AppearanceThemeControl({
@@ -44,28 +95,37 @@ export function AppearanceThemeControl({
   applyTheme: (theme: BuiltInTheme) => void
 }): React.JSX.Element {
   return (
-    <SettingsSegmentedControl
-      ariaLabel={label}
-      value={settings.theme}
-      onChange={(theme) => {
-        updateSettings({ theme })
-        applyTheme(theme)
-      }}
-      options={[
-        {
-          value: 'system',
-          label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
-        },
-        {
-          value: 'dark',
-          label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
-        },
-        {
-          value: 'light',
-          label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
-        }
-      ]}
-    />
+    <div className="flex items-center gap-2">
+      {/* Why desktop only: the web client has no plugin catalog to open. */}
+      {isWebClientLocation() ? null : (
+        <Button variant="outline" size="sm" onClick={() => requestPluginBrowse('themes')}>
+          <Store />
+          {browseThemesLabel()}
+        </Button>
+      )}
+      <SettingsSegmentedControl
+        ariaLabel={label}
+        value={settings.theme}
+        onChange={(theme) => {
+          updateSettings({ theme })
+          applyTheme(theme)
+        }}
+        options={[
+          {
+            value: 'system',
+            label: translate('auto.components.settings.AppearancePane.fb0e0b4453', 'System')
+          },
+          {
+            value: 'dark',
+            label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+          },
+          {
+            value: 'light',
+            label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+          }
+        ]}
+      />
+    </div>
   )
 }
 
@@ -82,13 +142,14 @@ export function AppearanceThemeSlotSelect({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
-  const themes = usePluginThemes().filter((theme) => theme.base === base)
+  const allThemes = usePluginThemes()
+  const themes = allThemes.filter((theme) => theme.base === base)
+  const catalog = useCatalogAppThemes(base, allThemes, settings.pluginSystemEnabled === true)
   const pluginTerminalThemes = usePluginTerminalThemes()
   const selectedId = base === 'dark' ? settings.pluginAppThemeDark : settings.pluginAppThemeLight
   const active = themes.find((theme) => theme.id === selectedId)
   const value =
     selectedId === MATCH_TERMINAL_APP_THEME ? MATCH_TERMINAL_APP_THEME : (active?.id ?? BUILT_IN)
-  const groups = Map.groupBy(themes, (theme) => theme.pluginKey)
   const terminal = active
     ? pluginTerminalThemes.find(
         (theme) =>
@@ -99,9 +160,20 @@ export function AppearanceThemeSlotSelect({
     terminal !== undefined && isPluginTerminalThemeSelected(settings, terminal, base === 'dark')
   return (
     <div className="flex flex-col items-end gap-1">
-      <Select
+      <SettingsSearchableSelect
+        ariaLabel={label}
         value={value}
-        onValueChange={(next) =>
+        searchPlaceholder={searchThemesLabel()}
+        emptyText={noThemesLabel()}
+        onOpenChange={(open) => {
+          if (open) {
+            catalog.open()
+          }
+        }}
+        onValueChange={(next) => {
+          if (catalog.pick(next)) {
+            return
+          }
           updateSettings(
             pluginAppThemeSlotUpdate(
               base,
@@ -110,41 +182,74 @@ export function AppearanceThemeSlotSelect({
                 : (themes.find((theme) => theme.id === next)?.id ?? null)
             )
           )
+        }}
+        groups={[
+          {
+            key: BUILT_IN,
+            options: [
+              { value: BUILT_IN, label: builtInLabel() },
+              {
+                value: MATCH_TERMINAL_APP_THEME,
+                label: translate(
+                  'auto.components.settings.AppearanceThemeControl.matchTerminal',
+                  'Match Terminal'
+                ),
+                detail: (
+                  <>
+                    <Zap className="mr-1 size-3" aria-hidden />
+                    {translate(
+                      'auto.components.settings.AppearanceThemeControl.dynamic',
+                      'dynamic'
+                    )}
+                  </>
+                )
+              }
+            ]
+          },
+          ...pluginThemeGroups(themes),
+          {
+            key: 'catalog',
+            heading: translate(
+              'auto.components.settings.AppearanceThemeControl.moreThemes',
+              'More themes'
+            ),
+            options: catalog.themes.map((theme) => ({
+              value: theme.value,
+              label: theme.label,
+              keywords: [theme.pluginName],
+              disabled: catalog.installing !== null,
+              icon: <ThemeColorSwatch background={theme.background} accent={theme.accent} />
+            }))
+          }
+        ]}
+        status={
+          catalog.loading ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+              {translate(
+                'auto.components.settings.AppearanceThemeControl.moreThemesLoading',
+                'Loading themes…'
+              )}
+            </div>
+          ) : null
         }
-      >
-        <SelectTrigger size="sm" className="min-w-[220px]" aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={BUILT_IN}>
-            {translate(
-              'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
-              'Built-in'
-            )}
-          </SelectItem>
-          <SelectItem value={MATCH_TERMINAL_APP_THEME}>
-            {translate(
-              'auto.components.settings.AppearanceThemeControl.matchTerminal',
-              'Match Terminal'
-            )}
-            <span className="flex items-center text-xs text-muted-foreground">
-              (<Zap className="mr-1 size-3" aria-hidden />
-              {translate('auto.components.settings.AppearanceThemeControl.dynamic', 'dynamic')})
-            </span>
-          </SelectItem>
-          {[...groups.values()].map((group) => (
-            <SelectGroup key={group[0].pluginKey}>
-              <SelectLabel>{group[0].pluginName}</SelectLabel>
-              {group.map((theme) => (
-                <SelectItem key={theme.id} value={theme.id}>
-                  <PluginThemeSwatch theme={theme} />
-                  {theme.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          ))}
-        </SelectContent>
-      </Select>
+        actions={browseThemesActions()}
+      />
+      {catalog.installing ? (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+          {translate(
+            'auto.components.settings.AppearanceThemeControl.installingTheme',
+            'Installing {{value0}}…',
+            { value0: catalog.installing.label }
+          )}
+        </span>
+      ) : null}
+      {catalog.error ? (
+        <span role="alert" className="text-xs text-destructive">
+          {catalog.error}
+        </span>
+      ) : null}
       {terminal && !terminalInUse ? (
         <Button
           variant="link"
@@ -182,10 +287,12 @@ export function CodeEditorThemeSelect({
     base === 'dark' ? settings.editorThemeDark : settings.editorThemeLight,
     themes
   )
-  const groups = Map.groupBy(themes, (theme) => theme.pluginKey)
   return (
-    <Select
+    <SettingsSearchableSelect
+      ariaLabel={label}
       value={selected === null ? FOLLOW_APP : typeof selected === 'string' ? selected : selected.id}
+      searchPlaceholder={searchThemesLabel()}
+      emptyText={noThemesLabel()}
       onValueChange={(value) =>
         updateSettings(
           editorThemeSlotUpdate(
@@ -196,40 +303,32 @@ export function CodeEditorThemeSelect({
           )
         )
       }
-    >
-      <SelectTrigger size="sm" className="min-w-[220px]" aria-label={label}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={FOLLOW_APP}>
-          {translate('settings.appearance.editorTheme.followApp', 'Same as app theme')}
-        </SelectItem>
-        <SelectGroup>
-          <SelectLabel>
-            {translate(
-              'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
-              'Built-in'
-            )}
-          </SelectLabel>
-          <SelectItem value="light">
-            {translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')}
-          </SelectItem>
-          <SelectItem value="dark">
-            {translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')}
-          </SelectItem>
-        </SelectGroup>
-        {[...groups.values()].map((group) => (
-          <SelectGroup key={group[0].pluginKey}>
-            <SelectLabel>{group[0].pluginName}</SelectLabel>
-            {group.map((theme) => (
-              <SelectItem key={theme.id} value={theme.id}>
-                <PluginThemeSwatch theme={theme} />
-                {theme.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        ))}
-      </SelectContent>
-    </Select>
+      groups={[
+        {
+          key: FOLLOW_APP,
+          options: [
+            {
+              value: FOLLOW_APP,
+              label: translate('settings.appearance.editorTheme.followApp', 'Same as app theme')
+            }
+          ]
+        },
+        {
+          key: BUILT_IN,
+          heading: builtInLabel(),
+          options: [
+            {
+              value: 'light',
+              label: translate('auto.components.settings.AppearancePane.fd89b5487c', 'Light')
+            },
+            {
+              value: 'dark',
+              label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+            }
+          ]
+        },
+        ...pluginThemeGroups(themes)
+      ]}
+    />
   )
 }

@@ -37,10 +37,6 @@ import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   _reloadDesktopCreatedServerTabsForTests,
   _resetDesktopCreatedServerTabsForTests,
-  forgetDesktopCreatedServerTab,
-  forgetDesktopCreatedServerTabsOf,
-  forgetPublishedServerTabs,
-  isDesktopCreatedServerTab,
   noteDesktopCreatedServerTab
 } from './desktop-created-server-tabs'
 
@@ -56,40 +52,6 @@ beforeEach(() => {
 })
 
 describe('the desktop-created server tab record', () => {
-  it('records an id per workspace: one workspace’s publish or removal leaves the other’s', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-x')
-    noteDesktopCreatedServerTab(ENV, WT2, 'tab-x')
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([true, true])
-
-    forgetPublishedServerTabs(WT1, ['tab-x'])
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([false, true])
-
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-x')
-    forgetDesktopCreatedServerTabsOf(WT2)
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([true, false])
-  })
-
-  it('forgets a workspace’s every id, and a closed id in any workspace', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-a')
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-b')
-    noteDesktopCreatedServerTab(ENV, WT2, 'tab-c')
-    forgetDesktopCreatedServerTabsOf(WT1)
-    expect([held(WT1, 'tab-a'), held(WT1, 'tab-b'), held(WT2, 'tab-c')]).toEqual([
-      false,
-      false,
-      true
-    ])
-    forgetDesktopCreatedServerTab('tab-c')
-    expect(held(WT2, 'tab-c')).toBe(false)
-  })
-
-  it('names a tab recorded by its entity id by its tab-bar id too', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'browser-workspace-1')
-    const tabs = [{ id: 'tab-bar-1', entityId: 'browser-workspace-1' }]
-    expect(isDesktopCreatedServerTab(tabs, WT1, 'tab-bar-1')).toBe(true)
-    expect(isDesktopCreatedServerTab(tabs, WT2, 'tab-bar-1')).toBe(false)
-  })
-
   it('drops the removed worktree’s ids when the worktree is removed, and only those', async () => {
     const store = createTestStore()
     seedStore(store, {

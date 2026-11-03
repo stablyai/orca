@@ -72,6 +72,7 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
           onAccountLocationChange={model.releaseNativeAccounts}
           settings={model.settings}
           updateSettings={model.updateSettings}
+          updateSettingsOrThrow={model.updateSettingsOrThrow}
           hostScope={LOCAL_SETTINGS_HOST_SCOPE}
           wslHostDistro={wslHostDistro}
           wslSupportedPlatform={terminal.localWslSupportedPlatform}
@@ -86,6 +87,7 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
           onAccountLocationChange={model.releaseNativeAccounts}
           settings={model.settings}
           updateSettings={model.updateSettings}
+          updateSettingsOrThrow={model.updateSettingsOrThrow}
           hostScope={model.settingsHostScope}
           wslSupportedPlatform={terminal.runtimeWslSupportedPlatform}
           wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}

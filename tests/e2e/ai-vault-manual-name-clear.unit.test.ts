@@ -21,7 +21,7 @@ import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   openTestJournalHostDatabase,

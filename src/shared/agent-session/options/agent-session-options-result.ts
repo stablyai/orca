@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../agent-session-journal-identity'
+import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../journal/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
@@ -22,6 +22,8 @@ export type AgentSessionOptionsResult = {
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** `/compact` takes instructions here; an older host omits this and refuses the field. */
+  compactInstructions?: boolean
   /** Offer goal controls only with threadGoal support; current spans the whole journal, including unloaded pages. */
   threadGoal?: { current: AgentJournalThreadGoal | null; contextFloor?: AgentJournalCursor }
   /** Journal goal changed only by the agent's /goal; separate from threadGoal so older clients never offer host controls. */

@@ -5,7 +5,7 @@ import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import type { SidebarFeedIndex } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 
 vi.mock('../../../../../../shared/sidebar-inputs-switch', () => ({

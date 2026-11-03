@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoisted(() => ({
@@ -8,7 +8,7 @@ const { clearSearch, handlers, sshSearch, sshHostInfos, runtimeSearch } = vi.hoi
   sshHostInfos: vi.fn<() => { targetId: string }[]>(() => []),
   runtimeSearch: vi.fn()
 }))
-vi.mock('../ai-vault/session-scanner-service-spawn', () => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', () => ({
   clearSessionSearchInService: clearSearch
 }))
 vi.mock('electron', () => ({

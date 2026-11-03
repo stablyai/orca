@@ -19,12 +19,12 @@ import { prepareStructuredAgentSessionCreateForWorktree } from '../../src/main/r
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentRuntimeMetadata } from '../../src/main/runtime/structured-agent-runtime-metadata'
-import { claudeStructuredSpawnOptions } from '../../src/main/claude/claude-structured-spawn-options'
+import { claudeStructuredSpawnOptions } from '../../src/main/claude/structured/launch/claude-structured-spawn-options'
 import { openCodexThread } from '../../src/main/codex/codex-structured-thread-open'
 import { resolvedCodexMessageOptions } from '../../src/main/codex/codex-structured-message-options'
 import { optionSession } from '../../src/main/codex/codex-structured-option-session.test-fixture'
-import { startStructuredAgentLaunch } from '../../src/renderer/src/lib/structured-agent-session-launch'
-import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/structured-agent-session-launch-options'
+import { startStructuredAgentLaunch } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch'
+import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
@@ -51,7 +51,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
 vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
   useStructuredAgentSessionStatusSummary: () => ({ summary: null, observation: 'live' })
 }))
-vi.mock('../../src/main/agent-workspace-trust', () => ({
+vi.mock('../../src/main/agent-launch/trust/agent-workspace-trust', () => ({
   applyAgentWorkspaceTrust: vi.fn(async () => ({}))
 }))
 let restore: (() => void) | undefined

@@ -1,4 +1,4 @@
-import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
+import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
 import { vi } from 'vitest'
 import { WorkspaceLifecycleQueue } from '../runtime/workspaces/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'

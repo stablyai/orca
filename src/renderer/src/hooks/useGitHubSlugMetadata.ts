@@ -1,3 +1,4 @@
+import { useGitHubOperationScope } from './useGitHubOperationScope'
 import { useMemo } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -26,9 +27,11 @@ export function useRepoLabelsBySlug(
   host?: string
 ): MetadataListState<string> {
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey =
     repositoryKey && target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}`
@@ -69,9 +72,11 @@ export function useRepoAssigneesBySlug(
 ): MetadataListState<GitHubAssignableUser> {
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const authority = useGitHubOperationScope(target)
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
-  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const repositoryKey =
+    owner && repo ? `${githubRepoIdentityKey({ owner, repo, host })}::${authority}` : null
   const cacheKey = repositoryKey
     ? target.kind === 'environment'
       ? `runtime:${target.environmentId}:${repositoryKey}`

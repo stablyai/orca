@@ -21,7 +21,7 @@ import {
 } from '../daemon/daemon-provider-state'
 import { HistoryReader } from '../daemon/history-reader'
 import { orcadMigrationDestinationFor } from '../managed-server/lifecycle/orcad-runtime-conversion-wiring'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../persistence/moving-wsl-projects/wsl-move-manifest-export'
 import { ensureWslMoveDestinationBrowserLogins } from '../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../browser/browser-route-partition-binding-runtime'
@@ -65,20 +65,26 @@ import { registerWslMoveHandlers } from './wsl-move-handlers'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { connectWslMoveHostService, type WslMoveHostConnectMode } from './wsl-move-host-connect'
-import { wslMoveReloadableWindow } from './wsl-move-reloadable-window'
-import { setWslMoveReloadableWindow } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+import {
+  leaveSettingsForWslMoveReload,
+  wslMoveReloadableWindow
+} from './wsl-move-reloadable-window'
+import {
+  setWslMoveReloadLanding,
+  setWslMoveReloadableWindow
+} from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
 import {
   commitRemoteOrcadMigrationCatalog,
   listRemoteOrcadRepositories,
   stageRemoteOrcadMigrationBlobChunk
 } from '../ssh/orcad-migration-catalog-client'
 import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspaces'
-import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
+import { makeTerminalScrollbackSnapshotRef } from '../pty/scrollback/terminal-scrollback-snapshots'
 import { pauseWorkspacesForProjectMove } from '../window/project-move-pause'
-import { getWslHostService } from '../wsl/wsl-host-service-instance'
-import { readWslGuestProcessTable } from '../wsl/wsl-guest-process-table'
-import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
-import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
+import { getWslHostService } from '../wsl/host-lifecycle/wsl-host-service-instance'
+import { readWslGuestProcessTable } from '../wsl/execution/wsl-guest-process-table'
+import { isWslDistroRegistered } from '../wsl/discovery/wsl-distro-registry-id'
+import { defaultWslOrcadEnvironmentId } from '../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from './pty/pane/key-state'
 import { tryGetProviderForPty } from './pty/provider/registry'
 import { getRuntimeEnvironmentStatus } from './runtime-environments/runtime-environment-status-probe'
@@ -88,6 +94,7 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
     const contents = getTrustedUIRendererWebContents()
     return contents && wslMoveReloadableWindow(contents)
   })
+  setWslMoveReloadLanding(() => leaveSettingsForWslMoveReload(store))
   registerWslMoveHandlers(
     () => app.getPath('userData'),
     (senderId) => getTrustedUIRendererWebContents()?.id === senderId,

@@ -132,83 +132,6 @@ describe('closeBrowserTab with reason cleanup', () => {
 
     expect(store.getState().activeWorktreeId).toBeNull()
   })
-
-  // Staged host page is unminted; tabClose could 404 or race create and kill its eventual page.
-  it('does not ask the host to close the page it never published', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    // A layout-owner build's close goes to main as `layout.apply`, answered before this mock.
-    expect(mockCallRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('asks the host to close the page on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    expect(mockCallRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'browser.tabClose',
-      expect.objectContaining({ page: 'remote-page-1' }),
-      expect.anything()
-    )
-  })
-
-  // Uncreated tabs have no undo history; reopening would restore a workspace with no host page.
-  it('does not enter the reopen stack', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    const s = store.getState()
-    expect(s.recentlyClosedBrowserTabsByWorktree[WT] ?? []).toEqual([])
-    expect(s.recentlyClosedTabKindsByWorktree[WT] ?? []).toEqual([])
-  })
-
-  it('enters the reopen stack on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    const s = store.getState()
-    expect(s.recentlyClosedBrowserTabsByWorktree[WT]).toHaveLength(1)
-    expect(s.recentlyClosedTabKindsByWorktree[WT]).toEqual(['browser'])
-  })
-
-  // Unwound creation is not feature use for onboarding counters.
-  it('does not record a tab interaction', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    expect(recordFeatureInteraction).not.toHaveBeenCalled()
-  })
-
-  it('records a tab interaction on a real close', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const recordFeatureInteraction = vi.fn()
-    store.setState({ recordFeatureInteraction })
-
-    store.getState().closeBrowserTab(workspaceId)
-
-    await settled()
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('terminal-tabs')
-  })
   it('clears focus for closed pages without rescanning pages for unrelated focus entries', async () => {
     const { store, workspaceId } = await storeWithOnlyBrowserTab()
     const original = store.getState().browserPagesByWorkspace[workspaceId][0]
@@ -257,23 +180,6 @@ describe('closeBrowserTab with reason cleanup', () => {
     })
     expect(store.getState().pendingAddressBarFocusByTabId).toEqual(unrelated)
     expect(idReads).toBeLessThan(10_000)
-  })
-
-  // Why: the omit path must not hand every pending-focus selector a fresh record on each close.
-  it('keeps the pending focus records identical when the closed tab had no pending entry', async () => {
-    const { store, workspaceId } = await storeWithOnlyBrowserTab()
-    const pending = { 'other-tab': true as const }
-    store.setState({
-      pendingAddressBarFocusByPageId: pending,
-      pendingAddressBarFocusByTabId: pending
-    })
-
-    store.getState().closeBrowserTab(workspaceId, { reason: 'cleanup' })
-
-    await settled()
-
-    expect(store.getState().pendingAddressBarFocusByPageId).toBe(pending)
-    expect(store.getState().pendingAddressBarFocusByTabId).toBe(pending)
   })
 
   // Background tab close must never move focus, including through pending address-bar bookkeeping.

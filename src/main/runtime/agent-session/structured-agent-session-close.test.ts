@@ -2,7 +2,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Child exit proof precedes advisory tab cleanup; failed stops retain the original surface.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import { pluginDisplayNameFromId } from './plugin-display-name'
 import { PLUGIN_TEMPLATE_NAMES, type PluginTemplateName } from './plugin-template-names'
 import { pluginTemplateKey } from './plugin-template-files'
 import { renderPluginTemplate } from './plugin-templates'
@@ -24,14 +25,6 @@ export function pluginIdFromFolder(folder: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
-
-function titleFromId(id: string): string {
-  return id
-    .split('-')
-    .filter(Boolean)
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(' ')
 }
 
 function assertEmptyFolder(dir: string): void {
@@ -58,7 +51,7 @@ export async function createPluginFromTemplate(input: {
 }): Promise<PluginCreateResult> {
   const dir = resolve(input.dir)
   const id = input.id ?? pluginIdFromFolder(dir)
-  const name = input.name ?? (titleFromId(id) || id)
+  const name = input.name ?? (pluginDisplayNameFromId(id) || id)
   const templateInput = { publisher: input.publisher, id, name }
   const pluginKey = pluginTemplateKey(templateInput)
   const template = renderPluginTemplate(input.template, templateInput)

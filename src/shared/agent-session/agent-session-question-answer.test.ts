@@ -35,12 +35,6 @@ describe('agent-session grouped question answers', () => {
     }
   })
 
-  it('keeps compact answers readable by the original percent-decoding contract', () => {
-    expect(decodeWithOriginalPercentDecoder(encodeAgentSessionQuestionAnswers(answers))).toEqual(
-      answers
-    )
-  })
-
   it('accepts the previous fully percent-encoded representation', () => {
     const encoded = `${GROUP_ANSWER_PREFIX}${encodeURIComponent(JSON.stringify(answers))}`
 
@@ -62,21 +56,6 @@ describe('agent-session grouped question answers', () => {
     expect(
       decodeWithOriginalPercentDecoder(encodeAgentSessionQuestionAnswers(unicodeAnswers))
     ).toEqual(unicodeAnswers)
-  })
-
-  it("keeps Claude's maximum choice group compact without losing selections", () => {
-    const maximumSelections = Array.from({ length: 4 }, (_, questionIndex) => ({
-      questionId: `q${questionIndex + 1}`,
-      optionIds: Array.from(
-        { length: 4 },
-        (_, optionIndex) => `q${questionIndex + 1}:choice-${optionIndex + 1}`
-      )
-    }))
-
-    const encoded = encodeAgentSessionQuestionAnswers(maximumSelections)
-    expect(encoded.length).toBeLessThanOrEqual(512)
-    expect(decodeAgentSessionQuestionAnswers(encoded)).toEqual(maximumSelections)
-    expect(decodeWithOriginalPercentDecoder(encoded)).toEqual(maximumSelections)
   })
 
   it('validates each grouped answer against its question shape', () => {

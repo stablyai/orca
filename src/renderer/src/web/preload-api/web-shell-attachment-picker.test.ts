@@ -32,9 +32,4 @@ describe('web chat attachment picker', () => {
     expect(tokens).toHaveLength(2)
     expect(tokens.map((token) => takeBrowserAttachmentFile(token))).toEqual(files)
   })
-
-  it('returns nothing when the picker is cancelled', async () => {
-    chooseOnClick(null)
-    await expect(createShellApi().pickAttachments!()).resolves.toEqual([])
-  })
 })

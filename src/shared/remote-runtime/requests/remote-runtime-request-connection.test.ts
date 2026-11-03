@@ -21,10 +21,10 @@ import * as commandResolution from '../../../main/git/command-runner/git-command
 import * as gitRunner from '../../../main/git/runner'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from '../../../main/git/command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../git-admission-scheduler'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 vi.mock('node:child_process', async (original) => ({
