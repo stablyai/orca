@@ -16,13 +16,13 @@ import { resolveSettingsHostScope } from '../settings/host-scope/settings-host-s
 import { renderAgentsSettingsSection } from '../settings/page/settings-capability-section-renderers'
 import { ActiveSettingsSectionProvider } from '../settings/section-layout/SettingsSection'
 import type { SettingsRenderContext } from '../settings/page/settings-render-context'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
+import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents/agents-search'
 import { chatDemoRevealTokens, getChatDemoCopy } from './chat-ui-here-feature-tip-demo'
 import { FeatureTipActions } from './FeatureTipActions'
 import FeatureTipsModal from './FeatureTipsModal'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('../settings/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
+vi.mock('../settings/agents/AgentsPane', () => ({ AgentsPane: () => <p>Per-agent controls</p> }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,

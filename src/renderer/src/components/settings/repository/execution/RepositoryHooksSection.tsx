@@ -27,8 +27,8 @@ import {
   RepositorySetupPolicySetting
 } from './RepositoryHookPolicySettings'
 import { RepositoryIssueCommandSetting } from './RepositoryIssueCommandSetting'
-import { useRepositoryHookSettingsDraft } from '../../use-repository-hook-settings-draft'
-import { useRepositoryIssueCommand } from '../../use-repository-issue-command'
+import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
+import { useRepositoryIssueCommand } from './use-repository-issue-command'
 
 type RepositoryHooksSectionProps = {
   repo: Repo

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { AdvancedPane } from '../advanced/AdvancedPane'
 import { ExperimentalPane } from '../advanced/ExperimentalPane'
-import { PluginsSettingsSection } from '../PluginsSettingsSection'
+import { PluginsSettingsSection } from '../../plugins/list/PluginsSettingsSection'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { SettingsRenderContext } from './settings-render-context'

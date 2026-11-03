@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { ChatSurfacePreview } from '../settings/AgentDefaultSurfacePreviews'
+import { ChatSurfacePreview } from '../agent/launch-settings/AgentDefaultSurfacePreviews'
 import { getChatUiHereVariantCopy } from './chat-ui-here-copy'
 import { FeatureTipActions } from './FeatureTipActions'
 import { FeatureTipSettingsLine } from './FeatureTipDialogFrame'

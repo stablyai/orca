@@ -14,15 +14,15 @@ import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
-import { AgentSkillSetupPanel } from '../../AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
-} from '../../CliSkillRuntimeSetup'
+} from '../../../../lib/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
-import { useLocalCliSkillFreshnessName } from '../../use-local-cli-skill-freshness-name'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 
 type CliSectionProps = {

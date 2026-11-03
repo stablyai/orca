@@ -7,7 +7,7 @@ import {
   fixture
 } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
-import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/HostAgentLaunchSettings'
+import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog'
 

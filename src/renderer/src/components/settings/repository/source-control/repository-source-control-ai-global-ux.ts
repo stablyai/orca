@@ -31,11 +31,11 @@ import {
 } from './repository-source-control-ai-draft'
 import { ACTION_MODE_INHERIT, DEFAULT_AGENT_VALUE } from './repository-source-control-ai-labels'
 import { createRepoAiPersistQueue } from './repository-source-control-ai-persist-queue'
-import { withRepoAiActionAgent } from '../../repository-source-control-ai-action-agent-draft'
+import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
 import {
   createRepoActionTextDraftEditors,
   resetActionDraftLaunchPreferences
-} from '../../repository-source-control-ai-text-draft'
+} from './repository-source-control-ai-text-draft'
 
 type HostedReviewDefaultKey = keyof NonNullable<RepoSourceControlAiOverrides['prCreationDefaults']>
 
