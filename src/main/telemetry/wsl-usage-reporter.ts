@@ -21,7 +21,7 @@ import {
   wslHostsGateOpen,
   wslHostsGateState
 } from '../wsl/host-lifecycle/wsl-host-gate'
-import { isForeignLink, readWorktreeLinks } from '../git/worktree-prune-guard'
+import { isForeignLink, readWorktreeLinks } from '../git/worktrees/removal/worktree-prune-guard'
 import { isTelemetryEnabled, track } from './client'
 import {
   buildWslUsageSnapshot,

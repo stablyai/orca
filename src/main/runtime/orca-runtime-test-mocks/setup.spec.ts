@@ -1,4 +1,4 @@
-import type * as WorktreeScanCacheModule from '../../git/worktree-scan-cache'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import { expect, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type * as GitUsernameModule from '../../git/git-username'
@@ -16,11 +16,12 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
-vi.mock('../../git/worktree-scan-cache', async (importOriginal) => {
-  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../../git/worktree')
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
   return {
     ...(await importOriginal<typeof WorktreeScanCacheModule>()),
-    listWorktrees: facade.listWorktrees
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
   }
 })
 
@@ -46,6 +47,11 @@ vi.mock('../../ipc/worktree-symlinks', () => ({
   createWorktreeSharedPaths: vi.fn(),
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock,
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
+}))
+
+vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
 }))
 
 export async function waitForMobileSessionTabsEvents(
@@ -288,21 +294,53 @@ const {
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
 
-vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
+  listWorktreesStrict: listWorktreesStrictMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
 }))
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: listWorktreesStrictMock,
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
-  addSparseWorktree: addSparseWorktreeMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock,
-  forceDeleteLocalBranch: forceDeleteLocalBranchMock
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesStrict: listWorktreesStrictMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
+      addSparseWorktree: addSparseWorktreeMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock,
+      forceDeleteLocalBranch: forceDeleteLocalBranchMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
+
+vi.mock('../../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await getWorktreeOwnerMocks()).addSparseWorktree
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
 }))
 
 vi.mock('../repo-worktree-resolution-scan', () => ({

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from '../../../../shared/worktree/create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,

@@ -8,7 +8,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
-import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
+import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktrees/removal/worktree-prune-guard'
 import { resolveLocalProjectRuntimeForProject } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { wslHostsOptedIn } from '../wsl/host-lifecycle/wsl-host-gate'
 import {

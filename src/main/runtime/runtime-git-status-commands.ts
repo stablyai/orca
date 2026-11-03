@@ -1,6 +1,6 @@
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { GitMutationInFlight } from '../../shared/git-mutation-in-flight'
-import { isGitWorktreeMutationInFlight } from '../git/git-worktree-mutation-state'
+import { isGitWorktreeMutationInFlight } from '../git/command-runner/git-worktree-mutation-state'
 import type {
   GitConflictOperation,
   GitStagingArea,
