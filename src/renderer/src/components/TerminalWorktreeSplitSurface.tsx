@@ -2,6 +2,8 @@ import React from 'react'
 import { useAppStore } from '../store'
 
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
+import { findSiblingGroupId } from '../../../shared/workspace-layout/tab-group-layout-tree'
+import type { BrowserSplitFold } from './tab-group/BrowserSplitToggle'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
@@ -70,7 +72,21 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   if (folded && !foldedGroupId) {
     setFold(null)
   }
-  const browserFold = React.useMemo(() => ({ groupId: foldedGroupId, setFold }), [foldedGroupId])
+  const browserFold = React.useMemo<BrowserSplitFold>(
+    () => ({
+      groupId: foldedGroupId,
+      setFold(target) {
+        setFold(target)
+        if (target) {
+          const siblingId = findSiblingGroupId(layout, target.groupId)
+          if (siblingId) {
+            useAppStore.getState().focusGroup(worktreeId, siblingId)
+          }
+        }
+      }
+    }),
+    [foldedGroupId, layout, worktreeId]
+  )
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
