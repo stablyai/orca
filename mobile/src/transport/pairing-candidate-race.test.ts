@@ -3,13 +3,14 @@ import { getPairingFailureMessage } from '../pairing/pairing-failure-message'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { PairingCodeRejectedError, racePairingCandidates } from './pairing-candidate-race'
 import { AUTH_REJECTED } from './rpc-client-authentication-retry'
+import type { Translate } from '../i18n/mobile-i18n'
 
 function failing(error: Error) {
   return { sendRequest: vi.fn().mockRejectedValue(error), close: vi.fn() }
 }
 
-const t = ((_key: string, fallback: string, values?: Record<string, unknown>) =>
-  fallback.replace('{{error}}', String(values?.error ?? ''))) as never
+const t: Translate = (_key, fallback, values) =>
+  fallback.replace('{{error}}', String(values?.error ?? ''))
 
 describe('first pairing rejected by the desktop', () => {
   it('reports an expired or replaced code when any path was refused', async () => {

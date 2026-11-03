@@ -121,7 +121,7 @@ describe('DeviceRegistry pairing offer TTL', () => {
   it('treats an unreadable expiry as never expiring', () => {
     writeFileSync(
       join(dir, DEVICE_REGISTRY_FILENAME),
-      JSON.stringify([row({ offerExpiresAt: 'soon' as never })])
+      JSON.stringify([{ ...row({}), offerExpiresAt: 'soon' }])
     )
     vi.setSystemTime(9e12)
     expect(new DeviceRegistry(dir).validateToken('tok')?.deviceId).toBe('d1')

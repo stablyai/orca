@@ -17,15 +17,15 @@ export class PairingCodeRejectedError extends Error {
 }
 
 // Relay and direct report a refused credential differently; old desktops use the same signals.
-function isCodeRejection(outcome: unknown): boolean {
-  if (outcome instanceof MobileE2EEAuthenticationError) {
-    return true
-  }
-  if (outcome instanceof Error) {
-    return outcome.message === AUTH_REJECTED
-  }
-  const reply = outcome as RpcResponse
-  return reply.ok === false && reply.error.code === 'unauthorized'
+function isRefusedError(error: unknown): boolean {
+  return (
+    error instanceof MobileE2EEAuthenticationError ||
+    (error instanceof Error && error.message === AUTH_REJECTED)
+  )
+}
+
+function isRefusedReply(reply: RpcResponse): boolean {
+  return !reply.ok && reply.error.code === 'unauthorized'
 }
 
 export type PairingCandidatePath = 'direct' | 'relay'
@@ -53,7 +53,7 @@ export function racePairingCandidates(
         (reply) => {
           if (!hostAnsweredStatusProbe(reply)) {
             failures++
-            codeRejected ||= isCodeRejection(reply)
+            codeRejected ||= isRefusedReply(reply)
             rejectIfFinished()
             return
           }
@@ -80,7 +80,7 @@ export function racePairingCandidates(
         },
         (error: unknown) => {
           failures++
-          codeRejected ||= isCodeRejection(error)
+          codeRejected ||= isRefusedError(error)
           rejectIfFinished()
         }
       )
