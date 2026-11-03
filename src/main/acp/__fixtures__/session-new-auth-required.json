@@ -1,0 +1,14 @@
+{
+  "agent": "grok",
+  "version": "1.0.70",
+  "method": "session/new",
+  "reply": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "error": {
+      "code": -32000,
+      "message": "Authentication required",
+      "data": "no auth method id provided"
+    }
+  }
+}

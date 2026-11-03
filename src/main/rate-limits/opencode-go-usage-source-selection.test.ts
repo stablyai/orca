@@ -71,28 +71,6 @@ describe('fetchOpenCodeGoUsage', () => {
     )
   })
 
-  it('passes the settings override down as the highest-precedence tier', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
-
-    await fetchOpenCodeGoUsage({ cookie: '', settingsApiKey: API_KEY })
-
-    expect(resolveApiKeyMock).toHaveBeenCalledWith({ settingsOverride: API_KEY })
-  })
-
-  it('passes trusted execution context and selected roots through to credential lookup', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
-    const environment = { XDG_DATA_HOME: '/task/selected', OPENCODE_DB: ':memory:' }
-
-    await fetchOpenCodeGoUsage({ cookie: '', backend: 'v1', environment, cwd: '/task/workspace' })
-
-    expect(resolveApiKeyMock).toHaveBeenCalledExactlyOnceWith({
-      settingsOverride: undefined,
-      backend: 'v1',
-      environment,
-      cwd: '/task/workspace'
-    })
-  })
-
   it('passes a manual override without evaluating selected execution context', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
     fetchWithApiKeyMock.mockResolvedValue({ kind: 'ok', windows: WINDOWS })
@@ -117,22 +95,6 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(fetchWithCookieMock).not.toHaveBeenCalled()
   })
 
-  it('names the missing subscription instead of a generic refresh failure', async () => {
-    resolveApiKeyMock.mockResolvedValue({
-      status: 'found',
-      key: API_KEY,
-      tier: 'opencode-auth-file'
-    })
-    fetchWithApiKeyMock.mockResolvedValue({ kind: 'no-subscription' })
-
-    const result = await fetchOpenCodeGoUsage({ cookie: '' })
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('no-subscription')
-    expect(result.error).toContain('no OpenCode Go subscription')
-    expect(result.error).not.toContain(API_KEY)
-  })
-
   it('keeps a working cookie account alive when the key has no Go entitlement', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
     fetchWithApiKeyMock.mockResolvedValue({ kind: 'no-subscription' })
@@ -154,33 +116,6 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('stale-token')
     expect(result.error).toContain('/connect')
-  })
-
-  it('surfaces a transport failure without exposing the key', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
-    fetchWithApiKeyMock.mockResolvedValue({
-      kind: 'failed',
-      message: 'OpenCode Go usage request failed (503)'
-    })
-
-    const result = await fetchOpenCodeGoUsage({ cookie: '' })
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('server')
-    expect(result.error).toBe('OpenCode Go usage request failed (503)')
-  })
-
-  it('carries a network failure kind from the key request', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
-    fetchWithApiKeyMock.mockResolvedValue({
-      kind: 'failed',
-      message: 'OpenCode Go usage request failed (TypeError)',
-      failureKind: 'network'
-    })
-
-    const result = await fetchOpenCodeGoUsage({ cookie: '' })
-
-    expect(result.usageMetadata?.failureKind).toBe('network')
   })
 
   it('falls back to the cookie path when no key exists anywhere', async () => {

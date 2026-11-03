@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION,
   hostTestAttachParams,
@@ -12,7 +12,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from '../runtime/structured-agent-session-runtime'
+} from '../runtime/agent-session/structured-agent-session-runtime'
 import { acpScriptedChild } from './acp-scripted-child.test-fixture'
 
 let stateDirectory: string | undefined

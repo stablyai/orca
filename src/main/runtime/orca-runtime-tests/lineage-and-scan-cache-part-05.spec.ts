@@ -310,8 +310,13 @@ describe('OrcaRuntimeService', () => {
         orchestrationRunId: runA.id
       })
 
-      db.createRun({
+      const runC = db.createRun({
         objective: 'rebind the original coordinator pane',
+        coordinatorHandle: handles.coordinator,
+        coordinatorPaneKey: paneKey('coordinator')
+      })
+      db.bindRun({
+        runId: runC.id,
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })

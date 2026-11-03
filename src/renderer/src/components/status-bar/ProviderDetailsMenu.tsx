@@ -12,6 +12,7 @@ import { useAppStore } from '../../store'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { ProviderPanel } from './tooltip'
+import { ProviderIdentityCard } from './ProviderIdentityCard'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
@@ -21,25 +22,31 @@ export function ProviderDetailsMenu({
   iconOnly,
   ariaLabel,
   topContent,
-  hidePanelResetCredits = false,
   open,
   onOpenChange,
   children,
   asSubmenu = false,
-  triggerContent
+  triggerContent,
+  trigger,
+  accountLabel,
+  panelFooter,
+  variant = 'default'
 }: {
-  provider: ProviderRateLimits
+  provider: ProviderRateLimits | null
   compact: boolean
   iconOnly: boolean
   ariaLabel: string
   topContent?: React.ReactNode
-  hidePanelResetCredits?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
   // Drill into this provider from UsageRosterPanel using a full-width trigger row.
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
+  trigger?: React.ReactElement
+  accountLabel?: string
+  panelFooter?: React.ReactNode
+  variant?: 'default' | 'account'
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
@@ -58,14 +65,20 @@ export function ProviderDetailsMenu({
   const panelBody = (
     <>
       {topContent}
-      <div className="p-2">
-        {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-        <ProviderPanel
-          p={provider}
-          showResetCredits={!hidePanelResetCredits}
-          usagePercentageDisplay={usagePercentageDisplay}
-        />
-      </div>
+      {provider ? (
+        <div className="p-2">
+          {variant === 'account' ? (
+            <ProviderIdentityCard
+              p={provider}
+              accountLabel={accountLabel}
+              footer={panelFooter}
+              usagePercentageDisplay={usagePercentageDisplay}
+            />
+          ) : (
+            <ProviderPanel p={provider} usagePercentageDisplay={usagePercentageDisplay} />
+          )}
+        </div>
+      ) : null}
       {children ? (
         <>
           <DropdownMenuSeparator />
@@ -84,7 +97,8 @@ export function ProviderDetailsMenu({
         <DropdownMenuSubContent
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
           collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-          className="max-h-(--radix-dropdown-menu-content-available-height) w-[300px] overflow-y-auto p-0 scrollbar-sleek"
+          scrollable
+          className={`${variant === 'account' ? 'w-[400px]' : 'w-[300px]'} max-w-[calc(100vw-1rem)]`}
         >
           {panelBody}
         </DropdownMenuSubContent>
@@ -95,24 +109,26 @@ export function ProviderDetailsMenu({
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label={ariaLabel}
-        >
-          {iconOnly ? (
-            <ProviderLetterBadge p={provider} />
-          ) : (
-            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+            aria-label={ariaLabel}
+          >
+            {!provider ? null : iconOnly ? (
+              <ProviderLetterBadge p={provider} />
+            ) : (
+              <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
+            )}
+          </button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         side="top"
         align="start"
         sideOffset={8}
-        className="w-[260px]"
+        className={`${variant === 'account' ? 'w-[400px]' : 'w-[260px]'} max-w-[calc(100vw-1rem)]`}
         onPointerDownOutside={menuFocusHandoff.onPointerDownOutside}
         onCloseAutoFocus={menuFocusHandoff.onCloseAutoFocus}
       >

@@ -1,6 +1,9 @@
 import { z } from 'zod'
+import { BrowserExpectedUrlMismatch } from './browser-expected-url'
 
 export const BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY = 'automation-v1' as const
+// Older hosts re-parse params and would drop expectUrl, so commands carrying it need this.
+export const BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY = 'expect-url-v1' as const
 export const BROWSER_CLIENT_AUTOMATION_PARAMS_MAX_BYTES = 256 * 1024
 export const BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES = 768 * 1024
 
@@ -109,7 +112,11 @@ export const BrowserClientAutomationResult = z.discriminatedUnion('status', [
     status: z.literal('completed'),
     value: BrowserClientAutomationResultValue.optional()
   }),
-  z.object({ status: z.literal('failed'), errorCode: z.string().min(1).max(256) })
+  z.object({
+    status: z.literal('failed'),
+    errorCode: z.string().min(1).max(256),
+    expectedUrlMismatch: BrowserExpectedUrlMismatch.optional()
+  })
 ])
 export type BrowserClientAutomationResult = z.infer<typeof BrowserClientAutomationResult>
 

@@ -1,11 +1,11 @@
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
-import type { AgentType } from '../../shared/native-chat-types'
+import type { AgentType } from '../../shared/agent-status-types'
 import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
-} from '../../shared/native-chat-agent-support'
+} from '../../shared/native-chat/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'

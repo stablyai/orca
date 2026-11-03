@@ -10,7 +10,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { SidebarClock } from '../../../../../../main/runtime/sidebar-inputs/sidebar-clock'
 import { SidebarRetentionOwner } from '../../../../../../main/runtime/sidebar-inputs/sidebar-retention-owner'
-import { makeRepo, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { makeTerminalTab } from '../../../../store/slices/worktrees-slice-test-fixtures'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'
 

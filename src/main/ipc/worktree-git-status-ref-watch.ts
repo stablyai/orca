@@ -4,7 +4,7 @@ import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   pathRelativeToWorktreeWatchRoot,
   type WorktreeBaseWatchTarget
-} from './worktree-base-directory-event-filter'
+} from './worktrees/creation/worktree-base-directory-event-filter'
 
 export type GitStatusRefWatchTarget = Pick<WorktreeBaseWatchTarget, 'kind' | 'repos' | 'path'> & {
   gitStatusRefPaths: Set<string>

@@ -171,7 +171,11 @@ describe('setupGuestShortcutForwarding', () => {
         getKeybindings: () => keybindings
       })
 
-      const input = { key: 'X', code: 'KeyX', shift: true }
+      const input = keybindings
+        ? { key: 'X', code: 'KeyX', shift: true }
+        : process.platform === 'darwin'
+          ? { key: '≈', code: 'KeyX', alt: true }
+          : { key: 'Y', code: 'KeyY', shift: true }
       expect(triggerBeforeInput(input)).not.toHaveBeenCalled()
       expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).not.toHaveBeenCalled()
       expect(rendererSendMock).not.toHaveBeenCalled()

@@ -43,6 +43,13 @@ export class PtyShellOwnershipMirror {
     return this.scanner.owner
   }
 
+  /** Consume the marker hint: true at most once per clean prompt cycle. */
+  claimIdlePrompt(): boolean {
+    const idle = this.scanner.isIdleAtPrompt
+    this.scanner.forgetIdlePrompt()
+    return idle
+  }
+
   seedOwner(owner: TerminalOwner | undefined, opts: { alternateScreen?: boolean } = {}): void {
     this.scanner.seedOwner(owner, opts)
   }

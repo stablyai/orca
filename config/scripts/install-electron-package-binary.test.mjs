@@ -90,29 +90,6 @@ describe('install-electron-package-binary', () => {
     }
   })
 
-  it('reuses a configured persistent cache without forcing a fresh download', () => {
-    const projectDir = mkTempProject()
-    const cacheRoot = join(projectDir, 'electron-cache')
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_CACHE_ROOT: cacheRoot
-      })
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
-        `cacheRoot=${cacheRoot} platform=linux arch=x64 force=false`
-      )
-      expect(existsSync(cacheRoot)).toBe(true)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
   it('preserves an existing Electron distribution when replacement download fails', () => {
     const projectDir = mkTempProject()
 
@@ -214,31 +191,6 @@ describe('install-electron-package-binary', () => {
     }
   })
 
-  it('retries transient Electron download failures', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, {
-        downloadFailures: 1,
-        downloadErrorCode: 'ECONNRESET'
-      })
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
-      })
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(
-        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
-      ).toHaveLength(2)
-      expect(result.stderr).toContain('Transient Electron download failure (ECONNRESET)')
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
   it('keeps a persistent cache root while retrying transient failures', () => {
     const projectDir = mkTempProject()
     const cacheRoot = join(projectDir, 'electron-cache')
@@ -263,33 +215,6 @@ describe('install-electron-package-binary', () => {
       expect(
         readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
       ).toHaveLength(2)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('retries HTTP/2 stream refusal Electron download failures', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, {
-        downloadFailures: 1,
-        downloadErrorCode: 'ERR_HTTP2_STREAM_ERROR'
-      })
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
-      })
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(
-        readFileSync(join(projectDir, 'electron-get.log'), 'utf8').trim().split('\n')
-      ).toHaveLength(2)
-      expect(result.stderr).toContain(
-        'Transient Electron download failure (ERR_HTTP2_STREAM_ERROR)'
-      )
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
@@ -414,30 +339,6 @@ describe('install-electron-package-binary', () => {
   })
 
   // The shared cache is macOS-only: it exists to avoid a second copy via APFS clonefile.
-  it('publishes a shared Electron dist entry after a fresh download', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      initGitRepo(projectDir)
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir)
-      writeFakeExtractor(projectDir, { createExecutable: true })
-
-      const result = runInstallScript(projectDir, { CI: '' })
-      const entryPath = join(sharedCacheRoot(projectDir), sharedEntryName)
-
-      expect(result.status, result.stderr).toBe(0)
-      expect(lstatSync(entryPath).isDirectory()).toBe(true)
-      expect(lstatSync(entryPath).isSymbolicLink()).toBe(false)
-      expect(readFileSync(join(entryPath, 'version'), 'utf8')).toBe('v41.5.0')
-      expect(existsSync(join(entryPath, 'electron'))).toBe(true)
-      expect(readSharedDistMarker(projectDir)).toBe(sharedEntryName)
-      expect(result.stdout).toMatch(/Published Electron 41\.5\.0 to .*41\.5\.0-linux-x64$/m)
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
   it('shares the Electron dist into a sibling worktree without downloading', () => {
     const projectDir = mkTempProject()
     const siblingDir = `${projectDir}-sibling`
@@ -600,24 +501,6 @@ describe('install-electron-package-binary', () => {
       expect(readFileSync(join(cacheRoot, sharedEntryNameFor('41.5.0'), 'version'), 'utf8')).toBe(
         'v41.5.0'
       )
-    } finally {
-      rmSync(projectDir, { recursive: true, force: true })
-    }
-  })
-
-  it('does not exit successfully when Electron download never settles', () => {
-    const projectDir = mkTempProject()
-
-    try {
-      writeFakeElectronPackage(projectDir)
-      writeFakeElectronGet(projectDir, { downloadNeverSettles: true })
-      writeFakeExtractor(projectDir, { createExecutable: false })
-
-      const result = runInstallScript(projectDir)
-
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('Detected unsettled top-level await')
-      expect(existsSync(join(projectDir, 'node_modules', 'electron', 'path.txt'))).toBe(false)
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }

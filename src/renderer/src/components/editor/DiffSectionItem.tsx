@@ -1,14 +1,14 @@
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
@@ -27,9 +27,9 @@ export function DiffSectionItem({
   isBranchMode,
   sideBySide,
   isDark,
-  settings,
   sectionHeight,
   worktreeId,
+  noteSource = NO_RESOURCE_EVIDENCE,
   loadSection,
   loadDeferredSection,
   retrySection,
@@ -48,16 +48,19 @@ export function DiffSectionItem({
   modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const diffTypography = useEditorTypography('diff')
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
-  // Select the stable worktree array and memoize filtering; fresh selector results would rerender this section on unrelated writes.
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
   const diffComments = useMemo(
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
@@ -68,10 +71,6 @@ export function DiffSectionItem({
     () =>
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
     [section.contentGeneration, section.key, worktreeId]
-  )
-  const diffEditorFontSize = computeDiffEditorFontSize(
-    settings?.terminalFontSize ?? 13,
-    editorFontZoomLevel
   )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
@@ -109,6 +108,7 @@ export function DiffSectionItem({
       body: string
     }): Promise<boolean> => {
       return submitDiffSectionComment({
+        owner: commentOwner,
         addDiffComment,
         body,
         onAddLineComment,
@@ -117,10 +117,12 @@ export function DiffSectionItem({
         worktreeId
       })
     },
-    [addDiffComment, onAddLineComment, section, worktreeId]
+    [commentOwner, addDiffComment, onAddLineComment, section, worktreeId]
   )
 
   useDiffCommentDecorator({
+    captureCreateComment: !onAddLineComment,
+    commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: `${modelPathBase}:modified`,
     filePath: section.path,
@@ -132,13 +134,16 @@ export function DiffSectionItem({
     onCreateComment: handleCreateComment,
     draftPlaceholder: addLineCommentPlaceholder,
     draftSubmitLabel: addLineCommentLabel,
-    canOpenDraft: !isLargeDiffLimited,
+    canOpenDraft: !isLargeDiffLimited && (commentOwner !== null || Boolean(onAddLineComment)),
     onDeleteComment: (id) => {
       if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+        void (commentOwner && deleteDiffComment(commentOwner, id))
       }
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    onUpdateComment: worktreeId
+      ? (id, body) =>
+          commentOwner ? updateDiffComment(commentOwner, id, body) : Promise.resolve(false)
+      : undefined,
     pendingScrollCommentId: pendingScrollForThisSection,
     onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
   })
@@ -324,10 +329,9 @@ export function DiffSectionItem({
           language={language}
           modelPathBase={modelPathBase}
           isEditable={isEditable}
-          diffEditorFontSize={diffEditorFontSize}
-          diffWordWrap={settings?.diffWordWrap}
-          diffShowWhitespace={settings?.diffShowWhitespace}
-          editorFontFamily={resolveEditorFontFamily(settings)}
+          typography={diffTypography}
+          diffWordWrap={diffWordWrap}
+          diffShowWhitespace={diffShowWhitespace}
           onRetrySection={retrySection}
           onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}

@@ -34,7 +34,7 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('notification route coordination', () => {
-  it('mounts the host before replacing it with the notification session, from a cold navigator', () => {
+  it('mounts the host, then opens the notification session over its list, from a cold navigator', () => {
     const target = getNotificationNavigationTarget({
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
@@ -85,9 +85,8 @@ describe('notification route coordination', () => {
     )
 
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
+      type: 'PUSH',
       target: '/h',
-      source: 'host-index',
       payload: target!.sessionTarget
     })
   })
@@ -168,6 +167,10 @@ it('does not reuse a different workspace on the same host', () => {
   )
   const router = { push: vi.fn(), replace: vi.fn() }
   navigateToHostStackRoute(harness.navigation, router, target.hostId, target.sessionTarget!)
-  expect(router.push).toHaveBeenCalledOnce()
-  expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+  expect(router.push).not.toHaveBeenCalled()
+  expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+    type: 'PUSH',
+    target: 'host-stack',
+    payload: target.sessionTarget
+  })
 })

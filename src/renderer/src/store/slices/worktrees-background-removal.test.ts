@@ -1,3 +1,4 @@
+import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
@@ -275,4 +276,22 @@ describe('removing a worktree the host deletes in the background', () => {
     reconcileHostWorktreeRemovals(store)
     expect(deleteState(store)?.isDeleting).toBe(true)
   })
+  it.each(['removed', 'unmarked', 'unreadable'] as const)(
+    'lost-reply %s retires only with committed absence proof',
+    async (listing) => {
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+      seedRow(store)
+      hostListsOnRefresh(listing === 'unreadable' ? new Error('unreadable') : listing)
+      const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(worktreeId, 'codex', 'local')
+      launchDrafts.updateNativeChatComposerDraft(scope, { text: 'pending task' }, 'immediate')
+      const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+      mockApi.worktrees.remove.mockRejectedValue(new Error('Request timed out: worktree.rm'))
+      const result = await store
+        .getState()
+        .removeWorktree({ id: worktreeId, executionHostId: 'local' })
+      expect(result.ok).toBe(listing === 'removed')
+      expect(attempt.draft === undefined).toBe(listing === 'removed')
+      launchDrafts.clearNativeChatComposerDraftsForTests()
+    }
+  )
 })

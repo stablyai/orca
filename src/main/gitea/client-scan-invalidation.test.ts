@@ -18,7 +18,8 @@ import {
 } from './client'
 import { createGiteaPullRequest } from './pull-request-creation'
 import { _resetGiteaRepoRefCache } from './repository-ref'
-import { _resetGiteaPullRequestScanCache } from './pull-request-scan-cache'
+import { _resetGiteaPullRequestScanCache, scanGiteaPullRequests } from './pull-request-scan-cache'
+import { observeProviderRead } from '../source-control/hosted-review-provider-read'
 
 const branch = 'feature/gitea'
 const pullRequest = {
@@ -50,6 +51,18 @@ describe('Gitea scan invalidation after creation', () => {
     _resetGiteaPullRequestScanCache()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
+  })
+
+  it('reports a scan answered from the shared cache or a running scan as not a fresh read', async () => {
+    const fetchPage = vi.fn(async () => [pullRequest])
+    const scan = () =>
+      observeProviderRead(() => scanGiteaPullRequests('team/repo', fetchPage, 50, 1))
+    const [owner, joiner] = await Promise.all([scan(), scan()])
+    const cached = await scan()
+    expect(fetchPage).toHaveBeenCalledTimes(1)
+    expect(owner.answeredFromProviderCache).toBe(false)
+    expect(joiner.answeredFromProviderCache).toBe(true)
+    expect(cached.answeredFromProviderCache).toBe(true)
   })
 
   it('refreshes cached misses in both modes after a successful create and coalesces readers', async () => {

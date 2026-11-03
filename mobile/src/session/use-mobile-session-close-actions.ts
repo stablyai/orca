@@ -1,5 +1,9 @@
 import { clearMobileAiVaultMemoryCache } from '../agent-history/mobile-ai-vault-session-cache'
-import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
+import {
+  pendingSelectionTabId,
+  withoutPendingHandle,
+  withoutPendingTabId
+} from './pending-session-selection'
 import {
   sessionTabClose,
   sessionTerminalClose,
@@ -170,10 +174,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         setSessionTabs(remainingTabs)
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+        if (selectedSessionTabIdRef.current === tab.id) {
+          selectedSessionTabIdRef.current =
+            remainingTabs.find((candidate) => candidate.id === activeSessionTabIdRef.current)?.id ??
+            null
+        }
+        if (pendingSelectionTabId(pendingSelectionRef.current) === tab.id) {
+          pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
+        }
         // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
-        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        if (activeSessionTabIdRef.current === tab.id) {
           activeSessionTabTypeRef.current = null
-          selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null

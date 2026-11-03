@@ -1,8 +1,8 @@
 import { expect } from 'vitest'
 import { z } from 'zod'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { messageText } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -18,8 +18,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecoveryCapsule } from '../runtime/agent-session-recovery-capsule'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import {
   GROK,

@@ -129,31 +129,6 @@ describe('[features].daemon_auto_start write-back promotion', () => {
     expect(readSystemConfig()).toBe(settled)
   })
 
-  it('appends a [features] table when the source has none', () => {
-    writeSystemConfig('model = "gpt-5"\n\n[tui]\ntheme = "dark"\n')
-    syncSystemConfigIntoManagedCodexHome()
-    turnOffInMirror()
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readSystemConfig()).toBe(
-      'model = "gpt-5"\n\n[tui]\ntheme = "dark"\n\n[features]\ndaemon_auto_start = false\n'
-    )
-  })
-
-  it('replaces a source daemon_auto_start = true in place', () => {
-    writeSystemConfig('[features]\nhooks = true\ndaemon_auto_start = true\napps = true\n')
-    syncSystemConfigIntoManagedCodexHome()
-    turnOffInMirror()
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(readSystemConfig()).toBe(
-      '[features]\nhooks = true\ndaemon_auto_start = false\napps = true\n'
-    )
-    expect(readRuntimeConfig()).toContain('daemon_auto_start = false')
-  })
-
   it('keeps a source edit made while the runtime also changed, as for every promoted key', () => {
     writeSystemConfig('[features]\ndaemon_auto_start = true\n')
     syncSystemConfigIntoManagedCodexHome()

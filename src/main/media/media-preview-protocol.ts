@@ -1,5 +1,5 @@
 import { protocol } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
 import {
   filePreviewForPath,

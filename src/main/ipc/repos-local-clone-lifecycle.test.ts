@@ -19,10 +19,10 @@ vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
-vi.mock('./registered-worktree-roots-cache', () =>
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
-vi.mock('../worktree-root-preparation', () =>
+vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 
@@ -129,7 +129,7 @@ describe('repos:add + repos:clone', () => {
       Promise.resolve({
         stdout:
           args[0] === 'config' && args.includes('.gitmodules') && cloned
-            ? 'submodule.lib.path vendor/lib\n'
+            ? 'submodule.lib.path\nvendor/lib\0'
             : '',
         stderr: ''
       })

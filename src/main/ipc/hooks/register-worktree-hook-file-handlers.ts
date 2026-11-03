@@ -6,7 +6,7 @@ import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
 import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
-} from '../../issue-command-file'
+} from '../../workspace-hooks/issue-command-file'
 import { broadcastWhenWslDistroRunning } from '../preflight-wsl-refusal-retry'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'

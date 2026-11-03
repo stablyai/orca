@@ -141,7 +141,8 @@ export function _getPRRefreshAliasCountForTests(key: string): number {
 
 export async function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
-  reason: GitHubPRRefreshReason = 'manual'
+  reason: GitHubPRRefreshReason = 'manual',
+  options: { userRefresh?: boolean } = {}
 ): Promise<PRRefreshOutcome> {
   const alias = aliasFromCandidate(candidate)
   const key = refreshKey(candidate)
@@ -219,7 +220,7 @@ export async function refreshPRNow(
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
     candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-    ...hostedReviewOptionArgs(candidate, reason)
+    ...hostedReviewOptionArgs(candidate, reason, options)
   )
   if (!queue.ownsRequest(key, requestSequence)) {
     events.broadcast({ aliases, reason, outcome, requestStartedAt }, requestSequence)

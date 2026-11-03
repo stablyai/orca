@@ -168,7 +168,7 @@ function insertAdditionalAgentArgs(args: {
 export function planCommitMessageGeneration(
   input: CommitMessagePlanInput,
   prompt: string,
-  options: { strictMcp?: boolean } = {}
+  options: { strictMcp?: boolean; legacyToolPolicy?: boolean } = {}
 ): CommitMessagePlanResult {
   if (isCustomAgentId(input.agentId)) {
     const command = input.customAgentCommand?.trim() ?? ''
@@ -253,6 +253,7 @@ export function planCommitMessageGeneration(
     model: input.model,
     thinkingLevel: input.thinkingLevel,
     strictMcp: options.strictMcp,
+    legacyToolPolicy: options.legacyToolPolicy,
     userArgs: [...prefixArgs, ...recipeArgs]
   })
   // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.

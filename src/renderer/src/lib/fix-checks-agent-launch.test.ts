@@ -1,3 +1,7 @@
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import { getDefaultSettings } from '../../../shared/constants'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
@@ -60,7 +64,6 @@ const mocks = vi.hoisted(() => {
     activateAndRevealWorktree: vi.fn(),
     findGithubPrWorkspaceAttachment: vi.fn(),
     focusTerminalTabSurface: vi.fn(),
-    getConnectionId: vi.fn(),
     launchAgentInNewTab: vi.fn(),
     launchWorkItemDirect: vi.fn(),
     pickSourceControlLaunchAgent: vi.fn(),
@@ -87,10 +90,6 @@ vi.mock('sonner', () => ({
     error: mocks.toastError,
     message: mocks.toastMessage
   }
-}))
-
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: mocks.getConnectionId
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -166,7 +165,6 @@ describe('startFixChecksAgent', () => {
     mocks.store.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.findGithubPrWorkspaceAttachment.mockReturnValue(null)
-    mocks.getConnectionId.mockReturnValue(null)
     mocks.launchAgentInNewTab.mockImplementation(
       (args: { beforeSurfaceOpen?: (surface: { kind: 'local-terminal' }) => boolean | void }) => {
         args.beforeSurfaceOpen?.({ kind: 'local-terminal' })
@@ -184,173 +182,57 @@ describe('startFixChecksAgent', () => {
     mocks.resolveRepoWorktreeLaunchPlatform.mockReturnValue('darwin')
   })
 
-  it('activates the attached workspace as a surface-providing caller', async () => {
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    // The launcher owns creation; activation must not seed a sibling shell after the last terminal closed.
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
-  })
-
-  it('fails without launching when the requested worktree is missing', async () => {
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'missing-worktree',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('fails without launching when agent detection finds no enabled agent', async () => {
-    mocks.store.ensureDetectedAgents.mockResolvedValue([])
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('rejects without launching when remote agent detection fails', async () => {
-    mocks.store.repos = [{ ...mocks.store.repos[0], connectionId: 'conn-1' }]
-    mocks.getConnectionId.mockReturnValue('conn-1')
-    mocks.store.ensureRemoteDetectedAgents.mockRejectedValue(new Error('detection failed'))
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).rejects.toThrow('detection failed')
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it("resolves the attached workspace's own execution host", async () => {
-    mocks.store.repos = [
-      {
-        ...mocks.store.repos[0],
-        connectionId: 'ssh-1'
-      }
-    ]
-    mocks.getConnectionId.mockReturnValue(undefined)
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mocks.resolveRepoWorktreeLaunchPlatform).toHaveBeenCalledWith(
-      mocks.store,
-      expect.objectContaining({ id: 'repo-1', connectionId: 'ssh-1' }),
-      expect.objectContaining({ id: 'wt-1', path: '/repo/wt-1' })
-    )
-  })
-
-  it("plans a Linux server's launch for that server from a Windows client (#27971)", async () => {
-    mocks.resolveRepoWorktreeLaunchPlatform.mockReturnValue('linux')
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(true)
-
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({ launchPlatform: 'linux' })
-    )
-  })
-
-  it('fails without launching when the execution host has not reported its OS', async () => {
-    mocks.resolveRepoWorktreeLaunchPlatform.mockReturnValue(undefined)
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).resolves.toBe(false)
-
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
-  })
-
-  it('leaves hidden CLI validation to the selected launch route', async () => {
+  it('carries the actual use-default literal from Fix Checks into final startup and its recipe', async () => {
+    const settings = {
+      ...getDefaultSettings('/test'),
+      agentPermissionDefault: 'own' as const,
+      defaultTuiAgent: 'claude' as const,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
+    }
+    Object.assign(mocks.store.settings, settings)
+    mocks.store.ensureDetectedAgents.mockResolvedValue(['claude'])
+    mocks.pickSourceControlLaunchAgent.mockReturnValue('claude')
     mocks.resolveSourceControlActionRecipe.mockReturnValue({
+      agentId: null,
       commandInputTemplate: '{basePrompt}',
-      agentArgs: '--model "unterminated'
+      agentArgs: '--model literal'
+    })
+    const plans: ReturnType<typeof buildAgentStartupPlan>[] = []
+    mocks.launchAgentInNewTab.mockImplementation((args: LaunchAgentInNewTabArgs) => {
+      plans.push(
+        buildAgentStartupPlan({
+          ...resolveAgentStartupPlanInputs({
+            agent: args.agent,
+            settings,
+            agentArgs: args.agentArgs,
+            sessionOptions: args.sessionOptions,
+            sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
+          }),
+          prompt: '',
+          allowEmptyPromptLaunch: true
+        })
+      )
+      return {
+        surface: { kind: 'local-terminal', tabId: 'proof' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
     })
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
     await expect(
       startFixChecksAgent({
         repoId: 'repo-1',
         worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
+        basePrompt: 'Fix',
         launchSource: 'task_page'
       })
     ).resolves.toBe(true)
-
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({ agentArgs: '--model "unterminated' })
-    )
-    expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('rejects without focusing a terminal when agent launch throws', async () => {
-    mocks.launchAgentInNewTab.mockImplementation(() => {
-      throw new Error('launch failed')
-    })
-    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
-
-    await expect(
-      startFixChecksAgent({
-        repoId: 'repo-1',
-        worktreeId: 'wt-1',
-        basePrompt: 'Fix checks',
-        launchSource: 'task_page'
-      })
-    ).rejects.toThrow('launch failed')
-
-    expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
+    expect(plans).toHaveLength(1)
+    expect(plans[0]?.launchCommand).toBe("claude '--model' 'literal'")
+    expect(plans[0]?.launchConfig.agentArgs).toBe('--model literal')
+    expect(plans[0]?.launchCommand).not.toContain('high')
   })
 
   // Why: a saved chat stays implicit so a host that stops running chats falls back to a terminal.

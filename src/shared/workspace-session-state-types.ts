@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type { SleepingAgentSessionRecord } from './agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'

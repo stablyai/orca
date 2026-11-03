@@ -1,8 +1,17 @@
 import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
 import type { AgentStatusEntry } from '../agent-status-types'
+import type { NativeChatMessage } from '../native-chat/native-chat-types'
+import { agentMessageTranscriptText } from './agent-message-display-text'
 
 export const AGENT_MESSAGE_FOLDED_LINES = 3
-export type AgentMessageHeading = 'task' | 'coordinator' | 'worker' | 'generic'
+export type AgentMessageHeading =
+  | 'started'
+  | 'handed-off'
+  | 'started-agent'
+  | 'task'
+  | 'coordinator'
+  | 'worker'
+  | 'generic'
 export type AgentMessageSenderView = Readonly<{
   agentType?: AgentStatusEntry['agentType']
   progress?: number
@@ -20,7 +29,18 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
-export function agentMessageHeading(from: AgentMessageSource): AgentMessageHeading {
+/** Takes the message's creation flags and text together, and requires them, so no caller can show a
+ *  creation card as a plain message, a handoff as a started worker, or a handoff with no task as work handed over. */
+export function agentMessageHeading(
+  from: AgentMessageSource,
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
+): AgentMessageHeading {
+  if (creation.agentStart) {
+    if (!creation.agentHandoff) {
+      return 'started'
+    }
+    return agentMessageTranscriptText(creation.blocks, from) ? 'handed-off' : 'started-agent'
+  }
   if (from.orchestration?.message === 'task') {
     return 'task'
   }

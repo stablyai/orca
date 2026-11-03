@@ -7,6 +7,8 @@ import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
 import { cn } from '@/lib/utils'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
@@ -20,9 +22,18 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
     density: {
       default: '',
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
-      menu: '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px] [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+      menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
+      model:
+        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]'
     }
   },
+  compoundVariants: [
+    {
+      density: ['menu', 'model'],
+      className:
+        '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
+    }
+  ],
   defaultVariants: { surface: 'default', density: 'default' }
 })
 
@@ -65,40 +76,44 @@ function CommandDialog({
   surface?: 'default' | 'palette'
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope()
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
 
   return (
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
         <DialogOverlay className={overlayClassName} />
-        <DialogPrimitive.Content
-          data-slot="command-dialog-content"
-          // Match DialogContent’s surface/border/shadow recipe so the palette remains distinct in dark mode.
-          className={cn(
-            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-dialog-surface text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-            surface === 'palette' &&
-              'rounded-xl border-border/70 shadow-[0_26px_84px_rgba(0,0,0,0.32)]',
-            contentClassName
-          )}
-          onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}
-          onOpenAutoFocus={onOpenAutoFocus}
-          onCloseAutoFocus={onCloseAutoFocus}
-        >
-          <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
-            {description}
-          </DialogPrimitive.Description>
-          <Command
-            shouldFilter={shouldFilter}
+        <OverlayFocusScope value={scope}>
+          <DialogPrimitive.Content
+            data-slot="command-dialog-content"
+            ref={focusScopeRef}
+            // Match DialogContent’s surface/border/shadow recipe so the palette remains distinct in dark mode.
             className={cn(
-              '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
-              commandClassName
+              'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-black/14 bg-dialog-surface text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+              surface === 'palette' &&
+                'rounded-xl border-border/70 shadow-[0_26px_84px_rgba(0,0,0,0.32)]',
+              contentClassName
             )}
-            {...commandRootProps}
+            onEscapeKeyDown={(event) => handleImeOverlayEscape(event)}
+            onOpenAutoFocus={onOpenAutoFocus}
+            onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, onCloseAutoFocus)}
           >
-            {children}
-          </Command>
-        </DialogPrimitive.Content>
+            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              {description}
+            </DialogPrimitive.Description>
+            <Command
+              shouldFilter={shouldFilter}
+              className={cn(
+                '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+                commandClassName
+              )}
+              {...commandRootProps}
+            >
+              {children}
+            </Command>
+          </DialogPrimitive.Content>
+        </OverlayFocusScope>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
@@ -236,13 +251,19 @@ function CommandGroup({
 }
 
 const commandItemVariants = cva('', {
-  variants: { selection: { default: '', palette: 'jump-palette-item' } },
+  variants: {
+    selection: { default: '', palette: 'jump-palette-item' },
+    density: { default: '', workspace: 'px-3 py-2 text-xs' },
+    emphasis: { default: '', pinned: 'bg-muted/35' }
+  },
   defaultVariants: { selection: 'default' }
 })
 
 function CommandItem({
   className,
   selection,
+  density,
+  emphasis,
   ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item> & VariantProps<typeof commandItemVariants>) {
@@ -252,7 +273,7 @@ function CommandItem({
       data-slot="command-item"
       className={cn(
         'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
-        commandItemVariants({ selection }),
+        commandItemVariants({ selection, density, emphasis }),
         className
       )}
       {...props}

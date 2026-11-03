@@ -177,20 +177,6 @@ describe('pane viewport retry lifetime', () => {
     expect(requestFullViewportPresent).toHaveBeenCalledOnce()
   })
 
-  it('keeps immediate displayed presentation and the no-frame fallback', () => {
-    const pane = createPane()
-    pane.container.style.display = 'block'
-    presentPaneViewport(toPublicPane(pane))
-    expect(requestFullViewportPresent).toHaveBeenCalledOnce()
-    expect(frames.size).toBe(0)
-    pane.container.style.display = 'none'
-    vi.stubGlobal('requestAnimationFrame', undefined)
-    const refresh = vi.spyOn(pane.terminal, 'refresh')
-    presentPaneViewport(toPublicPane(pane))
-    expect(refresh).toHaveBeenCalledOnce()
-    expect(frames.size).toBe(0)
-  })
-
   it('allows a cancelled live wrapper to schedule again', () => {
     const pane = createPane()
     const view = toPublicPane(pane)

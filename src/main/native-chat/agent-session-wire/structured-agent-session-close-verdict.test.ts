@@ -6,13 +6,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { describeNativeChatTurnStatus } from '../../../shared/native-chat-turn-status'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { selectStructuredAgentSettledTurns } from '../../../shared/structured-agent-session-turn-timing'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import { selectStructuredAgentSettledTurns } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {

@@ -89,21 +89,21 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/codex-hook-definition',
   'src/main/codex/codex-hook-command-form',
   'src/main/codex/codex-hook-identity',
-  'src/main/codex/codex-app-server-client',
+  'src/main/codex/app-server/codex-app-server-client',
   'src/main/codex/codex-trust-identity',
   'src/main/codex/config-toml-hook-trust-',
   'src/main/codex/config-toml-key-path',
   'src/main/agent-hooks/posix-hook-command',
   'src/main/agent-hooks/hook-post-command',
   'src/main/codex-cli/codex-read-only-app-server-args',
-  'src/main/agent-trust-presets',
+  'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/config-toml-trust',
   'src/main/pty/codex-no-daemon-binary-contract',
   'src/main/pty/codex-shell-launch-preflight',
   'src/shared/codex-shell-function',
   'src/main/codex/codex-index-heal-binary-contract',
   'src/main/codex/codex-session-index-heal',
-  'src/main/codex/codex-app-server-session',
+  'src/main/codex/app-server/codex-app-server-session',
   'src/main/codex/codex-state-db',
   'src/main/sqlite/sync-database',
   'src/main/codex/app-server/codex-app-server-capability-signal',
@@ -193,14 +193,31 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/browser-client-host-placement',
   'src/shared/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch-params',
-  'src/shared/agent-session-wire',
+  'src/shared/agent-session/agent-session-wire',
+  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
+  'src/shared/agent-session/view/structured-agent-session-projection.ts',
+  'src/shared/agent-session/lifecycle/agent-session-record-stored-form.test.ts',
+  'src/shared/agent-session/lifecycle/agent-session-record-stored-form.ts',
+  'src/shared/agent-session/lifecycle/agent-session-record.test-fixture.ts',
+  'src/shared/agent-session/lifecycle/agent-session-record.ts',
+  'src/shared/agent-session/lifecycle/agent-session-turn-record.test.ts',
+  'src/shared/agent-session/lifecycle/agent-session-turn-record.ts',
+  'src/shared/agent-session/lifecycle/agent-session-mutation-envelope.test.ts',
+  'src/shared/agent-session/lifecycle/agent-session-mutation-envelope.ts',
+  'src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding.ts',
+  'src/shared/agent-session/lifecycle/agent-session-provider-handle-replacement.ts',
+  'src/shared/agent-session/lifecycle/agent-session-provider-handle.test.ts',
+  'src/shared/agent-session/lifecycle/agent-session-provider-handle.ts',
+  'src/shared/agent-session/lifecycle/agent-session-resume-marker.ts',
+  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
+  'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
-  'src/shared/structured-agent-session-mutation.ts',
-  'src/shared/structured-agent-session-send-mutation.ts',
+  'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts',
+  'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
   'src/shared/agent-session-record',
   'src/shared/agent-session-provider-handle',
-  'src/shared/agent-session-journal-',
+  'src/shared/agent-session/journal/',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
@@ -213,7 +230,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
   'src/main/runtime/agent-session-record-store',
-  'src/main/runtime/agent-session-recovery-capsule',
+  'src/main/runtime/agent-session/records/agent-session-record-store',
+  'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
   'src/main/runtime/rpc/dispatcher',
   // Run on every request the suites dispatch, whatever its method.
@@ -239,8 +257,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-status-types',
   'src/shared/agent-lead-status-fold',
   'src/shared/agent-session-turn-record',
-  'src/shared/structured-agent-session-agent-status',
-  'src/shared/structured-agent-session-projection',
+  'src/shared/agent-session/view/structured-agent-session-agent-status',
+  'src/shared/agent-session/view/structured-agent-session-projection',
+  'src/shared/agent-session/requests/structured-agent-session-projection-sender.spec.ts',
   'src/shared/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
@@ -539,8 +558,9 @@ function jobDetector(job) {
       return (files) =>
         files.some(
           (file) =>
-            !/^src\/main\/codex\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(file) &&
-            matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
+            !/^src\/main\/codex\/app-server\/codex-app-server-(client|session)\.test\.ts(?!.)/s.test(
+              file
+            ) && matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES)
         )
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))

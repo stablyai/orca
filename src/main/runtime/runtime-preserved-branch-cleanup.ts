@@ -17,7 +17,7 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { resolveWorktreeRemovalRepoOwner } from '../worktree-removal-repo-owner'
+import { resolveWorktreeRemovalRepoOwner } from '../workspaces/removal/worktree-removal-repo-owner'
 import { parseExactWorktreeIdSelector } from './runtime-worktree-selection'
 
 type PreservedBranchCleanupTarget = {

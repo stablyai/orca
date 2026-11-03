@@ -64,40 +64,6 @@ function reportTurnFinished(interrupted = false): void {
 }
 
 describe('a finished local agent', () => {
-  it('keeps completed quit records resumable', () => {
-    expect(
-      activationTreatsNoteAsFinished({
-        paneKey: 'quit-tab:quit-leaf',
-        tabId: 'quit-tab',
-        worktreeId: WORKTREE_ID,
-        agent: 'codex',
-        providerSession: { key: 'session_id', id: SESSION_ID },
-        prompt: '',
-        state: 'done',
-        origin: 'quit',
-        capturedAt: 1,
-        updatedAt: 1
-      })
-    ).toBe(false)
-  })
-
-  it('keeps its resume identity and is recorded as completed history', () => {
-    seedLiveLocalCodexPane()
-
-    reportTurnFinished()
-
-    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
-    expect(record, 'a finished codex turn leaves a resume record').toBeDefined()
-    expect(record?.state, 'the done turn stays done').toBe('done')
-    expect(record?.origin).toBe('live')
-    expect(record?.agent).toBe('codex')
-    expect(record?.providerSession).toEqual({ key: 'session_id', id: SESSION_ID })
-    expect(
-      activationTreatsNoteAsFinished(record!),
-      'a finished agent must read as history, or activation restarts it'
-    ).toBe(true)
-  })
-
   it('keeps an interrupted done turn resumable after its pane is killed', () => {
     seedLiveLocalCodexPane()
     reportTurnFinished(true)

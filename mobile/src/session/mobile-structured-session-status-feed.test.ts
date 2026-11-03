@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionStatusSummary } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'

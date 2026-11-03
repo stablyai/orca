@@ -16,7 +16,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runt
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
-import type { PtyBindingSourceExpectation } from '../../../persistence'
+import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -24,15 +24,16 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -111,6 +112,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
   cwd?: string
@@ -243,4 +245,9 @@ export function createRuntimePtySpawnState(
     reportPtySpawnCommitted: () => {},
     preSpawnHiddenMarkId: null
   }
+}
+
+/** Default-deny (E9): a main-side start is background unless its caller names the user's act; an adopted pane starts nothing. */
+export function isRuntimeWslBackgroundStart(ctx: RuntimePtySpawnState): boolean {
+  return !ctx.preAdoptedStablePane && ctx.args.wslUserAct !== true
 }

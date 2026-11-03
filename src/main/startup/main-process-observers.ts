@@ -1,8 +1,8 @@
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
-import { AgentAwakeService } from '../agent-awake-service'
+import { AgentAwakeService } from '../power/agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
-import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
+import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -15,7 +15,7 @@ import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetr
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'

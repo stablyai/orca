@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import type * as WorktreeLogic from '../ipc/worktree-logic'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Repo } from '../../shared/repo-types'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 
@@ -37,6 +37,10 @@ export { mocks }
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
 vi.mock('../orcad/orcad-data-root-locality', () => ({ orcadDataRootIsOnLocalDisk: () => true }))
 vi.mock('../git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: mocks.listWorktreeGraph
+}))
 vi.mock('../git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
@@ -66,7 +70,7 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => ({
   })
 }))
 
-import { _resetWorktreeCreatePreparationsForTests } from '../worktree-create-preparation'
+import { _resetWorktreeCreatePreparationsForTests } from '../workspaces/creation/preparation/worktree-create-preparation'
 
 // Evictions and retries are fire-and-forget, so let them settle before asserting.
 export function flushBackgroundWork(ms = 0): Promise<void> {

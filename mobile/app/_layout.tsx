@@ -29,6 +29,7 @@ import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-int
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
+import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
@@ -183,54 +184,56 @@ export default function RootLayout() {
     <RpcClientProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        <SideSafeArea>
-          <Stack
-            screenOptions={{
-              headerStyle: { backgroundColor: colors.bgPanel },
-              headerTintColor: colors.textPrimary,
-              headerTitleStyle: { fontSize: 16, fontWeight: '600' },
-              contentStyle: { backgroundColor: colors.bgBase },
-              headerShadowVisible: false
-              // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
-            }}
-          >
-            <Stack.Screen
-              name="index"
-              options={{
-                headerShown: false,
-                headerTitle: () => <OrcaLogo size={22} />
+        <SideRailProvider>
+          <SideSafeArea>
+            <Stack
+              screenOptions={{
+                headerStyle: { backgroundColor: colors.bgPanel },
+                headerTintColor: colors.textPrimary,
+                headerTitleStyle: { fontSize: 16, fontWeight: '600' },
+                contentStyle: { backgroundColor: colors.bgBase },
+                headerShadowVisible: false
+                // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
               }}
-            />
-            <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
-            <Stack.Screen name="pair" options={{ headerShown: false }} />
-            <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="mobile-onboarding"
-              options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
-            />
-            <Stack.Screen name="settings" options={{ headerShown: false }} />
-            <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
-            <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
-            <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
-            <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
-            <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
-            <Stack.Screen name="notifications" options={{ headerShown: false }} />
-            <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
-            <Stack.Screen name="connection-log" options={{ headerShown: false }} />
-            <Stack.Screen name="about" options={{ headerShown: false }} />
-            <Stack.Screen name="h" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="new-workspace"
-              options={{
-                headerShown: false,
-                // Draws nothing of its own: the drawer is the page's, over Home.
-                presentation: 'transparentModal',
-                animation: 'none',
-                contentStyle: { backgroundColor: 'transparent' }
-              }}
-            />
-          </Stack>
-        </SideSafeArea>
+            >
+              <Stack.Screen
+                name="index"
+                options={{
+                  headerShown: false,
+                  headerTitle: () => <OrcaLogo size={22} />
+                }}
+              />
+              <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+              <Stack.Screen name="pair" options={{ headerShown: false }} />
+              <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="mobile-onboarding"
+                options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+              />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
+              <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+              <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
+              <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+              <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+              <Stack.Screen name="notifications" options={{ headerShown: false }} />
+              <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+              <Stack.Screen name="connection-log" options={{ headerShown: false }} />
+              <Stack.Screen name="about" options={{ headerShown: false }} />
+              <Stack.Screen name="h" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="new-workspace"
+                options={{
+                  headerShown: false,
+                  // Draws nothing of its own: the drawer is the page's, over Home.
+                  presentation: 'transparentModal',
+                  animation: 'none',
+                  contentStyle: { backgroundColor: 'transparent' }
+                }}
+              />
+            </Stack>
+          </SideSafeArea>
+        </SideRailProvider>
       </View>
     </RpcClientProvider>
   )
