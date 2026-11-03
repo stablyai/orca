@@ -1,13 +1,13 @@
 // Host deletion needs bounded Windows lock retries and unpatched fs for Electron’s .asar handling.
 
-import { getErrorCode } from './git/worktree-operation-options'
-import { unregisteredFolderRefusal } from '../shared/worktree/removal'
+import { getErrorCode } from '../git/worktree-operation-options'
+import { unregisteredFolderRefusal } from '../../shared/worktree/removal'
 import { join, win32 } from 'node:path'
 import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
-import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import { isWslUncPath } from '../shared/wsl-paths'
-import { stripWin32LongPathPrefix } from '../shared/windows-path-access'
-import { removeTree } from '../shared/windows-transient-lock-removal'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { isWslUncPath } from '../../shared/wsl-paths'
+import { stripWin32LongPathPrefix } from '../../shared/windows-path-access'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {

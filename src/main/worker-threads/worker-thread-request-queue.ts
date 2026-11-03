@@ -1,4 +1,5 @@
-import { LazyWorkerThreadHost, type WorkerThreadFactory } from './lazy-worker-thread-host'
+import { LazyWorkerThreadHost } from './lazy-worker-thread-host'
+import type { WorkerThreadFactory } from './worker-thread-transport'
 
 /** Serialize worker calls; failures must never move their work onto the main thread. */
 

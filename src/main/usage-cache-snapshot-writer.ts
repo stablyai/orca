@@ -4,7 +4,7 @@ import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
   writeFileDurableIfCurrent
-} from './durable-file-write'
+} from './filesystem/durable-file-write'
 
 // Serialize durable writes per store and skip superseded snapshots.
 export class UsageCacheSnapshotWriter {

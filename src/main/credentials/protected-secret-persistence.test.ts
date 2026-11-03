@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { setSecretStore } from '../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
 
 const cipherState = { available: true }
 

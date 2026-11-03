@@ -1,7 +1,7 @@
 import { session } from 'electron'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
 import { clearBrowserExtensionProfileSessionData } from './browser-extension-data-removal'
 

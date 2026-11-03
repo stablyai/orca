@@ -17,7 +17,7 @@ vi.mock('./local-worktree-filesystem', () => ({
   removeLocalWorktreePath: removeLocalWorktreePathMock
 }))
 
-vi.mock('./asar-transparent-fs', () => ({ rm: hostRmMock }))
+vi.mock('./filesystem/asar-transparent-fs', () => ({ rm: hostRmMock }))
 
 vi.mock('./git/worktree', () => ({
   listWorktreesStrict: listWorktreesStrictMock

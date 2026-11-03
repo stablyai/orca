@@ -1,5 +1,5 @@
 import { basename, dirname, join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 
 /** Keep this reachable from plain-Node entries; the build guard rejects Electron imports here. */
 export type WorkerEntryLayout = {

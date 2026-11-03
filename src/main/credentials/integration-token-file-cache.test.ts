@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
 import { createIntegrationTokenFileCache } from './integration-token-file-cache'
 
 let directory = ''

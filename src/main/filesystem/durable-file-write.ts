@@ -3,11 +3,11 @@
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
 import {
-  publishFileWithoutOverwrite,
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
-} from './codex-accounts/fs-utils'
+} from '../../shared/windows-retry-file-operations'
 
 /** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
 async function syncDirectory(directory: string): Promise<void> {

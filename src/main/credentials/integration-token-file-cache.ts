@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import type { IntegrationCredentialService } from '../shared/integration-credential-errors'
+import type { IntegrationCredentialService } from '../../shared/integration-credential-errors'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,

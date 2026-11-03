@@ -1,5 +1,4 @@
 import type { WorkerRequestTransport, WorkerThreadFactory } from './worker-thread-transport'
-export type { WorkerRequestTransport, WorkerThreadFactory } from './worker-thread-transport'
 
 /** Clients own request state and must fail queued calls when spawning fails. */
 export class LazyWorkerThreadHost<TResponse> {

@@ -11,7 +11,7 @@ import { createRequire, isBuiltin } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 
 /** Electron’s asar fs shim makes recursive removal fail; plain Node cannot reproduce it. */
 const requireFromTest = createRequire(import.meta.url)
@@ -67,7 +67,7 @@ async function bundleHostTreeRemoval(outFile: string): Promise<void> {
       minify: false,
       ssr: true,
       rollupOptions: {
-        input: 'src/main/host-tree-removal.ts',
+        input: 'src/main/filesystem/host-tree-removal.ts',
         // Match production externals: externalizing original-fs here could hide a bundling regression.
         output: { format: 'cjs' },
         external: (id: string) => isBuiltin(id) || id === 'electron' || id.startsWith('electron/')
