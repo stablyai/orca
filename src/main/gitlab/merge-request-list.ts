@@ -59,7 +59,21 @@ export async function listMergeRequests(
     if (await isTaskRepositoryIneligible(repoPath, 'gitlab', connectionId, localGitOptions)) {
       return { items: [], page, perPage, totalCount: 0, totalPages: 0 }
     }
-    if (connectionId || involvement) {
+    if (!connectionId && involvement) {
+      // The task page hides not_found, so an empty scoped list would look like no matching MRs.
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: {
+          type: 'unknown',
+          message: 'Could not identify the GitLab project for this repository.'
+        }
+      }
+    }
+    if (connectionId) {
       // Without local cwd, an unresolved SSH project could become an unrelated glab repository.
       return {
         items: [],

@@ -484,6 +484,48 @@ describe('gitlab client — MR operations', () => {
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })
 
+    it.each(['mine', 'needs-review'] as const)(
+      'surfaces an unresolved local project for the %s filter',
+      async (involvement) => {
+        resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+        const result = await listMergeRequests(
+          '/repo',
+          'opened',
+          1,
+          20,
+          undefined,
+          undefined,
+          null,
+          {},
+          involvement
+        )
+        expect(result.items).toEqual([])
+        expect(result.error).toEqual({
+          type: 'unknown',
+          message: 'Could not identify the GitLab project for this repository.'
+        })
+        expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+        expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      }
+    )
+
+    it('keeps an unresolved SSH project as not_found for involvement filters', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      const result = await listMergeRequests(
+        '/remote/repo',
+        'opened',
+        1,
+        20,
+        undefined,
+        undefined,
+        'conn-1',
+        {},
+        'mine'
+      )
+      expect(result.error?.type).toBe('not_found')
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+
     it('classifies API errors into the result envelope', async () => {
       glabApiWithHeadersMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
       const result = await listMergeRequests('/repo', 'opened')
