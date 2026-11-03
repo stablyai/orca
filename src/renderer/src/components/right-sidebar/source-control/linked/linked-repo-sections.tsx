@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronDown, FolderGit2, Plus, RefreshCw, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -55,10 +56,11 @@ export function SourceControlLinkedRepoSections({
   activeRepoId,
   isVisible,
   revealInExplorer
-}: Props): React.JSX.Element {
+}: Props): React.JSX.Element | null {
   useUiLanguageRevision()
   const linkedIds = useLinkedWorktreeIds(activeWorktreeId)
-  const { views, refreshOne } = useLinkedWorktreeStatus(linkedIds, isVisible)
+  const enabled = useAppStore((s) => s.settings?.linkedRepositoriesEnabled !== false)
+  const { views, refreshOne } = useLinkedWorktreeStatus(linkedIds, isVisible && enabled)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
 
   const toggle = useCallback((id: string) => {
@@ -72,6 +74,10 @@ export function SourceControlLinkedRepoSections({
       return next
     })
   }, [])
+
+  if (!enabled) {
+    return null
+  }
 
   return (
     <div data-testid="source-control-linked-repos" className="border-t border-border/60 mt-2">
@@ -144,11 +150,20 @@ function LinkedRepoSection({
     async (action: () => Promise<void>) => {
       try {
         await action()
+      } catch (error) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.SourceControl.linkedReposActionFailed',
+            'Git action failed in {{repo}}',
+            { repo: repo.displayName }
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
       } finally {
         onRefresh()
       }
     },
-    [onRefresh]
+    [onRefresh, repo.displayName]
   )
 
   const openEntry = useCallback(

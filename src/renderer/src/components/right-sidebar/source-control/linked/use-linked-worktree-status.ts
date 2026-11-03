@@ -94,20 +94,33 @@ export function useLinkedWorktreeStatus(linkedIds: readonly string[], isVisible:
     }
   }, [])
 
-  const refreshAll = useCallback(() => {
-    for (const { context } of targets) {
-      void refreshOne(context)
-    }
-  }, [refreshOne, targets])
+  // Catalog updates rebuild `targets`; restart polling only when what we poll actually changes.
+  const targetsRef = useRef(targets)
+  targetsRef.current = targets
+  const targetsKey = targets
+    .map(({ context }) =>
+      [
+        context.worktreeId,
+        context.worktreePath,
+        context.connectionId ?? '',
+        context.target.kind === 'environment' ? context.target.environmentId : 'local'
+      ].join('\0')
+    )
+    .join('\n')
 
   useEffect(() => {
-    if (!isVisible || targets.length === 0) {
+    if (!isVisible || targetsKey === '') {
       return
+    }
+    const refreshAll = (): void => {
+      for (const { context } of targetsRef.current) {
+        void refreshOne(context)
+      }
     }
     refreshAll()
     const timer = window.setInterval(refreshAll, LINKED_STATUS_POLL_MS)
     return () => window.clearInterval(timer)
-  }, [isVisible, refreshAll, targets.length])
+  }, [isVisible, refreshOne, targetsKey])
 
   const views: LinkedWorktreeView[] = targets.map((target) => ({
     ...target,
