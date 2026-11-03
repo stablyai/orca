@@ -12,7 +12,7 @@ import {
   type waitForWslRelaySentinel,
   type WslRelayStartupFailure
 } from './wsl-hook-relay-sentinel'
-import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import { addOrcaWslInteropEnv } from '../pty/shell-startup/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'

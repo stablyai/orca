@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { TEST_LEAF_1 } from '../persistence-session-fixtures'
-import { PtyExitProof } from '../../pty-exit-proof'
+import { PtyExitProof } from '../../pty/process-retirement/pty-exit-proof'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

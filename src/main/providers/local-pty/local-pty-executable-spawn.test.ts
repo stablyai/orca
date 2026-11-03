@@ -52,7 +52,7 @@ import {
   validateWorkingDirectory,
   _resetWorkingDirectoryValidationStateForTest
 } from '../working-directory-validation'
-import { getFishXdgDataDirsLaunchEnv } from '../../fish-xdg-data-dirs-handoff'
+import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'

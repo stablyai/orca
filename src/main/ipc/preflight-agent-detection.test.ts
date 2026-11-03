@@ -82,7 +82,7 @@ vi.mock('./command-path-resolver', async (importOriginal) => ({
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
-vi.mock('../pty/windows-environment-path', () => ({
+vi.mock('../pty/environment/windows-environment-path', () => ({
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))

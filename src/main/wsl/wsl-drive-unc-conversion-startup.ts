@@ -25,7 +25,7 @@ import {
 } from './wsl-drive-unc-conversion-stores'
 import { wslHostsGateOpen } from './wsl-host-gate'
 import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
-import { getHistoryRoot, listWslHistoryRoots } from '../terminal-history-paths'
+import { getHistoryRoot, listWslHistoryRoots } from '../pty/history/terminal-history-paths'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'

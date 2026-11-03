@@ -148,7 +148,7 @@ vi.mock('../wsl', () => ({
   listWslDistrosAsync: windowsProbes.listWslDistrosAsync
 }))
 
-vi.mock('../pwsh', () => ({
+vi.mock('../pty/shell-startup/pwsh', () => ({
   isPwshAvailable: windowsProbes.isPwshAvailable,
   isPwshAvailableAsync: windowsProbes.isPwshAvailableAsync
 }))

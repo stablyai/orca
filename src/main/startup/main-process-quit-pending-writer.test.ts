@@ -54,7 +54,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
-  '../terminal-history-gc': { cancelHistoryGc: idle() },
+  '../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
   '../persistence/loading-store/user-data-path': {

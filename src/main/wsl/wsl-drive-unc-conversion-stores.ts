@@ -15,7 +15,7 @@ import {
 } from '../filesystem/durable-file-write'
 import { rewriteWslMoveOrchestrationHistoryFile } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
 import Database from '../sqlite/sync-database'
-import { hashWorktreeId } from '../terminal-history-id'
+import { hashWorktreeId } from '../pty/history/terminal-history-id'
 
 export type WslDriveUncConversionStorePaths = {
   /** The daemon's `terminal-history`: one folder per terminal session, named by its id. */

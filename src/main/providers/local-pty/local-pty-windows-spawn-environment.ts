@@ -4,10 +4,13 @@ import {
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/claude-profile-routing'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
+import {
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost
+} from '../../pty/shell-startup/codex-home-wsl-env'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
 import { parseWslPath } from '../../wsl'
-import { isWindowsGitBashShellPath } from '../../git-bash'
+import { isWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,

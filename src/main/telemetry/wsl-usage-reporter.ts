@@ -12,7 +12,7 @@ import { getCachedWslDistros } from '../wsl'
 import { listConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
 import { filterUserWslDistros } from '../wsl-distro-list-output'
 import { peekConfirmedRunningWslDistros } from '../wsl-running-distro-cache'
-import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows-native-registry'
+import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows/windows-native-registry'
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
 import { listWslHostDistros } from '../wsl/wsl-host-distro-list'
 import {
