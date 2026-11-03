@@ -277,6 +277,12 @@ describe('CliInstaller', () => {
 
       const installed = await installer.install()
       expect(installed.commandPath).toBe(join(commandDir, 'orca-ide'))
+      expect((await lstat(legacyCommandPath)).isSymbolicLink()).toBe(false)
+      await expect(readFile(legacyCommandPath, 'utf8')).resolves.toContain(
+        '# orca-serve-bare-orca-dispatcher'
+      )
+
+      await installer.remove()
       await expect(lstat(legacyCommandPath)).rejects.toMatchObject({ code: 'ENOENT' })
     }
   )
@@ -312,7 +318,10 @@ describe('CliInstaller', () => {
 
       const installed = await installer.install()
       expect(installed.commandPath).toBe(join(commandDir, 'orca-ide'))
-      await expect(lstat(legacyCommandPath)).rejects.toMatchObject({ code: 'ENOENT' })
+      expect((await lstat(legacyCommandPath)).isSymbolicLink()).toBe(false)
+      await expect(readFile(legacyCommandPath, 'utf8')).resolves.toContain(
+        '# orca-serve-bare-orca-dispatcher'
+      )
     }
   )
 
@@ -352,8 +361,11 @@ describe('CliInstaller', () => {
         processPathEnv: commandDir
       })
 
-      await installer.install()
-      await expect(lstat(legacyCommandPath)).rejects.toMatchObject({ code: 'ENOENT' })
+      const installed = await installer.install()
+      expect((await lstat(legacyCommandPath)).isSymbolicLink()).toBe(false)
+      await expect(readFile(legacyCommandPath, 'utf8')).resolves.toContain(
+        installed.launcherPath as string
+      )
 
       await writeFile(legacyCommandPath, buildLegacyAppImageCliWrapper(foreignAppImagePath), {
         encoding: 'utf8',
@@ -363,6 +375,40 @@ describe('CliInstaller', () => {
       await expect(readFile(legacyCommandPath, 'utf8')).resolves.toBe(
         buildLegacyAppImageCliWrapper(foreignAppImagePath)
       )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves a foreign ~/.local/bin/orca command when packaged Linux installs orca-ide',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const commandDir = join(homePath, '.local', 'bin')
+      const foreignOrcaPath = join(commandDir, 'orca')
+      const foreignContent = '#!/usr/bin/env bash\necho screen-reader\n'
+      const appImagePath = join(fixture.root, 'Orca.AppImage')
+      const cacheRootPath = join(fixture.root, 'cache')
+      await mkdir(commandDir, { recursive: true })
+      await writeFile(foreignOrcaPath, foreignContent, { encoding: 'utf8', mode: 0o755 })
+      await writeFile(appImagePath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o755 })
+
+      const installer = new CliInstaller({
+        platform: 'linux',
+        isPackaged: true,
+        userDataPath: fixture.userDataPath,
+        appPath: fixture.appPath,
+        appImagePath,
+        appImageCacheRootPath: cacheRootPath,
+        appImageExtractRunner: fakeAppImageExtractRunner,
+        homePath,
+        processPathEnv: commandDir
+      })
+
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      await expect(readFile(foreignOrcaPath, 'utf8')).resolves.toBe(foreignContent)
+      await installer.remove()
+      await expect(readFile(foreignOrcaPath, 'utf8')).resolves.toBe(foreignContent)
     }
   )
 })
