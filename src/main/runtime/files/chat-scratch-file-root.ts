@@ -5,6 +5,10 @@ import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
 } from '../../ipc/filesystem/filesystem-auth'
+import {
+  getDefaultFloatingWorkspacePath,
+  resolveFloatingTerminalCwd
+} from '../../ipc/floating-workspace-directory'
 import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import { nativeChatScratchRootFor } from '../../native-chat/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
@@ -16,12 +20,24 @@ function chatScratchRoot(): string {
   return nativeChatScratchRootFor(getProfileUserDataPath())
 }
 
-export function resolveRuntimeAuthorizedPath(
+export async function resolveRuntimeAuthorizedPath(
   targetPath: string,
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
-  return resolveAuthorizedPath(targetPath, store, { ...options, extraRoots: [chatScratchRoot()] })
+  const floatingCwd = await resolveFloatingTerminalCwd(store, {
+    path: store.getSettings().floatingTerminalCwd,
+    requireTrusted: true
+  }).catch(() => null)
+  const extraRoots = [
+    chatScratchRoot(),
+    getDefaultFloatingWorkspacePath(),
+    ...(floatingCwd ? [floatingCwd] : [])
+  ]
+  return resolveAuthorizedPath(targetPath, store, {
+    ...options,
+    extraRoots: [...(options.extraRoots ?? []), ...extraRoots]
+  })
 }
 
 export function isChatScratchWorktreeId(worktreeId: string): boolean {
