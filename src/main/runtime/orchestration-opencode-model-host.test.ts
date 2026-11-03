@@ -1,9 +1,10 @@
+import type * as ProjectRuntimeResolutionModule from '../workspaces/execution-host/local-project-runtime-resolution'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { resolveOpenCodeDirectModelExecutable } from '../opencode/opencode-model-executable'
 import { probeOpenCodeLaunchCapabilities } from '../opencode/opencode-launch-capabilities'
-import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
-import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch-model-preferences'
+import { resolveLocalProjectRuntimeForRepo } from '../workspaces/execution-host/local-project-runtime-resolution'
+import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../shared/agent-launch/choices/agent-launch-model-preferences'
 
 vi.mock('../opencode/opencode-launch-capabilities', () => ({
   probeOpenCodeLaunchCapabilities: vi.fn()
@@ -14,7 +15,13 @@ vi.mock('../opencode/opencode-model-executable', () => ({
 vi.mock('../managed-data-accounts/launch-environment', () => ({
   applyManagedDataAccountEnvironment: vi.fn()
 }))
-vi.mock('../project-runtime-git-options', () => ({ resolveLocalProjectRuntimeForRepo: vi.fn() }))
+vi.mock(
+  '../workspaces/execution-host/local-project-runtime-resolution',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ProjectRuntimeResolutionModule>()),
+    resolveLocalProjectRuntimeForRepo: vi.fn()
+  })
+)
 
 function host(
   scope: { path: string; connectionId?: string; repo?: { executionHostId?: string } } = {

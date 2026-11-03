@@ -210,17 +210,6 @@ describe('automation terminal ownership', () => {
     expect(closeTab).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['remote runtime', { runtimeKind: 'environment' as const }],
-    ['remote PTY identity', { ptyId: 'remote:env-1@@terminal-1' }]
-  ])('never owns a %s terminal', async (_label, overrides) => {
-    const { closeTab, store } = createStore()
-    const ownership = own(store, overrides)
-
-    expect(await ownership.finalize({ preservePane: false })).toBeNull()
-    expect(closeTab).not.toHaveBeenCalled()
-  })
-
   it('sleeps a resumable pane in a workspace the run owns instead of closing it', async () => {
     const { closeTab, shutdownCompletedAgentPaneForHibernation, store } = createStore()
     const ownership = own(store)

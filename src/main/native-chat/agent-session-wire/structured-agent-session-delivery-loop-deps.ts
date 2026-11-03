@@ -1,6 +1,6 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../agent-session-journal/journal-unsent-send-hold'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -36,6 +36,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
     next?: AgentJournalSubmission
   ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
+  stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => boolean
   readiness: (
     sessionId: string,

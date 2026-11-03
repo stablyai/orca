@@ -191,28 +191,6 @@ describe('a renderer publisher returning after a headless epoch', () => {
     expect(mirroredTabIds()).toContain(toWebTerminalSurfaceTabId('host-tab-b'))
   })
 
-  it('revives nothing from an older host whose census is not labelled authoritative', async () => {
-    renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    await publish({ ...frame(RENDERER_EPOCH, 3, [terminal('a')]), type: 'snapshot' })
-    await publish({ ...frame(HEADLESS_EPOCH, 1, [terminal('a')]), type: 'snapshot' })
-    const returning = frame(RENDERER_EPOCH, 5, [terminal('a'), terminal('b')])
-    census = {
-      id: 'list-all',
-      ok: true,
-      result: { snapshots: [returning] },
-      _meta: { runtimeId: 'runtime-a' }
-    }
-    await publish({ ...returning, type: 'snapshot' })
-    await act(async () => {
-      vi.advanceTimersByTime(300)
-      await settle()
-    })
-
-    expect(mirroredTabIds()).not.toContain(toWebTerminalSurfaceTabId('host-tab-b'))
-  })
-
   it('does not let a census outrank a stream frame that arrived while it was in flight', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)

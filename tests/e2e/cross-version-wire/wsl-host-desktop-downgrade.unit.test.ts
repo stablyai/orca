@@ -15,7 +15,7 @@ import { mapRuntimeError } from '../../../src/main/runtime/rpc/errors'
 import {
   withWslOrcadAccountEnv,
   type WslOrcadAccountEnvDependencies
-} from '../../../src/main/wsl/wsl-orcad-account-env'
+} from '../../../src/main/wsl/orcad/wsl-orcad-account-env'
 import {
   RuntimeRpcCallError,
   unwrapRuntimeRpcResult

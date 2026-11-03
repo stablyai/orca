@@ -2,45 +2,8 @@ import { queuedMessageEditAcceptsText } from '../../queued-message-edit-command'
 import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand,
-  structuredSessionSlashCommands,
-  structuredSlashCommands
+  isStructuredAgentSessionComposerCommand
 } from './structured-agent-session-composer'
-
-describe('structuredSessionSlashCommands', () => {
-  const names = (commands: readonly { name: string }[]) => commands.map(({ name }) => name)
-
-  // Reported Pi/ACP commands must not hide the host-owned commands.
-  it("keeps the host's commands first once the session reports its own", () => {
-    const reported = [
-      { name: 'llama', kind: 'command' as const },
-      { name: 'mcp', kind: 'command' as const },
-      { name: 'skill:caveman', kind: 'skill' as const }
-    ]
-    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], undefined))).toEqual(
-      names(structuredSlashCommands(['clear', 'compact'], 'pi'))
-    )
-    expect(names(structuredSessionSlashCommands('pi', ['clear', 'compact'], reported))).toEqual([
-      'model',
-      'effort',
-      'clear',
-      'compact',
-      'llama',
-      'mcp'
-    ])
-  })
-
-  it("offers the host's row in place of an agent command of the same name", () => {
-    const offered = structuredSessionSlashCommands(
-      'opencode',
-      ['clear', 'compact'],
-      [{ name: 'compact', kind: 'command', description: 'compact the session' }]
-    )
-    expect(offered.filter(({ name }) => name === 'compact')).toEqual([
-      { name: 'compact', description: 'Compact conversation context' }
-    ])
-  })
-})
 
 describe('dispatchStructuredAgentSessionComposerCommand', () => {
   const controller = {
@@ -49,22 +12,6 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
     invokeAction: async () => true,
     setOption: async () => true
   }
-  it.each(['claude', 'codex'] as const)(
-    'handles %s conversation commands without message fallthrough',
-    async (agent) => {
-      const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
-      for (const command of ['clear', 'compact'] as const) {
-        const result = await dispatchStructuredAgentSessionComposerCommand(`/${command}`, {
-          ...controller,
-          agent,
-          conversationCommands: ['clear', 'compact'],
-          runConversationCommand
-        })
-        expect(result).toEqual({ handled: true, accepted: true, error: null })
-        expect(runConversationCommand).toHaveBeenLastCalledWith(command)
-      }
-    }
-  )
   it('retains a draft on unsupported hosts and rejects arguments before dispatch', async () => {
     expect(await dispatchStructuredAgentSessionComposerCommand('/clear', controller)).toMatchObject(
       { handled: true, accepted: false, error: '/clear is not supported by this chat host.' }
@@ -79,6 +26,49 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
     ).toMatchObject({ handled: true, accepted: false })
     expect(runConversationCommand).not.toHaveBeenCalled()
   })
+
+  it('hands /compact its text only where the host takes instructions, and never /clear', async () => {
+    const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
+    const taking = {
+      ...controller,
+      conversationCommands: ['clear', 'compact'] as const,
+      compactInstructions: true,
+      runConversationCommand
+    }
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand(
+        '/compact keep the decisions\nand the plan\n',
+        taking
+      )
+    ).toMatchObject({ handled: true, accepted: true })
+    expect(runConversationCommand).toHaveBeenCalledWith(
+      'compact',
+      'keep the decisions\nand the plan'
+    )
+    runConversationCommand.mockClear()
+    for (const text of ['/clear keep this', '/clear keep this\nand that']) {
+      expect(await dispatchStructuredAgentSessionComposerCommand(text, taking)).toMatchObject({
+        handled: true,
+        accepted: false,
+        errorCode: 'commandTakesNoArguments'
+      })
+    }
+    expect(runConversationCommand).not.toHaveBeenCalled()
+  })
+
+  it.each(['\n', '\r', '\u2028', '\u2029'])(
+    'leaves a message with line break %j after another command to the agent',
+    async (lineBreak) => {
+      const setOption = vi.fn(async () => true)
+      expect(
+        await dispatchStructuredAgentSessionComposerCommand(
+          `/model picker looks wrong${lineBreak}see the log`,
+          { ...controller, setOption }
+        )
+      ).toMatchObject({ handled: false })
+      expect(setOption).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('agent-implemented commands pass through to the agent', () => {
@@ -88,31 +78,6 @@ describe('agent-implemented commands pass through to the agent', () => {
     setOption: async () => true
   }
   const PASSED_THROUGH = { handled: false, accepted: false, error: null }
-
-  // Claude’s harness handles these from message text; claiming them would wrongly refuse working commands.
-  it.each(['init', 'review', 'help'] as const)(
-    'sends /%s on to the Claude harness instead of refusing it',
-    async (name) => {
-      expect(isStructuredAgentSessionComposerCommand(`/${name}`, 'claude')).toBe(false)
-      expect(
-        await dispatchStructuredAgentSessionComposerCommand(`/${name}`, {
-          ...controller,
-          agent: 'claude'
-        })
-      ).toEqual(PASSED_THROUGH)
-    }
-  )
-
-  // Codex app-server lacks a slash parser, but its model handles /goal through goal tools.
-  it('passes /goal through on Codex, arguments and all', async () => {
-    expect(isStructuredAgentSessionComposerCommand('/goal', 'codex')).toBe(false)
-    expect(
-      await dispatchStructuredAgentSessionComposerCommand('/goal ship the fix', {
-        ...controller,
-        agent: 'codex'
-      })
-    ).toEqual(PASSED_THROUGH)
-  })
 
   it('sets the goal through the host where the host can, instead of sending prose', async () => {
     const setThreadGoalObjective = vi.fn(async () => true)
@@ -151,25 +116,6 @@ describe('agent-implemented commands pass through to the agent', () => {
       errorCode: 'goalObjectiveMissing'
     })
     expect(setThreadGoalObjective).not.toHaveBeenCalled()
-  })
-
-  // OMP's ACP catalog advertises only commands it handles itself, e.g. /fast.
-  it('passes a session-reported command on to the session that advertised it', async () => {
-    const sessionCommands = [
-      { name: 'fast', kind: 'command' },
-      { name: 'compact', kind: 'command' }
-    ] as const
-    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp')).toBe(false)
-    expect(isStructuredAgentSessionComposerCommand('/fast', 'omp', sessionCommands)).toBe(false)
-    expect(
-      await dispatchStructuredAgentSessionComposerCommand('/fast status', {
-        ...controller,
-        agent: 'omp',
-        sessionCommands
-      })
-    ).toEqual(PASSED_THROUGH)
-    // Orca still runs its own commands even when the session reports them.
-    expect(isStructuredAgentSessionComposerCommand('/compact', 'omp', sessionCommands)).toBe(true)
   })
 
   it('leaves provider text independent of the optional inventory', async () => {

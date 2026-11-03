@@ -4,7 +4,7 @@ import {
   type AgentJournalTurnLifecycle,
   type AgentJournalTurnLifecycleState
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'

@@ -1,27 +1,30 @@
 import { tmpdir } from 'node:os'
 import { basename, join, win32 as pathWin32 } from 'node:path'
 import { statSync } from 'node:fs'
+import { encodePowerShellCommand } from '../../shared/powershell-command-encoding'
 import {
-  encodePowerShellCommand,
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
-} from '../powershell-osc133-bootstrap'
+} from '../pty/shell-startup/powershell-osc133-bootstrap'
 import { getFishCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getFishClaudeShellFunction } from '../../shared/claude-shell-function'
-import { getFishXdgDataDirsLaunchEnv } from '../fish-xdg-data-dirs-handoff'
-import { getFishShellReadyInitCommand } from '../shell-templates'
+import { getFishXdgDataDirsLaunchEnv } from '../pty/shell-startup/fish-xdg-data-dirs-handoff'
+import { getFishShellReadyInitCommand } from '../pty/shell-startup/shell-templates'
 import {
   encodeShellStartupFeatures,
   SHELL_STARTUP_FEATURE_ENV,
   type ShellStartupFeature
-} from '../shell-startup-features'
-import { resolveShellWrapperRoot } from '../shell-wrapper-content-address'
-import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
+} from '../pty/shell-startup/shell-startup-features'
+import { resolveShellWrapperRoot } from '../pty/shell-startup/shell-wrapper-content-address'
+import { writeShellWrapperFiles } from '../pty/shell-startup/shell-wrapper-file-writer'
 import {
   buildDaemonShellReadyWrapperFiles,
   getDaemonShellReadyWrapperPaths
 } from './daemon-shell-ready-wrapper-fileset'
-import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
+import {
+  inheritedZdotdirEnv,
+  resolveInheritedZdotdir
+} from '../pty/shell-startup/zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'

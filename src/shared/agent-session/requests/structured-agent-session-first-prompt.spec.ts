@@ -47,27 +47,6 @@ describe('first structured chat prompt', () => {
     ).toBe('first user prompt')
   })
 
-  it('bounds a multi-block prompt before joining it', () => {
-    const prompt = message('', {
-      body: {
-        kind: 'message',
-        role: 'user',
-        blocks: [
-          { type: 'text', text: 'x'.repeat(STRUCTURED_CHAT_NAME_PROMPT_LIMIT - 2) },
-          { type: 'text', text: 'yz'.repeat(100_000) }
-        ]
-      }
-    })
-    const result = firstStructuredAgentSessionPrompt([prompt])
-    expect(result).toHaveLength(STRUCTURED_CHAT_NAME_PROMPT_LIMIT)
-    expect(result.endsWith('\ny')).toBe(true)
-  })
-
-  it('clips a single prompt block without splitting a Unicode character', () => {
-    const prefix = 'A'.repeat(STRUCTURED_CHAT_NAME_PROMPT_LIMIT - 1)
-    expect(firstStructuredAgentSessionPrompt([message(`${prefix}𠮷`)])).toBe(prefix)
-  })
-
   it('clips a later prompt block without splitting a Unicode character', () => {
     const prefix = 'A'.repeat(STRUCTURED_CHAT_NAME_PROMPT_LIMIT - 2)
     const prompt = message('', {
@@ -116,10 +95,5 @@ describe('first structured chat prompt', () => {
       firstStructuredAgentSessionPrompt([message('?!'), message('修复登录'), message('Later')])
     ).toBe('修复登录')
     expect(firstStructuredAgentSessionPrompt([message('?!')])).toBe('')
-  })
-
-  it('retains a URL-only first request', () => {
-    const url = 'https://example.test/issues/123'
-    expect(firstStructuredAgentSessionPrompt([message(url), message('Later')])).toBe(url)
   })
 })

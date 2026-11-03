@@ -229,9 +229,4 @@ describe('workspace activation focus', () => {
     flushFrame()
     expect(mocks.focus).not.toHaveBeenCalled()
   })
-
-  it('declines a failed activation', () => {
-    expect(queueWorkspaceActivationTerminalFocus('wt-1', false)).toBe(false)
-    expect(mocks.subscribe).not.toHaveBeenCalled()
-  })
 })

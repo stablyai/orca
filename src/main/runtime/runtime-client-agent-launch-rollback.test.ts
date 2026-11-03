@@ -9,7 +9,7 @@ import {
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   resolveAgentPermission
-} from '../../shared/tui-agent-permission-choice'
+} from '../../shared/agent-launch/permissions/tui-agent-permission-choice'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -19,7 +19,7 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({

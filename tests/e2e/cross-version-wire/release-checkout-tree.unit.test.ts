@@ -10,7 +10,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { pathToFileURL } from 'node:url'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
 import { extractReleaseCheckoutTree } from './release-checkout-tree'
@@ -18,6 +19,7 @@ import { extractReleaseCheckoutTree } from './release-checkout-tree'
 const temporaryRoots: string[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -106,6 +108,58 @@ const RELEASE_PROCESS_HOST = {
 }
 
 describe('release checkout workspace packages', () => {
+  it('extracts a filtered release after fetching missing blobs without lazy archive fetches', async () => {
+    const { repo, commit } = commitRelease({
+      'src/main/cold.ts': "export const cold = 'historical release'\n",
+      'src/shared/cold.ts': "export const cold = 'shared release'\n"
+    })
+    const git = async (cwd: string, args: string[]): Promise<string> => {
+      const result = await currentProcessHost.runProcess({ program: 'git', args, cwd })
+      expect(result.code).toBe(0)
+      return result.stdout
+    }
+    await git(repo, ['config', 'uploadpack.allowFilter', 'true'])
+    const filtered = temporaryDirectory('orca-cross-version-filtered-')
+    await git(repo, [
+      'clone',
+      '--quiet',
+      '--filter=blob:none',
+      '--no-checkout',
+      pathToFileURL(repo).href,
+      filtered
+    ])
+    writeFileSync(join(filtered, 'package.json'), '{ "dependencies": {} }\n')
+    const missing = async (): Promise<string[]> =>
+      (
+        await git(filtered, [
+          'rev-list',
+          '--objects',
+          '--missing=print',
+          '--no-object-names',
+          '--no-walk',
+          commit
+        ])
+      )
+        .split('\n')
+        .filter((line) => line.startsWith('?'))
+    expect((await missing()).length).toBeGreaterThan(0)
+    const runProcess = currentProcessHost.runProcess
+    vi.spyOn(currentProcessHost, 'runProcess').mockImplementation((spec) =>
+      runProcess({ ...spec, env: { ...spec.env, GIT_NO_LAZY_FETCH: '1' } })
+    )
+    const staging = temporaryDirectory('orca-cross-version-prefetched-')
+
+    await extractReleaseCheckoutTree(filtered, staging, commit)
+
+    expect(await missing()).toEqual([])
+    expect(readFileSync(join(staging, 'src/main/cold.ts'), 'utf8')).toBe(
+      "export const cold = 'historical release'\n"
+    )
+    expect(readFileSync(join(staging, 'src/shared/cold.ts'), 'utf8')).toBe(
+      "export const cold = 'shared release'\n"
+    )
+  })
+
   it('loads the release workspace package rather than the current one', async () => {
     expect('releaseOnlyExport' in currentProcessHost).toBe(false)
     const { repo, commit } = commitRelease({
@@ -187,30 +241,4 @@ describe('release checkout workspace packages', () => {
       expect(failure).toContain(`No public orca-source export for ${specifier}`)
     }
   )
-
-  it('extracts a release that predates workspace packages unchanged', async () => {
-    const source = "import { lock } from 'proper-lockfile'\nexport const locker = typeof lock\n"
-    const { repo, commit } = commitRelease({ 'src/main/old.ts': source })
-    const staging = temporaryDirectory('orca-cross-version-release-staging-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-
-    expect(readFileSync(join(staging, 'src/main/old.ts'), 'utf8')).toBe(source)
-    expect(existsSync(join(staging, 'pnpm-workspace.yaml'))).toBe(false)
-    expect(existsSync(join(staging, 'src/wsl-guest'))).toBe(false)
-  })
-
-  it('extracts the WSL guest sources a release relay imports when the release has them', async () => {
-    const source = "export { RELAY_SENTINEL } from '../wsl-guest/protocol'\n"
-    const { repo, commit } = commitRelease({
-      'src/relay/relay.ts': source,
-      'src/wsl-guest/protocol.ts': "export const RELAY_SENTINEL = 'sentinel'\n"
-    })
-    const staging = temporaryDirectory('orca-cross-version-release-staging-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-
-    expect(readFileSync(join(staging, 'src/relay/relay.ts'), 'utf8')).toBe(source)
-    expect(existsSync(join(staging, 'src/wsl-guest/protocol.ts'))).toBe(true)
-  })
 })

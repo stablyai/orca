@@ -6,8 +6,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   isSessionSearchIndexReady,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history-status-copy'
-import { useSessionSearchStatus } from '@/components/settings/use-session-search-status'
+} from '@/components/settings/session-history/session-history-status-copy'
+import { useSessionSearchStatus } from '@/components/settings/session-history/use-session-search-status'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 

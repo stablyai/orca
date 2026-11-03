@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   abandonStructuredAgentSessionLaunchIntent,
@@ -207,6 +207,7 @@ function structuredAgentLaunchState(
   )
   intent.explicitLaunchOptions = options.launchOptions ? { ...options.launchOptions } : undefined
   intent.beforeCreate = options.beforeCreate
+  intent.createAfter = options.createAfter
   intent.surfaceAddress = options.surfaceAddress
   const text = launchPromptText(options)
   const stagedPrompt = text

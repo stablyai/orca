@@ -4,7 +4,7 @@ import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
@@ -18,7 +18,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../shared/native-chat-ask-card-rules'
+} from '../../../../shared/native-chat/input/native-chat-ask-card-rules'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
@@ -62,7 +62,7 @@ export function NativeChatQuestionCard({
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
-  const autoAdvance = useNativeChatQuestionAutoAdvance()
+  const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
   const [index, setIndex] = useState(0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.

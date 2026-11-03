@@ -201,6 +201,7 @@ const workItemSchema = z
   .looseObject({
     id: prText('id'),
     number: prCount('number'),
+    prRepo: prRepoIdentity('prRepo'),
     type: salvagedOptional('type', z.enum(['issue', 'pr'] as const)),
     state: salvagedOptional('state', z.enum(PR_STATE)),
     title: prText('title'),
@@ -229,6 +230,7 @@ const workItemSchema = z
       : {
           id: item.id,
           type: item.type,
+          prRepo: item.prRepo,
           number: item.number,
           title: item.title ?? '',
           state: item.state,
@@ -261,6 +263,7 @@ export const githubWorkItemDetailsSchema = z
     pullRequestId: prText('pullRequestId'),
     checks: prCheckList('checks'),
     participants: prUserList('participants'),
+    filesUnavailable: prFlag('filesUnavailable'),
     // Absent assignees means unreported, distinct from a confirmed empty list.
     assignees: salvagedOptional('assignees', salvagingArray(z.string())),
     // Older hosts send no files; the diff screen then keeps viewed state on the phone.
@@ -279,7 +282,9 @@ export const githubWorkItemDetailsSchema = z
           checks: details.checks ?? [],
           participants: details.participants ?? [],
           assignees: details.assignees,
-          ...(details.files ? { files: details.files } : {})
+          ...(details.files ? { files: details.files } : {}),
+          // A host that could not list files says so, so the PR tab hides its changes card rather than showing zero.
+          ...(details.filesUnavailable === true ? { filesUnavailable: true } : {})
         }
   )
   .nullable()

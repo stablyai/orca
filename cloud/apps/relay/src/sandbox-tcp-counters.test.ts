@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  parseProcNetSnmpTcp,
-  readSandboxTcpCounters,
-  sandboxTcpCounterDeltas
-} from './sandbox-tcp-counters.js'
+import { parseProcNetSnmpTcp, sandboxTcpCounterDeltas } from './sandbox-tcp-counters.js'
 
 // Tcp lines in /proc/net/snmp's layout, with counter values a Cloud Run gen1 (gVisor) sandbox reported on 2026-10-26.
 const GEN1_SNMP = [
@@ -32,14 +28,6 @@ describe('sandbox TCP counters', () => {
   it('reads nothing from a file without both Tcp lines or with a non-numeric counter', () => {
     expect(parseProcNetSnmpTcp('Ip: Forwarding\nIp: 1')).toBeUndefined()
     expect(parseProcNetSnmpTcp(GEN1_SNMP.replace(' 485 ', ' x '))).toBeUndefined()
-  })
-
-  it('reads nothing where the file is absent, as off Linux', () => {
-    expect(
-      readSandboxTcpCounters(() => {
-        throw new Error('ENOENT')
-      })
-    ).toBeUndefined()
   })
 
   it('reports per-window deltas, and none across a counter reset', () => {

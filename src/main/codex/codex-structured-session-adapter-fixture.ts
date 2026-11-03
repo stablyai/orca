@@ -4,7 +4,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -21,6 +21,7 @@ import type {
 } from './codex-structured-session-state'
 
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 
 const startLinks = new WeakMap<
   CodexStructuredSessionAdapter,
@@ -90,13 +91,34 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closeCount: number
 }
 
+const STARTUP_METHODS = new Set(['thread/start', 'thread/resume', 'thread/read'])
+
 export function fakeCodex(routes: Record<string, Route> = {}): {
   connections: FakeConnection[]
   openConnection: typeof openCodexAppServerConnection
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
-  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (
+    launch,
+    adapterHandlers = {}
+  ) => {
+    // As the real connection: a spontaneous exit also fails the start's calls still waiting.
+    const waiting = new Set<(error: Error) => void>()
+    const handlers: CodexAppServerConnectionHandlers = {
+      ...adapterHandlers,
+      onExit: (error, exit) => {
+        // The real connection's own exit error reads as the agent's exit, never a refusal.
+        adapterHandlers.onExit?.(exit?.expected ? error : withObservedProviderExit(error), exit)
+        if (exit?.expected) {
+          return
+        }
+        for (const fail of waiting) {
+          fail(error)
+        }
+        waiting.clear()
+      }
+    }
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -108,7 +130,14 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
       request: async (method, params) => {
         connection.calls.push({ method, params })
         const route = routes[method]
-        return route ? route(params) : {}
+        const answer = route ? route(params) : {}
+        // Turn calls keep the answers their tests script; a start's calls end with the child.
+        if (!(answer instanceof Promise) || !STARTUP_METHODS.has(method)) {
+          return answer
+        }
+        const exited = new Promise<never>((_resolve, reject) => waiting.add(reject))
+        void exited.catch(() => {})
+        return Promise.race([answer, exited])
       },
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),

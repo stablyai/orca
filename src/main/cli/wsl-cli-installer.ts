@@ -1,7 +1,7 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { getDefaultWslDistro } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
-import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/execution/wsl-process-failure'
 import { CliInstaller } from './cli-installer'
 import {
   buildManagedLegacyRemoveCommand,

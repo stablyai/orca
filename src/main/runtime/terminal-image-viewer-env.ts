@@ -1,5 +1,5 @@
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal-image-viewer-capability'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RpcContext } from './rpc/core'
 
 export function terminalImageViewerSupported(

@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { buildQuickComposerStartup } from '../hooks/composer-state/quick-startup-plan'
-import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   buildAiVaultLocalResumeStartup,
   buildAiVaultForkStartup,

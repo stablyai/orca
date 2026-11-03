@@ -124,3 +124,46 @@ describe('a write refused on a journal a newer Orca wrote', () => {
     })
   })
 })
+
+describe("a queued card's refused Send", () => {
+  const refusing = (refusal: { code: string; details: { reason: string } }): RpcClient =>
+    stubRpcClient({
+      sendRequest: async (): Promise<RpcResponse> => ({
+        id: 'req-1',
+        ok: true,
+        result: { ok: false, refusal }
+      })
+    })
+  const send = (refusal: { code: string; details: { reason: string } }) =>
+    requestStructuredAgentSessionMutation({
+      client: refusing(refusal),
+      method: 'agentSession.queuedMessageSend',
+      fingerprintMethod: 'agentSession.queuedMessageSend',
+      sessionId: 'session-1',
+      expectedRuntimeFence: 3,
+      fields: { messageId: 'card-1' },
+      clientOperationId: `1900000000000-${'e'.repeat(32)}`
+    })
+
+  it("says its message wasn't sent only when Orca couldn't confirm its mail", async () => {
+    expect(
+      await send({
+        code: 'execution_owner_reconciling',
+        details: { reason: 'mailOwnerUnconfirmed' }
+      })
+    ).toEqual({
+      status: 'refused',
+      code: 'execution_owner_reconciling',
+      message:
+        "Orca couldn't confirm this message is still meant for this chat. Your message was not sent. Try again."
+    })
+    // Any other refused Send of a queued card keeps its existing words.
+    expect(
+      await send({ code: 'agent_session_checkpoint_stale', details: { reason: 'fenceStale' } })
+    ).toEqual({
+      status: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      message: "The command didn't run."
+    })
+  })
+})

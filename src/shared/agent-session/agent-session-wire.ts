@@ -15,7 +15,7 @@ import type {
 
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalResetReason,
@@ -190,6 +190,11 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
+  usageLimitContinue?: {
+    turnItemId: string
+    resetsAt: number
+    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
+  }
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
@@ -209,6 +214,8 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
+  /** Current child's reported execution model, independent of the next-turn selection. */
+  reportedModel?: string
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
@@ -419,6 +426,8 @@ export type AgentSessionSlashCommand = {
   description?: string
   /** Provider-authored argument sketch, e.g. `<issue-url>`. */
   argumentHint?: string
+  /** The provider's own built-in command, not a user command or skill of the same name. */
+  builtin?: true
   /** The skill file the provider selects this skill by; two skills may share a name. */
   path?: string
 }

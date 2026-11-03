@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
-import { extractIconHref } from '../../src/main/repo-icon-source-href.ts'
+import { extractIconHref } from '../../src/main/repository-icons/repo-icon-source-href.ts'
 
 // Regex comparator retained for the before/after measurement.
 const html =

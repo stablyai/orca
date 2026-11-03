@@ -29,9 +29,10 @@ import { providerRequestTimeoutOf } from '../../provider-process/provider-reques
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [
+  'savedConversationMissing',
   'notSignedIn',
   'cliMissing',
   'historyTooLarge',
@@ -148,11 +149,17 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
   if (preparation) {
     return agentSessionFailureFact('launchPreparationFailed', { detail: preparation })
   }
-  const exited = providerExitObserved(cause)
+  // A request deadline is the most specific explanation: an exit seen around it never replaces it.
+  const requestTimeout = providerRequestTimeoutOf(cause)
+  const exited = !requestTimeout && providerExitObserved(cause)
   return agentSessionFailureFact(exited ? 'providerStartFailed' : 'startFailed', {
+    // A typed refusal of any reason stays final when only its exit fact reaches the start.
+    ...(cause instanceof AgentSessionAcquisitionRefusal
+      ? { refusal: { code: cause.code, details: { reason: cause.reason } } }
+      : {}),
     detail: providerDiagnosticOf(cause),
     argumentProblem: argumentProblemOf(cause),
-    ...(exited ? {} : { requestTimeout: providerRequestTimeoutOf(cause) })
+    requestTimeout
   })
 }
 

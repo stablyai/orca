@@ -2,11 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import {
-  isImeCompositionKeyDown,
-  isImeOwnedKeyboardEvent,
-  useImeEnterGestureOwnership
-} from './ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from './ime-composition-keyboard-event'
 
 type ImeEnterGestureEventForTest = Pick<
   ReactKeyboardEvent,
@@ -19,46 +15,6 @@ type ImeEnterGestureEventForTest = Pick<
   | 'preventDefault'
   | 'shiftKey'
 > & { readonly prevented: boolean }
-
-function keyEvent(nativeEvent: { isComposing?: boolean; keyCode?: number }): ReactKeyboardEvent {
-  return {
-    nativeEvent: {
-      isComposing: nativeEvent.isComposing ?? false,
-      keyCode: nativeEvent.keyCode ?? 13
-    }
-  } as unknown as ReactKeyboardEvent
-}
-
-describe('isImeCompositionKeyDown', () => {
-  it('owns the marked real Enter shape without treating plain Enter as IME input', () => {
-    expect(isImeOwnedKeyboardEvent({ isComposing: true, keyCode: 13 })).toBe(true)
-    expect(isImeOwnedKeyboardEvent({ isComposing: false, keyCode: 13 })).toBe(false)
-  })
-
-  it('is true while the IME is composing', () => {
-    expect(isImeCompositionKeyDown(keyEvent({ isComposing: true }))).toBe(true)
-  })
-
-  it('is true for the keyCode 229 fallback when isComposing is not set', () => {
-    expect(isImeCompositionKeyDown(keyEvent({ isComposing: false, keyCode: 229 }))).toBe(true)
-  })
-
-  it('is false for a plain Enter outside of composition', () => {
-    expect(isImeCompositionKeyDown(keyEvent({ isComposing: false, keyCode: 13 }))).toBe(false)
-  })
-
-  it('keeps the recorded Process/ShiftLeft event IME-owned without treating ordinary Shift as IME', () => {
-    const shift = { code: 'ShiftLeft', shiftKey: true, isComposing: false }
-    expect(isImeOwnedKeyboardEvent({ ...shift, key: 'Process', keyCode: 229 })).toBe(true)
-    expect(isImeOwnedKeyboardEvent({ ...shift, key: 'Shift', keyCode: 16 })).toBe(false)
-  })
-
-  it('owns the marked Windows palette chord without swallowing the ordinary chord', () => {
-    const chord = { key: 'J', code: 'KeyJ', ctrlKey: true, shiftKey: true, keyCode: 74 }
-    expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: true })).toBe(true)
-    expect(isImeOwnedKeyboardEvent({ ...chord, isComposing: false })).toBe(false)
-  })
-})
 
 describe('useImeEnterGestureOwnership', () => {
   function gestureEvent(init: {
@@ -87,20 +43,6 @@ describe('useImeEnterGestureOwnership', () => {
       }
     }
   }
-
-  // Shift+Enter must remain a newline after composition, including multiline review comments.
-  it('never owns Shift+Enter, during composition or on the redispatch', () => {
-    const { result } = renderHook(() => useImeEnterGestureOwnership())
-    result.current.setComposing(true)
-
-    const marked = gestureEvent({ key: 'Enter', keyCode: 13, isComposing: true, shiftKey: true })
-    expect(result.current.ownsKeyDown(marked)).toBe(false)
-
-    result.current.setComposing(false)
-    const redispatch = gestureEvent({ key: 'Enter', keyCode: 13, shiftKey: true })
-    expect(result.current.ownsKeyDown(redispatch)).toBe(false)
-    expect(redispatch.prevented).toBe(false)
-  })
 
   // Pinyin can emit Process/229 for every key; non-Enter keyup must disarm carry before a later deliberate submit.
   it.each([

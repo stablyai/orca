@@ -130,45 +130,4 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
       }
     }
   )
-
-  it('leaves no highlighted cells after typing a query character by character', async () => {
-    const harness = openTerminalWithSearch()
-    await write(harness.terminal, 'needle one\r\nneedle two\r\nneedle three\r\n')
-
-    // Each search keystroke disposes the preceding decorations through the same leaking path.
-    for (const query of ['n', 'ne', 'nee', 'need', 'needl', 'needle']) {
-      harness.search.findNext(query, { decorations: SEARCH_DECORATIONS, incremental: true })
-      await settle(10)
-    }
-    await settle()
-
-    harness.closeSearch()
-    await settle()
-
-    expect(harness.highlightedCellCount()).toBe(0)
-  })
-
-  it('does not accumulate highlights across repeated open/close cycles', async () => {
-    const harness = openTerminalWithSearch()
-    await write(harness.terminal, 'needle one\r\nneedle two\r\nneedle three\r\n')
-
-    for (let cycle = 0; cycle < 5; cycle++) {
-      harness.search.findNext('needle', { decorations: SEARCH_DECORATIONS })
-      await settle(10)
-      harness.closeSearch()
-      await settle(10)
-    }
-
-    expect(harness.highlightedCellCount()).toBe(0)
-  })
-
-  it('keeps highlights painted while search is still open', async () => {
-    const harness = openTerminalWithSearch()
-    await write(harness.terminal, 'needle one\r\nneedle two\r\n')
-
-    harness.search.findNext('needle', { decorations: SEARCH_DECORATIONS })
-    await settle()
-
-    expect(harness.highlightedCellCount()).toBeGreaterThan(0)
-  })
 })

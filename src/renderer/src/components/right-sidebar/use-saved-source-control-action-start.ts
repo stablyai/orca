@@ -6,7 +6,8 @@ import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
 } from '@/lib/host-chat-program-acquisition'
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
@@ -16,7 +17,7 @@ import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
@@ -58,7 +59,7 @@ export function useSavedSourceControlActionStart() {
       signal?.throwIfAborted()
       const store = useAppStore.getState()
       const { worktreeId } = args
-      const recipe = selectSourceControlActionRecipe(args.selection)
+      const recipe = structuredClone(selectSourceControlActionRecipe(args.selection))
       const agent = recipe.agentId
       if (!isTuiAgent(agent) || !worktreeId) {
         onFallback()
@@ -92,9 +93,17 @@ export function useSavedSourceControlActionStart() {
         sourceControlLaunchAppliesAgentArgs({
           agent: isTuiAgent(agent) ? agent : null,
           worktreeId,
-          repoId: args.repoId
+          repoId: args.repoId,
+          preferredSurface: projection.preferredSurface
         })
-      const detectedAgents = appliesArgs ? [...(choices.detected ?? [])] : choices.offered
+      const detectedAgents = appliesArgs
+        ? [...(choices.detected ?? [])]
+        : agentsOfferedForLaunch(
+            useAppStore.getState(),
+            workspace,
+            choices.detected,
+            projection.preferredSurface ? agent : undefined
+          )
       const plan = buildSourceControlAgentDeliveryPlan({
         settings: args.settings,
         agentLaunchPreferences,

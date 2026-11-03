@@ -1,17 +1,17 @@
-import { getClaudeAgentViewService } from '../../../claude/agent-view-service'
+import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
-import { isPwshAvailableAsync } from '../../../pwsh'
-import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { LocalPtyProviderOptions } from '../../../providers/local-pty-provider-types'
-import { runAsWslLaunchUserAct } from '../../../wsl/wsl-background-exec-gate'
+import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
+import type { LocalPtyProviderOptions } from '../../../providers/local-pty/local-pty-provider-types'
+import { runAsWslLaunchUserAct } from '../../../wsl/discovery/wsl-background-exec-gate'
 import {
   addOrcaWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
-} from '../../../pty/wsl-orca-env'
+} from '../../../pty/shell-startup/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'

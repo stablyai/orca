@@ -8,7 +8,7 @@ import {
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from './agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import type { AgentStatusEntry } from './agent-status-types'
 import {
   recoveryRecordMatches,

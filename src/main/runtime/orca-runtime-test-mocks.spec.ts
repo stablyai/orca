@@ -81,7 +81,7 @@ export const getEffectiveHooks = importedValues.exportedGetEffectiveHooks
 export const getEffectiveHooksFromConfig = importedValues.exportedGetEffectiveHooksFromConfig
 export const getRuntimeBrowserPageRegistry = importedValues.exportedGetRuntimeBrowserPageRegistry
 export const getTerminalPasteIngestMs = importedValues.exportedGetTerminalPasteIngestMs
-export const gitRunner = importedValues.exportedGitRunner
+
 export const hasHooksFile = importedValues.exportedHasHooksFile
 export const headlessBrowserTabsUnchanged = importedValues.exportedHeadlessBrowserTabsUnchanged
 export const homedir = importedValues.exportedHomedir
@@ -255,7 +255,7 @@ export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
 export type { Tab } from '../../shared/tab-types'
 export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 export type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-export type { TuiAgent } from '../../shared/tui-agent'
+
 export type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
 export type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 export type { Worktree } from '../../shared/worktree/types'

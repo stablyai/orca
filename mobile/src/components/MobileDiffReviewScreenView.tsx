@@ -23,13 +23,15 @@ import { mobileDiffReviewPositionLabel } from '../session/mobile-diff-review-scr
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
+  hostConnection: HostConnectionInputs
   onBack: () => void
 }
 
-export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+export function MobileDiffReviewScreenView({ controller, hostConnection, onBack }: Props) {
   useMobileColorScheme()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
@@ -51,7 +53,9 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const item = controller.currentItem
   const github = controller.github
   const refetchPR = controller.refetchPRSidebar
-  const refetchThreads = useCallback(() => refetchPR({ includeDetails: true }), [refetchPR])
+  const refetchThreads = useCallback(async () => {
+    await refetchPR({ includeDetails: true })
+  }, [refetchPR])
   const threadCommentActions = useMobilePrCommentActions({
     client: controller.client,
     connState: controller.connState,
@@ -165,9 +169,11 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
               refetch={controller.refetchPRSidebar}
+              rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
+              hostConnection={hostConnection}
               gitBranch={controller.prSidebarBranch}
               gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
@@ -187,9 +193,11 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             state={controller.prSidebarState}
             onRetry={controller.retryPRSidebar}
             refetch={controller.refetchPRSidebar}
+            rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}
+            hostConnection={hostConnection}
             gitBranch={controller.prSidebarBranch}
             gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}

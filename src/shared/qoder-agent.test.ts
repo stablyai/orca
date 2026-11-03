@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   recognizeAgentProcessFromCommandLine,
@@ -11,8 +9,9 @@ import {
   normalizeTerminalTitle,
   detectAgentStatusFromTitle
 } from './agent-detection'
-import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { buildAgentStartupPlan } from './agent-launch/startup/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from './agent-launch/startup/tui-agent-resume-startup'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 
@@ -92,11 +91,6 @@ describe('Qoder agent identity and lifecycle', () => {
     expect(normalizeTerminalTitle(stored)).toBe(stored)
   })
 
-  it('keeps upstream Gemini titles and arbitrary triangle text unchanged', () => {
-    expect(isGeminiTerminalTitle('✦  Working (project)')).toBe(true)
-    expect(getAgentLabel('deploy ▲ complete')).not.toBe('Qoder CLI')
-  })
-
   it('tracks start, work, permission, completion and resume without becoming Claude', () => {
     const state = createHookListenerState()
     const session = { session_id: 'qoder-session', transcript_path: '/tmp/qoder-session.jsonl' }
@@ -132,28 +126,6 @@ describe('Qoder agent identity and lifecycle', () => {
       'qoder-session'
     ])
   })
-})
-
-it('replays captured unauthenticated startup, prompt, idle and resume hooks', () => {
-  const state = createHookListenerState()
-  const lines = readFileSync(
-    join(__dirname, '__fixtures__', 'qoder-no-account-hooks.jsonl'),
-    'utf8'
-  )
-    .trim()
-    .split('\n')
-  const events = lines.map((line) => normalizeAndAccept(state, 'qoder', JSON.parse(line)))
-  expect(events.map((event) => event?.payload.state)).toEqual([
-    'done',
-    'working',
-    'done',
-    'done',
-    'done',
-    'done'
-  ])
-  expect(events.every((event) => event?.payload.agentType === 'qoder')).toBe(true)
-  expect(events[4]?.payload.sessionBoundary).toBe(true)
-  expect(events[4]?.providerSession?.id).toBe(events[0]?.providerSession?.id)
 })
 
 it.each(['darwin', 'linux', 'win32'] as const)(

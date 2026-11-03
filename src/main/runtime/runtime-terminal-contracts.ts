@@ -1,6 +1,7 @@
+import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
-import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
-import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch-tab-publication'
+import type { AgentLaunchRuntime } from '../../shared/agent-launch/startup/agent-launch-runtime'
+import type { AgentLaunchTabViewerRule } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
@@ -19,7 +20,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
@@ -192,7 +193,17 @@ export type HookLiveAgentRow = Pick<
   | 'programStatus'
 >
 
-export type TerminalHandleRecord = {
+export type TerminalHandlePty = {
+  record: TerminalHandleRecord
+  pty: RuntimePtyWorktreeRecord
+}
+
+export type TerminalHandleLeaf = {
+  record: TerminalHandleRecord
+  leaf: RuntimeLeafRecord
+}
+
+export type TerminalHandleRecord = Readonly<{
   handle: string
   runtimeId: string
   rendererGraphEpoch: number
@@ -203,7 +214,7 @@ export type TerminalHandleRecord = {
   ptyGeneration: number
   /** Issue-time stamp of the pane main bound a terminal handle for; read only by recoverTerminalPane. */
   issuedForPaneKey?: string
-}
+}>
 
 export type OrchestrationCompatibilityTerminalAuthority = {
   runtimeId: string

@@ -11,7 +11,7 @@ import {
 } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/structured-agent-session-journal-views'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { blockOf } from '../claude-background-task-row-test-support'
 import {
@@ -172,17 +172,12 @@ describe('Claude structured reading control', () => {
     await adapter.drainObservedExits()
   })
 
-  it('automatically retries a hard-watermark row before resuming SDK reads', async () => {
+  it('admits a task row past the pause watermark and resumes SDK reads after the journal drains', async () => {
     const persisted = new Map<string, AgentJournalItemBody>()
     const target = persistedTarget(persisted)
     const deferred = createDeferredStructuredAgentSessionEventSink({
       ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedOperations: 1,
-        maxQueuedOperations: 4,
-        lowQueuedOperations: 0,
-        maxQueuedBytes: 1_000_000
-      }
+      watermarks: { pauseQueuedOperations: 1, lowQueuedOperations: 0 }
     })
     deferred.bind(target)
     const claude = fakeClaude()
@@ -223,7 +218,7 @@ describe('Claude structured reading control', () => {
     }
     claude.connections[0].handlers.onMessage?.(notification)
     claude.connections[0].handlers.onMessage?.(notification)
-    expect(deferred.state().queuedOperations).toBe(4)
+    expect(deferred.state().backpressured).toBe(true)
 
     appendGate.resolve()
     await vi.waitFor(() => expect(resumeReading).toHaveBeenCalledOnce())

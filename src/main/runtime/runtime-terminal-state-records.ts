@@ -10,7 +10,7 @@ import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-c
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../shared/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../shared/terminal-output-side-effects'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/pty-provider-contract'
@@ -49,10 +49,10 @@ export type RuntimeWorktreeTerminalSleepState = {
   terminalHandlesByPtyId: Record<string, string[]>
 }
 
-export type RuntimeLeafRecord = RuntimeSyncedLeaf &
+export type RuntimeLeafRecord = Readonly<RuntimeSyncedLeaf> &
   RuntimeTerminalTailState & {
-    ptyGeneration: number
-    connected: boolean
+    readonly ptyGeneration: number
+    readonly connected: boolean
     writable: boolean
     lastOutputAt: number | null
     lastExitCode: number | null
@@ -65,19 +65,19 @@ export type RuntimeLeafRecord = RuntimeSyncedLeaf &
   }
 
 export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
-  ptyId: string
-  incarnationId: PtyIncarnationId | null
-  worktreeId: string
-  connectionId: string | null
+  readonly ptyId: string
+  readonly incarnationId: PtyIncarnationId | null
+  readonly worktreeId: string
+  readonly connectionId: string | null
   runtimeSessionOwned: boolean
-  isWsl: boolean | null
-  wslDistro: string | null
+  readonly isWsl: boolean | null
+  readonly wslDistro: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
-  tabId?: string | null
+  readonly tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
-  paneKey?: string | null
+  readonly paneKey?: string | null
   /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
-  surfaceRecordedAtGraphSequence?: number
+  readonly surfaceRecordedAtGraphSequence?: number
   savedTerminalLaunchResult?: {
     incarnationId: PtyIncarnationId | null
     launchConfig: SleepingAgentLaunchConfig | null
@@ -94,7 +94,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchCommandAgent: TuiAgent | null
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TerminalAgent | null
-  connected: boolean
+  readonly connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null

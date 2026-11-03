@@ -1,7 +1,7 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
 import { join } from 'node:path'
 import type { DeviceScope } from '../../shared/runtime-types'
-import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
+import { removeStaleDurableWriteTempFiles } from '../filesystem/durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
@@ -209,7 +209,7 @@ export class DeviceRegistry {
   // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
     this.adoptExternalEdits()
-    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
+    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId), this.devices)
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
       ? { kind: 'unavailable' }
       : lookup

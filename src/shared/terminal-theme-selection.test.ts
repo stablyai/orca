@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   resolveConfiguredTerminalColors,
   resolveTerminalPalette,
+  terminalCustomThemeRemoval,
   withImportedTerminalColorOverrides
 } from './terminal-theme-selection'
 import { TERMINAL_THEME_CATALOG } from './terminal-themes'
@@ -133,5 +134,68 @@ describe('plugin terminal palettes', () => {
         true
       )
     ).toEqual({ foreground: '#e8e0ff', background: '#1b1430' })
+  })
+})
+
+describe('deleting an imported terminal theme (#32138)', () => {
+  const imported = {
+    id: 'warp:dusk',
+    name: 'Dusk',
+    source: 'warp' as const,
+    mode: 'dark' as const,
+    terminal: { foreground: '#eeeeee', background: '#101020', red: '#ff5555' },
+    importedAt: '2026-01-01T00:00:00.000Z'
+  }
+  const kept = { ...imported, id: 'warp:dawn', name: 'Dawn' }
+  const settings = {
+    ...base,
+    terminalThemeDark: 'custom:warp:dusk',
+    terminalThemeLight: 'custom:warp:dusk',
+    terminalCustomThemes: [imported, kept],
+    terminalColorOverrides: { background: '#000000' },
+    terminalColorOverridesLight: { background: '#ffffff' }
+  }
+
+  it('moves every slot showing it back to that slot default, and undo puts it all back', () => {
+    const { updates, undo } = terminalCustomThemeRemoval(settings, 'warp:dusk')
+    expect(updates).toEqual({
+      terminalCustomThemes: [kept],
+      terminalThemeDark: 'Ghostty Default Style Dark',
+      terminalColorOverrides: undefined,
+      terminalThemeLight: 'Builtin Tango Light',
+      terminalColorOverridesLight: undefined
+    })
+    const afterDelete = { ...settings, ...updates, terminalCustomThemes: [kept] }
+    expect(undo(afterDelete)).toEqual({
+      terminalCustomThemes: [kept, imported],
+      terminalThemeDark: 'custom:warp:dusk',
+      terminalColorOverrides: { background: '#000000' },
+      terminalThemeLight: 'custom:warp:dusk',
+      terminalColorOverridesLight: { background: '#ffffff' }
+    })
+  })
+
+  it('undo keeps what the user changed after the delete', () => {
+    const { updates, undo } = terminalCustomThemeRemoval(settings, 'warp:dusk')
+    const afterDelete = { ...settings, ...updates, terminalCustomThemes: [kept] }
+    const restored = undo({
+      ...afterDelete,
+      terminalThemeDark: 'Tokyo Night',
+      terminalColorOverridesLight: { cursor: '#ff00ff' }
+    })
+    expect(restored).toEqual({ terminalCustomThemes: [kept, imported] })
+    const reimported = { ...imported, name: 'Dusk v2' }
+    expect(undo({ ...afterDelete, terminalCustomThemes: [kept, reimported] })).not.toHaveProperty(
+      'terminalCustomThemes'
+    )
+  })
+
+  it('leaves slots showing another theme untouched', () => {
+    const { updates } = terminalCustomThemeRemoval(
+      { ...settings, terminalThemeLight: 'custom:warp:dawn' },
+      'warp:dusk'
+    )
+    expect(updates).not.toHaveProperty('terminalThemeLight')
+    expect(updates).not.toHaveProperty('terminalColorOverridesLight')
   })
 })

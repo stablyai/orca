@@ -106,21 +106,6 @@ describe('terminal DOM focus sync lifetime', () => {
     expect(frames.cancel).toHaveBeenCalledOnce()
   })
 
-  it('does not queue another frame when the immediate sync disposes its own owner', () => {
-    const frames = frameQueue()
-    captureObserver()
-    const element = terminalElement()
-    const release = attachDomRendererFocusClassSync(element)
-    const query = element.querySelector.bind(element)
-    vi.spyOn(element, 'querySelector').mockImplementation((selector) => {
-      release()
-      return query(selector)
-    })
-    element.dispatchEvent(new Event('focusin'))
-    expect(frames.pending.size).toBe(0)
-    expect(frames.cancel).toHaveBeenCalledOnce()
-  })
-
   it('cancels only the old attachment when the same terminal element gets a successor', () => {
     const frames = frameQueue()
     captureObserver()

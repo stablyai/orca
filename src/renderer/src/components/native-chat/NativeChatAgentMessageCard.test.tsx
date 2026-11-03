@@ -39,6 +39,20 @@ import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript
 import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
+
+it('renders and copies structured mail content without the agent envelope', async () => {
+  const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
+  const writeClipboardText = vi.fn(async () => {})
+  vi.stubGlobal('api', { ui: { writeClipboardText } })
+  render(card(message))
+  expect(screen.getByText('Review complete')).toBeInTheDocument()
+  expect(screen.getByText('result', { selector: 'strong' })).toBeInTheDocument()
+  expect(screen.getByText('Review worker')).toBeInTheDocument()
+  expect(screen.queryByText(/Subject:|──── From:|orchestration reply/)).toBeNull()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+  expect(writeClipboardText).toHaveBeenCalledWith('Review complete\n\nThe **result** is ready.')
+})
 
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
@@ -109,7 +123,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
   expect(navigation.rpc).toHaveBeenCalledWith(
     { kind: 'local' },
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     {
       address: 'term_0'
     },
@@ -450,7 +464,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build cards' })))
     expect(navigation.rpc).toHaveBeenCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       {
         address: 'term_0'
       },
@@ -459,7 +473,7 @@ it.each(['task', 'mail'] as const)(
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Other sender' })))
     expect(navigation.rpc).toHaveBeenLastCalledWith(
       { kind: 'local' },
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_1' },
       { timeoutMs: 5000 }
     )
@@ -658,6 +672,13 @@ it.each([10, 100])(
       return projection.messages(counted).filter(({ agentStart }) => agentStart)
     }
     let messages = readRows()
+    for (const item of items) {
+      if (item.body.kind === 'agent-start') {
+        expect(messages.find((message) => message.id === item.itemId)?.agentStartDispatchId).toBe(
+          item.body.dispatchId
+        )
+      }
+    }
     expect(conversions).toBe(items.length)
     expect(taskReads).toBe(count)
     // One existing question pass visits the source array once; the second pass visits its composed rows.

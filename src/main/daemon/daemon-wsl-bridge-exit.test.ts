@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
+import type { WslRunningDistrosRead } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
-} from '../wsl-running-distro-cache'
+} from '../wsl/discovery/wsl-running-distro-cache'
 import { checkWslBridgeDistro } from './daemon-wsl-bridge-exit'
 
 afterEach(() => {

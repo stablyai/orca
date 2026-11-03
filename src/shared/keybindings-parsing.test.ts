@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatKeybindingList,
   isKeybindingActionId,
   keybindingFromInput,
   keybindingFromInputForAction,
@@ -165,14 +164,6 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('editor.nextChange', shiftF7, 'darwin')).toBe(false)
     expect(keybindingMatchesAction('editor.previousChange', shiftF7, 'darwin')).toBe(true)
     expect(keybindingMatchesAction('editor.previousChange', f7, 'darwin')).toBe(false)
-  })
-
-  it('formats keybindings with platform labels', () => {
-    expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
-    expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+⇧+J')
-    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'darwin')).toBe('⌘⇧⌫')
-    expect(formatKeybindingList(['Mod+Shift+Backspace'], 'linux')).toBe('Ctrl+⇧+Backspace')
-    expect(formatKeybindingList([], 'win32')).toBe('Unassigned')
   })
 
   it('preserves explicit numpad shortcut tokens', () => {

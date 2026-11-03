@@ -46,6 +46,7 @@ type EmulatorDeviceFrameProps = {
   isActive: boolean
   onTap: (x: number, y: number) => void
   onGesture: (points: EmulatorGesturePoint[]) => void
+  onStreamLost?: () => void
 }
 
 const MAX_GESTURE_SAMPLES = 32,
@@ -72,7 +73,8 @@ export function EmulatorDeviceFrame({
   visualOrientation,
   isActive,
   onTap,
-  onGesture
+  onGesture,
+  onStreamLost
 }: EmulatorDeviceFrameProps) {
   const { paneRef, paneSize } = useEmulatorPaneSize()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
@@ -344,7 +346,8 @@ export function EmulatorDeviceFrame({
 
   const handleStreamError = useCallback(() => {
     setStreamError(true)
-  }, [])
+    onStreamLost?.()
+  }, [onStreamLost])
 
   // Park inactive tabs and hidden windows to avoid frame IPC/decode churn, including over SSH, without detaching sessions.
   const windowVisibleForStream = useEmulatorStreamWindowVisible()
