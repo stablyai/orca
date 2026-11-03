@@ -125,11 +125,14 @@ function keyboardHides(duration: number): void {
   act(() => harness.hide?.(duration))
 }
 
-function marginBottom(renderer: ReactTestRenderer): unknown {
+function sheetStyle(renderer: ReactTestRenderer): { marginBottom?: unknown; maxHeight?: unknown } {
   const node = renderer.root.find((candidate) => candidate.props.testID === 'bottom-drawer-sheet')
   const style: unknown[] = [node.props.style].flat(Infinity)
   return Object.assign({}, ...style.filter((entry) => typeof entry === 'object' && entry !== null))
-    .marginBottom
+}
+
+function marginBottom(renderer: ReactTestRenderer): unknown {
+  return sheetStyle(renderer).marginBottom
 }
 
 describe('the drawer riding the keyboard seam', () => {
@@ -153,6 +156,17 @@ describe('the drawer riding the keyboard seam', () => {
     // It still rides the keyboard's next event.
     keyboardShows(310, 0)
     expect(harness.timings).toContainEqual({ to: 310, duration: 250 })
+    act(() => renderer.unmount())
+  })
+
+  it('caps a content-sized sheet by the keyboard lift so its top stays on screen', () => {
+    const renderer = render(false)
+    // 900 tall screen, 24 top inset, 16 top gap.
+    expect(sheetStyle(renderer).maxHeight).toBe(860)
+    keyboardShows(300, 0)
+    expect(sheetStyle(renderer).maxHeight).toBe(560)
+    keyboardHides(0)
+    expect(sheetStyle(renderer).maxHeight).toBe(860)
     act(() => renderer.unmount())
   })
 
