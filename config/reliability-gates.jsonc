@@ -7935,15 +7935,6 @@
           "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.23,
-          "summary": "Three assertions passed against published v1.4.182 and the current tree: the release lacks the negotiated capabilities, strips additive placement without changing legacy fields, and the current server preserves an old request with omitted placement."
-        },
-        {
-          "date": "2026-08-16",
-          "runner": "local",
-          "platform": "macos",
           "command": "SKIP_BUILD=1 ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE=/Applications/Orca.app/Contents/MacOS/Orca pnpm exec playwright test tests/e2e/packaged-mixed-version-browser-placement.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
           "durationSeconds": 10.3,
@@ -8017,7 +8008,8 @@
         "The packaged skew journey uses one published old package plus the current E2E artifact on macOS; packaged Windows/Linux and a second independently released post-feature package remain unrecorded.",
         "The live fixture proves routed HTTP, HTTPS, WebSocket, redirect, subresource, and download ownership plus remote DNS through the fixed SOCKS session; worker, speculative, WebRTC, UDP, and DoH containment remain unrecorded.",
         "The setting currently requires explicit enablement while product rollout policy is decided; disabling it is intentionally new-page-only.",
-        "The mocked client-placement and immediate create-failure suites were removed, including parameter selection, delayed mocked materialization and no-fallback call ledgers. The remaining live journeys and contracts do not establish equivalent unit alarms. Earlier descriptions and executed results for those fixtures are historical."
+        "The mocked client-placement and immediate create-failure suites were removed, including parameter selection, delayed mocked materialization and no-fallback call ledgers. The remaining live journeys and contracts do not establish equivalent unit alarms. Earlier descriptions and executed results for those fixtures are historical.",
+        "The browser-placement schema suite was retired; its initial optional-field inventory is no longer active coverage. Historical local/macos run on 2026-08-16: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts; passed in 0.23s. Three assertions passed against published v1.4.182 and the current tree: the release lacks the negotiated capabilities, strips additive placement without changing legacy fields, and the current server preserves an old request with omitted placement. No replacement equivalence is claimed."
       ],
       "demotionRule": "Demote if placement changes after creation, a client failure creates a server fallback page, one logical page owns two engines, an omitted or unnegotiated field activates client hosting, the execution route resolves on the viewing desktop, a client page uses screencast/input RPC rendering, automation reaches a different page or engine, delayed publication leaks listeners or causes cleanup of a materialized page, or the kill switch mutates an existing page."
     },
