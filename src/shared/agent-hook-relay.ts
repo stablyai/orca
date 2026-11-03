@@ -1,3 +1,4 @@
+import type { ClaudePermissionProjection } from './agent-hook-listener/claude-permission-facts'
 import type { AgentProcessPresence } from './agent-process-presence'
 import type { ClaudeSettledRequest } from './agent-hook-listener/claude-settled-permission-requests'
 // Relay normalizes; main revalidates at the SSH trust boundary and routes. Wire connectionId stays null until ingestRemote stamps mux identity. CLI version/env survive forwarding; remote marks location, not build type. Keep wire envelopes separate from renderer IPC/install contracts without Electron dependencies.
@@ -83,8 +84,8 @@ export type AgentHookRelayEnvelope = {
   toolUseId?: string
   /** Optional, replay only: Claude requests the relay saw end while this receiver may have been away. */
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
-  /** Claude calls a live batch settled; on replay, the relay's recent batch settlements. Bound waits only. */
-  claudeBatchSettledRequests?: readonly ClaudeSettledRequest[]
+  /** Optional: the execution host already decided this row's Claude permission state. Older receivers ignore it. */
+  claudePermission?: ClaudePermissionProjection
   /** Claude subagent identity, when the source hook provides one. */
   toolAgentId?: string
   /** Claude teammate name carried by TeammateIdle. */

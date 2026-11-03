@@ -1,19 +1,15 @@
-import { mainAgentStatusEqual } from '../../../shared/main-agent-status'
-import {
-  claudeTeammateIdMatchesName,
-  isClaudeChildTurnEndEvent
-} from '../../../shared/claude-subagent-roster'
-import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import {
-  isClaudePermissionSettledByReplay,
-  isSameClaudeReplayRun
-} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import { mainAgentStatusEqual } from '../main-agent-status'
+import { claudeTeammateIdMatchesName, isClaudeChildTurnEndEvent } from '../claude-subagent-roster'
+import { isAskUserQuestionTool } from '../agent-question-answered-intent'
+import type { AgentHookEventPayload } from './listener-event'
+import { isClaudePermissionSettledByReplay } from './claude-settled-permission-requests'
+import type { HookListenerState } from './listener-state'
+import { buildClaudeCachedLeadStatusPayload } from './providers/claude-lifecycle-events'
+import { setClaudeMainAgentTurnState } from './providers/claude-roster-state'
 
 /** Retain the shell-work fact only with the main-agent observation that established it. */
 export function pairedClaudeNonAgentWork(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  previous: AgentHookEventPayload | undefined,
   next: AgentHookEventPayload
 ): boolean | undefined {
   if (next.claudeRunningNonAgentTask !== undefined) {
@@ -25,10 +21,10 @@ export function pairedClaudeNonAgentWork(
 }
 
 /** Keep main-agent progress behind a child's permission prompt so restart cannot settle live work. */
-export function withHeldChildWaitMainAgent(
-  previous: EnrichedAgentHookEventPayload,
+export function withHeldChildWaitMainAgent<T extends AgentHookEventPayload>(
+  previous: T,
   next: AgentHookEventPayload
-): EnrichedAgentHookEventPayload {
+): T {
   const mainAgent = next.payload.mainAgent
   if (!previous.toolAgentId || !mainAgent) {
     return previous
@@ -44,12 +40,9 @@ export function withHeldChildWaitMainAgent(
   ) {
     return previous
   }
-  const { claudeRunningNonAgentTask: _unpaired, ...unpaired } = previous
   return {
-    ...unpaired,
-    ...(runningNonAgentTask !== undefined
-      ? { claudeRunningNonAgentTask: runningNonAgentTask }
-      : {}),
+    ...previous,
+    claudeRunningNonAgentTask: runningNonAgentTask,
     payload:
       mainAgentChanged || wakeupChanged
         ? { ...previous.payload, mainAgent, claudeTaskWakeupPending: pendingWakeup }
@@ -57,79 +50,20 @@ export function withHeldChildWaitMainAgent(
   }
 }
 
-type ClaudeSettlementEvidence = Pick<
-  AgentHookEventPayload,
-  | 'hookEventName'
-  | 'toolUseId'
-  | 'claudeBatchSettledRequests'
-  | 'connectionId'
-  | 'toolAgentId'
-  | 'isReplay'
-  | 'launchToken'
-  | 'providerSession'
->
-
-/** The bound tool use's own start or end, or batch evidence listing it, from the same owner. */
-function endsBoundClaudePermission(
-  previous: AgentHookEventPayload,
-  next: ClaudeSettlementEvidence
-): boolean {
-  const toolUseId = previous.toolUseId?.trim()
-  const owner = previous.toolAgentId?.trim() || undefined
-  if (!toolUseId) {
-    return false
-  }
-  // A live batch lists its own calls; a replay carries the relay's recent batch settlements, each with its owner.
-  if (next.isReplay === true) {
-    if (
-      isSameClaudeReplayRun(previous, next) &&
-      next.claudeBatchSettledRequests?.some(
-        (request) => request.toolUseId === toolUseId && request.toolAgentId === owner
-      )
-    ) {
-      return true
-    }
-  } else if (next.hookEventName === 'PostToolBatch') {
-    return (
-      previous.connectionId === next.connectionId &&
-      owner === (next.toolAgentId?.trim() || undefined) &&
-      next.claudeBatchSettledRequests?.some((request) => request.toolUseId === toolUseId) === true
-    )
-  }
-  return (
-    previous.connectionId === next.connectionId &&
-    owner === (next.toolAgentId?.trim() || undefined) &&
-    (next.hookEventName === 'PreToolUse' ||
-      next.hookEventName === 'PostToolUse' ||
-      next.hookEventName === 'PostToolUseFailure') &&
-    next.toolUseId?.trim() === toolUseId
-  )
-}
-
-/** A live batch only ever settles a held bound request; anything else is main's no-op and never becomes the row. */
-export function isUnusedClaudeSettlement(
-  previous: AgentHookEventPayload | undefined,
-  next: ClaudeSettlementEvidence & Pick<AgentHookEventPayload, 'isReplay' | 'payload'>
-): boolean {
-  return (
-    next.hookEventName === 'PostToolBatch' &&
-    next.isReplay !== true &&
-    !(
-      previous?.claudePermissionBound &&
-      previous.payload.state === 'waiting' &&
-      // A producer whose lead now waits on a newer dialog cannot stand in for it; that dialog's own row will.
-      next.payload.state !== 'waiting' &&
-      endsBoundClaudePermission(previous, next)
-    )
-  )
-}
-
+/**
+ * `host` is the execution host deciding for its own observations (local hooks, a relay); without it this is
+ * the legacy decision a receiver applies to rows from a host that publishes no projection.
+ */
 export function shouldKeepClaudePermissionVisible(
-  previous: EnrichedAgentHookEventPayload | undefined,
-  next: AgentHookEventPayload
+  previous: AgentHookEventPayload | undefined,
+  next: AgentHookEventPayload,
+  host?: HookListenerState
 ): boolean {
   if (previous?.restoredUnconfirmed) {
     return false
+  }
+  if (host && previous && childRequestOutlivesParentEnd(host, previous, next)) {
+    return true
   }
   if (
     previous?.payload.agentType !== 'claude' ||
@@ -149,9 +83,8 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionSettledByReplay(previous, next)) {
     return false
   }
-  if (previous.claudePermissionBound) {
-    // A request naming its tool use waits for that use's own settlement; sibling previews never end it.
-    return !endsBoundClaudePermission(previous, next)
+  if (host && claudeBatchSettlesRequest(previous, next)) {
+    return false
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
@@ -164,7 +97,7 @@ export function shouldKeepClaudePermissionVisible(
 }
 
 function isClaudePermissionOwningChildEnding(
-  previous: EnrichedAgentHookEventPayload,
+  previous: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
   const ownerId = previous.toolAgentId?.trim()
@@ -182,7 +115,7 @@ function isClaudePermissionOwningChildEnding(
 }
 
 function isClaudePermissionResumingApprovedTool(
-  previous: EnrichedAgentHookEventPayload,
+  previous: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
   const previousToolUseId = previous.toolUseId?.trim() || undefined
@@ -235,7 +168,7 @@ function isClaudePermissionResumingApprovedTool(
 }
 
 export function shouldInheritClaudeToolUseIdForPermission(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  previous: AgentHookEventPayload | undefined,
   next: AgentHookEventPayload
 ): boolean {
   if (
@@ -270,19 +203,9 @@ export function shouldInheritClaudeToolUseIdForPermission(
 }
 
 export function attachClaudePermissionToolUseId(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  previous: AgentHookEventPayload | undefined,
   next: AgentHookEventPayload
 ): AgentHookEventPayload {
-  if (
-    next.payload.agentType === 'claude' &&
-    next.payload.state === 'waiting' &&
-    next.hookEventName === 'PermissionRequest' &&
-    next.toolUseId?.trim() &&
-    !isAskUserQuestionTool(next.payload.toolName)
-  ) {
-    // The provider omits the id; a producer supplies it only for its single matching in-flight call.
-    return { ...next, claudePermissionBound: true }
-  }
   const inheritedToolUseId = previous?.toolUseId
   if (
     !shouldInheritClaudeToolUseIdForPermission(previous, next) ||
@@ -295,4 +218,78 @@ export function attachClaudePermissionToolUseId(
     // PermissionRequest omits tool_use_id; PostToolUse reuses the PreToolUse ID.
     toolUseId: inheritedToolUseId
   }
+}
+
+/** A parent's turn end is not its child's: a live child's request stays until its own end. */
+function childRequestOutlivesParentEnd(
+  host: HookListenerState,
+  previous: AgentHookEventPayload,
+  next: AgentHookEventPayload
+): boolean {
+  const owner = previous.toolAgentId?.trim()
+  return (
+    !!owner &&
+    !next.toolAgentId &&
+    previous.payload.agentType === 'claude' &&
+    previous.payload.state === 'waiting' &&
+    previous.hookEventName === 'PermissionRequest' &&
+    !isAskUserQuestionTool(previous.payload.toolName) &&
+    next.payload.agentType === 'claude' &&
+    next.payload.state === 'done' &&
+    next.hasExplicitPrompt !== true &&
+    // Hook agents never join the roster; anyone else missing from it has ended.
+    (owner.startsWith('hook-agent-') ||
+      host.claudeSubagentRosterByPaneKey.get(previous.paneKey)?.has(owner) === true)
+  )
+}
+
+/**
+ * A completed batch from the request's own owner and run lists the request: by the id the provider gave it,
+ * else by its whole input. A match is not an identity; no member id is ever assigned to the request.
+ */
+export function claudeBatchSettlesRequest(
+  previous: AgentHookEventPayload | undefined,
+  batch: AgentHookEventPayload
+): boolean {
+  const request = previous?.claudeRequest
+  if (
+    !previous ||
+    !request ||
+    !batch.claudeBatch ||
+    previous.restoredUnconfirmed ||
+    previous.payload.agentType !== 'claude' ||
+    previous.payload.state !== 'waiting' ||
+    previous.hookEventName !== 'PermissionRequest' ||
+    previous.toolAgentId !== batch.toolAgentId ||
+    previous.connectionId !== batch.connectionId ||
+    previous.launchToken !== batch.launchToken ||
+    previous.providerSession?.id !== batch.providerSession?.id
+  ) {
+    return false
+  }
+  return batch.claudeBatch.members.some((member) =>
+    request.providerToolUseId
+      ? member.toolUseId === request.providerToolUseId
+      : request.digest !== undefined && member.digest === request.digest
+  )
+}
+
+/** The batch ended the request the lead was waiting on: resume what that wait displaced, then show it. */
+export function resumeClaudeRequestLead(
+  state: HookListenerState,
+  request: AgentHookEventPayload,
+  batch: AgentHookEventPayload
+): AgentHookEventPayload {
+  const lead = state.claudeLeadStateByPaneKey.get(batch.paneKey)
+  if (lead?.state === 'waiting' && lead.waitingAgentId === request.toolAgentId) {
+    setClaudeMainAgentTurnState(
+      state,
+      batch.paneKey,
+      lead.waitingAgentId
+        ? (lead.stateBeforeWait ?? { state: 'working' })
+        : { state: 'working', ...(lead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}) }
+    )
+  }
+  const payload = buildClaudeCachedLeadStatusPayload(state, 'PostToolBatch', batch.paneKey, {})
+  return payload ? { ...batch, payload } : batch
 }

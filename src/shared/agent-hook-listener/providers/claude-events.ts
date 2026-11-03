@@ -8,6 +8,7 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
+  foldClaudeBackgroundTasksIntoRoster,
   isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
@@ -21,7 +22,6 @@ import {
   normalizeClaudeSubagentLifecycleEvent
 } from './claude-lifecycle-events'
 import {
-  foldClaudeBackgroundInventory,
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
@@ -232,7 +232,12 @@ export function normalizeClaudeEvent(
   if (isTurnBoundary && eventAgentId === undefined) {
     // Teammates can report running while idle; trust only unambiguous background_tasks entries and retain tracking for older builds.
     if (backgroundTasks.present) {
-      foldClaudeBackgroundInventory(state, paneKey, backgroundTasks)
+      foldClaudeBackgroundTasksIntoRoster(
+        getOrCreateClaudeSubagentRoster(state, paneKey),
+        backgroundTasks.tasks,
+        Date.now(),
+        { inventoryComplete: !backgroundTasks.truncated }
+      )
     }
   }
   // Preserve the original lead stash through multiple child waits.

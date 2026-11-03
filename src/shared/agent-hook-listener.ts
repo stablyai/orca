@@ -1,4 +1,5 @@
-import { observeClaudePermissionBinding } from './agent-hook-listener/claude-permission-binding'
+import { readClaudePermissionFacts } from './agent-hook-listener/claude-permission-facts'
+import { buildClaudeCachedLeadStatusPayload } from './agent-hook-listener/providers/claude-lifecycle-events'
 import { readHookAgentProcess } from './agent-process-presence'
 import { isInheritedHookStatus } from './agent-hook-presence-transition'
 import { normalizeAgentStatusPayload, type AgentMainAgentStatus } from './agent-status-types'
@@ -199,11 +200,6 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  const binding =
-    source === 'claude'
-      ? observeClaudePermissionBinding(state, paneKey, launchToken, eventName, hookPayloadRecord)
-      : undefined
-  const hookPayload = binding?.hookPayload ?? hookPayloadRecord
   const sessionEndReason = readString(hookPayloadRecord, 'reason')
   if (
     eventName === 'SessionEnd' &&
@@ -240,7 +236,7 @@ export function normalizeHookPayload(
     eventName,
     promptText,
     paneKey,
-    hookPayload,
+    hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt,
     previousOpenCodeMainAgent: options.previousOpenCodeMainAgent
@@ -250,12 +246,17 @@ export function normalizeHookPayload(
     eventName === 'session_start' &&
     providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
+  const claudeFacts =
+    source === 'claude' ? readClaudePermissionFacts(eventName, hookPayloadRecord) : {}
+  // A batch has no status of its own; it carries the cached lead so a host can act on what it ended.
   const transportPayload =
     dispatched.payload ??
     (providerSessionOnly
       ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null) ??
-    binding?.settlementPayload?.()
+    (claudeFacts.claudeBatch
+      ? buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayloadRecord)
+      : null)
   const restoredUnconfirmed =
     source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   if (!transportPayload) {
@@ -291,8 +292,8 @@ export function normalizeHookPayload(
       source === 'grok' ? (grokActiveTurn?.promptId ?? providerPromptId) : providerPromptId,
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
-    toolUseId: readFirstString(hookPayload, ['tool_use_id', 'toolUseId']),
-    ...(binding?.settled ? { claudeBatchSettledRequests: binding.settled } : {}),
+    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    ...claudeFacts,
     toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'

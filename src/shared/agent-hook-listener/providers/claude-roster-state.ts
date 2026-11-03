@@ -1,4 +1,3 @@
-import { retireClaudeInFlightOwners } from '../claude-permission-binding'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
@@ -6,11 +5,7 @@ import type {
   AgentWorkingMode
 } from '../../agent-status-types'
 import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
-import {
-  foldClaudeBackgroundTasksIntoRoster,
-  type ClaudeSubagentRoster
-} from '../../claude-subagent-roster'
-import type { ClaudeBackgroundAgentTask } from '../../claude-background-task-inventory'
+import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
@@ -100,24 +95,6 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
-/** A complete inventory proves child ends as their own end hooks do, so those children's calls end too. */
-export function foldClaudeBackgroundInventory(
-  state: HookListenerState,
-  paneKey: string,
-  inventory: { tasks: ClaudeBackgroundAgentTask[]; truncated: boolean }
-): void {
-  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
-  const before = [...roster.keys()]
-  foldClaudeBackgroundTasksIntoRoster(roster, inventory.tasks, Date.now(), {
-    inventoryComplete: !inventory.truncated
-  })
-  retireClaudeInFlightOwners(
-    state,
-    paneKey,
-    before.filter((id) => !roster.has(id))
-  )
-}
-
 /** Only fresh inventory retires a reported shell; lead verdicts cannot override positive process evidence. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
@@ -182,7 +159,6 @@ export function markClaudeLeadTurnDone(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
-  retireClaudeInFlightOwners(state, paneKey, [''])
   const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)

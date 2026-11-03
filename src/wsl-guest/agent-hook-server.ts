@@ -5,6 +5,7 @@ import {
   type RelayInterruptHost
 } from './agent-hook-interrupt-reconciliation'
 import { applyRelayHookEvent, type RelayHookAdmissionOptions } from './agent-hook-event-admission'
+import { relayClaudeReplayProjection } from './agent-hook-claude-permission-host'
 import { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
 import { RelayAgentHookCanonicalStatus } from './agent-hook-canonical-status'
 import type {
@@ -217,7 +218,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
     })
     for (const { event, meta } of replayable) {
       void this.checkAgentPresence(event.paneKey)
-      this.forward(buildCachedPaneReplayEnvelope({ event, meta }))
+      const claudePermission = relayClaudeReplayProjection(this.state, event.paneKey)
+      this.forward(buildCachedPaneReplayEnvelope({ event: { ...event, claudePermission }, meta }))
     }
     return replayable.length + this.replayCanonicalHooks()
   }

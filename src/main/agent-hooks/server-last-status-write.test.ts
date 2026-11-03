@@ -98,26 +98,6 @@ describe('Last-status persistence', () => {
     }
   })
 
-  it('persists a bound permission row without its runtime-only binding', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      const tool = { tool_name: 'Read', tool_input: { file_path: '/outside.txt' } }
-      await postHookEvent(server, buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'p' }))
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'PreToolUse', tool_use_id: 'bound-call', ...tool })
-      )
-      await postHookEvent(server, buildBody({ hook_event_name: 'PermissionRequest', ...tool }))
-      server.flushStatusPersistSync()
-      const entry = JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]
-      expect(entry).toMatchObject({ toolUseId: 'bound-call', payload: { state: 'waiting' } })
-      expect(entry).not.toHaveProperty('claudePermissionBound')
-    } finally {
-      server.stop()
-    }
-  })
-
   it('scrubs a legacy persisted launch bearer while retaining its authority commitment', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()

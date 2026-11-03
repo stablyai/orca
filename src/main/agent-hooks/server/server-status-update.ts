@@ -15,10 +15,12 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
+  claudeBatchSettlesRequest,
   pairedClaudeNonAgentWork,
+  resumeClaudeRequestLead,
   shouldKeepClaudePermissionVisible,
   withHeldChildWaitMainAgent
-} from './server-claude-status-rules'
+} from '../../../shared/agent-hook-listener/claude-permission-transition'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
@@ -192,7 +194,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    // A projected row was already decided by its execution host; this server decides only its own hooks.
+    const projection = identityResolvedPayload.claudePermission
+    const host = identityResolvedPayload.connectionId === null ? this.state : undefined
+    const attachedPayload = projection
+      ? identityResolvedPayload
+      : attachClaudePermissionToolUseId(previous, identityResolvedPayload)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {
@@ -215,8 +222,16 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    const effectivePayload = latch.event
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+    const effectivePayload =
+      host && claudeBatchSettlesRequest(previous, latch.event) && previous
+        ? resumeClaudeRequestLead(this.state, previous, latch.event)
+        : latch.event
+    if (
+      previous &&
+      (projection
+        ? projection.held === true && !projection.row
+        : shouldKeepClaudePermissionVisible(previous, effectivePayload, host))
+    ) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {
@@ -249,7 +264,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const {
       claudeRunningNonAgentTask: _unpaired,
       claudeSettledRequests: _settled,
-      claudeBatchSettledRequests: _batchSettled,
+      claudeBatch: _batch,
+      claudePermission: _projection,
       ...unpairedPayload
     } = effectivePayload
     const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)

@@ -1,6 +1,5 @@
 import type { AgentHookEventPayload } from './listener-event'
 import { isRecord } from '../agent-status-child-work-value-guards'
-import { isAskUserQuestionTool } from '../agent-question-answered-intent'
 
 /** One Claude tool request the execution host saw end, keyed exactly as a permission wait is. */
 export type ClaudeSettledRequest = {
@@ -13,8 +12,7 @@ export type ClaudeSettledRequest = {
 export const MAX_CLAUDE_SETTLED_REQUESTS = 16
 const MAX_ID_LENGTH = 256
 
-/** A trimmed, bounded tool-use or agent id, or undefined when the value cannot be one. */
-export function readClaudeSettledId(value: unknown): string | undefined {
+function readId(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
@@ -23,11 +21,8 @@ export function readClaudeSettledId(value: unknown): string | undefined {
 }
 
 /** Validates the optional wire field; anything malformed is dropped whole, never partially trusted. */
-export function readClaudeSettledRequests(
-  value: unknown,
-  max = MAX_CLAUDE_SETTLED_REQUESTS
-): ClaudeSettledRequest[] | undefined {
-  if (!Array.isArray(value) || value.length === 0 || value.length > max) {
+export function readClaudeSettledRequests(value: unknown): ClaudeSettledRequest[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CLAUDE_SETTLED_REQUESTS) {
     return undefined
   }
   const requests: ClaudeSettledRequest[] = []
@@ -35,11 +30,9 @@ export function readClaudeSettledRequests(
     if (!isRecord(row)) {
       return undefined
     }
-    const toolUseId = readClaudeSettledId(row.toolUseId)
-    const toolAgentId =
-      row.toolAgentId === undefined ? undefined : readClaudeSettledId(row.toolAgentId)
-    const toolAgentType =
-      row.toolAgentType === undefined ? undefined : readClaudeSettledId(row.toolAgentType)
+    const toolUseId = readId(row.toolUseId)
+    const toolAgentId = row.toolAgentId === undefined ? undefined : readId(row.toolAgentId)
+    const toolAgentType = row.toolAgentType === undefined ? undefined : readId(row.toolAgentType)
     if (
       !toolUseId ||
       (row.toolAgentId !== undefined && !toolAgentId) ||
@@ -63,58 +56,17 @@ function settledRequestOf(event: AgentHookEventPayload): ClaudeSettledRequest | 
   ) {
     return undefined
   }
-  const toolUseId = readClaudeSettledId(event.toolUseId)
+  const toolUseId = readId(event.toolUseId)
   if (!toolUseId) {
     return undefined
   }
-  const toolAgentId = readClaudeSettledId(event.toolAgentId)
-  const toolAgentType = readClaudeSettledId(event.toolAgentType)
+  const toolAgentId = readId(event.toolAgentId)
+  const toolAgentType = readId(event.toolAgentType)
   return {
     toolUseId,
     ...(toolAgentId ? { toolAgentId } : {}),
     ...(toolAgentType ? { toolAgentType } : {})
   }
-}
-
-/** Batch settlements a relay forwarded, kept apart from tool settlements so they never prove an unbound wait. */
-export function retainClaudeBatchSettledRequests(
-  retained: readonly ClaudeSettledRequest[] | undefined,
-  previous: AgentHookEventPayload | undefined,
-  next: AgentHookEventPayload
-): readonly ClaudeSettledRequest[] | undefined {
-  const kept = previous && sameClaudeRun(previous, next) ? (retained ?? []) : []
-  // A live batch lists only ids; its owner is the batch's own. Only its last entries can survive the ring.
-  const incoming = (next.claudeBatchSettledRequests ?? [])
-    .slice(-MAX_CLAUDE_SETTLED_REQUESTS)
-    .map((request) => ({
-      toolUseId: request.toolUseId,
-      ...(next.toolAgentId ? { toolAgentId: next.toolAgentId } : {}),
-      ...(next.toolAgentType ? { toolAgentType: next.toolAgentType } : {})
-    }))
-  const merged = [
-    ...kept.filter((request) => !incoming.some((added) => sameRequest(request, added))),
-    ...incoming
-  ].slice(-MAX_CLAUDE_SETTLED_REQUESTS)
-  return merged.length > 0 ? merged : undefined
-}
-
-/** A relay's cached request that a batch from the same owner and run settles: its outcome replaces it. */
-export function isClaudeCachedRequestSettledByBatch(
-  cached: AgentHookEventPayload | undefined,
-  batch: AgentHookEventPayload
-): boolean {
-  const toolUseId = readClaudeSettledId(cached?.toolUseId)
-  return (
-    !!cached &&
-    !!toolUseId &&
-    cached.payload.agentType === 'claude' &&
-    cached.payload.state === 'waiting' &&
-    cached.hookEventName === 'PermissionRequest' &&
-    !isAskUserQuestionTool(cached.payload.toolName) &&
-    cached.toolAgentId === batch.toolAgentId &&
-    sameClaudeRun(cached, batch) &&
-    batch.claudeBatchSettledRequests?.some((request) => request.toolUseId === toolUseId) === true
-  )
 }
 
 function sameClaudeRun(previous: AgentHookEventPayload, next: AgentHookEventPayload): boolean {
@@ -154,35 +106,25 @@ function sameRequest(a: ClaudeSettledRequest, b: ClaudeSettledRequest): boolean 
   )
 }
 
-/** Replay settlement must come from the waiting row's own connection, launch and session. */
-export function isSameClaudeReplayRun(
-  waiting: Pick<AgentHookEventPayload, 'connectionId' | 'launchToken' | 'providerSession'>,
-  next: Pick<AgentHookEventPayload, 'connectionId' | 'launchToken' | 'providerSession'>
-): boolean {
-  return (
-    waiting.connectionId === next.connectionId &&
-    (waiting.launchToken === undefined || waiting.launchToken === next.launchToken) &&
-    (waiting.providerSession?.id === undefined ||
-      waiting.providerSession.id === next.providerSession?.id)
-  )
-}
-
 /** A replayed row whose host saw this exact request end: the held wait is over, whatever came after. */
 export function isClaudePermissionSettledByReplay(
   waiting: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const toolUseId = readClaudeSettledId(waiting.toolUseId)
+  const toolUseId = readId(waiting.toolUseId)
   if (
     next.isReplay !== true ||
     !toolUseId ||
     !next.claudeSettledRequests ||
-    !isSameClaudeReplayRun(waiting, next)
+    waiting.connectionId !== next.connectionId ||
+    (waiting.launchToken !== undefined && waiting.launchToken !== next.launchToken) ||
+    (waiting.providerSession?.id !== undefined &&
+      waiting.providerSession.id !== next.providerSession?.id)
   ) {
     return false
   }
-  const toolAgentId = readClaudeSettledId(waiting.toolAgentId)
-  const toolAgentType = readClaudeSettledId(waiting.toolAgentType)
+  const toolAgentId = readId(waiting.toolAgentId)
+  const toolAgentType = readId(waiting.toolAgentType)
   return next.claudeSettledRequests.some((request) =>
     sameRequest(request, {
       toolUseId,

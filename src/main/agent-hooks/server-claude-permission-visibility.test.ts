@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from './server/program-status/hook-precedence'
 import captures from '../../shared/agent-hook-listener/__fixtures__/declined-permission-hooks.json'
 import { buildBody, postHookEvent, PANE } from './server.test-fixtures'
 
@@ -606,14 +605,12 @@ async function withClaudePane(
       return server.getStatusSnapshot()[0].state
     }, server)
   } finally {
-    vi.useRealTimers()
     server.stop()
   }
 }
 
 const [start, submit] = captures.claudeDecline
 const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-const typed = { agent_type: 'reviewer' }
 const child = { agent_id: 'child-a', agent_type: 'general-purpose' }
 const readAt = (offset: number) => ({ tool_name: 'Read', tool_input: { file_path: '/x', offset } })
 const hook = (hook_event_name: string, fields: Record<string, unknown> = {}) => ({
@@ -627,16 +624,19 @@ const ask = (tool: Record<string, unknown>, owner = {}) =>
   hook('PermissionRequest', { ...tool, ...owner })
 const done = (id: string, tool: Record<string, unknown>, owner = {}) =>
   hook('PostToolUse', { ...tool, tool_use_id: id, tool_response: 'ok', ...owner })
-const batch = (ids: string[], owner = {}) =>
-  hook('PostToolBatch', { tool_calls: ids.map((tool_use_id) => ({ tool_use_id })), ...owner })
+const batch = (calls: [string, Record<string, unknown>][], owner = {}) =>
+  hook('PostToolBatch', {
+    tool_calls: calls.map(([tool_use_id, tool]) => ({ ...tool, tool_use_id, tool_response: 'r' })),
+    ...owner
+  })
 
-describe('Claude requests bound to their single in-flight call', () => {
+describe('the represented Claude request on its execution host', () => {
   it.each([
     ['claudeDecline', 5],
     ['claudeParallel', 10],
     ['claudeChild', 20]
   ] as const)(
-    'keeps recorded %s waiting through siblings and child work, and clears at its batch before the turn ends',
+    'keeps recorded %s waiting through siblings and child work, and clears at its own completed batch',
     async (capture, settledAt) => {
       await withClaudePane(async (post, server) => {
         const raws = captures[capture]
@@ -659,183 +659,97 @@ describe('Claude requests bound to their single in-flight call', () => {
     }
   )
 
-  it('keeps a child request through its own different-input sibling and clears on its own completion', async () => {
-    await withClaudePane(async (post) => {
+  it('restores the lead a child request displaced when the child’s own batch completes it', async () => {
+    await withClaudePane(async (post, server) => {
+      const tool = readAt(0)
       await post(start)
       await post(submit)
-      await post(pre('P', { tool_name: 'Agent', tool_input: { prompt: 'look' } }))
       await post(hook('SubagentStart', child))
-      await post(pre('T', readAt(0), child))
-      await post(pre('V', { tool_name: 'Bash', tool_input: { command: 'ls' } }, child))
-      expect(await post(ask(readAt(0), child))).toBe('waiting')
-      expect(
-        await post(done('V', { tool_name: 'Bash', tool_input: { command: 'ls' } }, child))
-      ).toBe('waiting')
-      expect(await post(done('T', readAt(0), child))).toBe('working')
+      await post(pre('C', tool, child))
+      expect(await post(ask(tool, child))).toBe('waiting')
+      expect(await post(batch([['C', tool]], child))).toBe('working')
+      expect(server.getStatusSnapshot()[0].mainAgent?.state).toBe('working')
     })
   })
 
-  it('ends only on its own settlement, and a batch that settles something else never becomes the row', async () => {
-    await withClaudePane(async (post, server) => {
-      await post(start)
-      await post(submit)
-      await post(pre('T', readAt(0), typed))
-      await post(pre('U', readAt(100), typed))
-      expect(await post(ask(readAt(0), typed))).toBe('waiting')
-      // Same agent type and preview: main's guess would clear here.
-      expect(await post(done('U', readAt(100), typed))).toBe('waiting')
-      const held = server.getStatusSnapshot()[0]
-      expect(await post(batch(['U'], typed))).toBe('waiting')
-      // Another owner's batch naming the same id is not this request's settlement either.
-      expect(await post(batch(['T'], child))).toBe('waiting')
-      expect(server.getStatusSnapshot()[0]).toEqual(held)
-      expect(await post(hook('PostToolUseFailure', { tool_use_id: 'T', ...typed }))).toBe('working')
-
-      await post(pre('W', readAt(1)))
-      expect(await post(ask(readAt(1)))).toBe('waiting')
-      expect(await post(batch(['W']))).toBe('working')
-    })
-  })
-
-  it('settles a held call listed at position 257 of a batch', async () => {
+  it('keeps a sole prompt waiting while its allowed identical sibling finishes, until the batch', async () => {
     await withClaudePane(async (post) => {
+      const tool = readAt(0)
       await post(start)
       await post(submit)
-      const ids = Array.from({ length: 300 }, (_, i) => `call-${i}`)
-      // Only the held call is in flight; the batch also lists 299 others, as after a restart.
-      await post(pre('call-256', { tool_name: 'Read', tool_input: { file_path: '/f256' } }))
-      expect(await post(ask({ tool_name: 'Read', tool_input: { file_path: '/f256' } }))).toBe(
-        'waiting'
-      )
-      expect(await post(batch(ids))).toBe('working')
+      // T's Pre comes last, so the request follows it; U's identical input must not end T's prompt.
+      await post(pre('U', tool))
+      await post(pre('T', tool))
+      expect(await post(ask(tool))).toBe('waiting')
+      expect(await post(done('U', tool))).toBe('waiting')
+      expect(
+        await post(
+          batch([
+            ['T', tool],
+            ['U', tool]
+          ])
+        )
+      ).toBe('working')
     })
   })
 
-  it('keeps a fully observed root request waiting at a sibling’s completion after named owners overflow, as main does', async () => {
-    await withClaudePane(async (post, server) => {
-      const helper = (i: string) => ({ agent_id: `hook-agent-${i}` })
-      const file = (path: string) => ({ tool_name: 'Read', tool_input: { file_path: path } })
+  it('accepted (Brennan 2026-11-03): NC2 after an earlier batch release, an equal-preview sibling can clear a still-open prompt', async () => {
+    await withClaudePane(async (post) => {
+      const other = { tool_name: 'Read', tool_input: { file_path: '/a' } }
       await post(start)
       await post(submit)
-      // 256 helper calls stay in flight; 64 more helper owners cannot be recorded.
-      for (let i = 0; i < 256; i++) {
-        await post(pre(`a${i}`, file(`/a${i}`), helper(`a${i}`)))
-      }
-      for (let i = 0; i < 64; i++) {
-        await post(pre(`b${i}`, file(`/b${i}`), helper(`b${i}`)))
-      }
-      await post(done('a0', file('/a0'), helper('a0')))
-      // An earlier root request, declined and settled by its batch (main keeps showing it).
-      await post(pre('A', file('/a')))
-      expect(await post(ask(file('/a')))).toBe('waiting')
-      expect(await post(batch(['A']))).toBe('working')
-      await post(pre('Z', file('/z')))
-      // The root has its own budget, so b64 takes the helper slot a0 freed; b65 is then the 65th
-      // unrecordable helper owner and sets the named-owner overflow while the root has lost nothing.
-      await post(pre('b64', file('/b64'), helper('b64')))
-      await post(pre('b65', file('/b65'), helper('b65')))
-      const state: unknown = Reflect.get(server, 'state')
-      const tables =
-        typeof state === 'object' && state !== null
-          ? Reflect.get(state, 'claudeInFlightByPaneKey')
-          : undefined
-      expect(tables instanceof Map ? tables.get(PANE) : undefined).toMatchObject({
-        namedOwnersDegraded: true
-      })
-      await post(done('Z', file('/z')))
-      for (let i = 1; i < 256; i++) {
-        await post(done(`a${i}`, file(`/a${i}`), helper(`a${i}`)))
-      }
+      await post(pre('A', other))
+      await post(ask(other))
+      expect(await post(batch([['A', other]]))).toBe('working')
       await post(pre('T', readAt(0)))
       await post(pre('U', readAt(100)))
       expect(await post(ask(readAt(0)))).toBe('waiting')
-      // T's prompt is open; U's completion must not clear it (main: waiting too).
-      expect(await post(done('U', readAt(100)))).toBe('waiting')
-      expect(await post(batch(['T', 'U']))).toBe('working')
+      // Main keeps T here (A stays held there, so T inherits nothing); the legacy preview inheritance now
+      // reads U as T's predecessor and its completion clears T while T is still open.
+      expect(await post(done('U', readAt(100)))).toBe('working')
     })
   })
 
-  it('takes main’s path for a named owner after the overflow, clearing at the same sibling completion main does', async () => {
+  it('accepted (Brennan 2026-11-03): NC1 a late older batch with the same input clears a newer sole prompt', async () => {
     await withClaudePane(async (post) => {
-      const helper = (i: number) => ({ agent_id: `hook-agent-${i}` })
+      const tool = readAt(0)
       await post(start)
       await post(submit)
-      for (let i = 0; i < 256; i++) {
-        await post(pre(`a${i}`, readAt(1000 + i), helper(i)))
-      }
-      for (let i = 256; i < 321; i++) {
-        await post(pre(`b${i}`, readAt(1000 + i), helper(i)))
-      }
+      await post(pre('T', tool))
+      expect(await post(ask(tool))).toBe('waiting')
+      // W's batch, same owner and input, delivered after T's request: main ignores it; the input match does not.
+      expect(await post(batch([['W', tool]]))).toBe('working')
+    })
+  })
+
+  it('accepted (Brennan 2026-11-03): NC4 a helper’s request whose own end is lost outlives the parent’s finish', async () => {
+    await withClaudePane(async (post) => {
+      const helper = { agent_id: 'hook-agent-1' }
+      await post(start)
+      await post(submit)
+      await post(pre('H', readAt(0), helper))
+      expect(await post(ask(readAt(0), helper))).toBe('waiting')
+      // Main can show Done here; the request stays until the helper's own end or a real replacement.
+      expect(await post(hook('Stop'))).toBe('waiting')
+      expect(await post(hook('UserPromptSubmit', { prompt: 'Next' }))).toBe('working')
+    })
+  })
+
+  it('ends a child’s request at a complete inventory that ends that child, but not while it still runs', async () => {
+    await withClaudePane(async (post) => {
+      await post(start)
+      await post(submit)
       await post(hook('SubagentStart', child))
-      await post(pre('T', readAt(0), child))
-      await post(pre('U', readAt(100), child))
+      await post(pre('C', readAt(0), child))
       expect(await post(ask(readAt(0), child))).toBe('waiting')
-      // Unbound child request with an equal-preview sibling: main's same-agent preview release fires here too.
-      expect(await post(done('U', readAt(100), child))).toBe('working')
-    })
-  })
-
-  it('still ends at a new prompt, the owning child’s end and the turn’s end', async () => {
-    await withClaudePane(async (post) => {
-      await post(start)
-      await post(submit)
-      await post(pre('T', readAt(0)))
-      expect(await post(ask(readAt(0)))).toBe('waiting')
-      expect(await post(hook('UserPromptSubmit', { prompt: 'Do something else' }))).toBe('working')
-      await post(hook('SubagentStart', child))
-      await post(pre('C', readAt(1), child))
-      expect(await post(ask(readAt(1), child))).toBe('waiting')
-      expect(await post(hook('SubagentStop', child))).toBe('working')
-      await post(pre('R', readAt(2)))
-      expect(await post(ask(readAt(2)))).toBe('waiting')
-      expect(await post(hook('Stop'))).toBe('done')
-    })
-  })
-
-  it('holds terminal working behind a bound request and keeps the existing done fallback', async () => {
-    await withClaudePane(async (post, server) => {
-      for (const raw of captures.claudeParallel.slice(0, 5)) {
-        await post(raw)
-      }
-      vi.useFakeTimers({ toFake: ['Date'] })
-      vi.setSystemTime(Date.now() + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
-      const terminal = {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        connectionId: null,
-        fromProgramStatus: true,
-        renewsProgramStatusLease: true
-      }
-      server.ingestTerminalStatus({
-        ...terminal,
-        payload: { agentType: 'claude', state: 'working', prompt: '' }
-      })
-      expect(server.getStatusSnapshot()[0].state).toBe('waiting')
-      server.ingestTerminalStatus({
-        ...terminal,
-        payload: { agentType: 'claude', state: 'done', prompt: '' }
-      })
-      expect(server.getStatusSnapshot()[0].state).toBe('done')
-    })
-  })
-
-  it('accepted limitation (Brennan 2026-11-02): two open prompts for identical input can show working while the second is open', async () => {
-    await withClaudePane(async (post) => {
-      const X = { tool_name: 'Read', tool_input: { file_path: '/tmp/outside.txt' } }
-      await post(start)
-      await post(submit)
-      await post(pre('A', X, typed))
-      await post(ask(X, typed))
-      expect(await post(batch(['A'], typed))).toBe('working')
-      await post(pre('T', readAt(0), typed))
-      expect(await post(ask(readAt(0), typed))).toBe('waiting')
-      await post(pre('U', readAt(0), typed))
-      // Both identical calls are in flight, so U's request cannot be named and takes main's path.
-      expect(await post(ask(readAt(0), typed))).toBe('waiting')
-      // U's prompt is still open here; main shows waiting. Accepted tradeoff, not a guarantee.
-      expect(await post(done('T', readAt(0), typed))).toBe('working')
-      expect(await post(hook('Stop', typed))).toBe('done')
+      expect(
+        await post(
+          hook('Stop', {
+            background_tasks: [{ id: child.agent_id, type: 'subagent', status: 'running' }]
+          })
+        )
+      ).toBe('waiting')
+      expect(await post(hook('Stop', { background_tasks: [] }))).not.toBe('waiting')
     })
   })
 })

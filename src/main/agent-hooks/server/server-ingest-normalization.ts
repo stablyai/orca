@@ -2,13 +2,13 @@ import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { claudeBatchSettlesRequest } from '../../../shared/agent-hook-listener/claude-permission-transition'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
-import { isUnusedClaudeSettlement } from './server-claude-status-rules'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
@@ -28,14 +28,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.settleClaudePromptBlocked(applied)
     }
     return applied
-  }
-
-  /** A live batch that settles no held bound request is main's no-op: it must not become the row. */
-  protected dropsClaudeSettlement(
-    paneKey: string,
-    event: Parameters<typeof isUnusedClaudeSettlement>[1]
-  ): boolean {
-    return isUnusedClaudeSettlement(this.state.lastStatusByPaneKey.get(paneKey), event)
   }
 
   /** An OpenCode relay that lost status retires only the row its own connection and launch wrote. */
@@ -118,8 +110,16 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
     const normalized = normalizeHookPayload(this.state, source, body, this.env)
+    // A batch ending no request this host shows is main's no-op; a replayed one is history, not evidence.
     const event =
-      normalized && this.dropsClaudeSettlement(normalized.paneKey, normalized) ? null : normalized
+      normalized?.claudeBatch &&
+      (isReplay ||
+        !claudeBatchSettlesRequest(
+          this.state.lastStatusByPaneKey.get(normalized.paneKey),
+          normalized
+        ))
+        ? null
+        : normalized
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).

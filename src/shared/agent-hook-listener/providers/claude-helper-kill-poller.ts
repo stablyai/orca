@@ -1,4 +1,3 @@
-import { retireClaudeInFlightOwners } from '../claude-permission-binding'
 import { dirname, basename, join, posix, win32 } from 'node:path'
 import { AgentTranscriptPollScheduler } from '../../agent-transcript-poll-scheduler'
 import {
@@ -250,7 +249,6 @@ export class ClaudeHelperKillPoller {
       )
     }
     clearClaudePendingWaitForAgent(this.state, paneKey, (id) => ended.includes(id))
-    retireClaudeInFlightOwners(this.state, paneKey, ended)
     if (!roster.size) {
       this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
     }

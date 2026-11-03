@@ -116,7 +116,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
-      claudeSettlement,
+      claudeSettledRequests,
+      claudePermission,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -130,18 +131,11 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (age !== undefined && (typeof age !== 'number' || !Number.isSafeInteger(age) || age < 0)) {
       return
     }
-    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (
-      !validatedPayload ||
-      this.dropsClaudeSettlement(paneKey, {
-        hookEventName,
-        ...claudeSettlement,
-        toolAgentId,
-        connectionId: trimmedConnectionId,
-        isReplay: envelope.isReplay,
-        payload: validatedPayload
-      })
-    ) {
+    // A replayed projection carries the held request's own payload in place of the cached row's.
+    const validatedPayload = normalizeAgentStatusPayload(
+      claudePermission?.row?.payload ?? envelope.payload
+    )
+    if (!validatedPayload) {
       return
     }
     if (
@@ -273,7 +267,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
-      ...claudeSettlement,
+      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
+      ...(claudePermission ? { claudePermission } : {}),
       toolAgentId,
       teammateName,
       toolAgentType,

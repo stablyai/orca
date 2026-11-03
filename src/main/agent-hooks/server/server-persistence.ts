@@ -50,9 +50,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
-        claudePermissionBound: _claudePermissionBound,
-        claudeSettledRequests: _claudeSettledRequests,
-        claudeBatchSettledRequests: _claudeBatchSettledRequests,
+        claudeRequest: _claudeRequest,
         // Terminal handles belong to this runtime and cannot safely rejoin a hydrated row.
         terminalHandle: _terminalHandle,
         hostTurnRevision: _hostTurnRevision,

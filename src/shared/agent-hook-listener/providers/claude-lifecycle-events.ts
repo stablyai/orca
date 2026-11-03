@@ -1,4 +1,3 @@
-import { retireClaudeInFlightOwnersMatching } from '../claude-permission-binding'
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import {
   markClaudeBackgroundAgentRunning,
@@ -67,10 +66,6 @@ export function normalizeClaudeSubagentLifecycleEvent(
     }
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
-    )
-    // An idle teammate's turn has ended, so its calls have too.
-    retireClaudeInFlightOwnersMatching(state, paneKey, (owner) =>
-      claudeTeammateIdMatchesName(owner, teammateName)
     )
   } else {
     const agentId = lifecycleId
@@ -144,17 +139,12 @@ export function buildClaudeCachedLeadStatusPayload(
     workingChildEvidence?: boolean
     endedChildWork?: boolean
     endedRuntimeChildWork?: boolean
-    inTurnEvidence?: boolean
   } = {}
 ): ParsedAgentStatusPayload | null {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   let leadState = lead?.state
   if (!leadState) {
-    if (
-      evidence.workingChildEvidence ||
-      evidence.endedRuntimeChildWork ||
-      evidence.inTurnEvidence
-    ) {
+    if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
       // Current-runtime child endings wake the parent; only cached lead boundaries can prove pane completion.
       leadState = 'working'
     } else if (evidence.endedChildWork) {

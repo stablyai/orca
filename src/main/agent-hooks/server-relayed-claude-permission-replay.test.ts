@@ -183,24 +183,17 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
 })
 
 const decline = captures.claudeDecline
-
-/** The relay's own cached pane row (what it would replay), read without a production accessor. */
-function relayRow(relay: RelayAgentHookServer): unknown {
-  const state: unknown = Reflect.get(relay, 'state')
-  const rows =
-    typeof state === 'object' && state !== null
-      ? Reflect.get(state, 'lastStatusByPaneKey')
-      : undefined
-  const get: unknown =
-    typeof rows === 'object' && rows !== null ? Reflect.get(rows, 'get') : undefined
-  return typeof get === 'function' ? get.call(rows, PANE) : undefined
-}
 const declineBatch = decline.findIndex((raw) => raw.hook_event_name === 'PostToolBatch')
+const [start, submit] = decline
+const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+const question = {
+  tool_name: 'AskUserQuestion',
+  tool_input: { questions: [{ question: 'Which?' }] }
+}
 
-/** A relay and desktop pair whose forwarding can be cut, filtered, or moved to a fresh relay process. */
-async function startDeclinePair(
-  filter: (envelope: AgentHookRelayEnvelope) => AgentHookRelayEnvelope | undefined = (envelope) =>
-    envelope
+/** A relay and desktop pair whose delivery can be cut, filtered, or moved to a fresh relay process. */
+async function startPair(
+  filter: (envelope: AgentHookRelayEnvelope) => AgentHookRelayEnvelope | undefined = (e) => e
 ) {
   const desktop = new AgentHookServer()
   running.push(desktop)
@@ -219,7 +212,7 @@ async function startDeclinePair(
       expect(response.status).toBe(204)
       return row(desktop).state
     },
-    /** A fresh relay process: an empty producer table while the CLI keeps running. */
+    /** A fresh relay process: no represented request while the CLI keeps running. */
     restart: async () => {
       pair.relay?.stop()
       const endpointDir = mkdtempSync(join(tmpdir(), 'orca-relayed-permission-'))
@@ -243,71 +236,39 @@ async function startDeclinePair(
   return pair
 }
 
-describe('a relayed request bound to its single in-flight call (recorded decline)', () => {
-  it('clears live at the batch that settles it; batches that settle nothing shown change neither side’s row', async () => {
-    const pair = await startDeclinePair()
-    for (const raw of decline.slice(0, declineBatch)) {
-      await pair.post(raw)
-    }
-    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
-    expect(await pair.post(decline[declineBatch])).toBe('working')
-    await pair.post(decline[declineBatch + 1])
-    await pair.post(decline[declineBatch + 2])
-    const cached = relayRow(pair.relay)
-    const shown = row(pair.desktop)
-    // The next recorded batch settles a call no one is waiting on.
-    await pair.post(decline[declineBatch + 3])
-    expect(row(pair.desktop)).toEqual(shown)
-    expect(relayRow(pair.relay)).toBe(cached)
-    expect(
-      pair.forwarded
-        .filter((envelope) => envelope.hookEventName === 'PostToolBatch')
-        .map((envelope) => envelope.claudeBatchSettledRequests)
-    ).toEqual([[{ toolUseId: 'tool_use_id-1' }], [{ toolUseId: 'tool_use_id-2' }]])
-  })
+/** A desktop built before projections: it reads only the fields older receivers know. */
+const olderDesktop = (envelope: AgentHookRelayEnvelope): AgentHookRelayEnvelope => {
+  const { claudePermission: _projection, ...legacy } = envelope
+  return legacy
+}
 
-  it('clears on reconnect when the batch settled it while the desktop was away', async () => {
-    const pair = await startDeclinePair()
-    for (const raw of decline.slice(0, declineBatch)) {
-      await pair.post(raw)
+describe('a relayed request decided by its execution host', () => {
+  it('clears recorded B live at its batch on a current desktop, and keeps main’s wait on an older one', async () => {
+    for (const older of [false, true]) {
+      const pair = await startPair(older ? olderDesktop : undefined)
+      for (const raw of decline.slice(0, declineBatch)) {
+        await pair.post(raw)
+      }
+      expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+      expect({ older, state: await pair.post(decline[declineBatch]) }).toEqual({
+        older,
+        state: older ? 'waiting' : 'working'
+      })
     }
-    pair.connected = false
-    for (const raw of decline.slice(declineBatch, declineBatch + 3)) {
-      await pair.post(raw)
-    }
-    pair.connected = true
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop).state).toBe('working')
-  })
-
-  it('clears on reconnect right after the batch, with no later tool activity', async () => {
-    const pair = await startDeclinePair()
-    for (const raw of decline.slice(0, declineBatch)) {
-      await pair.post(raw)
-    }
-    pair.connected = false
-    await pair.post(decline[declineBatch])
-    pair.connected = true
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop).state).toBe('working')
-    expect(pair.forwarded.at(-1)).toMatchObject({
-      isReplay: true,
-      hookEventName: 'PostToolBatch',
-      claudeBatchSettledRequests: [{ toolUseId: 'tool_use_id-1' }]
-    })
   })
 
   it.each(['question', 'elicitation'] as const)(
-    'keeps a newer %s waiting through an older request’s batch, child activity and reconnect',
+    'catches a desktop that missed a newer %s up to it at the older request’s batch, under its own identity',
     async (kind) => {
-      const pair = await startDeclinePair()
-      const [start, submit] = decline
-      const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
+      let dropNewer = true
+      const pair = await startPair((envelope) =>
+        dropNewer &&
+        (envelope.payload?.toolName === 'AskUserQuestion' ||
+          envelope.hookEventName === 'Elicitation')
+          ? undefined
+          : envelope
+      )
       const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
-      const question = {
-        tool_name: 'AskUserQuestion',
-        tool_input: { questions: [{ question: 'Which?' }] }
-      }
       await pair.post(start)
       await pair.post(submit)
       await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
@@ -316,270 +277,184 @@ describe('a relayed request bound to its single in-flight call (recorded decline
       )
       if (kind === 'question') {
         await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
-        expect(
-          await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
-        ).toBe('waiting')
+        await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
       } else {
-        expect(
-          await pair.post({
-            ...root,
-            hook_event_name: 'Elicitation',
-            mcp_server_name: 'server',
-            message: 'Allow?',
-            mode: 'form'
-          })
-        ).toBe('waiting')
+        await pair.post({
+          ...root,
+          hook_event_name: 'Elicitation',
+          mcp_server_name: 'server',
+          message: 'Allow?',
+          mode: 'form'
+        })
       }
-      const shown = row(pair.desktop)
-      expect(
-        await pair.post({
-          ...root,
-          hook_event_name: 'PostToolBatch',
-          tool_calls: [{ tool_use_id: 'A' }]
-        })
-      ).toBe('waiting')
-      expect(row(pair.desktop)).toEqual(shown)
-      expect(
-        await pair.post({
-          ...root,
-          hook_event_name: 'SubagentStart',
-          agent_id: 'child-a',
-          agent_type: 'general-purpose'
-        })
-      ).toBe('waiting')
-      pair.connected = false
-      pair.connected = true
-      pair.relay.replayCachedPayloadsForPanes()
+      expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+      dropNewer = false
+      await pair.post({
+        ...root,
+        hook_event_name: 'PostToolBatch',
+        tool_calls: [{ ...tool, tool_use_id: 'A', tool_response: 'denied' }]
+      })
       expect(row(pair.desktop).state).toBe('waiting')
+      const state: unknown = Reflect.get(pair.desktop, 'state')
+      const rows =
+        typeof state === 'object' && state !== null
+          ? Reflect.get(state, 'lastStatusByPaneKey')
+          : undefined
+      const stored: unknown =
+        rows instanceof Map || (typeof rows === 'object' && rows !== null && 'get' in rows)
+          ? Reflect.apply(Reflect.get(rows, 'get'), rows, [PANE])
+          : undefined
+      expect(stored).toMatchObject(
+        kind === 'question'
+          ? { hookEventName: 'PermissionRequest', payload: { toolName: 'AskUserQuestion' } }
+          : { hookEventName: 'Elicitation' }
+      )
+      expect(pair.forwarded.at(-1)).toMatchObject(
+        kind === 'question'
+          ? { hookEventName: 'PermissionRequest', payload: { toolName: 'AskUserQuestion' } }
+          : { hookEventName: 'Elicitation' }
+      )
     }
   )
 
-  it('keeps a desktop that missed the newer question waiting on A, never retagging the question as A’s settlement', async () => {
-    let dropQuestion = true
-    const pair = await startDeclinePair((envelope) =>
-      dropQuestion && envelope.payload?.toolName === 'AskUserQuestion' ? undefined : envelope
-    )
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
-    const question = {
-      tool_name: 'AskUserQuestion',
-      tool_input: { questions: [{ question: 'Which?' }] }
-    }
-    await pair.post(start)
-    await pair.post(submit)
-    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
-    await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
-    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
-    await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
-    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
-    // A's proof reaches the desktop, but the producer's current dialog is Q: no Q card under A's batch.
-    await pair.post({
-      ...root,
-      hook_event_name: 'PostToolBatch',
-      tool_calls: [{ tool_use_id: 'A' }]
-    })
-    expect(pair.forwarded.at(-1)).toMatchObject({
-      claudeBatchSettledRequests: [{ toolUseId: 'A' }]
-    })
-    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
-    // The relay's cached question stayed intact and arrives with its own identity.
-    dropQuestion = false
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
-  })
-
-  it('replays a cached question unchanged when a batch settles something else', async () => {
-    const pair = await startDeclinePair()
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    const question = {
-      tool_name: 'AskUserQuestion',
-      tool_input: { questions: [{ question: 'Which?' }] }
-    }
-    await pair.post(start)
-    await pair.post(submit)
-    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
-    expect(await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...question })).toBe(
-      'waiting'
-    )
-    pair.connected = false
-    await pair.post({
-      ...root,
-      hook_event_name: 'PostToolBatch',
-      tool_calls: [{ tool_use_id: 'other' }]
-    })
-    pair.connected = true
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
-  })
-
-  it('replays a child’s settled request as the lead it displaced, not as working forever or waiting', async () => {
-    const pair = await startDeclinePair()
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    const owner = { agent_id: 'child-a', agent_type: 'general-purpose' }
-    const tool = { tool_name: 'Read', tool_input: { file_path: '/child' } }
-    await pair.post(start)
-    await pair.post(submit)
-    await pair.post({ ...root, hook_event_name: 'SubagentStart', ...owner })
-    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'C', ...tool, ...owner })
-    expect(
-      await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool, ...owner })
-    ).toBe('waiting')
-    pair.connected = false
-    await pair.post({
-      ...root,
-      hook_event_name: 'PostToolBatch',
-      tool_calls: [{ tool_use_id: 'C' }],
-      ...owner
-    })
-    pair.connected = true
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
-  })
-
-  it('lets a restarted relay settle the held wait after the recorded Notification arrives first', async () => {
-    const pair = await startDeclinePair()
-    for (const raw of decline.slice(0, declineBatch - 1)) {
+  it('never lets a restarted relay clear a wait the desktop still holds, and discloses NC3', async () => {
+    const pair = await startPair()
+    for (const raw of decline.slice(0, declineBatch)) {
       await pair.post(raw)
     }
     await pair.restart()
-    expect(await pair.post(decline[declineBatch - 1])).toBe('waiting')
-    expect(await pair.post(decline[declineBatch])).toBe('working')
-  })
+    // The new relay has not seen this pane's dialog, so the desktop keeps deciding for itself.
+    expect(
+      await pair.post({
+        ...root,
+        hook_event_name: 'PreToolUse',
+        tool_use_id: 'later',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' }
+      })
+    ).toBe('waiting')
 
-  it('settles a held call listed at position 257 of a live batch', async () => {
-    const pair = await startDeclinePair()
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    await pair.post(start)
-    await pair.post(submit)
-    const ids = Array.from({ length: 300 }, (_, i) => `call-${i}`)
-    await pair.post({
-      ...root,
-      hook_event_name: 'PreToolUse',
-      tool_name: 'Read',
-      tool_use_id: 'call-256',
-      tool_input: { file_path: '/f256' }
-    })
+    // NC3, accepted Brennan 2026-11-03: a restart between a tool's start and its prompt loses the
+    // predecessor main's desktop would inherit, so the approved prompt waits for its batch.
+    const nc3 = await startPair()
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/t' } }
+    await nc3.post(start)
+    await nc3.post(submit)
+    await nc3.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'T', ...tool })
+    await nc3.restart()
+    expect(await nc3.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).toBe(
+      'waiting'
+    )
     expect(
-      await pair.post({
+      await nc3.post({
         ...root,
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'Read',
-        tool_input: { file_path: '/f256' }
-      })
-    ).toBe('waiting')
-    // Another owner's batch naming the same id is not this request's settlement.
-    expect(
-      await pair.post({
-        ...root,
-        hook_event_name: 'PostToolBatch',
-        agent_id: 'child-a',
-        tool_calls: [{ tool_use_id: 'call-256' }]
+        hook_event_name: 'PostToolUse',
+        tool_use_id: 'T',
+        tool_response: 'ok',
+        ...tool
       })
     ).toBe('waiting')
     expect(
-      await pair.post({
+      await nc3.post({
         ...root,
         hook_event_name: 'PostToolBatch',
-        tool_calls: ids.map((tool_use_id) => ({ tool_use_id }))
+        tool_calls: [{ ...tool, tool_use_id: 'T' }]
       })
     ).toBe('working')
   })
 
-  it('never lets replayed batch evidence clear a request it could not name, as on main', async () => {
-    const pair = await startDeclinePair()
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    const tool = { tool_name: 'Read', tool_input: { file_path: '/same' } }
-    for (const raw of [start, submit]) {
+  it('replays a held request a desktop never saw, with that request’s own card', async () => {
+    const pair = await startPair()
+    await pair.post(start)
+    await pair.post(submit)
+    pair.connected = false
+    for (const raw of decline.slice(2, declineBatch)) {
       await pair.post(raw)
     }
+    pair.connected = true
+    pair.relay.replayCachedPayloadsForPanes()
+    expect(row(pair.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+  })
+
+  it('still recovers an older desktop through the shipped per-tool replay after it missed the approval', async () => {
+    const pair = await startPair(olderDesktop)
+    const tool = { tool_name: 'Read', tool_input: { file_path: '/t' } }
+    await pair.post(start)
+    await pair.post(submit)
     await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'T', ...tool })
-    await pair.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'U', ...tool })
-    // Two identical calls in flight: the request cannot be named and takes main's path.
     expect(await pair.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).toBe(
       'waiting'
     )
     pair.connected = false
     await pair.post({
       ...root,
-      hook_event_name: 'PostToolBatch',
-      tool_calls: [{ tool_use_id: 'T' }, { tool_use_id: 'U' }]
+      hook_event_name: 'PostToolUse',
+      tool_use_id: 'T',
+      tool_response: 'ok',
+      ...tool
     })
-    // Its cached request was never named, so the relay keeps it and replays it unchanged.
-    pair.connected = true
-    pair.relay.replayCachedPayloadsForPanes()
-    expect(row(pair.desktop).state).toBe('waiting')
-    pair.connected = false
     await pair.post({
       ...root,
       hook_event_name: 'PreToolUse',
-      tool_use_id: 'W',
+      tool_use_id: 'Z',
       tool_name: 'Bash',
       tool_input: { command: 'ls' }
     })
     pair.connected = true
     pair.relay.replayCachedPayloadsForPanes()
-    expect(pair.forwarded.at(-1)).toMatchObject({
-      isReplay: true,
-      claudeBatchSettledRequests: [{ toolUseId: 'T' }, { toolUseId: 'U' }]
-    })
-    expect(row(pair.desktop).state).toBe('waiting')
-  })
-
-  it('keeps main’s behavior for a desktop paired with a relay that predates bound requests', async () => {
-    // An older relay sends no producer-supplied request id and drops batch hooks.
-    const pair = await startDeclinePair((envelope) =>
-      envelope.hookEventName === 'PermissionRequest'
-        ? { ...envelope, toolUseId: undefined }
-        : envelope.hookEventName === 'PostToolBatch'
-          ? undefined
-          : envelope
-    )
-    for (const [index, raw] of decline.slice(0, -3).entries()) {
-      const state = await pair.post(raw)
-      if (raw.hook_event_name === 'Stop') {
-        expect(state).toBe('done')
-      } else if (index >= 3) {
-        expect({ index, state }).toEqual({ index, state: 'waiting' })
-      }
-    }
+    expect(row(pair.desktop).state).toBe('working')
   })
 })
 
-describe('a live batch through the relay’s real publication sink', () => {
-  it('settles a held call at position 1,501 of a 2,000-call batch split across frames, and leaves the row alone for another owner', async () => {
-    // A 64 KiB stdout sink, as the WSL relay attaches it: producer frames are capped well below the batch.
-    const frames: Buffer[] = []
-    const dispatcher = new RelayDispatcher(
-      (data) => {
-        frames.push(Buffer.from(data))
-        return true
-      },
-      {
-        writableHighWaterMark: () => 65536,
-        writableLength: () => 0,
-        waitWriteDrain: () => () => undefined
+/** The WSL relay's real publication path into a 64 KiB stdout sink that can stall, feeding current and older desktops. */
+async function startSinkPair() {
+  const frames: Buffer[] = []
+  const drainListeners = new Set<() => void>()
+  let blocked = false
+  const dispatcher = new RelayDispatcher(
+    (data) => {
+      frames.push(Buffer.from(data))
+      return !blocked
+    },
+    {
+      writableHighWaterMark: () => 65536,
+      writableLength: () => 0,
+      waitWriteDrain: (callback) => {
+        drainListeners.add(callback)
+        return () => drainListeners.delete(callback)
       }
-    )
-    running.push({ stop: () => dispatcher.dispose() })
-    const desktop = new AgentHookServer()
-    running.push(desktop)
-    const endpointDir = mkdtempSync(join(tmpdir(), 'orca-relayed-permission-'))
-    temporaryPaths.push(endpointDir)
-    const relay = new RelayAgentHookServer({
-      endpointDir,
-      token: 'relayed-permission-token',
-      forward: (envelope, options) => publishAgentHookEnvelope(dispatcher, envelope, options)
-    })
-    running.push(relay)
-    await relay.start({ publishEndpoint: false })
-    let read = 0
-    const batchFrames: AgentHookRelayEnvelope[] = []
-    const post = async (raw: Record<string, unknown>) => {
+    }
+  )
+  running.push({ stop: () => dispatcher.dispose() })
+  const current = new AgentHookServer()
+  const older = new AgentHookServer()
+  running.push(current, older)
+  const endpointDir = mkdtempSync(join(tmpdir(), 'orca-relayed-permission-'))
+  temporaryPaths.push(endpointDir)
+  const relay = new RelayAgentHookServer({
+    endpointDir,
+    token: 'relayed-permission-token',
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
+  })
+  running.push(relay)
+  await relay.start({ publishEndpoint: false })
+  let read = 0
+  const deliver = () => {
+    for (const frame of frames.slice(read)) {
+      const length = frame.readUInt32BE(9)
+      const message =
+        length > 0 ? JSON.parse(frame.subarray(13, 13 + length).toString('utf-8')) : null
+      if (message?.method === 'agent.hook') {
+        current.ingestRemote(message.params, 'conn-1')
+        older.ingestRemote(olderDesktop(message.params), 'conn-1')
+      }
+    }
+    read = frames.length
+  }
+  return {
+    current,
+    older,
+    post: async (raw: Record<string, unknown>) => {
       const { port, token } = relay.getCoordinates()
       const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
         method: 'POST',
@@ -587,52 +462,133 @@ describe('a live batch through the relay’s real publication sink', () => {
         body: JSON.stringify(buildBody(raw))
       })
       expect(response.status).toBe(204)
-      for (const frame of frames.slice(read)) {
-        const length = frame.readUInt32BE(9)
-        const message =
-          length > 0 ? JSON.parse(frame.subarray(13, 13 + length).toString('utf-8')) : null
-        if (message?.method === 'agent.hook') {
-          const envelope = message.params as AgentHookRelayEnvelope
-          if (envelope.hookEventName === 'PostToolBatch') {
-            batchFrames.push(envelope)
+    },
+    /** Writes are accepted but never settle until drained, as a full pipe. */
+    block: () => {
+      blocked = true
+      for (const size of [8_000, 512, 16]) {
+        for (let attempt = 0; attempt < 5_000; attempt++) {
+          if (!dispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'x'.repeat(size) })) {
+            break
           }
-          desktop.ingestRemote(envelope, 'conn-1')
         }
       }
-      read = frames.length
-      return row(desktop)
-    }
-    const [start, submit] = decline
-    const root = { session_id: start.session_id, prompt_id: submit.prompt_id }
-    const ids = Array.from({ length: 2_000 }, (_, i) => String(i).padStart(64, '0'))
-    const held = ids[1_500]
-    const tool = { tool_name: 'Read', tool_input: { file_path: '/held' } }
-    await post(start)
-    await post(submit)
-    await post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: held, ...tool })
-    expect((await post({ ...root, hook_event_name: 'PermissionRequest', ...tool })).state).toBe(
-      'waiting'
-    )
-    const calls = ids.map((tool_use_id) => ({ tool_use_id }))
-    // Another owner's batch naming the same ids is not this request's settlement.
-    const before = row(desktop)
-    expect(
-      await post({
+    },
+    drain: async () => {
+      blocked = false
+      for (const listener of Array.from(drainListeners)) {
+        drainListeners.delete(listener)
+        listener()
+      }
+      // One redelivery interval carries any snapshot still owed.
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    },
+    deliver
+  }
+}
+
+describe('current-state delivery through the relay’s real sink', () => {
+  const tool = { tool_name: 'Read', tool_input: { file_path: '/a' } }
+  const waitingOnA = async () => {
+    const sink = await startSinkPair()
+    await sink.post(start)
+    await sink.post(submit)
+    await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+    await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
+    sink.deliver()
+    expect(row(sink.current).state).toBe('waiting')
+    return sink
+  }
+
+  it('reaches the latest state after 257 batches pile up behind a stalled sink, with nothing older owed', async () => {
+    const sink = await waitingOnA()
+    sink.block()
+    await sink.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ ...tool, tool_use_id: 'A' }]
+    })
+    for (let i = 0; i < 256; i++) {
+      await sink.post({
         ...root,
         hook_event_name: 'PostToolBatch',
-        agent_id: 'child-a',
-        tool_calls: calls
+        tool_calls: [{ tool_use_id: `later-${i}` }]
       })
-    ).toEqual(before)
-    batchFrames.length = 0
-    expect(
-      (await post({ ...root, hook_event_name: 'PostToolBatch', tool_calls: calls })).state
-    ).toBe('working')
-    expect(batchFrames.length).toBeGreaterThan(1)
-    expect(
-      batchFrames.flatMap((envelope) =>
-        (envelope.claudeBatchSettledRequests ?? []).map((request) => request.toolUseId)
+    }
+    // Nothing got through while stalled.
+    sink.deliver()
+    expect(row(sink.current).state).toBe('waiting')
+    await sink.drain()
+    sink.deliver()
+    expect(row(sink.current).state).toBe('working')
+    // The older desktop keeps its own hold, as on main: the batch improvement waits for its update.
+    expect(row(sink.older).state).toBe('waiting')
+  })
+
+  it('fits a release among short and 256-character ids with a large assistant message and roster', async () => {
+    const sink = await startSinkPair()
+    await sink.post(start)
+    await sink.post(submit)
+    for (let i = 0; i < 120; i++) {
+      await sink.post({
+        ...root,
+        hook_event_name: 'SubagentStart',
+        agent_id: `child-${i}-${'c'.repeat(80)}`,
+        agent_type: 'general-purpose'
+      })
+    }
+    await sink.post({
+      ...root,
+      hook_event_name: 'PreToolUse',
+      tool_use_id: 'big',
+      tool_name: 'Bash',
+      tool_input: { command: 'cat big' }
+    })
+    await sink.post({
+      ...root,
+      hook_event_name: 'PostToolUse',
+      tool_use_id: 'big',
+      tool_name: 'Bash',
+      tool_input: { command: 'cat big' },
+      tool_response: 'r'.repeat(60_000)
+    })
+    await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'A', ...tool })
+    await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...tool })
+    sink.deliver()
+    expect(row(sink.current).state).toBe('waiting')
+    const ids = [
+      's',
+      'l'.repeat(256),
+      'A',
+      ...Array.from({ length: 300 }, (_, i) => `${i}`.padStart(256, 'v'))
+    ]
+    await sink.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: ids.map((tool_use_id) =>
+        tool_use_id === 'A' ? { ...tool, tool_use_id } : { tool_use_id }
       )
-    ).toEqual(ids)
+    })
+    sink.deliver()
+    expect(row(sink.current).state).toBe('working')
+  })
+
+  it('shows an older desktop the newer question, not the older request’s working outcome, after a stall', async () => {
+    const sink = await waitingOnA()
+    sink.block()
+    await sink.post({
+      ...root,
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ ...tool, tool_use_id: 'A' }]
+    })
+    await sink.post({ ...root, hook_event_name: 'PreToolUse', tool_use_id: 'Q', ...question })
+    await sink.post({ ...root, hook_event_name: 'PermissionRequest', ...question })
+    sink.deliver()
+    expect(row(sink.older)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    await sink.drain()
+    sink.deliver()
+    for (const desktop of [sink.current, sink.older]) {
+      expect(row(desktop)).toMatchObject({ state: 'waiting', toolName: 'AskUserQuestion' })
+    }
   })
 })

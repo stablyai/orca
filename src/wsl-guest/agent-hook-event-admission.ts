@@ -5,13 +5,10 @@ import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
-import {
-  isClaudeCachedRequestSettledByBatch,
-  retainClaudeBatchSettledRequests,
-  retainClaudeSettledRequests
-} from '../shared/agent-hook-listener/claude-settled-permission-requests'
+import { retainClaudeSettledRequests } from '../shared/agent-hook-listener/claude-settled-permission-requests'
 import { reduceHostTurnEnd } from '../shared/agent-hook-turn-end-timing'
 import { buildRelayHookEnvelope } from './agent-hook-envelope-build'
+import { decideRelayClaudePermission } from './agent-hook-claude-permission-host'
 import type { RelayHookForward } from './agent-hook-server-contract'
 import { MAX_CACHED_PANES, type CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
 import {
@@ -59,26 +56,6 @@ export function applyRelayHookEvent(
   ) {
     return undefined
   }
-  if (
-    incoming.hookEventName === 'PostToolBatch' &&
-    incoming.claudeBatchSettledRequests &&
-    !isClaudeCachedRequestSettledByBatch(previous, incoming)
-  ) {
-    // A batch that does not end the cached request changes nothing shown here: forward it whole, never cache it.
-    const meta = host.metadata.get(incoming.paneKey)
-    if (meta) {
-      meta.claudeBatchSettledRequests = retainClaudeBatchSettledRequests(
-        meta.claudeBatchSettledRequests,
-        previous,
-        incoming
-      )
-    }
-    host.forward(buildRelayHookEnvelope(incoming, source, env, version, options), {
-      evidenceOnly: true
-    })
-    // No row changed here, so nothing downstream (retries, polls) may follow it as one.
-    return undefined
-  }
   const cancellation = reconcileRelayClaudeCancel(host.state, previous, incoming, source)
   if (cancellation.hold) {
     return previous
@@ -107,10 +84,24 @@ export function applyRelayHookEvent(
     hostTurn: _hostTurn,
     ...unflagged
   } = revised
-  const event: AgentHookEventPayload = {
-    ...unflagged,
-    ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+  const decision = decideRelayClaudePermission(
+    host.state,
+    previous,
+    {
+      ...unflagged,
+      ...reduceHostTurnEnd(previous, revised, Date.now(), options.isReplay !== true)
+    },
+    options.isReplay === true
+  )
+  if (decision.kind !== 'publish') {
+    // A batch changes no row here; at most the current row goes out again for a receiver that missed it.
+    const meta = host.metadata.get(incoming.paneKey)
+    if (decision.kind === 'republish' && meta) {
+      host.forward(buildRelayHookEnvelope(decision.event, meta.source, meta.env, meta.version))
+    }
+    return undefined
   }
+  const event = decision.event
   // Drop retired-pane posts and cached status so clients cannot auto-resume a ghost pane onto an orphan’s live transcript (#12447).
   if (host.isPaneSurfaceRetired(event.paneKey)) {
     host.clearPaneState(event.paneKey)
@@ -132,18 +123,12 @@ export function applyRelayHookEvent(
     previous,
     event
   )
-  const claudeBatchSettledRequests = retainClaudeBatchSettledRequests(
-    host.metadata.get(event.paneKey)?.claudeBatchSettledRequests,
-    previous,
-    event
-  )
   host.metadata.delete(event.paneKey)
   host.metadata.set(event.paneKey, {
     source,
     env,
     version,
-    ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
-    ...(claudeBatchSettledRequests ? { claudeBatchSettledRequests } : {})
+    ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
   options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))

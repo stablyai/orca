@@ -7,10 +7,6 @@ import {
 } from '../shared/agent-hook-relay'
 import { fitInteractivePrompt } from '../shared/agent-status-field-normalization'
 import type { RelayDispatcher } from './dispatcher'
-import {
-  isBatchEvidenceEnvelope,
-  publishBatchEvidence
-} from './agent-hook-batch-evidence-publication'
 
 // Shed reconstructible fields first; keep state/paneKey and preserve interactivePrompt longest so waiting panes remain answerable.
 // Mark shed rosters on the wire so clients restore cached subagents instead of permitting hibernation.
@@ -113,21 +109,10 @@ function logUnsendableEnvelope(
 // Fit one envelope to every sink by shedding optional fields; retry queue-full frames, drop frames that cannot fit.
 export function publishAgentHookEnvelope(
   dispatcher: RelayDispatcher,
-  envelope: AgentHookRelayEnvelope | AgentHookUnavailableEnvelope,
-  options: { evidenceOnly?: true } = {}
+  envelope: AgentHookRelayEnvelope | AgentHookUnavailableEnvelope
 ): void {
   const clientIds = dispatcher.activeClientIds()
   if (clientIds.length === 0) {
-    return
-  }
-  if (envelope.payload !== null && isBatchEvidenceEnvelope(envelope)) {
-    // A batch that became the pane's row supersedes an older pending snapshot; evidence alone does not.
-    if (!options.evidenceOnly) {
-      clearPendingEnvelope(dispatcher, envelope.paneKey)
-    }
-    if (!publishBatchEvidence(dispatcher, envelope, clientIds)) {
-      logUnsendableEnvelope(dispatcher, toNotificationParams(envelope, []), clientIds)
-    }
     return
   }
   if (envelope.payload === null) {
@@ -195,10 +180,24 @@ export function publishAgentHookEnvelope(
       return
     }
     // Copy before shedding: the server caches this envelope for reconnect replay.
-    candidate = { ...candidate, payload: { ...candidate.payload } }
+    const row = candidate.claudePermission?.row
+    candidate = {
+      ...candidate,
+      payload: { ...candidate.payload },
+      // A replayed held request rides in the projection; it sheds in step with the row it replaces.
+      ...(row && candidate.claudePermission
+        ? {
+            claudePermission: {
+              ...candidate.claudePermission,
+              row: { ...row, payload: { ...row.payload } }
+            }
+          }
+        : {})
+    }
     const shedField =
       field === 'subagents' ? createShedSubagentsField(candidate.payload.subagents ?? []) : field
     delete candidate.payload[field]
+    delete candidate.claudePermission?.row?.payload[field]
     shedFields.push(shedField)
   }
 }
