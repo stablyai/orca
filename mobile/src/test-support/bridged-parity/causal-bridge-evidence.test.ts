@@ -285,16 +285,15 @@ describe('actual page, host and tracker contracts', () => {
         let result: unknown = null
         return {
           action: () => {
-            const rejected = client
-              .sendRequest('same', shared, {
+            const rejected = (async () =>
+              client.sendRequest('same', shared, {
                 beforeSend: () => {
                   called++
                   throw refusal
                 }
-              })
-              .catch((error) => {
-                original = error
-              })
+              }))().catch((error) => {
+              original = error
+            })
             const accepted = client.sendRequest('same', shared).then((reply) => {
               if (!reply.ok) {
                 throw new Error(reply.error.message)

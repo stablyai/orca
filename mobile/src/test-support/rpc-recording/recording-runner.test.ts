@@ -424,9 +424,8 @@ describe('actual invocation ownership and fatal output boundaries', () => {
         }
       }
       try {
-        const refused = transport.client
-          .sendRequest('same', shared, originalOptions)
-          .catch((error) => error)
+        const refused = (async () =>
+          transport.client.sendRequest('same', shared, originalOptions))().catch((error) => error)
         const accepted = transport.client.sendRequest('same', shared)
         await clock.flush()
         expect(transport.payloads).toEqual([])
@@ -475,9 +474,9 @@ describe('actual invocation ownership and fatal output boundaries', () => {
           `same#4${suffix}`,
           `other#1${suffix}`
         ])
-        await expect(transport.client.sendRequest('same', shared, originalOptions)).rejects.toBe(
-          sentinel
-        )
+        await expect(
+          (async () => transport.client.sendRequest('same', shared, originalOptions))()
+        ).rejects.toBe(sentinel)
         const fresh = transport.client.sendRequest('same', shared)
         await clock.flush()
         transport.complete(`same#6${suffix}`, shared, { ok: true, result: 'fresh' })

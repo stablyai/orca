@@ -135,9 +135,9 @@ it('keeps a page callback local, preserves callback-only arity, and allocates no
   const beforeSend = vi.fn(() => {
     throw new Error('retired')
   })
-  await expect(
-    page.client.sendRequest('github.listLabels', undefined, { beforeSend })
-  ).rejects.toThrow('retired')
+  expect(() => page.client.sendRequest('github.listLabels', undefined, { beforeSend })).toThrow(
+    'retired'
+  )
   expect(page.frames().filter((message) => message.type === 'request')).toHaveLength(0)
   const pending = page.client.sendRequest('status.get', undefined, { beforeSend: () => {} })
   const request = page.frames().find((message) => message.type === 'request')
