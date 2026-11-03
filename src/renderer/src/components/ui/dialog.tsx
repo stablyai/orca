@@ -10,12 +10,27 @@ import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
-function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  // Why: stay controlled while gating; parent `open` still restores a draft dialog when Tasks returns.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      {...props}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
+    />
+  )
 }
 
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {

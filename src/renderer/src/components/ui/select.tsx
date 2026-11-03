@@ -7,10 +7,25 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 
-function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+function Select({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  // Why: stay controlled so hiding Tasks cannot flip Radix uncontrolled↔controlled and reopen the select on return.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      {...props}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
+    />
+  )
 }
 
 function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
