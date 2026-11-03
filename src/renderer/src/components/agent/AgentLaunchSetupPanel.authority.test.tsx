@@ -103,7 +103,9 @@ it.each(['missing-default', 'pending', 'known-default', 'explicit'] as const)(
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
       fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
+        [...host.querySelectorAll('button')].find(
+          (button) => button.getAttribute('aria-label') === way
+        )!
       )
       expect(agentPickerLaunchInputs(onUse.mock.calls[0][0], own)).toEqual({})
     }
@@ -133,7 +135,9 @@ it('edits the QA inline settings carrier after verbose and compiles the same eff
   expect(fast?.disabled).toBe(false)
   fireEvent.click(fast!)
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
   const compiled = resolveAgentLaunchCommand({
@@ -182,7 +186,9 @@ it('keeps the QA unclosed permission literal once after Ask and preserves actual
   )
   expect(host.querySelector('button[aria-label^="Remove --permission"]')).toBeNull()
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
   expect(launch.agentArgs).toBe(raw)

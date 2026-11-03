@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 // Exercise production Modal/Card/Picker/inventory with synthetic composer targets.
 import React, { useRef, useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
@@ -103,7 +104,6 @@ vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => nul
 vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
   useContextualTour: () => {}
 }))
-vi.mock('@/components/agent/AgentSettingsDialog', () => ({ default: () => null }))
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({ AddRemoteHostDialog: () => null }))
 vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
@@ -216,6 +216,7 @@ vi.mock('@/hooks/useComposerState', () => ({
   }
 }))
 const initialState = useAppStore.getState()
+const originalApi = window.api
 beforeEach(() => {
   evidence.trace = []
   evidence.phase = 'mount'
@@ -246,6 +247,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
+  Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 const textarea = () =>
@@ -274,23 +277,23 @@ async function useDraft(surface: 'chat' | 'terminal' = 'terminal') {
   await waitFor(() =>
     expect(
       document.querySelector(
-        '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+        '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
       )
     ).toBeNull()
   )
 }
 async function closeMenu() {
   const panel = document.querySelector(
-    '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+    '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
   )
   if (panel) {
-    fireEvent.click(
-      document.querySelector(`button[aria-label="${panel.getAttribute('aria-label')}"]`)!
-    )
+    const input = textarea()
+    act(() => input.focus())
+    fireEvent.keyDown(input, { key: 'Escape' })
     await waitFor(() =>
       expect(
         document.querySelector(
-          '[data-slot="popover-content"][aria-label^="Configure "][data-state="open"]'
+          '[data-slot="dropdown-menu-sub-content"][aria-label^="Configure "][data-state="open"]'
         )
       ).toBeNull()
     )
@@ -490,4 +493,76 @@ it('keeps accepted and newer pending ordinary intent across same-target agent sw
   }
   expect(evidence.submit).toHaveBeenCalledTimes(2)
   expect(evidence.submit.mock.calls[0]).toEqual(captured[0])
+})
+
+it('keeps accepted and pending workspace options through the shared gear/footer Agents dialog', async () => {
+  const user = userEvent.setup()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ...window.api,
+      platform: {
+        get: () => ({
+          platform: 'darwin',
+          osRelease: '',
+          arch: 'arm64',
+          shell: '/bin/sh',
+          displayServer: null,
+          windowMaterial: 'off'
+        })
+      }
+    }
+  })
+  render(<NewWorkspaceComposerModal />, { wrapper: TooltipProvider })
+  fireEvent.change(screen.getByRole('textbox', { name: 'workspace name' }), {
+    target: { value: 'retained-work' }
+  })
+  await open('Claude')
+  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+  fireEvent.change(textarea(), { target: { value: '--verbose' } })
+  await useDraft()
+  await open('Claude')
+  fireEvent.change(textarea(), { target: { value: '--debug' } })
+  await closeMenu()
+  await user.click(screen.getByRole('button', { name: 'Select agent' }))
+  await user.click(screen.getByRole('menuitem', { name: 'Agent settings…' }))
+  const agents = await screen.findByRole('dialog', { name: 'Agents' })
+  expect(screen.getAllByRole('dialog', { name: 'Agents' })).toHaveLength(1)
+  expect(within(agents).getAllByRole('switch').length).toBeGreaterThan(0)
+  fireEvent.keyDown(within(agents).getByRole('button', { name: 'Close' }), {
+    key: 'Enter',
+    metaKey: true,
+    ctrlKey: true
+  })
+  expect(evidence.submit).not.toHaveBeenCalled()
+  within(agents).getByRole('button', { name: 'Close' }).focus()
+  await user.keyboard('{Escape}')
+  const picker = await screen.findByRole('button', { name: 'Select agent' })
+  await waitFor(() => expect(document.activeElement).toBe(picker))
+  await user.tab()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Advanced' }))
+  expect(screen.getByRole('textbox', { name: 'workspace name' })).toHaveProperty(
+    'value',
+    'retained-work'
+  )
+  const gear = screen.getByRole('button', { name: 'Open agent settings' })
+  fireEvent.click(gear)
+  fireEvent.click(
+    within(await screen.findByRole('dialog', { name: 'Agents' })).getByRole('button', {
+      name: 'Close'
+    })
+  )
+  await waitFor(() => expect(document.activeElement).toBe(gear))
+  await user.tab()
+  expect(document.activeElement).toBe(picker)
+  await open('Claude')
+  expect(textarea().value).toBe('--debug')
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
+  await useDraft()
+  fireEvent.click(screen.getByRole('button', { name: 'Create worktree' }))
+  expect(evidence.submit).toHaveBeenCalledOnce()
+  expect(evidence.submit.mock.calls[0][0]).toBe('claude')
+  expect(evidence.submit.mock.calls[0][1]).toMatchObject({
+    launchInputs: { agentArgs: '--debug', sessionOptions: { effort: 'low' } }
+  })
 })

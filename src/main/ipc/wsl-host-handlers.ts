@@ -42,7 +42,7 @@ import {
 } from '../wsl/wsl-orcad-host-account-push'
 import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
 import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
-import { wireWslNodeRuntimePrefetch } from '../wsl/wsl-node-runtime-prefetch'
+import { wireWslNodeRuntimePrefetch } from '../wsl/execution/wsl-node-runtime-prefetch'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',

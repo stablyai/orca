@@ -7,7 +7,7 @@ import { emptyOrcadActivationRecord } from '../managed-server/activation/orcad-a
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
-import type { WslDistroHolder } from './wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 const mocks = vi.hoisted(() => ({

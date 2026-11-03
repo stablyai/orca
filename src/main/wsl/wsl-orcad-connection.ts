@@ -18,7 +18,7 @@ import {
   wslConnectFailedStatus,
   type WslOrcadConnectionStatus
 } from './wsl-orcad-connection-status'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import {
   defaultWslOrcadEnvironmentId,
   deployAndLaunchWslOrcad,

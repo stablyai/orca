@@ -3,10 +3,10 @@
  * commands. A stop heard meanwhile (`wsl --terminate`, a holder exit) fences every later spawn, so
  * the connect fails instead of booting the distro again.
  */
-import { onWslDistroGateNote } from '../wsl-background-distro-gate'
+import { onWslDistroGateNote } from './discovery/wsl-background-distro-gate'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
-import type { WslDistroHolder } from './wsl-distro-holder-types'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import type { WslOrcadDeployOptions } from './wsl-orcad-deploy'
 

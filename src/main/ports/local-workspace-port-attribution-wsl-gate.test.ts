@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
-import type * as WslUncAccessGate from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGate from '../wsl/filesystem/wsl-unc-access-gate'
 
 const mocks = vi.hoisted(() => ({
   realpath: vi.fn(async (path: string) => path),
@@ -10,7 +10,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   realpath: mocks.realpath
 }))
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGate>()),
   blockedWslDistroForPath: mocks.blocked
 }))

@@ -1,4 +1,4 @@
-// Codex picks describe the next turn; other modes follow the running agent’s report.
+// Saved choices describe requested policy; runtime observations never replace that intent.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -62,21 +62,17 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
-  const selectedForNextTurn = state.record.agent === 'codex' && !own
-  const current =
-    !selectedForNextTurn && state.reportedPermissionMode !== undefined
-      ? (state.reportedPermissionMode ?? undefined)
-      : own
-        ? undefined
-        : (state.permissionMode ?? undefined)
+  const current = state.permissionMode ?? undefined
   const reported = support.modes.find((mode) => mode === current)
-  const label = reported
-    ? MODE_COPY[reported].label
-    : current === 'plan'
-      ? 'Plan mode'
-      : current === 'read-only'
-        ? 'Read only'
-        : (current ?? 'Permissions')
+  const label = own
+    ? "Agent's own settings"
+    : reported
+      ? MODE_COPY[reported].label
+      : current === 'plan'
+        ? 'Plan mode'
+        : current === 'read-only'
+          ? 'Read only'
+          : (current ?? 'Permissions')
   return {
     description: label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -91,14 +87,9 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
       }))
     },
-    valueSource:
-      current === undefined
-        ? 'unknown'
-        : current === state.reportedPermissionMode
-          ? 'reported'
-          : 'applied',
+    valueSource: 'applied',
     transport: 'agent-session',
-    settable: state.permissionOwnSupported !== null && current !== undefined
+    settable: state.permissionOwnSupported !== null
   }
 }
 

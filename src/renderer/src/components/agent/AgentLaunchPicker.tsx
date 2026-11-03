@@ -1,10 +1,11 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
-import { memo, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
+import AgentSettingsDialog, { restoreAgentSettingsInvoker } from './AgentSettingsDialog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { AgentSettingsMenuItem } from './AgentSettingsMenuItem'
 import {
   DropdownMenu,
@@ -39,11 +40,13 @@ export const AgentLaunchPicker = memo(
     agent,
     disabled,
     setupDisabled,
+    matchTriggerWidth,
     emptyLabel,
     cli,
     children,
     onTriggerEnter,
     onCatalogOpen,
+    onOpenAgentSettings,
     onPick
   }: {
     model: NewTabAgentMenuModel
@@ -56,6 +59,7 @@ export const AgentLaunchPicker = memo(
     agent: AgentPickerEntry['agent'] | null
     disabled?: boolean
     setupDisabled?: boolean
+    matchTriggerWidth?: boolean
     emptyLabel?: string
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
@@ -63,6 +67,7 @@ export const AgentLaunchPicker = memo(
     onTriggerEnter?: () => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
+    onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -72,12 +77,16 @@ export const AgentLaunchPicker = memo(
   }) {
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
-    const openSettingsPage = useAppStore((state) => state.openSettingsPage)
-    const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+    const [settingsOpen, setSettingsOpen] = useState(false)
+    const trigger = useRef<HTMLButtonElement>(null)
     const openAgentSettings = useCallback(() => {
-      openSettingsTarget({ pane: 'agents', repoId: null })
-      openSettingsPage()
-    }, [openSettingsPage, openSettingsTarget])
+      setOpen(false)
+      if (onOpenAgentSettings) {
+        onOpenAgentSettings(trigger.current!)
+      } else {
+        setSettingsOpen(true)
+      }
+    }, [onOpenAgentSettings])
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
@@ -99,8 +108,10 @@ export const AgentLaunchPicker = memo(
       ? agentPickerPanelArguments(entry, draft ?? agentPickerDraft(entry)).choices
       : undefined
     const modelLabel =
-      (entry && entry.catalog.origin !== 'unknown'
-        ? entry.catalog.models.find((model) => model.id === choices?.model)?.label
+      (entry
+        ? getAgentSessionOptionLaunchCatalog(entry.agent)?.models.find(
+            (model) => model.id === choices?.model
+          )?.label
         : undefined) ?? choices?.model
     const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
     const agentLabel = agent
@@ -113,6 +124,7 @@ export const AgentLaunchPicker = memo(
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
             <Button
+              ref={trigger}
               type="button"
               aria-label={translate('agentPicker.select', 'Select agent')}
               variant="outline"
@@ -138,7 +150,11 @@ export const AgentLaunchPicker = memo(
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)"
+            className={
+              matchTriggerWidth
+                ? 'w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)'
+                : 'min-w-64'
+            }
           >
             {children}
             {model.state === 'settled' ? (
@@ -171,6 +187,13 @@ export const AgentLaunchPicker = memo(
             <AgentSettingsMenuItem onSelect={openAgentSettings} />
           </DropdownMenuContent>
         </DropdownMenu>
+        {settingsOpen && !onOpenAgentSettings ? (
+          <AgentSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            onCloseAutoFocus={(event) => restoreAgentSettingsInvoker(event, trigger.current)}
+          />
+        ) : null}
       </div>
     )
   },

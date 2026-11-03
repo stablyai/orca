@@ -19109,6 +19109,7 @@
         "attachmentNotAFile": "Bu mesajdaki bir görsel dosya olmadığı için mesaj gönderilmedi.",
         "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
         "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+        "attachmentsExpired": "Süresi doldu: {{names}}.",
         "attachmentUnreadable": "Bu mesajdaki bir ek okunamadığı için mesaj gönderilmedi.",
         "emptyMessage": "Bu mesaj boş olduğu için gönderilmedi.",
         "commandUnavailable": "Bu komut {{agent}} sohbetlerinde kullanılamadığı için gönderilmedi.",
@@ -19198,6 +19199,7 @@
         "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
         "attachmentExpired": "Bu ekin süresi doldu.",
         "reattachFile": "Kaldırıp yeniden ekleyin.",
+        "reattachFiles": "Kaldırıp yeniden ekleyin.",
         "conversationCleared": "Bu konuşma temizlendi.",
         "openCurrentConversation": "Devam etmek için mevcut konuşmayı açın.",
         "clearUnfinished": "Son /clear işlemi tamamlanmadı.",
@@ -20426,7 +20428,6 @@
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
       "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
-      "setupOnly": "Yalnızca kurulum",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

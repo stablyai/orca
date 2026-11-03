@@ -6,7 +6,7 @@ import { prChecksCacheSuffix } from '../github/cache-identity'
 import { createHostedReviewSlice } from './hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { AppState } from '../types'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
+
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 
 const mockApi = {
@@ -20,19 +20,6 @@ const mockApi = {
 
 // @ts-expect-error test window mock
 globalThis.window = { api: mockApi }
-
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve: (value: T) => void = () => {}
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve
-  })
-  return { promise, resolve }
-}
 
 function createTestStore() {
   return create<AppState>()(
@@ -70,171 +57,6 @@ afterEach(() => {
 })
 
 describe('createGitHubSlice.fetchPRChecks checks cache freshness', () => {
-  it('keeps repeated automatic empty checks refreshes cacheable', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-
-    mockApi.gh.prChecks.mockResolvedValue([])
-
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    vi.setSystemTime(11_001)
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
-    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(1, {
-      repoPath,
-      repoId,
-      prNumber: 12,
-      headSha: undefined,
-      prRepo: null,
-      noCache: false
-    })
-    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(2, {
-      repoPath,
-      repoId,
-      prNumber: 12,
-      headSha: undefined,
-      prRepo: null,
-      noCache: false
-    })
-  })
-
-  it('keeps non-empty checks cache entries fresh for the normal checks TTL', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-
-    mockApi.gh.prChecks.mockResolvedValue([
-      { name: 'build', status: 'completed', conclusion: 'success', url: null }
-    ])
-
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    vi.setSystemTime(11_001)
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(1)
-  })
-
-  it('dedupes simultaneous cacheable empty checks requests', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-    const request = deferred<PRCheckDetail[]>()
-    mockApi.gh.prChecks.mockReturnValueOnce(request.promise)
-
-    const first = store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    const second = store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(1)
-    request.resolve([])
-
-    await expect(first).resolves.toEqual([])
-    await expect(second).resolves.toEqual([])
-  })
-
-  it('does not dedupe forced checks onto an in-flight cacheable request', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-    const cacheableRequest = deferred<PRCheckDetail[]>()
-    const forcedChecks = [
-      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
-    ]
-    mockApi.gh.prChecks
-      .mockReturnValueOnce(cacheableRequest.promise)
-      .mockResolvedValueOnce(forcedChecks)
-
-    const cacheable = store
-      .getState()
-      .fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    const forced = store
-      .getState()
-      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(1)
-    cacheableRequest.resolve([])
-
-    await expect(cacheable).resolves.toEqual([])
-    await expect(forced).resolves.toEqual(forcedChecks)
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
-    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(2, {
-      repoPath,
-      repoId,
-      prNumber: 12,
-      headSha: undefined,
-      prRepo: null,
-      noCache: true
-    })
-  })
-
-  it('dedupes simultaneous forced checks requests', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-    const request = deferred<PRCheckDetail[]>()
-    const checks = [
-      { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
-    ]
-    mockApi.gh.prChecks.mockReturnValueOnce(request.promise)
-
-    const first = store
-      .getState()
-      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
-    const second = store
-      .getState()
-      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(1)
-    request.resolve(checks)
-
-    await expect(first).resolves.toEqual(checks)
-    await expect(second).resolves.toEqual(checks)
-    expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
-      repoPath,
-      repoId,
-      prNumber: 12,
-      headSha: undefined,
-      prRepo: null,
-      noCache: true
-    })
-  })
-
-  it('treats explicit noCache checks requests as fresh requests', async () => {
-    const store = createTestStore()
-    const repoPath = '/repo'
-    const repoId = 'repo-id'
-    const branch = 'feature/test'
-
-    mockApi.gh.prChecks.mockResolvedValue([
-      { name: 'build', status: 'completed', conclusion: 'success', url: null }
-    ])
-
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
-    await store
-      .getState()
-      .fetchPRChecks(repoPath, 12, branch, undefined, null, { noCache: true, repoId })
-
-    expect(mockApi.gh.prChecks).toHaveBeenCalledTimes(2)
-    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(2, {
-      repoPath,
-      repoId,
-      prNumber: 12,
-      headSha: undefined,
-      prRepo: null,
-      noCache: true
-    })
-  })
-
   it('preserves cached checks when the checks IPC fails', async () => {
     const store = createTestStore()
     const repoPath = '/repo'

@@ -79,11 +79,11 @@ import {
   stageRemoteOrcadMigrationBlobChunk
 } from '../ssh/orcad-migration-catalog-client'
 import { listRemoteOrcadFolderCatalog } from '../ssh/orcad-server-folder-workspaces'
-import { makeTerminalScrollbackSnapshotRef } from '../terminal-scrollback-snapshots'
+import { makeTerminalScrollbackSnapshotRef } from '../pty/scrollback/terminal-scrollback-snapshots'
 import { pauseWorkspacesForProjectMove } from '../window/project-move-pause'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../wsl/wsl-guest-process-table'
-import { isWslDistroRegistered } from '../wsl/wsl-distro-registry-id'
+import { isWslDistroRegistered } from '../wsl/discovery/wsl-distro-registry-id'
 import { defaultWslOrcadEnvironmentId } from '../wsl/wsl-orcad-deploy'
 import { ptyPaneKey } from './pty/pane/key-state'
 import { tryGetProviderForPty } from './pty/provider/registry'

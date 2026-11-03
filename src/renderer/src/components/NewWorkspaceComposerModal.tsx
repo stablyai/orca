@@ -18,7 +18,9 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
-import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
+import AgentSettingsDialog, {
+  restoreAgentSettingsInvoker
+} from '@/components/agent/AgentSettingsDialog'
 import type { AddRepoDialogHostedController } from '@/components/sidebar/use-add-repo-hosted-controller'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
@@ -169,6 +171,7 @@ function QuickTabBody({
   })
   // Layer agent settings over the composer so edits retain the typed workspace/repo selection.
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
+  const agentSettingsInvoker = useRef<HTMLButtonElement | null>(null)
   // User picks outrank newly detected preferences. Derive from an override so detection stays current without an effect-driven extra commit.
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     undefined
@@ -205,9 +208,6 @@ function QuickTabBody({
   const chipAgentIds =
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
-  const [quickSelectionCleared, setQuickSelectionCleared] = useState(false)
-  const quickSetupOnly = quickAgent === null && quickSelectionCleared
-
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<{
     agent: TuiAgent | null
@@ -239,15 +239,9 @@ function QuickTabBody({
     ) => {
       setQuickAgentOverride(agent)
       setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
-      setQuickSelectionCleared(false)
     },
     [observation.contextKey]
   )
-
-  const handleQuickSetupOnlySelect = useCallback(() => {
-    setQuickAgentOverride(null)
-    setQuickSelectionCleared(true)
-  }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
@@ -269,7 +263,8 @@ function QuickTabBody({
       )
     }
     await submitQuick(quickAgent, {
-      setupOnly: quickSetupOnly,
+      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+      setupOnly: quickAgent === null,
       launchChoice: launchSelection.choice,
       ...(launchInputs ? { launchInputs } : {})
     })
@@ -277,7 +272,6 @@ function QuickTabBody({
     createDisabled,
     quickAgent,
     launchSelection.choice,
-    quickSetupOnly,
     submitQuick,
     pickerDraft,
     quickAgentPick.entry
@@ -386,8 +380,6 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
-        quickSetupOnly={quickSetupOnly}
-        onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
@@ -404,12 +396,23 @@ function QuickTabBody({
             : undefined
         }
         primaryActionLabel={primaryActionLabel}
-        onOpenAgentSettings={() => setAgentSettingsOpen(true)}
+        onOpenAgentSettings={(invoker) => {
+          agentSettingsInvoker.current = invoker
+          setAgentSettingsOpen(true)
+        }}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}
         onNestedDialogOpenChange={setSetLocationOpen}
       />
-      <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
+      <AgentSettingsDialog
+        open={agentSettingsOpen}
+        onOpenChange={setAgentSettingsOpen}
+        onCloseAutoFocus={(event) => {
+          const invoker = agentSettingsInvoker.current
+          agentSettingsInvoker.current = null
+          restoreAgentSettingsInvoker(event, invoker)
+        }}
+      />
       {addProjectMounted ? (
         <Suspense fallback={null}>
           <HostedAddRepoDialog hosted={addProjectController} />

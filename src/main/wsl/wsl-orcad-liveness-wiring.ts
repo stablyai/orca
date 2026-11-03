@@ -10,12 +10,12 @@ import {
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
-import { subscribeSystemPowerLifecycle } from '../system-power-lifecycle'
+import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
 import {
   deferUntilWslDistroRunning,
   readSettledConfirmedRunningWslDistros
-} from '../wsl-background-distro-gate'
-import type { WslDistroHolder } from './wsl-distro-holder'
+} from './discovery/wsl-background-distro-gate'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
 import { readWslGuestIdentity } from './wsl-guest-process-identity'
 import type { WslOrcadConnection, WslOrcadConnectionManager } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId } from './wsl-orcad-deploy'

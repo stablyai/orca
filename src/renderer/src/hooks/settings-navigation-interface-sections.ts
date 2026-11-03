@@ -3,6 +3,7 @@ import { getChatAppearanceSearchEntries } from '@/components/settings/chat-appea
 import { getChatBehaviorSearchEntries } from '@/components/settings/chat-behavior-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat-inline-visuals-search'
+import { getChatLaunchSearchEntries } from '@/components/settings/chat-launch-search'
 import { getChatPermissionSearchEntry } from '@/components/settings/chat-permission-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
@@ -45,6 +46,7 @@ export function buildInterfaceSettingsSections({
       description: translate('settings.chat.description', 'Choose how chats look and behave.'),
       icon: MessageSquare,
       searchEntries: [
+        ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
         getChatPermissionSearchEntry(typedChatPermissions),
         ...getChatAppearanceSearchEntries(),
         ...getChatBehaviorSearchEntries().filter(

@@ -2,7 +2,8 @@ import { queuedMessageEditAcceptsText } from '../../queued-message-edit-command'
 import { describe, expect, it, vi } from 'vitest'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand
+  isStructuredAgentSessionComposerCommand,
+  structuredSessionSlashCommands
 } from './structured-agent-session-composer'
 
 describe('dispatchStructuredAgentSessionComposerCommand', () => {
@@ -41,6 +42,61 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
       })
     ).toMatchObject({ handled: true, accepted: false })
     expect(runConversationCommand).not.toHaveBeenCalled()
+  })
+
+  it('hands /compact its text only where the host takes instructions, and never /clear', async () => {
+    const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
+    const taking = {
+      ...controller,
+      conversationCommands: ['clear', 'compact'] as const,
+      compactInstructions: true,
+      runConversationCommand
+    }
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand(
+        '/compact keep the decisions\nand the plan\n',
+        taking
+      )
+    ).toMatchObject({ handled: true, accepted: true })
+    expect(runConversationCommand).toHaveBeenCalledWith(
+      'compact',
+      'keep the decisions\nand the plan'
+    )
+    runConversationCommand.mockClear()
+    for (const text of ['/clear keep this', '/clear keep this\nand that']) {
+      expect(await dispatchStructuredAgentSessionComposerCommand(text, taking)).toMatchObject({
+        handled: true,
+        accepted: false,
+        errorCode: 'commandTakesNoArguments'
+      })
+    }
+    expect(runConversationCommand).not.toHaveBeenCalled()
+  })
+
+  it.each(['\n', '\r', '\u2028', '\u2029'])(
+    'leaves a message with line break %j after another command to the agent',
+    async (lineBreak) => {
+      const setOption = vi.fn(async () => true)
+      expect(
+        await dispatchStructuredAgentSessionComposerCommand(
+          `/model picker looks wrong${lineBreak}see the log`,
+          { ...controller, setOption }
+        )
+      ).toMatchObject({ handled: false })
+      expect(setOption).not.toHaveBeenCalled()
+    }
+  )
+
+  it('hints instructions on /compact only where the host takes them', () => {
+    const hint = (compactInstructions?: boolean) =>
+      structuredSessionSlashCommands(
+        'claude',
+        ['clear', 'compact'],
+        [{ name: 'compact', kind: 'command', argumentHint: '<from the agent>' }],
+        compactInstructions
+      ).find((entry) => entry.name === 'compact')?.argumentHint
+    expect(hint(true)).toBe('[instructions]')
+    expect(hint()).toBeUndefined()
   })
 })
 

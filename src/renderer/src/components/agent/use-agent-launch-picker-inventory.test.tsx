@@ -524,7 +524,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
     expect(document.querySelector('textarea')).toHaveProperty('disabled', true)
     expect(
       [...document.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Launch terminal'
+        (button) => button.getAttribute('aria-label') === 'Launch terminal'
       )
     ).toHaveProperty('disabled', false)
   }

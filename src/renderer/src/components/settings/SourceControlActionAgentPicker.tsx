@@ -121,7 +121,7 @@ export function SourceControlActionAgentPickerView(props: ViewProps) {
         canonicalSourceControlActionSelection({ agentId: props.agent, surface: props.surface })
       const preview = sourceControlActionAgentPreview(props.observation, props.agent)
       const saved =
-        surface === undefined && props.agent === agent
+        props.agent === agent && (surface === undefined || surface === props.surface)
           ? props.surface
           : props.canSaveSurface
             ? savedSurfaceForPick(props.observation.model, agent, surface, entry)

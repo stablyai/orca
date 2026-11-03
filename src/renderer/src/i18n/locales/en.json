@@ -511,6 +511,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "Chat UI is on",
+        "off": "Chat UI is off",
+        "agents": "Default launch mode per agent",
+        "agentsDescription": "Choose whether each agent opens in Chat UI or its CLI.",
+        "chatDescription": "New agents will launch in chat mode by default.",
+        "cliDescription": "New agents will launch as CLI by default.",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "toggle": "Use Chat UI by default"
+      },
       "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
       "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",
@@ -13176,13 +13187,16 @@
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
           "moreThemesLoading": "Loading themes…",
-          "installingTheme": "Installing {{value0}}…"
+          "installingTheme": "Installing {{value0}}…",
+          "searchThemes": "Search themes…",
+          "noThemes": "No themes match your search."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Icon theme",
             "description": "File and folder icons from an enabled plugin.",
-            "builtIn": "Built-in"
+            "builtIn": "Built-in",
+            "search": "Search icon themes…"
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
@@ -13591,6 +13605,9 @@
           "kitty_title": "Import from Kitty",
           "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "No matches."
         }
       },
       "right": {
@@ -19361,6 +19378,23 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "textAttachmentPreview": {
+        "copiedContents": "Copied contents",
+        "textAttachment": "Text attachment",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copy contents",
+        "saveFile": "Save file",
+        "copyTooLarge": "This file is too large to copy. Save it instead.",
+        "exportError": "Unable to export attachment. Try again.",
+        "unreadableReply": "Unreadable attachment reply. Try again.",
+        "incompleteReply": "Attachment changed or its reply was incomplete. Close it and try again.",
+        "notText": "This file cannot be previewed as text. Save it to open it in another app.",
+        "openFailed": "Unable to open attachment. Try again.",
+        "hostUpdate": "This host cannot open text attachments yet. Update Orca on that host, then retry.",
+        "hostUnavailable": "The attachment host is unavailable. Reconnect and retry.",
+        "connectionChanged": "Connection changed. Close this attachment and reopen it.",
+        "readFailed": "Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed."
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },
@@ -19423,6 +19457,7 @@
         "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
         "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
         "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+        "attachmentsExpired": "{{names}} expired.",
         "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
         "emptyMessage": "This message is empty, so it was not sent.",
         "commandUnavailable": "This command isn't available in {{agent}} chats, so it was not sent.",
@@ -19512,6 +19547,7 @@
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "attachmentExpired": "This attachment expired.",
         "reattachFile": "Remove it and attach it again.",
+        "reattachFiles": "Remove them and attach them again.",
         "conversationCleared": "This conversation has been cleared.",
         "openCurrentConversation": "Open the current conversation to continue.",
         "clearUnfinished": "The last /clear didn't finish.",
@@ -20056,7 +20092,11 @@
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
-        "updateFromWorker": "Update from worker"
+        "updateFromWorker": "Update from worker",
+        "senderReplaced": "{{name}} is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.",
+        "senderAmbiguous": "Orca can't tell which terminal {{name}} is running in. Open it from the sidebar.",
+        "senderNotRunning": "{{name}} is no longer running. Start a new agent from the sidebar to continue its work.",
+        "unnamedSenderSubject": "An agent"
       },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
@@ -20788,7 +20828,6 @@
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
       "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
-      "setupOnly": "Setup only",
       "setupCheckFailed": "Could not check setup configuration. Try again.",
       "directSetup": {
         "run": "Run setup",
@@ -21887,6 +21926,9 @@
         "reasonOwnFolder": "Uses your own Claude folder",
         "reasonUnknownAccount": "Account unknown",
         "reasonNoSession": "Can't resume",
+        "reasonSharedSession": "Also open in another pane",
+        "sharedOne": "1 Claude session stays on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
+        "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",

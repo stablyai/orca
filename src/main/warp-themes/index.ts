@@ -14,7 +14,7 @@ import {
   type PreviewOperationBudget,
   type WarpThemePreviewOptions
 } from './preview-operation-budget'
-import { validateImportSource } from '../import-source-validation'
+import { validateImportSource } from '../configuration-import/import-source-validation'
 import { filesFromAutoDirectories } from './auto-discovered-theme-files'
 import { filesFromDirectory, type ThemeSourceSelection } from './theme-source-selection'
 import {

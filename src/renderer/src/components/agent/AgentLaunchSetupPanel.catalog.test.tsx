@@ -207,7 +207,9 @@ it('keeps the actual retained current row usable during an owned read without in
   expect(row.getAttribute('data-disabled')).not.toBe('true')
   fireEvent.click(row)
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   expect(onUse).toHaveBeenCalledOnce()
   expect(onUse.mock.calls[0][0]).toMatchObject({
@@ -240,7 +242,9 @@ it('keeps failed guidance when opaque Arguments supply no real current model row
   expect(host.querySelector('[cmdk-item][data-current="true"]')).toBeNull()
   expect(host.textContent).not.toContain('No models match your search.')
   fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+    [...host.querySelectorAll('button')].find(
+      (button) => button.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   expect(onUse).toHaveBeenCalledOnce()
   expect(onUse.mock.calls[0][0]).toMatchObject({ choices: {}, arguments: args })

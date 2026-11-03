@@ -18,12 +18,18 @@ import {
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import { agentModelChoiceChips } from '../settings/agent-model-choice-chips'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from '../settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
-import { AgentLaunchSetupFooter, type AgentLaunchSetupFooterHandle } from './AgentLaunchSetupFooter'
+import {
+  AgentLaunchSetupFooter,
+  agentLaunchSetupArgumentsNote,
+  type AgentLaunchSetupFooterHandle
+} from './AgentLaunchSetupFooter'
 import { AgentLaunchSetupActions } from './AgentLaunchSetupActions'
 import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
@@ -137,33 +143,27 @@ export function AgentLaunchSetupPanel({
     },
     argumentsView.context
   )
-  const noModelFlag = !seed?.modelApply.cli?.length
-  const composed = options.some((option) => option.apply.composedIntoModel)
-  const noOptionFlag = options.some(
-    (option) => !option.apply.cli?.length && !option.apply.composedIntoModel
-  )
-  const note =
-    noModelFlag || noOptionFlag
-      ? translate(
-          'agentPicker.chatChoicesNote',
-          '{{agent}} model or effort choices without a CLI flag apply to chats.',
-          { agent: entry.label }
-        )
-      : composed
-        ? translate(
-            'agentPicker.composedChoicesNote',
-            '{{agent}} effort and speed choices are included in the model argument.',
-            { agent: entry.label }
-          )
-        : undefined
+  const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
       className="flex w-full flex-col"
+      onKeyDownCapture={(event) => {
+        if (isScreenSubmitShortcut(event)) {
+          event.preventDefault()
+          event.stopPropagation()
+          const primary = mode === 'select' ? draft.surface : entry.defaultSurface
+          const alternate = entry.surfaces.find((surface) => surface !== primary)
+          if (alternate && !disabled && !event.repeat) {
+            use(alternate)
+          }
+        }
+      }}
       onKeyDown={(event) => {
         event.stopPropagation()
         if (
           !disabled &&
+          !isImeOwnedKeyboardEvent(event) &&
           event.key === 'Enter' &&
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
@@ -178,6 +178,7 @@ export function AgentLaunchSetupPanel({
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
+            !isImeOwnedKeyboardEvent(event) &&
             event.key === 'Enter' &&
             event.currentTarget.querySelector(
               '[cmdk-item][data-selected="true"][data-current="true"]'
@@ -195,6 +196,7 @@ export function AgentLaunchSetupPanel({
         }}
       >
         <CommandInput
+          autoFocus
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}

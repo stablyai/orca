@@ -19123,6 +19123,7 @@
         "attachmentNotAFile": "Ein Bild in dieser Nachricht ist keine Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentNoSource": "Für ein Bild in dieser Nachricht fehlt die zu sendende Datei, daher wurde die Nachricht nicht gesendet.",
         "attachmentInvalid": "Ein Anhang dieser Nachricht kann nicht an den Agenten gesendet werden.",
+        "attachmentsExpired": "Abgelaufen: {{names}}.",
         "attachmentUnreadable": "Ein Anhang dieser Nachricht konnte nicht gelesen werden, daher wurde die Nachricht nicht gesendet.",
         "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
         "commandUnavailable": "Dieser Befehl ist in Chats mit {{agent}} nicht verfügbar und wurde daher nicht gesendet.",
@@ -19211,6 +19212,7 @@
         "recordFailed": "Orca konnte dies nicht im Chatverlauf speichern.",
         "attachmentExpired": "Dieser Anhang ist abgelaufen.",
         "reattachFile": "Den Anhang entfernen und erneut anhängen.",
+        "reattachFiles": "Die Anhänge entfernen und erneut anhängen.",
         "conversationCleared": "Diese Unterhaltung wurde geleert.",
         "openCurrentConversation": "Zum Fortfahren die aktuelle Unterhaltung öffnen.",
         "clearUnfinished": "Der letzte /clear-Befehl wurde nicht abgeschlossen.",
@@ -20442,7 +20444,6 @@
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
       "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
-      "setupOnly": "Nur Einrichtung",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

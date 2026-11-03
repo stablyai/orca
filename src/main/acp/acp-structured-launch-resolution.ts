@@ -22,7 +22,7 @@ import {
   checkAgentCliVersion,
   type AgentCliVersionCheck,
   type AgentCliVersionReader
-} from '../agent-cli-version-probe'
+} from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,

@@ -55,3 +55,45 @@ export const codexAskRetainedArgsTokens = [
   '--add-dir',
   'old-owner'
 ]
+
+export const pickerResizeObservers = new Set<ResizeObserverFixture>()
+export const pickerMovementObservers = new Set<IntersectionObserverFixture>()
+export class IntersectionObserverFixture implements IntersectionObserver {
+  readonly root = null
+  readonly rootMargin = ''
+  readonly scrollMargin = '0px'
+  readonly thresholds = [1]
+  targets = new Set<Element>()
+  constructor(readonly callback: IntersectionObserverCallback) {
+    pickerMovementObservers.add(this)
+  }
+  observe(target: Element) {
+    this.targets.add(target)
+  }
+  unobserve(target: Element) {
+    this.targets.delete(target)
+  }
+  disconnect() {
+    this.targets.clear()
+    pickerMovementObservers.delete(this)
+  }
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
+}
+export class ResizeObserverFixture implements ResizeObserver {
+  targets = new Set<Element>()
+  constructor(readonly callback: ResizeObserverCallback) {
+    pickerResizeObservers.add(this)
+  }
+  observe(target: Element) {
+    this.targets.add(target)
+  }
+  unobserve(target: Element) {
+    this.targets.delete(target)
+  }
+  disconnect() {
+    this.targets.clear()
+    pickerResizeObservers.delete(this)
+  }
+}

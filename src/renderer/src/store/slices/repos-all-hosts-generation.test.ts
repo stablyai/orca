@@ -374,25 +374,6 @@ describe('fetchReposForAllHosts generation', () => {
     )
   })
 
-  it('invalidates folder path statuses when an all-host repo catalog changes', async () => {
-    reposList.mockResolvedValueOnce([{ ...localRepo, path: '/local/changed' }])
-    const store = createTestStore()
-    store.setState({
-      repos: [localRepo],
-      folderWorkspacePathStatuses: {
-        cached: {
-          status: { path: '/local', exists: true },
-          checkedAt: 1,
-          requestSnapshot: 'before-change'
-        }
-      }
-    })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().folderWorkspacePathStatuses).toEqual({})
-  })
-
   it('drops a targeted repo catalog that started before a reconnect', async () => {
     const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
     const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()

@@ -22,7 +22,7 @@ vi.mock('../../shared/app-environment', () => ({
     getPath: () => 'C:/profile'
   })
 }))
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: mocks.run }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: mocks.run }))
 // The admission gate asks the running list for the path's distro; `running` stands in for it.
 vi.mock('../native-chat/wsl-transcript-running-admission', () => ({
   admitWslTranscriptPath: async (path: string) => {

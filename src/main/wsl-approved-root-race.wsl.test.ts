@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { containedDeleteCommand } from './wsl-contained-delete'
-import { parseWslPath } from './wsl'
+import { containedDeleteCommand } from './wsl/filesystem/wsl-contained-delete'
+import { parseWslPath } from './wsl/filesystem/unc-path-access'
 
 const execFileAsync = promisify(execFile)
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'

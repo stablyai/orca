@@ -139,7 +139,7 @@ it.each(['button', 'enter'] as const)(
     } else {
       fireEvent.click(
         [...document.querySelectorAll('button')].find(
-          (button) => button.textContent === 'Launch terminal'
+          (button) => button.getAttribute('aria-label') === 'Launch terminal'
         )!
       )
     }
@@ -218,13 +218,17 @@ it('rebases accepted recipe receipts and retires independent form scopes with eq
   open()
   fireEvent.change(document.querySelector('textarea')!, { target: { value: '--accepted' } })
   fireEvent.click(
-    [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+    [...document.querySelectorAll('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   expect(launch.mock.calls.at(-1)?.[0].recipeEdits.changed).toBe(true)
   open()
   expect(document.querySelector('textarea')).toHaveProperty('value', '--accepted')
   fireEvent.click(
-    [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+    [...document.querySelectorAll('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   expect(launch.mock.calls.at(-1)?.[0].recipeEdits.changed).toBe(false)
   open()

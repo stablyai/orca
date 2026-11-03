@@ -7,6 +7,8 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { TerminalHandleAccess } from '../../runtime-agent-sender-associations'
+import { readIssuedTerminalHandles } from './terminal-issued-handle-reader'
 
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
@@ -106,6 +108,22 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     })
     this.terminalIdentity.bindLeaf(leafKey, preAllocated)
     return preAllocated
+  }
+
+  protected terminalHandleAccess(): TerminalHandleAccess {
+    return {
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      ...readIssuedTerminalHandles({
+        leafHandle: (leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)),
+        ptyHandles: () => this.handleByPtyId,
+        incarnations: () => this.handleByPtyIncarnation,
+        ptys: () => this.ptysById,
+        handles: () => this.handles,
+        runtimeId: () => this.runtimeId,
+        rendererGraphEpoch: () => this.rendererGraphEpoch
+      })
+    }
   }
 
   protected issuePtyHandle(

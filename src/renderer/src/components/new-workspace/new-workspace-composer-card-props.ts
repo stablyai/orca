@@ -51,9 +51,6 @@ export type NewWorkspaceComposerCardProps = {
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
-  /** Cleared picker: skip the agent and the extra shell when setup runs. */
-  quickSetupOnly?: boolean
-  onQuickSetupOnlySelect?: () => void
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string
@@ -112,7 +109,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameJiraSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
-  onOpenAgentSettings: () => void
+  onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean

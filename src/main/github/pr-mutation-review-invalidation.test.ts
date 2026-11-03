@@ -45,7 +45,9 @@ vi.mock('./client/lookup/branch-lookup-resolution', () => ({
 vi.mock('../ipc/github-work-item-mutation-events', () => ({
   broadcastGitHubWorkItemMutation: vi.fn()
 }))
-vi.mock('../project-runtime-git-options', () => ({ getLocalProjectGhExecOptions: () => ({}) }))
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
+  getLocalProjectGhExecOptions: () => ({})
+}))
 
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 import { registerGitHubPRMutationHandlers } from '../ipc/github-pr-mutation-handlers'

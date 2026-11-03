@@ -24,7 +24,7 @@ import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
 } from '../../git/huge-folder-ignore'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
   getLocalGitOptionsForRegisteredWorktree,
@@ -42,7 +42,7 @@ import {
   noteWslDistroWokenForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context

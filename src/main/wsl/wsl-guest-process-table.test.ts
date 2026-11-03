@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGate from '../wsl-background-distro-gate'
+import type * as BackgroundDistroGate from './discovery/wsl-background-distro-gate'
 
 const mocks = vi.hoisted(() => ({
   runWslProcess: vi.fn(),
   readWslDistroRunningState: vi.fn()
 }))
-vi.mock('./wsl-runner', () => ({ runWslProcess: mocks.runWslProcess }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('./execution/wsl-runner', () => ({ runWslProcess: mocks.runWslProcess }))
+vi.mock('./discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGate>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))
 
 import { readWslGuestProcessTable } from './wsl-guest-process-table'
-import { runAsWslUserAct } from './wsl-unc-access-gate'
+import { runAsWslUserAct } from './filesystem/wsl-unc-access-gate'
 
 describe('readWslGuestProcessTable never boots a stopped distro (E9)', () => {
   const originalPlatform = process.platform

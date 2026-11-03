@@ -7,6 +7,7 @@ import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-the
 import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { resolveEditorFontStack } from '@/lib/editor-typography'
 import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-theme'
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
@@ -53,6 +54,9 @@ export function selectNativeChatAppearanceSettings(
     terminalColorOverridesLight: settings?.terminalColorOverridesLight,
     pluginAppThemeDark: settings?.pluginAppThemeDark,
     pluginAppThemeLight: settings?.pluginAppThemeLight,
+    editorFontFamily: settings?.nativeChatAppearance?.matchTerminalInterface
+      ? undefined
+      : settings?.editorFontFamily,
     terminalFontFamily: settings?.terminalFontFamily,
     terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
       ? settings.terminalFontSize
@@ -147,6 +151,7 @@ export function nativeChatAppearanceStyle(
     maxWidthPx
   )
   const font = buildFontFamily(settings?.terminalFontFamily ?? '')
+  const codeFont = matching ? font : resolveEditorFontStack(settings)
   const style: NativeChatAppearanceStyle = {
     '--chat-font-size': `${fontSize}px`,
     '--chat-ui-font-size': `${uiFontSize}px`,
@@ -159,7 +164,7 @@ export function nativeChatAppearanceStyle(
       Math.floor((((96 * columnWidthPx) / 736) * 14) / fontSize)
     ),
     '--chat-estimated-spacing-scale': uiFontSize / 14,
-    '--chat-code-font-family': font,
+    '--chat-code-font-family': codeFont,
     ...(appearance.fontFamily
       ? { '--chat-font-family': buildAppFontFamily(appearance.fontFamily) }
       : {})

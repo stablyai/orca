@@ -7,7 +7,7 @@ import {
   type WslHostCopyParams
 } from '../../shared/wsl-host-failure-copy'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 
 export const WSL_HOSTS_DISABLED_MESSAGE = WSL_HOST_ADD_REFUSAL_COPY.turnedOff
 export const WSL_HOST_SERVER_FILES_MISSING_MESSAGE = WSL_HOST_ADD_REFUSAL_COPY.serverFilesMissing

@@ -23,7 +23,9 @@ import {
   normalizeSourceControlAiSettings
 } from '../../../../shared/source-control-ai'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }
+}))
 
 beforeEach(() => useAppStore.setState({ settingsSearchQuery: '' }))
 afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
@@ -517,14 +519,15 @@ it('renders current native text-agent facts for a normalized legacy model recipe
   expect(unused).not.toHaveBeenCalled()
 })
 
-it.each([
-  { agent: 'claude', scope: 'global' },
-  { agent: 'codex', scope: 'global' },
-  { agent: 'claude', scope: 'repo' },
-  { agent: 'codex', scope: 'repo' }
-] as const)(
-  'persists only deliberate $agent route events from the actual CLI-default $scope row',
-  async ({ agent, scope }) => {
+it.each(
+  (['claude', 'codex'] as const).flatMap((agent) =>
+    (['global', 'repo'] as const).flatMap((scope) =>
+      (['chat', 'terminal'] as const).map((surface) => ({ agent, scope, surface }))
+    )
+  )
+)(
+  'persists deliberate current-$surface $agent route events from the actual $scope row',
+  async ({ agent, scope, surface }) => {
     setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
     const settings = useAppStore.getState().settings!
     const recipe = {
@@ -549,7 +552,7 @@ it.each([
       localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
       settings: {
         ...settings,
-        nativeChatProviders: {},
+        nativeChatProviders: { [agent]: surface === 'chat' },
         sourceControlAi: normalizeSourceControlAiSettings({
           ...getDefaultSourceControlAiSettings(),
           enabled: true,
@@ -616,9 +619,10 @@ it.each([
         name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
       })
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
-    await act(async () => {})
-    expect(read()).toEqual(before)
+    fireEvent.click(
+      screen.getByRole('button', { name: surface === 'chat' ? 'Launch chat' : 'Launch terminal' })
+    )
+    await waitFor(() => expect(read()).toEqual({ ...before, surface }))
     await open()
     fireEvent.click(
       screen.getByRole('button', {
@@ -646,6 +650,54 @@ it.each([
     view = mount()
     expect(read()).toEqual({ ...before, surface: 'terminal' })
     expect(row().getByRole('button', { name: 'Select agent' }).textContent).toContain('(CLI)')
+    const { makeWorktree } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const { planAgentSessionLaunch } = await import('@/lib/agent-session-launch-plan')
+    const { projectSourceControlActionLaunch } =
+      await import('../../../../shared/source-control-action-launch-preferences')
+    for (const selected of ['terminal', 'chat'] as const) {
+      if (selected === 'chat') {
+        await open()
+        fireEvent.click(
+          screen.getByRole('button', {
+            name: `Configure ${agent === 'claude' ? 'Claude' : 'Codex'}`
+          })
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Launch chat' }))
+        await waitFor(() => expect(read()).toEqual({ ...before, surface: 'chat' }))
+      }
+      act(() =>
+        useAppStore.setState(({ settings }) => ({
+          settings: { ...settings!, nativeChatProviders: { [agent]: selected !== 'chat' } },
+          worktreesByRepo: {
+            [TEST_REPO.id]: [makeWorktree({ id: 'route-effect', repoId: TEST_REPO.id })]
+          }
+        }))
+      )
+      const saved = read()
+      if (!saved || saved.commandInputTemplate === null || saved.agentArgs === null) {
+        throw new Error('Saved fixture recipe must have non-null template and Arguments')
+      }
+      const projection = projectSourceControlActionLaunch(
+        {
+          ...saved,
+          commandInputTemplate: saved.commandInputTemplate,
+          agentArgs: saved.agentArgs
+        },
+        agent,
+        { basePrompt: 'fix' }
+      )
+      const plan = planAgentSessionLaunch(useAppStore.getState(), {
+        requestId: 'saved-route-effect',
+        agent,
+        workspace: { kind: 'git-worktree', worktreeId: 'route-effect' },
+        requestedSurface: projection.requestedSurface,
+        preferredSurface: projection.preferredSurface,
+        launchOptions: projection.sessionOptions,
+        chatLaunchOptions: projection.chatSessionOptions
+      })
+      expect(plan.route).toBe(selected === 'chat' ? 'structured-native-chat' : 'terminal-tui')
+      expect(read()).toEqual({ ...before, surface: selected })
+    }
     view.unmount()
   }
 )

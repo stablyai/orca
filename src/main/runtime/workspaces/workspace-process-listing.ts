@@ -22,7 +22,7 @@ import { attachRuntimeWorktreeAgentRows } from '../runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
-import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
+import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,

@@ -24,7 +24,10 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
-import { noteWslDistroMayHaveStopped, noteWslDistroWoken } from '../wsl-background-distro-gate'
+import {
+  noteWslDistroMayHaveStopped,
+  noteWslDistroWoken
+} from '../wsl/discovery/wsl-background-distro-gate'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')

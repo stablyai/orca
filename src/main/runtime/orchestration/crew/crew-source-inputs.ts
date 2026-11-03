@@ -5,7 +5,16 @@ import {
   type CrewParentClaim,
   type CrewParentResource
 } from './crew-parent-inputs'
-import { readCrewRuns, type CrewAssignmentRow } from './crew-query'
+import {
+  readCrewRuns,
+  readCrewOwnedRunAddresses,
+  readCrewTraffic,
+  readCrewQuestions,
+  type CrewAssignmentRow
+} from './crew-query'
+import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
+import { exposeUtcTimestamp } from '../db/utc-timestamp'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { paneKeyMatchSuffix } from '../db/pane-key-match'
 
@@ -14,7 +23,7 @@ type Provenance = { local: ProvenanceRow[]; remote: ProvenanceRow[] }
 type Run = ReturnType<typeof readCrewRuns>[number]
 
 /** Disposable host input indexes contain source facts, never projected parties or selected parents. */
-export function createCrewSourceInputs(db: OrchestrationDb | null) {
+export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = () => 256) {
   const sourceFingerprint =
     z
       .object({ caller_fingerprint: z.string() })
@@ -155,5 +164,78 @@ export function createCrewSourceInputs(db: OrchestrationDb | null) {
     }
     return addresses.flatMap((address) => (runs.has(address) ? [runs.get(address)!] : []))
   }
-  return { parentInputs, provenance, runInputs, activeRemoteAttachmentForPane, legacyOwner }
+  const owned = new Map<string, string[]>()
+  const mail = new Map<
+    string,
+    {
+      aliases: readonly string[]
+      traffic?: {
+        rows: ReturnType<typeof readCrewTraffic>
+        queriedAt: number
+        validThrough: number
+      }
+      questions?: ReturnType<typeof readCrewQuestions>
+    }
+  >()
+  const retain = <T>(cache: Map<string, T>, key: string, value: T): T => {
+    cache.set(key, value)
+    while (cache.size > capacity()) {
+      cache.delete(cache.keys().next().value!)
+    }
+    return value
+  }
+  const ownedRuns = (party: OrchestrationCoordinatorKey) => {
+    const key = JSON.stringify([party.terminalHandle, party.orcaSessionId, party.paneKey])
+    return (
+      owned.get(key) ??
+      retain(owned, key, db ? readCrewOwnedRunAddresses(db, party, legacyOwner) : [])
+    )
+  }
+  const mailbox = (aliases: string[]): NonNullable<ReturnType<typeof mail.get>> => {
+    const selected = [...new Set(aliases)].sort()
+    const key = JSON.stringify(selected)
+    return mail.get(key) ?? retain(mail, key, { aliases: selected })
+  }
+  const traffic = (aliases: string[], now: number) => {
+    const input = mailbox(aliases)
+    const cached = input.traffic
+    if (cached && now >= cached.queriedAt && now <= cached.validThrough) {
+      return cached.rows
+    }
+    const rows = db
+      ? readCrewTraffic(db, aliases, new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString())
+      : []
+    let validThrough = Infinity
+    for (const row of rows) {
+      const at = Date.parse(exposeUtcTimestamp(row.created_at)!)
+      validThrough = Math.min(
+        validThrough,
+        Number.isFinite(at) ? at + AGENT_STATUS_STALE_AFTER_MS : -Infinity
+      )
+    }
+    input.traffic = { rows, queriedAt: now, validThrough }
+    return rows
+  }
+  const questions = (aliases: string[]) => {
+    const input = mailbox(aliases)
+    return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
+  }
+  const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
+    for (const [key, input] of mail) {
+      if (!addresses || input.aliases.some((address) => addresses.has(address))) {
+        mail.delete(key)
+      }
+    }
+  }
+  return {
+    parentInputs,
+    provenance,
+    runInputs,
+    activeRemoteAttachmentForPane,
+    legacyOwner,
+    ownedRuns,
+    traffic,
+    questions,
+    invalidateTraffic
+  }
 }

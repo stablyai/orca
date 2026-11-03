@@ -8,7 +8,7 @@ import {
 } from './agent-launch-setup-panel-test-fixture'
 
 import { act } from 'react'
-import { fireEvent, getByText, isInaccessible, waitFor } from '@testing-library/react'
+import { fireEvent, getByRole, getByText, isInaccessible, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
@@ -77,11 +77,7 @@ it('shows a raw Arguments value in the shared Permissions menu; removing its chi
   expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')?.value).toBe(
     '--add-dir docs'
   )
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch terminal')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch terminal' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ surface: 'terminal', arguments: '--add-dir docs' })
   )
@@ -118,11 +114,7 @@ it('shows remembered chat defaults without turning displayed values into launch 
   )
   expect(host.textContent).not.toMatch(/Agents? defaults?|Reset to default/)
   expect(host.querySelector('[cmdk-item][data-current="true"]')?.textContent).toBe('Astra')
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch chat')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith({
     agent: 'codex',
     surface: 'chat',
@@ -151,10 +143,7 @@ it('keeps pending defaults disabled, selects resolved values without overrides, 
     )
   render(pending)
   fireEvent.click(host.querySelector('button[aria-label="Toggle Arguments"]')!)
-  expect(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch chat')
-      ?.disabled
-  ).toBe(false)
+  expect(getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' }).disabled).toBe(false)
   expect(host.querySelector<HTMLInputElement>('input[aria-label="Search models"]')?.disabled).toBe(
     true
   )
@@ -213,11 +202,7 @@ it('keeps pending defaults disabled, selects resolved values without overrides, 
     'Ask for approval'
   )
   expect(host.textContent).not.toMatch(/Agents? defaults?|Reset to default/)
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch chat')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ choices: {}, arguments: undefined })
   )
@@ -227,10 +212,7 @@ it('keeps pending defaults disabled, selects resolved values without overrides, 
     false
   )
   expect(host.querySelector('[cmdk-item][data-current="true"]')).toBeNull()
-  expect(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch chat')
-      ?.disabled
-  ).toBe(false)
+  expect(getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' }).disabled).toBe(false)
 })
 
 it('launches explicit model and effort picks when settled defaults have neither selected', () => {
@@ -273,9 +255,7 @@ it('launches explicit model and effort picks when settled defaults have neither 
     [...host.querySelectorAll('[role="radio"]')].find((radio) => radio.textContent === 'High')!
   )
   expect(host.querySelector('[role="radio"][data-state="on"]')?.textContent).toBe('High')
-  fireEvent.click(
-    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch chat')!
-  )
+  fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' }))
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       surface: 'chat',
@@ -286,10 +266,12 @@ it('launches explicit model and effort picks when settled defaults have neither 
     model: 'host-model',
     effort: 'high'
   })
-  const footer = [...host.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Launch chat'
-  )!.parentElement!
-  expect(footer.textContent).toBe('Launch terminalLaunch chat')
+  const footer = getByRole<HTMLButtonElement>(host, 'button', {
+    name: 'Launch chat'
+  }).parentElement!
+  expect(
+    [...footer.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))
+  ).toEqual(['Launch terminal', 'Launch chat'])
 })
 
 it('returns to concrete default model, effort and permission values by selecting them directly', () => {
@@ -363,11 +345,7 @@ it('returns to concrete default model, effort and permission values by selecting
   )
   select('Permissions', 'Full access')
   select('Permissions', 'Ask')
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch chat')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       choices: { model: 'astra', options: { effort: 'low' }, permissionMode: 'ask' }
@@ -416,11 +394,7 @@ it('searches current and supplied legacy models, keeps unknown explicit choices,
       .find((row) => row.textContent === 'Retired model')
       ?.click()
   )
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch chat')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch chat' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ choices: { model: 'retired' } })
   )
@@ -454,7 +428,9 @@ it.each(['chat', 'terminal'] as const)(
       act(() =>
         [...host.querySelectorAll('button')]
           .find(
-            (button) => button.textContent === (way === 'chat' ? 'Launch chat' : 'Launch terminal')
+            (button) =>
+              button.getAttribute('aria-label') ===
+              (way === 'chat' ? 'Launch chat' : 'Launch terminal')
           )
           ?.click()
       )
@@ -542,11 +518,7 @@ it('keeps uncertain permission text literal instead of offering a badge that rem
     raw
   )
   expect(host.querySelector('button[aria-label^="Remove --unknown-option"]')).toBeNull()
-  act(() =>
-    [...host.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Launch terminal')
-      ?.click()
-  )
+  act(() => getByRole<HTMLButtonElement>(host, 'button', { name: 'Launch terminal' })?.click())
   expect(onUse).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({ arguments: undefined, choices: {} })
   )
@@ -584,9 +556,7 @@ it('uses the shared permission menu without its inheritance row and couples raw,
   expect(input.value).toBe('--add-dir "keep spaces"')
   for (const way of ['Launch chat', 'Launch terminal']) {
     onUse.mockClear()
-    fireEvent.click(
-      [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-    )
+    fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
     expect(onUse).toHaveBeenCalledOnce()
     const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], entry)
     expect(launch.sessionOptions?.permissionMode).toBe('accept-edits')
@@ -638,9 +608,7 @@ it.each(['chat', 'terminal'] as const)(
     expect(input.value).toContain('"theme":"dark"')
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
-      fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-      )
+      fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       expect(launch.sessionOptions?.fastMode).toBe('true')
       if (way === 'Launch terminal') {
@@ -703,18 +671,14 @@ it.each([
     expect(input.value).toContain('--add-dir docs')
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
-      fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-      )
+      fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
       expect(agentPickerLaunchInputs(onUse.mock.calls[0][0], own)).not.toHaveProperty('agentArgs')
     }
     fireEvent.click(chip!)
     expect(host.querySelector('button[aria-label*="Remove --settings"]')).toBeNull()
     for (const way of ['Launch chat', 'Launch terminal']) {
       onUse.mockClear()
-      fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-      )
+      fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       expect(launch.sessionOptions?.fastMode).toBe('false')
       if (way === 'Launch terminal') {
@@ -791,9 +755,7 @@ it('enables recorded Codex tier choices after defaults become known without inve
   expect(standard().getAttribute('aria-checked')).toBe('false')
   const launch = (way: string) => {
     onUse.mockClear()
-    fireEvent.click(
-      [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-    )
+    fireEvent.click(getByRole<HTMLButtonElement>(host, 'button', { name: way }))
     return agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
   }
   for (const way of ['Launch chat', 'Launch terminal']) {

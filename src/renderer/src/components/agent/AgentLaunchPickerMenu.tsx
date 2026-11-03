@@ -1,17 +1,14 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import {
-  memo,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ComponentProps,
-  type PointerEvent
-} from 'react'
+import { memo, useEffect, useId, useRef, useState, type ComponentProps } from 'react'
 import { useAppStore } from '@/store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+  useDropdownMenuClose
+} from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -51,16 +48,9 @@ type Launch = (
   row: NewTabAgentMenuRow,
   draft?: AgentPickerDraft,
   entry?: AgentPickerEntry,
-  /** Select mode: set only when a Chat or Terminal button changes the form's surface. */
+  /** Select mode: the surface explicitly accepted by a named launch action. */
   surface?: AgentPickerSurface
 ) => boolean | void | Promise<boolean>
-
-function keepSetupFocus(event: PointerEvent<HTMLDivElement>) {
-  // Radix row hover must not steal focus from the row's portaled setup or its nested controls.
-  if (event.currentTarget.querySelector('[data-slot="popover-trigger"][aria-expanded="true"]')) {
-    event.preventDefault()
-  }
-}
 
 export function AgentLaunchPickerMenu({
   draftScope,
@@ -161,7 +151,7 @@ export function AgentLaunchPickerMenu({
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
-        <div className="p-1">
+        <div className="px-1 py-0.5">
           <Input
             value={query}
             density="compact"
@@ -188,57 +178,59 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      {setups.map((setup) => {
-        const source = draftForEntry?.(setup.entry)
-        return (
-          <AgentPickerMenuRow
-            key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-            draftScope={draftScope}
-            draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-            initialModel={setup.model.id}
-            initialEffort={setup.choices.options?.effort}
-            entry={setup.entry}
-            mode={mode}
-            setupDisabled={setupDisabled}
-            openSetup={openSetup}
-            onSetupOpenChange={setActiveSetup}
-            label={setup.label}
-            source={source}
-            selected={value?.agent === setup.entry.agent ? value : undefined}
-            onSelectAgent={onSelectAgent}
-            disabled={disabled}
-            runLaunch={runLaunch}
-          />
-        )
-      })}
-      {visible.map((entry) => {
-        const source = draftForEntry?.(entry)
-        return (
-          <AgentPickerMenuRow
-            key={entry.agent}
-            draftScope={draftScope}
-            entry={entry}
-            mode={mode}
-            source={source}
-            selected={value?.agent === entry.agent ? value : undefined}
-            setupDisabled={setupDisabled}
-            openSetup={openSetup}
-            onSetupOpenChange={setActiveSetup}
-            disabled={disabled}
-            runLaunch={runLaunch}
-            onSelectAgent={onSelectAgent}
-            shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-          />
-        )
-      })}
-      {!visible.length && !setups.length ? (
-        <DropdownMenuItem disabled>
-          {translate(
-            'auto.components.agent.AgentCombobox.579c768bde',
-            'No agents match your search.'
-          )}
-        </DropdownMenuItem>
-      ) : null}
+      <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+        {setups.map((setup) => {
+          const source = draftForEntry?.(setup.entry)
+          return (
+            <AgentPickerMenuRow
+              key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+              draftScope={draftScope}
+              draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+              initialModel={setup.model.id}
+              initialEffort={setup.choices.options?.effort}
+              entry={setup.entry}
+              mode={mode}
+              setupDisabled={setupDisabled}
+              openSetup={openSetup}
+              onSetupOpenChange={setActiveSetup}
+              label={setup.label}
+              source={source}
+              selected={value?.agent === setup.entry.agent ? value : undefined}
+              onSelectAgent={onSelectAgent}
+              disabled={disabled}
+              runLaunch={runLaunch}
+            />
+          )
+        })}
+        {visible.map((entry) => {
+          const source = draftForEntry?.(entry)
+          return (
+            <AgentPickerMenuRow
+              key={entry.agent}
+              draftScope={draftScope}
+              entry={entry}
+              mode={mode}
+              source={source}
+              selected={value?.agent === entry.agent ? value : undefined}
+              setupDisabled={setupDisabled}
+              openSetup={openSetup}
+              onSetupOpenChange={setActiveSetup}
+              disabled={disabled}
+              runLaunch={runLaunch}
+              onSelectAgent={onSelectAgent}
+              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+            />
+          )
+        })}
+        {!visible.length && !setups.length ? (
+          <DropdownMenuItem disabled>
+            {translate(
+              'auto.components.agent.AgentCombobox.579c768bde',
+              'No agents match your search.'
+            )}
+          </DropdownMenuItem>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -309,11 +301,11 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
         }
       })
     : undefined
-  const item = useRef<HTMLDivElement>(null)
-  const dismissing = useRef(false)
+  const closeMenu = useDropdownMenuClose()
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
   return (
     <AgentLaunchSetupButton
+      submenu
       draftScope={draftScope}
       draftId={draftId}
       preset={preset}
@@ -324,36 +316,32 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       mode={mode}
       open={openSetup === setupId}
       replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
-      disabled={disabled || setupDisabled}
+      disabled={disabled || setupDisabled || !entry.surfaces.length}
       onOpenChange={(next) => {
-        onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
+        if (next || openSetup === setupId) {
+          onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
+        }
         if (next) {
           onSelectAgent?.(entry.agent)
         }
       }}
       onUse={(draft) => {
-        // Same surface as the form: accept the draft without a new route event.
-        const committed = (initial ?? selected ?? source)?.surface ?? entry.defaultSurface
-        const chosen = mode === 'select' && draft.surface !== committed ? draft.surface : undefined
+        const chosen = mode === 'select' ? draft.surface : undefined
         const result =
           chosen === undefined
             ? runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
             : runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry, chosen)
         if (result !== false) {
-          // The row click dismisses Radix only; the operation above owns acceptance.
-          dismissing.current = true
-          item.current?.click()
+          closeMenu()
         }
         return result
       }}
       renderAnchor={(trigger) => (
-        <DropdownMenuItem
-          ref={item}
-          variant="launch"
-          disabled={disabled || !entry.surfaces.length}
-          onSelect={(event) => {
-            if (dismissing.current) {
-              dismissing.current = false
+        <div
+          data-agent-launch-row
+          onClick={(event) => {
+            event.preventDefault()
+            if (disabled || !entry.surfaces.length) {
               return
             }
             const draft = initial ?? (mode === 'select' ? selected : undefined)
@@ -366,29 +354,34 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
                     : row.kind === 'terminal' || row.kind === 'cli'
                 ) ?? pickerLaunchRow(entry, surface))
             const result = draft ? runLaunch(row, draft, entry) : runLaunch(row, undefined)
-            if (result === false) {
-              event.preventDefault()
+            if (result !== false) {
+              closeMenu()
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'ArrowRight') {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === 'Enter' || event.key === ' ')
+            ) {
               event.preventDefault()
-              item.current?.querySelector<HTMLButtonElement>('button')?.focus()
+              event.currentTarget.click()
             }
           }}
-          onPointerMove={keepSetupFocus}
-          onPointerLeave={keepSetupFocus}
         >
-          <AgentIcon agent={entry.agent} size={14} />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
-          {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
-            <span className="text-xs text-muted-foreground">
-              {chatUnavailableLabel(unavailable.reason)}
+          <Button asChild variant="menu-launch" size="menu">
+            <span>
+              <AgentIcon agent={entry.agent} size={14} />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
+              {unavailable?.kind === 'chat-unavailable' && !entry.surfaces.includes('chat') ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel(unavailable.reason)}
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          </Button>
           {trigger}
-        </DropdownMenuItem>
+        </div>
       )}
     />
   )

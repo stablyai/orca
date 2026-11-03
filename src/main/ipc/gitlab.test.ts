@@ -68,7 +68,7 @@ const {
   getProjectSlugMock: vi.fn()
 }))
 const readWslDistroRunningStateMock = vi.hoisted(() => vi.fn())
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: readWslDistroRunningStateMock
 }))

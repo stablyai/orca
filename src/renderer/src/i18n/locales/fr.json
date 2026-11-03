@@ -19124,6 +19124,7 @@
         "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
         "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
         "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+        "attachmentsExpired": "Expiré : {{names}}.",
         "attachmentUnreadable": "Une pièce jointe de ce message n'a pas pu être lue, le message n'a donc pas été envoyé.",
         "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
         "commandUnavailable": "Cette commande n'est pas disponible dans les chats {{agent}}, elle n'a donc pas été envoyée.",
@@ -19211,6 +19212,7 @@
         "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
         "attachmentExpired": "Cette pièce jointe a expiré.",
         "reattachFile": "Retirez-la et joignez-la à nouveau.",
+        "reattachFiles": "Retirez-les et joignez-les à nouveau.",
         "conversationCleared": "Cette conversation a été effacée.",
         "openCurrentConversation": "Ouvrez la conversation actuelle pour continuer.",
         "clearUnfinished": "Le dernier /clear ne s'est pas terminé.",
@@ -20554,7 +20556,6 @@
     "newWorkspace": {
       "agentOptional": "Agent (facultatif)",
       "createDescription": "Choisissez le projet et le nom de l'espace de travail. Sélectionnez un agent si vous souhaitez en démarrer un.",
-      "setupOnly": "Configuration uniquement",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",

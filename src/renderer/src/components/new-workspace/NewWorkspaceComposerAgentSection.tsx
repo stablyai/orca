@@ -15,10 +15,11 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'agentSurfaceRows'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
+  | 'selectedRepoIsGit'
+  | 'selectedProjectId'
+  | 'projectOptions'
   | 'onQuickAgentChange'
   | 'agentRows'
-  | 'quickSetupOnly'
-  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -38,9 +39,10 @@ export function NewWorkspaceComposerAgentSection({
   agentSurfaceRows,
   agentPickerDraft,
   agentSetupDisabled,
+  selectedRepoIsGit,
+  selectedProjectId,
+  projectOptions,
   onQuickAgentChange,
-  quickSetupOnly = false,
-  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -61,7 +63,7 @@ export function NewWorkspaceComposerAgentSection({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                onClick={onOpenAgentSettings}
+                onClick={(event) => onOpenAgentSettings(event.currentTarget)}
                 tabIndex={-1}
                 className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                 aria-label={translate(
@@ -79,27 +81,24 @@ export function NewWorkspaceComposerAgentSection({
         </div>
         <AgentLaunchPicker
           model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
-          agent={quickSetupOnly ? null : quickAgent}
+          agent={quickAgent}
           value={agentPickerDraft}
           cli={agentSurfaceRows?.selection.cli === true}
           setupDisabled={agentSetupDisabled}
-          onTriggerEnter={createDisabled ? undefined : onCreate}
-          emptyLabel={
-            quickSetupOnly
-              ? translate('components.newWorkspace.setupOnly', 'Setup only')
-              : translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+          matchTriggerWidth={
+            selectedRepoIsGit &&
+            projectOptions?.find((option) => option.id === selectedProjectId)?.kind !==
+              'project-group'
           }
+          onOpenAgentSettings={onOpenAgentSettings}
+          onTriggerEnter={createDisabled ? undefined : onCreate}
+          emptyLabel={translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         >
           <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
             <Terminal className="size-3.5" />
             {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           </DropdownMenuItem>
-          {onQuickSetupOnlySelect ? (
-            <DropdownMenuItem onSelect={onQuickSetupOnlySelect}>
-              {translate('components.newWorkspace.setupOnly', 'Setup only')}
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuSeparator />
         </AgentLaunchPicker>
       </div>

@@ -18427,6 +18427,7 @@
         "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
         "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
         "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+        "attachmentsExpired": "{{names}} 已过期。",
         "attachmentUnreadable": "无法读取此消息中的附件，因此消息未发送。",
         "emptyMessage": "此消息为空，因此未发送。",
         "commandUnavailable": "此命令在 {{agent}} 聊天中不可用，因此未发送。",
@@ -18515,6 +18516,7 @@
         "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
         "attachmentExpired": "此附件已过期。",
         "reattachFile": "请将其移除后重新附加。",
+        "reattachFiles": "请将它们移除后重新附加。",
         "conversationCleared": "此对话已被清除。",
         "openCurrentConversation": "请打开当前对话以继续。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -19749,7 +19751,6 @@
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
       "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
-      "setupOnly": "仅设置",
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",
