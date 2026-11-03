@@ -39,6 +39,29 @@ export function getCompactAgentSecondary(
   lastAssistantMessageOverride?: string,
   presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
 ): string {
+  const detail = compactAgentSecondaryDetail(
+    agent,
+    now,
+    lastAssistantMessageOverride,
+    presentation
+  )
+  // Why: spawn attribution stays on this card; say which sibling the live cwd is in (#10572).
+  const mismatch = agent.liveWorktreeMismatchLabel?.trim() ?? ''
+  if (mismatch && detail) {
+    return `${mismatch} · ${detail}`
+  }
+  if (mismatch) {
+    return mismatch
+  }
+  return detail
+}
+
+function compactAgentSecondaryDetail(
+  agent: DashboardAgentRowData,
+  now: number,
+  lastAssistantMessageOverride?: string,
+  presentation: ProgramStatusPresentation = resolveRowProgramStatus(agent).presentation
+): string {
   // Program-reported blocks need user attention before other row details.
   if (presentation.attention) {
     return programStatusAttentionLine(presentation.attention)
