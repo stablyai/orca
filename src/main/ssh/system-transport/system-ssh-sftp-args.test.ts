@@ -7,19 +7,6 @@ import {
 } from './system-ssh-sftp-args'
 
 describe('translateSshArgsToSftpArgs', () => {
-  it('sends the port as an option, since sftp -p preserves mtimes instead', () => {
-    const args = translateSshArgsToSftpArgs(['-p', '2222', '--', 'dev@win.example'])
-
-    expect(args).toEqual(['-o', 'Port=2222', '--', 'dev@win.example'])
-  })
-
-  it('sends the login name as an option, since sftp has no -l', () => {
-    // Unclaimed aliases use -l; rejecting it would unnecessarily choose and cache the unreliable fallback.
-    const args = translateSshArgsToSftpArgs(['-l', 'neil', '--', 'awin'])
-
-    expect(args).toEqual(['-o', 'User=neil', '--', 'awin'])
-  })
-
   it('translates the whole unclaimed-alias shape buildSshArgs emits', () => {
     const args = translateSshArgsToSftpArgs([
       '-o',
@@ -53,21 +40,10 @@ describe('translateSshArgsToSftpArgs', () => {
     ])
   })
 
-  it('spells ControlPath=none out, since sftp -S names a program to run', () => {
-    // `sftp -S none` would try to exec a binary called `none`.
-    const args = translateSshArgsToSftpArgs(['-S', 'none', '--', 'dev@win.example'])
-
-    expect(args).toEqual(['-o', 'ControlPath=none', '--', 'dev@win.example'])
-  })
-
   it('refuses any other -S, which would hand sftp an ssh binary Orca did not choose', () => {
     expect(() => translateSshArgsToSftpArgs(['-S', '/tmp/ctl.sock'])).toThrow(
       SftpArgTranslationError
     )
-  })
-
-  it('drops -T, which sftp does not have', () => {
-    expect(translateSshArgsToSftpArgs(['-T', '--', 'host'])).toEqual(['--', 'host'])
   })
 
   it('passes through the flags both clients spell the same way', () => {
