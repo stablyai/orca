@@ -50,7 +50,8 @@ vi.mock('@/store', async () => {
       ptyIdsByTabId: {},
       browserTabsByWorktree: {},
       worktreesByRepo: {},
-      repos: []
+      repos: [],
+      workspaceGridViewMemberIds: []
     }))
   }
 })

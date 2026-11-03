@@ -66,6 +66,7 @@ async function addRepoWorktree(page: Page, repoPath: string): Promise<[string, s
 }
 
 test('shows two workspaces side by side and moves focus between them', async ({ orcaPage }) => {
+  // Waits for a live terminal, then opens a never-opened worktree whose first tab spawns a shell.
   test.setTimeout(120_000)
   await waitForSessionReady(orcaPage)
   const originalId = await waitForActiveWorktree(orcaPage)
@@ -111,6 +112,7 @@ test('shows two workspaces side by side and moves focus between them', async ({ 
 })
 
 test('shows workspaces from different projects side by side', async ({ orcaPage }) => {
+  // Creates and registers a second git project, then opens its worktree's first terminal.
   test.setTimeout(120_000)
   await waitForSessionReady(orcaPage)
   const firstWorktreeId = await waitForActiveWorktree(orcaPage)
