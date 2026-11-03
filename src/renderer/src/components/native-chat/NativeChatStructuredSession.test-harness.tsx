@@ -11,8 +11,7 @@ import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
-
-import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+import type { NativeChatQuestionCardProps } from './native-chat-question-card-props'
 import type {
   NativeChatLaunchSeed,
   NativeChatStructuredComposerTransport

@@ -52,6 +52,8 @@ You can also switch the same terminal-backed session with **Switch between Chat 
 
 When Claude shows an **AskUserQuestion** (or similar structured permission/question card), Chat UI should render the question card in the transcript so you can answer from the composer path instead of treating it as a collapsed tool call. Confirm with **Submit** on the card. That includes agents running on a paired [Remote Orca Server](/docs/remote-servers) / headless host — not only local panes.
 
+When the agent replaces a question prompt, the card clears the previous answers and cancels any pending automatic advance. Refreshing the same prompt keeps your selections.
+
 ## Availability
 
 Chat UI ships on desktop for supported local and remote (paired server) agent sessions. The available agents and actions depend on the execution host and client capabilities; an older paired host or an unsupported launch can still open in the terminal. The [mobile companion](/docs/mobile) reuses chat-style transcript patterns for paired sessions; the desktop menu steps above describe the desktop app.
