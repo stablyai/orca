@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 
-import { linearSettingsForBoardWorktree } from './use-workspace-board-task-status-sync'
+import {
+  linearSettingsForBoardWorktree,
+  clickUpSettingsForBoardWorktree
+} from './use-workspace-board-task-status-sync'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -103,5 +106,25 @@ describe('linearSettingsForBoardWorktree', () => {
     }
 
     expect(idReads).toBeLessThanOrEqual(rows.length * 2)
+  })
+})
+
+describe('clickUpSettingsForBoardWorktree', () => {
+  it('prefers the saved ClickUp task source context over workspace owner routing', () => {
+    const source = {
+      kind: 'task-source' as const,
+      provider: 'clickup' as const,
+      projectId: 'proj',
+      hostId: 'local' as const
+    }
+    expect(
+      clickUpSettingsForBoardWorktree(
+        {
+          ...ownedBy('runtime:env-b'),
+          getKnownWorktreeById: () => ({ linkedTaskSourceContext: source })
+        },
+        WORKTREE_ID
+      )
+    ).toEqual({ activeRuntimeEnvironmentId: null })
   })
 })

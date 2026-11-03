@@ -143,6 +143,16 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
 
+      const linkedClickUpTaskId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickupIdentifier
+          : undefined
+
+      const linkedClickUpWorkspaceId =
+        submitLinkedWorkItem && submitLinkedWorkItemProvider === 'clickup'
+          ? submitLinkedWorkItem.clickupWorkspaceId
+          : undefined
+
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride: submitBranchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -189,6 +199,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId,
         effectiveBranchNameOverride,
         branchIntent:
           smartGitHubResolution.kind === 'none' &&

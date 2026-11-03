@@ -12,6 +12,11 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import type { RuntimeClickUpSettings } from '@/runtime/runtime-clickup-client'
+import {
+  normalizeStoredTaskSourceContext,
+  getTaskSourceRuntimeSettings
+} from '../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import type {
   WorkspaceStatus,
@@ -28,36 +33,78 @@ import {
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
     case 'issue-read-failed':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskReadFailed',
+          'ClickUp task {{value0}} could not be read.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.c1d2e3f4a5',
         'Linear issue {{value0}} could not be read.',
         { value0: message.issueIdentifier }
       )
     case 'missing-workflow-state':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpStatusMissing',
+          'No matching ClickUp status for {{value0}}.',
+          { value0: message.statusLabel }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.d2e3f4a5b6',
         'No matching Linear workflow state for {{value0}}.',
         { value0: message.statusLabel }
       )
     case 'ambiguous-workflow-state':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpStatusAmbiguous',
+          'Multiple ClickUp statuses match {{value0}}.',
+          { value0: message.statusLabel }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.e3f4a5b6c7',
         'Multiple Linear workflow states match {{value0}}.',
         { value0: message.statusLabel }
       )
     case 'update-failed':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskUpdateFailed',
+          'Could not update ClickUp task {{value0}}.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.f4a5b6c7d8',
         'Could not update Linear issue {{value0}}.',
         { value0: message.issueIdentifier }
       )
     case 'provider-error':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpTaskSyncFailed',
+          'Could not sync ClickUp task {{value0}}.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.a5b6c7d8e9',
         'Could not sync Linear issue {{value0}}.',
         { value0: message.issueIdentifier }
       )
     case 'owner-ambiguous':
+      if (message.provider === 'ClickUp') {
+        return translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.clickUpOwnerAmbiguous',
+          'Skipped ClickUp task {{value0}}: this workspace is on more than one host.',
+          { value0: message.issueIdentifier }
+        )
+      }
       return translate(
         'auto.components.sidebar.WorkspaceKanbanDrawer.f0a1b2c3d4',
         'Skipped Linear issue {{value0}}: this workspace is on more than one host.',
@@ -151,6 +198,26 @@ export function linearSettingsForBoardWorktree(
   return target
 }
 
+export function clickUpSettingsForBoardWorktree(
+  state: WorktreeOperationRouteState & {
+    getKnownWorktreeById: (worktreeId: string) => { linkedTaskSourceContext?: unknown } | undefined
+  },
+  worktreeId: string
+): RuntimeClickUpSettings | null {
+  const source = normalizeStoredTaskSourceContext(
+    state.getKnownWorktreeById(worktreeId)?.linkedTaskSourceContext
+  )
+  if (source?.provider === 'clickup') {
+    return getTaskSourceRuntimeSettings(source)
+  }
+  const target = getRuntimeTargetForWorktreeOwner(state, worktreeId)
+  if (!target) {
+    warnAmbiguousOwnerOnce(worktreeId, 'sync a board task status')
+    return null
+  }
+  return target
+}
+
 export function useWorkspaceBoardTaskStatusSync(args: {
   enabled: boolean
   /** Board cards by host identity, so each same-id copy syncs through its own host. */
@@ -177,6 +244,12 @@ export function useWorkspaceBoardTaskStatusSync(args: {
           const worktree = args.worktreesByKey.get(key)
           return worktree
             ? linearSettingsForBoardWorktree(useAppStore.getState(), worktree.id, worktree.hostId)
+            : null
+        },
+        getClickUpSettingsForWorktree: (key) => {
+          const worktree = args.worktreesByKey.get(key)
+          return worktree
+            ? clickUpSettingsForBoardWorktree(useAppStore.getState(), worktree.id)
             : null
         },
         getLatestWorkspaceStatus: (key) => {

@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import type { TaskPageSourceAvailabilityPreludeModel } from './use-task-page-source-availability'
 import { useMemo } from 'react'
 import type { TaskProvider } from '../../../../shared/task-providers'
@@ -12,6 +13,12 @@ import { getRepoBackedProviderAvailability } from '@/components/task-source-prov
 import { getTaskSourceAvailabilityNotice } from '../task-source-context-summary'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
+  const clickUpStatus = useAppStore((state) => state.clickUpStatus)
+  const workspaces = clickUpStatus.workspaces ?? []
+  const workspaceId =
+    clickUpStatus.selectedWorkspaceId ?? clickUpStatus.activeWorkspaceId ?? workspaces[0]?.id
+  const clickUpWorkspaceName =
+    workspaces.find((workspace) => workspace.id === workspaceId)?.name ?? null
   const {
     preflightStatus,
     preflightStatusChecked,
@@ -95,6 +102,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      clickup:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('clickup'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -115,11 +129,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'clickup'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'clickup'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById
@@ -148,6 +162,6 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
   nextModel.taskSourceAvailabilityNoticeByProvider = taskSourceAvailabilityNoticeByProvider
   nextModel.taskSourceAvailabilityNotice = taskSourceAvailabilityNotice
   nextModel.githubEmptyState = githubEmptyState
-  return nextModel
+  return Object.assign(nextModel, { clickUpWorkspaceName })
 }
 export type TaskPageSourceSummaryModel = ReturnType<typeof useTaskPageSourceSummary>

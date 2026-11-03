@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { getExecutionHostLabel } from '../../../shared/execution-host'
-import type { ExecutionHostScope } from '../../../shared/execution-host'
+import { getExecutionHostLabel, type ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/task-providers'
@@ -49,7 +48,6 @@ function getHostLabel(hostId: ExecutionHostScope, hostLabelById: HostLabelLookup
 type RepoBackedTaskSourceSummaryArgs = {
   providerLabel: string
   repoContexts: readonly TaskSourceContext[]
-  /** Resolved list sources; null names no repository. Saved project identity is not the list's source. */
   repoIdentities: readonly (TaskProviderIdentity | null)[]
   hostAvailability?: readonly TaskSourceHostAvailability[]
   hostLabelById?: HostLabelLookup
@@ -60,12 +58,13 @@ export function getTaskSourceContextSummary(
   args:
     | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
     | {
-        provider: Extract<TaskProvider, 'linear' | 'jira'>
+        provider: Extract<TaskProvider, 'linear' | 'jira' | 'clickup'>
         providerLabel: string
         hostAvailability?: readonly TaskSourceHostAvailability[]
         hostLabelById?: HostLabelLookup
         accountHostId?: ExecutionHostScope | null
         linearWorkspaceName?: string | null
+        clickUpWorkspaceName?: string | null
         jiraSiteName?: string | null
       }
 ): TaskSourceContextSummary {
@@ -76,6 +75,13 @@ export function getTaskSourceContextSummary(
     case 'linear':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
         accountLabel: args.linearWorkspaceName,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
+    case 'clickup':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: args.clickUpWorkspaceName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -225,6 +231,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'clickup':
+      return identity.listName ?? identity.listId ?? identity.workspaceName ?? null
   }
 }
 

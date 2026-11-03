@@ -1,5 +1,3 @@
-import type { QuickCreationExecutionInput } from './composer-model'
-
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -14,6 +12,7 @@ import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import type { QuickCreationExecutionInput } from './quick-creation-execution-input'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -82,6 +81,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId,
         effectiveBranchNameOverride,
         branchIntent,
         submitBaseBranch,
@@ -194,6 +195,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
+        linkedClickUpTaskId,
+        linkedClickUpWorkspaceId,
         branchNameOverride: effectiveBranchNameOverride,
         branchIntent,
         parentWorktreeId,

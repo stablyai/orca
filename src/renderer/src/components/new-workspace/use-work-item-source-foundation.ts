@@ -48,6 +48,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     getCachedWorkItems,
     linearStatus: defaultLinearStatus,
     linearStatusChecked: defaultLinearStatusChecked,
+    clickUpConnected,
     linearStatusContextKey,
     listLinearIssues,
     preflightStatus,
@@ -67,6 +68,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
+      clickUpConnected: s.clickUpStatus.connected === true,
       linearStatusContextKey: s.linearStatusContextKey,
       listLinearIssues: s.listLinearIssues,
       preflightStatus: s.preflightStatus,
@@ -218,7 +220,8 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     linearStatusChecked: hasLinearSearchSource || linearStatusChecked,
     linearStatusPending: hasLinearSearchSource && !linearConnection.loaded,
     checkLinearConnection,
-    jiraSourceConnected
+    jiraSourceConnected,
+    clickUpModeAvailable: props.clickUpEnabled === true && clickUpConnected
   })
   const linearUrlIntentOwnsInput =
     parseBoundedSmartWorkspaceLinearIssueUrlIntent(value) !== null &&

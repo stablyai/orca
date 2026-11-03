@@ -16,6 +16,7 @@ import { useSmartWorkspaceGithubSearch } from './use-smart-workspace-github-sear
 import { useSmartWorkspaceGitlabSearch } from './use-smart-workspace-gitlab-search'
 import { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
 import { useSmartWorkspaceSecondarySearches } from './use-smart-workspace-secondary-searches'
+import { useClickUpSourceSearch } from './use-clickup-source-search'
 
 export function useWorkItemSourceSearch({
   jiraSourceContext = null,
@@ -118,10 +119,20 @@ export function useWorkItemSourceSearch({
     sourceQueryWithinLimit,
     shouldQueryGitlab
   })
+  const clickUp = useClickUpSourceSearch({
+    enabled: props.clickUpEnabled === true && !disabled && !textOnly,
+    mode: foundation.mode,
+    debouncedQuery: foundation.debouncedQuery,
+    sourceQueryWithinLimit: sourceQueryWithinLimit && !foundation.jiraSource.intent,
+    selectedRepo: foundation.selectedRepo
+  })
   const presentation = useWorkItemSourcePresentation(foundation, {
     linearUrlIntent,
     linearUrlIntentOwnsInput,
-    linearQuery
+    linearQuery,
+    clickUpAvailable: clickUp.clickUpAvailable,
+    clickUpTasks: clickUp.clickUpTasks,
+    clickUpLoading: clickUp.clickUpLoading
   })
   const resolveRow = useCallback(
     (row: (typeof presentation.rows)[number]) =>
@@ -147,6 +158,7 @@ export function useWorkItemSourceSearch({
   return {
     ...foundation,
     ...presentation,
+    clickUpSourceContext: clickUp.clickUpSourceContext,
     resolveRow,
     linearStatusId: foundation.linearStatusId
   }

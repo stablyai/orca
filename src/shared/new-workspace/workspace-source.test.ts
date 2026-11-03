@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
@@ -66,6 +67,20 @@ describe('workspace source policy', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     })
+  })
+
+  it.each([
+    ['https://app.clickup.com/t/86abc123', '86abc123'],
+    ['https://app.clickup.com/t/123/CU-12', 'CU-12']
+  ])('stores the ClickUp identifier represented by %s', (url, clickupIdentifier) => {
+    expect(
+      buildClickUpWorkspaceSource({
+        id: '86abc123',
+        customId: 'CU-12',
+        name: 'Fix export',
+        url
+      })
+    ).toMatchObject({ clickupIdentifier })
   })
 
   it('preserves global work-item sources across repo changes', () => {

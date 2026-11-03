@@ -125,7 +125,12 @@ export function workspaceReferenceReview(
   item: WorkspaceAttachment,
   details: WorkspaceReferenceDetails | undefined
 ): WorktreeCardPrDisplay | null {
-  if (item.provider === 'linear' || item.provider === 'jira' || item.type === 'issue') {
+  if (
+    item.provider === 'linear' ||
+    item.provider === 'jira' ||
+    item.provider === 'clickup' ||
+    item.type === 'issue'
+  ) {
     return null
   }
   return (

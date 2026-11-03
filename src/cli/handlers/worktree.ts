@@ -45,7 +45,7 @@ import {
   getWorkspaceKeyParentSelector,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
-import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { getOptionalTaskLinkFlags } from './worktree-task-link-flags'
 import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
@@ -166,7 +166,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         cwdContext = {}
       }
     }
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const taskLinks = getOptionalTaskLinkFlags(flags)
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
     const repoTarget: CliRepoTarget = cwdContext.repoId
@@ -188,7 +188,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       branchNameOverride,
       ...reviewLinks,
-      ...linearIssueLink,
+      ...taskLinks,
       ...(linkedItems ? { linkedItems } : {}),
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
@@ -234,16 +234,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     }
     const isUnread = getOptionalWorktreeUnreadFlag(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
-    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
-      allowNull: true
-    })
+    const taskLinks = getOptionalTaskLinkFlags(flags, { allowNull: true })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
-      ...linearIssueLink,
+      ...taskLinks,
       // An explicit empty value clears the stored comment.
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),

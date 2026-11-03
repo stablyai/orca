@@ -9,6 +9,7 @@ import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
 } from '@/components/integrations/source-control/cli-source-control-integration-cards'
+import { ClickUpIntegrationCard } from '@/components/integrations/task-trackers/clickup-integration-card'
 import { JiraIntegrationCard } from '@/components/integrations/task-trackers/jira-integration-card'
 import { LinearIntegrationCard } from '@/components/integrations/task-trackers/linear-integration-card'
 import {
@@ -142,7 +143,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
                 i18n={i18n}
                 defaults={translate(
                   'auto.components.feature.wall.ConnectIntegrationsList.codeHostTasksSummary',
-                  '<provider>{{provider}}</provider> issues available as tasks · add Linear or Jira if your team plans work there',
+                  '<provider>{{provider}}</provider> issues available as tasks · add Linear, ClickUp, or Jira if your team plans work there',
                   { provider: status.codeHostTaskProviderName }
                 )}
                 components={{ provider: <span className="font-semibold text-foreground" /> }}
@@ -159,6 +160,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
         >
           <IntegrationCardGroup>
             <LinearIntegrationCard />
+            <ClickUpIntegrationCard />
             <JiraIntegrationCard />
           </IntegrationCardGroup>
           <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">

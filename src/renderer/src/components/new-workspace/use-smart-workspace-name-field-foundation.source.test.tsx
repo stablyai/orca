@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     checkLinearConnection: vi.fn(),
     linearStatus: { connected: false, viewer: null, selectedWorkspaceId: 'focused-workspace' },
     linearStatusChecked: true,
+    clickUpStatus: { connected: false, viewer: null },
     linearStatusContextKey: 'local#0',
     settings: null,
     preflightStatus: null,

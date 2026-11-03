@@ -16,8 +16,7 @@ import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../github'
 import { registerGitLabHandlers } from '../gitlab'
 import { registerHostedReviewHandlers } from '../hosted-review'
-import { registerLinearHandlers } from '../linear/register-handlers'
-import { registerJiraHandlers } from '../jira/register-handlers'
+import { registerTaskTrackerHandlers } from './register-task-tracker-handlers'
 import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../bitbucket'
 import { registerFeedbackHandlers } from '../feedback'
@@ -202,8 +201,7 @@ export function registerCoreHandlers(
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
-  registerLinearHandlers()
-  registerJiraHandlers()
+  registerTaskTrackerHandlers()
   registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
   registerBitbucketHandlers()
   registerFeedbackHandlers()

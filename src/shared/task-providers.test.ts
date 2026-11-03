@@ -2,10 +2,28 @@ import { describe, expect, it } from 'vitest'
 import {
   filterAvailableTaskProviders,
   normalizeTaskProviderSettings,
+  normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider
 } from './task-providers'
 
 describe('task providers', () => {
+  it('normalizes provider lists while preserving supported order', () => {
+    expect(normalizeVisibleTaskProviders(['gitlab', 'unknown', 'gitlab', 'linear'])).toEqual([
+      'gitlab',
+      'linear'
+    ])
+  })
+
+  it('falls back to all providers when none are visible', () => {
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'clickup'
+    ])
+  })
+
   it('restores a valid saved default when provider settings drifted', () => {
     expect(
       normalizeTaskProviderSettings({

@@ -36,6 +36,8 @@ export type QuickCreationRequestInput = {
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
+  linkedClickUpTaskId: string | undefined
+  linkedClickUpWorkspaceId: string | undefined
   branchNameOverride: string | undefined
   branchIntent?: WorktreeCreationRequest['branchIntent']
   parentWorktreeId: string | null
@@ -104,6 +106,10 @@ export function buildQuickCreationRequest(
       : {}),
     ...(input.linkedLinearIssueOrganizationUrlKey !== undefined
       ? { linkedLinearIssueOrganizationUrlKey: input.linkedLinearIssueOrganizationUrlKey }
+      : {}),
+    ...(input.linkedClickUpTaskId ? { linkedClickUpTaskId: input.linkedClickUpTaskId } : {}),
+    ...(input.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: input.linkedClickUpWorkspaceId }
       : {}),
     ...(input.branchNameOverride ? { branchNameOverride: input.branchNameOverride } : {}),
     ...(input.branchIntent ? { branchIntent: input.branchIntent } : {}),

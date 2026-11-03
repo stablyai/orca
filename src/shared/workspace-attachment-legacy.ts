@@ -15,7 +15,8 @@ export const WORKSPACE_ATTACHMENT_NUMBER_SLOTS = [
 export const WORKSPACE_ATTACHMENT_LEGACY_FIELDS = [
   ...WORKSPACE_ATTACHMENT_NUMBER_SLOTS.map(([slot]) => [slot] as const),
   ['linkedLinearIssue', 'linkedLinearIssueWorkspaceId', 'linkedLinearIssueOrganizationUrlKey'],
-  ['linkedWorkItem', 'linkedTaskSourceContext']
+  ['linkedWorkItem', 'linkedTaskSourceContext'],
+  ['linkedClickUpTaskId', 'linkedClickUpWorkspaceId']
 ] as const
 
 export type WorkspaceAttachmentMetadata = Partial<
@@ -78,6 +79,17 @@ export function legacyWorkspaceAttachments(
       linearIdentifier: meta.linkedLinearIssue ?? undefined,
       linearWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? undefined,
       linearOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? undefined
+    })
+  }
+  if (meta.linkedClickUpTaskId?.trim()) {
+    items.push({
+      provider: 'clickup',
+      type: 'issue',
+      number: 0,
+      identifier: meta.linkedClickUpTaskId,
+      clickupIdentifier: meta.linkedClickUpTaskId,
+      clickupWorkspaceId: meta.linkedClickUpWorkspaceId ?? undefined,
+      taskSourceContext: meta.linkedTaskSourceContext
     })
   }
   return normalizeWorkspaceAttachments(items)

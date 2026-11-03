@@ -23,7 +23,7 @@ export function deriveIntegrationStepStates(input: {
 
 export function deriveIntegrationFlowState(input: {
   reviewConnected: boolean
-  trackerProviderName: 'Linear' | 'Jira' | null
+  trackerProviderName: 'Linear' | 'ClickUp' | 'Jira' | null
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   trackerChecking: boolean
 }): {
@@ -82,6 +82,9 @@ type ProviderStatusFacts = {
   jiraStatus: { connected?: boolean }
   jiraStatusChecked: boolean
   jiraStatusContextKey: string | null
+  clickUpStatus?: { connected?: boolean }
+  clickUpStatusChecked?: boolean
+  clickUpStatusContextKey?: string | null
   providerRuntimeContextKey: string
 }
 
@@ -90,13 +93,9 @@ export type IntegrationConnectionStatus = {
   reviewProviderName: 'GitHub' | 'GitLab' | 'Bitbucket' | 'Azure DevOps' | 'Gitea' | null
   // GitHub/GitLab issues can double as tasks; token/env review providers do not.
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
-  // Any usable task source, including code-host issues, satisfies this legacy-named field.
   trackerConnected: boolean
-  // Dedicated trackers only; code hosts use reviewProviderName.
-  trackerProviderName: 'Linear' | 'Jira' | null
-  // Include all usable sources, trackers first, for complete connection summaries.
-  taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
-  // True while the code-host check is unresolved, stale or loading.
+  trackerProviderName: 'Linear' | 'ClickUp' | 'Jira' | null
+  taskSourceNames: ('Linear' | 'ClickUp' | 'Jira' | 'GitHub' | 'GitLab')[]
   reviewChecking: boolean
   trackerChecking: boolean
   // Treat unresolved checks as unknown to avoid flashing disconnected summaries.
@@ -151,11 +150,23 @@ export function deriveIntegrationConnectionStatus(
 
   const linearStatusCurrent = facts.linearStatusContextKey === facts.providerRuntimeContextKey
   const jiraStatusCurrent = facts.jiraStatusContextKey === facts.providerRuntimeContextKey
+  const clickUpFactsPresent =
+    facts.clickUpStatus !== undefined ||
+    facts.clickUpStatusChecked !== undefined ||
+    facts.clickUpStatusContextKey !== undefined
+  const clickUpStatusCurrent =
+    !clickUpFactsPresent || facts.clickUpStatusContextKey === facts.providerRuntimeContextKey
   const linearChecking = !linearStatusCurrent || !facts.linearStatusChecked
   const jiraChecking = !jiraStatusCurrent || !facts.jiraStatusChecked
+  // Why: older embedded consumers omit ClickUp facts entirely; absence means
+  // unsupported/settled rather than leaving their integration flow pending.
+  const clickUpChecking =
+    clickUpFactsPresent && (!clickUpStatusCurrent || facts.clickUpStatusChecked !== true)
   const linearConnected =
     !linearChecking && linearStatusCurrent && facts.linearStatus.connected === true
   const jiraConnected = !jiraChecking && jiraStatusCurrent && facts.jiraStatus.connected === true
+  const clickUpConnected =
+    !clickUpChecking && clickUpStatusCurrent && facts.clickUpStatus?.connected === true
 
   const reviewProviderName = githubConnected
     ? 'GitHub'
@@ -169,16 +180,23 @@ export function deriveIntegrationConnectionStatus(
             ? 'Gitea'
             : null
   const codeHostTaskProviderName = githubConnected ? 'GitHub' : gitlabConnected ? 'GitLab' : null
-  const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : null
+  const trackerProviderName = linearConnected
+    ? 'Linear'
+    : clickUpConnected
+      ? 'ClickUp'
+      : jiraConnected
+        ? 'Jira'
+        : null
   const taskSourceNames: IntegrationConnectionStatus['taskSourceNames'] = [
     ...(linearConnected ? (['Linear'] as const) : []),
+    ...(clickUpConnected ? (['ClickUp'] as const) : []),
     ...(jiraConnected ? (['Jira'] as const) : []),
     ...(githubConnected ? (['GitHub'] as const) : []),
     ...(gitlabConnected ? (['GitLab'] as const) : [])
   ]
   const hasUsableTaskSource = taskSourceNames.length > 0
-  // Parent readiness needs one task source; the code-host acknowledgement waits for trackers to choose accurate copy.
-  const trackerChecking = trackerProviderName === null && (linearChecking || jiraChecking)
+  const trackerChecking =
+    trackerProviderName === null && (linearChecking || clickUpChecking || jiraChecking)
 
   return {
     reviewConnected:
@@ -210,6 +228,9 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const clickUpStatus = useAppStore((s) => s.clickUpStatus)
+  const clickUpStatusChecked = useAppStore((s) => s.clickUpStatusChecked)
+  const clickUpStatusContextKey = useAppStore((s) => s.clickUpStatusContextKey)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -230,6 +251,9 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    clickUpStatus,
+    clickUpStatusChecked,
+    clickUpStatusContextKey,
     providerRuntimeContextKey
   })
 }

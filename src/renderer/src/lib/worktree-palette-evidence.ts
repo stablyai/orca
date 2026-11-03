@@ -205,7 +205,12 @@ export function buildWorktreePortEvidence(
 export function buildWorktreeAttachmentEvidence(
   item: WorkspaceAttachment
 ): PaletteComposedEvidence | null {
-  if (item.type !== 'issue' && item.provider !== 'linear' && item.provider !== 'jira') {
+  if (
+    item.type !== 'issue' &&
+    item.provider !== 'linear' &&
+    item.provider !== 'jira' &&
+    item.provider !== 'clickup'
+  ) {
     return buildWorktreeReviewEvidence({
       provider: item.provider,
       number: item.number,

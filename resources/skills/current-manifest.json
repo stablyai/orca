@@ -66,6 +66,22 @@
       ]
     },
     {
+      "name": "orca-clickup",
+      "sourcePath": "skills/orca-clickup",
+      "packageDigest": "adbe199e9424c097ccccdbfdd18c438adc31301a856c6ec5c539ba99f349a38a",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 6017,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "2f0ea2223edc1e15200e753855a9845b4aa6611020da0a1bebe0d65c146f8f94",
+          "textNormalizedSha256": "2f0ea2223edc1e15200e753855a9845b4aa6611020da0a1bebe0d65c146f8f94",
+          "identitySha256": "2f0ea2223edc1e15200e753855a9845b4aa6611020da0a1bebe0d65c146f8f94"
+        }
+      ]
+    },
+    {
       "name": "orca-emulator",
       "sourcePath": "skills/orca-emulator",
       "packageDigest": "1dc42e5addc613abd85eba639d4ac36d9c7b3bc6f7186f0a2d54d10dae3f06d3",

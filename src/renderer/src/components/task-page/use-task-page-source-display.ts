@@ -7,6 +7,7 @@ import { getGitHubProjectSourceSummary } from './task-page-source-context'
 
 type TaskPageSourceDisplayInput = TaskPageLinearCreationStateModel & {
   activeGithubTaskKind: GitHubTaskKind
+  clickUpWorkspaceName?: string | null
 }
 
 /** The Tasks source claims (summary, repo link) come from the list's resolved sources once mode and kind are known. */
@@ -26,6 +27,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     hostLabelById,
     selectedLinearWorkspace,
     selectedJiraSite,
+    clickUpWorkspaceName,
     activeGithubTaskKind
   } = model
   // Why strict kind: Issues and PRs resolve independently; the other kind's repo is not this list's source.
@@ -51,7 +53,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
         hostLabelById
       })
     }
-    if (taskSource === 'linear' || taskSource === 'jira') {
+    if (taskSource === 'linear' || taskSource === 'jira' || taskSource === 'clickup') {
       return getTaskSourceContextSummary({
         provider: taskSource,
         providerLabel,
@@ -59,6 +61,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
         accountHostId: accountBackedTaskSourceHostId,
         hostLabelById,
         linearWorkspaceName,
+        clickUpWorkspaceName,
         jiraSiteName
       })
     }
@@ -80,6 +83,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
   }, [
     accountBackedTaskSourceHostAvailability,
     accountBackedTaskSourceHostId,
+    clickUpWorkspaceName,
     githubActiveSources,
     githubMode,
     hostLabelById,

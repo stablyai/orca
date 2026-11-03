@@ -7,6 +7,7 @@ import {
   GitHubIntegrationCard,
   GitLabIntegrationCard
 } from '../../integrations/source-control/cli-source-control-integration-cards'
+import { ClickUpIntegrationCard } from '../../integrations/task-trackers/clickup-integration-card'
 import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integration-card'
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
@@ -53,6 +54,7 @@ export function IntegrationsPane(): React.JSX.Element {
         <div className="space-y-3">
           <LinearIntegrationCard />
           <JiraIntegrationCard />
+          <ClickUpIntegrationCard />
         </div>
       </section>
     </div>

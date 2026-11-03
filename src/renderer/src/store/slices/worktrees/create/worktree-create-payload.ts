@@ -22,6 +22,8 @@ export type CreateWorktreeCallOptions = {
   clientAutomationProvenance?: ClientAutomationWorkspaceProvenance
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  linkedClickUpTaskId?: string
+  linkedClickUpWorkspaceId?: string | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
   startupDraft?: string
   /** A terminal agent the owning host may plan from its own settings; `startup` stays the fallback. */
@@ -37,6 +39,32 @@ export type CreateWorktreeCallOptions = {
     executionHostId: ExecutionHostId
     expectedPath: string
     expectedRefHead?: string
+  }
+}
+
+export function optionalCreateWorktreeLinkOptions(
+  source: Pick<
+    CreateWorktreeCallOptions,
+    | 'linkedWorkItem'
+    | 'linkedTaskSourceContext'
+    | 'linkedClickUpTaskId'
+    | 'linkedClickUpWorkspaceId'
+  >
+): Pick<
+  CreateWorktreeCallOptions,
+  'linkedWorkItem' | 'linkedTaskSourceContext' | 'linkedClickUpTaskId' | 'linkedClickUpWorkspaceId'
+> {
+  return {
+    ...(source.linkedWorkItem !== undefined ? { linkedWorkItem: source.linkedWorkItem } : {}),
+    ...(source.linkedTaskSourceContext !== undefined
+      ? { linkedTaskSourceContext: source.linkedTaskSourceContext }
+      : {}),
+    ...(source.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: source.linkedClickUpTaskId }
+      : {}),
+    ...(source.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: source.linkedClickUpWorkspaceId }
+      : {})
   }
 }
 
@@ -100,6 +128,12 @@ function sharedCreateFields(
       ? {
           linkedLinearIssueOrganizationUrlKey: request.linkedLinearIssueOrganizationUrlKey
         }
+      : {}),
+    ...(options?.linkedClickUpTaskId !== undefined
+      ? { linkedClickUpTaskId: options.linkedClickUpTaskId }
+      : {}),
+    ...(options?.linkedClickUpWorkspaceId !== undefined
+      ? { linkedClickUpWorkspaceId: options.linkedClickUpWorkspaceId }
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
