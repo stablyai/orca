@@ -877,6 +877,7 @@ jobs:
     uses: ./.github/workflows/unit-plan.yml
     with:
       selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+      defer_shadow: true
 
   test:
     needs: [code_paths, unit_plan]
@@ -894,6 +895,7 @@ jobs:
       # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
       module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
       shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: ${{ vars.ORCA_UNIT_SELECTION_MODE == 'selected' && github.event.pull_request.draft == true }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
@@ -903,6 +905,8 @@ jobs:
     needs: [test]
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
+    with:
+      rebuild_plan: true
 
   # Isolate two browser/mobile files to avoid every unit shard paying for their installs; test the same shipped bundle plus render/census.
   mobile_web_app:

@@ -1,13 +1,32 @@
 name: Unit transform cache producer
 
 # Cold full unit run on main that publishes per-shard Vitest transform caches.
-# Dispatch only: PR shards run on hosted runners, which cannot read this Blacksmith-store cache.
+# Match PR architecture and GitHub's cache store; Vitest invalidates edited source modules.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '23 */3 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'config/.bun-version'
+      - 'config/pnpmfile.cjs'
+      - 'config/patches/**'
+      - 'config/vitest.config.ts'
+      - 'config/tsconfig*.json'
+      - 'config/scripts/vitest*'
+      - 'config/scripts/ci-unit-*'
+      - 'config/scripts/run-vitest.mjs'
+      - '.github/workflows/unit-module-cache.yml'
+      - '.github/workflows/unit-tests.yml'
 
 concurrency:
   group: unit-module-cache-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -16,6 +35,8 @@ jobs:
   unit_plan:
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/unit-plan.yml
+    with:
+      defer_shadow: true
 
   test:
     needs: unit_plan
@@ -23,8 +44,9 @@ jobs:
     with:
       # Match the PR unit matrix so the cache key's runtime and shard fields line up.
       node_versions: '["24"]'
-      runner: blacksmith-8vcpu-ubuntu-2404
+      runner: ubuntu-24.04-arm
       shards: ${{ needs.unit_plan.outputs.shards }}
       module_cache: cold
+      download_selection_plan: false
       artifact_prefix: cache-producer-unit
       run_relay_integration: false

@@ -11,23 +11,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  unit_plan:
+    uses: ./.github/workflows/unit-plan.yml
+    with:
+      defer_shadow: true
+
   baseline:
+    needs: unit_plan
     uses: ./.github/workflows/unit-tests.yml
     with:
-      node_versions: '["24.22.1"]'
+      node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: false
       artifact_prefix: baseline-unit
       phase_diagnostics: true
       run_relay_integration: false
 
   producer:
-    needs: baseline
+    needs: [unit_plan, baseline]
     uses: ./.github/workflows/unit-tests.yml
     with:
-      node_versions: '["24.22.1"]'
+      node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: false
       artifact_prefix: producer-unit
       module_cache: cold
       module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -36,12 +44,13 @@ jobs:
       run_relay_integration: false
 
   warm:
-    needs: producer
+    needs: [unit_plan, producer]
     uses: ./.github/workflows/unit-tests.yml
     with:
-      node_versions: '["24.22.1"]'
+      node_versions: '["24"]'
       runner: ubuntu-24.04-arm
-      shards: '[{"index":1,"count":5},{"index":2,"count":5},{"index":3,"count":5},{"index":4,"count":5},{"index":5,"count":5}]'
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: false
       artifact_prefix: warm-unit
       module_cache: warm
       module_cache_namespace: ${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,6 +1,20 @@
-import { appendFileSync, globSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+export function readUnitSelectionRecords(directory, fallbackPlanPath) {
+  return globSync('**/unit-timings.json', { cwd: directory }).map((file) => {
+    const timing = JSON.parse(readFileSync(join(directory, file), 'utf8'))
+    const shardPlan = join(directory, file.replace('unit-timings.json', 'unit-selection.json'))
+    const plan = JSON.parse(
+      readFileSync(
+        existsSync(shardPlan) || !fallbackPlanPath ? shardPlan : fallbackPlanPath,
+        'utf8'
+      )
+    )
+    return { timing, plan }
+  })
+}
 
 export function reviewUnitSelection(records) {
   const groups = new Map()
@@ -80,16 +94,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!directory) {
     throw new Error('Usage: ci-unit-selection-review.mjs ARTIFACT_DIRECTORY')
   }
-  const records = globSync('**/unit-timings.json', { cwd: directory }).map((file) => {
-    const timing = JSON.parse(readFileSync(join(directory, file), 'utf8'))
-    const plan = JSON.parse(
-      readFileSync(
-        join(directory, file.replace('unit-timings.json', 'unit-selection.json')),
-        'utf8'
-      )
-    )
-    return { timing, plan }
-  })
+  const records = readUnitSelectionRecords(directory, process.argv[3])
   if (!records.length) {
     throw new Error('No unit selection evidence')
   }
