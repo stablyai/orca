@@ -4,6 +4,22 @@ import { orchestrationTestContext } from '../orchestration-handler-test-context'
 import { ORCHESTRATION_LINK_HANDLERS } from './session-link-handlers'
 
 describe('link operation recovery errors', () => {
+  it('rejects a missing control turn before RPC without retry guidance', async () => {
+    const call = vi.fn()
+    const context = orchestrationTestContext(
+      call,
+      new Map([
+        ['id', 'pair'],
+        ['action', 'end']
+      ]),
+      true
+    )
+    await expect(
+      ORCHESTRATION_LINK_HANDLERS['orchestration link-control'](context)
+    ).rejects.toThrow(/^Missing required --turn-operation$/)
+    expect(call).not.toHaveBeenCalled()
+  })
+
   for (const command of ['link-send', 'link-control']) {
     it.each(['client', 'rpc'])(`preserves %s error codes and data for ${command}`, async (kind) => {
       const data = { effectsApplied: false, recovery: { query: 'inspect' } }

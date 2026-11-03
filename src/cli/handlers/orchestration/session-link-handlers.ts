@@ -55,6 +55,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
     if (action !== 'stop' && action !== 'end') {
       throw new Error('Agents may only stop or end a link.')
     }
+    const callerOperationId = getRequiredStringFlag(flags, 'turn-operation')
     const operationId = getOptionalStringFlag(flags, 'operation') ?? randomUUID()
     try {
       const observed = await client.call('orchestration.linkShow', { id })
@@ -62,7 +63,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
       const result = await client.call('orchestration.linkControl', {
         id,
         action,
-        callerOperationId: getRequiredStringFlag(flags, 'turn-operation'),
+        callerOperationId,
         version: current.link.version,
         operationId
       })
