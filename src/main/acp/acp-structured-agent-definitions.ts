@@ -19,6 +19,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
   const { managedRuntime } = spec
   return {
     agent: spec.agent,
+    ...(spec.displayName ? { displayName: spec.displayName } : {}),
     handleTransport: ACP_HANDLE_TRANSPORT,
     ...spec.account.pin,
     capabilities: {

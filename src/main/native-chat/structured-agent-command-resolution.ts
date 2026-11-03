@@ -2,7 +2,7 @@ import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
   resolveCliCommand,
   resolveExecutableCommand
@@ -42,10 +42,13 @@ type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
 
 function resolveOverride(
-  agent: TuiAgent,
+  agent: string,
   settings: CommandSettings | null | undefined,
   options: CommandOptions
 ) {
+  if (!isTuiAgent(agent)) {
+    return null
+  }
   const plan = structuredAgentCommandPlan(
     settings?.agentCmdOverrides?.[agent] ?? '',
     options.platform ?? process.platform
@@ -78,12 +81,12 @@ export type StructuredAgentCommand = { command: string; prefixArgs: string[] }
 
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
-  agent: TuiAgent,
+  agent: string,
   settings: CommandSettings,
   options: CommandOptions = {},
   stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
 ): StructuredAgentCommand {
-  if (!hasExplicitTuiLaunchCommand(settings, agent)) {
+  if (!isTuiAgent(agent) || !hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)

@@ -1,5 +1,6 @@
 import type { buildNewTabAgentMenuRows } from '@/lib/new-tab-agent-menu-rows'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
+import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import type { AgentPickerDefaultSettings } from '../../../../shared/agent-launch-picker'
@@ -8,6 +9,7 @@ export type NewTabAgentMenuModel =
   | { state: 'loading'; placeholderCount: number }
   | {
       state: 'settled'
+      customChats?: TabCreateMenuOption[]
       rows: ReturnType<typeof buildNewTabAgentMenuRows>
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
@@ -64,6 +66,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
       x?.settings?.agentPermissionOverrides,
       x?.settings?.nativeChatSessionOptions,
       x?.settings?.nativeChatPermissionMode,
+      ...(a.customChats ?? []).map((option) => option.id),
       ...(a.detection.detectedIds ?? []),
       ...a.rows.flatMap((row) => [
         row.agent,
@@ -91,6 +94,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
       y?.settings?.agentPermissionOverrides,
       y?.settings?.nativeChatSessionOptions,
       y?.settings?.nativeChatPermissionMode,
+      ...(b.customChats ?? []).map((option) => option.id),
       ...(b.detection.detectedIds ?? []),
       ...b.rows.flatMap((row) => [
         row.agent,

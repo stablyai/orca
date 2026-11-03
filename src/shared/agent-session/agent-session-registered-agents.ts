@@ -9,6 +9,7 @@ export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 
 export type AgentSessionRegisteredAgent = {
   agent: string
+  displayName?: string
   capabilities: AgentSessionCapabilities
   /** Host-provided program needs no installed CLI; older hosts omit this and require CLI detection. */
   managedRuntime?: true
@@ -26,6 +27,7 @@ const capabilityFlag = z.boolean().optional().default(false)
 
 const registeredAgentSchema = z.object({
   agent: z.string().refine(isStructuredAgentId),
+  displayName: z.string().trim().min(1).max(128).optional().catch(undefined),
   capabilities: z.object({
     rewind: capabilityFlag,
     compact: capabilityFlag,

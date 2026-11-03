@@ -8,7 +8,7 @@ import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
 import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
-import type { TuiAgent } from '../../shared/tui-agent'
+import { loadCustomAcpLaunchSpecs } from './custom-acp-launch-specs'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import type { InitializeResponse } from './generated/acp-protocol.generated'
@@ -93,7 +93,8 @@ export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean
 }
 
 export type AcpLaunchSpec = {
-  agent: TuiAgent
+  agent: string
+  displayName?: string
   command: string
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
@@ -302,7 +303,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
-  ANTIGRAVITY_LAUNCH_SPEC
+  ANTIGRAVITY_LAUNCH_SPEC,
+  ...loadCustomAcpLaunchSpecs()
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

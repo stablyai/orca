@@ -3,7 +3,6 @@ import {
   agentCliTooOldWords,
   sayAgentSessionFailureEnglish
 } from '../../shared/agent-session/failures/agent-session-failure-copy'
-import type { TuiAgent } from '../../shared/tui-agent'
 import { AgentSessionPreSpawnError } from './agent-session-wire/structured-agent-session-adapter'
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 
@@ -16,7 +15,7 @@ export class AgentCliInstallationError extends AgentSessionPreSpawnError {
   }
 
   static tooOld(
-    agent: TuiAgent,
+    agent: string,
     check: { version: string; minimumVersion: string }
   ): AgentCliInstallationError {
     return new AgentCliInstallationError({

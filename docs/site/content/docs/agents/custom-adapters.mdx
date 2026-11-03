@@ -1,0 +1,77 @@
+---
+title: Custom agent adapters
+description: Connect your own ACP-speaking agent to Orca Chat UI.
+---
+
+You can register your own agent by running an adapter executable that speaks **Agent Client
+Protocol (ACP) v1 over stdio**. Orca uses the same Chat UI, journal, permission cards and process
+supervisor as its built-in ACP agents. A CLI with a different protocol needs a bridge that
+translates it to ACP.
+
+## Register adapters on the execution host
+
+Create a JSON file outside your project, using absolute paths for account directories:
+
+```json
+{
+  "apiVersion": 1,
+  "agents": [
+    {
+      "id": "custom-reviewer",
+      "name": "Company reviewer",
+      "command": "company-agent-adapter",
+      "args": ["--stdio"],
+      "env": { "REVIEW_API_URL": "https://agents.example.com" },
+      "account": {
+        "variable": "REVIEWER_HOME",
+        "directory": "/absolute/path/to/reviewer-account"
+      }
+    }
+  ]
+}
+```
+
+Set `ORCA_CUSTOM_AGENT_ADAPTERS` to the absolute path of this file **when starting the Orca
+execution host**. For development:
+
+```bash
+ORCA_CUSTOM_AGENT_ADAPTERS=/absolute/path/to/adapters.json pnpm dev
+```
+
+On Windows, set `$env:ORCA_CUSTOM_AGENT_ADAPTERS = 'C:\absolute\adapters.json'` in PowerShell
+before starting Orca. Restart the executing runtime after changing the file. A paired server
+reads its own file and runs its own adapters; the client does not upload executables,
+configuration paths or credentials.
+
+An ID must start with `custom-` and contain lowercase letters, digits, hyphens or underscores.
+Keep it stable for session restoration. Use a new ID when replacing an adapter with an
+incompatible protocol or session store. Duplicate IDs, unknown fields, unsupported API versions
+and files over 256 KiB reject the custom roster; built-in agents remain available.
+
+`command` is an absolute executable path or a binary name on the host's PATH. Relative executable
+paths are refused. `args` is literal argv, never a shell command. `account.variable` names the
+environment variable your adapter uses for its configuration and session store. Orca pins that
+directory to each conversation so later configuration changes cannot silently switch its account.
+Do not repeat that variable in `env`. Avoid storing credentials in a project or committing this
+host configuration to a repository.
+
+Only the explicit host startup setting loads adapters. Orca does not discover or execute adapter
+code from workspace files. Configure executables you trust: they run with the host user's access,
+as other agent CLIs do. Orca's approval cards can answer ACP permission requests; they do not
+confine an adapter that acts without asking.
+
+## Open a chat
+
+In a workspace on that host, open the **+** tab menu and choose **Start a chat with Company
+reviewer**. The entry appears after the host finds the executable. New chats start in **Ask for
+approval** mode. The adapter's replies, tools, permission requests and cancellation use Orca's
+normal chat pipeline. Models become available when the adapter reports them in the live session.
+
+Existing conversations retain the adapter ID, provider session ID and pinned account directory
+across restarts. The adapter must implement ACP session loading to continue saved conversations.
+
+This first version supports desktop Chat UI and paired Orca execution hosts. Direct SSH and WSL
+execution without a supervising Orca runtime are unavailable, as for the shared ACP adapter.
+Custom entries do not add terminal presets, automation providers, pre-chat model probes,
+CLI `agent launch` names, or a mobile new-chat picker. Paired clients can read and control
+published sessions through the existing structured-session protocol.
