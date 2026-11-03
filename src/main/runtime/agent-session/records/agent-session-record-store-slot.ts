@@ -4,9 +4,8 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 
 import { existsSync } from 'node:fs'
 import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import { openStructuredAgentSessionJournalDatabase } from '../structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 
@@ -60,6 +59,14 @@ export function openAgentSessionRecordStoreOnce(
     opened: openRecordStore(location).then(
       (opened) => {
         slot.store = opened.store
+        opened.journalDatabase.faultListeners.add(() => {
+          pendingDatabaseClose.add(opened.journalDatabase)
+          slot.store = undefined
+          if (opening === slot) {
+            opening = null
+            sessionCrewChanges.notify()
+          }
+        })
         if (opening === slot) {
           sessionCrewChanges.notify()
         }
@@ -86,11 +93,11 @@ async function openRecordStore(
   location: AgentSessionRecordStoreLocation
 ): Promise<OpenedAgentSessionRecordStore> {
   await closeAgentSessionRecordStoreDatabase()
-  const journalDatabase = openStructuredAgentSessionJournalDatabase(location)
+  const journalDatabase = await openStructuredAgentSessionJournalDatabase(location)
   try {
     return {
       journalDatabase,
-      store: AgentSessionRecordStore.open({
+      store: await AgentSessionRecordStore.open({
         journalDatabase,
         hostId: location.hostId,
         legacySessionTabIds: location.legacySessionTabIds
@@ -113,16 +120,16 @@ export async function releaseAgentSessionRecordStore(): Promise<OpenedAgentSessi
 }
 
 /** Whether this profile holds a structured chat: a record or tab in the journal database. */
-export function hasPersistedStructuredAgentSessionStore(
+export async function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
-): boolean {
+): Promise<boolean> {
   const databasePath = journalDatabasePath(stateDirectory)
   if (!fileExists(databasePath)) {
     return false
   }
   try {
-    return journalDatabaseHoldsAgentSessions(databasePath)
+    return await JournalHostDatabase.holdsSessions(stateDirectory)
   } catch {
     // A database that cannot be read cannot say it is empty.
     return true

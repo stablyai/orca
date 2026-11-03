@@ -163,7 +163,7 @@ async function attach(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: sessionAdapter,
-    openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+    openConversation: openTestAttachConversation(await openTestJournalHostDatabase(root!)),
     authority: {
       spawnToken: 'spawn-a',
       claimKeyId: 'key-1',
@@ -366,7 +366,7 @@ describe('adopting a provider conversation on create', () => {
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter(),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW

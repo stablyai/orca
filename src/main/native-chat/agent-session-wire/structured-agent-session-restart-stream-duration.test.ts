@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -103,7 +104,7 @@ async function restartAfterCrash(): Promise<void> {
   rig.host = new StructuredAgentSessionHost({
     ...old.deps,
     store: rig.store,
-    journalDatabase: openTestJournalHostDatabase(rig.root),
+    journalDatabase: await openTestJournalHostDatabase(rig.root),
     now: () => RESTARTED_AT
   })
 }
@@ -145,6 +146,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
         cursor,
         emit: (event) => events.push(event)
       })
+      await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
       const replayedTurns = events.flatMap((event) => {
         const items =
           event.type === 'snapshot'

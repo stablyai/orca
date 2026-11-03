@@ -106,7 +106,7 @@ async function carryOn(
       await editReleasedCard(journal)
       if (prefix) {
         // The release's rows stay byte for byte; one marker follows them, where records begin.
-        const database = openTestJournalHostDatabase(stateDirectory)
+        const database = await openTestJournalHostDatabase(stateDirectory)
         const rows = liveTestJournalRows(database.db, options.identity.sessionId)
         expect(rows.slice(0, prefix.length)).toEqual(prefix)
         expect(rows).toHaveLength(prefix.length + 1)
@@ -169,7 +169,7 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
         )
         expect(written.cards).toHaveLength(2)
 
-        const database = openTestJournalHostDatabase(directory)
+        const database = await openTestJournalHostDatabase(directory)
         const rows = liveTestJournalRows(database.db, identity.sessionId)
         expect(rows.filter((row) => !parseJournalRow(row.rowJson).ok)).toEqual([])
         // Anti-vacuous: the release wrote every row kind a chat holds (cards in their own table
@@ -191,8 +191,8 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           // A release in the window wrote the shapes this build reads, so it opens as written,
           // and the edit records the card the old rows hold in its place among them.
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
-          const edits = openTestJournalHostDatabase(directory)
-            .db.prepare(`SELECT ordinal FROM journal_outcomes
+          const edits = (await openTestJournalHostDatabase(directory)).db
+            .prepare(`SELECT ordinal FROM journal_outcomes
             WHERE field = 'queue.cards' AND entry_key = '"card-2"'`)
             .all()
           expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })

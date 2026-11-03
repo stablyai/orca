@@ -1,10 +1,10 @@
+import { observeNativeJournalTransactions } from './journal-native-test-instrumentation'
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { journalPragmaNumber } from './journal-database'
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
@@ -47,15 +47,13 @@ export function openJournal(sessionId = 'stream') {
   })
 }
 
-export function commitLevels() {
-  const { db } = openTestJournalHostDatabase(root)
+export async function commitLevels() {
+  const database = await openTestJournalHostDatabase(root)
   const levels: number[] = []
-  const exec = db.exec.bind(db)
-  vi.spyOn(db, 'exec').mockImplementation((sql) => {
+  observeNativeJournalTransactions(database, ({ sql, synchronous }) => {
     if (sql === 'COMMIT') {
-      levels.push(journalPragmaNumber(db, 'synchronous'))
+      levels.push(synchronous)
     }
-    exec(sql)
   })
   return levels
 }

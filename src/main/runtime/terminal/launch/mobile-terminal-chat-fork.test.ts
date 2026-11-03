@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeNotifier } from '../../runtime-notifier-contract'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'

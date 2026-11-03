@@ -9,6 +9,7 @@ import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-sess
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import {
   structuredAgentSessionCurrentWork,
   type StructuredAgentSessionWorkEvidence
@@ -43,7 +44,7 @@ export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
   private readonly byJournal = new WeakMap<
     AgentSessionJournal,
-    StructuredAgentSessionJournalProjection
+    { projection: StructuredAgentSessionJournalProjection; itemIds: ReadonlySet<string> }
   >()
 
   constructor(
@@ -51,6 +52,33 @@ export class StructuredAgentSessionJournalProjections {
       sessionId: string
     ) => StructuredAgentSessionWorkEvidence['replaced']
   ) {}
+
+  /** Creation cards cannot change status unless they replace an item the projection read. */
+  advance(journal: AgentSessionJournal, rows?: readonly JournalRow[]): void {
+    const cached = this.byJournal.get(journal)
+    if (!cached || !rows?.length) {
+      return
+    }
+    const cursor = journal.cursor()
+    if (
+      cached.projection.epoch === cursor.epoch &&
+      rows.at(-1)?.seq === cursor.sequence &&
+      rows.every(
+        (row, index) =>
+          row.epoch === cursor.epoch &&
+          row.seq === cached.projection.sequence + index + 1 &&
+          row.kind === 'item' &&
+          (row.body.kind === 'agent-start' || row.body.kind === 'agent-handoff') &&
+          !Object.hasOwn(row, 'echoOf') &&
+          !cached.itemIds.has(journal.canonicalItemId(row.itemId))
+      )
+    ) {
+      this.byJournal.set(journal, {
+        ...cached,
+        projection: { ...cached.projection, sequence: cursor.sequence }
+      })
+    }
+  }
 
   read(
     journal: AgentSessionJournal,
@@ -73,7 +101,7 @@ export class StructuredAgentSessionJournalProjections {
       revision: seen?.operationalRevision ?? 0
     })
     const stopRevision = journal.stopMarks.revision()
-    let projection = this.byJournal.get(journal)
+    let projection = this.byJournal.get(journal)?.projection
     if (
       !projection ||
       projection.epoch !== cursor.epoch ||
@@ -144,7 +172,10 @@ export class StructuredAgentSessionJournalProjections {
           work.scope
         )
       }
-      this.byJournal.set(journal, projection)
+      this.byJournal.set(journal, {
+        projection,
+        itemIds: new Set(snapshot.items.map((item) => item.itemId))
+      })
     }
     return projection
   }

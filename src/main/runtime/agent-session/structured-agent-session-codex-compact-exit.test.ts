@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

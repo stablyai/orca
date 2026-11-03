@@ -115,9 +115,9 @@ it('adds one row for a death however many attempts its settle takes to write', a
     const turns = () =>
       journal.snapshot().items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     const statusRows = () => journal.snapshot().items.filter((item) => item.body.kind === 'status')
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     const cursor = journal.cursor()
-    database.db.exec(`CREATE TEMP TRIGGER reject_later_stale_settlement
+    database.db.exec(`CREATE TRIGGER reject_later_stale_settlement
       BEFORE INSERT ON journal_rows
       WHEN NEW.session_id = 'session-1' AND NEW.seq > ${cursor.sequence + 1}
         AND json_extract(NEW.row_json, '$.recovered') = 1

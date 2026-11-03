@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'

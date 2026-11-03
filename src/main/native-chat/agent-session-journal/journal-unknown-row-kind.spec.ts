@@ -83,7 +83,7 @@ export function registerJournalUnknownRowKindTests(): void {
     edit: (put: (seq: number, json: string) => void) => void = () => {}
   ) {
     await journals.closeAll()
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = await openTestJournalHostDatabase(root)
     edit((seq, json) => {
       deleteTestJournalRow(db, IDENTITY.sessionId, seq)
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, json, 5_000 + seq)
@@ -96,14 +96,15 @@ export function registerJournalUnknownRowKindTests(): void {
     return open()
   }
 
-  function stored(): { seq: number; rowJson: string }[] {
-    return liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId).map(
-      (row) => ({ seq: row.seq, rowJson: row.rowJson })
-    )
+  async function stored(): Promise<{ seq: number; rowJson: string }[]> {
+    return liveTestJournalRows(
+      (await openTestJournalHostDatabase(root)).db,
+      IDENTITY.sessionId
+    ).map((row) => ({ seq: row.seq, rowJson: row.rowJson }))
   }
 
-  function storedKinds(): [number, unknown][] {
-    return stored().map((row) => [row.seq, JSON.parse(row.rowJson).kind])
+  async function storedKinds(): Promise<[number, unknown][]> {
+    return (await stored()).map((row) => [row.seq, JSON.parse(row.rowJson).kind])
   }
 
   async function journalWithOneItem(): Promise<string> {
@@ -219,15 +220,15 @@ export function registerJournalUnknownRowKindTests(): void {
       }
       const epoch = first.epoch
       await journals.closeAll()
-      const known = stored().find((row) => row.seq === 3)?.rowJson ?? ''
+      const known = (await stored()).find((row) => row.seq === 3)?.rowJson ?? ''
       const newer = JSON.stringify(newerRow(epoch, 3))
 
       await rewriteClosed((put) => put(3, newer))
-      const refused = stored()
+      const refused = await stored()
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-      expect(stored()).toEqual(refused)
-      expect(stored().find((row) => row.seq === 3)?.rowJson).toBe(newer)
+      expect(await stored()).toEqual(refused)
+      expect((await stored()).find((row) => row.seq === 3)?.rowJson).toBe(newer)
 
       const upgraded = await restartAfter((put) => put(3, known))
       expect(itemIds(upgraded)).toHaveLength(4)
@@ -239,7 +240,7 @@ export function registerJournalUnknownRowKindTests(): void {
       const epoch = await journalWithOneItem()
       await rewriteClosed((put) => put(3, JSON.stringify(newerRow(epoch, 9))))
       await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-      expect(storedKinds()).toEqual([
+      expect(await storedKinds()).toEqual([
         [1, 'epoch'],
         [2, 'item'],
         [3, 'future-mark']
@@ -251,7 +252,7 @@ export function registerJournalUnknownRowKindTests(): void {
       await expect(
         restartAfter((put) => put(3, JSON.stringify(newerRow(epoch, 3, { fence: 'one' }))))
       ).rejects.toMatchObject(UNLOADABLE)
-      expect(storedKinds()).toEqual([
+      expect(await storedKinds()).toEqual([
         [1, 'epoch'],
         [2, 'item'],
         [3, 'future-mark']
@@ -274,7 +275,7 @@ export function registerJournalUnknownRowKindTests(): void {
       await expect(restartAfter((put) => put(3, JSON.stringify(tombstone)))).rejects.toMatchObject(
         UNLOADABLE
       )
-      expect(storedKinds()).toEqual([
+      expect(await storedKinds()).toEqual([
         [1, 'epoch'],
         [2, 'item'],
         [3, 'tombstone']

@@ -1,3 +1,4 @@
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
@@ -52,6 +53,10 @@ export class StructuredAgentSessionClientDelivery {
       })
   )
 
+  advanceStatusProjection(journal: AgentSessionJournal, rows?: readonly JournalRow[]): void {
+    this.statusFeed.advanceJournalProjection(journal, rows)
+  }
+
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
@@ -81,7 +86,10 @@ export class StructuredAgentSessionClientDelivery {
       currentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
       deps,
       onAgentStarted,
-      onChildWorkChanged,
+      onChildWorkChanged: (sessionId) => {
+        onChildWorkChanged(sessionId)
+        this.turnCompletionFeed.observe(sessionId)
+      },
       readUsageLimitContinue
     })
     this.turnCompletionFeed = new StructuredAgentSessionTurnCompletionFeed({
@@ -186,11 +194,7 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => {
-    this.statusFeed.publishChildWork(sessionId, evidence, producer)
-    // A drain can be the moment a held turn becomes finished.
-    this.turnCompletionFeed.observe(sessionId)
-  }
+  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
 
   readStopping = (sessionId: string): boolean => {
     const projection = this.statusFeed.journalProjection(sessionId)

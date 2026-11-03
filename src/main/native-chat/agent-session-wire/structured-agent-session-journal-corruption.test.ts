@@ -1,3 +1,4 @@
+import { JournalReadConnection } from '../agent-session-journal/journal-sql-owner'
 import { readdir } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -46,15 +47,8 @@ const sqliteError = (message: string, errcode: number): Error =>
   Object.assign(new Error(message), { code: 'ERR_SQLITE_ERROR', errcode })
 
 /** Fail chat-record statements while leaving history readable. */
-function failRecordStatements(error: Error): void {
-  const connection = openTestJournalHostDatabase(root).db
-  const prepare = connection.prepare.bind(connection)
-  vi.spyOn(connection, 'prepare').mockImplementation((sql: string) => {
-    if (sql.includes('agent_session_')) {
-      throw error
-    }
-    return prepare(sql)
-  })
+async function failRecordStatements(error: Error): Promise<void> {
+  vi.spyOn(JournalReadConnection.prototype, 'receipts').mockRejectedValue(error)
 }
 
 const stop = (turnEnvelope = envelope('agentSession.cancel', { turnId: 'turn-1' })) =>
@@ -66,7 +60,7 @@ it('refuses a send and a Stop as corrupt when SQLite reports damage, interruptin
   await hostTestRecoveryCapsuleSettled()
   const files = (await readdir(root, { recursive: true })).toSorted()
   const damaged = sqliteError('database disk image is malformed', 11)
-  vi.spyOn(openTestJournalHostDatabase(root), 'transaction').mockImplementation(() => {
+  vi.spyOn(await openTestJournalHostDatabase(root), 'transaction').mockImplementation(() => {
     throw damaged
   })
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -96,7 +90,7 @@ it.each([
   ['full', sqliteError('database or disk is full', 13)]
 ])('answers unknown and interrupts nothing when the records are %s', async (_, error) => {
   await runningTurn()
-  failRecordStatements(error)
+  await failRecordStatements(error)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
   // Unreadable receipts leave prior acceptance unknown.

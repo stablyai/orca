@@ -69,7 +69,7 @@ import { AgentSessionRecordTabs } from '../agent-session-tab-table'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
-import { loadAgentSessionStoreRows } from './agent-session-record-rows'
+import { loadAgentSessionStoreRowsAsync } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import {
@@ -98,12 +98,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   }
 
   /** Structural readability does not depend on which agents this host can launch. */
-  static open(args: {
+  static async open(args: {
     journalDatabase: JournalHostDatabase
     hostId: string
     legacySessionTabIds: readonly string[]
-  }): AgentSessionRecordStore {
-    const rows = loadAgentSessionStoreRows(args.journalDatabase.db)
+  }): Promise<AgentSessionRecordStore> {
+    const rows = await args.journalDatabase.read(loadAgentSessionStoreRowsAsync)
     const transactions = new AgentSessionStoreTransactions(
       args.journalDatabase,
       rows,

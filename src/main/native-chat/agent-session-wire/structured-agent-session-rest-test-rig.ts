@@ -172,7 +172,7 @@ export async function createRestTestRig(
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } }))
   }
   const starts = structuredAgentSessionHeldStarts(() => rig.host)
-  const hostFor = (overrides: Partial<StructuredAgentSessionHostDeps>) =>
+  const hostFor = async (overrides: Partial<StructuredAgentSessionHostDeps>) =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexAgents(),
       logger: createStructuredAgentSessionLogger(),
@@ -184,7 +184,7 @@ export async function createRestTestRig(
         answerPrompt: async ({ commit }) => commit(),
         setOption: async () => undefined
       }),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-a',
       probeOwner: async () => ({ outcome: 'pid-absent' }),
@@ -197,7 +197,7 @@ export async function createRestTestRig(
   const rig: RestTestRig = {
     root,
     store,
-    host: hostFor({}),
+    host: await hostFor({}),
     adapter,
     clock,
     statusEvents,
@@ -208,7 +208,7 @@ export async function createRestTestRig(
       await rig.host.flushAllStreamedEvents().catch(() => undefined)
       store = await openTestAgentSessionRecordStore(root)
       rig.store = store
-      rig.host = hostFor(overrides)
+      rig.host = await hostFor(overrides)
       rig.host.subscribeStatus({ id: 'status', emit: (event) => statusEvents.push(event) })
       return rig.host
     },

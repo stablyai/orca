@@ -1,3 +1,5 @@
+import { settleTestSubscriberDeliveries } from '../native-chat/agent-session-wire/agent-session-subscriber-test-support'
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { measureAutomationChatRun } from './automation-chat-run-measurement-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -32,6 +34,7 @@ const mocks = vi.hoisted(() => {
     ...hostState,
     host: {
       journalSnapshot: vi.fn(),
+      flushStreamedEvents: vi.fn(async () => {}),
       observeConversationPublications: vi.fn(),
       queuedSendAnswer: vi.fn(async () => null)
     }
@@ -251,11 +254,14 @@ describe('restart observation and disposal', () => {
     view.items[0] = turn('own', view.submissions[0].providerItemId!)
     delayed.resolve(null)
     expect(await pending).toMatchObject({ status: 'completed' })
-    expect(mocks.host.journalSnapshot).toHaveBeenCalledTimes(3)
+    expect(mocks.host.journalSnapshot).toHaveBeenCalledTimes(4)
+    expect(mocks.host.flushStreamedEvents).toHaveBeenCalledOnce()
     expect(release).toHaveBeenCalledOnce()
   })
   it('ends read errors, listener errors, host-end and the six-hour deadline exactly once', async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
     const { run, runtime, view } = fixture()
     for (const mode of ['read', 'listener', 'end', 'deadline'] as const) {
       const release = vi.fn()
@@ -389,6 +395,7 @@ describe('real host queue publication and operation bounds', () => {
               sink.publish()
               await sink.written?.()
               await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
+              await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
             }
           }
           const difference = (before: number[]) =>
@@ -401,6 +408,7 @@ describe('real host queue publication and operation bounds', () => {
                   emit: () => {}
                 })
               : () => {}
+          await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
           const beforeBaseline = measure()
           await tokenBurst()
           const baselineWork = difference(beforeBaseline)
@@ -427,6 +435,7 @@ describe('real host queue publication and operation bounds', () => {
           }
           await rig.host.flushStreamedEvents(HOST_TEST_SESSION)
           await eventually(() => expect(full.mock.calls.length).toBeGreaterThan(0))
+          await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
           const beforeTokens = measure()
           const readsBeforeTokens = observerReads.mock.calls.length
           const keysBeforeTokens = keys.map((spy) => spy.mock.calls.length)
@@ -568,18 +577,19 @@ describe('real host queue publication and operation bounds', () => {
           .filter((_, i) => i !== 5 && i !== 12)
           .map(() => 0)
       )
-      expect(added[5]).toBe(6)
-      expect(added[12]).toBe(6)
+      // Terminal output is recaptured once after the admitted producer drain.
+      expect(added[5]).toBe(7)
+      expect(added[12]).toBe(7)
       expect(totals[0].slice(17, 21)).toEqual([1, 2 * history + 5, 0, 0])
-      expect(totals[1].slice(17, 21)).toEqual([5, 10 * history + 20, 2, 2 * history + 2])
+      expect(totals[1].slice(17, 21)).toEqual([6, 12 * history + 25, 2, 2 * history + 2])
       expect(added.slice(15)).toEqual([
-        8 * history + 15,
+        12 * history + 25,
         2 * history + 2,
-        4,
-        8 * history + 15,
+        5,
+        10 * history + 20,
         2,
         2 * history + 2,
-        0
+        2 * history + 5
       ])
       process.stdout.write(
         `${JSON.stringify({ history, fullWorkloadBaseline: totals[0], fullWorkloadInternal: totals[1], added, displayControl: totals[2] })}\n`

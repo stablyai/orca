@@ -235,11 +235,11 @@ export function registerJournalSequenceReplayTests(
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
 
-      const resumed = journal.readSince(cursor)
+      const resumed = await journal.readSince(cursor)
       expect(resumed.ok && resumed.rows).toHaveLength(1)
 
       await journal.rollEpoch('handle_forked', 2)
-      expect(journal.readSince(cursor)).toEqual({ ok: false, reset: 'epoch_changed' })
+      expect(await journal.readSince(cursor)).toEqual({ ok: false, reset: 'epoch_changed' })
     })
 
     it('rebuilds from a clean epoch after a rollover', async () => {
@@ -257,7 +257,7 @@ export function registerJournalSequenceReplayTests(
     })
 
     it('refuses a journal with a gap and keeps every row', async () => {
-      seedLegacyTestJournal(openTestJournalHostDatabase(fixture.root), {
+      seedLegacyTestJournal(await openTestJournalHostDatabase(fixture.root), {
         identity: fixture.IDENTITY,
         now: fixture.tick
       })

@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import '../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.

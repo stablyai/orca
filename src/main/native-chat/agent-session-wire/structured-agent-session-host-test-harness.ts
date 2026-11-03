@@ -169,7 +169,7 @@ beforeEach(async () => {
     logger: log.logger,
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     recoveryCapsule,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',

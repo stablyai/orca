@@ -29,16 +29,16 @@ export type PersistedTestAgentSessionStore = {
   sessionTabs?: { tabId: string; sessionId: string }[]
 }
 
-function databaseFor(stateDirectory: string): Database.Database {
-  return openTestJournalHostDatabase(stateDirectory).db
+async function databaseFor(stateDirectory: string): Promise<Database.Database> {
+  return (await openTestJournalHostDatabase(stateDirectory)).db
 }
 
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
   options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
 ): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({
-    journalDatabase: openTestJournalHostDatabase(stateDirectory),
+  return await AgentSessionRecordStore.open({
+    journalDatabase: await openTestJournalHostDatabase(stateDirectory),
     hostId: options.hostId ?? TEST_HOST_ID,
     legacySessionTabIds: options.legacySessionTabIds ?? []
   })
@@ -114,7 +114,7 @@ export async function seedTestAgentSessionRecordStore(
     sessionTabs?: { tabId: string; sessionId: string }[]
   }
 ): Promise<void> {
-  writePersisted(databaseFor(stateDirectory), {
+  writePersisted(await databaseFor(stateDirectory), {
     records: Object.fromEntries(
       seed.records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
     ),
@@ -129,7 +129,7 @@ export async function seedTestAgentSessionRecordStore(
 export async function seedTestAgentSessionStoreFromNewerBuild(
   stateDirectory: string
 ): Promise<void> {
-  openTestJournalHostDatabase(stateDirectory).db.pragma(
+  ;(await openTestJournalHostDatabase(stateDirectory)).db.pragma(
     `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
   )
   await closeTestJournalHostDatabase(stateDirectory)
@@ -142,7 +142,7 @@ function parsed(json: unknown): unknown {
 export async function readPersistedTestAgentSessionStore(
   stateDirectory: string
 ): Promise<PersistedTestAgentSessionStore> {
-  const db = databaseFor(stateDirectory)
+  const db = await databaseFor(stateDirectory)
   const persisted: PersistedTestAgentSessionStore = {
     records: {},
     operations: {},
@@ -202,5 +202,5 @@ export async function editPersistedTestAgentSessionStore(
 ): Promise<void> {
   const persisted = await readPersistedTestAgentSessionStore(stateDirectory)
   edit(persisted)
-  writePersisted(databaseFor(stateDirectory), persisted)
+  writePersisted(await databaseFor(stateDirectory), persisted)
 }

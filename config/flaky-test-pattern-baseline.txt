@@ -355,7 +355,6 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-offer-withdrawal.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-ownership.test.ts
 2 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume.test.ts
-1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-start-admission.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-stop-aborts-start.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-target-reconcile.test.ts
 1 test-no-real-time-wait:src/main/native-chat/transcript-opencode2-sqlite.test.ts

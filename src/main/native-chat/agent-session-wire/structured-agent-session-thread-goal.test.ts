@@ -1,3 +1,7 @@
+import {
+  observeNativeJournalSql,
+  failNextNativeJournalStatement
+} from '../agent-session-journal/journal-native-test-instrumentation'
 import { AgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store'
 import {
   sweepAgentSessionAttachments,
@@ -192,7 +196,7 @@ describe('performThreadGoalChange', () => {
       clientOperationId: 'op-6',
       change: { kind: 'set', objective: `Do ${formatNativeChatFileReference(kept)}` }
     })
-    const db = openTestJournalHostDatabase(root ?? '').db
+    const db = (await openTestJournalHostDatabase(root ?? '')).db
     expect(markUnclaimedUploadForSweep(db, '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01', 1)).toBe(false)
 
     const gone = join(storeRoot, '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02', 'orca-paste-2-b.txt')
@@ -350,19 +354,24 @@ it.each([1, 10])(
       ok: false as const,
       rejected: 'goals feature is disabled'
     }))
-    const db = openTestJournalHostDatabase(root ?? '').db
-    const insertion = vi.spyOn(
-      db.prepare(
-        'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
-      ),
-      'run'
-    )
-    const retirement = vi.spyOn(
-      db.prepare(
+    const database = await openTestJournalHostDatabase(root ?? '')
+    const db = database.db
+    const insertion = vi.fn()
+    const retirement = vi.fn()
+    const stopSql = observeNativeJournalSql(database, (entry) => {
+      if (entry.method !== 'run') {
+        return
+      }
+      if (entry.sql.startsWith('INSERT OR IGNORE INTO agent_session_attachment_claims ')) {
+        insertion()
+      }
+      if (
+        entry.sql ===
         'DELETE FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
-      ),
-      'run'
-    )
+      ) {
+        retirement()
+      }
+    })
     for (const file of files) {
       expect(
         await performThreadGoalChange(context(journal, { changeThreadGoal: rejected }), {
@@ -373,8 +382,7 @@ it.each([1, 10])(
     }
     expect(insertion).toHaveBeenCalledTimes(count)
     expect(retirement).toHaveBeenCalledTimes(count)
-    insertion.mockRestore()
-    retirement.mockRestore()
+    stopSql()
     expect(journal.snapshot().items).toEqual([])
     expect(db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toHaveLength(
       0
@@ -390,7 +398,7 @@ it.each([1, 10])(
     await journal.close()
     await closeTestJournalHostDatabase(root ?? '')
     journal = await openJournal()
-    const reopened = openTestJournalHostDatabase(root ?? '')
+    const reopened = await openTestJournalHostDatabase(root ?? '')
     const store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(root ?? ''), {
       hasSession: () => true
     })
@@ -400,8 +408,7 @@ it.each([1, 10])(
     const swept = await sweepAgentSessionAttachments(
       store,
       {
-        database: () => reopened.db,
-        write: (run) => reopened.writeAutocommit(run),
+        database: () => reopened,
         recordedSessionIds: () => new Set([IDENTITY.sessionId])
       },
       Math.max(...uploadModifiedAt) + UNCLAIMED_ATTACHMENT_MAX_AGE_MS + 1000
@@ -491,7 +498,7 @@ it.each([
   if (kind === 'live-goal-epoch') {
     await journal.rollEpoch('legacy_import', 1)
   }
-  const database = openTestJournalHostDatabase(root ?? '')
+  const database = await openTestJournalHostDatabase(root ?? '')
   if (kind === 'queue') {
     await journal.queuedMessages.insert({ messageId: 'queued', body: file.body })
   }
@@ -561,12 +568,16 @@ it.each([
   } else {
     await journal.withdrawGoalObjective(identity, { fence: 1 })
   }
-  const claims = openTestJournalHostDatabase(root ?? '')
-    .db.prepare('SELECT session_id FROM agent_session_attachment_claims')
+  const claims = (await openTestJournalHostDatabase(root ?? '')).db
+    .prepare('SELECT session_id FROM agent_session_attachment_claims')
     .all()
   expect(claims).toHaveLength(kind === 'live-goal-epoch' ? 0 : 1)
   expect(
-    markUnclaimedUploadForSweep(openTestJournalHostDatabase(root ?? '').db, file.uploadId, 1)
+    markUnclaimedUploadForSweep(
+      (await openTestJournalHostDatabase(root ?? '')).db,
+      file.uploadId,
+      1
+    )
   ).toBe(kind === 'live-goal-epoch')
 })
 
@@ -587,15 +598,8 @@ it('keeps inverse and SQL synchronized across failed COMMIT and failed post-COMM
     { ...file.body, sentAs: 'goal' },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
-  const database = openTestJournalHostDatabase(root ?? '')
-  const transaction = database.transaction.bind(database)
-  const spy = vi.spyOn(database, 'transaction')
-  spy.mockImplementationOnce((run) =>
-    transaction((db) => {
-      run(db)
-      throw new Error('commit failed')
-    })
-  )
+  const database = await openTestJournalHostDatabase(root ?? '')
+  await failNextNativeJournalStatement(database, 'COMMIT', 'commit failed')
   await expect(journal.withdrawGoalObjective(identity, { fence: 1 })).rejects.toThrow(
     'commit failed'
   )
@@ -620,13 +624,15 @@ it('keeps inverse and SQL synchronized across failed COMMIT and failed post-COMM
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-  ).rejects.toThrow('publication failed')
+  ).rejects.toMatchObject({
+    outcome: 'committed',
+    cause: { errors: [expect.objectContaining({ message: 'publication failed' })] }
+  })
   failPublication = false
   await journal.withdrawGoalObjective(identity, { fence: 1 })
   expect(
     database.db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()
   ).toHaveLength(1)
-  spy.mockRestore()
 })
 
 async function appendDurableAttachmentInput(
@@ -661,7 +667,7 @@ it.each(['step', 'batch'] as const)(
       }
     })
     const file = await storedGoalFile()
-    const database = openTestJournalHostDatabase(root ?? '')
+    const database = await openTestJournalHostDatabase(root ?? '')
     const claims = () =>
       database.db
         .prepare('SELECT upload_id FROM agent_session_attachment_claims WHERE upload_id = ?')
@@ -671,13 +677,7 @@ it.each(['step', 'batch'] as const)(
       clientMessageId: `independent-${kind}`
     }
     expect(claims()).toHaveLength(0)
-    const transaction = database.transaction.bind(database)
-    const spy = vi.spyOn(database, 'transaction').mockImplementationOnce((run) =>
-      transaction((db) => {
-        run(db)
-        throw new Error('commit failed')
-      })
-    )
+    await failNextNativeJournalStatement(database, 'COMMIT', 'commit failed')
     await expect(
       appendDurableAttachmentInput(journal, kind, identity, file.body, 'rolled-back')
     ).rejects.toThrow('commit failed')
@@ -686,7 +686,10 @@ it.each(['step', 'batch'] as const)(
     failPublication = true
     await expect(
       appendDurableAttachmentInput(journal, kind, identity, file.body, 'accepted')
-    ).rejects.toThrow('publication failed')
+    ).rejects.toMatchObject({
+      outcome: 'committed',
+      cause: { errors: [expect.objectContaining({ message: 'publication failed' })] }
+    })
     failPublication = false
     expect(claims()).toHaveLength(1)
     await journal.close()
@@ -694,9 +697,12 @@ it.each(['step', 'batch'] as const)(
     const reopened = await openJournal()
     expect(reopened.snapshot().items.map((item) => item.body)).toContainEqual(file.body)
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(root ?? '').db, file.uploadId, 1)
+      markUnclaimedUploadForSweep(
+        (await openTestJournalHostDatabase(root ?? '')).db,
+        file.uploadId,
+        1
+      )
     ).toBe(false)
-    spy.mockRestore()
   }
 )
 
@@ -709,7 +715,7 @@ it.each(['step', 'batch'] as const)(
         throw new Error('publication failed')
       }
     })
-    const database = openTestJournalHostDatabase(root ?? '')
+    const database = await openTestJournalHostDatabase(root ?? '')
     for (const phase of ['self', 'rollback', 'accepted'] as const) {
       const file = await storedGoalFile()
       const identity: AgentJournalItemIdentity = {
@@ -736,18 +742,14 @@ it.each(['step', 'batch'] as const)(
           phase
         )
       if (phase === 'rollback') {
-        const transaction = database.transaction.bind(database)
-        const spy = vi.spyOn(database, 'transaction').mockImplementationOnce((run) =>
-          transaction((db) => {
-            run(db)
-            throw new Error('commit failed')
-          })
-        )
+        await failNextNativeJournalStatement(database, 'COMMIT', 'commit failed')
         await expect(append()).rejects.toThrow('commit failed')
-        spy.mockRestore()
       } else if (phase === 'accepted') {
         failPublication = true
-        await expect(append()).rejects.toThrow('publication failed')
+        await expect(append()).rejects.toMatchObject({
+          outcome: 'committed',
+          cause: { errors: [expect.objectContaining({ message: 'publication failed' })] }
+        })
         failPublication = false
       } else {
         await append()

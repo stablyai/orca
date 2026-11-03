@@ -106,7 +106,7 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       lastProvenAliveAt: 35_000,
       runtimeEnd: 'quit'
     })
-    const db = openTestJournalHostDatabase(directory).db
+    const db = (await openTestJournalHostDatabase(directory)).db
     const saved = db
       .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
       .get(sessionId)

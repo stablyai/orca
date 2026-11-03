@@ -2,11 +2,9 @@
 
 import { AgentSessionJournalError } from './journal-write-guards'
 
-/** Async bodies could interleave sequence assignment and commits. */
-export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
-export type JournalWriteBody<T> = () => JournalWriteResult<T>
+export type JournalWriteBody<T> = () => T | Promise<T>
 
-/** Idle writes commit synchronously; reentrant/waiting writes queue. Admission remains valid after close. */
+/** Ownership lasts through adoption and settlement; admitted writes remain valid after close. */
 export class JournalWriteQueue {
   /** Track settlement regardless of write success. */
   private writes: Promise<unknown> = Promise.resolve()
@@ -28,7 +26,7 @@ export class JournalWriteQueue {
   }
 
   /** Read between preceding and later writes; closed queues refuse reads from potentially replaced folds. */
-  readInOrder<T>(read: () => T): Promise<T> {
+  readInOrder<T>(read: JournalWriteBody<T>): Promise<T> {
     if (this.closed) {
       return Promise.reject(this.closedError())
     }
@@ -50,7 +48,7 @@ export class JournalWriteQueue {
     return this.writes.then(() => undefined)
   }
 
-  private runNow<T>(run: () => T): Promise<T> {
+  private runNow<T>(run: JournalWriteBody<T>): Promise<T> {
     let release: (settled: Promise<unknown>) => void = () => undefined
     this.writes = new Promise<unknown>((resolve) => {
       release = resolve
@@ -61,14 +59,15 @@ export class JournalWriteQueue {
       result = Promise.resolve(run())
     } catch (error) {
       result = Promise.reject(error)
-    } finally {
-      this.running = false
     }
-    release(result.catch(() => undefined))
-    return result
+    const settled = result.finally(() => {
+      this.running = false
+    })
+    release(settled.catch(() => undefined))
+    return settled
   }
 
-  private join<T>(run: () => T): Promise<T> {
+  private join<T>(run: JournalWriteBody<T>): Promise<T> {
     const started = this.writes.then(run)
     this.writes = started.catch(() => undefined)
     this.waiting++

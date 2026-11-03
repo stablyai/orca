@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -40,7 +41,9 @@ it('reports every content publication to the journal hook, subscribed or not', a
   })
 
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
   subscribers.snapshot(SESSION, journal, 1)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(published).toEqual([SESSION, SESSION])
 })
@@ -97,6 +100,7 @@ it('settles a session nobody is reading, from running to idle', async () => {
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(statuses.at(-1)).toEqual({
     type: 'status',
@@ -105,6 +109,7 @@ it('settles a session nobody is reading, from running to idle', async () => {
 
   await journal.appendTombstone(turn, { fence: 1 })
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(statuses.at(-1)).toEqual({
     type: 'status',
@@ -133,6 +138,7 @@ it('publishes background lifecycle without advancing the journal and carries its
     fence: 1,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   const cursor = journal.cursor()
 
   const backgroundTasks: AgentSessionBackgroundTaskState = {
@@ -158,6 +164,7 @@ it('publishes background lifecycle without advancing the journal and carries its
     { fence: 2, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   subscribers.publish(SESSION, journal)
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(events.at(-1)).toMatchObject({ type: 'batch', fence: 2 })
 })
@@ -182,12 +189,14 @@ it('publishes latest turn activity without advancing or adding journal rows', as
     fence: 1,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   const cursor = journal.cursor()
 
   subscribers.publish(SESSION, journal, {
     turnId: 'turn-1',
     text: 'Inspecting the session wire'
   })
+  await settleTestSubscriberDeliveries(subscribers)
 
   expect(journal.cursor()).toEqual(cursor)
   expect(events.at(-1)).toEqual({
@@ -201,6 +210,7 @@ it('publishes latest turn activity without advancing or adding journal rows', as
 
   subscribers.close(SESSION, 'subscriber-1')
   subscribers.publish(SESSION, journal, null)
+  await settleTestSubscriberDeliveries(subscribers)
   subscribers.open({
     id: 'reconnected',
     sessionId: SESSION,
@@ -209,6 +219,7 @@ it('publishes latest turn activity without advancing or adding journal rows', as
     cursor,
     emit: (event) => events.push(event)
   })
+  await settleTestSubscriberDeliveries(subscribers)
   expect(journal.cursor()).toEqual(cursor)
   expect(events.at(-1)).toMatchObject({ activity: null })
 })

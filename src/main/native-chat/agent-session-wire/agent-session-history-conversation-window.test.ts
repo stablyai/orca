@@ -88,8 +88,10 @@ function textsOf(page: AgentSessionHistoryPage): string[] {
   )
 }
 
-function read(request: Omit<AgentSessionHistoryRequest, 'sessionId'>): AgentSessionHistoryPage {
-  const result = readAgentSessionHistory(journal, { sessionId: 'session-1', ...request })
+async function read(
+  request: Omit<AgentSessionHistoryRequest, 'sessionId'>
+): Promise<AgentSessionHistoryPage> {
+  const result = await readAgentSessionHistory(journal, { sessionId: 'session-1', ...request })
   if (!result.ok) {
     throw new Error(`expected a page, got reset ${result.reset}`)
   }
@@ -120,11 +122,11 @@ describe('a history page over a session with a subagent', () => {
     await append(named('child-', 1, 300), child)
     await append(['own-6'])
 
-    const tail = read({ direction: 'tail', limit: 3 })
+    const tail = await read({ direction: 'tail', limit: 3 })
     expect(textsOf(tail)).toEqual(['own-4', 'own-5', ...named('child-', 1, 300), 'own-6'])
     expect(tail.hasOlder).toBe(true)
 
-    const older = read({ direction: 'before', cursor: tail.window.nextCursor, limit: 3 })
+    const older = await read({ direction: 'before', cursor: tail.window.nextCursor, limit: 3 })
     expect(textsOf(older)).toEqual(['own-1', 'own-2', 'own-3'])
     expect(older.hasOlder).toBe(false)
     expect(older.hasNewer).toBe(true)
@@ -144,7 +146,7 @@ describe('a history page over a session with a subagent', () => {
     await append(named('child-', 1, 3), child)
     await append(named('own-', 1, 2))
 
-    const tail = read({ direction: 'tail', limit: 5 })
+    const tail = await read({ direction: 'tail', limit: 5 })
 
     expect(textsOf(tail)).toEqual([...named('child-', 1, 3), 'own-1', 'own-2'])
     expect(tail.hasOlder).toBe(false)
@@ -161,7 +163,7 @@ describe('a history page over a session with a subagent', () => {
     }
     await append(['own-6'])
 
-    const tail = read({ direction: 'tail', limit: 3 })
+    const tail = await read({ direction: 'tail', limit: 3 })
 
     expect(textsOf(tail)).toEqual([
       'own-4',
@@ -212,8 +214,8 @@ describe('a history page over a session with a subagent', () => {
         )
       )
 
-    const tail = read({ direction: 'tail', limit: 5 })
-    const older = read({ direction: 'before', cursor: tail.window.nextCursor, limit: 5 })
+    const tail = await read({ direction: 'tail', limit: 5 })
+    const older = await read({ direction: 'before', cursor: tail.window.nextCursor, limit: 5 })
 
     expect(textsOf(tail)[0]).toBe('Kicked off subagent Audit')
     expect(textsOf(older)).toEqual(named('own-', 1, 3))
@@ -242,7 +244,7 @@ describe('a history page over a session with a subagent', () => {
       await append([...own])
     }
 
-    const tail = read({ direction: 'tail', limit: 2 })
+    const tail = await read({ direction: 'tail', limit: 2 })
 
     expect(textsOf(tail)).toEqual(['own-8', 'own-9', 'own-10', 'Kicked off subagent b', 'own-11'])
   })
@@ -253,13 +255,13 @@ describe('a history page over a session with a subagent', () => {
     await append(named(`${large}:`, 1, 20), child)
     await append(['own-2'])
 
-    const tail = read({ direction: 'tail', limit: 40 })
+    const tail = await read({ direction: 'tail', limit: 40 })
     expect(tail.hasOlder).toBe(true)
     const seen = [...tail.items]
     let page = tail
     for (let guard = 0; page.hasOlder; guard += 1) {
       expect(guard).toBeLessThan(30)
-      page = read({ direction: 'before', cursor: page.window.nextCursor, limit: 40 })
+      page = await read({ direction: 'before', cursor: page.window.nextCursor, limit: 40 })
       expect(page.items.length).toBeGreaterThan(0)
       seen.unshift(...page.items)
     }
@@ -319,7 +321,7 @@ describe('a history page names the subagents whose roster row is older than it',
     await append(['child-1'], child)
 
     expect(readAgentSessionHydrationPage(journal).subagentRoster).toBeUndefined()
-    expect(read({ direction: 'tail', limit: 5 }).subagentRoster).toBeUndefined()
+    expect((await read({ direction: 'tail', limit: 5 })).subagentRoster).toBeUndefined()
   })
 
   it('names a bounded number of subagents', async () => {
@@ -331,7 +333,7 @@ describe('a history page names the subagents whose roster row is older than it',
     }
     await append(['own-2'])
 
-    const tail = read({ direction: 'tail', limit: 2 })
+    const tail = await read({ direction: 'tail', limit: 2 })
 
     expect(textsOf(tail)[0]).toBe('own-1')
     expect(tail.subagentRoster).toHaveLength(64)
@@ -343,10 +345,10 @@ describe('a history page over a session with no subagent rows', () => {
     await append(named('own-', 1, 23))
 
     const pages: string[][] = []
-    let page = read({ direction: 'tail', limit: 5 })
+    let page = await read({ direction: 'tail', limit: 5 })
     pages.push(textsOf(page))
     while (page.hasOlder) {
-      page = read({ direction: 'before', cursor: page.window.nextCursor, limit: 5 })
+      page = await read({ direction: 'before', cursor: page.window.nextCursor, limit: 5 })
       pages.push(textsOf(page))
     }
 

@@ -111,7 +111,7 @@ async function startHost(): Promise<void> {
           reportedOptions: { model: '' }
         }))
     }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: 5, idleMs },
@@ -259,7 +259,7 @@ async function writeAsEarlierProcess(
   })
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
-    database: openTestJournalHostDatabase(root)
+    database: await openTestJournalHostDatabase(root)
   })
   await write(journal, record.lease.runtimeFence)
   await journal.close()

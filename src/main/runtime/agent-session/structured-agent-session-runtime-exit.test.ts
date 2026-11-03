@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { openTestChats } from '../../native-chat/agent-session-wire/structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

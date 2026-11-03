@@ -8,7 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { replaceJournalEpoch } from './journal-epoch-replacement'
 import type { JournalLoad } from './journal-open'
 import {
@@ -60,12 +60,11 @@ export function createFixture() {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
   }
 
-  function replace(input: {
-    items: Parameters<typeof replaceJournalEpoch>[0]['items']
+  async function replace(input: {
+    items: ReturnType<Parameters<typeof replaceJournalEpoch>[1]>['items']
     onPublished?: (loaded: JournalLoad) => void
-  }): void {
-    replaceJournalEpoch({
-      database,
+  }): Promise<void> {
+    await replaceJournalEpoch(database, () => ({
       identity: IDENTITY,
       reason: 'legacy_import',
       fence: 1,
@@ -75,13 +74,13 @@ export function createFixture() {
       now,
       mintEpoch: () => `epoch-${clock}`,
       onPublished: input.onPublished ?? (() => undefined)
-    })
+    }))
   }
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-journal-replace-'))
     clock = 1_000
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
   })
 
   afterEach(async () => {

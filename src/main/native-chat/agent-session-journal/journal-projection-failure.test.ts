@@ -1,3 +1,9 @@
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import { failNextNativeJournalStatement } from './journal-native-test-instrumentation'
+import {
+  stageTestJournalRowReceipt,
+  writeCommandReceiptTestRecord
+} from './command-receipt-test-support'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,7 +18,7 @@ import {
 import { journalInputOrder } from './journal-input-order'
 import { encodeJournalState } from './journal-state-codec'
 import { JournalStopMarks } from './journal-stop-marks'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 import {
   projectionBase as base,
@@ -29,7 +35,7 @@ let database: JournalHostDatabase
 let rig: ReturnType<typeof projectionWriter> | undefined
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-failure-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
@@ -99,10 +105,13 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
       providerHandle: { kind: 'codex', threadId: 'thread-1' },
       payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, user)
     })
-  database.db.exec('CREATE TABLE test_receipts (seq INTEGER)')
+  writeCommandReceiptTestRecord(database.db, sessionId)
+  database.db.exec(
+    "CREATE VIEW test_receipts AS SELECT json_extract(result_json, '$.sequence') AS seq FROM agent_session_command_receipts"
+  )
   const receipt = {
-    write: (db: JournalHostDatabase['db'], row?: JournalRow) => {
-      db.prepare('INSERT INTO test_receipts VALUES (?)').run(row?.seq ?? 0)
+    write: (db: JournalPersistencePlan, row?: JournalRow) => {
+      stageTestJournalRowReceipt(db, sessionId, row)
     },
     committed: vi.fn()
   }
@@ -143,7 +152,8 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
         }),
         send(id)
       ],
-      receipt
+      receipt,
+      (rows) => rows.at(-1)
     )
   const unchanged = () => {
     expect(live.inputCards.has('overlay')).toBe(false)
@@ -168,11 +178,11 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     ],
     [
       'receipt',
-      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`
+      `CREATE TRIGGER failure BEFORE INSERT ON agent_session_command_receipts BEGIN SELECT RAISE(ABORT, 'failure'); END`
     ],
     [
       'outer',
-      `CREATE TRIGGER failure BEFORE INSERT ON test_receipts BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
+      `CREATE TRIGGER failure BEFORE INSERT ON agent_session_command_receipts BEGIN SELECT RAISE(ROLLBACK, 'failure'); END`
     ]
   ] as const
   for (const [name, sql] of scenarios) {
@@ -186,15 +196,8 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     expect(stops.latest()?.settle).toBe(settle)
     expectProjectionMatches(database, live)
   }
-  const exec = database.db.exec.bind(database.db)
-  const spy = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
-    if (sql === 'COMMIT') {
-      throw new Error('injected boundary failure')
-    }
-    exec(sql)
-  })
+  await failNextNativeJournalStatement(database, 'COMMIT', 'injected boundary failure')
   await expect(attempt('commit')).rejects.toThrow('injected boundary failure')
-  spy.mockRestore()
   unchanged()
   expect(rig.state()).toBe(live)
   expect(encodeJournalState(live)).toEqual(saved)

@@ -1,3 +1,4 @@
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
 import type { createFixture } from './journal-epoch-replacement-contract-test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile } from 'node:fs/promises'
@@ -14,10 +15,10 @@ export function registerJournalEpochReplacementReceiptsTests(
   fixture: ReturnType<typeof createFixture>
 ): void {
   describe('journal epoch replacement', () => {
-    it('publishes one observable replacement', () => {
+    it('publishes one observable replacement', async () => {
       const published: JournalLoad[] = []
 
-      fixture.replace({
+      await fixture.replace({
         items: [
           {
             identity: fixture.item(1),
@@ -107,22 +108,25 @@ export function registerJournalEpochReplacementReceiptsTests(
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       const extraction = vi.spyOn(attachmentReferences, 'agentSessionAttachmentReferences')
-      const insertion = vi.spyOn(
-        db.prepare(
-          'INSERT OR IGNORE INTO agent_session_attachment_claims (upload_id, session_id, claimed_at) VALUES (?, ?, ?)'
-        ),
-        'run'
-      )
+      let insertions = 0
+      const stop = observeNativeJournalSql(fixture.database, (entry) => {
+        if (
+          entry.method === 'run' &&
+          entry.sql.startsWith('INSERT OR IGNORE INTO agent_session_attachment_claims')
+        ) {
+          insertions++
+        }
+      })
       const acquired = vi.spyOn(JournalGoalAttachmentInverse.prototype, 'acquired')
       await (mode === 'replace'
         ? journal.replaceEpochItems('legacy_import', 1, [])
         : journal.rollEpoch('handle_forked', 1))
       expect(extraction).toHaveBeenCalledTimes(count)
-      expect(insertion).toHaveBeenCalledTimes(count)
+      expect(insertions).toBe(count)
       expect(acquired).toHaveBeenCalledTimes(count)
       expect(cards()).toEqual(before)
       process.stdout.write(
-        `pr34654-epoch-contract ${JSON.stringify({ mode, count, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
+        `pr34654-epoch-contract ${JSON.stringify({ mode, count, extractions: extraction.mock.calls.length, insertions: insertions, acquired: acquired.mock.calls.length })}\n`
       )
       await journal.withdrawGoalObjective(goal, { fence: 1 })
       expect(
@@ -143,7 +147,7 @@ export function registerJournalEpochReplacementReceiptsTests(
         })
         expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
         extraction.mockClear()
-        insertion.mockClear()
+        insertions = 0
         acquired.mockClear()
         await journal.replaceEpochItems('legacy_import', 1, [
           {
@@ -154,7 +158,7 @@ export function registerJournalEpochReplacementReceiptsTests(
           }
         ])
         expect(extraction).toHaveBeenCalledTimes(count + 2)
-        expect(insertion).toHaveBeenCalledTimes(count + 2)
+        expect(insertions).toBe(count + 2)
         expect(acquired).toHaveBeenCalledTimes(count + 2)
         expect(journal.submission('pending')).toMatchObject({
           dispatchState: 'pending',
@@ -164,15 +168,16 @@ export function registerJournalEpochReplacementReceiptsTests(
         expect(journal.queuedMessages.get('queue-0')?.state).toBe('dispatched')
         expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([card.body, card.body])
         process.stdout.write(
-          `pr34654-mixed-epoch-contract ${JSON.stringify({ q: count, i: 1, s: 1, extractions: extraction.mock.calls.length, insertions: insertion.mock.calls.length, acquired: acquired.mock.calls.length })}\n`
+          `pr34654-mixed-epoch-contract ${JSON.stringify({ q: count, i: 1, s: 1, extractions: extraction.mock.calls.length, insertions: insertions, acquired: acquired.mock.calls.length })}\n`
         )
       }
+      stop()
       await fixture.journals.closeAll()
       const reopened = await fixture.journals.open({
         identity: fixture.IDENTITY,
         stateDirectory: fixture.root
       })
-      fixture.database = openTestJournalHostDatabase(fixture.root)
+      fixture.database = await openTestJournalHostDatabase(fixture.root)
       expect(reopened.queuedMessages.list().map((card) => card.body)).toEqual(
         before.map((card) => card.body)
       )
@@ -205,8 +210,8 @@ export function registerJournalEpochReplacementReceiptsTests(
         if (phase === 'rollback') {
           const transaction = fixture.database.transaction.bind(fixture.database)
           vi.spyOn(fixture.database, 'transaction').mockImplementationOnce((run) =>
-            transaction((db) => {
-              run(db)
+            transaction(async (db) => {
+              await run(db)
               throw new Error('rollback epoch')
             })
           )
@@ -215,7 +220,10 @@ export function registerJournalEpochReplacementReceiptsTests(
           journal.observeCommits(() => {
             throw new Error('publication failed')
           })
-          await expect(retire()).rejects.toThrow('publication failed')
+          await expect(retire()).rejects.toMatchObject({
+            outcome: 'committed',
+            cause: { errors: [expect.objectContaining({ message: 'publication failed' })] }
+          })
           journal.observeCommits(() => {})
         }
         await journal.withdrawGoalObjective(goal, { fence: 1 })

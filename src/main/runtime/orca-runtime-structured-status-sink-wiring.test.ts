@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 

@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Exercise structured capability admission and wire shapes through the shared dispatcher fixture.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -1,3 +1,4 @@
+import type { JournalReadConnection } from './journal-sql-owner'
 import type Database from '../../sqlite/sync-database'
 import { journalInputOrder } from './journal-input-order'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
@@ -186,13 +187,7 @@ export class LegacyQueuedCards {
     if (this.key() === '') {
       return null
     }
-    const { db } = this.deps.database()
-    const row = db
-      .prepare(
-        `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? AND message_id = ?`
-      )
-      .get(this.deps.sessionId, messageId)
-    const card = row === undefined ? null : readStoredQueuedMessageRow(row)
+    const card = this.rows().find((row) => row.messageId === messageId) ?? null
     return card && legacyQueuedChange(this.deps.state(), card)
   }
 
@@ -200,15 +195,17 @@ export class LegacyQueuedCards {
   deletion(messageIds: readonly string[]): JournalOperationReceipt {
     return {
       write: (db) => {
-        const remove = db.prepare(
-          'DELETE FROM queued_messages WHERE session_id = ? AND message_id = ?'
-        )
-        for (const messageId of messageIds) {
-          remove.run(this.deps.sessionId, messageId)
-        }
+        db.add({ kind: 'queue-delete', sessionId: this.deps.sessionId, ids: [...messageIds] })
       },
       committed: () => {
-        this.revision += messageIds.length > 0 ? 1 : 0
+        if (messageIds.length) {
+          this.revision++
+          const removed = new Set(messageIds)
+          this.stored = {
+            revision: this.revision,
+            rows: this.rows().filter((row) => !removed.has(row.messageId))
+          }
+        }
       }
     }
   }
@@ -227,21 +224,26 @@ export class LegacyQueuedCards {
       return Promise.resolve()
     }
     return this.deps
-      .serialize(() => {
-        const rows = this.read()
+      .serialize(async () => {
+        const rows = this.rows()
         const deletion = this.deletion(rows.map((row) => row.messageId))
         const plan = rows.flatMap((row) => {
           const change = legacyQueuedChange(this.deps.state(), row)
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {
-          this.deps.writer.writeRows(() => plan, deletion)
+          await this.deps.writer.writeRows(() => plan, deletion)
           return
         }
         // Empty append plans open no transaction, so legacy deletion must commit independently.
-        this.deps.database().transaction((db) => deletion.write(db))
-        deletion.committed()
-        this.deps.committed()
+        await this.deps.database().transaction(
+          (db) => deletion.write(db),
+          false,
+          () => {
+            deletion.committed()
+            this.deps.committed()
+          }
+        )
       })
       .catch((error: unknown) => {
         console.warn('[journal-open] queued-message import skipped:', {
@@ -251,15 +253,18 @@ export class LegacyQueuedCards {
       })
   }
 
-  private rows(): readonly QueuedMessageRow[] {
-    if (this.stored?.revision !== this.revision) {
-      this.stored = { revision: this.revision, rows: this.read() }
-    }
-    return this.stored.rows
+  async initialize(): Promise<void> {
+    const rows = await this.deps
+      .database()
+      .read((read) => readLegacyRowsAsync(read, this.deps.sessionId))
+    this.stored = { revision: this.revision, rows }
   }
 
-  private read(): QueuedMessageRow[] {
-    return readLegacyRows(this.deps.database().db, this.deps.sessionId)
+  private rows(): readonly QueuedMessageRow[] {
+    if (!this.stored) {
+      throw new Error('legacy journal cards were not loaded')
+    }
+    return this.stored.rows
   }
 }
 
@@ -280,4 +285,34 @@ function readLegacyRows(db: Database.Database, sessionId: string): QueuedMessage
     )
     .all(sessionId)
     .flatMap((row) => readStoredQueuedMessageRow(row) ?? [])
+}
+
+export async function readLegacyRowsAsync(
+  read: JournalReadConnection,
+  sessionId: string
+): Promise<QueuedMessageRow[]> {
+  const rows: QueuedMessageRow[] = []
+  for await (const page of read.pages(
+    `SELECT ${LEGACY_QUEUED_MESSAGE_COLUMNS} FROM queued_messages WHERE session_id = ? ORDER BY position ASC`,
+    [sessionId]
+  )) {
+    for (const row of page) {
+      const stored = readStoredQueuedMessageRow(row)
+      if (stored) {
+        rows.push(stored)
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  return rows
+}
+
+export async function readJournalLegacyCardsAsync(
+  read: JournalReadConnection,
+  state: JournalReducerState
+): Promise<QueuedMessageRow[]> {
+  return (await readLegacyRowsAsync(read, state.sessionId)).flatMap((row) => {
+    const change = legacyQueuedChange(state, row)
+    return change ? [queuedCardFromChange(state, row.messageId, change)] : []
+  })
 }

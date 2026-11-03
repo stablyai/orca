@@ -9,8 +9,23 @@ export type StructuredInputSelection =
   | { kind: 'submission'; submission: AgentJournalSubmission }
   | { kind: 'none' }
 
-/** One live checkpoint owns automatic input order; debt alone is not execution. */
+/** Execution resolves only the selected input's legacy receipt demand. */
 export function selectStructuredAgentSessionInput(
+  journal: AgentSessionJournal,
+  currentInput?: string,
+  unanswerable = false
+): Promise<StructuredInputSelection> {
+  return journal.withInputOrder(
+    () =>
+      [journal.inputOrder.firstQueued()?.clientMessageId, currentInput].filter(
+        (id): id is string => id !== undefined
+      ),
+    () => selectPublishedStructuredAgentSessionInput(journal, currentInput, unanswerable)
+  )
+}
+
+/** One live checkpoint owns automatic input order; debt alone is not execution. */
+export function selectPublishedStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
   unanswerable = false
@@ -55,23 +70,23 @@ export function selectStructuredAgentSessionInput(
   return { kind: 'submission', submission: selected }
 }
 
-export function selectedStructuredSubmission(
+export async function selectedStructuredSubmission(
   journal: AgentSessionJournal
-): AgentJournalSubmission | undefined {
-  const selected = selectStructuredAgentSessionInput(journal)
+): Promise<AgentJournalSubmission | undefined> {
+  const selected = await selectStructuredAgentSessionInput(journal)
   return selected.kind === 'submission' ? selected.submission : undefined
 }
 
-export function selectableStructuredSubmission(
+export async function selectableStructuredSubmission(
   journal: AgentSessionJournal,
   work: StructuredAgentSessionCurrentWork | null,
   currentInput?: string
-): AgentJournalSubmission | undefined {
+): Promise<AgentJournalSubmission | undefined> {
   if (!journal.inputOrder.firstQueued() && currentInput === undefined) {
     return undefined
   }
   const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.actionablePrompts())
-  const selected = selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
+  const selected = await selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
   if (selected.kind !== 'submission') {
     return undefined
   }

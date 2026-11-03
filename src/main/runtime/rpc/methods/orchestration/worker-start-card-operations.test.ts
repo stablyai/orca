@@ -1,4 +1,8 @@
 import {
+  observeNativeJournalSql,
+  failNextNativeJournalStatement
+} from '../../../../native-chat/agent-session-journal/journal-native-test-instrumentation'
+import {
   expectWorkerStartPopulation,
   expectWorkerStartSourcePlans
 } from './worker-start-card-population.test-fixture'
@@ -179,18 +183,25 @@ it.each([10, 100])(
             )
         )
       )
-    const connection = openTestJournalHostDatabase(current.root).db
-    const epochReads = vi.spyOn(
-      connection.prepare('SELECT epoch FROM journal_sessions WHERE session_id = ?'),
-      'get'
-    )
-    const inserts = vi.spyOn(
-      connection.prepare(
-        'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-      ),
-      'run'
-    )
-    const journalQueries = vi.spyOn(connection, 'prepare')
+    const database = await openTestJournalHostDatabase(current.root)
+    const connection = database.db
+    const epochReads = vi.fn()
+    const inserts = vi.fn()
+    const journalQueries = vi.fn()
+    const stopSql = observeNativeJournalSql(database, (entry) => {
+      if (entry.method === 'prepare') {
+        journalQueries(entry.sql)
+      }
+      if (
+        entry.method === 'get' &&
+        entry.sql === 'SELECT epoch FROM journal_sessions WHERE session_id = ?'
+      ) {
+        epochReads()
+      }
+      if (entry.method === 'run' && entry.sql.startsWith('INSERT INTO journal_rows ')) {
+        inserts()
+      }
+    })
     const serialized = vi.spyOn(journalSchema, 'serializeJournalRow')
     const activeSource = vi.spyOn(db, 'getActiveDispatchForTerminal')
     const recordedSource = vi.spyOn(db, 'getDispatchContextById')
@@ -224,10 +235,8 @@ it.each([10, 100])(
     const before = journal.snapshot()
     snapshot.mockClear()
     const fail = prepareWorkerStartCard(runtime, admitted.caller)
-    expect(epochReads).toHaveBeenCalledTimes(1)
-    inserts.mockImplementationOnce(() => {
-      throw new Error('fixture insert failed')
-    })
+    await eventually(() => expect(epochReads).toHaveBeenCalledTimes(1))
+    await failNextNativeJournalStatement(database, 'COMMIT', 'fixture insert failed')
     fail(facts[0])
     await eventually(() => expect(append).toHaveBeenCalledTimes(1))
     await Promise.allSettled(append.mock.results.map((result) => result.value))
@@ -237,7 +246,7 @@ it.each([10, 100])(
         expect.any(Error)
       )
     )
-    expect(epochReads).toHaveBeenCalledTimes(4)
+    expect(epochReads).toHaveBeenCalledTimes(2)
     expect(serialized).toHaveBeenCalledTimes(1)
     expect(inserts).toHaveBeenCalledTimes(1)
     expect(sourceQueries).toHaveBeenCalledTimes(3)
@@ -272,19 +281,19 @@ it.each([10, 100])(
     snapshotSources.length = 0
     tabVisits = dispatchVisits = taskVisits = workerVisits = 0
     const publishers = facts.map(() => prepareWorkerStartCard(runtime, admitted.caller))
-    expect(epochReads).toHaveBeenCalledTimes(count)
+    await eventually(() => expect(epochReads).toHaveBeenCalledTimes(count))
     facts.forEach((fact, index) => publishers[index](fact))
     await eventually(() => expect(append).toHaveBeenCalledTimes(count))
     await Promise.all(append.mock.results.map((result) => result.value))
-    expect(epochReads).toHaveBeenCalledTimes(4 * count)
+    expect(epochReads).toHaveBeenCalledTimes(2 * count)
     expect(serialized).toHaveBeenCalledTimes(count)
     expect(inserts).toHaveBeenCalledTimes(count)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(snapshotSources).toEqual([])
     // Duplicate callbacks still name the sender but must stop before row serialization/insertion.
     facts.forEach((fact, index) => publishers[index](fact))
     await eventually(() => expect(append).toHaveBeenCalledTimes(2 * count))
     await Promise.all(append.mock.results.map((result) => result.value))
-    expect(epochReads).toHaveBeenCalledTimes(6 * count)
+    expect(epochReads).toHaveBeenCalledTimes(2 * count)
     expect(serialized).toHaveBeenCalledTimes(count)
     expect(inserts).toHaveBeenCalledTimes(count)
     expect(sender).toHaveBeenCalledTimes(2 * count)
@@ -300,8 +309,8 @@ it.each([10, 100])(
     expect(tabVisits).toBeLessThanOrEqual(2 * count * tabs.length)
     expect(dedupe).toHaveBeenCalledTimes(2 * count)
     expect(scan).not.toHaveBeenCalled()
-    expect(snapshot).toHaveBeenCalledTimes(1)
-    expect(snapshotSources).toEqual(['status-projection'])
+    expect(snapshot).not.toHaveBeenCalled()
+    expect(snapshotSources).toEqual([])
     expect(
       journalQueries.mock.calls.filter(
         ([query]) => /FROM journal_rows/.test(query) && !/seq = 1/.test(query)
@@ -310,6 +319,7 @@ it.each([10, 100])(
     expect(warn).not.toHaveBeenCalled()
     expectWorkerStartSourcePlans(sourceQueries.mock.calls, prepareSource)
     expectWorkerStartPopulation({ journal, facts, count, connection, before })
+    stopSql()
     console.info('start population/operations', {
       count,
       sourceRecords: 10 * count,

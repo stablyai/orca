@@ -24,7 +24,7 @@ describe('pre-existing oversized identities', () => {
     ])
 
     for (const sequence of [seq, seq + 1]) {
-      const result = readAgentSessionHistory(reopened, {
+      const result = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: { epoch: reopened.epoch, sequence },
@@ -46,7 +46,7 @@ describe('pre-existing oversized identities', () => {
       }
       expect(liveCursor.sequence).toBeGreaterThanOrEqual(seq + 2)
 
-      const resumed = readAgentSessionHistory(reopened, {
+      const resumed = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: liveCursor,
@@ -77,7 +77,7 @@ describe('pre-existing oversized identities', () => {
     while (true) {
       guard += 1
       expect(guard).toBeLessThan(30)
-      const result = readAgentSessionHistory(reopened, {
+      const result = await readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor,
@@ -106,7 +106,7 @@ describe('pre-existing oversized identities', () => {
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') }
     ])
 
-    const tail = readAgentSessionHistory(reopened, {
+    const tail = await readAgentSessionHistory(reopened, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 40
@@ -123,7 +123,7 @@ describe('pre-existing oversized identities', () => {
     expect(marker?.itemId).toBe(boundJournalKeyComponent(HUGE_ITEM_ID))
     expect(marker?.itemId.length).toBeLessThan(2048)
 
-    const forward = readAgentSessionHistory(reopened, {
+    const forward = await readAgentSessionHistory(reopened, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: { epoch: reopened.epoch, sequence: seq },
@@ -158,7 +158,7 @@ describe('identity bounding at admission', () => {
     const beforeTombstone = fixture.journal.cursor()
     await fixture.journal.appendTombstone(oversized, { fence: 1 })
 
-    const created = readAgentSessionHistory(fixture.journal, {
+    const created = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: start,
@@ -172,7 +172,7 @@ describe('identity bounding at admission', () => {
     )
     expect(created.page.removedItemIds).toEqual([appended.itemId])
 
-    const removal = readAgentSessionHistory(fixture.journal, {
+    const removal = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: beforeTombstone,

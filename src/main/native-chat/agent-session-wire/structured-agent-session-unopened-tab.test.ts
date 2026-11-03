@@ -54,7 +54,7 @@ async function relaunchWith(
     recursive: true,
     filter: (source) => !source.includes('.lock')
   })
-  edit(openTestJournalHostDatabase(relaunched).db)
+  edit((await openTestJournalHostDatabase(relaunched)).db)
   const store = await openTestAgentSessionRecordStore(relaunched, {
     legacySessionTabIds: [SESSION]
   })
@@ -63,7 +63,7 @@ async function relaunchWith(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     now: () => NOW

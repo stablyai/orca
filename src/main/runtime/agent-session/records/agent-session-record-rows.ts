@@ -11,6 +11,8 @@ import {
 import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
+import type { SQLInputValue } from 'node:sqlite'
+import type { JournalReadConnection } from '../../../native-chat/agent-session-journal/journal-sql-owner'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreRowWrites } from './agent-session-store-draft'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -75,7 +77,13 @@ function unreadableRecordReason(value: unknown): string {
 
 /** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
  * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
-export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+type StoreRead = { sql: string; parameters: SQLInputValue[]; one?: boolean }
+function* loadAgentSessionStoreSteps(): Generator<
+  StoreRead | null,
+  AgentSessionStoreState,
+  SqliteRow[]
+> {
+  let examined = 0
   const state: AgentSessionStoreState = {
     records: new Map(),
     operations: new Map(),
@@ -85,15 +93,21 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
   }
   // Read-only newer databases may lack tables; report no chats without creating them.
   if (
-    !db
-      .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('agent_session_records')
+    (yield {
+      sql: "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?",
+      parameters: ['agent_session_records'],
+      one: true
+    }).length === 0
   ) {
     return state
   }
-  for (const row of db
-    .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT session_id, record_json FROM agent_session_records ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const sessionId = text(row, 'session_id')
     if (sessionId === null) {
       continue
@@ -124,34 +138,45 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
       })
     }
   }
-  for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const key = text(row, 'operation_key')
     const parsed = parseJson(text(row, 'row_json'))
     if (key !== null && parsed.ok && isReadableAgentSessionStoreOperation(key, parsed.value)) {
       state.operations.set(key, parsed.value)
     }
   }
-  for (const row of db
-    .prepare(
-      'SELECT key_id AS keyId, retired_at AS retiredAt FROM agent_session_retired_claim_keys ORDER BY rowid'
-    )
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT key_id AS keyId, retired_at AS retiredAt FROM agent_session_retired_claim_keys ORDER BY rowid',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const entry = { keyId: row.keyId, retiredAt: Number(row.retiredAt) }
     if (isReadableRetiredAgentSessionClaimKey(entry)) {
       state.retiredClaimKeys.push(entry)
     }
   }
-  const recorded = db
-    .prepare('SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?')
-    .get(SESSION_TABS_RECORDED)
+  const recorded =
+    (yield {
+      sql: 'SELECT 1 AS present FROM agent_session_store_meta WHERE key = ?',
+      parameters: [SESSION_TABS_RECORDED],
+      one: true
+    }).length > 0
   const table = new AgentSessionTabTable()
-  for (const row of db
-    .prepare(
-      'SELECT tab_id AS tabId, session_id AS sessionId FROM agent_session_tabs ORDER BY position'
-    )
-    .all()) {
+  for (const row of yield {
+    sql: 'SELECT tab_id AS tabId, session_id AS sessionId FROM agent_session_tabs ORDER BY position',
+    parameters: []
+  }) {
+    if (++examined % 128 === 0) {
+      yield null
+    }
     const entry = { tabId: row.tabId, sessionId: row.sessionId }
     if (
       isReadableAgentSessionStoreTab(entry) &&
@@ -165,6 +190,44 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     state.sessionTabs = table
   }
   return state
+}
+
+export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+  const steps = loadAgentSessionStoreSteps()
+  let rows: SqliteRow[] = []
+  for (;;) {
+    const next = steps.next(rows)
+    if (next.done) {
+      return next.value
+    }
+    const query = next.value
+    if (query) {
+      const statement = db.prepare(query.sql)
+      const row = query.one ? statement.get(...query.parameters) : undefined
+      rows = query.one ? (row ? [row] : []) : statement.all(...query.parameters)
+    }
+  }
+}
+
+export async function loadAgentSessionStoreRowsAsync(
+  read: JournalReadConnection
+): Promise<AgentSessionStoreState> {
+  const steps = loadAgentSessionStoreSteps()
+  let rows: SqliteRow[] = []
+  for (;;) {
+    const next = steps.next(rows)
+    if (next.done) {
+      return next.value
+    }
+    const query = next.value
+    if (!query) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    } else {
+      const statement = read.prepare(query.sql)
+      const row = query.one ? await statement.get(...query.parameters) : undefined
+      rows = query.one ? (row ? [row] : []) : await statement.all(...query.parameters)
+    }
+  }
 }
 
 function writeTabIndex(

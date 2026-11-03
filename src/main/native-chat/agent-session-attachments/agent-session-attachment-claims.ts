@@ -1,6 +1,7 @@
 // Claim writes and sweep marks share the journal transaction connection so only one can win.
 
 import { lstatSync, readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
 import type Database from '../../sqlite/sync-database'
@@ -89,21 +90,76 @@ export type AgentSessionAttachmentClaim = {
   now: number
 }
 
+export type PreparedAgentSessionAttachmentClaim = {
+  sessionId: string
+  now: number
+  uploadIds: Set<string>
+  required: string[]
+}
+
+function attachmentClaimParts(claim: AgentSessionAttachmentClaim): {
+  root: string
+  prepared: PreparedAgentSessionAttachmentClaim
+} {
+  const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
+  const uploadIds = agentSessionAttachmentReferences(root, claim.body)
+  const kept = claim.previous
+    ? agentSessionAttachmentReferences(root, claim.previous)
+    : new Set<string>()
+  return {
+    root,
+    prepared: {
+      sessionId: claim.sessionId,
+      now: claim.now,
+      uploadIds,
+      required: claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+    }
+  }
+}
+
+/** Mutation ownership excludes a new sweep mark until the prepared native claim commits. */
+export async function prepareAgentSessionAttachmentClaim(
+  claim: AgentSessionAttachmentClaim
+): Promise<PreparedAgentSessionAttachmentClaim> {
+  const { root, prepared } = attachmentClaimParts(claim)
+  for (const id of prepared.required) {
+    let stored = false
+    try {
+      stored = (await readdir(join(root, id))).some(
+        (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
+      )
+    } catch {
+      stored = false
+    }
+    if (!stored) {
+      throw new AgentSessionAttachmentExpiredError()
+    }
+  }
+  return prepared
+}
+
 /** Share the message transaction so missing required uploads roll back the entire send. */
 export function claimAgentSessionAttachmentsInTransaction(
   db: Database.Database,
   claim: AgentSessionAttachmentClaim
 ): { referenced: Set<string>; inserted: string[] } {
-  const root = agentSessionAttachmentStoreRoot(claim.stateDirectory)
-  const uploadIds = agentSessionAttachmentReferences(root, claim.body)
+  const { root, prepared } = attachmentClaimParts(claim)
+  if (prepared.required.some((id) => !uploadIsStored(root, id))) {
+    throw new AgentSessionAttachmentExpiredError()
+  }
+  return claimPreparedAgentSessionAttachments(db, prepared)
+}
+
+/** Sweep marks and claims are rechecked atomically on the sole native writer. */
+export function claimPreparedAgentSessionAttachments(
+  db: Database.Database,
+  claim: PreparedAgentSessionAttachmentClaim
+): { referenced: Set<string>; inserted: string[] } {
+  const { uploadIds, required } = claim
   if (uploadIds.size === 0) {
     return { referenced: uploadIds, inserted: [] }
   }
-  const kept = claim.previous
-    ? agentSessionAttachmentReferences(root, claim.previous)
-    : new Set<string>()
-  const required = claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
-  if (required.some((uploadId) => isBeingSwept(db, uploadId) || !uploadIsStored(root, uploadId))) {
+  if (required.some((uploadId) => isBeingSwept(db, uploadId))) {
     throw new AgentSessionAttachmentExpiredError()
   }
   const inserted = insertClaims(db, required, claim.sessionId, claim.now)

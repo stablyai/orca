@@ -11,8 +11,12 @@ import type { JournalSubmissionRow } from '../agent-session-journal/journal-row-
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 
 /** Actual unannotated initial-source writer shape, including terminal direct inputs between consumers. */
-export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal, n: number): void {
-  const database = openTestJournalHostDatabase(root)
+export async function writeLegacyGapFixture(
+  root: string,
+  journal: AgentSessionJournal,
+  n: number
+): Promise<void> {
+  const database = await openTestJournalHostDatabase(root)
   const { sessionId } = journal['identity']
   const { epoch, sequence } = journal.cursor()
   let seq = sequence
@@ -61,7 +65,7 @@ export function writeLegacyGapFixture(root: string, journal: AgentSessionJournal
     n
   )
   const acceptedSequence = submission('legacy-M')
-  database.transaction((db) => {
+  database.fixtureTransaction((db) => {
     writeCommandReceiptTestRecord(db, sessionId)
     insertCommandReceiptIfAbsent(
       db,

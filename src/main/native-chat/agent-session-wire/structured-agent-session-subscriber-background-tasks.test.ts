@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,6 +82,7 @@ describe('the background-task roster on subscriber frames', () => {
     subscribers.republishBackgroundTasks(SESSION, 1)
     await appendRow(journal, 'after')
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
 
     subscribers.open({
       id: 'pane-2',
@@ -90,6 +92,7 @@ describe('the background-task roster on subscriber frames', () => {
       cursor: pane.cursor!,
       emit: toPane
     })
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(pane.backgroundTasks).toBeNull()
   })
@@ -107,6 +110,7 @@ describe('the background-task roster on subscriber frames', () => {
       cursor: journal.cursor(),
       emit: (event) => events.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(events).toHaveLength(1)
     expect(rosterOf(events[0])).toEqual(MONITORING)
@@ -124,10 +128,12 @@ describe('the background-task roster on subscriber frames', () => {
       fence: 1,
       emit: (e) => events.push(e)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     const reads = readBackgroundTasks.mock.calls.length
 
     await appendRow(journal, 'token')
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(readBackgroundTasks).toHaveBeenCalledTimes(reads)
     expect(events.at(-1)).toMatchObject({ type: 'batch' })
@@ -147,6 +153,7 @@ describe('the background-task roster on subscriber frames', () => {
       fence: 1,
       emit: (e) => first.push(e)
     })
+    await settleTestSubscriberDeliveries(subscribers)
 
     roster = MONITORING
     subscribers.republishBackgroundTasks(SESSION, 1)
@@ -157,6 +164,7 @@ describe('the background-task roster on subscriber frames', () => {
       fence: 1,
       emit: (e) => second.push(e)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     subscribers.republishBackgroundTasks(SESSION, 1)
     expect([first.length, second.length]).toEqual([2, 1])
 

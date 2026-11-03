@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

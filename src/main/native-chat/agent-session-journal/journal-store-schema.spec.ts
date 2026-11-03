@@ -62,7 +62,7 @@ export function registerJournalStoreSchemaTests(): void {
   }
 
   async function withDatabase(run: (db: Database.Database) => void): Promise<void> {
-    const opened = openTestJournalHostDatabase(root)
+    const opened = await openTestJournalHostDatabase(root)
     try {
       run(opened.db)
     } finally {

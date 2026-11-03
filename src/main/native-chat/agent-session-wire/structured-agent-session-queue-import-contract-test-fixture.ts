@@ -27,7 +27,7 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-export const db = () => openTestJournalHostDatabase(rig.root).db
+export const db = async () => (await openTestJournalHostDatabase(rig.root)).db
 
 export const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
@@ -46,9 +46,9 @@ export const words = (fact: 'providerRejected' | 'cancelled') =>
     { surface: 'rejection' }
   )
 
-export function journalFor(sessionId: string): AgentSessionJournal {
+export async function journalFor(sessionId: string): Promise<AgentSessionJournal> {
   return new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
+    database: await openTestJournalHostDatabase(rig.root),
     identity: {
       sessionId,
       workspaceId: 'workspace-1',
@@ -101,8 +101,8 @@ export type Legacy = [
   hold?: string
 ]
 
-export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
+export async function seedLegacy(sessionId: string, rows: readonly Legacy[]): Promise<void> {
+  const insert = (await db()).prepare(
     `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
        created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
      VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
@@ -125,14 +125,14 @@ export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
   })
 }
 
-export const legacyIds = (sessionId = SESSION) =>
-  db()
+export const legacyIds = async (sessionId = SESSION) =>
+  (await db())
     .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
     .all(sessionId)
     .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
 
-export function queueRows(sessionId = SESSION): string[] {
-  return readTestQueueChanges(db(), sessionId).map(
+export async function queueRows(sessionId = SESSION): Promise<string[]> {
+  return readTestQueueChanges(await db(), sessionId).map(
     ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
   )
 }

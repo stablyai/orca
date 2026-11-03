@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 // Support/create/account reads share registration authority before host install; unknown agents must not install one.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

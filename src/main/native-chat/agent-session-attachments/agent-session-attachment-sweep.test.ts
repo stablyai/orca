@@ -9,6 +9,12 @@ vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof FsPromises>()
   return {
     ...fs,
+    lstat: (...args: Parameters<typeof fs.lstat>) => {
+      if (fault.sync && String(args[0]).startsWith(fault.path)) {
+        throw Object.assign(new Error('probe failed'), { code: 'EACCES' })
+      }
+      return fs.lstat(...args)
+    },
     readdir: (...args: Parameters<typeof fs.readdir>) => {
       if (!fault.sync && String(args[0]) === fault.path) {
         throw Object.assign(new Error('listing failed'), { code: 'EIO' })
@@ -30,7 +36,7 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
@@ -70,7 +76,7 @@ beforeEach(async () => {
   store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(stateDirectory), {
     hasSession: () => true
   })
-  journal = openTestJournalHostDatabase(stateDirectory)
+  journal = await openTestJournalHostDatabase(stateDirectory)
   db = journal.db
   recorded = new Set(['session-1', 'session-2'])
 })
@@ -85,9 +91,7 @@ afterEach(async () => {
 
 function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
   return {
-    database: () => db,
-    write: <T>(run: (db: Database.Database) => T) =>
-      overrides.database?.() === null ? undefined : journal.writeAutocommit(run),
+    database: () => journal,
     recordedSessionIds: () => recorded,
     ...overrides
   }

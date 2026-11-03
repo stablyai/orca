@@ -391,6 +391,7 @@ describe('structured status feed over the real child-record store', () => {
         outcome: 'succeeded'
       }))
     )
+    await journal.readInOrder(() => {})
     expect(views()).toHaveLength(2_389)
     expect(views().filter((view) => view.membership === 'settled')).toHaveLength(2_049)
     expect(feed.childWorkIncomplete(SESSION)).toBe(false)

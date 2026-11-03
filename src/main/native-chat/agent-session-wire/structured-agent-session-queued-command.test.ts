@@ -216,10 +216,12 @@ it('replays /compact across callers with one submission and one provider command
   }
   expect(replay.value).toEqual(original.value)
   expect((await rig.host.journalSnapshot(params.envelope.sessionId)).submissions).toHaveLength(1)
-  expect(rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)).toEqual({
+  expect(
+    await rig.store.readCommandReceipt({ kind: 'caller', callerKey: 'second-caller' }, id)
+  ).toEqual({
     verdict: 'absent'
   })
-  expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
+  expect(await rig.store.readCommandReceipt({ kind: 'global' }, id)).toMatchObject({
     verdict: 'readable',
     receipt: { callerKey: CALLER.callerKey }
   })
@@ -306,8 +308,8 @@ it('replays a completed compact after reopening an unreadable writer without com
   expect(rig.compact).toHaveBeenCalledOnce()
   rig.host.stopDelivery()
   await rig.host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(rig.root)
-    .db.prepare(
+  ;(await openTestJournalHostDatabase(rig.root)).db
+    .prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
     )
     .run(SESSION)

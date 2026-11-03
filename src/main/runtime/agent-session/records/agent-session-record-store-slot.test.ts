@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 /** Early launch admission and the later chat host must share one record-store writer. */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -126,8 +127,8 @@ it.each(['standalone', 'construction'] as const)(
     let database: JournalHostDatabase | undefined
     const realClose = JournalHostDatabase.prototype.close
     const realOpen = JournalHostDatabase.open
-    vi.spyOn(JournalHostDatabase, 'open').mockImplementation((directory) => {
-      const opened = realOpen(directory)
+    vi.spyOn(JournalHostDatabase, 'open').mockImplementation(async (directory) => {
+      const opened = await realOpen(directory)
       database = opened
       return opened
     })

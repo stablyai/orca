@@ -22,7 +22,7 @@ it('leaves no row of a settlement durable when a later one of its rows fails to 
   await deferred.drained()
   const before = journal.cursor().sequence
   // Abort the second insert to verify settlement transaction atomicity.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_chunk
+  ;(await openTestJournalHostDatabase(root)).db.exec(`CREATE TRIGGER fail_second_chunk
 BEFORE INSERT ON main.journal_rows WHEN NEW.seq = ${before + 2}
 BEGIN SELECT RAISE(ABORT, 'second chunk refused'); END`)
   sink.tryAppendTransition?.({
@@ -81,6 +81,8 @@ it('lands a write a step issues while it runs after the whole transition', async
       itemStep(() => ({ identity: identity('second'), body: tool('second', 'running') }))
     ]
   })
+  await deferred.drained()
+  // The first barrier captures the outer transition; its callback admits the nested write.
   await deferred.drained()
 
   expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(

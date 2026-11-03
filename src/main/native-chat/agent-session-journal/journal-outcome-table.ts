@@ -1,5 +1,10 @@
+import type { JournalReadConnection } from './journal-sql-owner'
 import { journalInputOrder } from './journal-input-order'
-import { detachJournalNativePrefix, restoreJournalNativeState } from './journal-input-conversion'
+import {
+  detachJournalNativePrefix,
+  restoreJournalNativeState,
+  restoreJournalNativeStateAsync
+} from './journal-input-conversion'
 import type Database from '../../sqlite/sync-database'
 import type { JournalReducerState } from './journal-reducer'
 import { applyJournalRow } from './journal-reducer'
@@ -9,16 +14,16 @@ import { journalRowReadBack } from './journal-row-table'
 import {
   encodeJournalOutcomes,
   journalOutcomeScalars,
-  JournalOutcomeFold,
-  JOURNAL_PREFIX_ORDINAL
+  JournalOutcomeFold
 } from './journal-outcome-codec'
 import type { JournalOutcomeSource } from './journal-outcome-format'
-
-// The key index orders each key's records newest first, so a range seek past the last key read lands
-// on the next key's newest record: one indexed seek per key, whatever its revisions number.
-export const JOURNAL_NEWEST_OUTCOME_SQL = `SELECT seq, field, entry_key, format, ordinal, value_json,
-  deleted FROM journal_outcomes WHERE generation = ? AND (field, entry_key) > (?, ?) AND seq <= ?
-  ORDER BY field, entry_key, seq DESC LIMIT 1`
+import type { JournalEncodedOutcome } from './journal-persistence-plan'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  JOURNAL_NEWEST_OUTCOME_SQL,
+  writeJournalEncodedOutcomes
+} from './journal-outcome-persistence'
+export { JOURNAL_NEWEST_OUTCOME_SQL } from './journal-outcome-persistence'
 
 /** Folds each key's newest record, deletions included, over `baseline`, the chat's folded input
  * prefix when it has one. Superseded revisions are never read: they no longer shape the chat. */
@@ -45,32 +50,38 @@ export function readJournalOutcomes(
   }
 }
 
-/** Runs inside the receipt transaction and only inserts: no record is ever updated or rewritten. A
- * row the reader would reject is refused, as an input insert refuses it; the caller rolls back. */
-export function persistJournalOutcomeRows(
-  db: Database.Database,
+/** Uses the same private canonical fold for native persistence and host preparation. */
+function* prepareJournalOutcomeSteps(
   state: JournalReducerState,
-  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
   rows: readonly JournalRow[],
   savedAt?: number,
   upgradeNative = false,
-  finish?: (state: JournalReducerState) => void
-): { state: JournalReducerState; adopt: () => JournalReducerState } {
+  finish?: (state: JournalReducerState) => void,
+  acceptance?: (id: string) => AgentJournalCursor | undefined
+): Generator<
+  void,
+  { state: JournalReducerState; adopt: () => JournalReducerState; values: JournalEncodedOutcome[] }
+> {
+  const values: JournalEncodedOutcome[] = []
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
   journalInputOrder(transition.state).introduceOverlays(transition.state)
-  const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
-    WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
-  const insert = db.prepare(`INSERT INTO journal_outcomes
-    (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+  let examined = 0,
+    bytes = 0
   for (const row of rows) {
     // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
     // unusable never reaches the model, so it is never refused by the strict record encoder.
     const { stored } = journalRowReadBack(state.sessionId, row)
-    applyJournalRow(transition.state, stored, savedAt ?? row.ts)
-    if (row === rows.at(-1)) {
-      finish?.(transition.state)
+    const apply = () => {
+      applyJournalRow(transition.state, stored, savedAt ?? row.ts)
+      if (row === rows.at(-1)) {
+        finish?.(transition.state)
+      }
+    }
+    if (acceptance) {
+      journalInputOrder(transition.state).withAcceptance(acceptance, apply)
+    } else {
+      apply()
     }
     const changes = transition.changes(true)
     if (upgradeNative) {
@@ -92,32 +103,81 @@ export function persistJournalOutcomeRows(
     for (const [index, value] of encoded.values.entries()) {
       // Each change's record is at its own index; the scalar records after them match no change.
       const change = changes.at(index)
-      const kept = previous.get(source.generation, value.field, value.key)
-      // A new or re-created key takes its place in the row's touch order, as the live map does; a
-      // key that existed before this row keeps its place, which for a key only the frozen prefix
-      // held is the prefix's own order.
-      const ordinal = change?.reinsert
-        ? appended(row.seq, index)
-        : kept?.deleted === 0 && typeof kept.ordinal === 'string'
-          ? kept.ordinal
-          : !kept && source.prefix > 0 && change
-            ? JOURNAL_PREFIX_ORDINAL
-            : appended(row.seq, index)
-      insert.run(
-        source.generation,
-        value.seq,
-        value.field,
-        value.key,
-        value.format,
-        ordinal,
-        value.json,
-        Number(value.deleted)
-      )
+      bytes += Buffer.byteLength(value.json)
+      values.push({
+        ...value,
+        index,
+        reinsert: Boolean(change?.reinsert),
+        changed: Boolean(change)
+      })
+    }
+    if (++examined >= 128 || bytes >= 256 * 1024) {
+      examined = bytes = 0
+      yield
     }
   }
-  return { state: transition.state, adopt: transition.adopt }
+  return { state: transition.state, adopt: transition.adopt, values }
 }
 
-function appended(seq: number, index: number): string {
-  return `s${String(seq).padStart(16, '0')}:${String(index).padStart(16, '0')}`
+export function prepareJournalOutcomeRows(...input: Parameters<typeof prepareJournalOutcomeSteps>) {
+  const steps = prepareJournalOutcomeSteps(...input)
+  for (;;) {
+    const next = steps.next()
+    if (next.done) {
+      return next.value
+    }
+  }
+}
+export async function prepareJournalOutcomeRowsAsync(
+  ...input: Parameters<typeof prepareJournalOutcomeSteps>
+) {
+  const steps = prepareJournalOutcomeSteps(...input)
+  for (;;) {
+    const next = steps.next()
+    if (next.done) {
+      return next.value
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+}
+
+/** Direct native contracts use the same encoder and SQL ordinal decisions. */
+export function persistJournalOutcomeRows(
+  db: Database.Database,
+  state: JournalReducerState,
+  source: Pick<JournalOutcomeSource, 'generation' | 'prefix'>,
+  rows: readonly JournalRow[],
+  savedAt?: number,
+  upgradeNative = false,
+  finish?: (state: JournalReducerState) => void
+) {
+  const transition = prepareJournalOutcomeRows(state, rows, savedAt, upgradeNative, finish)
+  writeJournalEncodedOutcomes(db, source, transition.values)
+  return transition
+}
+
+/** A finite snapshot supplies bounded newest-key pages without one host round trip per key. */
+export async function readJournalOutcomesAsync(
+  read: JournalReadConnection,
+  sessionId: string,
+  epoch: string,
+  source: JournalOutcomeSource,
+  baseline?: JournalReducerState
+): Promise<JournalReducerState> {
+  const prefix = detachJournalNativePrefix(baseline)
+  const fold = new JournalOutcomeFold()
+  let after = { field: '', key: '' }
+  for (;;) {
+    const rows = await read.outcomes(source.generation, source.through, after.field, after.key)
+    if (!rows.length) {
+      const state = fold.finish(sessionId, epoch, source.through, baseline)
+      await restoreJournalNativeStateAsync(read, state, source.format, fold, prefix)
+      return state
+    }
+    for (const row of rows) {
+      const value = fold.add(row)
+      after = { field: value.field, key: value.key }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
 }

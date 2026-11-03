@@ -156,7 +156,7 @@ export async function interruptedRestart(
     logger: log.logger,
     store,
     adapter: { ...adapter(), closeSession },
-    journalDatabase: openTestJournalHostDatabase(previous.root),
+    journalDatabase: await openTestJournalHostDatabase(previous.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner,

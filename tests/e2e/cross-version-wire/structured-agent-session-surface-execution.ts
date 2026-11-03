@@ -1,3 +1,5 @@
+import { settleTestSubscriberDeliveries } from '../../../src/main/native-chat/agent-session-wire/agent-session-subscriber-test-support'
+import { getStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { availableRevealWorkspace } from '../../../src/main/runtime/session-tabs/structured-workspace-authority.test-fixture'
 import { expect, vi } from 'vitest'
 import type { structuredHostStub } from './structured-agent-session-host-fixture'
@@ -111,6 +113,12 @@ export async function callBuild(
     (raw) => replies.push(JSON.parse(raw) as RpcReply),
     client
   )
+  if (method === 'agentSession.subscribe') {
+    const subscribers = getStructuredAgentSessionHost()?.collaboratorsForTests?.().subscribers
+    if (subscribers) {
+      await settleTestSubscriberDeliveries(subscribers)
+    }
+  }
   return replies
 }
 

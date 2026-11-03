@@ -1,4 +1,3 @@
-import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -242,7 +241,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       wakesQueued.has(sessionId) ||
       !work ||
       structuredAgentSessionCommandRunning(work) ||
-      !selectableStructuredSubmission(journal, work)
+      !journal.inputOrder.firstQueued()
     ) {
       return
     }

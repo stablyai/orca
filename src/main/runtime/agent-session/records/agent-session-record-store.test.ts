@@ -381,7 +381,7 @@ describe('concurrent claims', () => {
     const before = store.getRecord('session-alpha')
     const persistedBefore = await readPersistedTestAgentSessionStore(directory)
     // Fail the record update inside commit, like full-disk/I/O failure.
-    openTestJournalHostDatabase(directory).db.exec(
+    ;(await openTestJournalHostDatabase(directory)).db.exec(
       "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
     )
     await expect(store.setConversationName('session-alpha', 'renamed')).rejects.toThrow(

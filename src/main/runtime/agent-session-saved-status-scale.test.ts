@@ -1,3 +1,4 @@
+import { observeNativeJournalSql } from '../native-chat/agent-session-journal/journal-native-test-instrumentation'
 import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -59,21 +60,12 @@ it.each([10, 100])(
     const death = vi.fn()
     const unsubscribe = store.onDeathEvidence(death)
     const work = countStatusWriteWork()
-    const db = openTestJournalHostDatabase(rig.root).db
-    const prepare = db.prepare.bind(db)
+    const database = await openTestJournalHostDatabase(rig.root)
     const sql = { records: 0, other: 0 }
-    const observed = new WeakSet<object>()
-    vi.spyOn(db, 'prepare').mockImplementation((query) => {
-      const statement = prepare(query)
-      if (/^(INSERT|DELETE|UPDATE)/.test(query) && !observed.has(statement)) {
-        observed.add(statement)
-        const run = statement.run.bind(statement)
-        vi.spyOn(statement, 'run').mockImplementation((...args) => {
-          sql[query.startsWith('INSERT INTO agent_session_records ') ? 'records' : 'other']++
-          return run(...args)
-        })
+    const stopSql = observeNativeJournalSql(database, (entry) => {
+      if (entry.method === 'run' && /^(INSERT|DELETE|UPDATE)/.test(entry.sql)) {
+        sql[entry.sql.startsWith('INSERT INTO agent_session_records ') ? 'records' : 'other']++
       }
-      return statement
     })
     const turn = { provider: 'claude', sessionId: `provider-${id}-0`, uuid: 'turn' } as const
     await journal.appendItem(
@@ -131,6 +123,7 @@ it.each([10, 100])(
       expect(sql).toEqual({ records: 0, other: 0 })
     }
     unsubscribe()
+    stopSql()
   }
 )
 

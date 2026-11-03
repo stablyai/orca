@@ -77,7 +77,7 @@ export function createFixture() {
   }
 
   async function saveOldItems(inputs: { itemId: string; revision?: number; body: unknown }[]) {
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = await openTestJournalHostDatabase(root)
     for (const [index, input] of inputs.entries()) {
       const json = JSON.stringify({
         v: 3,
@@ -108,7 +108,7 @@ export function createFixture() {
       { itemId: 'orca:approval', body: pendingApproval() }
     ])
     const before = journal.snapshot().items.find((item) => item.itemId === saved.itemId)
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = await openTestJournalHostDatabase(root)
     const history = liveTestJournalRows(db, 'validation')
     const commits = vi.fn()
     journal.observeCommits(commits)

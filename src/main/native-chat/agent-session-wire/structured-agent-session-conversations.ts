@@ -1,3 +1,4 @@
+import { advancePromptProjection } from './structured-agent-session-actionable-prompts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -32,6 +33,7 @@ export class StructuredAgentSessionConversations extends Map<
 
   constructor(
     private readonly delivery: {
+      advanceStatusProjection?: (journal: AgentSessionJournal, rows?: readonly JournalRow[]) => void
       observe?: (
         sessionId: string,
         journal: AgentSessionJournal,
@@ -75,6 +77,8 @@ export class StructuredAgentSessionConversations extends Map<
       if (!current()) {
         return
       }
+      advancePromptProjection(journal, rows)
+      this.delivery.advanceStatusProjection?.(journal, rows)
       this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
       try {
         this.delivery.observe?.(sessionId, journal, rows)

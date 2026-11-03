@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 // Exercise worst-case serialized frames against the phone bridge limit.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -215,6 +216,7 @@ describe('frames to a bounded-frame subscriber', () => {
       emit,
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     check('unknown')
     close()
     frames.length = 0
@@ -228,6 +230,7 @@ describe('frames to a bounded-frame subscriber', () => {
       cursor,
       snapshotCatchUp: false
     })
+    await settleTestSubscriberDeliveries(subscribers)
     expect(
       frames.filter((frame) => frame.type === 'batch' && frame.batch.items.length).length
     ).toBeGreaterThan(1)
@@ -235,6 +238,7 @@ describe('frames to a bounded-frame subscriber', () => {
     frames.length = 0
     held = new Set(ids)
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
     check('pending')
     for (const frame of frames) {
       expect(frame).toMatchObject({
@@ -307,6 +311,7 @@ describe('frames to a bounded-frame subscriber', () => {
       emit,
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     subscribers.open({
       id: 'catch-up',
       sessionId: SESSION,
@@ -316,9 +321,12 @@ describe('frames to a bounded-frame subscriber', () => {
       cursor: { epoch: journal.epoch, sequence: 0 },
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     await fillChat()
     subscribers.publish(SESSION, journal, { turnId: 't'.repeat(100_000), text: 'working' })
+    await settleTestSubscriberDeliveries(subscribers)
     subscribers.snapshot(SESSION, journal, 1)
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(frames.length).toBeGreaterThan(4)
     for (const frame of frames) {
@@ -349,12 +357,14 @@ describe('frames to a bounded-frame subscriber', () => {
       emit: (event) => frames.push(event),
       boundedFrames: true
     })
+    await settleTestSubscriberDeliveries(subscribers)
     // Simulate a buffered drain before one publish.
     for (let index = 0; index < 40; index += 1) {
       await append(message('x'.repeat(256 * 1024)))
     }
     frames.length = 0
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
 
     // The phone shell caps unacknowledged stream bytes at 4 MiB.
     const bytes = frames.reduce((sum, frame) => sum + bridgeFrameBytes(frame), 0)
@@ -367,6 +377,7 @@ describe('frames to a bounded-frame subscriber', () => {
     await append(message('next'))
     const live = frames.length
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
     expect(frames.slice(live).map((frame) => frame.type)).toEqual(['batch'])
 
     let state = frames.reduce(
@@ -374,7 +385,7 @@ describe('frames to a bounded-frame subscriber', () => {
       EMPTY_STRUCTURED_AGENT_SESSION
     )
     for (let cursor = oldestStructuredAgentSessionCursor(state); state.hasOlder && cursor;) {
-      const older = readAgentSessionHistory(journal, {
+      const older = await readAgentSessionHistory(journal, {
         sessionId: SESSION,
         direction: 'before',
         cursor
@@ -428,8 +439,10 @@ describe('frames to a bounded-frame subscriber', () => {
       fence: 1,
       emit: (event) => frames.push(event)
     })
+    await settleTestSubscriberDeliveries(subscribers)
     await append(stored)
     subscribers.publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(subscribers)
 
     expect(frames).toHaveLength(2)
     expect(frames[0]).toMatchObject({

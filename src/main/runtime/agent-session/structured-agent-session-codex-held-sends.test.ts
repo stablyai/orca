@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Exercise shipped host/journal/adapter with fake Codex: Working follows provider-held sends, including completion without delivery rows; subscribers read real frames.
 
 import { mkdtemp, rm } from 'node:fs/promises'

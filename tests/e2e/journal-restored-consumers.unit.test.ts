@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../../src/main/native-chat/agent-session-wire/agent-session-subscriber-test-support'
 // @vitest-environment happy-dom
 
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
@@ -38,7 +39,7 @@ import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-sessio
 import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
 import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
+import { prepareJournalOutcomeWriteAsync } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
 import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
@@ -201,7 +202,8 @@ it.each(cases)(
     const active = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } })
     rig = active
     setStructuredAgentSessionHost(active.host)
-    const pinInputs = kind === 'mixed' ? seedQueuedRigLegacyJournal(active.root, SESSION) : null
+    const pinInputs =
+      kind === 'mixed' ? await seedQueuedRigLegacyJournal(active.root, SESSION) : null
     const attached = await active.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
     if (!attached.ok) {
       throw new Error('Fixture attach refused')
@@ -295,15 +297,15 @@ it.each(cases)(
     }
     await active.host.close(SESSION, 'evict')
     expect(active.host.hasSession(SESSION)).toBe(false)
-    const database = openTestJournalHostDatabase(active.root)
+    const database = await openTestJournalHostDatabase(active.root)
     const saved = restoreJournal(database.db, SESSION)?.state
     if (!saved) {
       throw new Error('Missing usable projection before tail append')
     }
     const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
-    database.transaction(
-      (db) => {
+    await database.transaction(
+      async (db) => {
         const rows: JournalRow[] = []
         for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
           rows.push({
@@ -331,7 +333,7 @@ it.each(cases)(
           itemId: disposable.itemId,
           revision: disposable.revision + 1
         })
-        return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
+        return prepareJournalOutcomeWriteAsync(db, saved, rows, active.clock.now)
       },
       false,
       (result) => {
@@ -373,6 +375,7 @@ it.each(cases)(
           signal: controller.signal
         }
       )
+      await settleTestSubscriberDeliveries(active.host.collaboratorsForTests().subscribers)
       expect(subscribe).toHaveBeenLastCalledWith(expect.objectContaining({ snapshotCatchUp }))
       expect(subscribe.mock.calls.at(-1)?.[0].boundedFrames === true).toBe(bounded)
       return { events, rawFrames }

@@ -32,6 +32,7 @@ export type JournalStopAcceptance = {
 export class JournalStopAcceptor {
   constructor(
     private readonly deps: {
+      now: () => number
       writer: Pick<JournalRowWriter, 'enqueueRows'>
       state: () => JournalReducerState
     }
@@ -47,6 +48,7 @@ export class JournalStopAcceptor {
     receipt?: JournalOperationReceipt
   ): Promise<JournalStopAcceptance> {
     const { state } = this.deps
+    const observedAt = this.deps.now()
     let turnId: string | null = null
     const rows = await this.deps.writer.enqueueRows(
       () => {
@@ -54,7 +56,7 @@ export class JournalStopAcceptor {
         const event = { ...input.event, ...(turnId !== null ? { turnId } : {}) }
         return [
           ...journalQueuedRejectionRowBuilders(state, input.fence, STOP_WITHDRAWAL),
-          journalStopEventRowBuilder(state, event, input.fence)
+          journalStopEventRowBuilder(state, event, input.fence, observedAt)
         ]
       },
       receipt,

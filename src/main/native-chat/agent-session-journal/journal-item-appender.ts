@@ -52,8 +52,8 @@ export class JournalItemAppender {
     let committed: (() => void) | void
     return this.deps
       .enqueue(journalItemRowBuilder(this.deps.state, identity, body, options), {
-        write: (db) => {
-          committed = this.deps.claimAttachments(
+        write: async (db) => {
+          committed = await this.deps.claimAttachments(
             db,
             body,
             true,

@@ -49,17 +49,17 @@ describe('readAgentSessionHistory', () => {
       direction: 'after' as const,
       cursor: { epoch: cursor.epoch, sequence: 0 }
     }
-    expect(read(request)).toMatchObject({
+    expect(await read(request)).toMatchObject({
       ok: true,
       page: { items: [{ body: { state: 'running' } }], latestTurn: { turn: { state: 'running' } } }
     })
-    const { db } = openTestJournalHostDatabase(fixture.root)
+    const { db } = await openTestJournalHostDatabase(fixture.root)
     db.prepare(
       "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
     ).run(IDENTITY.sessionId, cursor.epoch, cursor.sequence)
     await fixture.journal.open()
     expect(fixture.journal.cursor()).toEqual(cursor)
-    expect(read(request)).toMatchObject({
+    expect(await read(request)).toMatchObject({
       ok: true,
       page: {
         items: [{ body: { state: 'completed' } }],
@@ -112,7 +112,10 @@ describe('readAgentSessionHistory', () => {
     expect(structuredSessionGateFacts(current.items).turnRunning).toBe(false)
     expect(current.submissions).toMatchObject([{ clientMessageId: 'u', dispatchState: 'accepted' }])
     expect(
-      readAgentSessionHistory(fixture.journal, { sessionId: IDENTITY.sessionId, direction: 'tail' })
+      await readAgentSessionHistory(fixture.journal, {
+        sessionId: IDENTITY.sessionId,
+        direction: 'tail'
+      })
     ).toMatchObject({
       ok: true,
       page: { items: expected.items, submissions: expected.submissions }
@@ -122,7 +125,7 @@ describe('readAgentSessionHistory', () => {
 
   it('serves the newest page on tail and pages backward from it', async () => {
     await appendItems(5)
-    const tail = readAgentSessionHistory(fixture.journal, {
+    const tail = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 2
@@ -135,7 +138,7 @@ describe('readAgentSessionHistory', () => {
     expect(tail.page.hasNewer).toBe(false)
     expect(tail.page.liveCursor).toEqual(fixture.journal.cursor())
 
-    const older = readAgentSessionHistory(fixture.journal, {
+    const older = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'before',
       cursor: tail.page.window.nextCursor,
@@ -152,7 +155,7 @@ describe('readAgentSessionHistory', () => {
     await appendItems(2)
     const cursor = fixture.journal.cursor()
     await appendItems(5)
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -171,7 +174,7 @@ describe('readAgentSessionHistory', () => {
     const cursor = fixture.journal.cursor()
     await fixture.journal.appendTombstone(item(1), { fence: 1 })
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor
@@ -186,7 +189,7 @@ describe('readAgentSessionHistory', () => {
   it('reports a forward read with no cursor as cursor_ahead rather than serving the tail', async () => {
     await appendItems(1)
     expect(
-      readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'after' })
+      await readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'after' })
     ).toMatchObject({ ok: false, reset: 'cursor_ahead' })
   })
 
@@ -196,7 +199,7 @@ describe('readAgentSessionHistory', () => {
     await fixture.journal.rollEpoch('legacy_import', 2)
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(fixture.journal, {
+        await readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction,
           cursor: stale
@@ -209,7 +212,7 @@ describe('readAgentSessionHistory', () => {
     await appendItems(1)
     const ahead = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence + 10 }
     expect(
-      readAgentSessionHistory(fixture.journal, {
+      await readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'before',
         cursor: ahead
@@ -224,7 +227,7 @@ describe('readAgentSessionHistory', () => {
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       fence: 1
     })
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail'
     })

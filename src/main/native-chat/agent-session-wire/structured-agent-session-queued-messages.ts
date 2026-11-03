@@ -35,7 +35,7 @@ import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachmen
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import {
-  selectStructuredAgentSessionInput,
+  selectPublishedStructuredAgentSessionInput,
   structuredInputExecutionWorking
 } from './structured-agent-session-input-selection'
 
@@ -86,7 +86,7 @@ export function nextStructuredQueuedMessage(
   ) {
     return null
   }
-  const selected = selectStructuredAgentSessionInput(input.journal)
+  const selected = selectPublishedStructuredAgentSessionInput(input.journal)
   return selected.kind === 'card' ? selected.card : null
 }
 
@@ -271,7 +271,15 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const next = work ? nextStructuredQueuedMessage({ journal, record, work }) : null
+    const next = work
+      ? await journal.withInputOrder(
+          () =>
+            [journal.inputOrder.firstQueued()?.clientMessageId].filter(
+              (id): id is string => id !== undefined
+            ),
+          () => nextStructuredQueuedMessage({ journal, record, work })
+        )
+      : null
     if (this.disposed || !next) {
       return
     }

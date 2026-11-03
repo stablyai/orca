@@ -21,7 +21,10 @@ export function readJournalInputPlace(
     return undefined
   }
   if (own.context.basis === 'legacy' && !originals.has(id)) {
-    originals.set(id, originalAcceptance?.(id))
+    const accepted = originalAcceptance?.(id)
+    if (accepted) {
+      originals.set(id, accepted)
+    }
   }
   const original = originals.get(id)
   return {
@@ -79,4 +82,14 @@ export function isJournalInputOverride(
   recoveryPending: boolean
 ): boolean {
   return !recoveryPending && entry.origin === 'client' && entry.queuedMessageId !== undefined
+}
+
+export function journalInputsNeedingAcceptance(
+  state: JournalReducerState,
+  originals: ReadonlyMap<string, unknown>,
+  ids: readonly string[]
+): string[] {
+  return ids.filter(
+    (id) => state.inputEntries.get(id)?.context.basis === 'legacy' && !originals.has(id)
+  )
 }

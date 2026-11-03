@@ -443,7 +443,7 @@ describe('cross-version structured agent sessions', () => {
           spawnToken: 'spawn-vault',
           host: () => host
         }),
-        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
+        journalDatabase: await journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
@@ -671,7 +671,7 @@ describe('cross-version structured agent sessions', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(() => host),
-        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
+        journalDatabase: await journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes

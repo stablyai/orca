@@ -751,14 +751,14 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
   const journal = host['sessions'].get(SESSION)!.journal
   const snapshotRoot = join(root, 'crash')
   await mkdir(snapshotRoot)
-  await openTestJournalHostDatabase(root).db.backup(journalDatabasePath(snapshotRoot))
+  await (await openTestJournalHostDatabase(root)).db.backup(journalDatabasePath(snapshotRoot))
   const fresh = fakeCodex()
   const restartedAdapter = adapterFor(fresh)
   const restarted = new StructuredAgentSessionHost({
     ...host['deps'],
     adapter: restartedAdapter,
     store: await openTestAgentSessionRecordStore(snapshotRoot),
-    journalDatabase: openTestJournalHostDatabase(snapshotRoot),
+    journalDatabase: await openTestJournalHostDatabase(snapshotRoot),
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
   try {
@@ -785,7 +785,7 @@ export function codexInputFinalizationFixture() {
     adapter,
     codex,
     config,
-    database: () => openTestJournalHostDatabase(root).db,
+    database: async () => (await openTestJournalHostDatabase(root)).db,
     rewindTo: (itemId: string, expectedEpoch: string) =>
       host.rewind(CALLER, {
         envelope: envelope('agentSession.rewind', { itemId, expectedEpoch }),

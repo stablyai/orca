@@ -86,7 +86,7 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     now: () => NOW

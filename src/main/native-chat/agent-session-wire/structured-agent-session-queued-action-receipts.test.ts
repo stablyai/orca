@@ -50,16 +50,16 @@ function ledgerRow(id: string) {
   return rig.store.listOperationRows().find((row) => row.operationId === id)
 }
 
-function failReceiptWrites(): () => void {
-  const db = openTestJournalHostDatabase(rig.root).db
+async function failReceiptWrites(): Promise<() => void> {
+  const db = (await openTestJournalHostDatabase(rig.root)).db
   db.exec(`CREATE TRIGGER fail_queued_receipt BEFORE INSERT ON agent_session_command_receipts
     BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
   return () => db.exec('DROP TRIGGER fail_queued_receipt')
 }
 
-function writeUnreadableReceipt(id: string, method: string): void {
-  openTestJournalHostDatabase(rig.root)
-    .db.prepare(
+async function writeUnreadableReceipt(id: string, method: string): Promise<void> {
+  ;(await openTestJournalHostDatabase(rig.root)).db
+    .prepare(
       `INSERT INTO agent_session_command_receipts (operation_id, session_id, caller_key, method,
         fingerprint, status, result_json, rejection_json, accepted_at)
        VALUES (?, ?, ?, ?, 'x', 'accepted', '{', NULL, 0)`
@@ -102,7 +102,7 @@ describe('Send now', () => {
       replayed: false,
       value: { clientMessageId: id, submission: { queuedMessageId: draftId } }
     })
-    expect(receipt(id)).toMatchObject({
+    expect(await receipt(id)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.queuedMessageSend', result: { kind: 'journal-row' } }
     })
@@ -135,7 +135,7 @@ describe('Send now', () => {
       replayed: false,
       value: { clientMessageId: first }
     })
-    expect(receipt(alias)).toMatchObject({ receipt: { result: { kind: 'journal-row' } } })
+    expect(await receipt(alias)).toMatchObject({ receipt: { result: { kind: 'journal-row' } } })
     expect(await rig.sendNow(draftId, alias)).toMatchObject({
       ok: true,
       replayed: true,
@@ -187,11 +187,11 @@ describe('Send now', () => {
     await rig.workingSend()
     const draftId = await queuedDraft('roll me back')
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     await expect(rig.sendNow(draftId, id)).rejects.toThrow('receipt unavailable')
     expect(await rig.handoff(draftId)).toBeUndefined()
     expect(await rig.drafts()).toContainEqual(expect.objectContaining({ messageId: draftId }))
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
     restore()
     expect(await rig.sendNow(draftId, id)).toMatchObject({ ok: true, replayed: false })
@@ -203,7 +203,7 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_invalid' }
     })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
   })
 
@@ -213,10 +213,10 @@ describe('Send now', () => {
     const first = opId()
     await rig.sendNow(draftId, first)
     const alias = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     expect(await rig.sendNow(draftId, alias)).toMatchObject(UNKNOWN)
     restore()
-    expect(receipt(alias)).toEqual({ verdict: 'absent' })
+    expect(await receipt(alias)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(alias)).toBeUndefined()
     const handoffs = (await rig.host.journalSnapshot(SESSION)).submissions.filter(
       (entry) => entry.queuedMessageId === draftId
@@ -228,7 +228,7 @@ describe('Send now', () => {
     await rig.workingSend()
     const draftId = await queuedDraft('unknown send')
     const id = opId()
-    writeUnreadableReceipt(id, 'agentSession.queuedMessageSend')
+    await writeUnreadableReceipt(id, 'agentSession.queuedMessageSend')
     expect(await rig.sendNow(draftId, id)).toMatchObject(UNKNOWN)
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
@@ -259,7 +259,7 @@ describe('Delete', () => {
       replayed: false,
       value: { deleted: true, messageId: draftId }
     })
-    expect(receipt(id)).toMatchObject({
+    expect(await receipt(id)).toMatchObject({
       receipt: { result: { kind: 'queued-draft', messageId: draftId } }
     })
     expect(await rig.deleteQueued(draftId, id)).toMatchObject({
@@ -290,7 +290,7 @@ describe('Delete', () => {
         replayed: false,
         value: answer
       })
-      expect(receipt(id)).toMatchObject({
+      expect(await receipt(id)).toMatchObject({
         receipt: {
           result: {
             kind: 'no-op',
@@ -320,7 +320,7 @@ describe('Delete', () => {
     await rig.workingSend()
     const draftId = await queuedDraft('keep me')
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     await expect(rig.deleteQueued(draftId, id)).rejects.toThrow('receipt unavailable')
     restore()
     expect(await rig.drafts()).toContainEqual(
@@ -333,7 +333,7 @@ describe('Delete', () => {
     await rig.workingSend()
     const draftId = await queuedDraft('unknown delete')
     const id = opId()
-    writeUnreadableReceipt(id, 'agentSession.queuedMessageDelete')
+    await writeUnreadableReceipt(id, 'agentSession.queuedMessageDelete')
     expect(await rig.deleteQueued(draftId, id)).toMatchObject(UNKNOWN)
     expect(await rig.drafts()).toContainEqual(
       expect.objectContaining({ messageId: draftId, state: 'waiting' })
@@ -355,10 +355,10 @@ describe('Delete', () => {
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     await rig.workingSend()
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     expect(await rig.deleteQueued('no-such-card', id)).toMatchObject(UNKNOWN)
     restore()
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
   })
 
@@ -388,7 +388,7 @@ describe('Resume', () => {
       replayed: false,
       value: { resumed: true }
     })
-    expect(receipt(id)).toMatchObject({ receipt: { result: { kind: 'journal-row' } } })
+    expect(await receipt(id)).toMatchObject({ receipt: { result: { kind: 'journal-row' } } })
     await rig.stop()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     expect(await rig.resume(id)).toMatchObject({
@@ -406,7 +406,7 @@ describe('Resume', () => {
       replayed: false,
       value: { resumed: false }
     })
-    expect(receipt(id)).toMatchObject({
+    expect(await receipt(id)).toMatchObject({
       receipt: { result: { kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } } }
     })
     expect(await rig.resume(id)).toMatchObject({
@@ -420,7 +420,7 @@ describe('Resume', () => {
     await rig.workingSend()
     await queuedDraft('still held')
     await rig.stop()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     await expect(rig.resume(opId())).rejects.toThrow('receipt unavailable')
     restore()
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
@@ -437,17 +437,17 @@ describe('Resume', () => {
 
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)
     restore()
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
   })
 
   it("answers a no-op on a newer Orca's records with that refusal, not unknown", async () => {
     await rig.workingSend()
     const id = opId()
-    Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
+    Object.defineProperty(await openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
     expect(await rig.resume(id)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_journal_unreadable' }
@@ -457,7 +457,7 @@ describe('Resume', () => {
   it('answers an unreadable receipt as unknown and lifts nothing', async () => {
     await pausedQueue()
     const id = opId()
-    writeUnreadableReceipt(id, 'agentSession.queuedMessagesResume')
+    await writeUnreadableReceipt(id, 'agentSession.queuedMessagesResume')
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   })
@@ -488,7 +488,7 @@ describe.each([
       ok: false,
       refusal: { code: 'agent_session_operation_invalid' }
     })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
   })
 })
@@ -513,7 +513,7 @@ describe('an id reused across commands', () => {
     expect(await rig.resume(id)).toMatchObject(conflict)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     // Refused actions cannot overwrite the Stop receipt.
-    expect(receipt(id)).toMatchObject({
+    expect(await receipt(id)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.cancel', result: { kind: 'journal-row' } }
     })

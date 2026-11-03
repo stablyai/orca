@@ -1,3 +1,4 @@
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'

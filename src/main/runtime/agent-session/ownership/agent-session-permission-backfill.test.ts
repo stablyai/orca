@@ -95,7 +95,7 @@ describe('existing chat permission backfill', () => {
     const store = await openTestAgentSessionRecordStore(root)
     await store.backfillChatPermissionModes(() => true)
     const before = store.listRecords()
-    const db = openTestJournalHostDatabase(root).db
+    const db = (await openTestJournalHostDatabase(root)).db
     db.exec(
       "CREATE TRIGGER refuse_backfill_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'unexpected second write'); END"
     )
@@ -175,7 +175,7 @@ describe('existing chat permission backfill', () => {
   it('rolls back every row if saving fails, then succeeds on the next startup pass', async () => {
     await seedTestAgentSessionRecordStore(root, { records: [record('claude'), record('codex')] })
     const store = await openTestAgentSessionRecordStore(root)
-    const db = openTestJournalHostDatabase(root).db
+    const db = (await openTestJournalHostDatabase(root)).db
     db.exec(
       "CREATE TRIGGER refuse_backfill_write BEFORE UPDATE ON agent_session_records WHEN NEW.session_id = 'session-codex' BEGIN SELECT RAISE(ABORT, 'disk full'); END"
     )

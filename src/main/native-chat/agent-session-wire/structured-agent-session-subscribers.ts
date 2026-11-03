@@ -1,8 +1,7 @@
+import { queueSubscriberDelivery } from './agent-session-subscriber-delivery'
 import type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 export type { AgentSessionSubscribeInput } from './agent-session-subscribe-input'
 import type { CurrentRequestsSubscriber } from './agent-session-current-requests'
-// Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
-
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
@@ -18,9 +17,9 @@ import {
   type SubscriberFieldState
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from './structured-agent-session-queued-publication'
-import {
+import type {
   deliverToSubscriber,
-  type SubscriberDeliveryPort
+  SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
@@ -44,6 +43,8 @@ export type Subscriber = CurrentRequestsSubscriber &
     workView?: string
     /** Semantic history baseline actually emitted, independent of token/row progress. */
     historyView?: string
+    delivery?: Promise<void>
+    pendingDelivery?: Omit<Parameters<typeof deliverToSubscriber>[1], 'subscriber'>
   }
 
 export type AgentSessionSubscribersHooks = {
@@ -96,13 +97,6 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     if (input.cursor) {
       this.deliver(subscriber, input.journal, hostNow, true)
-      refreshDerivedStopNotes(
-        this.deliveryPort(),
-        subscriber,
-        input.journal,
-        hostNow,
-        this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      )
     } else {
       const view = input.journal.publicRead()
       const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)
@@ -276,13 +270,20 @@ export class AgentSessionSubscribers {
     emitCheckpoint = false,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(this.deliveryPort(), {
+    queueSubscriberDelivery(
+      this.deliveryPort(),
       subscriber,
-      journal,
-      hostNow,
-      emitCheckpoint,
-      activity
-    })
+      { journal, hostNow, emitCheckpoint, activity },
+      (pending) => {
+        refreshDerivedStopNotes(
+          this.deliveryPort(),
+          subscriber,
+          pending.journal,
+          pending.hostNow,
+          this.hooks.readCurrentWork?.(subscriber.sessionId, pending.journal)
+        )
+      }
+    )
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()

@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Drive real host/journal/adapter with Codex 0.157 turn bookkeeping: Stop settles held sends when their target turn ends, including before turn/started.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -678,13 +679,14 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     const began = Promise.withResolvers<void>()
     openWaits.began = began.resolve
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    const stopping = settledWithin(stop(), CODEX_TURN_OPEN_WAIT_MS + 2_000)
+    const stopping = stop()
     release?.()
     await began.promise
     await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
     expect(openWaits.ended).toEqual([])
-    await vi.advanceTimersByTimeAsync(2_001)
-    expect(await stopping).not.toBe('held')
+    await vi.advanceTimersByTimeAsync(1)
+    vi.useRealTimers()
+    expect(await settledWithin(stopping, 2_000)).not.toBe('held')
   }
 
   function turnRow(

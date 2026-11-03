@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import * as timers from 'node:timers'
 import { afterEach, expect, it, vi } from 'vitest'
-import { JournalHostDatabase } from './journal-host-database'
+import {
+  openNativeCheckpointFixture,
+  type NativeCheckpointFixture
+} from './journal-checkpoint-test-support'
 import type * as WorkerSource from './journal-checkpoint-worker-source'
 
 const deadlines = vi.hoisted(() => ({
@@ -70,7 +73,7 @@ ${source.journalCheckpointWorkerSource}`
 
 type Metrics = { noop: number; passive: number; stat: number; timers: number; maxTimers: number }
 type Checked = { type: 'checked'; id?: number; log: number; checkpointed: number; metrics: Metrics }
-let host: JournalHostDatabase | undefined
+let host: NativeCheckpointFixture | undefined
 let root: string
 
 afterEach(async () => {
@@ -108,7 +111,7 @@ async function fixture(history: number) {
   })
   const deadline = vi.spyOn(timers, 'setTimeout')
   root = await mkdtemp(join(tmpdir(), 'orca-checkpoint-scaling-'))
-  const database = JournalHostDatabase.open(root)
+  const database = openNativeCheckpointFixture(root)
   host = database
   database.transaction((db) => {
     db.exec('CREATE TABLE maintenance_corpus (chat INTEGER, payload BLOB)')

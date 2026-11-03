@@ -90,13 +90,13 @@ function adapter(): StructuredAgentSessionAdapter {
   )
 }
 
-function openHost(): StructuredAgentSessionHost {
+async function openHost(): Promise<StructuredAgentSessionHost> {
   return new StructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
     agents: claudeAndCodexDeclared(),
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' }),
@@ -121,7 +121,7 @@ beforeEach(async () => {
   }))
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-live-'))
   store = await openTestAgentSessionRecordStore(directory)
-  host = openHost()
+  host = await openHost()
 })
 
 afterEach(async () => {

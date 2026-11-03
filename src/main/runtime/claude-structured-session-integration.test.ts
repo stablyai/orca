@@ -1,3 +1,6 @@
+import { leaseOf, itemsOf, textOf } from './structured-session-observation-test-support'
+import { settleTestSubscriberDeliveries } from '../native-chat/agent-session-wire/agent-session-subscriber-test-support'
+import '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -5,7 +8,6 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
@@ -113,18 +115,6 @@ function ensureParams(fence: number) {
   }
 }
 
-function leaseOf(sessionId: string): {
-  claimStatus: string
-  runtimeFence: number
-  handoffStage: string | null
-  deathEvidence: { kind: string; detail: string } | null
-} {
-  const host = getStructuredAgentSessionHost() as unknown as {
-    deps: { store: { getRecord: (id: string) => { lease: ReturnType<typeof leaseOf> } } }
-  }
-  return host.deps.store.getRecord(sessionId).lease
-}
-
 let claude: ReturnType<typeof fakeClaude>
 let root: string
 let dispatcher: RpcDispatcher
@@ -178,28 +168,6 @@ async function subscribe(
     client
   )
   return frames
-}
-
-function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
-  const items = new Map<string, AgentJournalRenderItem>()
-  for (const frame of frames) {
-    const rows =
-      frame.type === 'snapshot' || frame.type === 'reset'
-        ? frame.page.items
-        : frame.type === 'batch'
-          ? frame.batch.items
-          : []
-    for (const row of rows) {
-      items.set(row.itemId, row)
-    }
-  }
-  return [...items.values()]
-}
-
-function textOf(item: AgentJournalRenderItem): string {
-  return item.body?.kind === 'message'
-    ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
 }
 
 beforeEach(async () => {
@@ -339,19 +307,21 @@ describe('a structured Claude session over agentSession.*', () => {
       description: 'Audit the build',
       is_backgrounded: true
     })
-    expect(childWork).toContainEqual([
-      expect.objectContaining({ kind: 'structured-session', sessionId: SESSION }),
-      [
-        expect.objectContaining({
-          type: 'live',
-          child: expect.objectContaining({
-            handle: { idKind: 'task_id', id: 'agent-1', runId: 'toolu_1' },
-            description: 'Audit the build'
+    await vi.waitFor(() =>
+      expect(childWork).toContainEqual([
+        expect.objectContaining({ kind: 'structured-session', sessionId: SESSION }),
+        [
+          expect.objectContaining({
+            type: 'live',
+            child: expect.objectContaining({
+              handle: { idKind: 'task_id', id: 'agent-1', runId: 'toolu_1' },
+              description: 'Audit the build'
+            })
           })
-        })
-      ],
-      'claude'
-    ])
+        ],
+        'claude'
+      ])
+    )
   })
 
   it("keeps the shell's Anthropic auth with its proxy address once a managed account is pinned", async () => {
@@ -601,10 +571,17 @@ describe('a structured Claude session over agentSession.*', () => {
     // System auth retains shell credentials; the configured overlay still wins.
     expect(claude.live().launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' })
     expect(claude.live().launch.env?.PATH ?? claude.live().launch.env?.Path).toBeTruthy()
-    const history = await call('agentSession.history', {
-      sessionId: SESSION,
-      direction: 'tail',
-      limit: 1
+    const history = await vi.waitFor(async () => {
+      const value = await call('agentSession.history', {
+        sessionId: SESSION,
+        direction: 'tail',
+        limit: 1
+      })
+      expect(value).toMatchObject({
+        ok: true,
+        result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
+      })
+      return value
     })
     expect(history).toMatchObject({
       ok: true,
@@ -650,6 +627,9 @@ describe('a structured Claude session over agentSession.*', () => {
       event: { type: 'message_stop' }
     })
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await settleTestSubscriberDeliveries(
+      getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+    )
     expect(itemsOf(stream).find((item) => textOf(item) === 'Two files.')?.itemId).toBe(
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
@@ -663,6 +643,9 @@ describe('a structured Claude session over agentSession.*', () => {
       message: { role: 'assistant', content: [{ type: 'text', text: 'Background task update.' }] }
     })
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await settleTestSubscriberDeliveries(
+      getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+    )
 
     for (const [taskId, taskType, description] of [
       ['task-one', 'local_agent', 'First task'],
@@ -680,6 +663,9 @@ describe('a structured Claude session over agentSession.*', () => {
       })
     }
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await settleTestSubscriberDeliveries(
+      getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+    )
     const itemsBeforeTaskStop = itemsOf(stream)
     const targetedStopFields = {
       turnId: 'background-tasks',
@@ -727,6 +713,9 @@ describe('a structured Claude session over agentSession.*', () => {
       } as never)
     )
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+    await settleTestSubscriberDeliveries(
+      getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+    )
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       title: 'Allow Bash?',
@@ -850,6 +839,9 @@ describe('a structured Claude session over agentSession.*', () => {
         uuid: 'result-frame-uuid'
       })
       await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+      await settleTestSubscriberDeliveries(
+        getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+      )
       const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
       expect(turnRow()?.body).toMatchObject({ state: 'completed' })
 
@@ -862,6 +854,9 @@ describe('a structured Claude session over agentSession.*', () => {
       // This final event has no later publication to carry it to the client.
       await vi.waitFor(async () => {
         await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+        await settleTestSubscriberDeliveries(
+          getStructuredAgentSessionHost()!.collaboratorsForTests().subscribers
+        )
         const turn = turnRow()?.body
         expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
           kind: 'report',

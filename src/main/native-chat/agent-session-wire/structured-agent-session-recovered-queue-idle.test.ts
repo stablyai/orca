@@ -33,7 +33,7 @@ it('keeps a recovered handoff consumed through natural idle unload and a history
     const dispatches = rig.dispatch.mock.calls.length
     // Simulate process loss without a graceful close settling the handed-over row.
     rig.host.collaboratorsForTests().lifetime.idleSweep.dispose()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     const read = async () => {
       const result = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
       if (!result.ok) {

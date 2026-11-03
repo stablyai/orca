@@ -32,9 +32,9 @@ beforeEach(async () => {
 afterEach(() => rig.dispose())
 
 const journal = () => rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-const db = () => openTestJournalHostDatabase(rig.root).db
-const canonicalPrefix = (sequence: number) =>
-  db()
+const db = async () => (await openTestJournalHostDatabase(rig.root)).db
+const canonicalPrefix = async (sequence: number) =>
+  (await db())
     .prepare(
       'SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes WHERE generation = (SELECT generation FROM journal_outcome_epochs WHERE session_id = ? AND epoch = ?) AND seq <= ? ORDER BY seq, field, entry_key'
     )
@@ -66,7 +66,7 @@ async function seed(limited = false) {
   const prefix = journal()
     .snapshot()
     .items.filter((item) => item.sequence <= floor.sequence)
-  const raw = canonicalPrefix(floor.sequence)
+  const raw = await canonicalPrefix(floor.sequence)
   const kept = await send('kept after clear', 'kept')
   if (limited) {
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
@@ -124,7 +124,7 @@ async function returnedCardAndWaitingCard() {
 
 async function replayedJournal() {
   const reopened = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
+    database: await openTestJournalHostDatabase(rig.root),
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -245,7 +245,7 @@ describe('rewind behind a clear boundary', () => {
         .snapshot()
         .items.filter((item) => item.sequence <= floor.sequence)
     ).toEqual(prefix)
-    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
+    expect(await canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(
       journal()
         .snapshot()
@@ -264,7 +264,7 @@ describe('rewind behind a clear boundary', () => {
       new Error('optional cancel unavailable')
     )
     const before = journal().snapshot()
-    db().exec(`CREATE TEMP TRIGGER fail_rewind BEFORE UPDATE ON agent_session_records
+    ;(await db()).exec(`CREATE TRIGGER fail_rewind BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
       BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
     await expect(rig.host.rewind(CALLER, params)).rejects.toThrow('disk full')
@@ -274,7 +274,7 @@ describe('rewind behind a clear boundary', () => {
     expect(
       rig.store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
-    db().exec('DROP TRIGGER fail_rewind')
+    ;(await db()).exec('DROP TRIGGER fail_rewind')
     await rig.host.close(SESSION, 'evict')
     await rig.host.revealSession(SESSION)
     await rig.host.drainStatusWrites()
@@ -302,7 +302,7 @@ describe('rewind behind a clear boundary', () => {
       rig.store.getRecord(SESSION)!.lease.runtimeFence
     )
     expect(journal().snapshot()).toEqual(recovered)
-    expect(canonicalPrefix(floor.sequence)).toEqual(raw)
+    expect(await canonicalPrefix(floor.sequence)).toEqual(raw)
     expect(rewind).toHaveBeenCalledOnce()
     expect(await rig.host.rewind(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })

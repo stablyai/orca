@@ -571,7 +571,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
 
       await abandonStructuredAgentSessionHost(host)
       await hostTestRecoveryCapsuleSettled()
-      const nativeDb = openTestJournalHostDatabase(rig.root).db
+      const nativeDb = (await openTestJournalHostDatabase(rig.root)).db
       const before = nativeDb
         .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
         .get(sessionId)
@@ -616,7 +616,7 @@ describeIfBuilt('native caller subprocess over durable records', () => {
       host = new StructuredAgentSessionHost({
         ...rig.host.deps,
         store,
-        journalDatabase: openTestJournalHostDatabase(rig.root)
+        journalDatabase: await openTestJournalHostDatabase(rig.root)
       })
       replaceHostTestState({ host, store })
       setStructuredAgentSessionHost(host)

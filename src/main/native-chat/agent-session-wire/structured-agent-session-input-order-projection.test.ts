@@ -1,3 +1,4 @@
+import { JournalReadConnection } from '../agent-session-journal/journal-sql-owner'
 import * as transitions from '../agent-session-journal/journal-reducer-transition'
 import * as outcomes from '../agent-session-journal/journal-outcome-codec'
 import { journalInputOrder, JournalInputOrder } from '../agent-session-journal/journal-input-order'
@@ -292,6 +293,13 @@ it.each([10, 30])(
       metric().receipts++
       return receipt(...args)
     })
+    const readReceipts = JournalReadConnection.prototype.receipts
+    const nativeReceipts = vi
+      .spyOn(JournalReadConnection.prototype, 'receipts')
+      .mockImplementation(function (this: JournalReadConnection, scope, ids) {
+        metric().receipts += ids.length
+        return readReceipts.call(this, scope, ids)
+      })
     const before = JournalInputOrder.prototype.beforeRow
     const rows = vi.spyOn(JournalInputOrder.prototype, 'beforeRow').mockImplementation(function (
       this: JournalInputOrder,
@@ -448,9 +456,9 @@ it.each([10, 30])(
             fingerprint: journal.queuedMessages.get('Q0')!.fingerprint
           }).status
         ).toBe('held')
-        expect(selectStructuredAgentSessionInput(journal).kind).toBe('none')
+        expect((await selectStructuredAgentSessionInput(journal)).kind).toBe('none')
         journal.queuedMessages.editLeases.release(key, 'Q0')
-        expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+        expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
           kind: 'card',
           card: { messageId: 'Q0' }
         })
@@ -626,6 +634,7 @@ it.each([10, 30])(
       domain.mockRestore()
       line.mockRestore()
       receipts.mockRestore()
+      nativeReceipts.mockRestore()
       rows.mockRestore()
       folded.mockRestore()
     }

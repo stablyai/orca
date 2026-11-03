@@ -51,9 +51,9 @@ function clientSend(body: AgentJournalMessageItem, delivery?: 'queue-if-active')
   })
 }
 
-function claimedSessions(): string[] {
-  return openTestJournalHostDatabase(rig.root)
-    .db.prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
+async function claimedSessions(): Promise<string[]> {
+  return (await openTestJournalHostDatabase(rig.root)).db
+    .prepare('SELECT session_id FROM agent_session_attachment_claims ORDER BY session_id')
     .all()
     .flatMap((row) =>
       typeof row === 'object' && row !== null && 'session_id' in row ? [String(row.session_id)] : []
@@ -91,7 +91,7 @@ describe('attachments at send admission', () => {
       ok: true,
       value: { queued: { state: 'waiting' } }
     })
-    expect(claimedSessions()).toEqual([SESSION])
+    expect(await claimedSessions()).toEqual([SESSION])
     await rig.stop()
     await rig.settleAccepted(working, 'a')
     const fields = { command: 'clear' as const }
@@ -100,7 +100,7 @@ describe('attachments at send admission', () => {
       ...fields
     })
     expect(cleared).toMatchObject({ ok: true })
-    expect(claimedSessions()).toEqual([SESSION])
+    expect(await claimedSessions()).toEqual([SESSION])
   })
 
   it('sends text that only mentions another store path, claiming nothing', async () => {
@@ -108,7 +108,7 @@ describe('attachments at send admission', () => {
       textWith(`/home/someone/.config/Orca/agent-session-attachments/${UPLOAD}/notes.txt`)
     )
     expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    expect(claimedSessions()).toEqual([])
+    expect(await claimedSessions()).toEqual([])
   })
 
   it('replays an admitted send under the same id without judging its attachments again', async () => {
@@ -156,7 +156,7 @@ it.each([undefined, 'queue-if-active'] as const)(
       userSend: true as const
     }
     expect(await rig.host.send(CALLER, params)).toMatchObject(EXPIRED)
-    expect(rig.store.readCommandReceipt({ kind: 'global' }, clientOperationId)).toEqual({
+    expect(await rig.store.readCommandReceipt({ kind: 'global' }, clientOperationId)).toEqual({
       verdict: 'absent'
     })
     expect(

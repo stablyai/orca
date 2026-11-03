@@ -71,7 +71,7 @@ it.each([false, true])(
       expect((await rig.submission(m.id))?.handedOverAt).toBeUndefined()
       expect(rig.dispatch.mock.calls.some(([input]) => input.clientMessageId === m.id)).toBe(false)
       const original = journal.submission(m.id)!
-      const receipt = rig.store.readCommandReceipt({ kind: 'global' }, m.id)
+      const receipt = await rig.store.readCommandReceipt({ kind: 'global' }, m.id)
       expect(receipt).toMatchObject({
         verdict: 'readable',
         receipt: {
@@ -101,7 +101,7 @@ it.each([false, true])(
       expect(recoveredM?.payloadFingerprint).toBe(original.payloadFingerprint)
       expect(recoveredM?.acceptedSequence).toBe(original.acceptedSequence)
       const reopened = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-      expect(rig.store.readCommandReceipt({ kind: 'global' }, m.id)).toEqual(receipt)
+      expect(await rig.store.readCommandReceipt({ kind: 'global' }, m.id)).toEqual(receipt)
       expect(reopened.queuedMessages.get(m.id)).toMatchObject({
         body: hostTestMessage('M ordinary steer while C is held, never entered'),
         options: original.options

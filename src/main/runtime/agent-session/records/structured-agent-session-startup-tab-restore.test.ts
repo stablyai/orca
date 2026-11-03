@@ -31,7 +31,7 @@ import { journalIdentityFor } from '../../../native-chat/agent-session-wire/stru
 import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/structured-agent-session-conversation-open'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import type * as AgentSessionRecordRows from './agent-session-record-rows'
+import { JournalPersistencePlan } from '../../../native-chat/agent-session-journal/journal-persistence-plan'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore,
@@ -49,19 +49,21 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 // `failing` fails every record write; `grants` lets that many more through, then fails.
 const writes = vi.hoisted(() => ({ failing: false, grants: Infinity, refused: 0 }))
 
-vi.mock('./agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
+beforeEach(() => {
+  const add = JournalPersistencePlan.prototype.add
+  vi.spyOn(JournalPersistencePlan.prototype, 'add').mockImplementation(function (
+    this: JournalPersistencePlan,
+    ...args
+  ) {
+    if (args[0].kind === 'store') {
       if (writes.failing || writes.grants <= 0) {
         writes.refused += 1
         throw new Error('disk I/O error')
       }
       writes.grants -= 1
-      return actual.writeAgentSessionStoreRows(...args)
     }
-  }
+    add.apply(this, args)
+  })
 })
 
 const PROMPT = 'add a retry'
@@ -137,7 +139,7 @@ async function seedProfile(
         }
       : {})
   })
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   for (const record of options.history ?? records) {
     const fence = record.lease.runtimeFence
     const journal = await journalFactory.openAgentSessionJournal({
@@ -194,7 +196,7 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
     }
   }
   class StartupRuntime extends OrcaRuntimeService {
-    protected override hasPersistedStructuredAgentSessionStore() {
+    protected override async hasPersistedStructuredAgentSessionStore() {
       return true
     }
     protected override async refreshMobileSessionPtyRecords() {
@@ -266,7 +268,7 @@ describe('restoring the chat tabs open at quit', () => {
     const record = chatRecord(sessionId, { codex: true })
     // Companion record/profile are fixtures; only these two raw journal rows are recorded state.
     await seedProfile([record], { visible: [sessionId], history: [] })
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     publishJournalSessionEpoch(
       database.db,
       { sessionId, workspaceId: record.location.workspaceId },

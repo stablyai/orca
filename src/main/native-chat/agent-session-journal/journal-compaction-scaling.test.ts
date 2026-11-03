@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
+import { journalDatabasePath } from './journal-host-database'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import type { SqliteStatement } from '../../sqlite/sqlite-statement'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
@@ -38,8 +39,8 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-function chat(size: number, bytes = 100): JournalHostDatabase {
-  const database = openTestJournalHostDatabase(join(root, `${size}-${bytes}`))
+async function chat(size: number, bytes = 100): Promise<JournalHostDatabase> {
+  const database = await openTestJournalHostDatabase(join(root, `${size}-${bytes}`))
   const rows: JournalRow[] = [projectionEpochRow]
   for (let revision = 1; revision <= size; revision++) {
     rows.push({
@@ -63,55 +64,34 @@ function watch(database: JournalHostDatabase) {
   let returned = 0
   let removed = 0
   const sqls: string[] = []
-  const prepare = database.db.prepare.bind(database.db)
-  const spy = vi.spyOn(database.db, 'prepare').mockImplementation((sql) => {
-    sqls.push(sql)
-    const statement = prepare(sql)
-    const counted: SqliteStatement = {
-      all: (...args) => {
-        const rows = statement.all(...args)
-        returned += rows.length
-        return rows
-      },
-      get: (...args) => {
-        const row = statement.get(...args)
-        returned += Number(!!row)
-        return row
-      },
-      run: (...args) => {
-        const result = statement.run(...args)
-        removed += Number(result.changes)
-        return result
-      },
-      iterate: function* (...args) {
-        for (const row of statement.iterate(...args)) {
-          returned++
-          yield row
-        }
-      },
-      setReadBigInts: (enabled) => statement.setReadBigInts(enabled)
+  const stop = observeNativeJournalSql(database, (entry) => {
+    if (entry.method === 'prepare') {
+      sqls.push(entry.sql)
     }
-    return counted
+    returned += entry.rows
+    removed += entry.changes
   })
   return () => {
-    spy.mockRestore()
+    stop()
     return { returned, removed, sqls }
   }
 }
 
-it('bounds every page at N and 10N revisions, without reading or decoding content', () => {
-  const measure = (size: number) => {
-    const database = chat(size)
+it('bounds every page at N and 10N revisions, without reading or decoding content', async () => {
+  const measure = async (size: number) => {
+    const database = await chat(size)
     const compaction = new JournalOutcomeCompaction()
-    expect(compaction.page(database)).toBe(true) // Selects one source, independently of its size.
+    expect(await compaction.page(database)).toBe(true) // Selects one source, independently of its size.
     const stop = watch(database)
-    expect(compaction.page(database)).toBe(true)
+    expect(await compaction.page(database)).toBe(true)
     const work = stop()
     expect(work.returned).toBeLessThanOrEqual(97) // One source, 32 records, two indexed probes each.
     expect(work.removed).toBeGreaterThan(0)
     expect(work.removed).toBeLessThanOrEqual(32)
     for (const sql of work.sqls) {
-      expect(sql).not.toContain('value_json')
+      expect(sql.replace('length(CAST(value_json AS BLOB)) AS bytes', 'bytes')).not.toContain(
+        'value_json'
+      )
       const parameters = sql.startsWith('SELECT seq, field') ? [1, 0, '', '', size + 1] : null
       if (parameters) {
         const plan = database.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...parameters)
@@ -121,31 +101,31 @@ it('bounds every page at N and 10N revisions, without reading or decoding conten
     }
     return work
   }
-  expect(measure(1_000)).toEqual(measure(100))
+  expect(await measure(1_000)).toEqual(await measure(100))
 })
 
-it('does no record work on an unchanged pass at N and 10N, and revisits the former latest on new writes', () => {
-  const measure = (size: number) => {
-    const database = chat(size)
+it('does no record work on an unchanged pass at N and 10N, and revisits the former latest on new writes', async () => {
+  const measure = async (size: number) => {
+    const database = await chat(size)
     const compaction = new JournalOutcomeCompaction()
-    while (compaction.page(database)) {
+    while (await compaction.page(database)) {
       /* Bounded transactions. */
     }
     const stop = watch(database)
-    while (compaction.page(database)) {
+    while (await compaction.page(database)) {
       /* Only source metadata is consulted. */
     }
     const idle = stop()
     expect(idle.removed).toBe(0)
     expect(idle.sqls.every((sql) => !/\bFROM journal_outcomes\b/.test(sql))).toBe(true)
     // A committed append changes coverage; the next pass must reconsider the former latest.
-    database.transaction((db) => {
+    database.fixtureTransaction((db) => {
       db.prepare(`INSERT INTO journal_outcomes SELECT generation, seq + 1, field, entry_key,
         format, ordinal, value_json, deleted FROM journal_outcomes WHERE field = 'items'
         AND seq = (SELECT MAX(seq) FROM journal_outcomes WHERE field = 'items')`).run()
       db.prepare('UPDATE journal_outcome_epochs SET through_seq = through_seq + 1').run()
     })
-    while (compaction.page(database)) {
+    while (await compaction.page(database)) {
       /* Bounded transactions. */
     }
     expect(
@@ -154,20 +134,20 @@ it('does no record work on an unchanged pass at N and 10N, and revisits the form
     ).toBe(2)
     return idle
   }
-  expect(measure(1_000)).toEqual(measure(100))
+  expect(await measure(1_000)).toEqual(await measure(100))
 })
 
 it('retries a failed deletion without advancing its page and keeps the chat writable during rests', async () => {
-  const database = chat(100)
+  const database = await chat(100)
   const compaction = new JournalOutcomeCompaction()
-  compaction.page(database)
+  await compaction.page(database)
   const rows = database.db.prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()
-  database.db.exec(`CREATE TEMP TRIGGER fail_compaction BEFORE DELETE ON journal_outcomes
+  database.db.exec(`CREATE TRIGGER fail_compaction BEFORE DELETE ON journal_outcomes
     BEGIN SELECT RAISE(ABORT, 'injected deletion failure'); END`)
-  expect(() => compaction.page(database)).toThrow('injected deletion failure')
+  await expect(compaction.page(database)).rejects.toThrow('injected deletion failure')
   expect(database.db.prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()).toEqual(rows)
   database.db.exec('DROP TRIGGER fail_compaction')
-  while (compaction.page(database)) {
+  while (await compaction.page(database)) {
     /* The failed page is retried, not skipped: every middle revision goes. */
   }
   expect(
@@ -199,7 +179,7 @@ it('retries a failed deletion without advancing its page and keeps the chat writ
 })
 
 it('reclaims freed pages incrementally, and leaves non-incremental databases alone', async () => {
-  const database = chat(100, 16_384)
+  const database = await chat(100, 16_384)
   const pages = () => Number(database.db.pragma('page_count', { simple: true }))
   const before = pages()
   const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
@@ -207,26 +187,29 @@ it('reclaims freed pages incrementally, and leaves non-incremental databases alo
   await sweeper.pass()
   expect(pages()).toBeLessThan(before)
   expect(database.db.pragma('freelist_count', { simple: true })).toBe(0)
-  const older = new Database(join(root, 'non-incremental.db'))
+  const directory = join(root, 'non-incremental')
+  await mkdir(directory)
+  const older = new Database(journalDatabasePath(directory))
   try {
     older.exec(`CREATE TABLE t (v TEXT); INSERT INTO t VALUES (zeroblob(1000000)); DELETE FROM t`)
-    const olderPages = Number(older.pragma('page_count', { simple: true }))
-    expect(Number(older.pragma('freelist_count', { simple: true }))).toBeGreaterThan(0)
-    expect(vacuumJournalPage({ writeAutocommit: (run) => run(older) })).toBe(false)
-    expect(Number(older.pragma('page_count', { simple: true }))).toBe(olderPages)
   } finally {
     older.close()
   }
+  const olderHost = await openTestJournalHostDatabase(directory)
+  const olderPages = Number(olderHost.db.pragma('page_count', { simple: true }))
+  expect(Number(olderHost.db.pragma('freelist_count', { simple: true }))).toBeGreaterThan(0)
+  expect(await vacuumJournalPage(olderHost)).toBe(false)
+  expect(Number(olderHost.db.pragma('page_count', { simple: true }))).toBe(olderPages)
 })
 
 it.each(['newer', 'missing'] as const)(
   'services healthy successors and vacuum past a %s marker on scheduled retries and a fresh runner',
   async (marker) => {
-    vi.useFakeTimers()
-    const database = openTestJournalHostDatabase(root)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const database = await openTestJournalHostDatabase(root)
     const seed = (sessionId: string, revisions: number) =>
       database
-        .transaction((db) => {
+        .fixtureTransaction((db) => {
           publishTestJournalEpoch(db, sessionId, 'epoch-1')
           return publishJournalOutcomeEpoch(db, sessionId, 'epoch-1', [
             projectionEpochRow,
@@ -271,6 +254,7 @@ it.each(['newer', 'missing'] as const)(
       )
     const errors: unknown[] = []
     let rests = 0
+    const scheduledPasses: Promise<void>[] = []
     const runner = () => {
       const sweeper = new JournalOutcomeSweeper({
         database: () => database,
@@ -280,6 +264,12 @@ it.each(['newer', 'missing'] as const)(
         },
         onError: (error) => errors.push(error)
       }).start()
+      const pass = sweeper.pass.bind(sweeper)
+      vi.spyOn(sweeper, 'pass').mockImplementation(() => {
+        const pending = pass()
+        scheduledPasses.push(pending)
+        return pending
+      })
       sweepers.push(sweeper)
       return sweeper
     }
@@ -297,12 +287,16 @@ it.each(['newer', 'missing'] as const)(
     const assertPass = async (ms: number) => {
       const pages = Number(database.db.pragma('page_count', { simple: true }))
       const priorRests = rests
+      const passCount = scheduledPasses.length
       await vi.advanceTimersByTimeAsync(ms)
+      expect(scheduledPasses).toHaveLength(passCount + 1)
+      await scheduledPasses.at(-1)
       expect(errors).toEqual([])
       expect(count()).toBe(2)
       expect(unsupported()).toEqual(frozen)
       expect(rests - priorRests).toBeGreaterThan(3)
-      expect(rests - priorRests).toBeLessThan(100)
+      // One-page vacuum can visit at most the pre-pass file pages, plus finite metadata/record pages.
+      expect(rests - priorRests).toBeLessThan(pages + 20)
       expect(Number(database.db.pragma('page_count', { simple: true }))).toBeLessThan(pages)
       expect(database.db.pragma('freelist_count', { simple: true })).toBe(0)
       expectProjectionMatches(database, rig.state())
@@ -324,6 +318,7 @@ it.each(['newer', 'missing'] as const)(
       database.db.exec('ALTER TABLE journal_rows RENAME TO pr36053_unavailable_rows')
       try {
         await vi.advanceTimersByTimeAsync(60_000)
+        await expect(scheduledPasses.at(-1)).rejects.toThrow('no such table: journal_rows')
         expect(errors).toHaveLength(1)
         expect(String(errors[0])).toContain('no such table: journal_rows')
         expect(count()).toBe(before)

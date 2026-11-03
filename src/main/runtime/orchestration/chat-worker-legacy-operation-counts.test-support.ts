@@ -127,11 +127,11 @@ export function countLegacyFailureDisplay() {
     counts[phase].decodedRows++
     return decode(row)
   })
-  const restore = legacy.readJournalLegacyCards
-  vi.spyOn(legacy, 'readJournalLegacyCards').mockImplementation((...args) => {
+  const restore = legacy.readJournalLegacyCardsAsync
+  vi.spyOn(legacy, 'readJournalLegacyCardsAsync').mockImplementation(async (...args) => {
     const measured = counts[phase]
     const before = measured.decodedRows
-    const cards = restore(...args)
+    const cards = await restore(...args)
     measured.restoredRows += measured.decodedRows - before
     return cards
   })
@@ -216,30 +216,32 @@ export function countLegacyFailureDisplay() {
       counts[phase].indexRebuilds++
     }
   })
+  const instrumentedSources = new WeakSet<object>()
   const Original = legacy.LegacyQueuedCards
   vi.spyOn(legacy, 'LegacyQueuedCards').mockImplementation(
     class extends Original {
       constructor(private readonly source: ConstructorParameters<typeof Original>[0]) {
         super(source)
-        const read = this['read'].bind(this)
-        this['read'] = () => {
+        const read = this['rows'].bind(this)
+        this['rows'] = () => {
           const rows = read()
+          if (instrumentedSources.has(rows)) {
+            return rows
+          }
+          instrumentedSources.add(rows)
           countMap(rows, () => counts[phase].sourceIdEntries++)
           countFlatMap(
             rows,
             () => counts[phase].ownerClassifications++,
             (cards) => {
               if (classifying) {
-                countFlatMap(cards, () => {
+                const duringClassification = (key: 'handoffVisits' | 'identityEntries') => () => {
                   if (classifying) {
-                    counts[phase].handoffVisits++
+                    counts[phase][key]++
                   }
-                })
-                countMap(cards, () => {
-                  if (classifying) {
-                    counts[phase].identityEntries++
-                  }
-                })
+                }
+                countFlatMap(cards, duringClassification('handoffVisits'))
+                countMap(cards, duringClassification('identityEntries'))
               }
             }
           )
@@ -301,10 +303,6 @@ export function countLegacyFailureDisplay() {
         phase = previous
       }
     },
-    reset: () => {
-      for (const value of Object.values(counts)) {
-        Object.assign(value, emptyLegacyCounts())
-      }
-    }
+    reset: () => Object.values(counts).forEach((value) => Object.assign(value, emptyLegacyCounts()))
   }
 }

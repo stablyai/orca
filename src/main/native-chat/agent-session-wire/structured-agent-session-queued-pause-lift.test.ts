@@ -235,7 +235,7 @@ describe("a Stop's queue pause", () => {
     const draftId = await stoppedDraft()
     const inFlight = await handedOverUserSend('sent before the restart')
     // Crash without close; persisted journal state must still derive both pauses.
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     await rig.settleAccepted(inFlight, 'after-restart')
@@ -305,8 +305,8 @@ describe("a Stop's queue pause", () => {
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     // Model legacy no-receipt acceptance that must reconstruct its result.
-    openTestJournalHostDatabase(rig.root)
-      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
+    ;(await openTestJournalHostDatabase(rig.root)).db
+      .prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
       .run(working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
@@ -591,7 +591,7 @@ describe('Resume', () => {
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
     const draftId = await stoppedDraft()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     expect(await rig.queuePause()).toBeNull()
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })

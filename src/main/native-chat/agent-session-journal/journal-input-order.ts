@@ -3,7 +3,8 @@ import {
   restoreJournalInputPlaces,
   currentJournalInputIdentity,
   journalInputOrderChanged,
-  isJournalInputOverride
+  isJournalInputOverride,
+  journalInputsNeedingAcceptance
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
@@ -19,21 +20,11 @@ import type { InputPlaceQuery } from './journal-input-place-index'
 import { JournalInputLineageOwner } from './journal-input-lineage'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-const owners = new WeakMap<JournalReducerState, JournalInputOrder>()
-export function initializeJournalInputOrder(
-  state: JournalReducerState,
-  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
-): JournalInputOrder {
-  const owner = new JournalInputOrder(state, originalAcceptance)
-  owners.set(state, owner)
-  return owner
-}
-export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
-  return owners.get(state) ?? initializeJournalInputOrder(state)
-}
-export function setJournalInputOrder(state: JournalReducerState, owner: JournalInputOrder): void {
-  owners.set(state, owner)
-}
+export {
+  initializeJournalInputOrder,
+  journalInputOrder,
+  setJournalInputOrder
+} from './journal-input-order-owner'
 
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
@@ -55,10 +46,24 @@ export class JournalInputOrder {
 
   constructor(
     private readonly state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+    private originalAcceptance?: (id: string) => AgentJournalCursor | undefined
   ) {
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
+  }
+
+  withAcceptance<T>(read: (id: string) => AgentJournalCursor | undefined, run: () => T): T {
+    const previous = this.originalAcceptance
+    this.originalAcceptance = read
+    try {
+      return run()
+    } finally {
+      this.originalAcceptance = previous
+    }
+  }
+
+  needsAcceptance(ids: readonly string[]): string[] {
+    return journalInputsNeedingAcceptance(this.state, this.originals, ids)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -119,9 +124,7 @@ export class JournalInputOrder {
     this.lineage.restoreFrontier(state.lastSequence, state.inputEntries.values())
   }
 
-  linkedVersion(): number {
-    return this.links.version()
-  }
+  linkedVersion = (): number => this.links.version()
   linkedTo(id: string): Iterable<AgentJournalSubmission> {
     return this.links.to(id)
   }

@@ -1,3 +1,4 @@
+import { settleJournalCommit } from './journal-row-writer'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -67,20 +68,22 @@ export class JournalSubmissionWriter {
           return [...reopen, ...card.rows, submission]
         },
         {
-          write: (db, row) => {
-            card?.receipt.write(db)
+          write: async (db, row) => {
+            await card?.receipt.write(db)
             // New client sends require stored uploads; queued cards already claimed theirs.
-            claimsCommitted = claimAttachments(
+            claimsCommitted = await claimAttachments(
               db,
               input.body,
               input.origin === 'client' && !consume
             )
-            receipt?.write(db, row)
+            await receipt?.write(db, row)
           },
           committed: () => {
-            claimsCommitted?.()
-            card?.receipt.committed()
-            receipt?.committed()
+            settleJournalCommit(
+              () => claimsCommitted?.(),
+              () => card?.receipt.committed(),
+              () => receipt?.committed()
+            )
           }
         },
         (rows) => rows.at(-1)

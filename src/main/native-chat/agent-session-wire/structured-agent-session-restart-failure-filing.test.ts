@@ -66,8 +66,8 @@ it('says so in the chat when the agent cannot start for the continuation', async
   // The failure note replaces the derived cut notice to avoid duplicate explanations.
   expect(await readerNotes(host)).toEqual(await statusNotes(host))
   await host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(root)
-    .db.prepare(
+  ;(await openTestJournalHostDatabase(root)).db
+    .prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
     )
     .run(SESSION)

@@ -38,7 +38,7 @@ let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 
-function openHost(): void {
+async function openHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -73,7 +73,7 @@ function openHost(): void {
       },
       () => host
     ),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     idleSweep: { intervalMs: 5 },
@@ -137,7 +137,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   closeSession = vi.fn(async () => true)
   store = await openTestAgentSessionRecordStore(root)
-  openHost()
+  await openHost()
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true
   })
@@ -164,7 +164,7 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after an app restart opens it for reading', async () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
-    openHost()
+    await openHost()
     await host.seedSessionTabs([SESSION])
     await host.revealSession(SESSION)
     expect(host.hasSession(SESSION)).toBe(true)

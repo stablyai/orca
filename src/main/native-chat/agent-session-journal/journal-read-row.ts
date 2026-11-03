@@ -1,3 +1,4 @@
+import type { JournalReadConnection } from './journal-sql-owner'
 import type Database from '../../sqlite/sync-database'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOutcomeSource } from './journal-outcome-format'
@@ -55,4 +56,51 @@ function publicOutcomeKey(stored: unknown): string {
     }
     return key
   })
+}
+
+export async function readJournalOutcomeGroupsAsync(
+  read: JournalReadConnection,
+  epoch: string,
+  source: JournalOutcomeSource,
+  after: number,
+  limit?: number
+): Promise<JournalOutcomeReadRow[]> {
+  const groups: JournalOutcomeReadRow[] = []
+  const bySequence = new Map<number, JournalOutcomeReadRow>()
+  const selected = `SELECT DISTINCT seq FROM journal_outcomes WHERE generation = ? AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`
+  const parameters = [source.generation, after, source.through, limit ?? -1]
+  for await (const page of read.pages(selected, parameters)) {
+    for (const row of page) {
+      if (typeof row.seq !== 'number') {
+        throw new JournalOutcomeDecodeError('invalid journal outcome group')
+      }
+      const group: JournalOutcomeReadRow = {
+        kind: 'outcome',
+        epoch,
+        seq: row.seq,
+        itemIds: [],
+        submissionIds: []
+      }
+      groups.push(group)
+      bySequence.set(row.seq, group)
+    }
+  }
+  for await (const page of read.pages(
+    `SELECT seq, field, entry_key FROM journal_outcomes WHERE generation = ? AND seq IN (${selected}) AND field IN ('items', 'submissions') ORDER BY seq, field, entry_key`,
+    [source.generation, ...parameters]
+  )) {
+    for (const row of page) {
+      const group = typeof row.seq === 'number' ? bySequence.get(row.seq) : undefined
+      if (!group) {
+        throw new JournalOutcomeDecodeError('invalid journal outcome group')
+      }
+      const key = publicOutcomeKey(row.entry_key)
+      if (row.field === 'items') {
+        group.itemIds.push(key)
+      } else {
+        group.submissionIds.push(key)
+      }
+    }
+  }
+  return groups
 }

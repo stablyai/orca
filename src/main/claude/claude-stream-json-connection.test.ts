@@ -375,7 +375,7 @@ describe('Claude stream-json connection', () => {
         agent: 'claude',
         providerHandle: claudeProviderHandle(SESSION_ID, 'leaf-1')
       },
-      database: openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
+      database: await openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })

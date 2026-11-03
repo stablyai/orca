@@ -172,7 +172,7 @@ export async function readRecordedAcpOptions(
       adapter,
       agents: declaredEffortAgents(agent, adapter),
       logger,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestJournalHostDatabase(root),
       claimKeyId: 'test-key',
       modelCatalog: {
         captureRead: hostTestCatalogReadOperation,

@@ -1,6 +1,6 @@
+import { JournalPersistencePlan } from '../agent-session-journal/journal-persistence-plan'
 import { cp, readdir, readFile, rm } from 'node:fs/promises'
-import { afterEach, expect, it, vi } from 'vitest'
-import type * as AgentSessionRecordRows from '../../runtime/agent-session/records/agent-session-record-rows'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
@@ -32,17 +32,17 @@ import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
-vi.mock('../../runtime/agent-session/records/agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
-      if (writes.failing) {
-        throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
-      }
-      return actual.writeAgentSessionStoreRows(...args)
+beforeEach(() => {
+  const add = JournalPersistencePlan.prototype.add
+  vi.spyOn(JournalPersistencePlan.prototype, 'add').mockImplementation(function (
+    this: JournalPersistencePlan,
+    ...args
+  ) {
+    if (writes.failing && args[0].kind === 'store') {
+      throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
     }
-  }
+    add.apply(this, args)
+  })
 })
 
 const IO_ERROR = expect.objectContaining({ message: 'disk I/O error' })
@@ -51,6 +51,7 @@ const relaunchedRoots: string[] = []
 
 afterEach(async () => {
   writes.failing = false
+  vi.restoreAllMocks()
   await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
@@ -90,7 +91,7 @@ async function relaunch(
     },
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner,

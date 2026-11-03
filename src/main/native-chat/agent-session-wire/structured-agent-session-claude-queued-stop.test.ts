@@ -54,7 +54,9 @@ let lifecycleCancelled: string[]
 let claude: ReturnType<typeof fakeClaude>
 
 beforeEach(async () => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
   root = await mkdtemp(join(tmpdir(), 'orca-claude-queued-stop-'))
   resetHostTestOperationIds()
   queued = []
@@ -110,7 +112,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW

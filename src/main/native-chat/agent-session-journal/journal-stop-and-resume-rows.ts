@@ -71,10 +71,17 @@ export function buildJournalQueueReopenRow(
 export function journalStopEventRowBuilder(
   state: () => JournalReducerState,
   event: Omit<JournalStopEvent, 'at'>,
-  fence: number
+  fence: number,
+  observedAt?: number
 ): (seq: number, ts: number) => JournalTombstoneRow {
   return (seq, ts) =>
-    buildJournalStopEventRow({ state: state(), seq, fence, ts, event: { ...event, at: ts } })
+    buildJournalStopEventRow({
+      state: state(),
+      seq,
+      fence,
+      ts,
+      event: { ...event, at: observedAt ?? ts }
+    })
 }
 
 export function journalQueueResumeRowBuilder(

@@ -15,7 +15,7 @@ import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { JournalOutcomeCompaction } from './journal-outcome-compaction'
 import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
@@ -62,7 +62,7 @@ vi.mock('../agent-session-wire/structured-agent-session-registry', () => ({
       if (!workerHost.journal) {
         throw new Error('missing test journal')
       }
-      return readAgentSessionHistory(workerHost.journal, request, { scope })
+      return await readAgentSessionHistory(workerHost.journal, request, { scope })
     }
   })
 }))
@@ -78,7 +78,7 @@ const journals = createTrackedJournalOpener()
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-outcome-compaction-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
   for (const rig of rigs.splice(0)) {
@@ -100,8 +100,8 @@ const item = (seq: number, itemId: string, revision: number): JournalRow => ({
 })
 const records = () =>
   database.db.prepare('SELECT * FROM journal_outcomes ORDER BY seq, field, entry_key').all()
-function compact(compaction = new JournalOutcomeCompaction()): void {
-  while (compaction.page(database)) {
+async function compact(compaction = new JournalOutcomeCompaction()): Promise<void> {
+  while (await compaction.page(database)) {
     // Each call commits at most one bounded page.
   }
 }
@@ -157,14 +157,14 @@ it.each([1, 'mixed', 'upgrade', 2] as const)(
     const compaction = new JournalOutcomeCompaction()
     if (format === 'upgrade') {
       // The pass has captured a format-1 boundary; a real write raises the epoch during its rest.
-      expect(compaction.page(database)).toBe(true)
+      expect(await compaction.page(database)).toBe(true)
       await rig.writer.enqueue((seq) => item(seq, 'x', 43))
     }
     const before = records()
     const rows = raw()
     const facts = before.filter((row) => row.deleted === 1 || row.field === 'tombstones')
     expect(facts.some((row) => row.field === 'items' && row.entry_key === '"y"')).toBe(true)
-    compact(compaction)
+    await compact(compaction)
     expect(records().length).toBeLessThan(before.length)
     const xValues = before.filter(
       (row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0
@@ -242,19 +242,21 @@ it.each([4, 40])(
       (row) => row.deleted !== 0 || row.field === 'tombstones' || row.field === 'removedTurnIds'
     )
     const catchUp = () =>
-      Array.from({ length: journal.cursor().sequence + 1 }, (_, sequence) => {
-        const since = journal.readSince({ epoch, sequence })
-        if (!since.ok) {
-          throw new Error('missing catch-up')
-        }
-        return projectJournalBatch({
-          rows: since.rows,
-          snapshot: journal.snapshot(),
-          afterSequence: sequence
+      Promise.all(
+        Array.from({ length: journal.cursor().sequence + 1 }, async (_, sequence) => {
+          const since = await journal.readSince({ epoch, sequence })
+          if (!since.ok) {
+            throw new Error('missing catch-up')
+          }
+          return projectJournalBatch({
+            rows: since.rows,
+            snapshot: journal.snapshot(),
+            afterSequence: sequence
+          })
         })
-      })
-    const expectedCatchUp = catchUp()
-    compact()
+      )
+    const expectedCatchUp = await catchUp()
+    await compact()
     for (const id of ['large', agentJournalItemKey(kept.identity)]) {
       expect(
         records().filter(
@@ -273,12 +275,12 @@ it.each([4, 40])(
     }
     expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
     expect(encodeJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(saved)
-    expect(catchUp()).toEqual(expectedCatchUp)
+    expect(await catchUp()).toEqual(expectedCatchUp)
     await journals.closeAll()
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
     journal = await journals.open({ identity, stateDirectory: root })
     expect(journal.snapshot()).toEqual(snapshot)
-    expect(catchUp()).toEqual(expectedCatchUp)
+    expect(await catchUp()).toEqual(expectedCatchUp)
     // Continued writes use the retained latest ordinal and removal facts after a real cold reopen.
     await journal.context.rewind(floor, 1, [kept], () => receipt)
     expect(renderJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(
@@ -292,7 +294,7 @@ it.each([4, 40])(
 
 it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
   'stops at an unknown record %s and never deletes anything after it',
-  (unknown) => {
+  async (unknown) => {
     seedOutcomeRows(database, [
       projectionEpochRow,
       ...Array.from({ length: 100 }, (_, n) => item(n + 2, 'x', n + 1))
@@ -325,7 +327,7 @@ it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
         )
         .run()
     }
-    database.transaction((db) => {
+    database.fixtureTransaction((db) => {
       publishTestJournalEpoch(db, 'healthy-successor', epoch)
       publishJournalOutcomeEpoch(db, 'healthy-successor', epoch, [
         projectionEpochRow,
@@ -343,7 +345,7 @@ it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
             : unknown === 'old-native'
               ? 'inputEntries'
               : '$'))
-    compact()
+    await compact()
     if (unknown === 'epoch') {
       expect(affected()).toEqual(before)
     } else {
@@ -571,7 +573,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     )
     expect(workerText.join('\n')).toContain('x re-created')
     expect(workerText.join('\n')).toContain('hello')
-    const tail = readAgentSessionHistory(
+    const tail = await readAgentSessionHistory(
       journal,
       { sessionId, direction: 'tail', limit: 3 },
       { reader }
@@ -584,10 +586,12 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     let backwardPages = 1
     while (page.hasOlder) {
       const requestedCursor = page.window.nextCursor
-      page = readAgentSessionHistory(
-        journal,
-        { sessionId, direction: 'before', cursor: requestedCursor, limit: 3 },
-        { reader }
+      page = (
+        await readAgentSessionHistory(
+          journal,
+          { sessionId, direction: 'before', cursor: requestedCursor, limit: 3 },
+          { reader }
+        )
       ).page
       backward = reduceStructuredAgentSession(backward, {
         type: 'older-page',
@@ -643,7 +647,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
       let cursor = { epoch, sequence }
       let pages = 0
       for (;;) {
-        const result = readAgentSessionHistory(
+        const result = await readAgentSessionHistory(
           journal,
           { sessionId, direction: 'after', cursor, limit: 3 },
           { reader, rowReplay: true }
@@ -652,7 +656,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
         const next = result.page.window.nextCursor
         if (result.page.hasNewer) {
           expect(next.sequence).toBeGreaterThan(cursor.sequence)
-          const available = journal.readSince(cursor, 3)
+          const available = await journal.readSince(cursor, 3)
           if (
             available.ok &&
             available.rows.filter((row) => row.seq <= next.sequence).length <
@@ -720,7 +724,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
       deleted: 1
     })
   )
-  compact()
+  await compact()
   expect(records().length).toBeLessThan(before.length / 2)
   expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)
   expect(
@@ -732,7 +736,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   }
   expect(await consumers()).toEqual(expected)
   await journals.closeAll()
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   journal = await journals.open({ identity, stateDirectory: root })
   expect(journal.snapshot()).toEqual(snapshot)
   expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)

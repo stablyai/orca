@@ -44,7 +44,7 @@ let probe: Mock<() => Promise<AgentSessionOwnerProbe>>
 let stopOwnerProcess: Mock<(pid: number, signal: 'SIGTERM' | 'SIGKILL') => void>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
-function openHost(): void {
+async function openHost(): Promise<void> {
   host = new StructuredAgentSessionHost({
     agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
@@ -64,7 +64,7 @@ function openHost(): void {
       },
       () => host
     ),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     now: () => NOW,
@@ -87,7 +87,7 @@ async function persistFromOlderBuild(lease: OlderBuildLease): Promise<void> {
   await writeOlderBuildLease(root, SESSION, { ...attached, ...lease })
   store = await openTestAgentSessionRecordStore(root)
   acquire.mockClear()
-  openHost()
+  await openHost()
 }
 
 /** Wait for delivery settlement; acceptance alone does not prove provider handover. */
@@ -143,7 +143,7 @@ beforeEach(async () => {
     }
   }))
   store = await openTestAgentSessionRecordStore(root)
-  openHost()
+  await openHost()
 })
 
 afterEach(async () => {

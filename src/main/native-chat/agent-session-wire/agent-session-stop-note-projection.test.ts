@@ -37,18 +37,21 @@ it.each([false, true])(
     const raw = fixture.journal.itemBody(noteId)
     const held = fixture.journal.cursor()
     await turn('interrupted', legacy)
-    const stored = rows()
+    const stored = await rows()
     const projected = readNote()
     expect(projected.body).toEqual(ordinary)
     expect(projected).toEqual({ ...prior, body: ordinary })
     expect(projected).not.toBe(prior)
     expect(readNote()).toBe(projected)
     expect(fixture.journal.itemBody(noteId)).toBe(raw)
-    expect(rows()).toEqual(stored)
+    expect(await rows()).toEqual(stored)
     expect(
       stored.filter((row) => row.kind === 'outcome' && row.itemIds.includes(noteId))
     ).toHaveLength(1)
-    const replay = restoreJournal(openTestJournalHostDatabase(fixture.root).db, 'session-1')!.state
+    const replay = restoreJournal(
+      (await openTestJournalHostDatabase(fixture.root)).db,
+      'session-1'
+    )!.state
     expect(replay.items.get(noteId)?.body).toEqual(unconfirmed)
     expect(renderJournalState(replay).items.find((item) => item.itemId === noteId)?.body).toEqual(
       ordinary
@@ -118,7 +121,7 @@ it('derives the op-keyed note after the retained association write re-keys it on
   expect(readNote().body).toEqual(ordinary)
   expect(fixture.journal.itemBody(noteId)).toEqual(unconfirmed)
   const batch = projectJournalBatch({
-    rows: rows().filter((row) => row.seq > held.sequence),
+    rows: (await rows()).filter((row) => row.seq > held.sequence),
     snapshot: fixture.journal.snapshot(),
     afterSequence: held.sequence
   })
@@ -151,7 +154,7 @@ it('re-emits the note for lifecycle turn mutations and restores the raw wording 
     ]
   })
   const batch = projectJournalBatch({
-    rows: rows().filter((row) => row.seq > held.sequence),
+    rows: (await rows()).filter((row) => row.seq > held.sequence),
     snapshot: fixture.journal.snapshot(),
     afterSequence: held.sequence
   })
@@ -171,7 +174,7 @@ it('re-emits the note for lifecycle turn mutations and restores the raw wording 
     mutations: [{ kind: 'tombstone', identity: turnIdentity }]
   })
   const removed = projectJournalBatch({
-    rows: rows().filter((row) => row.seq > ended.sequence),
+    rows: (await rows()).filter((row) => row.seq > ended.sequence),
     snapshot: fixture.journal.snapshot(),
     afterSequence: ended.sequence
   })
@@ -189,7 +192,7 @@ it('pages the end with its earlier note and advances by the consumed end row', a
   await note()
   const held = fixture.journal.cursor()
   await turn('interrupted')
-  const page = readAgentSessionHistory(fixture.journal, {
+  const page = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: held,
@@ -206,7 +209,7 @@ it('pages the end with its earlier note and advances by the consumed end row', a
       hasNewer: false
     }
   })
-  const notePage = readAgentSessionHistory(fixture.journal, {
+  const notePage = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'tail',
     limit: 1
@@ -221,7 +224,7 @@ it('derives a note page with its ended turn on an earlier page, in either paging
   await turn('interrupted')
   const held = fixture.journal.cursor()
   await note()
-  const forward = readAgentSessionHistory(fixture.journal, {
+  const forward = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'after',
     cursor: held,
@@ -239,7 +242,7 @@ it('derives a note page with its ended turn on an earlier page, in either paging
     { kind: 'status', text: 'Later' },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
-  const backward = readAgentSessionHistory(fixture.journal, {
+  const backward = await readAgentSessionHistory(fixture.journal, {
     sessionId: 'session-1',
     direction: 'before',
     cursor: fixture.journal.cursor(),

@@ -74,7 +74,7 @@ async function relaunchAfterCrashMidTurn(
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: { ...adapter(), acquire },
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestJournalHostDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => probe,
@@ -150,6 +150,6 @@ it('settles it when a read reaches the chat before the startup reconcile, then r
   await host.reconcileRestartLeases()
   await openTestChats(host, [SESSION])
 
-  expect(await turnStates(host)).toEqual(['interrupted'])
+  await eventually(async () => expect(await turnStates(host)).toEqual(['interrupted']))
   await host.flushAllStreamedEvents()
 })

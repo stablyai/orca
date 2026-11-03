@@ -515,7 +515,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
         )
       }
       const q = automationRunOperationId(current, 'reuse-send')
-      expect(rig.store.readCommandReceipt({ kind: 'global' }, q).verdict).toBe('absent')
+      expect((await rig.store.readCommandReceipt({ kind: 'global' }, q)).verdict).toBe('absent')
       expect(readAutomationRunReceipt(rig.store, current)).toBeNull()
       expect(
         rig.store.getOperationRow(rpcCallerOperationKey(AUTOMATION_AGENT_CALLER), q)?.outcome.status

@@ -24,7 +24,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   // Legacy handoffs were journaled while cards lived in a separate table.
   await fixture.rig.drafts()
   await fixture.rig.host.close(SESSION, 'evict')
-  const earlier = journalFor(SESSION)
+  const earlier = await journalFor(SESSION)
   await earlier.open()
   await handOff(earlier, 'att-present', 'ret-present', 'returned here', 'providerRejected')
   await handOff(
@@ -38,7 +38,7 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await handOff(earlier, 'att-stopped', 'stopped-same', 'stopped, unchanged', 'cancelled')
   await handOff(earlier, 'att-edited', 'stopped-edited', 'stopped, then edited', 'cancelled')
   await earlier.close()
-  seedLegacy(SESSION, [
+  await seedLegacy(SESSION, [
     ['ret-present', 'returned', 'returned here, edited', 'att-present'],
     ['ret-gone', 'returned', 'returned in a lost epoch', 'att-gone'],
     ['cmd-gone', 'returned', '/compact', 'att-cmd'],
@@ -51,10 +51,10 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     ['gone', 'withdrawn', 'deleted'],
     ['broken', 'waiting', null]
   ])
-  const all = legacyIds()
+  const all = await legacyIds()
 
   // Failed import must leave both storage and the projected card view unchanged.
-  db().exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+  ;(await db()).exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const published = [
@@ -82,14 +82,14 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   })
   expect(live.submission('att-stopped')).toEqual(rawStopped)
   await nothingSentTo('stopped-same')
-  db().exec('DROP TRIGGER fail_import')
+  ;(await db()).exec('DROP TRIGGER fail_import')
   expect(warned).toHaveBeenCalledWith(
     '[journal-open] queued-message import skipped:',
     expect.objectContaining({ sessionId: SESSION })
   )
   warned.mockRestore()
-  expect(legacyIds()).toEqual(all)
-  expect(queueRows()).toEqual([])
+  expect(await legacyIds()).toEqual(all)
+  expect(await queueRows()).toEqual([])
 
   const deletion = hostTestOperationId()
   expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
@@ -98,20 +98,20 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   const sent = await fixture.rig.sendNow('ret-gone')
   expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: 'ret-gone' } } })
   // Saved cards are whole values: an import stores each card as it reads, refused or not.
-  expect(queueRows()).toEqual([
+  expect(await queueRows()).toEqual([
     'ret-present:queued+refusal',
     'ret-present:withdrawn',
     'ret-gone:queued+refusal',
     'ret-gone:dispatched'
   ])
-  expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
+  expect(await legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
   await nothingSentTo('edited', 'held')
 
   // Reopen imports atomically; write refusals only for handoffs absent from this epoch.
   await fixture.rig.restartHostProcess()
   expect(await fixture.rig.drafts()).toEqual(published.slice(2))
-  expect(legacyIds()).toEqual(['broken'])
-  expect(queueRows().slice(4)).toEqual([
+  expect(await legacyIds()).toEqual(['broken'])
+  expect((await queueRows()).slice(4)).toEqual([
     'cmd-gone:queued+refusal',
     'disp-refused:queued+refusal',
     'stopped-same:queued',
@@ -144,30 +144,30 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   expect(resent).not.toBe('att-edited')
   await fixture.rig.settleAccepted(resent, 'resent')
 
-  const rows = queueRows()
+  const rows = await queueRows()
   await fixture.rig.restartHostProcess()
   await fixture.rig.drafts()
-  expect(queueRows()).toEqual(rows)
+  expect(await queueRows()).toEqual(rows)
   expect(await stopped()).toEqual(displayedStopped)
-  expect(legacyIds()).toEqual(['broken'])
+  expect(await legacyIds()).toEqual(['broken'])
   expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     replayed: true,
     value: { deleted: true }
   })
 
   // Answered-only legacy rows retire without writing new journal rows.
-  const other = journalFor('session-y')
+  const other = await journalFor('session-y')
   await other.open()
   await handOff(other, 'y-att', 'y-sent', 'delivered', 'accepted')
   await other.close()
-  seedLegacy('session-y', [
+  await seedLegacy('session-y', [
     ['y-gone', 'withdrawn', 'deleted'],
     ['y-sent', 'dispatched', 'delivered', 'y-att']
   ])
-  const reopened = journalFor('session-y')
+  const reopened = await journalFor('session-y')
   await reopened.open()
-  expect(legacyIds('session-y')).toEqual([])
-  expect(queueRows('session-y')).toEqual([])
+  expect(await legacyIds('session-y')).toEqual([])
+  expect(await queueRows('session-y')).toEqual([])
   expect(reopened.queuedMessages.list()).toEqual([])
   await reopened.close()
 })

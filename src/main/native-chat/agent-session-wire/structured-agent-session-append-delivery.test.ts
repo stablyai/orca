@@ -1,3 +1,7 @@
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { JournalReadSince } from '../agent-session-journal/journal-store-contracts'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { settleTestSubscriberDeliveries } from './agent-session-subscriber-test-support'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
@@ -146,7 +150,7 @@ beforeEach(async () => {
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
     },
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestJournalHostDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${generation + 1}`,
     now: () => NOW
@@ -176,6 +180,7 @@ describe('an open chat receives every row its journal commits', () => {
         expect.objectContaining({ clientMessageId: held, dispatchState: 'rejected' })
       )
     )
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().statusRows).toEqual([
       'Codex stopped before it finished starting. Send your message to try again.'
     ])
@@ -195,6 +200,7 @@ describe('an open chat receives every row its journal commits', () => {
     })
     await host.flushStreamedEvents(SESSION)
 
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().statuses).toEqual(['context usage answered after the turn'])
   })
 
@@ -214,6 +220,7 @@ describe('an open chat receives every row its journal commits', () => {
       }
     )
 
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().statuses).toEqual(['written by a writer that publishes nothing'])
   })
 })
@@ -237,11 +244,13 @@ describe('an open chat receives each row once', () => {
       rowCount: number
       rows: { epoch: string; sequence: number; kind: string; itemId: string | null }[]
     }[] = []
-    const realReadSince = journal.readSince.bind(journal)
-    const readSince = vi.spyOn(journal, 'readSince').mockImplementation((cursor, limit) => {
+    const recordRead = (
+      cursor: AgentJournalCursor,
+      limit: number | undefined,
+      result: JournalReadSince
+    ) => {
       const epoch = cursor.epoch
       const sequence = cursor.sequence
-      const result = realReadSince(cursor, limit)
       reads.push({
         epoch,
         sequence,
@@ -262,8 +271,20 @@ describe('an open chat receives each row once', () => {
             }))
           : []
       })
+    }
+    const realReadSince = journal.readSince.bind(journal)
+    const readSince = vi.spyOn(journal, 'readSince').mockImplementation(async (cursor, limit) => {
+      const result = await realReadSince(cursor, limit)
+      recordRead(cursor, limit, result)
       return result
     })
+    const realReadSinceView = journal.readSinceView.bind(journal)
+    const viewRead: AgentSessionJournal['readSinceView'] = (cursor, limit, capture, consume) =>
+      realReadSinceView(cursor, limit, capture, (result, view, canonical, context) => {
+        recordRead(cursor, limit, result)
+        return consume(result, view, canonical, context)
+      })
+    const readSinceView = vi.spyOn(journal, 'readSinceView').mockImplementation(viewRead)
 
     sink.appendItem(
       { provider: 'orca', clientMessageId: 'streamed' },
@@ -273,7 +294,9 @@ describe('an open chat receives each row once', () => {
     sink.publish()
     await host.flushStreamedEvents(SESSION)
 
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().statuses).toEqual(['streamed row'])
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().batches).toBe(1)
     const committedCursor = { epoch: hydratedCursor.epoch, sequence: hydratedCursor.sequence + 1 }
     expect(journal.cursor()).toEqual(committedCursor)
@@ -292,14 +315,13 @@ describe('an open chat receives each row once', () => {
         }
       ]
     }
-    // Call-time provenance: readForward owns lookahead; reusePromptProjection owns the delta.
+    // History reads one lookahead page; unchanged prompt projection advances from committed rows.
     const paneHistoryRead = { ...readResult, limit: 201 }
-    const promptDeltaRead = { ...readResult, limit: 200 }
     expect(reads.filter(({ limit }) => limit === paneHistoryRead.limit)).toEqual([paneHistoryRead])
-    expect(reads.filter(({ limit }) => limit === promptDeltaRead.limit)).toEqual([promptDeltaRead])
-    expect(reads).toHaveLength(2)
-    expect(readSince).toHaveBeenCalledTimes(2)
-    expect(reads.reduce((count, read) => count + read.rowCount, 0)).toBe(2)
+    expect(reads.filter(({ limit }) => limit === 200)).toEqual([])
+    expect(reads).toHaveLength(1)
+    expect(readSince.mock.calls.length + readSinceView.mock.calls.length).toBe(1)
+    expect(reads.reduce((count, read) => count + read.rowCount, 0)).toBe(1)
 
     const delivered = pane.received()
     const settledReads = [...reads]
@@ -307,7 +329,8 @@ describe('an open chat receives each row once', () => {
     await host.flushStreamedEvents(SESSION)
 
     expect(reads).toEqual(settledReads)
-    expect(readSince).toHaveBeenCalledTimes(2)
+    expect(readSince.mock.calls.length + readSinceView.mock.calls.length).toBe(1)
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received()).toEqual(delivered)
   })
 
@@ -326,9 +349,12 @@ describe('an open chat receives each row once', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     )
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().statuses).toEqual(['host row'])
     const delivered = pane.received().batches
     host['subscribers'].publish(SESSION, journal)
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
+    await settleTestSubscriberDeliveries(host.collaboratorsForTests().subscribers)
     expect(pane.received().batches).toBe(delivered)
   })
 })

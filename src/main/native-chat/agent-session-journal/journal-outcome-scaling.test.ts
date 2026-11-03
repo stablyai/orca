@@ -1,3 +1,4 @@
+import { observeNativeJournalSql } from './journal-native-test-instrumentation'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +16,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, type JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
@@ -253,12 +254,12 @@ function historyOf(size: number, everyCard = false): JournalRow[] {
   return rows
 }
 
-function databaseFor(label: string): JournalHostDatabase {
-  return openTestJournalHostDatabase(join(root, label))
+async function databaseFor(label: string): Promise<JournalHostDatabase> {
+  return await openTestJournalHostDatabase(join(root, label))
 }
 
-function outcomeChat(size: number, label: string) {
-  const database = databaseFor(label)
+async function outcomeChat(size: number, label: string) {
+  const database = await databaseFor(label)
   const rig = projectionWriter(database, seedOutcomeRows(database, historyOf(size)))
   rigs.push(rig)
   return { database, rig }
@@ -269,12 +270,12 @@ function watch(database: JournalHostDatabase) {
   const triggers = Object.entries(WRITTEN).flatMap(([table, column]) =>
     ['INSERT', 'UPDATE', 'DELETE'].map((op) => {
       const bytes = op === 'DELETE' ? '0' : `length(CAST(NEW.${column} AS BLOB))`
-      return `CREATE TEMP TRIGGER IF NOT EXISTS count_${table}_${op} AFTER ${op} ON ${table}
+      return `CREATE TRIGGER IF NOT EXISTS count_${table}_${op} AFTER ${op} ON ${table}
         BEGIN INSERT INTO scaling_writes VALUES ('${table} ${op}', ${bytes}); END;`
     })
   )
   database.db.exec(
-    `CREATE TEMP TABLE IF NOT EXISTS scaling_writes (target TEXT, bytes INTEGER); ${triggers.join('\n')}`
+    `CREATE TABLE IF NOT EXISTS scaling_writes (target TEXT, bytes INTEGER); ${triggers.join('\n')}`
   )
   database.db.exec('DELETE FROM scaling_writes')
   const statements: string[] = []
@@ -316,6 +317,18 @@ function watch(database: JournalHostDatabase) {
     }
     return counted
   })
+  const stopNative = observeNativeJournalSql(database, (entry) => {
+    if (
+      (entry.method === 'prepare' || entry.method === 'exec') &&
+      !TRANSACTION.test(entry.sql.trim())
+    ) {
+      statements.push(entry.sql)
+    }
+    const table = /\bFROM\s+(journal_\w+)/.exec(entry.sql)?.[1] ?? 'other'
+    if (entry.rows) {
+      read.set(table, (read.get(table) ?? 0) + entry.rows)
+    }
+  })
   return {
     rowsRead: (table: string) => read.get(table) ?? 0,
     take: () => {
@@ -335,7 +348,10 @@ function watch(database: JournalHostDatabase) {
       read.clear()
       return work
     },
-    stop: () => vi.restoreAllMocks()
+    stop: () => {
+      stopNative()
+      vi.restoreAllMocks()
+    }
   }
 }
 
@@ -352,7 +368,7 @@ function expectSameWork(
 
 it('appends a streamed revision, a Codex plan update and an acceptance with the same work at N and 10N', async () => {
   const measure = async (size: number) => {
-    const { database, rig } = outcomeChat(size, `append-${size}`)
+    const { database, rig } = await outcomeChat(size, `append-${size}`)
     await rig.writer.enqueue(revision('answer', message('x'.repeat(4_096), 'assistant'), 1))
     await rig.writer.enqueue(revision('plan', plan('Plan 1'), 1))
     const watched = watch(database)
@@ -393,7 +409,7 @@ const batchOf =
 
 it('encodes a settlement batch with the same work per mutation up to the mutation cap', async () => {
   const measure = async (size: number) => {
-    const { database, rig } = outcomeChat(N, `batch-${size}`)
+    const { database, rig } = await outcomeChat(N, `batch-${size}`)
     const watched = watch(database)
     const stringify = vi.spyOn(JSON, 'stringify')
     await rig.writer.enqueue(batchOf(size))
@@ -425,7 +441,7 @@ const toolCall = (size: number) => ({
 
 it("encodes a structured tool call's revisions without reading its input through the draft, at N and 10N nested objects", async () => {
   const measure = async (size: number) => {
-    const { rig } = outcomeChat(N, `tool-${size}`)
+    const { rig } = await outcomeChat(N, `tool-${size}`)
     // The draft's copy-on-write proxies read through Reflect.get; plain reads never call it.
     const reads = vi.spyOn(Reflect, 'get')
     await rig.writer.enqueue(revision('tool', toolCall(size), 1))
@@ -467,7 +483,7 @@ async function liveChat(size: number, label: string) {
       body: message(`card ${identity.ordinal}`)
     })
   }
-  return { journal, kept, database: openTestJournalHostDatabase(stateDirectory) }
+  return { journal, kept, database: await openTestJournalHostDatabase(stateDirectory) }
 }
 
 // Rewind, replacement and rollover restate the live chat in one transaction, as main does: the
@@ -544,7 +560,7 @@ function outcomeKeys(database: JournalHostDatabase): number {
 
 it("opens a new chat reading each key's newest record once, the same with N and 10N superseded revisions", async () => {
   const measure = async (revisions: number) => {
-    const { database, rig } = outcomeChat(N, `open-${revisions}`)
+    const { database, rig } = await outcomeChat(N, `open-${revisions}`)
     for (let index = 1; index <= revisions; index++) {
       await rig.writer.enqueue(revision('answer', message(`answer ${index}`, 'assistant'), index))
     }
@@ -588,7 +604,7 @@ it("opens a new chat reading each key's newest record once, the same with N and 
 
 /** An existing chat of `size` sends in its input rows, then three writes as outcome records. */
 async function prefixChat(size: number, label: string) {
-  const database = databaseFor(label)
+  const database = await databaseFor(label)
   const rig = projectionWriter(database, seedProjectionRows(database, historyOf(size)))
   rigs.push(rig)
   const watched = watch(database)
@@ -711,7 +727,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
 
 it('runs a sweep pass with nothing to retire without reading history at N and 10N', async () => {
   const measure = async (size: number) => {
-    const { database } = outcomeChat(size, `idle-${size}`)
+    const { database } = await outcomeChat(size, `idle-${size}`)
     const sweeper = new JournalOutcomeSweeper({ database: () => database, delay: async () => {} })
     await sweeper.pass()
     const watched = watch(database)
@@ -728,29 +744,29 @@ it('runs a sweep pass with nothing to retire without reading history at N and 10
   expectSameWork(small, await measure(10 * N))
 })
 
-it('sweeps a retired generation one bounded page per transaction at N and 10N', () => {
-  const measure = (size: number) => {
-    const { database } = outcomeChat(size, `sweep-${size}`)
+it('sweeps a retired generation one bounded page per transaction at N and 10N', async () => {
+  const measure = async (size: number) => {
+    const { database } = await outcomeChat(size, `sweep-${size}`)
     // A replacement generation retires the published one.
     database.db.exec(`INSERT INTO journal_outcome_generations (session_id, epoch)
       VALUES ('${sessionId}', '${epoch}')`)
     database.db.exec(`UPDATE journal_outcome_epochs SET generation =
       (SELECT MAX(generation) FROM journal_outcome_generations)`)
     const watched = watch(database)
-    expect(sweepJournalOutcomePage(database)).toBe(true)
+    expect(await sweepJournalOutcomePage(database)).toBe(true)
     const work = watched.take()
     watched.stop()
     return work
   }
-  const small = measure(N)
+  const small = await measure(N)
   expect(small.writes).toStrictEqual([['journal_outcomes DELETE', 32]])
-  expectSameWork(small, measure(10 * N))
+  expectSameWork(small, await measure(10 * N))
 })
 
-it('sweeps a retired generation numbered after N and 10N live chats without rescanning them per page', () => {
-  const measure = (chats: number) => {
-    const database = databaseFor(`sweep-chats-${chats}`)
-    database.transaction((db) => {
+it('sweeps a retired generation numbered after N and 10N live chats without rescanning them per page', async () => {
+  const measure = async (chats: number) => {
+    const database = await databaseFor(`sweep-chats-${chats}`)
+    database.fixtureTransaction((db) => {
       const generation = db.prepare(
         'INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)'
       )
@@ -770,35 +786,22 @@ it('sweeps a retired generation numbered after N and 10N live chats without resc
     // Each page's candidate scan walks the generations above its position in order, so the live
     // ones it passes are those numbered above that position.
     const positions: number[] = []
-    const prepare = database.db.prepare.bind(database.db)
-    vi.spyOn(database.db, 'prepare').mockImplementation((sql: string) => {
-      const statement = prepare(sql)
-      if (!sql.includes('LEFT JOIN journal_outcome_epochs')) {
-        return statement
+    const stop = observeNativeJournalSql(database, (entry) => {
+      if (entry.sql.includes('LEFT JOIN journal_outcome_epochs') && entry.position !== undefined) {
+        positions.push(entry.position)
       }
-      const recorded: SqliteStatement = {
-        all: (...parameters) => {
-          positions.push(Number(parameters[0]))
-          return statement.all(...parameters)
-        },
-        get: (...parameters) => statement.get(...parameters),
-        run: (...parameters) => statement.run(...parameters),
-        iterate: (...parameters) => statement.iterate(...parameters),
-        setReadBigInts: (enabled) => statement.setReadBigInts(enabled)
-      }
-      return recorded
     })
-    while (sweepJournalOutcomePage(database)) {
+    while (await sweepJournalOutcomePage(database)) {
       // One bounded page per call.
     }
-    vi.mocked(database.db.prepare).mockRestore()
+    stop()
     const passed = database.db.prepare(
       'SELECT COUNT(*) AS n FROM journal_outcome_epochs WHERE generation > ?'
     )
     return positions.map((position) => Number(passed.get(position)?.n))
   }
-  const small = measure(N)
-  const large = measure(10 * N)
+  const small = await measure(N)
+  const large = await measure(10 * N)
   // Four record pages and the page that drops the generation row; only a pass's first page walks
   // the live chats, as an idle pass does.
   expect(small).toEqual([N, 0, 0, 0, 0])
@@ -807,7 +810,7 @@ it('sweeps a retired generation numbered after N and 10N live chats without resc
 
 it('catches a wire client up from outcomes reading only the groups it asks for at N and 10N', async () => {
   const measure = async (size: number) => {
-    const { database, rig } = outcomeChat(size, `wire-${size}`)
+    const { database, rig } = await outcomeChat(size, `wire-${size}`)
     const after = rig.state().lastSequence
     for (let index = 0; index < 3; index++) {
       await rig.writer.enqueue(
@@ -831,9 +834,9 @@ it('catches a wire client up from outcomes reading only the groups it asks for a
 const trackedNodes = (state: JournalReducerState, row: JournalRow) =>
   isolateJournalTransition(state, (draft) => applyJournalRow(draft, row, row.ts)).tracked()
 
-it("folds a streamed revision and an acceptance through the draft with only main's scans growing at N and 10N", () => {
-  const measure = (size: number) => {
-    const database = databaseFor(`draft-${size}`)
+it("folds a streamed revision and an acceptance through the draft with only main's scans growing at N and 10N", async () => {
+  const measure = async (size: number) => {
+    const database = await databaseFor(`draft-${size}`)
     const state = seedOutcomeRows(database, historyOf(size, true))
     const next = state.lastSequence + 1
     const live = {
@@ -849,8 +852,8 @@ it("folds a streamed revision and an acceptance through the draft with only main
     }
     return live
   }
-  const small = measure(N)
-  const large = measure(10 * N)
+  const small = await measure(N)
+  const large = await measure(10 * N)
   const grown = (key: keyof typeof small) => large[key] - small[key]
   // Main's reducer scans these on the same rows; the draft adds one node per value it reaches.
   // A streamed revision's only growing term is the queue card scan: each card, and each returned

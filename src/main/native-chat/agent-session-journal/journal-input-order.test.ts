@@ -1,5 +1,6 @@
+import type { JournalPersistencePlan } from './journal-persistence-plan'
 import { journalInputOrder } from './journal-input-order'
-import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
+import { readCommandReceipt } from './command-receipt-table'
 import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -70,7 +71,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
     })
     await journal.queuedMessages.insert({ messageId: 'later', body: message('later card') })
     await journal.queuedMessages.withdraw([c.messageId])
-    expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+    expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
       kind: 'card',
       card: { messageId: 'D' }
     })
@@ -79,7 +80,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
       expect(knownPredecessors(journal, 'M')).toEqual(['D'])
       expect(journal.inputOrder.forced('M')).toBe(true)
       expect(journal.queuedMessages.get('C')).toBeNull()
-      expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+      expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'card',
         card: { messageId: 'D' }
       })
@@ -99,7 +100,7 @@ it('preserves the forced queue place through command removal, two epoch replacem
       dispatchState: 'rejected',
       keptAsQueuedMessageId: 'M'
     })
-    expect(selectedStructuredSubmission(reopened)).toBeUndefined()
+    expect(await selectedStructuredSubmission(reopened)).toBeUndefined()
   } finally {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
@@ -205,7 +206,7 @@ it.each(['resume', 'accepted'] as const)(
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
       const marks = readTestJournalOutcomes(
-        openTestJournalHostDatabase(root).db,
+        (await openTestJournalHostDatabase(root)).db,
         identity.sessionId
       ).filter((record) => record.field === '$' && record.key === '"queuePauseMarks"')
       expect(
@@ -287,7 +288,7 @@ it('keeps the receipt callback live after replacement of a legacy null-boundary 
   try {
     const cursor = journal.cursor()
     await journal.close()
-    insertTestJournalRow(openTestJournalHostDatabase(root).db, identity.sessionId, {
+    insertTestJournalRow((await openTestJournalHostDatabase(root)).db, identity.sessionId, {
       v: 3,
       epoch: cursor.epoch,
       seq: cursor.sequence + 1,
@@ -337,7 +338,7 @@ it.each(['legacy', 'observed'] as const)(
       providerHandle: claudeProviderHandle('thread', null)
     }
     let journal = await journals.open({ identity, stateDirectory: root })
-    const database = openTestJournalHostDatabase(root)
+    const database = await openTestJournalHostDatabase(root)
     try {
       const a = journal.cursor()
       await journal.close()
@@ -366,7 +367,7 @@ it.each(['legacy', 'observed'] as const)(
           })
         )
       }
-      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
+      database.fixtureTransaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
       journal = await journals.open({ identity, stateDirectory: root })
       const originals = new Map<string, string>()
       for (const id of ['M1', 'M2', 'M3']) {
@@ -374,20 +375,17 @@ it.each(['legacy', 'observed'] as const)(
           id === 'M2'
             ? undefined
             : {
-                write: (
-                  db: Parameters<typeof insertCommandReceiptIfAbsent>[0],
-                  target?: JournalRow
-                ) => {
+                write: (db: JournalPersistencePlan, target?: JournalRow) => {
                   expect(target).toMatchObject({ kind: 'submission', clientMessageId: id })
                   const result = {
                     kind: 'journal-row' as const,
                     epoch: target!.epoch,
                     sequence: target!.seq
                   }
-                  insertCommandReceiptIfAbsent(
-                    db,
-                    { kind: 'global' },
-                    {
+                  db.add({
+                    kind: 'receipt',
+                    scope: { kind: 'global' },
+                    receipt: {
                       operationId: id,
                       sessionId: identity.sessionId,
                       callerKey: 'fixture',
@@ -397,7 +395,7 @@ it.each(['legacy', 'observed'] as const)(
                       acceptedAt: 1,
                       result
                     }
-                  )
+                  })
                   originals.set(id, JSON.stringify(result))
                 },
                 committed: () => {}
@@ -435,7 +433,7 @@ it.each(['legacy', 'observed'] as const)(
           }
           insertTestJournalRow(database.db, identity.sessionId, target)
           if (receipt) {
-            database.transaction((db) => receipt.write(db, target))
+            await database.transaction((db) => receipt.write(db, target))
           }
           journal = await journals.open({ identity, stateDirectory: root })
         }

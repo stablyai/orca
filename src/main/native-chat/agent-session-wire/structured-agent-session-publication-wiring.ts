@@ -15,6 +15,8 @@ export function createStructuredAgentSessionPublicationWiring(input: {
   now: () => number
 }): StructuredAgentSessionConversations {
   return new StructuredAgentSessionConversations({
+    advanceStatusProjection: (journal, rows) =>
+      input.client().advanceStatusProjection(journal, rows),
     observe: (id, journal, rows) => input.client().requestFailures.observe(id, journal, rows),
     forget: (id) => input.client().requestFailures.forget(id),
     deliver: (id, journal) => {

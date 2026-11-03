@@ -56,7 +56,7 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
     })
   }
   await r.journal.close()
-  const db = openTestJournalHostDatabase(r.root).db
+  const db = (await openTestJournalHostDatabase(r.root)).db
   const insert = db.prepare(`INSERT INTO queued_messages
     (session_id, message_id, position, body_json, fingerprint, created_at, host_instance,
      state, hold_reason, returned_reason, consumed_as)
@@ -71,7 +71,7 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
       `legacy:${index}`
     )
   }
-  db.exec(`CREATE TEMP TRIGGER fail_import BEFORE DELETE ON queued_messages
+  db.exec(`CREATE TRIGGER fail_import BEFORE DELETE ON queued_messages
     BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const ops = countLegacyFailureDisplay()
@@ -94,12 +94,12 @@ it.each([100, 300])('bounds the added failure display with %i readable legacy ca
   ).toHaveLength(n)
   expect(journal.queuedMessages.list()).toHaveLength(n)
   const cold = structuredClone(ops.counts)
-  // Three decoded populations: restore, cached source and failed import. The import builds
+  // Two decoded populations: restore and cached source reused by the failed import. It builds
   // N queue rows on an isolated draft before its DELETE fails; none of that work is free.
   expect(cold).toEqual({
     upstream: {
       ...emptyLegacyCounts(),
-      decodedRows: 3 * n,
+      decodedRows: 2 * n,
       restoredRows: n,
       ownerClassifications: 2 * n,
       cardConstructions: 5 * n,

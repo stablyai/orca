@@ -1,11 +1,12 @@
-import { readJournalLegacyCards } from './journal-queue-import'
+import type { JournalReadConnection } from './journal-sql-owner'
+import { readJournalLegacyCards, readJournalLegacyCardsAsync } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import { initializeJournalInputOrder, journalInputOrder } from './journal-input-order'
 import type { JournalOutcomeFold } from './journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../sqlite/sync-database'
-import { journalInputAcceptance } from './journal-input-provenance'
+import { journalInputAcceptance, prepareJournalAcceptance } from './journal-input-provenance'
 
 export type JournalNativePrefix = {
   entries: Map<string, JournalInputEntry>
@@ -32,8 +33,30 @@ export function restoreJournalNativeState(
   fold: JournalOutcomeFold,
   prefix: JournalNativePrefix
 ): void {
+  for (const _step of liftJournalNativePrefix(state, format, fold, prefix)) {
+    /* synchronous native contract */
+  }
+  const owner = initializeJournalInputOrder(state, (id) =>
+    journalInputAcceptance(db, state.sessionId, id)
+  )
+  owner.beginReconstruction()
+  owner.restore(state)
+  owner.overlay(state, readJournalLegacyCards(db, state))
+  owner.finishReconstruction(state)
+}
+
+function* liftJournalNativePrefix(
+  state: JournalReducerState,
+  format: number,
+  fold: JournalOutcomeFold,
+  prefix: JournalNativePrefix
+): Generator<void> {
+  let examined = 0
   if (format < 2) {
     for (const [id, own] of prefix.entries) {
+      if (++examined % 128 === 0) {
+        yield
+      }
       if (
         state.submissions.get(id)?.dispatchState === 'pending' &&
         !fold.replaced('submissions', id)
@@ -42,11 +65,17 @@ export function restoreJournalNativeState(
       }
     }
     for (const [id, card] of prefix.cards) {
+      if (++examined % 128 === 0) {
+        yield
+      }
       if (!state.queue.cards.has(id) && !fold.replaced('queue.cards', id)) {
         state.inputCards.set(id, card)
       }
     }
     for (const [id, card] of state.queue.cards) {
+      if (++examined % 128 === 0) {
+        yield
+      }
       const known = !fold.replaced('queue.cards', id) ? prefix.cards.get(id) : undefined
       const introducedAt = fold.introduction('queue.cards', id)
       if (known) {
@@ -59,6 +88,9 @@ export function restoreJournalNativeState(
       }
     }
     for (const [id, entry] of state.submissions) {
+      if (++examined % 128 === 0) {
+        yield
+      }
       const sequence = entry.acceptedSequence ?? entry.submittedSequence
       if (
         !state.inputEntries.has(id) &&
@@ -76,13 +108,31 @@ export function restoreJournalNativeState(
       }
     }
   }
-  const owner = initializeJournalInputOrder(state, (id) =>
-    journalInputAcceptance(db, state.sessionId, id)
-  )
-  owner.beginReconstruction()
-  owner.restore(state)
-  owner.overlay(state, readJournalLegacyCards(db, state))
-  owner.finishReconstruction(state)
+}
+
+export async function restoreJournalNativeStateAsync(
+  read: JournalReadConnection,
+  state: JournalReducerState,
+  format: number,
+  fold: JournalOutcomeFold,
+  prefix: JournalNativePrefix
+): Promise<void> {
+  for (const _step of liftJournalNativePrefix(state, format, fold, prefix)) {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  const owner = initializeJournalInputOrder(state)
+  const ids = owner.needsAcceptance([...state.inputEntries.keys()])
+  const acceptance = await prepareJournalAcceptance(read, state.sessionId, ids)
+  const cards = await readJournalLegacyCardsAsync(read, state)
+  owner.withAcceptance(acceptance, () => {
+    owner.beginReconstruction()
+    owner.restore(state)
+    for (const id of ids) {
+      owner.place(id)
+    }
+    owner.overlay(state, cards)
+    owner.finishReconstruction(state)
+  })
 }
 
 /** Replacement carries facts directly; restatement is not a new admission or introduction. */

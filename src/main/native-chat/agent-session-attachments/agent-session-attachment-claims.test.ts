@@ -103,9 +103,9 @@ describe('claims written with the message', () => {
     return join(storeRoot, uploadId, name)
   }
 
-  function claims(): { upload_id: string; session_id: string }[] {
-    return openTestJournalHostDatabase(stateDirectory)
-      .db.prepare(
+  async function claims(): Promise<{ upload_id: string; session_id: string }[]> {
+    return (await openTestJournalHostDatabase(stateDirectory)).db
+      .prepare(
         'SELECT upload_id, session_id FROM agent_session_attachment_claims ORDER BY session_id'
       )
       .all()
@@ -147,7 +147,7 @@ describe('claims written with the message', () => {
     const path = await storeUpload(UPLOAD_A)
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     expect(journal.submission('send-1')).toBeTruthy()
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it('refuses the whole client message, writing nothing, when an upload is gone', async () => {
@@ -162,14 +162,18 @@ describe('claims written with the message', () => {
     ).catch((caught: unknown) => caught)
     expect(isAgentSessionAttachmentExpiredError(error)).toBe(true)
     expect(journal.submission('send-1')).toBeUndefined()
-    expect(claims()).toEqual([])
+    expect(await claims()).toEqual([])
   })
 
   it('refuses an upload the sweep already marked, even while its file is still on disk', async () => {
     const journal = await open()
     const path = await storeUpload(UPLOAD_A)
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      markUnclaimedUploadForSweep(
+        (await openTestJournalHostDatabase(stateDirectory)).db,
+        UPLOAD_A,
+        1
+      )
     ).toBe(true)
     const error = await clientSend(journal, 'send-1', message({ type: 'image-ref', path })).catch(
       (caught: unknown) => caught
@@ -182,7 +186,11 @@ describe('claims written with the message', () => {
     const path = await storeUpload(UPLOAD_A)
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      markUnclaimedUploadForSweep(
+        (await openTestJournalHostDatabase(stateDirectory)).db,
+        UPLOAD_A,
+        1
+      )
     ).toBe(false)
   })
 
@@ -200,11 +208,9 @@ describe('claims written with the message', () => {
       origin: 'host'
     })
     expect(journal.submission('host-1')).toBeTruthy()
-    expect(
-      claims()
-        .map((claim) => claim.upload_id)
-        .sort()
-    ).toEqual([UPLOAD_A, UPLOAD_B].sort())
+    expect((await claims()).map((claim) => claim.upload_id).sort()).toEqual(
+      [UPLOAD_A, UPLOAD_B].sort()
+    )
   })
 
   it("refuses a gone upload and keeps a waiting card's attachment claim across clear", async () => {
@@ -234,7 +240,7 @@ describe('claims written with the message', () => {
     await journals.closeAll()
     const reopened = await open()
     expect(reopened.queuedMessages.get('draft-1')).toMatchObject({ body, state: 'waiting' })
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
   })
 
   it("does not refuse a draft's conversion: the draft claimed its uploads when it was written", async () => {
@@ -266,9 +272,13 @@ describe('claims written with the message', () => {
     await clientSend(journal, 'send-1', message({ type: 'image-ref', path }))
     await journals.closeAll()
     journal = await open()
-    expect(claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
+    expect(await claims()).toEqual([{ upload_id: UPLOAD_A, session_id: IDENTITY.sessionId }])
     expect(
-      markUnclaimedUploadForSweep(openTestJournalHostDatabase(stateDirectory).db, UPLOAD_A, 1)
+      markUnclaimedUploadForSweep(
+        (await openTestJournalHostDatabase(stateDirectory)).db,
+        UPLOAD_A,
+        1
+      )
     ).toBe(false)
   })
 })

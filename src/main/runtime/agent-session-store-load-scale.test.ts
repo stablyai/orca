@@ -52,7 +52,7 @@ describe('SQLite conversation reopen work', () => {
     )
     await journal.close()
     const work = countStoreWork()
-    const queries = countRecordQueries(root)
+    const queries = await countRecordQueries(root)
     const store = await openTestAgentSessionRecordStore(root)
     expect(queries()).toEqual({ executions: 1, rows: n + 2 })
     expect(work.counts).toMatchObject({

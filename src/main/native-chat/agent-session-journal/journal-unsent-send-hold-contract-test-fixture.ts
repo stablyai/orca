@@ -125,7 +125,7 @@ export function createFixture() {
   ): Promise<void> {
     await journal.close()
     const seq = journal.submission(id)?.submittedSequence
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = await openTestJournalHostDatabase(root)
     const stored = liveTestJournalRows(db, IDENTITY.sessionId).find((row) => row.seq === seq)
     if (!stored) {
       throw new Error(`no stored row for ${id}`)

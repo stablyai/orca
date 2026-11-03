@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../rpc/unused-default-rpc-methods.test-fixture'
 /** Opening the store for history/resume/phone admission does not prove chat presence; the first chat record must update the signal immediately. */
 

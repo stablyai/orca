@@ -8,10 +8,10 @@ import {
 } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { restoreJournal } from '../agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../agent-session-journal/journal-open'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
-import type Database from '../../sqlite/sync-database'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
@@ -31,7 +31,9 @@ type Deps = {
   }
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
-  readSavedCut: (id: string) => NativeChatUsageLimitCut | null
+  readSavedCut: (
+    id: string
+  ) => NativeChatUsageLimitCut | null | Promise<NativeChatUsageLimitCut | null>
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>
   send: (
     params: Parameters<typeof sendStructuredAgentSessionTurn>[2]
@@ -42,11 +44,11 @@ type Deps = {
 }
 
 /** Reads a chat's saved conversation without opening it, as main does for unopened chats. */
-export function readSavedUsageLimitCut(
-  db: Database.Database,
+export async function readSavedUsageLimitCut(
+  database: JournalHostDatabase,
   id: string
-): NativeChatUsageLimitCut | null {
-  const load = restoreJournal(db, id)
+): Promise<NativeChatUsageLimitCut | null> {
+  const load = await database.read((read) => restoreJournalAsync(read, id))
   const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
   return snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
 }
@@ -93,13 +95,13 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   /** At most three history reads per pass; a read that throws stays retryable without starving others. */
-  private readColdCuts(visible: readonly string[]): void {
+  private async readColdCuts(visible: readonly string[]): Promise<void> {
     const pass = ++this.passes
     const unread = visible.filter((id) => !this.deps.sessions.has(id) && !this.coldCuts.has(id))
     unread.sort((a, b) => (this.coldFailures.get(a) ?? 0) - (this.coldFailures.get(b) ?? 0))
     for (const id of unread.slice(0, 3)) {
       try {
-        this.readCut(id, true)
+        await this.loadColdCut(id)
         this.coldFailures.delete(id)
       } catch (error) {
         if (!this.coldFailures.has(id)) {
@@ -128,15 +130,23 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.coldFailures.delete(id)
   }
 
-  private readCut(id: string, cold = false): NativeChatUsageLimitCut | null {
+  private readCut(id: string): NativeChatUsageLimitCut | null {
     if (this.deps.sessions.has(id)) {
       this.coldCuts.delete(id)
       return this.deps.readLoadedCut(id)
     }
-    if (!this.coldCuts.has(id) && cold) {
-      this.coldCuts.set(id, this.deps.readSavedCut(id))
-    }
+
     return this.coldCuts.get(id) ?? null
+  }
+
+  private async loadColdCut(id: string): Promise<NativeChatUsageLimitCut | null> {
+    if (!this.deps.sessions.has(id) && !this.coldCuts.has(id)) {
+      const cut = await this.deps.readSavedCut(id)
+      if (!this.disposed && !this.deps.sessions.has(id)) {
+        this.coldCuts.set(id, cut)
+      }
+    }
+    return this.readCut(id)
   }
 
   readState = (id: string): AgentSessionStatusSummary['usageLimitContinue'] => {
@@ -177,7 +187,7 @@ export class StructuredAgentSessionUsageLimitContinue {
 
   cancel = (input: { sessionId: string; turnItemId: string; resetsAt: number }): Promise<void> =>
     this.deps.serialize(input.sessionId, async () => {
-      const cut = this.readCut(input.sessionId, true)
+      const cut = await this.loadColdCut(input.sessionId)
       if (!cut || identity(cut) !== identity(input)) {
         return
       }
@@ -206,7 +216,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       }
       // Visibility and workspace sleep can change without a journal or settings commit.
       this.publishScheduled()
-      this.readColdCuts(visible)
+      await this.readColdCuts(visible)
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
         if (!this.deps.sessions.has(id) && !this.coldCuts.has(id)) {

@@ -120,8 +120,8 @@ async function rewindKeepingPrompt(itemId: string): Promise<void> {
   ])
 }
 
-function failReceiptWrites(): () => void {
-  const db = openTestJournalHostDatabase(root).db
+async function failReceiptWrites(): Promise<() => void> {
+  const db = (await openTestJournalHostDatabase(root)).db
   db.exec(`CREATE TRIGGER fail_prompt_receipt BEFORE INSERT ON agent_session_command_receipts
     BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
   return () => db.exec('DROP TRIGGER fail_prompt_receipt')
@@ -178,7 +178,7 @@ describe('a prompt answer', () => {
       replayed: false,
       value: { itemId: prompt.itemId, resolution: { state: 'resolved' } }
     })
-    expect(receipt(id)).toMatchObject({
+    expect(await receipt(id)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.respondTo:approval', result: { kind: 'prompt-answer' } }
     })
@@ -225,7 +225,7 @@ describe('a prompt answer', () => {
       replayed: false,
       value: { revision: prompt.revision + 1 }
     })
-    expect(receipt(alias, other.callerKey)).toMatchObject({
+    expect(await receipt(alias, other.callerKey)).toMatchObject({
       receipt: {
         result: {
           kind: 'prompt-answer',
@@ -245,21 +245,21 @@ describe('a prompt answer', () => {
   it('rolls the revision back when its receipt cannot be saved', async () => {
     const prompt = await seeded()
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     await expect(host.respondToPrompt(CALLER, answer(prompt, id))).rejects.toThrow(
       'receipt unavailable'
     )
     restore()
     expect(await resolution(prompt.itemId)).toBe('pending')
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(store.listOperationRows().find((row) => row.operationId === id)).toBeUndefined()
   })
 
   it('answers an unreadable receipt as unknown without asking the provider', async () => {
     const prompt = await seeded()
     const id = opId()
-    openTestJournalHostDatabase(root)
-      .db.prepare(
+    ;(await openTestJournalHostDatabase(root)).db
+      .prepare(
         `INSERT INTO agent_session_command_receipts (operation_id, session_id, caller_key, method,
           fingerprint, status, result_json, rejection_json, accepted_at)
          VALUES (?, ?, ?, 'agentSession.respondTo:approval', 'x', 'accepted', '{', NULL, 0)`
@@ -276,12 +276,12 @@ describe('a prompt answer', () => {
   it("refuses with the update words when a newer Orca's journal holds the chat", async () => {
     const prompt = await seeded()
     const id = opId()
-    Object.defineProperty(openTestJournalHostDatabase(root), 'readOnly', { value: true })
+    Object.defineProperty(await openTestJournalHostDatabase(root), 'readOnly', { value: true })
     expect(await host.respondToPrompt(CALLER, answer(prompt, id))).toMatchObject({
       ok: false,
       ...SAVED_BY_NEWER_ORCA
     })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
   })
 
   it('records nothing for a refusal before acceptance', async () => {
@@ -291,7 +291,7 @@ describe('a prompt answer', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_invalid' }
     })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(store.listOperationRows().find((row) => row.operationId === id)).toBeUndefined()
   })
 
@@ -398,10 +398,10 @@ describe('a prompt answer', () => {
     await host.respondToPrompt(CALLER, answer(prompt, opId()))
     const other = { callerKey: 'client-2' }
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     expect(await host.respondToPrompt(other, answer(prompt, id))).toMatchObject(UNKNOWN)
     restore()
-    expect(receipt(id, other.callerKey)).toEqual({ verdict: 'absent' })
+    expect(await receipt(id, other.callerKey)).toEqual({ verdict: 'absent' })
     expect(answerPrompt).toHaveBeenCalledOnce()
   })
 
@@ -423,7 +423,7 @@ describe('a prompt answer', () => {
       CONFLICT
     )
     // Refused answers cannot overwrite the Stop receipt.
-    expect(receipt(stopped)).toMatchObject({
+    expect(await receipt(stopped)).toMatchObject({
       verdict: 'readable',
       receipt: { method: 'agentSession.cancel' }
     })

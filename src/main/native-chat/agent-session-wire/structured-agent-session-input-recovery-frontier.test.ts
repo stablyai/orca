@@ -167,7 +167,7 @@ it('retains an automatic unentered link through two production replacements and 
     })
     const m = rig.send('M')
     await m.result
-    const receipt = rig.store.readCommandReceipt({ kind: 'global' }, m.id)
+    const receipt = await rig.store.readCommandReceipt({ kind: 'global' }, m.id)
     const intro = journal.inputOrder.lineage.cards.get('D')!.introduced
     await rig.deleteQueued('C')
     const reservation = conversationDelivery.loop['deps'].deliveryOrder.reserve(SESSION)
@@ -188,7 +188,7 @@ it('retains an automatic unentered link through two production replacements and 
         body: hostTestMessage('latest D'),
         options: { effort: 'high' }
       })
-      expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
+      expect(await selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'submission',
         submission: { clientMessageId: h }
       })
@@ -201,7 +201,7 @@ it('retains an automatic unentered link through two production replacements and 
           replay.state.submissions.get(m.id)!
         )
       ).toBe(true)
-      expect(rig.store.readCommandReceipt({ kind: 'global' }, m.id)).toEqual(receipt)
+      expect(await rig.store.readCommandReceipt({ kind: 'global' }, m.id)).toEqual(receipt)
     }
     release()
     await eventually(async () => expect((await rig.submission(h))?.handedOverAt).toBeDefined())
@@ -230,7 +230,7 @@ it.each([10, 100])(
     try {
       const original = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
       await rig.host.flushAllStreamedEvents()
-      writeLegacyGapFixture(rig.root, original, n)
+      await writeLegacyGapFixture(rig.root, original, n)
       const check = (state: JournalReducerState) => {
         const m = state.submissions.get('legacy-M')!
         expect.soft(journalInputOrder(state).forced('legacy-M')).toBe(true)
@@ -243,7 +243,7 @@ it.each([10, 100])(
       check(loadTestJournal(rig.root, SESSION)!.state)
       const journal = new AgentSessionJournal({
         identity: original['identity'],
-        database: openTestJournalHostDatabase(rig.root)
+        database: await openTestJournalHostDatabase(rig.root)
       })
       await journal.open()
       for (let pass = 0; pass < 2; pass++) {
@@ -252,7 +252,7 @@ it.each([10, 100])(
         check(loadTestJournal(rig.root, SESSION)!.state)
       }
       await journal.close()
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
       await rig.submission('legacy-M')
       const reopened = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
       const saved = reopened.queuedMessages

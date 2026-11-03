@@ -1,3 +1,4 @@
+import '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
@@ -66,7 +67,9 @@ function createDispatch() {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+  })
   structuredWorkerIdentities.clear()
   state = harness.setup()
   vi.spyOn(state.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
@@ -352,17 +355,19 @@ describe('the structured redrive publication edge', () => {
         expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
-        expect(send).toHaveBeenCalledTimes(2)
+        await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2))
         // Queued behind the running turn, like a person's message: delivered, not yet handed over.
-        expect(state.db.getMessageById(messageId)).toMatchObject({
-          read: 0,
-          delivered_at: expect.any(String)
-        })
+        await vi.waitFor(() =>
+          expect(state.db.getMessageById(messageId)).toMatchObject({
+            read: 0,
+            delivered_at: expect.any(String)
+          })
+        )
         expect(dispatch).not.toHaveBeenCalled()
         // The turn ends and the chat's own drain hands the card over.
         await worker.journal.appendTombstone(turn, { fence })
         await vi.advanceTimersByTimeAsync(300)
-        expect(dispatch).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
         expect(dispatch.mock.calls[0]![0].body).toMatchObject({
           kind: 'message',
           role: 'user',
@@ -549,7 +554,9 @@ describe('the structured redrive publication edge', () => {
         // Its Dispatch settled: the mail goes to a follow-up, never into the chat that finished it.
         expect(send).toHaveBeenCalledTimes(1)
         expect(dispatch).not.toHaveBeenCalled()
-        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+        await vi.waitFor(() =>
+          expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+        )
       }
     }
   )

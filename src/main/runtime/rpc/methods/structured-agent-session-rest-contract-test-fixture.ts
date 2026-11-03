@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../../../native-chat/agent-session-wire/agent-session-subscriber-test-support'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -43,6 +44,7 @@ export async function call(
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client
   )
+  await settleTestSubscriberDeliveries(rig.host.collaboratorsForTests().subscribers)
   return replies
 }
 

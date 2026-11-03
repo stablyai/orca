@@ -53,10 +53,11 @@ export function registerJournalUnknownContentTests(): void {
     return journals.open({ identity: IDENTITY, stateDirectory: root })
   }
 
-  function stored(): { seq: number; rowJson: string }[] {
-    return liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId).map(
-      (row) => ({ seq: row.seq, rowJson: row.rowJson })
-    )
+  async function stored(): Promise<{ seq: number; rowJson: string }[]> {
+    return liveTestJournalRows(
+      (await openTestJournalHostDatabase(root)).db,
+      IDENTITY.sessionId
+    ).map((row) => ({ seq: row.seq, rowJson: row.rowJson }))
   }
 
   /** Close after injecting rows so the next open replays them. */
@@ -68,13 +69,13 @@ export function registerJournalUnknownContentTests(): void {
     let seq = first.cursor().sequence
     await journals.closeAll()
     const tail = itemRow(epoch, 'codex:thread-1:turn-1:9', { kind: 'status', text: 'after' })
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = await openTestJournalHostDatabase(root)
     for (const row of [...rows(epoch), tail]) {
       seq += 1
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, JSON.stringify({ ...row, seq }), 5_000)
     }
     await closeTestJournalHostDatabase(root)
-    return { written: stored() }
+    return { written: await stored() }
   }
 
   function itemRow(epoch: string, itemId: string, body: Record<string, unknown>) {
@@ -115,7 +116,7 @@ export function registerJournalUnknownContentTests(): void {
   async function expectNewerAndKept(written: { seq: number; rowJson: string }[]) {
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
     await expect(open()).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-    expect(stored()).toEqual(written)
+    expect(await stored()).toEqual(written)
   }
 
   // An input row's union tags are closed like its keys: a newer kind refuses the chat before main's
@@ -259,7 +260,7 @@ export function registerJournalUnknownContentTests(): void {
           }
         })
       }
-      expect(stored()).toEqual(written)
+      expect(await stored()).toEqual(written)
     })
   })
 }

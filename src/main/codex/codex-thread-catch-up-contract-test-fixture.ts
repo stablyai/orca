@@ -1,14 +1,15 @@
+import {
+  getTestJournalNativeDatabase,
+  closeTestJournalHostDatabase,
+  createTrackedJournalOpener
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  closeTestJournalHostDatabase,
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
+
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { catchUpCodexThread } from './codex-structured-thread-catch-up'
@@ -98,7 +99,7 @@ export async function chat(clock: { now: number }) {
     },
     root,
     get db() {
-      return openTestJournalHostDatabase(root).db
+      return getTestJournalNativeDatabase(root)
     },
     publications,
     reopen: async () => {

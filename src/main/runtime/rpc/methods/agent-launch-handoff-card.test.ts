@@ -171,7 +171,7 @@ it('records a card for each handoff, and never re-adds one the user removed, acr
   })
   // Reopened from disk, the kept card reads back and the removed one stays removed.
   const host = await rig.restart()
-  const destination = host.captureAgentStartDestination(CALLER)!
+  const destination = (await host.captureAgentStartDestination(CALLER))!
   await host.appendAgentStart(destination, removed.body, removed.observedAt + 10)
 
   expect(await cards()).toEqual([kept])

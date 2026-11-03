@@ -85,23 +85,25 @@ type JournalEntry =
   | { kind: 'dispatch'; clientMessageId: string; state: AgentJournalDispatchState }
 
 /** Outcomes preserve the sequence at which a verdict or whole item committed. */
-function seqOf(matches: (entry: JournalEntry) => boolean): number | undefined {
-  return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).find((value) => {
-    if (value.deleted) {
+async function seqOf(matches: (entry: JournalEntry) => boolean): Promise<number | undefined> {
+  return readTestJournalOutcomes((await openTestJournalHostDatabase(root)).db, SESSION).find(
+    (value) => {
+      if (value.deleted) {
+        return false
+      }
+      if (value.field === 'items') {
+        return matches({
+          kind: 'item',
+          body: fields.items.element.parse(JSON.parse(value.json)).body
+        })
+      }
+      if (value.field === 'submissions') {
+        const [id, submission] = fields.submissions.element.parse(JSON.parse(value.json))
+        return matches({ kind: 'dispatch', clientMessageId: id, state: submission.dispatchState })
+      }
       return false
     }
-    if (value.field === 'items') {
-      return matches({
-        kind: 'item',
-        body: fields.items.element.parse(JSON.parse(value.json)).body
-      })
-    }
-    if (value.field === 'submissions') {
-      const [id, submission] = fields.submissions.element.parse(JSON.parse(value.json))
-      return matches({ kind: 'dispatch', clientMessageId: id, state: submission.dispatchState })
-    }
-    return false
-  })?.seq
+  )?.seq
 }
 
 const dispatchRow =
@@ -193,14 +195,14 @@ describe('a settlement Codex proves keeps its place behind the frame that proved
     streamedReplyAhead()
     turns.end('failed', 'The model is overloaded.')
 
-    await vi.waitFor(() => expect(seqOf(dispatchRow(sent, 'rejected'))).toBeDefined())
+    await vi.waitFor(async () => expect(await seqOf(dispatchRow(sent, 'rejected'))).toBeDefined())
     await host.flushStreamedEvents(SESSION)
-    const ended = seqOf((entry) => {
+    const ended = await seqOf((entry) => {
       const turn = turnOf(entry)
       return turn !== null && turn.state !== 'running'
     })
     expect(ended).toBeDefined()
-    expect(seqOf(dispatchRow(sent, 'rejected'))).toBeGreaterThan(ended!)
+    expect(await seqOf(dispatchRow(sent, 'rejected'))).toBeGreaterThan(ended!)
   })
 
   it('accepts a send only after the echo that proves it has landed', async () => {
@@ -211,11 +213,11 @@ describe('a settlement Codex proves keeps its place behind the frame that proved
     streamedReplyAhead()
     turns.echo(sent)
 
-    await vi.waitFor(() => expect(seqOf(dispatchRow(sent, 'accepted'))).toBeDefined())
+    await vi.waitFor(async () => expect(await seqOf(dispatchRow(sent, 'accepted'))).toBeDefined())
     await host.flushStreamedEvents(SESSION)
     // The echo reconciles into the send's own bubble: its row is the turn now naming that send.
-    const echoed = seqOf((entry) => turnOf(entry)?.userItemId === `orca:${sent}`)
+    const echoed = await seqOf((entry) => turnOf(entry)?.userItemId === `orca:${sent}`)
     expect(echoed).toBeDefined()
-    expect(seqOf(dispatchRow(sent, 'accepted'))).toBeGreaterThan(echoed!)
+    expect(await seqOf(dispatchRow(sent, 'accepted'))).toBeGreaterThan(echoed!)
   })
 })

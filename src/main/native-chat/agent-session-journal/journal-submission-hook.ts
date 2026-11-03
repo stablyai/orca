@@ -1,15 +1,15 @@
-import type Database from '../../sqlite/sync-database'
+import type { JournalPersistencePlan } from './journal-persistence-plan'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
 
 /** Claim attachments atomically; required rejects missing uploads except references retained from previous. */
 export type JournalAttachmentClaim = (
-  db: Database.Database,
+  db: JournalPersistencePlan,
   body: AgentJournalMessageItem,
   required: boolean,
   previous?: AgentJournalMessageItem,
   goalId?: string
-) => (() => void) | void
+) => Promise<(() => void) | void>
 
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 
@@ -21,9 +21,9 @@ export function journalAttachmentClaimsReceipt(
 ): JournalOperationReceipt {
   const commits: (() => void)[] = []
   const claims: JournalOperationReceipt = {
-    write: (db) => {
+    write: async (db) => {
       for (const body of bodies) {
-        const commit = claim(db, body, false)
+        const commit = await claim(db, body, false)
         if (commit) {
           commits.push(commit)
         }
@@ -58,13 +58,13 @@ export function journalInputClaimsReceipt(
 }
 
 export function journalAttachmentClaimReceipt(
-  claim: (db: Database.Database) => (() => void) | void,
+  claim: (db: JournalPersistencePlan) => Promise<(() => void) | void>,
   afterCommit: () => void = () => {}
 ): JournalOperationReceipt {
   let committed: (() => void) | void
   return {
-    write: (db) => {
-      committed = claim(db)
+    write: async (db) => {
+      committed = await claim(db)
     },
     committed: () => {
       committed?.()

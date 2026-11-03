@@ -10,7 +10,7 @@ import {
   openTestJournalHostDatabase,
   liveTestJournalRows
 } from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
@@ -30,7 +30,7 @@ let database: JournalHostDatabase
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
@@ -147,13 +147,12 @@ it('fences opens and every writer before mutation, while the old parser refuses 
 })
 
 // The check runs inside the publishing transaction, against the epoch the caller last saw.
-it('refuses to publish a new epoch over one the caller did not see, writing nothing', () => {
+it('refuses to publish a new epoch over one the caller did not see, writing nothing', async () => {
   seedOutcomeRows(database, [projectionEpochRow, item(2)])
   const before = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
   const committed = vi.fn()
-  expect(() =>
-    publishNewEpoch({
-      database,
+  await expect(
+    publishNewEpoch(database, () => ({
       identity: {
         sessionId,
         workspaceId: 'ws',
@@ -168,8 +167,8 @@ it('refuses to publish a new epoch over one the caller did not see, writing noth
       expectedEpoch: 'an-epoch-replaced-meanwhile',
       queue: { cards: [], receipt: { write: () => {}, committed } },
       onPublished: committed
-    })
-  ).toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
+    }))
+  ).rejects.toThrow(expect.objectContaining({ code: 'journal_row_rejected' }))
   expect(committed).not.toHaveBeenCalled()
   expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(before)
   expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe(epoch)

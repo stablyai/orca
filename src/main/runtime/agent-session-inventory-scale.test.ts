@@ -59,7 +59,7 @@ async function inventoryRig(n: number) {
   const host = new StructuredAgentSessionHost({
     ...hostTestState().host.deps,
     store: rig.store,
-    journalDatabase: openTestJournalHostDatabase(rig.root)
+    journalDatabase: await openTestJournalHostDatabase(rig.root)
   })
   setStructuredAgentSessionHost(host)
   return { ...rig, host }
@@ -137,7 +137,7 @@ describe('real conversation inventory work', () => {
     const host = new StructuredAgentSessionHost({
       ...hostTestState().host.deps,
       store,
-      journalDatabase: openTestJournalHostDatabase(root)
+      journalDatabase: await openTestJournalHostDatabase(root)
     })
     const ids = new Set(unreadable.map(({ sessionId }) => sessionId))
     const work = countStoreWork(store)
@@ -231,7 +231,7 @@ describe('real conversation inventory work', () => {
     const host = new StructuredAgentSessionHost({
       ...hostTestState().host.deps,
       store: globalStore,
-      journalDatabase: openTestJournalHostDatabase(globalRoot)
+      journalDatabase: await openTestJournalHostDatabase(globalRoot)
     })
     setStructuredAgentSessionHost(host)
     const db = new OrchestrationDb(':memory:')
@@ -345,7 +345,7 @@ describe('real conversation inventory work', () => {
     async (n) => {
       const rig = await inventoryRig(n)
       const work = countStoreWork(rig.store)
-      const queries = countRecordQueries(rig.root)
+      const queries = await countRecordQueries(rig.root)
       const visits = vi.spyOn(membership, 'hasAgentSessionConversation')
       let index: ReturnType<typeof createReferenceAgentIndex> = new Map()
       const result = await findWorkspaceReferences(
@@ -416,7 +416,7 @@ describe('real conversation inventory work', () => {
   it.each([10, 100])('keeps history and both adoption boundaries linear at %i rows', async (n) => {
     const rig = await inventoryRig(n)
     const work = countStoreWork(rig.store)
-    const queries = countRecordQueries(rig.root)
+    const queries = await countRecordQueries(rig.root)
     const healthy = n + 1 // closed is readable; damaged reuses its retained view.
     for (const size of [1, 10]) {
       const rows = Array.from({ length: size }, (_, i) => ({
@@ -488,7 +488,7 @@ describe('real conversation inventory work', () => {
         await (await scaleJournal(rig.root, id)).close()
       }
       const work = countStoreWork(rig.store)
-      const queries = countRecordQueries(rig.root)
+      const queries = await countRecordQueries(rig.root)
       const openJournal = vi.spyOn(journalFactory, 'openAgentSessionJournal')
       await rig.host.seedSessionTabs(['damaged-chat', rig.rows[0]!.sessionId])
       expect(openJournal).not.toHaveBeenCalled()

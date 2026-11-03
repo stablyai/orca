@@ -296,7 +296,7 @@ class SessionRuntime extends OrcaRuntimeService {
     return 77
   }
 
-  protected override hasPersistedStructuredAgentSessionStore(): boolean {
+  protected override async hasPersistedStructuredAgentSessionStore(): Promise<boolean> {
     return true
   }
 

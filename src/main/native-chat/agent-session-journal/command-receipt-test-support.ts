@@ -1,5 +1,8 @@
+import type { JournalRow } from './journal-row-schema'
 import type Database from '../../sqlite/sync-database'
+import { JournalPersistencePlan } from './journal-persistence-plan'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionStoreRowWrites } from '../../runtime/agent-session/records/agent-session-store-draft'
 import { writeAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { CommandReceipt } from './command-receipt-schema'
 
@@ -24,11 +27,11 @@ export function commandReceiptFixture(overrides: Partial<AcceptedReceipt> = {}):
 }
 
 export function writeCommandReceiptTestRecord(
-  db: Database.Database,
+  db: Database.Database | JournalPersistencePlan,
   sessionId = 'session-1',
   recordJson: string | null = '{}'
 ): void {
-  writeAgentSessionStoreRows(db, {
+  const writes: AgentSessionStoreRowWrites = {
     records: {
       upsert: recordJson === null ? [] : [[sessionId, recordJson]],
       remove: recordJson === null ? [sessionId] : []
@@ -36,5 +39,29 @@ export function writeCommandReceiptTestRecord(
     operations: { upsert: [], remove: [] },
     retiredClaimKeys: null,
     sessionTabs: null
+  }
+  if (db instanceof JournalPersistencePlan) {
+    db.add({ kind: 'store', writes, insertOperationsIfAbsent: false })
+  } else {
+    writeAgentSessionStoreRows(db, writes)
+  }
+}
+
+export function stageTestJournalRowReceipt(
+  plan: JournalPersistencePlan,
+  sessionId: string,
+  row?: JournalRow
+): void {
+  if (!row) {
+    throw new Error('missing receipt target')
+  }
+  plan.add({
+    kind: 'receipt',
+    scope: { kind: 'global' },
+    receipt: commandReceiptFixture({
+      operationId: `receipt-${row.seq}`,
+      sessionId,
+      result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
+    })
   })
 }

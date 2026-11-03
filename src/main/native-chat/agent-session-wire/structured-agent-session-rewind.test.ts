@@ -117,7 +117,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -244,8 +244,8 @@ describe('host rewind', () => {
     const request = await params(await seed())
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true })
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(directory)
-      .db.prepare(
+    ;(await openTestJournalHostDatabase(directory)).db
+      .prepare(
         "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
       )
       .run(HOST_TEST_SESSION)
@@ -799,8 +799,8 @@ describe('host rewind', () => {
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const cut = await appendRewindUsageLimitedTurn(journal, clock)
     const request = await params(target)
-    const db = openTestJournalHostDatabase(directory).db
-    db.exec(`CREATE TEMP TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
+    const db = (await openTestJournalHostDatabase(directory)).db
+    db.exec(`CREATE TRIGGER fail_rewind_completion BEFORE UPDATE ON agent_session_records
       WHEN instr(NEW.record_json, '"phase":"completed"') > 0
       BEGIN SELECT RAISE(ABORT, 'completion write failed'); END`)
     await expect(host.rewind(caller, request)).rejects.toThrow('completion write failed')

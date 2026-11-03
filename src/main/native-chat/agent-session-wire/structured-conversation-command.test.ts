@@ -77,7 +77,7 @@ async function openHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(generationRoot()),
+    journalDatabase: await openTestJournalHostDatabase(generationRoot()),
     claimKeyId: 'key',
     now: () => clock,
     mintSpawnToken: () => `spawn-${acquisitions}`,
@@ -264,8 +264,8 @@ describe('same-conversation clear', () => {
     expect(store.listRecords()).toHaveLength(1)
     expect(adapter.acquire).toHaveBeenCalledTimes(1)
     await host.flushAllStreamedEvents()
-    openTestJournalHostDatabase(generationRoot())
-      .db.prepare(
+    ;(await openTestJournalHostDatabase(generationRoot())).db
+      .prepare(
         "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
       )
       .run(HOST_TEST_SESSION)
@@ -287,9 +287,9 @@ describe('same-conversation clear', () => {
   })
 
   it('rolls back the divider, boundary and ledger success together when storage fails', async () => {
-    const db = openTestJournalHostDatabase(generationRoot()).db
+    const db = (await openTestJournalHostDatabase(generationRoot())).db
     db.exec(
-      "CREATE TEMP TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+      "CREATE TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
     )
     const params = commandParams('clear')
     const before = await host.journalSnapshot(HOST_TEST_SESSION)

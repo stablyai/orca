@@ -1,9 +1,14 @@
+import type { JournalPersistencePlan } from './journal-persistence-plan'
+import {
+  stageTestJournalRowReceipt,
+  writeCommandReceiptTestRecord
+} from './command-receipt-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 import { JournalRowWriter } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
@@ -40,7 +45,7 @@ export function registerJournalRowWriterTests(): void {
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-writer-'))
-      database = openTestJournalHostDatabase(root)
+      database = await openTestJournalHostDatabase(root)
       publishTestJournalEpoch(database.db, SESSION_ID, EPOCH)
       readOnly = false
     })
@@ -74,13 +79,16 @@ export function registerJournalRowWriterTests(): void {
 
     it('prepares a receipt once from built rows, preserves its target, and leaves empty or failed plans unwritten', async () => {
       const { writer, committedRows } = writerHarness()
-      database.db.exec('CREATE TABLE receipt_fact (sequence INTEGER)')
+      writeCommandReceiptTestRecord(database.db, SESSION_ID)
+      database.db.exec(
+        "CREATE VIEW receipt_fact AS SELECT json_extract(result_json, '$.sequence') AS sequence FROM agent_session_command_receipts"
+      )
       const build = vi.fn(row)
-      const write = vi.fn((db: JournalHostDatabase['db'], target?: JournalRow) => {
+      const write = vi.fn((db: JournalPersistencePlan, target?: JournalRow) => {
         if (!target) {
           throw new Error('missing receipt target')
         }
-        db.prepare('INSERT INTO receipt_fact VALUES (?)').run(target.seq)
+        stageTestJournalRowReceipt(db, SESSION_ID, target)
       })
       const committed = vi.fn(() => {
         expect(committedRows).toEqual([])

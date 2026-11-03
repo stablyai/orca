@@ -11,7 +11,7 @@ import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definiti
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournalAsync } from '../native-chat/agent-session-journal/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
@@ -151,7 +151,8 @@ function createAcpAdapter(
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
   return (context) => {
     const { deps, followUps } = context
-    const readJournal = (sessionId: string) => restoreJournal(context.journalDatabase.db, sessionId)
+    const readJournal = (sessionId: string) =>
+      context.journalDatabase.read((read) => restoreJournalAsync(read, sessionId))
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {

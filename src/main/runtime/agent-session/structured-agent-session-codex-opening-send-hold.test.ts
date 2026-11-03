@@ -1,3 +1,4 @@
+import '../../native-chat/agent-session-journal/journal-host-database-test-support'
 // Drive the real host/journal/adapter and client projection with fake Codex 0.157; sends behind an unopened turn wait to steer into it.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -315,6 +316,13 @@ async function compactRunning(): Promise<{ compacted: Promise<unknown> }> {
   turns.start()
   turns.echo(warmUp)
   turns.end('completed')
+  await vi.waitFor(async () =>
+    expect(
+      (await host.journalSnapshot(SESSION)).items.some(
+        (item) => readAgentJournalTurn(item.body)?.state === 'completed'
+      )
+    ).toBe(true)
+  )
   const compacted = compact()
   await vi.waitFor(async () =>
     expect(
@@ -523,7 +531,9 @@ describe('a send whose turn Codex answered and never opened', () => {
   it('never doubts a send whose turn is slow to open, and holds the next until it opens', async () => {
     const { first, second } = await heldBehindAnAnsweredSend()
 
-    vi.useFakeTimers()
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+    })
     await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS * 3)
     vi.useRealTimers()
 

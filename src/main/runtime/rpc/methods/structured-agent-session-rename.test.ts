@@ -54,7 +54,7 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     }
   )
   await seedTestAgentSessionRecordStore(rig.root, { records })
-  const database = openTestJournalHostDatabase(rig.root)
+  const database = await openTestJournalHostDatabase(rig.root)
   database.db
     .prepare(
       "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
@@ -70,7 +70,7 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     .all()
   await closeTestJournalHostDatabase(rig.root)
   const store = await openTestAgentSessionRecordStore(rig.root)
-  const reopened = openTestJournalHostDatabase(rig.root)
+  const reopened = await openTestJournalHostDatabase(rig.root)
   const host = new StructuredAgentSessionHost({
     ...rig.host.deps,
     store,
@@ -110,7 +110,7 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
     expect(host.hasSession('session-codex')).toBe(false)
     expect(host.readStatusSummary('session-codex')).toBeUndefined()
     const work = countStoreWork(store)
-    const queries = countRecordQueries(rig.root)
+    const queries = await countRecordQueries(rig.root)
     // Observe the actual cached loader statement even if a future caller reuses it directly.
     reopened.db.prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY rowid')
     const names = vi.spyOn(naming, 'structuredAgentSessionNamingSnapshot')

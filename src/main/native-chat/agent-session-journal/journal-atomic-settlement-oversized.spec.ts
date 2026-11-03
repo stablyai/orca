@@ -75,12 +75,12 @@ export function registerJournalAtomicSettlementOversizedTests(
         showUnexpectedExitOutcome: mode === 'startup',
         ...(mode === 'startup' ? { exitedDuringStartup: { generation: 'start-7' } } : {})
       }
-      const database = openTestJournalHostDatabase(fixture.root)
+      const database = await openTestJournalHostDatabase(fixture.root)
       const before = fixture.journal.snapshot()
       const diskBefore = fixture.rows()
       const published: AgentJournalSnapshot[] = []
       fixture.journal.observeCommits(() => published.push(fixture.journal.snapshot()))
-      database.db.exec(`CREATE TEMP TRIGGER reject_submission_settlement_item
+      database.db.exec(`CREATE TRIGGER reject_submission_settlement_item
     BEFORE INSERT ON journal_rows
     WHEN NEW.session_id = '${fixture.SESSION}' AND json_extract(NEW.row_json, '$.recovered') = 1
       AND json_extract(NEW.row_json, '$.kind') = 'item'

@@ -324,7 +324,7 @@ it.each(['stop', 'stop-save-refusal', 'exit', 'exit-after-close-record'] as cons
         expect(signal?.aborted).toBe(false)
       }
       if (ending === 'stop-save-refusal') {
-        const db = codexInputFinalizationFixture().database()
+        const db = await codexInputFinalizationFixture().database()
         const receipt = journal.receiptFor(id)
         db.exec(`CREATE TRIGGER fail_stop_receipt BEFORE INSERT ON agent_session_command_receipts
           BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)

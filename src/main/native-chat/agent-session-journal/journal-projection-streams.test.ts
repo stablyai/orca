@@ -27,7 +27,7 @@ import {
   seedOutcomeRows,
   seedProjectionRows
 } from './journal-projection-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import type { JournalRow } from './journal-row-schema'
 import { JournalOutcomeSweeper } from './journal-outcome-cleanup'
 import { encodeJournalState } from './journal-state-codec'
@@ -39,7 +39,7 @@ const journals = createTrackedJournalOpener()
 const disposals: (() => void)[] = []
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-projection-streams-'))
-  database = openTestJournalHostDatabase(root)
+  database = await openTestJournalHostDatabase(root)
 })
 afterEach(async () => {
   for (const dispose of disposals.splice(0)) {
@@ -232,7 +232,7 @@ it.each(['claude', 'codex'] as const)(
     expectProjectionMatches(database, expected)
     const cleaned = journal.snapshot()
     await journals.closeAll()
-    database = openTestJournalHostDatabase(root)
+    database = await openTestJournalHostDatabase(root)
     journal = await journals.open({ identity, stateDirectory: root, now: () => at })
     expect(journal.snapshot()).toEqual(cleaned)
     expectProjectionMatches(database, expected)

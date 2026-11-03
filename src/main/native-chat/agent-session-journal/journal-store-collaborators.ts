@@ -21,7 +21,7 @@ import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalWriteBody } from './journal-write-queue'
 import { journalInputClaimsReceipt, type JournalAttachmentClaim } from './journal-submission-hook'
-import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
+import { prepareAgentSessionAttachmentClaim } from '../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
@@ -37,8 +37,10 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
+  publish: () => void
   prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: (rows: readonly JournalRow[], savedAt: number) => void
+  verify: () => Promise<void>
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
 }
@@ -60,8 +62,8 @@ export type JournalStoreCollaborators = {
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
   const goalAttachments = new JournalGoalAttachmentInverse(host.identity.sessionId)
-  const claimAttachments: JournalAttachmentClaim = (db, body, required, previous, goalId) => {
-    const claim = claimAgentSessionAttachmentsInTransaction(db, {
+  const claimAttachments: JournalAttachmentClaim = async (db, body, required, previous, goalId) => {
+    const claim = await prepareAgentSessionAttachmentClaim({
       stateDirectory: host.database().stateDirectory,
       sessionId: host.identity.sessionId,
       body,
@@ -69,7 +71,19 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ...(previous ? { previous } : {}),
       now: host.now()
     })
-    return () => goalAttachments.acquired(claim.referenced, claim.inserted, goalId)
+    let acquired: { referenced: Set<string>; inserted: string[] } | undefined
+    db.add({ kind: 'claim', claim }, (result) => {
+      if (typeof result !== 'object' || !result || !('referenced' in result)) {
+        throw new Error('journal attachment claim result is missing')
+      }
+      acquired = result
+    })
+    return () => {
+      if (!acquired) {
+        throw new Error('journal attachment claim did not settle')
+      }
+      goalAttachments.acquired(acquired.referenced, acquired.inserted, goalId)
+    }
   }
   const epochController = new JournalEpochController({
     claimAttachments,
@@ -90,7 +104,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       ),
     queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
-    adopt: host.adopt
+    adopt: host.adopt,
+    publish: host.publish
   })
   const rowWriter = new JournalRowWriter({
     sessionId: host.identity.sessionId,
@@ -102,6 +117,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
     commit: host.commit,
+    verify: host.verify,
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
@@ -132,10 +148,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       writer: rowWriter,
       cards: queuedMessages
     }),
-    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
+    stops: new JournalStopAcceptor({ now: host.now, writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.
     restore: () =>
-      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
+      queuedMessages
+        .initialize()
+        .then(() => restoreJournalStore(host, { epochController }))
+        .then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,

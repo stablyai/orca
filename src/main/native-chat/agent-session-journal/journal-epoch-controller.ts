@@ -33,28 +33,33 @@ export class JournalEpochController {
       queueRestatement: () => JournalQueueRestatement
       cursor: () => AgentJournalCursor
       adopt: (loaded: JournalLoad) => void
+      publish: () => void
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
-    publishNewEpoch({
+  start(
+    reason: AgentJournalEpochReason,
+    fence: number,
+    expectedEpoch: string | null
+  ): Promise<void> {
+    return publishNewEpoch(this.deps.database(), () => ({
       expectedEpoch,
-      database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
       fence,
       now: this.deps.now(),
       queue: this.deps.queueRestatement(),
-      onPublished: this.deps.adopt
-    })
+      onPublished: this.deps.adopt,
+      publish: this.deps.publish
+    }))
   }
 
   /** Serialize rollover with appends and apply the same writable guard as every other journal write. */
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
+    return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence, this.deps.state().epoch)
+      await this.start(reason, fence, this.deps.state().epoch)
       return this.deps.cursor()
     })
   }
@@ -65,11 +70,10 @@ export class JournalEpochController {
     items: readonly JournalReplacementItem[],
     receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
-    return this.deps.serialize(() => {
+    return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
       assertJournalFence(fence, this.deps.highestFence())
-      replaceJournalEpoch({
-        database: this.deps.database(),
+      await replaceJournalEpoch(this.deps.database(), () => ({
         identity: this.deps.identity,
         reason,
         fence,
@@ -82,8 +86,9 @@ export class JournalEpochController {
         queue: this.deps.queueRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
-        onPublished: this.deps.adopt
-      })
+        onPublished: this.deps.adopt,
+        publish: this.deps.publish
+      }))
       return this.deps.cursor()
     })
   }

@@ -87,13 +87,13 @@ function adapter(): StructuredAgentSessionAdapter {
   )
 }
 
-function openHost(): StructuredAgentSessionHost {
+async function openHost(): Promise<StructuredAgentSessionHost> {
   return new StructuredAgentSessionHost({
     agents: claudeAndCodexDeclared(),
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestJournalHostDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     probeOwner: async () => ({ outcome: 'exit-observed' }),
@@ -118,7 +118,7 @@ beforeEach(async () => {
   }))
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-rest-'))
   store = await openTestAgentSessionRecordStore(directory)
-  host = openHost()
+  host = await openHost()
 })
 
 afterEach(async () => {
@@ -183,7 +183,7 @@ async function interruptedRewindAtRest(): Promise<void> {
   expect(store.getRecord(SESSION)?.rewind).toMatchObject({ phase: 'prepared' })
   await host.flushAllStreamedEvents()
   store = await openTestAgentSessionRecordStore(directory)
-  host = openHost()
+  host = await openHost()
 }
 
 describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
@@ -240,7 +240,7 @@ describe('a rewind asked of a chat at rest (P2-23)', () => {
     const epoch = (await host.journalSnapshot(SESSION)).cursor.epoch
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(directory)
-    host = openHost()
+    host = await openHost()
     const before = acquires
     rewindSupport.mockReturnValue({ supported: false, reason: 'history-not-paginated' })
 

@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Worker } from 'node:worker_threads'
 import Database from '../../sqlite/sync-database'
-import { JournalHostDatabase, journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath } from './journal-host-database'
+import {
+  openNativeCheckpointFixture,
+  type NativeCheckpointFixture
+} from './journal-checkpoint-test-support'
 import { journalDatabaseHoldsAgentSessions } from './journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
@@ -36,7 +40,7 @@ ${source.journalCheckpointWorkerSource}`
 })
 
 let root: string
-let host: JournalHostDatabase | undefined
+let host: NativeCheckpointFixture | undefined
 afterEach(async () => {
   vi.restoreAllMocks()
   await host?.close()
@@ -46,7 +50,7 @@ afterEach(async () => {
 })
 async function open() {
   root = await mkdtemp(join(tmpdir(), 'orca-checkpoint-'))
-  host = JournalHostDatabase.open(root)
+  host = openNativeCheckpointFixture(root)
   return host
 }
 
@@ -135,7 +139,7 @@ it('moves checkpoints off the writer, retries a pinned idle tail, reclaims on re
   expect(pending.size).toBe(1)
   await database.close()
   await expect(stat(`${journalDatabasePath(root)}-wal`)).rejects.toMatchObject({ code: 'ENOENT' })
-  host = JournalHostDatabase.open(root)
+  host = openNativeCheckpointFixture(root)
   expect(host.db.prepare('SELECT count(*) AS n FROM checkpoint_probe').get()?.n).toBe(5)
   expect(
     host.db
@@ -197,7 +201,7 @@ it('never starts maintenance for probes or a newer read-only journal', async () 
   await database.close()
   const worker = vi.spyOn(Worker.prototype, 'postMessage')
   journalDatabaseHoldsAgentSessions(journalDatabasePath(root))
-  host = JournalHostDatabase.open(root)
+  host = openNativeCheckpointFixture(root)
   expect(host.readOnly).toBe(true)
   await host.close()
   expect(worker).not.toHaveBeenCalled()

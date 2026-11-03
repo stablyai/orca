@@ -1,3 +1,4 @@
+import { settleTestSubscriberDeliveries } from '../agent-session-wire/agent-session-subscriber-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +24,7 @@ import type { JournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
-import { reusePromptProjection } from '../agent-session-wire/structured-agent-session-actionable-prompts'
+import { structuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -54,7 +55,7 @@ afterEach(async () => {
 
 it('keeps sparse sequence groups whole across catch-up, lookahead, history limits and byte shrinking', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-wire-'))
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   const rows: JournalRow[] = [projectionEpochRow]
   for (let seq = 2; seq <= 30; seq++) {
     rows.push({
@@ -68,7 +69,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
   seedOutcomeRows(database, rows)
   const journal = await journals.open({ identity, stateDirectory: root })
   const before = { epoch, sequence: 1 }
-  const old = journal.readSince(before)
+  const old = await journal.readSince(before)
   if (!old.ok) {
     throw new Error('dense read failed')
   }
@@ -105,7 +106,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await writeNoOp(journal)
-  const first = readAgentSessionHistory(journal, {
+  const first = await readAgentSessionHistory(journal, {
     sessionId,
     direction: 'after',
     cursor,
@@ -122,7 +123,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
   if (!first.ok) {
     throw new Error('first group missing')
   }
-  const second = readAgentSessionHistory(journal, {
+  const second = await readAgentSessionHistory(journal, {
     sessionId,
     direction: 'after',
     cursor: first.page.window.nextCursor,
@@ -137,7 +138,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
       window: { nextCursor: journal.cursor() }
     }
   })
-  const bounded = readAgentSessionHistory(
+  const bounded = await readAgentSessionHistory(
     journal,
     { sessionId, direction: 'after', cursor, limit: 5 },
     { reader: { budgetBytes: 1, form: (value) => ({ item: value, bytes: 100 }) } }
@@ -147,30 +148,34 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
 
 it('moves subscribers and prompt reuse to the newest write when that write saved nothing', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-wire-'))
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestJournalHostDatabase(root)
   seedOutcomeRows(database, [projectionEpochRow])
   const journal = await journals.open({ identity, stateDirectory: root })
   const subscribers = new AgentSessionSubscribers()
   const frames: AgentSessionSubscribeEvent[] = []
   subscribers.open({ id: 'phone', sessionId, journal, fence: 1, emit: (e) => frames.push(e) })
+  await settleTestSubscriberDeliveries(subscribers)
   await journal.appendItem(
     item('material'),
     { kind: 'status', text: 'material' },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const material = journal.cursor()
+  const work = structuredAgentSessionCurrentWork(journal, { record: null })
+  const prompts = work.actionablePrompts()
   await writeNoOp(journal)
   expect(journal.cursor().sequence).toBe(material.sequence + 1)
 
   subscribers.publish(sessionId, journal)
+  await settleTestSubscriberDeliveries(subscribers)
   expect(frames.findLast((frame) => frame.type === 'batch')).toMatchObject({
     batch: { cursor: journal.cursor(), items: [{ body: { text: 'material' } }] }
   })
   const reads = vi.spyOn(journal, 'readSince')
   subscribers.publish(sessionId, journal)
+  await settleTestSubscriberDeliveries(subscribers)
+  expect(reads).not.toHaveBeenCalled()
+  expect(work.actionablePrompts()).toBe(prompts)
   expect(reads).not.toHaveBeenCalled()
   reads.mockRestore()
-
-  const prior = { ...material, fence: 1, items: [], dependencies: new Set<string>() }
-  expect(reusePromptProjection(journal, prior, journal.cursor(), 1)).toBe(prior.items)
 })

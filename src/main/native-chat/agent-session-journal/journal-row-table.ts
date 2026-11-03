@@ -1,6 +1,8 @@
 import type Database from '../../sqlite/sync-database'
 import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
 import { AgentSessionJournalError } from './journal-write-guards'
+import type { JournalReadConnection } from './journal-sql-owner'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
@@ -90,11 +92,32 @@ export function readJournalRowsAfter(
     limit !== undefined
       ? db.prepare(SELECT_ROWS_AFTER_LIMITED).all(sessionId, epoch, afterSeq, limit)
       : db.prepare(SELECT_ROWS_AFTER).all(sessionId, epoch, afterSeq)
+  return journalStoredRows(rows, epoch)
+}
+
+function journalStoredRows(rows: SqliteRow[], epoch: string): JournalStoredRow[] {
   return rows.flatMap((row) =>
     typeof row.seq === 'number' && typeof row.ts === 'number' && typeof row.row_json === 'string'
       ? [{ epoch, seq: row.seq, ts: row.ts, rowJson: row.row_json }]
       : []
   )
+}
+
+export async function* iterateJournalEpochRowsAsync(
+  read: JournalReadConnection,
+  sessionId: string,
+  epoch: string,
+  after = Number.MIN_SAFE_INTEGER,
+  through = Number.MAX_SAFE_INTEGER,
+  limit = -1
+): AsyncGenerator<JournalStoredRow[]> {
+  for await (const page of read.pages(
+    `SELECT seq, ts, row_json FROM journal_rows
+    WHERE session_id = ? AND epoch = ? AND seq > ? AND seq <= ? ORDER BY seq ASC LIMIT ?`,
+    [sessionId, epoch, after, through, limit]
+  )) {
+    yield journalStoredRows(page, epoch)
+  }
 }
 
 export function deleteJournalEpochRows(

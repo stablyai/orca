@@ -1,3 +1,4 @@
+import { testJournalNativeDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import './rpc/unused-default-rpc-methods.test-fixture'
 
 import { execFile } from 'node:child_process'
@@ -301,7 +302,10 @@ describe("a chat assignee's liveness, stop and close", () => {
     const prefix = journal.cursor()
     await host.close(PEER_CHAT, 'evict')
     expect(host.hasSession(PEER_CHAT)).toBe(false)
-    const saved = restoreJournal(host.deps.journalDatabase.db, PEER_CHAT)?.state
+    const saved = restoreJournal(
+      testJournalNativeDatabase(host.deps.journalDatabase),
+      PEER_CHAT
+    )?.state
     expect(saved?.lastSequence).toBeGreaterThanOrEqual(prefix.sequence)
     const acquisitions = codex.connections.length
     const server = new OrcaRuntimeRpcServer({

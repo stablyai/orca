@@ -183,7 +183,7 @@ it.each(['adopted', 'blank'] as const)(
   async (nextSource) => {
     const first = { clientMessageId: hostTestOperationId(), body: hostTestMessage('first attempt') }
     const adopted = await adoptedParams('old imported history')
-    const db = openTestJournalHostDatabase(fixture.rig.root).db
+    const db = (await openTestJournalHostDatabase(fixture.rig.root)).db
     db.exec(
       `CREATE TRIGGER refuse_first BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated first write failure'); END`
     )

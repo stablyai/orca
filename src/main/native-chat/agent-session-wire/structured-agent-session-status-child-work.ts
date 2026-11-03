@@ -1,5 +1,6 @@
 // Broadcast only child facts and minute-scale freshness; per-tick usage/clocks stay on the chat’s background channel.
 
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
@@ -59,4 +60,13 @@ export function newestAcceptedSendKey(
 ): string {
   const accepted = submissions.findLast((submission) => submission.dispatchState === 'accepted')
   return `${epoch}:${accepted?.clientMessageId ?? ''}`
+}
+
+/** Display effects follow prior row adoption while execution obligations remain immediate. */
+export function publishOrderedStructuredChildWork(
+  journal: Pick<AgentSessionJournal, 'readInOrder'>,
+  publish: () => void,
+  failed: (error: unknown) => void
+): void {
+  void journal.readInOrder(publish).catch(failed)
 }

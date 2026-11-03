@@ -361,7 +361,7 @@ describe('deferred structured agent-session event sink', () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-settlement-'))
     const journal = await openAgentSessionJournal({
       identity: JOURNAL_IDENTITY,
-      database: openTestJournalHostDatabase(root),
+      database: await openTestJournalHostDatabase(root),
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())

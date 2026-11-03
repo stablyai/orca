@@ -31,7 +31,7 @@ const IN_TURN = { kind: 'turn' as const, turnItemId: TURN_KEY }
 export const APPROVAL: AgentJournalItemIdentity = { ...TURN, ordinal: 2 }
 /** Recovered outcome values carry recovered=true. */
 export const REJECT_RECOVERED_ROWS = `
-  CREATE TEMP TRIGGER reject_recovered BEFORE INSERT ON journal_outcomes
+  CREATE TRIGGER reject_recovered BEFORE INSERT ON journal_outcomes
   WHEN (NEW.field = 'items' AND json_extract(NEW.value_json, '$.recovered') = 1)
     OR (NEW.field = 'submissions' AND json_extract(NEW.value_json, '$[1].recovered') = 1)
   BEGIN SELECT RAISE(ABORT, 'temporary storage failure'); END;
@@ -71,7 +71,7 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
   if (!session || !child?.generation) {
     throw new Error('expected the original child')
   }
-  const database = openTestJournalHostDatabase(current.root)
+  const database = await openTestJournalHostDatabase(current.root)
   const before = readTestJournalOutcomes(database.db, SESSION)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   database.db.exec(REJECT_RECOVERED_ROWS)

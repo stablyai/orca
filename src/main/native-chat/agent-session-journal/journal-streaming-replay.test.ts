@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { TestJournalHostDatabase as JournalHostDatabase } from './journal-host-database-test-support'
 import { replayJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import * as reducer from './journal-reducer'
@@ -52,7 +52,7 @@ function put(row: JournalRow): void {
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-stream-replay-'))
-  opened = openTestJournalHostDatabase(root)
+  opened = await openTestJournalHostDatabase(root)
   publishTestJournalEpoch(opened.db, sessionId, epoch)
 })
 

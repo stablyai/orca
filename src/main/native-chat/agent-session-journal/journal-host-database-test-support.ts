@@ -1,48 +1,147 @@
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import {
+  seedLegacyTestJournal,
+  pinTestJournalInputMode
+} from './journal-native-fixture-test-support'
+export {
+  seedLegacyTestJournal,
+  pinTestJournalInputMode,
+  publishTestJournalEpoch,
+  readTestJournalRows,
+  liveTestJournalRows,
+  insertTestJournalRow,
+  insertTestJournalRowJson,
+  updateTestJournalRowJson,
+  deleteTestJournalRow,
+  writeTestLegacyTerminalGaps,
+  readTestJournalOutcomes,
+  readTestQueueChanges
+} from './journal-native-fixture-test-support'
+import { journalNativeTestInstrumentation } from './journal-native-test-instrumentation'
+
 // Share one connection per test profile to match production host ownership.
 
-import { resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { build } from 'esbuild'
+import { afterAll, beforeEach, vi } from 'vitest'
+import * as workerEntries from '../../worker-thread-entry-path'
+import NativeDatabase from '../../sqlite/sync-database'
+import { journalDatabasePath } from './journal-host-database'
+import { runJournalTransaction } from './journal-database'
+
 import { JournalHostDatabase } from './journal-host-database'
-import { fields } from './journal-state-schema'
-import { journalOutcomeSource } from './journal-outcome-format'
-import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
-import { applyJournalRow } from './journal-reducer'
+
 import { restoreJournal, type JournalLoad } from './journal-open'
-import { serializeJournalRow, type JournalRow } from './journal-row-schema'
-import {
-  insertJournalRow,
-  iterateJournalEpochRows,
-  publishJournalSessionEpoch,
-  readJournalSessionEpoch,
-  type JournalStoredRow
-} from './journal-row-table'
+
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionJournalOptions } from './journal-store-contracts'
 
-const opened = new Map<string, JournalHostDatabase>()
+export type TestJournalHostDatabase = JournalHostDatabase & {
+  /** Explicit native fixture access for seeding old/corrupt bytes and checking saved data. */
+  db: Database.Database
+  fixtureTransaction: <T>(run: (db: Database.Database) => T) => T
+}
+const nativeFixtures = new Map<JournalHostDatabase, Database.Database>()
+export function testJournalNativeDatabase(database: JournalHostDatabase): Database.Database {
+  const fixture = nativeFixtures.get(database)
+  if (fixture) {
+    return fixture
+  }
+  const db = new NativeDatabase(journalDatabasePath(database.stateDirectory), {
+    readonly: database.readOnly
+  })
+  nativeFixtures.set(database, db)
+  const close = database.close.bind(database)
+  database.close = async () => {
+    await close()
+    if (nativeFixtures.delete(database)) {
+      db.close()
+    }
+  }
+  return db
+}
 
-export function openTestJournalHostDatabase(stateDirectory: string): JournalHostDatabase {
+const opened = new Map<string, TestJournalHostDatabase>()
+const opening = new Map<string, Promise<TestJournalHostDatabase>>()
+let workerBundle: Promise<string> | undefined
+let bundleRoot: string | undefined
+const resolveWorkerEntry = workerEntries.resolveWorkerThreadEntryPath
+
+async function prepareTestWorker(): Promise<void> {
+  workerBundle ??= (async () => {
+    bundleRoot = await mkdtemp(join(tmpdir(), 'orca-journal-fixture-worker-'))
+    const path = join(bundleRoot, 'journal-sql-worker-entry.cjs')
+    await build({
+      entryPoints: [
+        resolve('src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts')
+      ],
+      outfile: path,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      logLevel: 'silent',
+      banner: { js: journalNativeTestInstrumentation }
+    })
+    return path
+  })()
+  const path = await workerBundle
+  vi.spyOn(workerEntries, 'resolveWorkerThreadEntryPath').mockImplementation((layout, entry) =>
+    entry === 'journal-sql-worker-entry.js' ? path : resolveWorkerEntry(layout, entry)
+  )
+}
+
+beforeEach(prepareTestWorker)
+
+afterAll(async () => {
+  await closeTestJournalHostDatabases()
+  if (bundleRoot) {
+    await rm(bundleRoot, { recursive: true, force: true })
+  }
+})
+
+export async function openTestJournalHostDatabase(
+  stateDirectory: string
+): Promise<TestJournalHostDatabase> {
   const directory = resolve(stateDirectory)
   const existing = opened.get(directory)
   if (existing && !existing.isClosed) {
     return existing
   }
-  const database = JournalHostDatabase.open(directory)
-  opened.set(directory, database)
-  return database
+  const pending = opening.get(directory)
+  if (pending) {
+    return pending
+  }
+  const task = (async () => {
+    await prepareTestWorker()
+    const database = await JournalHostDatabase.open(directory)
+    const db = testJournalNativeDatabase(database)
+    const fixture = Object.assign(database, {
+      db,
+      fixtureTransaction: <T>(run: (db: Database.Database) => T): T =>
+        runJournalTransaction(db, run)
+    })
+    opened.set(directory, fixture)
+    return fixture
+  })()
+  opening.set(directory, task)
+  try {
+    return await task
+  } finally {
+    opening.delete(directory)
+  }
 }
 
 export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
+  await opening.get(directory)
   await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
 export async function closeTestJournalHostDatabases(): Promise<void> {
+  await Promise.all(opening.values())
   for (const database of opened.values()) {
     await database.close()
   }
@@ -66,12 +165,12 @@ export function createTrackedJournalOpener(
   return {
     open: async ({ stateDirectory, ...options }) => {
       if (fixture.legacyInputs) {
-        seedLegacyTestJournal(openTestJournalHostDatabase(stateDirectory), options)
+        seedLegacyTestJournal(await openTestJournalHostDatabase(stateDirectory), options)
       }
       const { openAgentSessionJournal } = await import('./journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
-        database: openTestJournalHostDatabase(stateDirectory)
+        database: await openTestJournalHostDatabase(stateDirectory)
       })
       if (fixture.legacyInputs) {
         pinTestJournalInputMode(journal)
@@ -90,33 +189,6 @@ export function createTrackedJournalOpener(
   }
 }
 
-/** Input-parser fixtures explicitly found an epoch in the shipped input format. */
-export function seedLegacyTestJournal(
-  database: JournalHostDatabase,
-  options: Omit<TestJournalOptions, 'stateDirectory'>
-): void {
-  if (
-    database.readOnly ||
-    readJournalSessionEpoch(database.db, options.identity.sessionId) !== null
-  ) {
-    return
-  }
-  const epoch = options.mintEpoch?.() ?? randomUUID()
-  database.transaction((db) => {
-    publishJournalSessionEpoch(db, options.identity, epoch)
-    insertTestJournalRow(db, options.identity.sessionId, {
-      kind: 'epoch',
-      v: journalRowSchemaVersion([]),
-      epoch,
-      seq: 1,
-      fence: 0,
-      ts: options.now?.() ?? Date.now(),
-      reason: 'session_created',
-      providerHandle: agentSessionJournalProviderHandle(options.identity)
-    })
-  })
-}
-
 export const SAVED_BY_NEWER_ORCA = {
   refusal: {
     code: 'agent_session_journal_unreadable',
@@ -125,177 +197,17 @@ export const SAVED_BY_NEWER_ORCA = {
 }
 
 export function loadTestJournal(stateDirectory: string, sessionId: string): JournalLoad | null {
-  return restoreJournal(openTestJournalHostDatabase(stateDirectory).db, sessionId)
+  return restoreJournal(requireTestDatabase(stateDirectory).db, sessionId)
 }
 
-function liveEpoch(db: Database.Database, sessionId: string): string {
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  if (epoch === null) {
-    throw new Error(`no journal for ${sessionId}`)
+export function getTestJournalNativeDatabase(stateDirectory: string): Database.Database {
+  return requireTestDatabase(stateDirectory).db
+}
+
+function requireTestDatabase(stateDirectory: string): TestJournalHostDatabase {
+  const database = opened.get(resolve(stateDirectory))
+  if (!database || database.isClosed) {
+    throw new Error('open the async journal fixture before reading it')
   }
-  return epoch
-}
-
-export function publishTestJournalEpoch(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string
-): void {
-  publishJournalSessionEpoch(db, { sessionId, workspaceId: 'ws-1' }, epoch)
-}
-
-export function readTestJournalRows(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string
-): JournalStoredRow[] {
-  return readJournalSessionEpoch(db, sessionId) === epoch
-    ? [...iterateJournalEpochRows(db, sessionId, epoch)]
-    : []
-}
-
-export function liveTestJournalRows(db: Database.Database, sessionId: string): JournalStoredRow[] {
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  return epoch === null ? [] : [...iterateJournalEpochRows(db, sessionId, epoch)]
-}
-
-export function insertTestJournalRow(
-  db: Database.Database,
-  sessionId: string,
-  row: JournalRow
-): void {
-  insertTestJournalRowJson(db, sessionId, row.seq, serializeJournalRow(row), row.ts)
-}
-
-export function insertTestJournalRowJson(
-  db: Database.Database,
-  sessionId: string,
-  seq: number,
-  rowJson: string,
-  ts = 1
-): void {
-  db.prepare(
-    'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-  ).run(sessionId, liveEpoch(db, sessionId), seq, ts, rowJson)
-}
-
-export function updateTestJournalRowJson(
-  db: Database.Database,
-  sessionId: string,
-  seq: number,
-  rowJson: string
-): void {
-  db.prepare(
-    'UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND epoch = ? AND seq = ?'
-  ).run(rowJson, sessionId, liveEpoch(db, sessionId), seq)
-}
-
-export function deleteTestJournalRow(db: Database.Database, sessionId: string, seq: number): void {
-  db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq = ?').run(
-    sessionId,
-    liveEpoch(db, sessionId),
-    seq
-  )
-}
-
-/** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
-export function writeTestLegacyTerminalGaps(
-  db: Database.Database,
-  sessionId: string,
-  base: {
-    epoch: string
-    sequence: number
-    fence: number
-    providerHandle: AgentSessionJournalProviderHandle
-  },
-  n: number
-): number {
-  let seq = base.sequence
-  const row = () => ({ v: 3, epoch: base.epoch, seq: ++seq, fence: base.fence, ts: 1 })
-  for (let i = 0; i < n; i++) {
-    const id = `terminal-${i}`
-    insertTestJournalRow(db, sessionId, {
-      ...row(),
-      kind: 'submission',
-      clientMessageId: id,
-      payloadFingerprint: id,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
-      providerHandle: base.providerHandle,
-      handoverRecorded: true,
-      origin: 'client'
-    })
-    insertTestJournalRow(db, sessionId, {
-      ...row(),
-      kind: 'dispatch',
-      clientMessageId: id,
-      state: 'rejected',
-      providerItemId: null,
-      reason: 'not sent'
-    })
-  }
-  return seq
-}
-
-/** Read current canonical contributions in commit order for persisted-outcome assertions. */
-export function readTestJournalOutcomes(
-  db: Database.Database,
-  sessionId: string
-): JournalOutcome[] {
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  const source = epoch && journalOutcomeSource(db, sessionId, epoch)
-  if (!source) {
-    return []
-  }
-  return db
-    .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted FROM journal_outcomes
-    WHERE generation = ? ORDER BY seq, field, entry_key`)
-    .all(source.generation)
-    .map(decodeJournalOutcome)
-}
-
-export function readTestQueueChanges(
-  db: Database.Database,
-  sessionId: string
-): {
-  messageId: string
-  op: string
-  returned: boolean
-}[] {
-  const seen = new Set<string>()
-  return readTestJournalOutcomes(db, sessionId).flatMap((value) => {
-    if (value.field !== 'queue.cards') {
-      return []
-    }
-    if (value.deleted) {
-      return [{ messageId: String(JSON.parse(value.key)), op: 'withdrawn', returned: false }]
-    }
-    const [messageId, card] = fields.queue.shape.cards.element.parse(JSON.parse(value.json))
-    const first = !seen.has(messageId)
-    seen.add(messageId)
-    return [
-      { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
-    ]
-  })
-}
-
-/** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
- * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
- * rows. An epoch this build founds (rollover, replacement) is written as this build writes it. */
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  projection.prepare = (db, rows, savedAt) => {
-    const state = journal['state']
-    if (journalOutcomeSource(db, state.sessionId, state.epoch)) {
-      return prepare(db, rows, savedAt)
-    }
-    for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
-    }
-    return () => {
-      for (const row of rows) {
-        applyJournalRow(state, row, savedAt)
-      }
-    }
-  }
+  return database
 }
