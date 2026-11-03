@@ -10,8 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { hasPathSeparator } from '@/lib/create-named-file'
-import { getRelativePathInsideRoot } from '@/lib/path'
+import { getNamedFileRelativeDirectory, hasPathSeparator } from '@/lib/create-named-file'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -42,6 +41,7 @@ export function NewFileDialog({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const nameInputId = useId()
   const folderInputId = useId()
+  const errorId = useId()
   const mountedRef = useMountedRef()
 
   useEffect(() => {
@@ -90,7 +90,7 @@ export function NewFileDialog({
       )
       return
     }
-    if (getRelativePathInsideRoot(trimmedFolder, worktreePath) === null) {
+    if (getNamedFileRelativeDirectory(trimmedFolder, worktreePath) === null) {
       setError(
         translate(
           'auto.components.editor.NewFileDialog.folderOutsideWorkspace',
@@ -140,7 +140,7 @@ export function NewFileDialog({
           <div>
             <label
               htmlFor={nameInputId}
-              className="text-[11px] font-medium text-muted-foreground mb-1 block"
+              className="text-2xs font-medium text-muted-foreground mb-1 block"
             >
               {translate('auto.components.editor.NewFileDialog.name', 'Name')}
             </label>
@@ -156,12 +156,13 @@ export function NewFileDialog({
               placeholder={suggestedName}
               className="h-8"
               aria-invalid={!!error}
+              aria-describedby={error ? errorId : undefined}
             />
           </div>
           <div>
             <label
               htmlFor={folderInputId}
-              className="text-[11px] font-medium text-muted-foreground mb-1 block"
+              className="text-2xs font-medium text-muted-foreground mb-1 block"
             >
               {translate('auto.components.editor.NewFileDialog.folder', 'Folder')}
             </label>
@@ -175,6 +176,8 @@ export function NewFileDialog({
                 }}
                 onKeyDown={submitOnEnter}
                 className="h-8"
+                aria-invalid={!!error}
+                aria-describedby={error ? errorId : undefined}
               />
               <Button
                 type="button"
@@ -197,7 +200,11 @@ export function NewFileDialog({
             </div>
           </div>
         </div>
-        {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+        {error && (
+          <p id={errorId} className="text-xs text-destructive mt-1">
+            {error}
+          </p>
+        )}
         <DialogFooter className="mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
             {translate('auto.components.editor.NewFileDialog.cancel', 'Cancel')}

@@ -7,16 +7,31 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance,
-  getEditorFileOperationContext
+  getEditorFileOperationContext,
+  type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 import {
   createNamedFile,
   isSshOwnedFileContext,
   NamedFileExistsError,
+  NamedFileOutsideWorkspaceError,
   suggestUntitledName
 } from '@/lib/create-named-file'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { NewFileDialog } from './NewFileDialog'
+
+type OpenedSession = {
+  worktreeId: string
+  worktreePath: string
+  operationProvenance: EditorFileOperationProvenance
+  disableBrowse: boolean
+}
+
+type OpenResult =
+  | { session: OpenedSession; blockedMessage: null }
+  | { session: null; blockedMessage: string }
+
+const BLOCKED_TOAST_ID = 'new-file-blocked'
 
 /** Mounted while activeModal is 'new-file'; creates the file on the active workspace's own host. */
 export default function NewFileModal(): React.JSX.Element | null {
@@ -35,75 +50,92 @@ export default function NewFileModal(): React.JSX.Element | null {
   const mountedRef = useMountedRef()
 
   // Why: pinned at open so a worktree switch behind the dialog cannot redirect the write.
-  const opened = useMemo(() => {
+  const opened = useMemo((): OpenResult | null => {
     if (!worktreeId || !worktreePath) {
       return null
     }
     const state = useAppStore.getState()
-    const operationProvenance = captureEditorFileOperationProvenance(
-      state,
-      worktreeId,
-      undefined,
-      false
-    )
-    let disableBrowse = true
-    let sshOwned = false
     try {
-      const context = getEditorFileOperationContext(
+      const operationProvenance = captureEditorFileOperationProvenance(
         state,
-        { worktreeId, operationProvenance },
-        worktreePath
+        worktreeId,
+        undefined,
+        false
       )
-      disableBrowse = context.target.kind !== 'local' || Boolean(context.connectionId)
-      sshOwned = isSshOwnedFileContext(context)
-    } catch {
-      // Unresolved owner: keep the local folder picker off; create will surface the owner error.
-    }
-    return { worktreeId, worktreePath, operationProvenance, disableBrowse, sshOwned }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot once per mount
-  }, [])
-
-  const sshBlocked = opened?.sshOwned === true
-  useEffect(() => {
-    if (!sshBlocked) {
-      return
-    }
-    // Why: a fixed id collapses the duplicate effect run React StrictMode performs in development.
-    toast.error(
-      translate(
-        'auto.components.editor.NewFileDialog.sshUnsupported',
-        "Creating files in SSH workspaces isn't supported yet."
-      ),
-      { id: 'new-file-ssh-unsupported' }
-    )
-    closeModal()
-  }, [closeModal, sshBlocked])
-
-  const handleCreate = useCallback(
-    async ({ name, folder }: { name: string; folder: string }): Promise<string | null> => {
-      if (!opened) {
-        return null
-      }
-      const state = useAppStore.getState()
+      let disableBrowse = true
       try {
         const context = getEditorFileOperationContext(
           state,
-          { worktreeId: opened.worktreeId, operationProvenance: opened.operationProvenance },
-          opened.worktreePath
+          { worktreeId, operationProvenance },
+          worktreePath
+        )
+        if (isSshOwnedFileContext(context)) {
+          return {
+            session: null,
+            blockedMessage: translate(
+              'auto.components.editor.NewFileDialog.sshUnsupported',
+              "Creating files in SSH workspaces isn't supported yet."
+            )
+          }
+        }
+        disableBrowse = context.target.kind !== 'local' || Boolean(context.connectionId)
+      } catch {
+        // Unresolved owner: keep the local folder picker off; create will surface the owner error.
+      }
+      return {
+        session: { worktreeId, worktreePath, operationProvenance, disableBrowse },
+        blockedMessage: null
+      }
+    } catch (err) {
+      return {
+        session: null,
+        blockedMessage: extractIpcErrorMessage(
+          err,
+          translate(
+            'auto.components.editor.NewFileDialog.createFailed',
+            "Couldn't create the file."
+          )
+        )
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot once per mount
+  }, [])
+
+  const session = opened?.session ?? null
+  const blockedMessage = opened?.blockedMessage ?? null
+  useEffect(() => {
+    if (!blockedMessage) {
+      return
+    }
+    // Why: a fixed id collapses the duplicate effect run React StrictMode performs in development.
+    toast.error(blockedMessage, { id: BLOCKED_TOAST_ID })
+    closeModal()
+  }, [blockedMessage, closeModal])
+
+  const handleCreate = useCallback(
+    async ({ name, folder }: { name: string; folder: string }): Promise<string | null> => {
+      if (!session) {
+        return null
+      }
+      try {
+        const context = getEditorFileOperationContext(
+          useAppStore.getState(),
+          { worktreeId: session.worktreeId, operationProvenance: session.operationProvenance },
+          session.worktreePath
         )
         const info = await createNamedFile(
-          { ...context, worktreePath: opened.worktreePath },
+          { ...context, worktreePath: session.worktreePath },
           folder,
           name,
           () => {
-            // Why: Cancel before the write lands must stop it; after it, nothing may open or close.
+            // Why: stops a create that has not been dispatched yet once the dialog is gone; a write already sent cannot be recalled.
             if (!mountedRef.current) {
               throw new Error('New file dialog closed')
             }
             assertEditorFileOperationCurrent(
               useAppStore.getState(),
-              opened.worktreeId,
-              opened.operationProvenance
+              session.worktreeId,
+              session.operationProvenance
             )
           }
         )
@@ -113,7 +145,7 @@ export default function NewFileModal(): React.JSX.Element | null {
         const latest = useAppStore.getState()
         latest.openFile(info, {
           preview: false,
-          targetGroupId: latest.activeGroupIdByWorktree[opened.worktreeId],
+          targetGroupId: latest.activeGroupIdByWorktree[session.worktreeId],
           focusEditor: true
         })
         closeModal()
@@ -125,6 +157,12 @@ export default function NewFileModal(): React.JSX.Element | null {
             'A file with that name already exists'
           )
         }
+        if (err instanceof NamedFileOutsideWorkspaceError) {
+          return translate(
+            'auto.components.editor.NewFileDialog.folderOutsideWorkspace',
+            'Folder must be inside the current workspace'
+          )
+        }
         return extractIpcErrorMessage(
           err,
           translate(
@@ -134,29 +172,28 @@ export default function NewFileModal(): React.JSX.Element | null {
         )
       }
     },
-    [closeModal, mountedRef, opened]
+    [closeModal, mountedRef, session]
   )
 
   const suggestName = useCallback(
     async (folder: string): Promise<string | null> => {
-      if (!opened || !folder) {
+      if (!session || !folder) {
         return null
       }
       try {
-        const state = useAppStore.getState()
         const context = getEditorFileOperationContext(
-          state,
-          { worktreeId: opened.worktreeId, operationProvenance: opened.operationProvenance },
-          opened.worktreePath
+          useAppStore.getState(),
+          { worktreeId: session.worktreeId, operationProvenance: session.operationProvenance },
+          session.worktreePath
         )
         return await suggestUntitledName(
-          { ...context, worktreePath: opened.worktreePath },
+          { ...context, worktreePath: session.worktreePath },
           folder,
           () =>
             assertEditorFileOperationCurrent(
               useAppStore.getState(),
-              opened.worktreeId,
-              opened.operationProvenance
+              session.worktreeId,
+              session.operationProvenance
             )
         )
       } catch {
@@ -164,18 +201,18 @@ export default function NewFileModal(): React.JSX.Element | null {
         return null
       }
     },
-    [opened]
+    [session]
   )
 
-  if (!opened || sshBlocked) {
+  if (!session) {
     return null
   }
 
   return (
     <NewFileDialog
-      worktreePath={opened.worktreePath}
-      defaultFolder={activeFilePath ? dirname(activeFilePath) : opened.worktreePath}
-      disableBrowse={opened.disableBrowse}
+      worktreePath={session.worktreePath}
+      defaultFolder={activeFilePath ? dirname(activeFilePath) : session.worktreePath}
+      disableBrowse={session.disableBrowse}
       suggestName={suggestName}
       onCreate={handleCreate}
       onClose={closeModal}

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createNamedFile,
+  getNamedFileRelativeDirectory,
   hasPathSeparator,
   isSshOwnedFileContext,
   NamedFileExistsError,
+  NamedFileOutsideWorkspaceError,
   nextUntitledName,
   suggestUntitledName
 } from './create-named-file'
@@ -123,5 +125,86 @@ describe('createNamedFile owner recheck', () => {
       })
     ).rejects.toThrow('owner changed')
     expect(createFile).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getNamedFileRelativeDirectory', () => {
+  it.each([
+    ['/repo', '/repo', ''],
+    ['/repo', '/repo/', ''],
+    ['/repo', '/repo/src/', 'src'],
+    ['/repo', '/repo/a..b', 'a..b'],
+    ['/repo', '/repo/.hidden', '.hidden'],
+    ['/', '/', ''],
+    ['C:\\repo', 'C:\\repo\\src\\', 'src'],
+    ['C:\\Repo', 'c:\\repo\\Src\\', 'Src'],
+    ['C:\\', 'C:\\', '']
+  ])('accepts %s -> %s as %j', (root, dir, expected) => {
+    expect(getNamedFileRelativeDirectory(dir, root)).toBe(expected)
+  })
+
+  it.each([
+    ['/repo', '/repo/../outside'],
+    ['/repo', '/repo/..'],
+    ['/repo', '/repo/a/../b'],
+    ['/repo', '/repo/../outside/'],
+    ['/repo', '/repo/./src'],
+    ['/repo', '/repo2'],
+    ['/repo', 'repo/src'],
+    ['C:\\repo', 'C:\\repo\\..\\x'],
+    ['C:\\repo', 'C:\\repo\\..'],
+    ['C:\\repo', 'C:/repo/a/../b/'],
+    ['C:\\repo', 'C:\\repo\\.\\src'],
+    ['C:\\repo', 'D:\\repo']
+  ])('rejects %s -> %s', (root, dir) => {
+    expect(getNamedFileRelativeDirectory(dir, root)).toBeNull()
+  })
+})
+
+describe('createNamedFile folder and name validation', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each(['/repo/../outside', '/repo/a/../b', '/repo/./src', '/repo2'])(
+    'rejects folder %s before any filesystem probe or write',
+    async (dir) => {
+      const { createFile, pathExists } = stubFs([])
+      await expect(createNamedFile(context, dir, 'a.txt', () => undefined)).rejects.toBeInstanceOf(
+        NamedFileOutsideWorkspaceError
+      )
+      await expect(createNamedFile(context, dir, '', () => undefined)).rejects.toBeInstanceOf(
+        NamedFileOutsideWorkspaceError
+      )
+      expect(pathExists).not.toHaveBeenCalled()
+      expect(createFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['../x', 'a/b', 'a\\b', '.', '..'])('rejects name %j without IO', async (name) => {
+    const { createFile, pathExists } = stubFs([])
+    await expect(createNamedFile(context, '/repo', name, () => undefined)).rejects.toThrow()
+    expect(pathExists).not.toHaveBeenCalled()
+    expect(createFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps names like .env, Makefile and a..b valid', async () => {
+    stubFs([])
+    for (const name of ['.env', 'Makefile', 'a..b']) {
+      const info = await createNamedFile(context, '/repo', name, () => undefined)
+      expect(info.relativePath).toBe(name)
+    }
+  })
+
+  it('returns a clean relative path for a nested folder with a trailing separator', async () => {
+    stubFs([])
+    const info = await createNamedFile(context, '/repo/src/', 'app.py', () => undefined)
+    expect(info).toMatchObject({ filePath: '/repo/src/app.py', relativePath: 'src/app.py' })
+  })
+
+  it('does not probe the filesystem when suggesting a name for an outside folder', async () => {
+    const { pathExists } = stubFs([])
+    await expect(
+      suggestUntitledName(context, '/repo/../x', () => undefined)
+    ).rejects.toBeInstanceOf(NamedFileOutsideWorkspaceError)
+    expect(pathExists).not.toHaveBeenCalled()
   })
 })

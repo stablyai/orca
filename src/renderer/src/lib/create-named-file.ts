@@ -13,6 +13,12 @@ export class NamedFileExistsError extends Error {
   }
 }
 
+export class NamedFileOutsideWorkspaceError extends Error {
+  constructor() {
+    super('Folder must be inside the current workspace')
+  }
+}
+
 export type NamedFileOpenInfo = {
   filePath: string
   relativePath: string
@@ -54,17 +60,34 @@ export function isSshOwnedFileContext(
   )
 }
 
+/**
+ * Workspace-relative folder ('' for the root), or null when `dir` is outside `root` or has `.`/`..` segments.
+ * Lexical only: symlinks are left to the host's existing path authorization.
+ */
+export function getNamedFileRelativeDirectory(dir: string, root: string): string | null {
+  const relative = getRelativePathInsideRoot(dir, root)
+  if (relative === null) {
+    return null
+  }
+  return relative.split('/').some((segment) => segment === '.' || segment === '..')
+    ? null
+    : relative
+}
+
 /** Why: an empty or separator-bearing name must never reach the filesystem as a nested path. */
 export function hasPathSeparator(name: string): boolean {
   return /[/\\]/.test(name)
 }
 
 /** The name a blank Name field would get in `dir` right now. */
-export function suggestUntitledName(
+export async function suggestUntitledName(
   context: NamedFileContext,
   dir: string,
   assertOperationCurrent: () => void
 ): Promise<string> {
+  if (getNamedFileRelativeDirectory(dir, context.worktreePath) === null) {
+    throw new NamedFileOutsideWorkspaceError()
+  }
   return nextUntitledName(async (candidate) => {
     assertOperationCurrent()
     return runtimePathExists(context, joinPath(dir, candidate))
@@ -78,7 +101,15 @@ export async function createNamedFile(
   requestedName: string,
   assertOperationCurrent: () => void
 ): Promise<NamedFileOpenInfo> {
+  // Why: validate before any filesystem probe or write so a bad folder or name never reaches the host.
+  const relativeDir = getNamedFileRelativeDirectory(dir, context.worktreePath)
+  if (relativeDir === null) {
+    throw new NamedFileOutsideWorkspaceError()
+  }
   const name = requestedName.trim()
+  if (name === '.' || name === '..' || hasPathSeparator(name)) {
+    throw new Error('Invalid file name')
+  }
   let fileName = name
   if (fileName) {
     assertOperationCurrent()
@@ -103,7 +134,6 @@ export async function createNamedFile(
   // Why: the write is async; a stale owner must not receive open metadata for a file it did not create.
   assertOperationCurrent()
 
-  const relativeDir = getRelativePathInsideRoot(dir, context.worktreePath) ?? ''
   const environmentId = runtimeTargetEnvironmentId(context.target)
   return {
     filePath,
