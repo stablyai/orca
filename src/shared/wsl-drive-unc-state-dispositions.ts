@@ -12,6 +12,7 @@ type Disposition =
 
 /** A new field fails to compile until it has a disposition. */
 export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
+  dashboardTaskNotes: 'keep',
   schemaVersion: 'keep',
   repos: 'rewrite',
   projects: 'rewrite',

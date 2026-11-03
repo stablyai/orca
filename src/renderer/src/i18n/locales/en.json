@@ -21103,6 +21103,7 @@
       "reviewRequired": "Record a review reference for this completed response before marking the result verified.",
       "waitRequired": "Specify the next step and who needs to act.",
       "saveFailed": "Task details could not be saved. Keep this form open and try again.",
+      "loadFailed": "Some task details could not be loaded or imported. Reopen the dashboard to retry.",
       "localScope": "Saved on this device for the current agent state. These notes do not control the agent. A new state requires a new review.",
       "outcome": "Task state",
       "automatic": "Follow agent activity",

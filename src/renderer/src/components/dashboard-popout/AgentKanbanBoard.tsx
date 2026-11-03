@@ -91,7 +91,7 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
   notes: Record<string, DashboardTaskNote>
-  onSaveTaskNote: (card: DashboardCard, note: DashboardTaskNote) => void
+  onSaveTaskNote: (card: DashboardCard, note: DashboardTaskNote) => void | Promise<void>
   searching: boolean
 }): React.JSX.Element {
   const label = bucketLabel(bucket)
@@ -191,7 +191,7 @@ export function AgentKanbanBoard({
   onBrowserForeground,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
-  const { notes, saveNote } = useDashboardTaskNotes()
+  const { notes, error: notesError, saveNote } = useDashboardTaskNotes()
   const visibleBuckets = useMemo(
     () => TASK_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
     [snapshot.showIdle]
@@ -332,6 +332,14 @@ export function AgentKanbanBoard({
             </div>
           ) : null}
         </div>
+        {notesError ? (
+          <p role="alert" className="px-4 py-2 text-xs text-destructive">
+            {translate(
+              'dashboardPopout.task.loadFailed',
+              'Some task details could not be loaded or imported. Reopen the dashboard to retry.'
+            )}
+          </p>
+        ) : null}
         <AgentDashboardToolbar
           cards={visibleCards}
           filterOptions={snapshot.filterOptions}

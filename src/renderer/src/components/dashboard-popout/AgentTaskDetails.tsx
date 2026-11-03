@@ -23,7 +23,7 @@ import {
 type TaskDetailsProps = {
   card: DashboardCard
   note?: DashboardTaskNote
-  onSave: (card: DashboardCard, note: DashboardTaskNote) => void
+  onSave: (card: DashboardCard, note: DashboardTaskNote) => void | Promise<void>
 }
 
 function TaskDetailsForm({
@@ -49,6 +49,7 @@ function TaskDetailsForm({
       }
   )
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const canVerify = hasCompletedResponse(card) && card.verdict === undefined
   const fields = [
     { key: 'title', label: translate('dashboardPopout.task.title', 'Task name'), max: 120 },
@@ -70,8 +71,11 @@ function TaskDetailsForm({
     <form
       aria-label={translate('dashboardPopout.task.details', 'Task details')}
       className="space-y-3"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault()
+        if (saving) {
+          return
+        }
         if (draft.observation !== taskObservation(card)) {
           setError(
             translate(
@@ -103,7 +107,8 @@ function TaskDetailsForm({
           return
         }
         try {
-          onSave(card, taskNoteSchema.parse({ ...draft, savedAt: Date.now() }))
+          setSaving(true)
+          await onSave(card, taskNoteSchema.parse({ ...draft, savedAt: Date.now() }))
           onClose()
         } catch {
           setError(
@@ -112,6 +117,8 @@ function TaskDetailsForm({
               'Task details could not be saved. Keep this form open and try again.'
             )
           )
+        } finally {
+          setSaving(false)
         }
       }}
     >
@@ -190,7 +197,7 @@ function TaskDetailsForm({
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
           {translate('common.cancel', 'Cancel')}
         </Button>
-        <Button type="submit" size="sm">
+        <Button type="submit" size="sm" disabled={saving}>
           {translate('common.save', 'Save')}
         </Button>
       </div>

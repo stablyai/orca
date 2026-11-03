@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { i18n } from '@/i18n/i18n'
 import { AgentTaskDetails } from './AgentTaskDetails'
@@ -119,6 +119,29 @@ describe('task details', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Task details' }))
     expect(screen.getByLabelText('Task name')).toHaveValue('Unsaved task')
     expect(screen.getByRole('alert')).toHaveTextContent('could not be saved')
+  })
+
+  it('waits for durable acknowledgement and keeps a rejected asynchronous draft', async () => {
+    let rejectSave!: (error: Error) => void
+    const save = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSave = reject
+        })
+    )
+    render(<AgentTaskDetails card={done} onSave={save} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Task details' }))
+    fireEvent.change(screen.getByLabelText('Task name'), { target: { value: 'Pending draft' } })
+    fireEvent.submit(screen.getByRole('form', { name: 'Task details' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.submit(screen.getByRole('form', { name: 'Task details' }))
+    expect(save).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      rejectSave(new Error('Disk unavailable'))
+    })
+    expect(screen.getByLabelText('Task name')).toHaveValue('Pending draft')
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be saved')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
   })
 
   it('restores saved task details after the board remounts', () => {

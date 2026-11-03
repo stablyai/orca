@@ -1,3 +1,4 @@
+import type { DashboardTaskNotes } from './dashboard-task-notes'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -57,6 +58,8 @@ export type PersistedMobileClientTabSelections = Record<
 >
 
 export type PersistedState = {
+  /** Local profile notes, never part of UI/settings/runtime projections. */
+  dashboardTaskNotes?: DashboardTaskNotes
   schemaVersion: number
   repos: Repo[]
   projects: Project[]

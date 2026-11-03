@@ -115,16 +115,17 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         setSnapshot(next)
         return
       }
-      // Commit DOM synchronously for the transition’s after-image; consume only occlusion aborts and surface other failures.
-      void startViewTransition(() => {
+      const transition = startViewTransition(() => {
         flushSync(() => setSnapshot(next))
-      }).ready.catch((error: unknown) => {
+      })
+      void transition.ready.catch((error: unknown) => {
         if (
-          documentIsHidden() &&
           error instanceof DOMException &&
-          error.name === 'InvalidStateError'
+          (error.name === 'AbortError' ||
+            (documentIsHidden() && error.name === 'InvalidStateError'))
         ) {
-          return
+          // Superseded animations may be skipped; the state update must still succeed.
+          return transition.updateCallbackDone
         }
         throw error
       })

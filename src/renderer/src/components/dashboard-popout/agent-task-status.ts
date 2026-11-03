@@ -1,19 +1,8 @@
-import { z } from 'zod'
+import { taskNoteSchema, type DashboardTaskNote } from '../../../../shared/dashboard-task-notes'
+export { taskNoteSchema, type DashboardTaskNote } from '../../../../shared/dashboard-task-notes'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { translate } from '@/i18n/i18n'
 
-export const taskNoteSchema = z.object({
-  status: z.enum(['automatic', 'waiting-user', 'waiting-input', 'verified']),
-  title: z.string().max(120),
-  summary: z.string().max(240),
-  nextStep: z.string().max(240),
-  owner: z.string().max(120),
-  reviewReference: z.string().max(500),
-  observation: z.string().max(500),
-  savedAt: z.number().finite().nonnegative()
-})
-
-export type DashboardTaskNote = z.infer<typeof taskNoteSchema>
 export type DashboardTaskBucket = DashboardCard['bucket'] | 'waiting-input'
 export const TASK_BUCKET_ORDER: readonly DashboardTaskBucket[] = [
   'attention',

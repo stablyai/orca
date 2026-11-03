@@ -1,8 +1,25 @@
+import type {
+  DashboardTaskNoteChange,
+  DashboardTaskNoteMutation,
+  DashboardTaskNotes
+} from '../../shared/dashboard-task-notes'
 import { ipcRenderer } from 'electron'
 import type { DashboardRevealAgentArgs, DashboardSnapshot } from '../../shared/dashboard-snapshot'
 import type { PreloadApi } from '../api-types'
 
 export const dashboardApi = {
+  taskNotes: {
+    storage: 'profile',
+    get: (): Promise<DashboardTaskNotes> => ipcRenderer.invoke('dashboard:taskNotes:get'),
+    set: (mutation: DashboardTaskNoteMutation): Promise<DashboardTaskNoteChange> =>
+      ipcRenderer.invoke('dashboard:taskNotes:set', mutation),
+    onChanged: (callback: (change: DashboardTaskNoteChange) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, change: DashboardTaskNoteChange): void =>
+        callback(change)
+      ipcRenderer.on('dashboard:taskNotes:changed', listener)
+      return () => ipcRenderer.removeListener('dashboard:taskNotes:changed', listener)
+    }
+  },
   openPopout: (): Promise<void> => ipcRenderer.invoke('dashboardPopout:open'),
 
   publishSnapshot: (snapshot: DashboardSnapshot): Promise<void> =>

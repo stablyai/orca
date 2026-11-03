@@ -44,6 +44,7 @@ let applyStatus: (next: AgentStatusIpcPayload) => void
 let applyClear: (next: AgentStatusClearIpcPayload) => void
 const requestSnapshot = vi.fn(async () => {})
 let readyRejection: unknown = null
+let updateCallbackRejection: unknown = null
 let hideDocumentAfterTransitionStart = false
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
@@ -53,7 +54,8 @@ const startViewTransition = vi.fn((cb: () => void) => {
   return {
     finished: Promise.resolve(),
     ready: readyRejection !== null ? Promise.reject(readyRejection) : Promise.resolve(),
-    updateCallbackDone: Promise.resolve()
+    updateCallbackDone:
+      updateCallbackRejection !== null ? Promise.reject(updateCallbackRejection) : Promise.resolve()
   }
 })
 
@@ -118,6 +120,7 @@ describe('useDashboardSnapshot', () => {
   afterEach(() => {
     document.body.innerHTML = ''
     readyRejection = null
+    updateCallbackRejection = null
     hideDocumentAfterTransitionStart = false
     if (originalVisibilityState) {
       Object.defineProperty(document, 'visibilityState', originalVisibilityState)
@@ -176,6 +179,28 @@ describe('useDashboardSnapshot', () => {
     expect(startViewTransition).toHaveBeenCalled()
     expect(reasons).toEqual([])
     expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('consumes a superseded animation AbortError after its state update succeeds', async () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    readyRejection = new DOMException('Transition was skipped', 'AbortError')
+    const reasons = await collectUnhandledRejections(() => {
+      act(() => apply(snapshot([card({ bucket: 'working' })])))
+    })
+    expect(reasons).toEqual([])
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('still reports a failed state update when the animation is aborted', async () => {
+    renderHook(() => useDashboardSnapshot())
+    readyRejection = new DOMException('Transition was skipped', 'AbortError')
+    const callbackError = new TypeError('State update failed')
+    updateCallbackRejection = callbackError
+    const reasons = await collectUnhandledRejections(() => {
+      act(() => apply(snapshot([card({ bucket: 'working' })])))
+    })
+    expect(reasons).toEqual([callbackError])
   })
 
   it('reports an unrelated ready error when the window becomes hidden', async () => {

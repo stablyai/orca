@@ -190,7 +190,7 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
 type AgentKanbanCardProps = {
   card: DashboardCard
   taskNote?: DashboardTaskNote
-  onSaveTaskNote?: (card: DashboardCard, note: DashboardTaskNote) => void
+  onSaveTaskNote?: (card: DashboardCard, note: DashboardTaskNote) => void | Promise<void>
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
