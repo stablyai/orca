@@ -25,7 +25,7 @@ export function FloatingTerminalHostSwitcher(): React.JSX.Element | null {
   const unavailableHost = translate('remoteFloatingTerminal.unavailableHost', 'Unavailable host')
   const localLabel = translate('remoteFloatingTerminal.local', 'Local')
   const hostName = environmentId ? (selectedHost?.name ?? unavailableHost) : localLabel
-  const hostLabel = translate('remoteFloatingTerminal.host', 'Host')
+  const hostLabel = translate('remoteFloatingTerminal.host', 'Remote host')
   const HostIcon = environmentId ? Server : Monitor
   return (
     <DropdownMenu>

@@ -9,6 +9,7 @@ import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 test('mobile terminal creation survives a remote floating host selection and a closed panel', async () => {
+  // Two isolated runtimes must boot before all three host-selection creation states can run.
   test.setTimeout(120_000)
   const host = await launchHeadlessPairedRuntimeHost()
   const profile = mkdtempSync(path.join(tmpdir(), 'orca-mobile-create-repro-'))

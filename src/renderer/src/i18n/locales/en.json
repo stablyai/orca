@@ -22141,6 +22141,7 @@
     "openDefault": "Open in Default App"
   },
   "remoteFloatingTerminal": {
+    "unpaired": "Host is no longer paired.",
     "local": "Local",
     "host": "Remote host",
     "loading": "Loading remote sessions…",

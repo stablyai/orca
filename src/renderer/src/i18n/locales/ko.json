@@ -21299,6 +21299,7 @@
     "openDefault": "기본 앱에서 열기"
   },
   "remoteFloatingTerminal": {
+    "unpaired": "호스트 연결 설정이 해제되었습니다.",
     "local": "로컬",
     "host": "원격 호스트",
     "loading": "원격 세션을 불러오는 중…",

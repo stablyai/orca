@@ -225,7 +225,7 @@ export function renderFloatingTerminalPanelSurface({
                   role="status"
                   className="flex h-full items-center justify-center text-sm text-muted-foreground"
                 >
-                  {translate('remoteFloatingTerminal.loading', 'Loading sessions…')}
+                  {translate('remoteFloatingTerminal.loading', 'Loading remote sessions…')}
                 </div>
               ) : surface.kind === 'workspace' && hasVisibleFloatingTabs ? (
                 // Why the flex frame: the tree's nodes size themselves as flex items (flex-1), so
