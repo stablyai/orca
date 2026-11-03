@@ -3368,9 +3368,7 @@
         },
         {
           "file": "src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts",
-          "assertions": [
-            "preserves a sibling runtime mirror under the same bare worktree id"
-          ]
+          "assertions": ["preserves a sibling runtime mirror under the same bare worktree id"]
         }
       ],
       "evidenceRuns": [
@@ -6004,9 +6002,7 @@
         },
         {
           "file": "src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
-          "assertions": [
-            "explicit cleanup cannot close a page owned by another worktree"
-          ]
+          "assertions": ["explicit cleanup cannot close a page owned by another worktree"]
         },
         {
           "file": "src/renderer/src/store/slices/browser.test.ts",
@@ -6057,9 +6053,7 @@
         },
         {
           "file": "src/main/browser/doc-preview-failure-notice.test.ts",
-          "assertions": [
-            "413 and 415 map to distinct reasons and everything else stays generic"
-          ]
+          "assertions": ["413 and 415 map to distinct reasons and everything else stays generic"]
         },
         {
           "file": "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts",
@@ -6110,9 +6104,7 @@
         },
         {
           "file": "src/shared/doc-preview-scheme.test.ts",
-          "assertions": [
-            "preview URLs round-trip per segment and reject a malformed grant id"
-          ]
+          "assertions": ["preview URLs round-trip per segment and reject a malformed grant id"]
         },
         {
           "file": "src/renderer/src/lib/doc-preview-grants.test.ts",
@@ -8576,9 +8568,7 @@
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership-depth.test.ts",
-          "assertions": [
-            "prunes deeply nested duplicate ownership without recursive stack growth"
-          ]
+          "assertions": ["prunes deeply nested duplicate ownership without recursive stack growth"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-layout-pty-ownership.test.ts",
@@ -8596,9 +8586,7 @@
         },
         {
           "file": "tests/e2e/terminal-duplicate-pty-renderer-reveal.spec.ts",
-          "assertions": [
-            "repairs duplicate persisted PTY renderers before streaming tab reveal"
-          ]
+          "assertions": ["repairs duplicate persisted PTY renderers before streaming tab reveal"]
         }
       ],
       "evidenceRuns": [
@@ -13436,9 +13424,7 @@
         },
         {
           "file": "src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
-          "assertions": [
-            "publishes pane and tab replacement identities in one store commit"
-          ]
+          "assertions": ["publishes pane and tab replacement identities in one store commit"]
         },
         {
           "file": "src/renderer/src/hooks/ipc-events/direct-ssh-connect-reply-routing.test.ts",
@@ -13531,9 +13517,7 @@
         },
         {
           "file": "src/renderer/src/store/slices/terminals-hydration.test.ts",
-          "assertions": [
-            "batches restored terminal reconnect wake hints into one store update"
-          ]
+          "assertions": ["batches restored terminal reconnect wake hints into one store update"]
         },
         {
           "file": "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
