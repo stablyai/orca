@@ -1,32 +1,42 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { runProcess } from '@orca/process-host'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { allowsRealtimePriority, readZeroRtTimeLimit } from '../linux-rttime-limit'
 
-type RtPrioOutcome = 'lowered' | 'not-needed' | 'prlimit-failed'
+type RtPrioOutcome = 'lowered' | 'lowered-partial-tree' | 'not-needed' | 'prlimit-failed'
 
-function listProcessTree(rootPid: number): number[] {
+// Why: complete=false when a live thread's children list is unreadable (e.g. a kernel without
+// CONFIG_PROC_CHILDREN), so the breadcrumb never claims zygotes were lowered that were never seen.
+export function listProcessTree(
+  rootPid: number,
+  procRoot = '/proc'
+): { pids: number[]; complete: boolean } {
   const pids = [rootPid]
+  let complete = true
   for (let i = 0; i < pids.length; i++) {
     let tids: string[]
     try {
-      tids = readdirSync(`/proc/${pids[i]}/task`)
+      tids = readdirSync(`${procRoot}/${pids[i]}/task`)
     } catch {
+      // The process exited, so it has nothing left to lower.
       continue
     }
     for (const tid of tids) {
       try {
-        const children = readFileSync(`/proc/${pids[i]}/task/${tid}/children`, 'utf8')
-        pids.push(...children.split(' ').filter(Boolean).map(Number))
+        const children = readFileSync(`${procRoot}/${pids[i]}/task/${tid}/children`, 'utf8')
+        pids.push(...children.split(/\s+/).filter(Boolean).map(Number))
       } catch {
-        // The thread exited between readdir and read.
+        // A thread that exited between readdir and read is fine; a live unreadable one is not.
+        if (existsSync(`${procRoot}/${pids[i]}/task/${tid}`)) {
+          complete = false
+        }
       }
     }
   }
-  return pids
+  return { pids, complete }
 }
 
-async function lowerRealtimePriorityToZero(pids: number[]): Promise<RtPrioOutcome> {
+async function lowerRealtimePriorityToZero(pids: number[]): Promise<boolean> {
   const results = await Promise.all(
     pids.map((pid) =>
       runProcess({
@@ -40,7 +50,7 @@ async function lowerRealtimePriorityToZero(pids: number[]): Promise<RtPrioOutcom
       )
     )
   )
-  return results.every(Boolean) ? 'lowered' : 'prlimit-failed'
+  return results.every(Boolean)
 }
 
 /**
@@ -52,14 +62,21 @@ async function lowerRealtimePriorityToZero(pids: number[]): Promise<RtPrioOutcom
  */
 export async function refuseRealtimeSchedulingUnderZeroRtTime(
   platform: NodeJS.Platform = process.platform,
-  limitsPath = '/proc/self/limits'
+  limitsPath = '/proc/self/limits',
+  procRoot = '/proc'
 ): Promise<void> {
   const rtTime = readZeroRtTimeLimit(platform, limitsPath)
   if (!rtTime) {
     return
   }
-  const rtPrio = allowsRealtimePriority(platform, limitsPath)
-    ? await lowerRealtimePriorityToZero(listProcessTree(process.pid))
-    : 'not-needed'
+  let rtPrio: RtPrioOutcome = 'not-needed'
+  if (allowsRealtimePriority(platform, limitsPath)) {
+    const tree = listProcessTree(process.pid, procRoot)
+    if (!(await lowerRealtimePriorityToZero(tree.pids))) {
+      rtPrio = 'prlimit-failed'
+    } else {
+      rtPrio = tree.complete ? 'lowered' : 'lowered-partial-tree'
+    }
+  }
   recordCrashBreadcrumb('linux_rttime_limit', { ...rtTime, rtPrio })
 }
