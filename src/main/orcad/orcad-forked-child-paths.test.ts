@@ -7,7 +7,7 @@ import { getWatcherProcessEntryPath } from '../ipc/filesystem/watcher-process/pa
 import {
   AI_VAULT_SERVICE_ENTRY_FILENAME,
   getAiVaultServiceEntryPath
-} from '../ai-vault/session-scanner-service-entry-path'
+} from '../ai-vault/scan-service/session-scanner-service-entry-path'
 import {
   FOREIGN_SQLITE_READER_ENTRY_FILENAME,
   resolveForeignSqliteReaderEntryPath

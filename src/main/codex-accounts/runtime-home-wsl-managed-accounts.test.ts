@@ -17,7 +17,9 @@ import {
 } from './runtime-home-service-test-harness'
 
 // These launches are the user's own, so the E9 exec gate lets their prep run.
-vi.mock('../wsl/wsl-background-exec-gate', () => ({ blockedWslDistroForExec: async () => null }))
+vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
+  blockedWslDistroForExec: async () => null
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: () => testState.userDataDir
@@ -45,7 +47,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -116,7 +118,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -183,7 +185,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -242,7 +244,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -323,7 +325,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -392,7 +394,7 @@ describe('CodexRuntimeHomeService', () => {
       vi.doUnmock('../codex/codex-home-paths')
       vi.doUnmock('../codex/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -403,7 +405,7 @@ describe('CodexRuntimeHomeService', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => wslHome,
       getWslHomeAsync: async () => wslHome
@@ -486,7 +488,7 @@ describe('CodexRuntimeHomeService', () => {
       2_000
     )
     const linuxHomePath = '/mnt/c/Users/alice/orca/codex-accounts/drive-account/home'
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => 'C:\\Users\\alice',
       getWslHomeAsync: async () => 'C:\\Users\\alice'
@@ -580,7 +582,7 @@ describe('CodexRuntimeHomeService', () => {
       vi.doUnmock('../codex/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
       vi.doUnmock('./wsl-codex-auth-batch-reader')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
@@ -596,7 +598,7 @@ describe('CodexRuntimeHomeService', () => {
       'system-refresh',
       2_000
     )
-    vi.doMock('../wsl', () => ({
+    vi.doMock('../wsl/discovery/distro-catalog', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
       getWslHome: () => 'C:\\Users\\alice',
       getWslHomeAsync: async () => 'C:\\Users\\alice'
@@ -660,7 +662,7 @@ describe('CodexRuntimeHomeService', () => {
       vi.doUnmock('../codex/wsl-codex-session-bridge')
       vi.doUnmock('./legacy-wsl-runtime-auth-drain')
       vi.doUnmock('./wsl-codex-auth-batch-reader')
-      vi.doUnmock('../wsl')
+      vi.doUnmock('../wsl/discovery/distro-catalog')
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }

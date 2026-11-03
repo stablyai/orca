@@ -18,7 +18,7 @@ vi.mock('../github/client', () => ({ getPRForBranch: vi.fn(), getPRForBranchOutc
 vi.mock('../github/pr-refresh-rate-limit-gate', () => ({
   prRefreshRateLimitPausedUntil: async () => null
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
   wslDistroForPath: () => null,
   blockedWslDistroForPath: async () => null
 }))

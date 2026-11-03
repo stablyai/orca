@@ -2,7 +2,7 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types
 import { translate } from '@/i18n/i18n'
 import { Checkbox } from '../ui/checkbox'
 import { VirtualizedList } from '../virtualized-list'
-import { useSettingsContentScrollElement } from './settings-content-scroll-element'
+import { useSettingsContentScrollElement } from './page/settings-content-scroll-element'
 import type { SshTargetBusyAction } from './ssh-target-action-state'
 import {
   groupSshTargetsBySource,

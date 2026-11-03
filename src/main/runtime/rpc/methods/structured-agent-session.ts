@@ -72,6 +72,10 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
+import {
+  projectReceiptDeviceEvent,
+  projectReceiptDeviceHistory
+} from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -206,20 +210,23 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+      return projectReceiptDeviceHistory(
+        projectTurnItemHistory(
+          projectQueuedImageCardHistory(
+            projectBackgroundTaskHistory(
+              await host.history(
+                params,
+                undefined,
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+              ),
+              ctx
             ),
             ctx
           ),
-          ctx
+          ctx,
+          host.sessionAgent(params.sessionId)
         ),
-        ctx,
-        host.sessionAgent(params.sessionId)
+        ctx
       )
     }
   }),
@@ -246,10 +253,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
+            projectReceiptDeviceEvent(
+              projectTurnItemEvent(
+                projectBackgroundTaskEvent(event, ctx),
+                ctx,
+                host.sessionAgent(params.sessionId)
+              ),
+              ctx
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),

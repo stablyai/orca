@@ -190,7 +190,10 @@ async function startOrcadRuntime(
 
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
+  let runtimeRpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    getPairedDeviceName: (deviceId) =>
+      runtimeRpc?.getDeviceRegistry()?.getDevice(deviceId)?.name ?? null,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -224,21 +227,14 @@ async function startOrcadRuntime(
   const { installOrcadEmulatorBridge } = await import('./orcad-emulator-bridge')
   installOrcadEmulatorBridge(runtime, registerCleanup)
 
-  const { startOrcadUsageHistory } = await import('./orcad-usage-history')
-  startOrcadUsageHistory(runtimeUserDataPath, profileStore, runtime.usageHistory, registerCleanup)
-
-  // Why before any launch: a desktop that owns this host's accounts pushed them on an earlier run.
-  const { restoreOrcadHostAccountLaunchEnv } = await import('./orcad-host-account-launch-env-store')
-  restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
-  featureReadiness.open('accounts')
-
-  const { installOrcadSessionSearchService } = await import('./orcad-session-search')
-  sessionSearch = await installOrcadSessionSearchService({
+  const { installOrcadProfileRuntimeServices } = await import('./orcad-profile-runtime-services')
+  sessionSearch = await installOrcadProfileRuntimeServices({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
+    store: profileStore,
+    runtime,
+    featureReadiness,
+    registerCleanup
   })
-  getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
-  featureReadiness.open('sessionSearch')
 
   const { startAgentStateRulesLiveUpdates } =
     await import('../runtime/agent-state-rules/agent-state-rules-live-update')
@@ -305,6 +301,7 @@ async function startOrcadRuntime(
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
+  runtimeRpc = rpc
   runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())

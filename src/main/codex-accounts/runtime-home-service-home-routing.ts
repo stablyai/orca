@@ -1,9 +1,9 @@
 import { posix as pathPosix } from 'node:path'
 import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { getDefaultWslDistro, getWslHome } from '../wsl'
-import { getCachedWslHome } from '../wsl-home-cache'
-import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { getCachedWslHome } from '../wsl/discovery/wsl-home-cache'
+import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,

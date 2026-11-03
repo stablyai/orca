@@ -4,7 +4,7 @@ import {
   resolveLocalWindowsTerminalRuntimeOptions,
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
-import { resolveManagedSshHostLoginShell } from '../../pty/managed-ssh-host-login-shell'
+import { resolveManagedSshHostLoginShell } from '../../pty/shell-startup/managed-ssh-host-login-shell'
 
 export type LocalPtySettings = Partial<
   Pick<GlobalSettings, 'terminalWindowsShell' | 'terminalWindowsWslDistro' | 'terminalDefaultShell'>

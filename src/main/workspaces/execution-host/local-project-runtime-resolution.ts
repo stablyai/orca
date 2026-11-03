@@ -15,8 +15,11 @@ import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
-import { getCachedWslAvailability, hasCachedWslAvailability } from '../../wsl-availability'
-import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl'
+import {
+  getCachedWslAvailability,
+  hasCachedWslAvailability
+} from '../../wsl/discovery/wsl-availability'
+import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl/discovery/distro-catalog'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import type { LocalWindowsTerminalRuntimeOptions } from '../../../shared/local-windows-terminal-runtime'

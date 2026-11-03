@@ -58,7 +58,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mocks.mergePathSegments
 }))
 
-vi.mock('../wsl', () => ({ getDefaultWslDistro: vi.fn() }))
+vi.mock('../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: vi.fn() }))
 
 import { registerCliHandlers } from './cli'
 

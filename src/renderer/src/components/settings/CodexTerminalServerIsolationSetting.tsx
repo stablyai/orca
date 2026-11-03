@@ -11,8 +11,8 @@ import {
   getCodexTerminalServerIsolationSearchKeywords,
   getCodexTerminalServerIsolationTitle
 } from './codex-terminal-server-isolation-copy'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSwitchRow } from './SettingsFormControls'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsSwitchRow } from './form-controls/SettingsFormControls'
 
 type CodexTerminalServerIsolationSettingProps = {
   settings: GlobalSettings

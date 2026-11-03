@@ -4,8 +4,13 @@ import type * as GitHubClient from '../github/client'
 const getPRForBranchMock = vi.hoisted(() => vi.fn())
 const git = vi.hoisted(() => vi.fn())
 const worktrees = vi.hoisted(() => vi.fn())
-vi.mock('../git/runner', () => ({ gitExecFileAsync: git }))
-vi.mock('../git/worktree', () => ({ listWorktrees: worktrees }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git
+}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+  listWorktrees: worktrees
+}))
 
 vi.mock('../github/client', async (importOriginal) => ({
   ...(await importOriginal<typeof GitHubClient>()),

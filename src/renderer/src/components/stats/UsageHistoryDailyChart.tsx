@@ -1,7 +1,7 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { area as svgArea, curveMonotoneX, line as svgLine } from 'd3-shape'
 import type { UsageHistoryRange, UsageHistoryRow } from '../../../../shared/usage-history-types'
-import { SettingsSegmentedControl } from '../settings/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { usageHistoryChartDays } from './usage-history-model'
 import {
   USAGE_PROVIDER_COLORS,

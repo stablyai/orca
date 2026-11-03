@@ -29,8 +29,8 @@ import {
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
-import { SettingsSectionStack } from './SettingsSectionStack'
-import { matchesSettingsSearch } from './settings-search'
+import { SettingsSectionStack } from './section-layout/SettingsSectionStack'
+import { matchesSettingsSearch } from './search/settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import {

@@ -9,9 +9,9 @@ import {
   getTerminalScrollbackSnapshotPath,
   readTerminalScrollbackStoredBytesSync,
   writeTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { deleteRemovedTerminalScrollbackSnapshots } from '../loading-store/terminal-session-cleanup'
-import { deleteRemovedTerminalScrollbackSnapshotsAsync } from '../../terminal-scrollback-snapshot-async-migration'
+import { deleteRemovedTerminalScrollbackSnapshotsAsync } from '../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 import { extractSessionOwnersForTransfer } from '../../orca-profiles/profile-session-owner-transfer'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 

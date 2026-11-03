@@ -8,9 +8,9 @@ import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import {
   JIRA_ISSUE_KEY_CASING_KEYWORDS,
@@ -29,7 +29,7 @@ import {
 } from './keep-local-main-up-to-date-setting'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 
 export { getGitPaneSearchEntries }
 

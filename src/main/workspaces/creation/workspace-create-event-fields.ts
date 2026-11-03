@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/telemetry-workspace-create-schemas'
 import type { WorktreeCreateTimingRecorder } from './worktree-create-timing'
 import type { WorktreeCreateConcurrency } from './worktree-create-concurrency'
-import type { CreateEventRepoFacts } from '../../git/create-event-repo-probe'
+import type { CreateEventRepoFacts } from '../../git/worktrees/creation/create-event-repo-probe'
 import { worktreeCreateUnattributedMs } from '../../observability/instrumentation'
 
 type OptionalEventFields<P extends Record<string, z.ZodType>> = { [K in keyof P]?: z.infer<P[K]> }

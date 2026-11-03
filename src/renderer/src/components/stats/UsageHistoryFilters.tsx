@@ -5,7 +5,7 @@ import type {
   UsageHistoryRow
 } from '../../../../shared/usage-history-types'
 import { Button } from '../ui/button'
-import { SettingsSegmentedControl } from '../settings/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { UsageHistoryFilter } from './UsageHistoryFilter'
 import {
   filterUsageHistory,

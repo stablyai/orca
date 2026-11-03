@@ -4,8 +4,8 @@ import {
   clearSparseCheckoutStateCache,
   clearSparseCheckoutStateCacheForRepo,
   onSparseCheckoutStateChanged
-} from '../../../git/worktree-sparse-checkout-cache'
-import { areWorktreePathsEqual } from '../../../git/worktree-path-comparison'
+} from '../../../git/worktrees/sparse-checkout/worktree-sparse-checkout-cache'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { registerWorktreeChangeInvalidator } from '../../worktree-change-invalidators'
 import { notifyWorktreesChanged } from '../../worktree-remote'
 

@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { computeWorkspaceRootWithin, getWorktreePathSettings } from '../worktree-logic'
-import { wslHomeUnlessStopped } from '../../wsl/wsl-home-unless-stopped'
+import { wslHomeUnlessStopped } from '../../wsl/discovery/wsl-home-unless-stopped'
 import { getWorktreeMirrorDistroForRuntime } from '../../workspaces/execution-host/project-runtime-git-options'
 import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
