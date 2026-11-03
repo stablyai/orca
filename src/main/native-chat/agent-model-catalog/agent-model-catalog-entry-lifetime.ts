@@ -5,6 +5,7 @@ import {
   type AgentModelCatalogSource
 } from './agent-model-catalog-entry'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
 
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 
@@ -31,6 +32,38 @@ export function pruneAgentModelCatalogPartialAttempts(
       attempts.delete(key)
     }
   }
+}
+
+export function recordAgentModelCatalogPartialAttempt(
+  attempts: Map<string, { agent: string; at: number }>,
+  key: string,
+  agent: string,
+  now: number,
+  cap: number
+): void {
+  attempts.set(key, { agent, at: now })
+  while (attempts.size > cap) {
+    const oldest = attempts.keys().next().value
+    if (oldest !== undefined) {
+      attempts.delete(oldest)
+    }
+  }
+}
+
+export function agentModelEffortProbeDue(
+  entry: AgentModelCatalogEntry | undefined,
+  attempts: Map<string, { agent: string; at: number }>,
+  model: string | undefined,
+  now: number
+): boolean {
+  if (!model || !entry || !usesModelSpecificAcpEfforts(entry.agent)) {
+    return false
+  }
+  pruneAgentModelCatalogPartialAttempts(attempts, now)
+  return (
+    entry.models.some((row) => row.id === model && row.effortsKnown === false) &&
+    !attempts.has(JSON.stringify([entry.fingerprint, model]))
+  )
 }
 
 export function evictAgentModelCatalogEntries(

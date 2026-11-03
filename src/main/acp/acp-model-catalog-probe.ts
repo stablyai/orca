@@ -28,7 +28,11 @@ import {
   type AcpLaunchInvocationDeps
 } from './acp-structured-launch-resolution'
 import { AcpStructuredOptions } from './acp-structured-options'
-import type { InitializeResponse } from './generated/acp-protocol.generated'
+import type {
+  InitializeResponse,
+  SetSessionConfigOptionResponse
+} from './generated/acp-protocol.generated'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { AcpAgentError } from './acp-errors'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 
@@ -44,6 +48,7 @@ export type AcpModelCatalogSessionConnection = Omit<
   'requestSessionFreeExtension'
 > & {
   start(options: AcpSessionStartOptions): Promise<AcpSessionStarted>
+  setConfigOption(configId: string, value: string): Promise<SetSessionConfigOptionResponse>
   deleteSession(sessionId: string): Promise<unknown>
 }
 
@@ -133,7 +138,15 @@ export function createAcpModelCatalogProbe(
           folderArgs && folder ? [...launch.args, ...folderArgs(folder.path)] : launch.args
         models = await runAgentModelCatalogSession(
           () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
-          (connection) => readSessionModels(spec, listing, connection, workspace, operation),
+          (connection) =>
+            readSessionModels(
+              spec,
+              listing,
+              connection,
+              workspace,
+              operation,
+              options?.selectedModel
+            ),
           run
         )
       } finally {
@@ -189,7 +202,8 @@ async function readSessionModels(
   listing: AcpSessionModelDiscovery,
   connection: AcpModelCatalogSessionConnection,
   workspace: string,
-  operation?: StructuredAgentResolutionOperation
+  operation?: StructuredAgentResolutionOperation,
+  selectedModel?: string
 ): Promise<AgentSessionModelOption[]> {
   const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
@@ -198,13 +212,60 @@ async function readSessionModels(
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
   const started = await connection.start({ cwd: workspace, mcpServers: [] })
-  // A failed delete or interrupted create may leave an empty conversation.
-  if (deletes) {
-    await connection.deleteSession(started.sessionId).catch((error: unknown) => {
-      console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
-    })
-  }
   const options = new AcpStructuredOptions(spec.dialect)
   options.adoptSession(started.response, 'new')
-  return options.read().models
+  let models = options.read().models
+  let stopped = false
+  try {
+    if (spec.dialect.effortChangesModel) {
+      const targets = selectedModel ? models.filter((row) => row.id === selectedModel) : models
+      const sweep = async () => {
+        for (const model of targets) {
+          if (stopped) {
+            return
+          }
+          assertStructuredAgentResolutionCurrent(operation)
+          if (model.effortsKnown !== false) {
+            continue
+          }
+          try {
+            for (let attempt = 0; attempt < 2 && !stopped; attempt++) {
+              const write = options.write('model', model.id)
+              if (write?.method !== 'config') {
+                break
+              }
+              const reply = await connection.setConfigOption(write.configId, write.value)
+              if (stopped) {
+                return
+              }
+              assertStructuredAgentResolutionCurrent(operation)
+              options.adoptConfigOptions(reply.configOptions)
+              const observed = options.read()
+              if (observed.current.model !== model.id) {
+                continue
+              }
+              const known = observed.models.find((row) => row.id === model.id)
+              if (known) {
+                models = models.map((row) => (row.id === model.id ? known : row))
+              }
+              break
+            }
+          } catch {
+            assertStructuredAgentResolutionCurrent(operation)
+          }
+        }
+      }
+      await withTimeout(sweep(), 5_000, undefined)
+    }
+    assertStructuredAgentResolutionCurrent(operation)
+    return models
+  } finally {
+    stopped = true
+    // Delete after inspection; the runner bounds teardown even if the agent stops replying.
+    if (deletes) {
+      await connection.deleteSession(started.sessionId).catch((error: unknown) => {
+        console.warn(`[acp-model-catalog] ${spec.agent} kept its listing session:`, error)
+      })
+    }
+  }
 }

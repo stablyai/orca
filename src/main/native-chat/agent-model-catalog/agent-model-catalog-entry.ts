@@ -3,6 +3,8 @@ import {
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
@@ -150,7 +152,12 @@ export function agentModelCatalogEntry(
     discovered,
     live,
     configured,
-    models: mergedAgentModelCatalogModels(discovered, live, configured).map((model) =>
+    models: mergedAgentModelCatalogModels(
+      discovered,
+      live,
+      configured,
+      usesModelSpecificAcpEfforts(agent)
+    ).map((model) =>
       independentAgentModelCatalog(agent) && discovered?.complete !== true
         ? { ...model, isDefault: false }
         : model
@@ -213,7 +220,10 @@ export function agentModelCatalogEntryWithSuccess(
         : null
     )
   }
-  const models = retainedAgentModelCatalogModels(previous, success)
+  const incoming = retainedAgentModelCatalogModels(previous, success)
+  const models = usesModelSpecificAcpEfforts(identity.agent)
+    ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
+    : incoming
   if (models.length === 0) {
     return null
   }

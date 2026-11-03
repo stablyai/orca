@@ -13,6 +13,8 @@ import { AgentModelCatalogListingStoppedError } from '../native-chat/agent-model
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import authRequired from './__fixtures__/session-new-auth-required.json'
+import recordedEfforts from './fixtures/opencode-v2.0.21-model-efforts.json'
+import { SetSessionConfigOptionRequestSchema } from './generated/acp-protocol.generated'
 
 const PREFIX = ['run', '--', 'agent']
 const launcherSettings = (agent: string) => ({
@@ -137,6 +139,7 @@ function scriptedOpenCode2(canDelete: boolean): {
     })
   )
   agent.on('session/delete', (frame) => agent.reply(frame, {}))
+  agent.on('session/set_config_option', (frame) => agent.fail(frame, -32602, 'Model unavailable'))
   const launches: ProviderProcessLaunch[] = []
   let closes = 0
   return {
@@ -156,6 +159,7 @@ function scriptedOpenCode2(canDelete: boolean): {
         return {
           initialize: () => runtime.initialize(),
           start: (options) => runtime.start(options),
+          setConfigOption: (id, value) => runtime.setConfigOption(id, value),
           deleteSession: (sessionId) => runtime.deleteSession(sessionId),
           close: async () => {
             closes += 1
@@ -168,6 +172,74 @@ function scriptedOpenCode2(canDelete: boolean): {
 }
 
 describe('ACP model catalog probes', () => {
+  it.each([undefined, 'opencode/beam-free'])(
+    'discovers actual model-owned menus before deleting its session (target %s)',
+    async (selectedModel) => {
+      const { agent, deps, closed } = scriptedOpenCode2(true)
+      agent.on('session/new', (frame) =>
+        agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new })
+      )
+      agent.on('session/set_config_option', (frame) => {
+        const { value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
+        agent.reply(
+          frame,
+          value === 'opencode/beam-free'
+            ? recordedEfforts['opencode/beam-free']
+            : value === 'google/gemini-3.8-flash'
+              ? recordedEfforts['google/gemini-3.8-flash']
+              : recordedEfforts.new
+        )
+      })
+      const result = await createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project', selectedModel }
+      )
+      expect(
+        result.models.find((row) => row.id === 'opencode/crouton-alpha-free')?.efforts
+      ).toHaveLength(7)
+      expect(result.models.find((row) => row.id === 'opencode/beam-free')?.efforts).toHaveLength(6)
+      expect(
+        result.models.find((row) => row.id === 'google/gemini-3.8-flash')?.efforts
+      ).toHaveLength(selectedModel ? 0 : 4)
+      expect(agent.frames.at(-1)?.method).toBe('session/delete')
+      expect(
+        agent.frames.filter((frame) => frame.method === 'session/set_config_option')
+      ).toHaveLength(selectedModel ? 1 : 2)
+      expect(closed()).toBe(1)
+    }
+  )
+
+  it('keeps a rejected or mismatched target unknown and an observed empty menu known', async () => {
+    const { agent, deps } = scriptedOpenCode2(true)
+    agent.on('session/new', (frame) =>
+      agent.reply(frame, { sessionId: 'probe-session', ...recordedEfforts.new })
+    )
+    const probe = () =>
+      createAcpModelCatalogProbe(OPENCODE, deps)(
+        { kind: 'opencode', locator: { kind: 'unmanaged' } },
+        { workspacePath: '/work/project', selectedModel: 'opencode/beam-free' }
+      )
+    expect((await probe()).models.find((row) => row.id === 'opencode/beam-free')).toMatchObject({
+      effortsKnown: false,
+      efforts: []
+    })
+    agent.on('session/set_config_option', (frame) => agent.reply(frame, recordedEfforts.new))
+    expect((await probe()).models.find((row) => row.id === 'opencode/beam-free')).toMatchObject({
+      effortsKnown: false,
+      efforts: []
+    })
+    agent.on('session/new', (frame) =>
+      agent.reply(frame, {
+        sessionId: 'probe-session',
+        ...recordedEfforts['opencode/longcat-2.5-preview-free']
+      })
+    )
+    expect((await probe()).models).toMatchObject([
+      { id: 'opencode/longcat-2.5-preview-free', efforts: [] }
+    ])
+    expect((await probe()).models[0]?.effortsKnown).toBeUndefined()
+  })
+
   it('projects an agent-authored auth-required session/new error, retaining unknown for other failures', async () => {
     const { agent, deps } = scriptedOpenCode2(true)
     const { code, message, data } = authRequired.reply.error
@@ -296,11 +368,12 @@ describe('ACP model catalog probes', () => {
     expect(agent.frames.map((frame) => frame.method)).toEqual([
       'initialize',
       'session/new',
+      'session/set_config_option',
       'session/delete'
     ])
     // In the asking chat's folder, so OpenCode records no project the person never opened.
     expect(agent.frames[1]!.params).toMatchObject({ cwd: '/work/project' })
-    expect(agent.frames[2]!.params).toEqual({ sessionId: 'probe-session' })
+    expect(agent.frames.at(-1)!.params).toEqual({ sessionId: 'probe-session' })
     expect(launches).toEqual([
       expect.objectContaining({ command: process.execPath, args: [...PREFIX, 'acp'] })
     ])

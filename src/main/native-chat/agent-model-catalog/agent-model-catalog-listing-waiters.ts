@@ -1,3 +1,4 @@
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
@@ -86,9 +87,14 @@ export async function waitForAgentModelCatalogRead(input: {
       bound &&
       (!store.get(bound.fingerprint) ||
         independentAgentModelCatalog(params.agent) ||
+        (usesModelSpecificAcpEfforts(params.agent) && store.isListing(bound.fingerprint)) ||
         store.heldReasonDue(bound.fingerprint))
     ) {
-      await store.pendingListing(bound.fingerprint, true, params.legacy)
+      await store.pendingListing(
+        bound.fingerprint,
+        true,
+        params.legacy || usesModelSpecificAcpEfforts(params.agent)
+      )
     }
     if (bound && !store.isListing(bound.fingerprint)) {
       await input.claim()?.promise

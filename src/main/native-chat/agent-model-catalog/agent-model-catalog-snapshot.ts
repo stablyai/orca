@@ -1,3 +1,4 @@
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-model-catalog-ownership'
 import {
   agentModelCatalogReadRecords,
   agentModelCatalogScopedRecord
@@ -239,7 +240,7 @@ export function projectAgentModelCatalogSnapshot(
     !params.verifiedOnly &&
     (deps.store.isListing(bound.fingerprint) ||
       (resolving && deps.store.probeDue(bound.fingerprint))) &&
-    (independent || !listed)
+    (independent || !listed || usesModelSpecificAcpEfforts(params.agent))
       ? { listingInProgress: true as const }
       : {}),
     ...(deps.store.failure(bound.fingerprint)?.unavailable

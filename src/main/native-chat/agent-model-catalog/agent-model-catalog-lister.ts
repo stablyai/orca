@@ -27,10 +27,21 @@ export type AgentModelCatalogSessionAccess = {
 
 export type InFlightListing = {
   agent: string
+  targets: Set<string>
   current?: () => boolean
   promise: Promise<AgentModelCatalogEntry | null>
   finish: (entry: AgentModelCatalogEntry | null) => void
   cleanup: () => void
+}
+
+export function demandAgentModelEfforts(
+  flight: InFlightListing | undefined,
+  model: string | undefined,
+  cap: number
+): void {
+  if (model && flight && flight.targets.size < cap) {
+    flight.targets.add(model)
+  }
 }
 
 /** Only the exact owner may detach a flight and release its waiters. */
@@ -52,7 +63,11 @@ export function retireAgentModelCatalogListing(
 export function refreshAgentModelCatalogListing(input: {
   fingerprint: string
   agent: string
-  listModels: () => Promise<AgentModelCatalogSuccess>
+  listModels: (selectedModel?: string) => Promise<AgentModelCatalogSuccess>
+  selectedModel?: string
+  maxTargets: number
+  targetDue: (model: string) => boolean
+  targetAttempted: (model: string) => void
   current?: () => boolean
   signal?: AbortSignal
   refreshes: Map<string, InFlightListing>
@@ -68,11 +83,13 @@ export function refreshAgentModelCatalogListing(input: {
   const { fingerprint, agent, listModels, signal } = input
   const existing = input.refreshes.get(fingerprint)
   if (existing) {
+    demandAgentModelEfforts(existing, input.selectedModel, input.maxTargets)
     return existing.promise
   }
   const result = Promise.withResolvers<AgentModelCatalogEntry | null>()
   const flight: InFlightListing = {
     agent,
+    targets: new Set(input.selectedModel ? [input.selectedModel] : []),
     current: input.current,
     promise: result.promise,
     finish: result.resolve,
@@ -94,10 +111,25 @@ export function refreshAgentModelCatalogListing(input: {
         span.end()
         return
       }
-      const success = await listModels()
-      if (current()) {
+      let target = input.selectedModel
+      let entry: AgentModelCatalogEntry | null = null
+      do {
+        if (target) {
+          flight.targets.delete(target)
+        }
+        const success = await listModels(target)
+        if (!current()) {
+          return
+        }
         span.setAttribute('models', success.models.length)
-        flight.finish(input.writeSuccess(fingerprint, agent, success, 'discovery'))
+        entry = input.writeSuccess(fingerprint, agent, success, 'discovery')
+        if (target) {
+          input.targetAttempted(target)
+        }
+        target = [...flight.targets].find(input.targetDue)
+      } while (target && current())
+      if (current()) {
+        flight.finish(entry)
       }
       span.end()
     } catch (error) {
@@ -122,9 +154,9 @@ export function scopedAgentModelCatalogLister(input: {
   probe: AgentModelCatalogProbe | undefined
   probeHome: AgentSessionAccountHome | null
   workspacePath: string | undefined
-}): () => Promise<AgentModelCatalogSuccess> {
+}): (selectedModel?: string) => Promise<AgentModelCatalogSuccess> {
   const { legacy, admission, signal, resolved, probe, probeHome, workspacePath } = input
-  return async () => {
+  return async (selectedModel) => {
     const release = legacy ? () => {} : await admission.acquire(0, signal)
     const deadline = new AbortController()
     // Share the retry budget and await bounded provider teardown before settling.
@@ -143,6 +175,7 @@ export function scopedAgentModelCatalogLister(input: {
       return await probe(probeHome, {
         signal: attemptSignal,
         workspacePath,
+        ...(selectedModel ? { selectedModel } : {}),
         operation: input.operation
       })
     } catch (error) {

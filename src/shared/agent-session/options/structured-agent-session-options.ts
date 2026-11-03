@@ -10,7 +10,14 @@ import {
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from '../../native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
-import { usesInstalledAgentModelCatalog } from '../../agent-model-catalog-ownership'
+import {
+  usesInstalledAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../agent-model-catalog-ownership'
+import {
+  fillUnknownCatalogEfforts,
+  enrichStructuredAgentEfforts
+} from './agent-session-model-efforts'
 import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
@@ -109,7 +116,7 @@ export function applyStructuredAgentSessionModelCatalog(
     state = { ...state, listingInProgress }
   }
   if (state.catalogSource === 'live' && !installed) {
-    return state
+    return enrichStructuredAgentEfforts(state, catalog)
   }
   const models =
     catalog.origin === 'unknown'
@@ -165,6 +172,13 @@ export function applyStructuredAgentSessionOptions(
   }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
+  let answeredCatalog = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
+  if (usesModelSpecificAcpEfforts(state.record.agent)) {
+    answeredCatalog = {
+      ...answeredCatalog,
+      models: fillUnknownCatalogEfforts(answeredCatalog.models, state.catalog?.models ?? [])
+    }
+  }
   // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
@@ -188,9 +202,7 @@ export function applyStructuredAgentSessionOptions(
     ...state,
     optionsAnswerPresent: true,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
-    catalog: keepCatalog
-      ? state.catalog
-      : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
+    catalog: keepCatalog ? state.catalog : answeredCatalog,
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&
