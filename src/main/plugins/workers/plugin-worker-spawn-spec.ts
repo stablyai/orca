@@ -1,6 +1,7 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 import type { PluginWorkerSpawnSpec } from './plugin-worker-startup'
+import { pluginNeedsResidentWorker } from './plugin-resident-worker'
 
 export function buildPluginWorkerSpawnSpec(
   plugin: ValidDiscoveredPlugin,
@@ -17,7 +18,7 @@ export function buildPluginWorkerSpawnSpec(
     manifestRevision: JSON.stringify(plugin.manifest),
     reviewedContentHash: plugin.contentHash ?? plugin.consentContentHash ?? null,
     ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null } : {}),
-    ...(plugin.manifest.contributes.hooks.length > 0 ? { keepWarm: true as const } : {}),
+    ...(pluginNeedsResidentWorker(plugin.manifest) ? { keepWarm: true as const } : {}),
     grantedCapabilities
   }
 }

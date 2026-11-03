@@ -116,12 +116,15 @@ export function clearRuntimeCompatibilityCache(environmentId?: string | null): v
   runtimeCompatibilityChecks.clear()
 }
 
-export function markRuntimeEnvironmentCompatible(environmentId: string): void {
+export function markRuntimeEnvironmentCompatible(
+  environmentId: string,
+  status?: RuntimeStatus
+): void {
   const trimmed = environmentId.trim()
   if (!trimmed) {
     return
   }
-  rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(null, true))
+  rememberRuntimeEnvironmentCompatibility(trimmed, compatibilityEntry(status ?? null, true))
 }
 
 /**

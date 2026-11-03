@@ -70,8 +70,8 @@ vi.mock('../native-chat/wsl-transcript-fs-process-dispatch', async (importOrigin
   openWslTranscriptFsProcess: async (path: string) => open(onShare(path), 'r')
 }))
 
-import { _resetWslCachesForTests } from '../wsl'
-import { _resetWslBackgroundDistroGateForTests } from '../wsl-background-distro-gate'
+import { _resetWslCachesForTests } from '../wsl/discovery/distro-catalog'
+import { _resetWslBackgroundDistroGateForTests } from '../wsl/discovery/wsl-background-distro-gate'
 import { resetWslTranscriptFsGateForTests } from '../native-chat/wsl-transcript-fs-gate'
 import { readNativeChatTranscriptTail } from '../native-chat/transcript-watch'
 import {

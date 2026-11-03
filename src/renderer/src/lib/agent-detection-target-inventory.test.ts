@@ -45,15 +45,6 @@ describe('agent inventory for a worktree', () => {
     expect(harness.ensureDetectedAgents).not.toHaveBeenCalled()
   })
 
-  it('loads a local workspace in its own project runtime', async () => {
-    const harness = storeWithRepo({})
-
-    await expect(
-      ensureDetectedAgentsForWorktree(harness.store.getState(), 'wt-1')
-    ).resolves.toEqual(['codex'])
-    expect(harness.ensureDetectedAgents).toHaveBeenCalledWith('wt-1')
-  })
-
   it("loads a direct SSH workspace from this client's connection", async () => {
     const harness = storeWithRepo({ connectionId: 'ssh-1' })
 

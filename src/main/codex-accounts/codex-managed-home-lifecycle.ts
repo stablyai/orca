@@ -6,9 +6,8 @@ import {
   WINDOWS_RM_RETRY_DELAY_MS
 } from '../../shared/windows-transient-lock-removal'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { CodexAccountAddTarget, ManagedCodexHomeLocation } from './codex-account-service-types'
 import { writeFileAtomically } from './fs-utils'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'

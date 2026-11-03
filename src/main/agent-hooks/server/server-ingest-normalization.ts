@@ -1,6 +1,7 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
+import { checkHookOwnerPresence, restateHookRoot } from '../../../shared/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import {
@@ -12,6 +13,65 @@ import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerTmuxStatus {
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+    this.readHookRootEvidence = reader
+  }
+
+  /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
+   *  owner's exit neither answers for the pane nor is forgotten. */
+  protected readonly undecidedOwnerChallenges = new Map<string, number>()
+
+  /** HTTP and spool hooks share one ownership preflight before provider folds; a drain passes
+   *  the one answer deadline all its records share. */
+  protected checkHookOwner(
+    source: AgentHookSource,
+    body: unknown,
+    answerBy?: number
+  ): Promise<unknown> | undefined {
+    const challenges = this.undecidedOwnerChallenges
+    let challenged: string | undefined
+    const read = this.readHookRootEvidence
+    const pending = checkHookOwnerPresence(
+      this.state,
+      source,
+      body,
+      this.env,
+      (paneKey) => {
+        challenged = this.resolvePaneKeyAlias(paneKey)
+        challenges.set(challenged, (challenges.get(challenged) ?? 0) + 1)
+        return this.checkAgentPresence(paneKey)
+      },
+      read && {
+        read,
+        answerBy,
+        // A late answer re-applies the pane's current row with the authority it settles.
+        reconcile: (completion) => {
+          const event = this.statusHooksEnabled
+            ? restateHookRoot(this.state, completion)
+            : undefined
+          if (event) {
+            this.applyNormalizedStatus(event)
+          }
+        }
+      }
+    )
+    // The caller admits or refuses the hook as soon as this settles, with no await in between.
+    return pending?.finally(() => {
+      if (!challenged) {
+        return
+      }
+      const remaining = (challenges.get(challenged) ?? 1) - 1
+      if (remaining > 0) {
+        challenges.set(challenged, remaining)
+      } else {
+        challenges.delete(challenged)
+      }
+    })
+  }
+
   protected override applyNormalizedStatus(
     ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
   ): EnrichedAgentHookEventPayload | undefined {
@@ -106,7 +166,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   }
 
   // Spool records are durable replay evidence, not a live observation.
-  protected ingestSpoolRecord(record: SpoolRecord): Promise<void> | void {
+  protected ingestSpoolRecord(record: SpoolRecord, answerBy?: number): Promise<void> | void {
     if (!isAgentHookSource(record.source)) {
       return
     }
@@ -123,9 +183,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.applySpoolHook(record, body)
     }
     const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
-    const pending = checkHookOwnerPresence(this.state, record.source, body, this.env, (paneKey) =>
-      this.checkAgentPresence(paneKey)
-    )
+    const pending = this.checkHookOwner(record.source, body, answerBy)
     return pending ? pending.then(apply) : apply()
   }
 

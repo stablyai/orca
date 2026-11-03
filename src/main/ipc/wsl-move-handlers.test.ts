@@ -7,7 +7,7 @@ import {
   configureWslHostsGate,
   noteWslHostsLivePolicyBlock,
   resetWslHostsGateForTests
-} from '../wsl/wsl-host-gate'
+} from '../wsl/host-lifecycle/wsl-host-gate'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { listWslMoveCutovers } from '../persistence/moving-wsl-projects/wsl-move-cutover-journal'

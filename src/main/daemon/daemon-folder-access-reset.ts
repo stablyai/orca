@@ -8,7 +8,7 @@ import {
   type MacTccFolderClass
 } from '../../shared/daemon-adoption-telemetry'
 import type { EventProps } from '../../shared/telemetry-events'
-import { readMacosBundleId, resetMacosTccPermission } from '../macos-tcc-reset'
+import { readMacosBundleId, resetMacosTccPermission } from '../macos-permissions/macos-tcc-reset'
 import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { track } from '../telemetry/client'
 import {

@@ -1,5 +1,5 @@
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -53,6 +53,7 @@ const NO_FILES: PendingNativeChatFile[] = []
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
   onSlashMenuOpen: () => void
+  onOpenFile?: (path: string) => void
   onSlashMenuDemand?: (open: boolean) => void
   onAttachFiles?: () => void
   // An uploading attachment must hold Send.
@@ -284,6 +285,7 @@ export function MobileNativeChatComposer({
             files={files}
             onRemoveImage={editSession?.locked ? undefined : onRemoveAttachment}
             onRemoveFile={editSession?.locked ? undefined : structured?.onRemoveFile}
+            onOpenFile={structured?.onOpenFile}
           />
           <MobileNativeChatComposerField
             ref={fieldRef}

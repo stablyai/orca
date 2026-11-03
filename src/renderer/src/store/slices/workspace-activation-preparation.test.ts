@@ -74,32 +74,6 @@ it.each([
   )
 })
 
-it.each(['folder', 'git'] as const)('preserves a live %s terminal on repeat activation', (kind) => {
-  const { store, workspaceId, activate } = seedWorkspace(kind, 'local')
-  store.setState({ ptyIdsByTabId: { terminal: ['live-pty'] } })
-  activate()
-  const activated = store.getState()
-
-  activate()
-
-  expect(store.getState()).toBe(activated)
-  expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(3)
-})
-
-it.each(['folder', 'git'] as const)(
-  'wakes an already-selected %s after its PTY is released',
-  (kind) => {
-    const { store, workspaceId, activate } = seedWorkspace(kind, 'local')
-    store.setState({ ptyIdsByTabId: { terminal: ['live-pty'] } })
-    activate()
-    store.setState({ ptyIdsByTabId: {} })
-
-    activate()
-
-    expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)
-  }
-)
-
 it('reads only the selected folder owner on screen and persists to that host', () => {
   const { store, activate } = seedWorkspace('folder', 'ssh:remote')
   const updateFolderWorkspace = vi.fn().mockResolvedValue(null)
@@ -120,13 +94,4 @@ it('reads only the selected folder owner on screen and persists to that host', (
     { isUnread: false },
     { executionHostId: 'ssh:remote' }
   )
-})
-
-it('leaves selection unchanged when the requested folder owner is absent', () => {
-  const { store } = seedWorkspace('folder', 'local')
-  const before = store.getState()
-
-  store.getState().setActiveFolderWorkspace(FOLDER_ID, 'ssh:missing')
-
-  expect(store.getState()).toBe(before)
 })

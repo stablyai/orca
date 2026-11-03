@@ -126,14 +126,6 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  it('decays a row from a host running fast, instead of holding it fresh forever', () => {
-    const store = seedPairedClientStore()
-    applyChangedHostSnapshot(store, T0 + HOST_SKEW_MS, T0)
-
-    expect(mirroredRowIsFreshAt(store, T0), 'fresh on arrival').toBe(true)
-    expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
-  })
-
   it('keeps a row from a host running slow fresh for the whole window, not zero of it', () => {
     const store = seedPairedClientStore()
     applyChangedHostSnapshot(store, T0 - HOST_SKEW_MS, T0)

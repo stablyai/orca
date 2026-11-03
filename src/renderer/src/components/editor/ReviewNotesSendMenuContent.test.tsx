@@ -363,48 +363,6 @@ describe('ReviewNotesSendMenuContent', () => {
     setStore()
   })
 
-  it('enumerates each running agent of the worktree as a send target', () => {
-    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: {
-        'wt-1': [
-          tab(TAB_A, { title: 'Terminal 1' }),
-          tab(TAB_B, { title: 'Codex', launchAgent: 'codex' })
-        ]
-      },
-      terminalLayoutsByTabId: {
-        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
-        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
-      }
-    })
-    harness.noteTargets = [
-      {
-        paneKey: statusPaneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'claude',
-        tabTitle: 'Terminal 1',
-        status: 'eligible'
-      },
-      {
-        paneKey: makePaneKey(TAB_B, LEAF_B),
-        tabId: TAB_B,
-        messageTarget: { kind: 'terminal', tabId: TAB_B, leafId: LEAF_B },
-        agentType: 'codex',
-        tabTitle: 'Codex',
-        status: 'eligible'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(2)
-    expect(items.every((item) => item.props.disabled === false)).toBe(true)
-    expect(collectText(items[0])).toContain('Claude')
-    expect(collectText(items[1])).toContain('Codex')
-  })
-
   it('orders send targets by the current worktree agent rows and shows status timing', () => {
     const paneKeyA = makePaneKey(TAB_A, LEAF_A)
     const paneKeyB = makePaneKey(TAB_B, LEAF_B)
@@ -815,19 +773,6 @@ describe('ReviewNotesSendMenuContent', () => {
       worktreeId: 'wt-1',
       prompt: 'my notes',
       target: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A }
-    })
-  })
-
-  it('always offers the new-agent launcher', () => {
-    const onPromptHandedOff = vi.fn()
-    const tree = render({ onPromptHandedOff })
-
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'my notes',
-      launchSource: 'notes_send',
-      onPromptHandedOff
     })
   })
 

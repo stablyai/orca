@@ -28,7 +28,10 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../pty/process-retirement/pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
 const START_BUDGET_MS = 20_000

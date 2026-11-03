@@ -9,7 +9,9 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ app: { getPath: () => '/home/test' } }))
 vi.mock('../keybindings/keybinding-service', () => ({ KeybindingService: class {} }))
-vi.mock('../provider-account-services', () => ({ createProviderAccountServices: () => ({}) }))
+vi.mock('../providers/accounts/provider-account-services', () => ({
+  createProviderAccountServices: () => ({})
+}))
 vi.mock('../codex/codex-session-migration-scheduler', () => ({
   createCodexSessionMigrationScheduler: () => ({ scheduleInitialRun: vi.fn() })
 }))
