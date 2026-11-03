@@ -1,4 +1,5 @@
 import { assertRuntimeFileMutationExpectation } from './file-mutation-expectation'
+import { formatEditorText } from '../../editor/format-editor-text'
 import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
@@ -23,6 +24,25 @@ type RuntimeFileMutationHost = Pick<
 
 export class RuntimeFileMutations {
   constructor(private readonly host: RuntimeFileMutationHost) {}
+
+  async formatFileExplorerText(
+    worktreeSelector: string,
+    relativePath: string,
+    text: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ) {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    requireLocalRuntimeFileRoute(target)
+    return formatEditorText(this.host.requireStore(), target, text)
+  }
 
   async writeFileExplorerFile(
     worktreeSelector: string,

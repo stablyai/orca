@@ -40,6 +40,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'repoIcon'
             | 'upstream'
             | 'hookSettings'
+            | 'editorFormatter'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
             | 'kind'
