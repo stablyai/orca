@@ -68,11 +68,13 @@ export default function NewFileModal(): React.JSX.Element | null {
     if (!sshBlocked) {
       return
     }
+    // Why: a fixed id collapses the duplicate effect run React StrictMode performs in development.
     toast.error(
       translate(
         'auto.components.editor.NewFileDialog.sshUnsupported',
         "Creating files in SSH workspaces isn't supported yet."
-      )
+      ),
+      { id: 'new-file-ssh-unsupported' }
     )
     closeModal()
   }, [closeModal, sshBlocked])
