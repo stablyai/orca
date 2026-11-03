@@ -22,6 +22,7 @@ import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
+import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
@@ -100,6 +101,7 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorFormatOnSaveSetting settings={settings} updateSettings={updateSettings} />
+      <EditorInsertFinalNewlineSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

@@ -77,7 +77,7 @@ export function NativeChatAgentMessageCard({
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
-  const text = agentMessageTranscriptText(message.blocks, from)
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
   const clip = useRef<HTMLDivElement>(null)
   const clipId = useId()

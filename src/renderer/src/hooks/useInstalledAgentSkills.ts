@@ -93,6 +93,7 @@ export function hasInstalledAgentSkillNamed(
     }
     return (
       expected.has(normalizeSkillName(skill.name)) ||
+      (skill.bundledName !== undefined && expected.has(normalizeSkillName(skill.bundledName))) ||
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })

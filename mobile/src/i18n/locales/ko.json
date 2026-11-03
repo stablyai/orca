@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
+      "retryLoading": "PR 로드 다시 시도"
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",

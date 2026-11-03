@@ -7,6 +7,7 @@ import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
 import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
+import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
 
 const workspace = 'agent-message-fixture'
 const image =
@@ -147,6 +148,26 @@ const store = {
 
 export const wide = defineFixture({ width: 720, store, render: cards })
 export const narrow = defineFixture({ width: 340, store, render: cards })
+export const mail = defineFixture({
+  width: 720,
+  render: () => {
+    const message = orchestrationMailFixture({
+      body: 'The message now shows the result directly.\n\nAll relevant checks passed. Open [the report](https://example.com/report) for details.'
+    })
+    return (
+      <div className="p-4">
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          allowFileUriLinks={false}
+          onRefolded={() => {}}
+        />
+      </div>
+    )
+  },
+  interact: (frame) =>
+    frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+})
 export const expanded = defineFixture({
   width: 720,
   store,

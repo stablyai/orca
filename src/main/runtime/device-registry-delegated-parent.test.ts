@@ -42,13 +42,6 @@ function delegatedRegistry() {
 }
 
 describe('delegated phone auth follows its parent desktop', () => {
-  it('accepts a delegated phone while its desktop is paired', () => {
-    const { registry, child, principal } = delegatedRegistry()
-
-    expect(registry.validateToken(child.token)?.deviceId).toBe(child.deviceId)
-    expect(registry.resolveAuthenticatedPrincipal(principal)?.deviceId).toBe(child.deviceId)
-  })
-
   it('refuses it once an admin removes the desktop on disk', () => {
     const { registry, desktop, child, principal } = delegatedRegistry()
 

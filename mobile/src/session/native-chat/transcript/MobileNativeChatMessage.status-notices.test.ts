@@ -120,9 +120,9 @@ describe('MobileNativeChatMessage status notices', () => {
         )
       )
     })
-    return renderer!.root.find(
+    return renderer!.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
+    )[0]!
   }
 
   it('names the Orca host an Orca stop came from, in desktop words', () => {
@@ -195,6 +195,16 @@ describe('MobileNativeChatMessage status notices', () => {
           colors.statusAmber
         )
         expect(markdownIn(tree.root)).toEqual([])
+        const details = tree.root.find(
+          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Details'
+        )
+        expect(details.props['aria-expanded']).toBe(false)
+        act(() => details.props.onPress())
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .flatMap((node) => node.props.children)
+        ).toContain('Internal error: Rate limit exceeded. Please try again later.')
       } finally {
         now.mockRestore()
       }

@@ -13,7 +13,7 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../shared/runtime-types'
 import { BrowserError } from '../../browser/browser-error'
-import { browserSessionRegistry } from '../../browser/browser-session-registry'
+import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
 import { browserManager } from '../../browser/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'

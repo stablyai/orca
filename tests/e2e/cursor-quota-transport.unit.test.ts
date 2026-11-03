@@ -6,7 +6,7 @@ import { build } from 'vite'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
 import { runProcess } from '@orca/process-host'
-import { resolveElectronProbeLaunch } from '../../src/main/browser/electron-probe-display-launch'
+import { resolveElectronProbeLaunch } from '../../src/main/browser/electron-fixtures/electron-probe-display-launch'
 import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
 
 const outcomeSchema = z.object({

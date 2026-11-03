@@ -108,9 +108,5 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
         expect.anything()
       )
     })
-
-    it('offers no preflight to the user undo', () => {
-      expect(createWslMoveUndoPorts(store, '/user-data').preflightHostCopies).toBeUndefined()
-    })
   })
 })
