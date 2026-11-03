@@ -209,6 +209,10 @@ export function getPairedRuntimeBrowserClientRouteIdentity(
   return clientHostRouteIdentities.get(environmentId) ?? null
 }
 
+export function pairedRuntimeBrowserClientHostId(environmentId: string): string | null {
+  return clientHostRouteIdentities.has(environmentId) ? getBrowserClientHostId() : null
+}
+
 export function pairedRuntimeBrowserClientHostsPage(
   environmentId: string,
   browserPageId: string

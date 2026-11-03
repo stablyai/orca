@@ -36,10 +36,11 @@ vi.mock('../../browser/paired-runtime-browser-client-host-runtime', () => ({
   startPairedRuntimeBrowserClientHost: startHostMock,
   closePairedRuntimeBrowserClientHostEnvironment: closeHostMock
 }))
-vi.mock('./runtime-environment-connectivity-handlers', () => ({
+vi.mock('./runtime-environment-manual-disconnect', () => ({
   isRuntimeEnvironmentManuallyDisconnected: manuallyDisconnectedMock
 }))
 
+import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
 import { channelHandlerLookup } from './runtime-environments-ipc-test-harness'
 
@@ -120,6 +121,14 @@ describe('runtime environment browser client host handler', () => {
     )
 
     await expect(prepare(null, { selector: 'environment-a' })).resolves.toEqual({ kind: 'server' })
+    await expect(
+      prepareRuntimeEnvironmentBrowserPlacement('/profile', {
+        selector: 'environment-a',
+        preference: 'auto',
+        enabled: true,
+        requireStatus: true
+      })
+    ).rejects.toThrow('socket closed before ready')
     expect(startHostMock).not.toHaveBeenCalled()
   })
 
