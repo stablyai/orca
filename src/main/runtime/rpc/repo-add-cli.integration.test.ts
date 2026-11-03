@@ -15,7 +15,7 @@ import type { RpcRequest } from './core'
 import { repoDispatcher } from './methods/repo-rpc.test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 
-vi.mock('../../repo-icon-autodetect', () => ({
+vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../worktree-root-preparation', () => ({

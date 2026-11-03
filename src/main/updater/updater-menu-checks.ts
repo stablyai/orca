@@ -56,13 +56,20 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     if (checkAlreadyInFlight) {
       this.backgroundCheckPromotedToUserInitiated = true
       this.rearmActiveUpdateCheckStallTimer()
-      if (checkVariant !== 'default') {
-        // The active check may pin stable; queue a fresh modifier check for the requested channel.
-        this.pendingUserInitiatedCheckAfterInFlight = checkVariant
+      if (checkVariant !== 'default' || options?.ignoreUpdateDelay !== undefined) {
+        // Queue explicit channel or delay-bypass requests after the active check settles.
+        this.pendingUserInitiatedCheckAfterInFlight = {
+          ...this.getOptionsForUpdateCheckVariant(checkVariant),
+          ...(options?.ignoreUpdateDelay !== undefined
+            ? { ignoreUpdateDelay: options.ignoreUpdateDelay }
+            : {})
+        }
       }
       return
     }
 
+    // Set only for a fresh launch so an unconsumed bypass cannot leak into a later background check.
+    this.ignoreUpdateDelayOnce = Boolean(options?.ignoreUpdateDelay)
     const attemptId = this.beginUpdateCheckAttempt()
     const autoUpdater = this.getAutoUpdater()
     const launch = (): Promise<unknown> | undefined => {
@@ -81,13 +88,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     }
     const run = this.pinDefaultReleaseFeed(checkVariant).then((preflightResult) => {
       if (preflightResult === 'not-available') {
-        if (!this.isActiveUpdateCheckAttempt(attemptId)) {
-          return false
-        }
-        this.userInitiatedCheck = false
-        this.finishActiveUpdateCheckAttempt()
-        this.recordCompletedUpdateCheck()
-        this.sendSettledCheckStatus({ state: 'not-available', userInitiated: true })
+        this.settleHeldUpdateCheck(attemptId)
         return false
       }
       return launch()

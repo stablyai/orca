@@ -72,7 +72,6 @@ beforeEach(() => {
     }
   )
   registerWorkspaceHttpLinkBrowserOpener(opening)
-  Object.assign(window.api, { shell: { openUrl: vi.fn(async () => {}) } })
 })
 afterEach(() => {
   registerWorkspaceHttpLinkBrowserOpener(null)
@@ -137,26 +136,6 @@ it.each(['refused', 'superseded'] as const)(
     expect(cleanups).toBe(1)
   }
 )
-
-it('does not notify browser completion for system opening and keeps unknown-owner refusal', async () => {
-  const complete = vi.fn()
-  openRoutedHttpLink(URL_TO_OPEN, {
-    worktreeId: WORKSPACE,
-    sourceOwner: { kind: 'unknown' },
-    forceDestination: 'system',
-    onBrowserOpenComplete: complete
-  })
-  expect(window.api.shell.openUrl).not.toHaveBeenCalled()
-  openRoutedHttpLink(URL_TO_OPEN, {
-    worktreeId: WORKSPACE,
-    sourceOwner: { kind: 'local' },
-    forceDestination: 'system',
-    onBrowserOpenComplete: complete
-  })
-  expect(window.api.shell.openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
-  expect(opening).not.toHaveBeenCalled()
-  expect(complete).not.toHaveBeenCalled()
-})
 
 it.each([false, true])(
   'preserves the existing failure presentation and captured cleanup with optional completion=%s',

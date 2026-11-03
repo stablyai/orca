@@ -28,7 +28,9 @@ vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }
 vi.mock('./github/client', () => ({
   getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
 }))
-vi.mock('./repo-icon-autodetect', () => ({ detectGitHubAvatarIcon: vi.fn(async () => null) }))
+vi.mock('./repository-icons/repo-icon-autodetect', () => ({
+  detectGitHubAvatarIcon: vi.fn(async () => null)
+}))
 
 const MOVING = 'repo-1'
 const STAYING = 'repo-2'

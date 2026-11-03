@@ -31,7 +31,7 @@ import {
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { seedClaudePinnedPtyRegistry } from '../claude-accounts/claude-pty-account-registries-startup'
-import { applyAppIcon } from '../app-icon'
+import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore

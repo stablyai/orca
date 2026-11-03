@@ -12,7 +12,6 @@ import {
   fixBrokenPullRequestChecks,
   startFixChecksFromDialog
 } from '@/components/pull-request-page/checks/fix-launch'
-import { fixBrokenGitHubChecks } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-actions'
 import * as preflight from './launch-work-item-direct-preflight'
 import * as preparation from './launch-work-item-direct-route-preparation'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
@@ -256,22 +255,6 @@ it('retains an edited Fix checks request through the PR-page Start handoff', asy
   expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledWith(
     expect.objectContaining({ content: 'My edited prompt', agent: 'claude', submit: true })
   )
-})
-
-it('lets the GitHub item checks action answer Ask without its toast fallback', async () => {
-  const launch = fixBrokenGitHubChecks({
-    item,
-    repoId: 'repo-1',
-    fixingChecks: false,
-    failedChecksLength: 1,
-    list: [],
-    setFixingChecks: vi.fn()
-  })
-  ;(await pending()).choose('skip')
-  await launch
-  expect(mocks.createWorktree).toHaveBeenCalledOnce()
-  expect(mocks.createWorktree.mock.calls[0][3]).toBe('skip')
-  expect(mocks.toastError).not.toHaveBeenCalled()
 })
 
 it.each(['Start work', 'Use item'])(

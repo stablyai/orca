@@ -229,6 +229,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'session.writeNotice.recordUnreadable',
       "Orca couldn't read this chat's saved state."
     ),
+  mailOwnerUnconfirmed: () =>
+    translate(
+      'session.writeNotice.mailOwnerUnconfirmed',
+      "Orca couldn't confirm this message is still meant for this chat."
+    ),
   chatNotFound: () => translate('session.writeNotice.chatNotFound', "Orca can't find this chat."),
   startNewChat: () =>
     translate('session.writeNotice.startNewChat', 'Start a new chat to continue.'),

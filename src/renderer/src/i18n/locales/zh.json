@@ -2126,8 +2126,6 @@
         "25690a3855": "从 PR 启动工作区",
         "a459866967": "恢复关联 PR 的工作区",
         "347034903a": "复制 GitHub 链接",
-        "5a01ca7253": "无法将查看的状态与 GitHub 同步。",
-        "996a1897d2": "无法同步此PR的查看状态。",
         "e0b15c793f": "复制 GitHub 链接失败",
         "992e799227": "GitHub 链接已复制",
         "61bfc81ada": "无法打开附加到此PR的工作区。",
@@ -18820,7 +18818,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续。",
-        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。"
+        "notSavedYet": "{{agent}} 尚未保存此对话。请在它回复后重试。",
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。"
       },
       "state": {
         "loading": {
@@ -22071,6 +22070,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}：没有可读取的备份，因此将从空白开始。",
+      "sectionKeptCurrent": "{{section}}：将保留当前运行记录",
       "sectionRestored": "{{section}}：将从 {{time}} 保存的备份中恢复。",
       "projectsForgotten": "Orca 将忘记你的项目及其工作区详情。磁盘上的文件不受影响。",
       "newerProjectsRemoved": "该备份之后添加的项目将连同其工作区详情一起从 Orca 中移除。磁盘上的文件不受影响。",
@@ -22113,7 +22113,7 @@
       "noneFound": "（未找到）",
       "sqlitePath": "SQLite 路径：{{path}}",
       "sectionsDamaged": "此配置文件已保存状态的一部分已损坏：{{sections}}。其余内容均完好无损。",
-      "repairCommand": "关闭 Orca，然后运行 `{{command}}`，仅从备份中替换损坏的部分，并保留其余所有内容。Orca 会保留损坏文件的副本。",
+      "repairCommand": "停止 Orca，然后运行 `{{command}}` 以仅修复损坏的部分并保留其他所有内容。Orca 会保留损坏文件的副本。",
       "restoreWholeBackup": "如需改为恢复整份备份，请先运行 `{{exportsCommand}}`，再运行 `{{rollbackCommand}}`。",
       "sqliteUnreadable": "Orca 无法安全地打开当前配置文件，因为其 SQLite 状态无法读取。",
       "legacyJsonPath": "旧版 JSON 路径：{{path}}",

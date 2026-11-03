@@ -163,7 +163,7 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
     return mocks.admission()
   }
 }))
-vi.mock('../macos-press-and-hold-default')
+vi.mock('../window/desktop-integration/macos-press-and-hold-default')
 vi.mock('../ai-vault/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({

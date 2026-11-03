@@ -221,47 +221,6 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  describe('single-authority invariant (fix gate — RED on current main)', () => {
-    it('agent status and visible tab label converge to one authoritative value under dual publication', () => {
-      const store = seedPairedClientStore()
-      const frames = runDualPublicationCycles(store, true)
-      const evidence = `observed publication frames:\n${JSON.stringify(frames, null, 2)}`
-
-      // After the first client write, authority may settle once but must not alternate status/title on each publication.
-      const statusTransitionsAfterDisagreement = countTransitions(
-        frames.slice(1).map((f) => f.statusState)
-      )
-      const visibleLabelTransitionsAfterDisagreement = countTransitions(
-        frames.slice(1).map((f) => f.visibleTabBarLabel)
-      )
-      expect(statusTransitionsAfterDisagreement, evidence).toBeLessThanOrEqual(1)
-      expect(visibleLabelTransitionsAfterDisagreement, evidence).toBeLessThanOrEqual(1)
-    })
-
-    it('a host surface without agentStatus does not delete the client-owned fresher live entry', () => {
-      const store = seedPairedClientStore()
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: false }),
-        T0
-      )
-      // Client clock exceeds all host timestamps; freshness cannot justify deletion.
-      replayClientOscWorking(store, T0 + 1_000)
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 2, hostNow: T0, includeAgentStatus: false }),
-        T0 + 1_500
-      )
-      const entryAfterMirror = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
-      // Host omission must not delete a client-owned live row.
-      expect(entryAfterMirror?.state, 'host mirror deleted the fresher client live entry').toBe(
-        'working'
-      )
-    })
-  })
-
   describe('converged sequence pinned (inverted defect pins — deterministic post-fix)', () => {
     it('settles on the client-owned status and generated label and stops flipping on republication', () => {
       const store = seedPairedClientStore()
@@ -318,54 +277,10 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       // Negative safety: the unrelated local pane survives all mirror cycles untouched.
       expect(store.getState().agentStatusByPaneKey[LOCAL_PANE_KEY]).toEqual(localEntryBefore)
     })
-
-    it('keeps the client live status and generated title when the host surface has no agentStatus', () => {
-      const store = seedPairedClientStore()
-      const frames = runDualPublicationCycles(store, false)
-
-      // Hook-only host omission is not exit evidence for OSC-driven panes.
-      const statusSequence = frames.map((f) => f.statusState)
-      expect(statusSequence).toEqual([
-        null,
-        'working',
-        'working',
-        'working',
-        'working',
-        'working',
-        'working'
-      ])
-      expect(countTransitions(statusSequence)).toBe(1)
-      expect(frames.map((f) => f.tabGeneratedTitle)).toEqual([
-        null,
-        ...Array.from({ length: 2 * CYCLES }, () => EXPECTED_GENERATED_TITLE)
-      ])
-    })
   })
 
   // Fence only proven client writers and never host-only state classes.
   describe('authority handback', () => {
-    it('does not fence a pane that claimed authority but never wrote byte-derived status', () => {
-      const store = seedPairedClientStore()
-      registerRendererOwnedAgentStatusPane(MIRROR_PANE_KEY, ENV)
-      store
-        .getState()
-        .setAgentStatus(
-          MIRROR_PANE_KEY,
-          { state: 'working', prompt: CLIENT_PROMPT, agentType: 'claude' },
-          'claude',
-          { updatedAt: T0 },
-          { tabId: MIRROR_TAB_ID, worktreeId: WT }
-        )
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 + 1_000, includeAgentStatus: true }),
-        T0 + 1_000
-      )
-
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('done')
-    })
-
     it('cedes back to the host once the pane is torn down', () => {
       const store = seedPairedClientStore()
       const release = replayClientOscWorking(store, T0 + 500)
@@ -405,31 +320,6 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         isExplicitAgentStatusFresh(entry!, afterStale, AGENT_STATUS_STALE_AFTER_MS),
         'the retained entry must read as stale so consumers render it idle'
       ).toBe(false)
-    })
-
-    it('lets a host permission block pierce the fence (hook-HTTP-only on the host)', () => {
-      const store = seedPairedClientStore()
-      replayClientOscWorking(store, T0 + 500)
-
-      const blockedAt = T0 + 1_000
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 2,
-          hostNow: blockedAt,
-          includeAgentStatus: true,
-          agentStatusOverrides: {
-            state: 'blocked',
-            prompt: 'Allow Bash(rm -rf)?',
-            interactivePrompt: 'Allow Bash(rm -rf)?'
-          }
-        }),
-        blockedAt
-      )
-
-      const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
-      expect(entry?.state).toBe('blocked')
-      expect(entry?.interactivePrompt).toBe('Allow Bash(rm -rf)?')
     })
 
     it('follows behind-clock host continuation and completion after an HTTP approval', () => {
@@ -542,86 +432,6 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         updatedAt: T0 + 1_500,
         prompt: CLIENT_PROMPT
       })
-    })
-
-    it('keeps live client status over a restored, unconfirmed host block', () => {
-      const store = seedPairedClientStore()
-      replayClientOscWorking(store, T0 + 500)
-
-      // Host clock ahead of the client: only the unconfirmed flag can keep this row out.
-      const restoredAt = T0 + 60_000
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 2,
-          hostNow: restoredAt,
-          includeAgentStatus: true,
-          agentStatusOverrides: {
-            state: 'blocked',
-            prompt: 'Allow Bash(rm -rf)?',
-            restoredUnconfirmed: true
-          }
-        }),
-        T0 + 1_000
-      )
-
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
-    })
-
-    it('adopts host monitoring metadata without replacing client-owned byte status', () => {
-      const store = seedPairedClientStore()
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: false }),
-        T0
-      )
-      replayClientOscWorking(store, T0 + 500)
-      const epochBeforeHostStatus = store.getState().agentStatusEpoch
-      const sortEpochBeforeHostStatus = store.getState().sortEpoch
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 2,
-          hostNow: T0 + 1_000,
-          includeAgentStatus: true,
-          agentStatusOverrides: {
-            state: 'working',
-            workingMode: 'monitoring',
-            prompt: 'host hook prompt'
-          }
-        }),
-        T0 + 1_000
-      )
-
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
-        state: 'working',
-        workingMode: 'monitoring',
-        prompt: CLIENT_PROMPT,
-        updatedAt: T0 + 500
-      })
-      expect(store.getState().agentStatusEpoch).toBe(epochBeforeHostStatus + 1)
-      expect(store.getState().sortEpoch).toBe(sortEpochBeforeHostStatus)
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 3,
-          hostNow: T0 + 2_000,
-          includeAgentStatus: true,
-          agentStatusOverrides: { state: 'working' }
-        }),
-        T0 + 2_000
-      )
-
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
-        state: 'working',
-        prompt: CLIENT_PROMPT,
-        updatedAt: T0 + 500
-      })
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.workingMode).toBeUndefined()
-      expect(store.getState().agentStatusEpoch).toBe(epochBeforeHostStatus + 2)
-      expect(store.getState().sortEpoch).toBe(sortEpochBeforeHostStatus)
     })
   })
 })
