@@ -4,8 +4,8 @@ import type { BrowserCookieImportResult } from '../../../shared/browser-workspac
 import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
-} from '../../browser/browser-client-route-cookie-import'
-import { clientRouteCookieImportSources } from '../../browser/client-route-cookie-import-source-store'
+} from '../../browser/cookies/client-route/browser-client-route-cookie-import'
+import { clientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/browser-cookie-import'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 

@@ -87,10 +87,11 @@ export type ListWorkItemsResult<T> = {
     ineligible?: true
     issues: GitHubOwnerRepo | null
     prs: GitHubOwnerRepo | null
-    /** Raw origin independent of preferences; compare candidates without inferring from effective PR source. */
-    originCandidate: GitHubOwnerRepo | null
+    /** Raw origin independent of preferences; compare candidates without inferring from effective PR source.
+     * Absent from older hosts' results: unavailable evidence, distinct from a present unresolved `null`. */
+    originCandidate?: GitHubOwnerRepo | null
     /** Raw upstream independent of preferences; selector visibility/tooltips need it even when effective issues source is origin. */
-    upstreamCandidate: GitHubOwnerRepo | null
+    upstreamCandidate?: GitHubOwnerRepo | null
   }
   errors?: {
     issues?: ClassifiedError

@@ -1,6 +1,6 @@
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
-import { track } from '../../telemetry/client'
+import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import {
   isTurnEndDisposition,
   normalizeAgentStatusPayload
@@ -66,7 +66,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
-      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      trackEmptyPaneKeyHook(envelope, this.attributionDiagnostics)
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {

@@ -5,17 +5,17 @@ import {
   parseChromeExtensionUrl
 } from '../../../../shared/browser-extension-url'
 import { browserManager } from '../../browser-manager'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
-import { getBrowserExtensionContextSignal } from '../browser-extension-context-lifetime'
-import { getHostSessionState } from '../browser-extension-contexts'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
+import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { chooseDownloadSavePath } from './downloads-save-as'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
-} from '../browser-extension-namespace-registry'
-import { getActiveBrowserTabId } from '../browser-extension-tab-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 
 const WILL_DOWNLOAD_TIMEOUT_MS = 15_000
 let nextDownloadId = 1
