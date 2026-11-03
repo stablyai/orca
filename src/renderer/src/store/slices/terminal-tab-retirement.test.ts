@@ -4,10 +4,8 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import '../../../../shared/constants'
 import '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import '../../../../shared/workspace-scope'
-import {
-  buildTerminalTabRetirementPlan,
-  buildTerminalTabRetirementPlans
-} from './terminal-tab-retirement'
+import type { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
+import { buildTerminalTabRetirementPlans } from './terminal-tab-retirement'
 
 type RetirementState = Parameters<typeof buildTerminalTabRetirementPlan>[0]
 
