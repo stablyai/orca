@@ -11,9 +11,9 @@ import {
   advanceSyntheticTitleSpinnerEntries,
   getSyntheticTitleSpinnerPaneKeyToStop,
   type SyntheticTitleSpinnerEntry
-} from '../synthetic-title-spinner'
-import { shouldSendSyntheticTitleFrame } from '../synthetic-title-visibility'
-import { shouldCopySyntheticTitleFrameToPtyData } from '../synthetic-title-frame-routing'
+} from '../runtime/terminal/title/synthetic-title-spinner'
+import { shouldSendSyntheticTitleFrame } from '../runtime/terminal/title/synthetic-title-visibility'
+import { shouldCopySyntheticTitleFrameToPtyData } from '../runtime/terminal/title/synthetic-title-frame-routing'
 import { mainProcessState as state } from './main-process-state'
 
 // Cursor redraws overwrite one-shot OSC titles; reassert at Pi's 80ms cadence and share the animation with OpenCode.

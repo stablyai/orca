@@ -213,3 +213,92 @@ for (const interaction of ['click', 'drag'] as const) {
       .toBeCloseTo(originalScroll, 0)
   })
 }
+
+for (const returnPath of ['bare', 'removed-replace', 'native', 'escape'] as const) {
+  test(`preserves the live viewport on ${returnPath} return from Find`, async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }, testInfo) => {
+    const context = await getActiveWorktreeContext(orcaPage)
+    const filePath = await createMarkdownFixture(
+      context,
+      '.orca-e2e-markdown-find-editing',
+      `viewport-${returnPath}`,
+      testInfo.workerIndex,
+      MARKDOWN
+    )
+    registerPostElectronShutdownCleanup(() => cleanupMarkdownFixture(filePath))
+    await openMarkdownFixture(orcaPage, context, filePath)
+    const editor = await waitForRichMarkdownEditor(orcaPage)
+    const originalText = await editor.textContent()
+    await editor.locator('p').first().click()
+    await pressShortcut(orcaPage, 'f')
+    const search = orcaPage.getByRole('textbox', { name: 'Find in rich markdown editor' })
+    await search.fill('Needle')
+    await expect(orcaPage.locator('.rich-markdown-search-status')).toHaveText('1/2')
+    if (returnPath === 'removed-replace' || returnPath === 'native') {
+      await orcaPage.getByRole('button', { name: 'Toggle replace', exact: true }).click()
+      await orcaPage.getByRole('textbox', { name: 'Replace in rich markdown editor' }).focus()
+    }
+    await centerParagraph(editor.locator('p').filter({ hasText: 'Editing' }))
+    const viewport = orcaPage.locator('.rich-markdown-editor-shell .overflow-auto')
+    const before = await viewport.evaluate((element) => element.scrollTop)
+    expect(before).toBeGreaterThan(1000)
+    if (returnPath === 'removed-replace' || returnPath === 'native') {
+      await orcaPage.getByRole('button', { name: 'Toggle replace', exact: true }).click()
+      await expect(
+        orcaPage.getByRole('textbox', { name: 'Replace in rich markdown editor' })
+      ).toHaveCount(0)
+    }
+    if (returnPath === 'native') {
+      await orcaPage.keyboard.press('Shift+Tab')
+      await expect(
+        orcaPage.getByRole('button', { name: 'Toggle replace', exact: true })
+      ).toBeFocused()
+      await orcaPage.keyboard.press('Shift+Tab')
+    } else if (returnPath === 'escape') {
+      await search.press('Escape')
+    } else {
+      await editor.evaluate((element) => {
+        if (!(element instanceof HTMLElement)) {
+          throw new Error('Missing rich editor')
+        }
+        element.focus()
+      })
+    }
+    await expect(editor).toBeFocused()
+    // Allow the engine's focus recovery to settle, rather than checking only the focus listener.
+    await expect
+      .poll(() =>
+        viewport.evaluate(async (element) => {
+          // ast-grep-ignore: test-no-real-time-wait -- proves the viewport stays put through the engine's 200 ms post-focus selection recovery window, which has no completion signal
+          await new Promise((resolve) => setTimeout(resolve, 250))
+          return element.scrollTop
+        })
+      )
+      .toBeCloseTo(before, 0)
+    await expect(editor).toHaveText(originalText ?? '')
+    if (returnPath === 'bare') {
+      await search.focus()
+      await orcaPage.getByRole('button', { name: 'Next match', exact: true }).click()
+      await expect(orcaPage.locator('.rich-markdown-search-status')).toHaveText('2/2')
+      const zero = await editor.evaluate((element) => {
+        if (
+          !(element instanceof HTMLElement) ||
+          !(element.parentElement?.parentElement instanceof HTMLElement)
+        ) {
+          throw new Error('Missing rich viewport')
+        }
+        const viewport = element.closest('.overflow-auto')
+        if (!(viewport instanceof HTMLElement)) {
+          throw new Error('Missing rich viewport')
+        }
+        viewport.scrollTo({ top: 0, behavior: 'instant' })
+        element.focus()
+        return viewport.scrollTop
+      })
+      expect(zero).toBe(0)
+      await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBe(0)
+    }
+  })
+}

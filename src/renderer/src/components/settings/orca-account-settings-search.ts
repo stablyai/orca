@@ -1,6 +1,6 @@
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from './settings-search-keywords'
+import { translateSearchKeyword } from './search/settings-search-keywords'
 
 export const getOrcaAccountSettingsSearchEntries = createLocalizedCatalog(() => [
   {

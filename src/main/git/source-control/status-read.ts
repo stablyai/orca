@@ -18,7 +18,7 @@ import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
-} from '../worktree-symlink-detection'
+} from '../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
@@ -35,6 +35,7 @@ import {
   getStatusLineStatsCacheKey
 } from './status-branch-line-total-input'
 import { reconcileDriveCheckoutSuspects } from './drive-checkout-suspect-status'
+import { markRecursiveSubmoduleRestores } from './submodule-restore-recurse'
 
 export async function getStatus(
   worktreePath: string,
@@ -197,6 +198,9 @@ async function runGetStatus(
 
   if (statusSucceeded && !didHitLimit) {
     entries = await reconcileDriveCheckoutSuspects(worktreePath, entries, options)
+  }
+  if (statusSucceeded) {
+    entries = await markRecursiveSubmoduleRestores(worktreePath, entries, options)
   }
   await dropSharedSymlinkUntrackedEntries(worktreePath, entries, options)
 

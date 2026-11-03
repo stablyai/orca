@@ -10,7 +10,7 @@ import type {
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
-import { resolveSettingsHostScope } from './settings-host-scope'
+import { resolveSettingsHostScope } from './host-scope/settings-host-scope'
 import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
@@ -22,6 +22,7 @@ function renderPane(
     React.createElement(AccountsPane, {
       settings,
       updateSettings: vi.fn(),
+      updateSettingsOrThrow: vi.fn(),
       hostScope: resolveSettingsHostScope({
         choice: null,
         defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
@@ -219,6 +220,7 @@ function render(
   const accountRuntime = { runtime: 'host' as const, wslDistro: null, label: 'This device' }
   const model: AccountsPaneSectionModel = {
     updateSettings: vi.fn(),
+    updateSettingsOrThrow: vi.fn(),
     accountOwner: { kind: 'local' },
     searchQuery: '',
     recordFeatureInteraction: vi.fn(),

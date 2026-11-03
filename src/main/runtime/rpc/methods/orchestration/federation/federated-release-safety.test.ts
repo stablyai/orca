@@ -3,7 +3,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 
 const HOME_FINGERPRINT = 'home-peer'
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -65,18 +65,16 @@ describe('federated worker release ownership', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('durably retains a user-taken-over remote worker terminal', async () => {
-    createAttachment('ctx_takeover', 'created')
-    settleAttachment('ctx_takeover')
+  it('refuses the home a release of a remote worker the user kept open', async () => {
+    createAttachment('ctx_kept', 'created')
+    settleAttachment('ctx_kept')
 
-    const changed = (await call('orchestration.workerTerminalUserInput', 'ctx_takeover', {
-      paneKey: PANE_KEY
-    })) as { changed: number }
-
-    expect(changed.changed).toBe(1)
-    await expect(call('orchestration.federationRelease', 'ctx_takeover')).resolves.toMatchObject({
+    await expect(
+      call('orchestration.workerKeepOpen', 'ctx_kept', { paneKey: PANE_KEY, keep: true })
+    ).resolves.toEqual({ autoClose: { kept: true } })
+    await expect(call('orchestration.federationRelease', 'ctx_kept')).resolves.toMatchObject({
       state: 'retained',
-      reason: 'user_takeover',
+      reason: 'user_kept',
       processAction: 'none'
     })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
@@ -195,7 +193,7 @@ describe('federated worker release ownership', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), {

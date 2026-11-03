@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import {
   isNativeChatSkillDiscoveryAwaitingDirectory,
@@ -9,76 +10,6 @@ import {
   resolveNativeChatSkillDiscoveryContext,
   resolveNativeChatSkillDiscoveryCwd
 } from './use-native-chat-skills'
-import { worktreeFixture } from './native-chat-workspace-test-fixtures'
-
-describe('resolveNativeChatSkillDiscoveryCwd', () => {
-  const catalog = {
-    floatingWorkspacePath: null,
-    folderWorkspaces: [],
-    worktreesByRepo: {
-      'repo-1': [worktreeFixture('repo-1::/repo/worktree', '/repo/worktree', { repoId: 'repo-1' })]
-    }
-  }
-
-  it('returns the owning worktree path for a terminal tab', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {
-            'repo-1::/repo/worktree': [
-              {
-                id: 'tab-1'
-              }
-            ]
-          }
-        },
-        'tab-1'
-      )
-    ).toBe('/repo/worktree')
-  })
-
-  it('returns the owning worktree path for a structured session tab', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {},
-          unifiedTabsByWorktree: {
-            'repo-1::/repo/worktree': [{ id: 'structured-tab-1' }]
-          }
-        },
-        'structured-tab-1'
-      )
-    ).toBe('/repo/worktree')
-  })
-
-  it('returns null when the tab has no known worktree owner', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        { ...catalog, tabsByWorktree: {}, worktreesByRepo: {} },
-        'tab-1'
-      )
-    ).toBeNull()
-  })
-
-  it('prefers the pane startupCwd over the worktree root', () => {
-    expect(
-      resolveNativeChatSkillDiscoveryCwd(
-        {
-          ...catalog,
-          tabsByWorktree: {
-            'repo-1::/repo/worktree': [
-              { id: 'tab-1', startupCwd: '/repo/worktree/packages/app' },
-              { id: 'tab-2' }
-            ]
-          }
-        },
-        'tab-1'
-      )
-    ).toBe('/repo/worktree/packages/app')
-  })
-})
 
 describe('floating workspace skill discovery', () => {
   const floatingTab: Tab = {
@@ -139,12 +70,76 @@ describe('floating workspace skill discovery', () => {
     })
   })
 
-  it('stays not-ready until the floating directory resolves', () => {
+  it('scans the folder a launch panel will start its agent in, before any tab exists', () => {
     expect(
       resolveNativeChatSkillDiscoveryContext(
-        { ...floatingInputs, floatingWorkspacePath: null },
-        'floating-chat-1'
+        { ...floatingInputs, unifiedTabsByWorktree: {} },
+        'agent-launch:floating:codex',
+        FLOATING_TERMINAL_WORKTREE_ID
       )
-    ).toBeNull()
+    ).toMatchObject({
+      cwd: '/home/me/scratch',
+      runtimeTarget: { kind: 'local' },
+      discoveryTarget: { cwd: '/home/me/scratch', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+    })
   })
 })
+
+it.each(['local', 'ssh:box'] as const)(
+  'qualifies a no-tab folder launch by its selected host %s',
+  (executionHostId) => {
+    const folder = (host: ExecutionHostId, folderPath: string) => ({
+      id: 'fw-twin',
+      projectGroupId: 'pg-1',
+      name: 'folder',
+      folderPath,
+      connectionId: host === 'local' ? null : 'box',
+      executionHostId: host,
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 0,
+      updatedAt: 0
+    })
+    const inputs: NativeChatSkillStateInputs = {
+      activeRepoId: null,
+      activeWorktreeId: 'folder:fw-twin',
+      activeWorkspaceExecutionHostId: executionHostId,
+      detectedWorktreesByRepo: {},
+      floatingWorkspacePath: null,
+      folderWorkspaces: [folder('local', '/local/repo'), folder('ssh:box', '/remote/repo')],
+      projectGroups: [
+        {
+          id: 'pg-1',
+          name: 'group',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ],
+      projects: [],
+      repos: [],
+      restoredRuntimeHostIdByWorkspaceSessionKey: {},
+      settings: getDefaultSettings('/home/me'),
+      structuredSessionLaunchDirectoryByTabId: {},
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      worktreesByRepo: {}
+    }
+    expect(
+      resolveNativeChatSkillDiscoveryContext(inputs, 'no-tab', 'folder:fw-twin')
+    ).toMatchObject({
+      cwd: executionHostId === 'local' ? '/local/repo' : '/remote/repo',
+      executionHostKind: executionHostId === 'local' ? 'local' : 'ssh'
+    })
+  }
+)

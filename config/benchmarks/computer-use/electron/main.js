@@ -20,8 +20,16 @@ app.whenReady().then(() => {
     title: 'BenchElectron',
     webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false }
   })
+  const nativeWindowId =
+    process.platform === 'linux' ? w.getNativeWindowHandle().readUInt32LE() : null
   ipcMain.on('st', (_event, state) => {
-    const data = JSON.stringify({ ...state, instance, activeForm: w.isFocused(), pid: process.pid })
+    const data = JSON.stringify({
+      ...state,
+      instance,
+      activeForm: w.isFocused(),
+      pid: process.pid,
+      nativeWindowId
+    })
     try {
       fs.writeFileSync(path.join(dir, 'state.json.tmp'), data)
       fs.renameSync(path.join(dir, 'state.json.tmp'), path.join(dir, 'state.json'))
@@ -67,6 +75,17 @@ app.whenReady().then(() => {
   setInterval(report, 30);
   </script></body></html>`)}`
   )
+  if (process.env.BENCH_FOCUS_SIBLING === '1') {
+    const sibling = new BrowserWindow({
+      x: 400,
+      y: 300,
+      width: 300,
+      height: 200,
+      title: 'BenchSibling'
+    })
+    sibling.loadURL('data:text/html,<title>BenchSibling</title><input aria-label="sibling">')
+    w.on('closed', () => sibling.close())
+  }
   setInterval(() => {
     const cmdPath = path.join(dir, 'cmd')
     if (!fs.existsSync(cmdPath)) {

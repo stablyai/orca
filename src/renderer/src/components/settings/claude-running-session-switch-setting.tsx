@@ -3,7 +3,7 @@ import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/clau
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 
 const POLICIES: readonly ClaudeAccountSwitchRunningSessions[] = ['ask', 'restart', 'keep']
 
@@ -20,11 +20,11 @@ export function ClaudeRunningSessionSwitchSetting({
 }): React.JSX.Element {
   const title = translate(
     'accounts.claude.switchSessions.settingTitle',
-    'When you switch accounts while Claude is running'
+    'When you switch accounts while Claude is running in terminals'
   )
   const description = translate(
     'accounts.claude.switchSessions.settingDescription',
-    'Restarting continues each running conversation on the new account.'
+    'Restarting continues each terminal conversation on the new account.'
   )
   return (
     <SearchableSetting

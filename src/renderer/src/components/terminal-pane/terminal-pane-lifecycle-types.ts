@@ -1,5 +1,6 @@
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import type { PanePtyBinding } from './pty-connection/pane-pty-binding'
 import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -57,7 +58,9 @@ export type UseTerminalPaneLifecycleDeps = {
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneKittyKeyboardModesRef: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
-  panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
+  panePtyBindingsRef: React.RefObject<
+    Map<number, IDisposable & Partial<Pick<PanePtyBinding, 'getOwnerContext'>>>
+  >
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>

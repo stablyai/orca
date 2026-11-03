@@ -15,7 +15,7 @@ import { lock } from 'proper-lockfile'
 import { renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
 
 export type ClaudeTrustPathStyle = 'posix' | 'win32'

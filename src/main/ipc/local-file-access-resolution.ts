@@ -16,7 +16,7 @@ import {
   isWindowsReservedDeviceName
 } from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read'
-import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import { resolveProjectFolderLinkPath } from './project-folder-link-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =

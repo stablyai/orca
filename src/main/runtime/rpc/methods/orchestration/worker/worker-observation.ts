@@ -1,8 +1,8 @@
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
@@ -13,6 +13,7 @@ import type {
   WorkerDispatchRow
 } from '../../../../orchestration/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { exposeDispatchContext } from './dispatch-context-exposure'
 
 /** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(
@@ -167,34 +168,6 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
   }
 }
 
-// Hide authority hashes and decode host_scope; emit one camelCase shape matching exposeWorker.
-export function exposeDispatchContext(dispatch: DispatchContextRow) {
-  return {
-    id: dispatch.id,
-    runId: dispatch.run_id,
-    taskId: dispatch.task_id,
-    // Keep dispatch.task_id beside the rename because shipped CLIs still read it.
-    task_id: dispatch.task_id,
-    contractVersion: dispatch.contract_version,
-    assigneeHandle: dispatch.assignee_handle,
-    assigneePaneKey: dispatch.assignee_pane_key,
-    processIncarnation: dispatch.process_incarnation,
-    capabilityRevokedAt: dispatch.capability_revoked_at,
-    retryOfDispatchId: dispatch.retry_of_dispatch_id,
-    creatorDispatchId: dispatch.creator_dispatch_id,
-    hostScope: parseWorkerTerminalHostScope(dispatch.host_scope),
-    status: dispatch.status,
-    failureCount: dispatch.failure_count,
-    lastFailure: dispatch.last_failure,
-    terminationReason: dispatch.termination_reason,
-    depth: dispatch.depth,
-    dispatchedAt: dispatch.dispatched_at,
-    completedAt: dispatch.completed_at,
-    createdAt: dispatch.created_at,
-    lastHeartbeatAt: dispatch.last_heartbeat_at
-  }
-}
-
 export async function showContextOnlyWorker(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
@@ -306,6 +279,10 @@ export async function callFederatedWorkerShow(
     effects: unknown[]
     residualResources: unknown[]
   }
+  /** Absent from hosts that predate automatic release. */
+  autoReleaseAt?: string | null
+  /** Absent from hosts that predate Keep open. */
+  keptOpen?: boolean
   terminal: unknown
   observation: {
     status: string

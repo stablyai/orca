@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import { REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT } from './regional-rehome-safety.js'
 

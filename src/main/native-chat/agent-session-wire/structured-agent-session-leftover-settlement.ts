@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput
@@ -6,7 +6,7 @@ import {
 // Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
 // absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
 
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   planStructuredAgentSessionDeadGeneration,
   type StructuredAgentSessionDeadGenerationInput
@@ -16,7 +16,7 @@ import {
   type StaleStructuredAgentSessionStateJournal
 } from './structured-agent-session-stale-state-settlement'
 import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import {
   structuredAgentSessionLiveFence,

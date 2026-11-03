@@ -99,7 +99,9 @@ function NativeChatPermissionModePickerInner({
   const title = nativeChatPermissionPickerTitle()
   const label = isAgentChatPermissionMode(current)
     ? nativeChatPermissionModeLabel(current)
-    : (currentLabel ?? title)
+    : current === 'own'
+      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      : (currentLabel ?? title)
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>

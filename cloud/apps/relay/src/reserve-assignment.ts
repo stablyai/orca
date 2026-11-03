@@ -5,7 +5,7 @@ import {
   RELAY_REGIONS,
   type RelayRegion
 } from '@orca-cloud/relay-contract'
-import type { AssignOptions, RelayAssignment } from './assignment-store.js'
+import type { AssignOptions, RelayAssignment } from './assignment/assignment-store.js'
 import { CELL_RESERVE_TTL_MS } from './cell-reserve-contract.js'
 import type { CellReserveClient } from './cell-reserve-client.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'

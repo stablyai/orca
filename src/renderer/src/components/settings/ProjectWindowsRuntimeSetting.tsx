@@ -8,7 +8,7 @@ import {
 import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
 import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'

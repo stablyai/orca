@@ -3,10 +3,10 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { GeminiIcon, OpenCodeGoIcon } from '../status-bar/icons'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { OpenCodeGoCredentials } from './accounts-pane-opencode-credentials'
-import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
+import { DebouncedSettingsTextInput } from './form-controls/DebouncedSettingsTextInput'
 
 export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const { localAccountRuntimeSentenceLabel, recordFeatureInteraction, settings, updateSettings } =

@@ -32,5 +32,3 @@ export { ghExecFileAsync, ghExecFileWithScopeAsync } from './command-runner/gh-e
 export { glabExecFileAsync, redirectPortedHostnameToEnv } from './command-runner/glab-exec-file'
 export { wslAwareSpawn } from './command-runner/wsl-aware-spawn'
 export { translateWslOutputPaths } from './command-runner/wsl-path-translation'
-
-export { parseWslPath, toLinuxPath, toWindowsWslPath, isWslPath } from '../wsl'

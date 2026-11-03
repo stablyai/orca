@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { AgentCatalogRow, type AgentCatalogRowProps } from './AgentCatalogRow'
-import { SettingsBadge, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsBadge, SettingsSubsectionHeader } from './form-controls/SettingsFormControls'
 import { AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 
 export function AgentDetectionCatalog({
@@ -43,7 +43,8 @@ export function AgentDetectionCatalog({
         </div>
       )}
 
-      <section id={AGENTS_INSTALLED_SECTION_ID}>
+      {/* Focusable so "Choose per agent" can move focus here. */}
+      <section id={AGENTS_INSTALLED_SECTION_ID} tabIndex={-1} className="scroll-mt-8 outline-none">
         {[
           ...detectedAgents.map((agent) => ({ agent, installed: true })),
           ...undetectedAgents.map((agent) => ({ agent, installed: false }))

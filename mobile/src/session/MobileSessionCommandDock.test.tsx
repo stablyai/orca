@@ -33,6 +33,15 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
+// The key row and its sheet are out of scope; the rail holding the keys leaves just the two fields.
+vi.mock('./use-session-terminal-key-rail', () => ({
+  useSessionTerminalKeyRail: () => ({
+    keysInRail: true,
+    moreKeysVisible: false,
+    closeMoreKeys: () => {}
+  })
+}))
+vi.mock('./MobileTerminalMoreKeysSheet', () => ({ MobileTerminalMoreKeysSheet: () => null }))
 vi.mock('./MobileTerminalInputActions', () => ({
   MobileTerminalInputActions: () => null,
   MobileTerminalAttachButton: () => null,
@@ -119,8 +128,7 @@ function Harness({ handle, liveInputEnabled }: Selection) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real dock reads these fields; action children are inert and no send/dictation handler is invoked.
     controller: controller as unknown as Parameters<
       typeof MobileSessionCommandDock
-    >[0]['controller'],
-    keysInRail: true
+    >[0]['controller']
   })
 }
 

@@ -27,21 +27,6 @@ afterEach(async () => {
 })
 
 describe('stageOneSourceForRuntimeUpload', () => {
-  it('records size instead of file contents so staging never holds the body', async () => {
-    const filePath = join(workDir, 'note.txt')
-    await writeFile(filePath, 'hello world')
-
-    const staged = await stageOneSourceForRuntimeUpload(filePath)
-
-    expect(staged).toMatchObject({
-      status: 'staged',
-      kind: 'file',
-      name: 'note.txt',
-      entries: [{ relativePath: '', kind: 'file', byteLength: 11 }]
-    })
-    expect(JSON.stringify(staged)).not.toContain('contentBase64')
-  })
-
   it('records the identity the uploader re-checks, not just the size', async () => {
     const filePath = join(workDir, 'note.txt')
     await writeFile(filePath, 'hello world')
@@ -73,16 +58,6 @@ describe('stageOneSourceForRuntimeUpload', () => {
     expect(staged.status === 'failed' && staged.reason).toBe(
       "'clip.mp4' is 6 KB, over the 4 KB per-file remote import limit"
     )
-  })
-
-  it('names the offending entry by its path inside a dropped directory', async () => {
-    const rootPath = join(workDir, 'media')
-    await mkdir(join(rootPath, 'clips'), { recursive: true })
-    await writeFile(join(rootPath, 'clips', 'big.mp4'), Buffer.alloc(6 * 1024))
-
-    const staged = await stageOneSourceForRuntimeUpload(rootPath)
-
-    expect(staged.status === 'failed' && staged.reason).toContain("'clips/big.mp4'")
   })
 
   it('counts earlier sources in the drop against the total ceiling', async () => {

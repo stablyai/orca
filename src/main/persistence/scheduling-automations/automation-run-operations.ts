@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import type {
   Automation,
   AutomationDispatchResult,
@@ -198,6 +198,10 @@ export function updateAutomationRun(
   const updated: AutomationRun = {
     ...current,
     status: result.status,
+    sessionKind: result.sessionKind ?? current.sessionKind,
+    chatSessionId: Object.hasOwn(result, 'chatSessionId')
+      ? (result.chatSessionId ?? null)
+      : current.chatSessionId,
     workspaceId,
     workspaceDisplayName:
       workspaceDisplayName ??

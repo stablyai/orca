@@ -32,9 +32,9 @@ import {
   buildAgentAvailabilitySettingsUpdate,
   createAgentAvailabilityUpdateQueue
 } from './AgentsPane'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch } from './search/settings-search'
 import { TooltipProvider } from '../ui/tooltip'
-import { resolveSettingsHostScope } from './settings-host-scope'
+import { resolveSettingsHostScope } from './host-scope/settings-host-scope'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,

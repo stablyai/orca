@@ -4,18 +4,18 @@
  */
 import { join } from 'node:path'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
-import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktree-prune-guard'
-import { resolveLocalProjectRuntimeForProject } from '../local-project-runtime-resolution'
-import { wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { readWorktreeLinks as readWorktreeAdminLinks } from '../git/worktrees/removal/worktree-prune-guard'
+import { resolveLocalProjectRuntimeForProject } from '../workspaces/execution-host/local-project-runtime-resolution'
+import { wslHostsOptedIn } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   convertWslDriveProjectToWindowsGit,
   previewWslDriveProjectWindowsGit,
   type WslDriveProjectDeps
-} from '../wsl/wsl-drive-project-windows-git'
+} from '../wsl/filesystem/wsl-drive-project-windows-git'
 
 export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
   'wslDriveProject:preview',
@@ -49,7 +49,8 @@ function requireId(value: unknown): string {
 }
 
 function gatedDeps(store: Store): WslDriveProjectDeps {
-  if (process.platform !== 'win32' || !wslHostsGateOpen()) {
+  // Opt-in, so the setting off or a block learned this run stops a conversion before it starts.
+  if (process.platform !== 'win32' || !wslHostsOptedIn(store.getSettings())) {
     throw new Error('wsl_drive_project_unavailable')
   }
   return {

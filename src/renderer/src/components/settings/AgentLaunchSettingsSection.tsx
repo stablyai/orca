@@ -17,8 +17,8 @@ import {
   type AgentPermissionsRenderer
 } from './AgentLaunchSettingsCatalog'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
-import { SettingsHostScopeUnavailableNotice } from './SettingsHostScopePicker'
-import type { SettingsHostScope } from './settings-host-scope'
+import { SettingsHostScopeUnavailableNotice } from './host-scope/SettingsHostScopePicker'
+import type { SettingsHostScope } from './host-scope/settings-host-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -154,6 +154,15 @@ function LocalAgentLaunchSettings({
   const mutate = (mutation: AgentLaunchSettingsMutation): Promise<void> =>
     enqueue(async () => {
       const before = permissions()
+      if (mutation.type === 'launch-choices') {
+        try {
+          await callRuntimeRpc(LOCAL_DETECTION_TARGET, 'settings.mutateAgentLaunch', mutation)
+          await useAppStore.getState().fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
+        } catch (error) {
+          failed(mutation.agent)(error)
+        }
+        return
+      }
       const after = await write(
         mutation.type !== 'default' && 'agent' in mutation ? mutation.agent : undefined,
         (latest, platform) => agentLaunchSettingsMutationUpdates(latest, mutation, platform)

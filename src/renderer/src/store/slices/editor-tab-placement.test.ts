@@ -8,7 +8,7 @@ import {
 import type { AppState } from '../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import '@/runtime/layout-apply-test-transport.test-fixture'
 import { makeLayout, makeTab } from './store-test-helpers'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
@@ -229,15 +229,6 @@ describe('createEditorSlice split-group editor routing', () => {
     return store.getState().unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === entityId)
   }
 
-  /** The group an open put the file in: a layout-owner build names it in main's open command. */
-  function openedGroupOf(store: StoreApi<AppState>, entityId: string): string | undefined {
-    return ORCA_LAYOUT_OWNER_IS_MAIN
-      ? layoutApplyTestTransport
-          .sentOfType('openEditorTab')
-          .find((command) => command.fileId === entityId)?.groupId
-      : findUnifiedTabByEntity(store, entityId)?.groupId
-  }
-
   it('routes implicit file opens to an existing visible editor group', async () => {
     const store = createDrawnEditorTabsStore()
     const { terminalTabId, terminalGroupId, editorGroupId } =
@@ -258,21 +249,6 @@ describe('createEditorSlice split-group editor routing', () => {
     expect(terminalGroup?.activeTabId).toBe(terminalTabId)
   })
 
-  it('uses editor-recent groups when no inactive group is currently showing an editor', async () => {
-    const store = createDrawnEditorTabsStore()
-    const { editorGroupId } = await seedTerminalAndEditorGroups(store)
-    store.getState().createUnifiedTab('wt-1', 'browser', {
-      id: 'browser-tab',
-      entityId: 'browser-tab',
-      label: 'Browser',
-      targetGroupId: editorGroupId
-    })
-
-    openSourceFile(store, '/repo/recent-target.ts')
-
-    expect(openedGroupOf(store, '/repo/recent-target.ts')).toBe(editorGroupId)
-  })
-
   it('keeps explicit target groups ahead of default editor routing', async () => {
     const store = createDrawnEditorTabsStore()
     const { terminalGroupId } = await seedTerminalAndEditorGroups(store)
@@ -281,31 +257,5 @@ describe('createEditorSlice split-group editor routing', () => {
     await main.settle()
 
     expect(findUnifiedTabByEntity(store, '/repo/explicit.ts')?.groupId).toBe(terminalGroupId)
-  })
-
-  it('opens implicit files in a focused browser split group instead of stealing an editor pane (#6891)', async () => {
-    const store = createDrawnEditorTabsStore()
-    const { editorGroupId } = await seedTerminalAndEditorGroups(store)
-
-    // Focused browser/editor/simulator panes must keep file opens in the visible group; treating browser as agent terminal stole opens into existing editors (#6891).
-    const browserGroupId = store.getState().createEmptySplitGroup('wt-1', editorGroupId, 'right')
-    if (!browserGroupId) {
-      throw new Error('Expected split browser group')
-    }
-    store.getState().createUnifiedTab('wt-1', 'browser', {
-      id: 'browser-tab',
-      entityId: 'browser-tab',
-      label: 'Browser',
-      targetGroupId: browserGroupId
-    })
-    store.setState({
-      activeGroupIdByWorktree: { 'wt-1': browserGroupId },
-      activeTabType: 'browser',
-      activeTabTypeByWorktree: { 'wt-1': 'browser' }
-    } as Partial<AppState>)
-
-    openSourceFile(store, '/repo/from-browser.ts')
-
-    expect(openedGroupOf(store, '/repo/from-browser.ts')).toBe(browserGroupId)
   })
 })

@@ -16,6 +16,8 @@ export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean
   untrackedChanges: boolean
+  // Effective submodule.recurse makes parent restore reset the checkout; older hosts omit it.
+  restoreRecurses?: boolean
 }
 
 // Legacy consumers may use modified styling, but unresolved conflicts must not offer file-dependent diff/drag/edit actions: both_deleted may have no file.

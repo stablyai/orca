@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { AddWslHostFormPanel, canAddWslDistro } from './AddWslHostFormPanel'
+import { AddWslHostFormPanel, canAddWslDistro, wslHostAddRequest } from './AddWslHostFormPanel'
 import { useWslDistroList } from './use-wsl-distro-list'
 import { useWslHostServerFilesMissing } from './use-wsl-hosts-enabled'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { wslHostAddRefusalMessage } from './wsl-host-failure-text'
+import { addWslHostDistro } from './add-wsl-host-distro'
 
 export function AddWslHostDialogBody({
   adding,
@@ -25,8 +23,6 @@ export function AddWslHostDialogBody({
   const distros = list.distros
   const [chosenDistro, setChosenDistro] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
-  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   // Keep an addable pick or the sole addable distro; never silently choose among several.
   const addable = distros.filter(canAddWslDistro)
   const selectedDistro = addable.some((distro) => distro.name === chosenDistro)
@@ -36,19 +32,14 @@ export function AddWslHostDialogBody({
       : ''
 
   const add = async (): Promise<void> => {
-    const api = window.api.runtimeEnvironments?.wslHosts
     const selected = distros.find((distro) => distro.name === selectedDistro)
-    if (!api || !selected || !canAddWslDistro(selected)) {
+    if (!selected || !canAddWslDistro(selected)) {
       return
     }
     setError(null)
     onAddingChange(true)
     try {
-      // Start and add explicitly authorizes starting a stopped distro.
-      const result = await api.add({
-        distro: selected.name,
-        startIfStopped: selected.state === 'stopped'
-      })
+      const result = await addWslHostDistro(wslHostAddRequest(selected))
       if (!result.ok) {
         setError(wslHostAddRefusalMessage(result))
         if (result.kind === 'distro-stopped') {
@@ -57,13 +48,6 @@ export function AddWslHostDialogBody({
         }
         return
       }
-      setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
-      await readRuntimeHostStatusSnapshots()
-      toast.success(
-        translate('auto.components.sidebar.AddWslHostDialogBody.added', '{{value0}} added.', {
-          value0: selected.name
-        })
-      )
       onAdded()
     } catch (cause) {
       setError(readIpcErrorDetail(cause) ?? String(cause))

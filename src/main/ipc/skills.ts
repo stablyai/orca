@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   SkillDiscoveryTargetSchema,
@@ -6,6 +6,7 @@ import {
   type SkillDiscoveryTarget
 } from '../../shared/skills'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
@@ -16,7 +17,7 @@ import {
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
 import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
@@ -82,5 +83,10 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
     'skills:bundledExecute',
     async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
       runtime.executeLocalBundledSkills(BundledSkillExecuteRequestSchema.parse(value))
+  )
+  handleMainWindowSkillIpc(
+    'skills:bundledAutoUpdate',
+    async (_event, value: unknown): Promise<BundledSkillInstallResult> =>
+      runtime.autoUpdateLocalBundledSkills(BundledSkillAutoUpdateRequestSchema.parse(value))
   )
 }

@@ -36,7 +36,11 @@ import {
   getCodexHistorySharingTitle
 } from './codex-history-sharing-copy'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
+import {
+  searchKeywords,
+  translateSearchKeyword,
+  uniqueKeywords
+} from './search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 function buildAgentSettingsKeywords(): string[] {
@@ -95,6 +99,8 @@ const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
+/** The top Chat or Terminal tiles that set this computer's default. */
+export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -136,6 +142,19 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: AGENT_DEFAULT_SURFACE_SECTION_ID,
+    title: translate('settings.agents.defaultSurfaceTitle', 'Open agents as'),
+    description: translate(
+      'settings.agents.defaultSurfaceDescription',
+      'The default for agents on this computer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
+      ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
+      ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI')
+    ]
+  },
+  {
     id: AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID,
     targetSectionId: AGENTS_INSTALLED_SECTION_ID,
     title: translate('settings.agents.chatChoiceTitle', 'Open as chat or CLI'),
@@ -144,7 +163,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'Choose whether each agent opens as a chat or in its CLI.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
       ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
       ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
       ...translateSearchKeyword('settings.chat.providers.title', 'Providers', {
@@ -246,6 +265,6 @@ export function getAgentsPaneSearchEntries({
     hiddenIds.add(CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID)
   }
   return getAllAgentsPaneSearchEntries().filter(
-    (entry) => !('id' in entry) || !hiddenIds.has(entry.id)
+    (entry) => !('id' in entry) || typeof entry.id !== 'string' || !hiddenIds.has(entry.id)
   )
 }

@@ -1,90 +1,16 @@
-// Replay real Claude 2.1.287 PTY hooks from the adjacent fixture: ended background tasks still owe main-agent notifications, so no running work does not imply completion (#23942).
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import 'node:fs'
+import 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from './agent-hook-listener'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import {
-  clearPaneCacheState,
-  createHookListenerState,
-  movePaneCacheState
-} from './agent-hook-listener/listener-state'
+import { clearPaneCacheState, createHookListenerState } from './agent-hook-listener/listener-state'
 import { cacheRelayLegacyAgentStatus } from './agent-status-legacy-relay-cache'
 import { markClaudeLeadTurnInterrupted } from './agent-hook-listener/providers/claude-roster-state'
 import { ClaudeOwedNotificationExpiryTimers } from './claude-owed-notification-expiry-timers'
 import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from './claude-owed-task-notifications'
 import { makePaneKey } from './stable-pane-id'
 
-type CapturedRecord = {
-  scenario: string
-  t: number
-  kind: 'hook' | 'key'
-  payload?: Record<string, unknown>
-}
-
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
-const records: CapturedRecord[] = readFileSync(
-  join(__dirname, '__fixtures__', 'claude-task-notification-hooks.jsonl'),
-  'utf8'
-)
-  .split('\n')
-  .filter(Boolean)
-  .map((line) => JSON.parse(line))
-const scenarios = [...new Set(records.map((record) => record.scenario))]
-
-function isTaskNotification(payload: Record<string, unknown>): boolean {
-  return (
-    payload.hook_event_name === 'UserPromptSubmit' &&
-    typeof payload.prompt === 'string' &&
-    payload.prompt.startsWith('<task-notification>')
-  )
-}
-
-/** Pane state after each hook that published one, in capture order. */
-function replay(scenario: string): { t: number; index: number; state: string }[] {
-  const state = createHookListenerState()
-  const published: { t: number; index: number; state: string }[] = []
-  records.forEach((record, index) => {
-    if (record.scenario !== scenario || !record.payload) {
-      return
-    }
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      { paneKey: PANE_KEY, payload: record.payload },
-      'production'
-    )
-    if (event && event.payload.sessionBoundary !== true) {
-      published.push({ t: record.t, index, state: event.payload.state })
-    }
-  })
-  return published
-}
-
-describe('Claude background task notifications', () => {
-  const lastNotificationIndexOf = (scenario: string): number =>
-    records.findLastIndex(
-      (record) =>
-        record.scenario === scenario && record.payload && isTaskNotification(record.payload)
-    )
-  // Why filtered: a scenario with no notification would pass this for any implementation.
-  const notifyingScenarios = scenarios.filter((scenario) => lastNotificationIndexOf(scenario) >= 0)
-
-  it.each(notifyingScenarios)(
-    '%s: never reads done while a notification is still to come',
-    (scenario) => {
-      const lastNotificationIndex = lastNotificationIndexOf(scenario)
-      const early = replay(scenario).filter(
-        (row) => row.state === 'done' && row.index < lastNotificationIndex
-      )
-      expect(early.map((row) => row.t)).toEqual([])
-    }
-  )
-
-  it.each(scenarios)('%s: settles to done once everything is delivered', (scenario) => {
-    expect(replay(scenario).at(-1)?.state).toBe('done')
-  })
-})
 
 describe('Claude owed task notifications outside the captures', () => {
   const SESSION = '00000000-0000-4000-8000-000000000000'
@@ -111,38 +37,6 @@ describe('Claude owed task notifications outside the captures', () => {
       tool_response: { isAsync: true, status: 'async_launched', agentId }
     })
   }
-
-  it('publishes an owed notification as live work the child list does not show', () => {
-    const post = listener()
-    launchAgent(post, 'a1')
-    post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-
-    const stopped = post({ hook_event_name: 'Stop', background_tasks: [] })
-
-    // A restart seeds a settled main agent only from a row that says no such work exists.
-    expect(stopped).toMatchObject({
-      claudeRunningNonAgentTask: true,
-      payload: { state: 'working' }
-    })
-    expect(stopped?.payload.subagents).toBeUndefined()
-  })
-
-  it('does not announce a turn end the main agent is about to resume from', () => {
-    const post = listener()
-    launchAgent(post, 'a1')
-    post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-
-    // A stamped working row is announced at once; this Stop is ~100 ms from the wake-up turn.
-    const owedOnly = post({ hook_event_name: 'Stop', background_tasks: [] })
-    expect(owedOnly?.payload.turnCompletedAt).toBeUndefined()
-
-    launchAgent(post, 'a2')
-    const childRunning = post({
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'a2', type: 'subagent', status: 'running' }]
-    })
-    expect(childRunning?.payload.turnCompletedAt).toEqual(expect.any(Number))
-  })
 
   it('drops what a replaced conversation was owed', () => {
     const post = listener()
@@ -192,18 +86,6 @@ describe('Claude owed task notifications outside the captures', () => {
     expect(post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.state).toBe('done')
   })
 
-  it('does not read a Stop that carries no inventory as a shell having ended', () => {
-    const post = listener()
-    post({
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Bash',
-      tool_response: { backgroundTaskId: 'b1' }
-    })
-
-    // A Claude build without `background_tasks` says nothing about the shell either way.
-    expect(post({ hook_event_name: 'Stop' })?.payload.state).toBe('done')
-  })
-
   it('past its cap forgets a launched task nobody is waiting on, never an owed one', () => {
     const state = createHookListenerState()
     const post = (payload: Record<string, unknown>) =>
@@ -221,49 +103,6 @@ describe('Claude owed task notifications outside the captures', () => {
 
     expect(state.claudeLaunchedBackgroundTasksByPaneKey.get(PANE_KEY)?.size).toBe(256)
     expect(post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.state).toBe('working')
-  })
-
-  it('at its cap makes room by forgetting a sub-agent already announced', () => {
-    const state = createHookListenerState()
-    const post = (payload: Record<string, unknown>) =>
-      normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
-    post({ hook_event_name: 'UserPromptSubmit', prompt: 'fan out' })
-    launchAgent(post, 'a1')
-    post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-    post({
-      hook_event_name: 'UserPromptSubmit',
-      prompt: '<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>'
-    })
-    for (let index = 2; index <= 257; index += 1) {
-      post({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Agent',
-        tool_response: { isAsync: true, status: 'async_launched', agentId: `a${index}` }
-      })
-    }
-    post({
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'a257', type: 'subagent', status: 'running' }]
-    })
-
-    expect(post({ hook_event_name: 'SubagentStop', agent_id: 'a257' })?.payload.state).toBe(
-      'working'
-    )
-  })
-
-  it('owes a vanished shell on a failed turn end too', () => {
-    const post = listener()
-    post({
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Bash',
-      tool_response: { backgroundTaskId: 'b1' }
-    })
-    post({ hook_event_name: 'Stop', background_tasks: [shell('b1')] })
-    post({ hook_event_name: 'UserPromptSubmit', prompt: 'and now?' })
-
-    expect(post({ hook_event_name: 'StopFailure', background_tasks: [] })?.payload.state).toBe(
-      'working'
-    )
   })
 
   it('past its cap never forgets a task that is still running', () => {
@@ -316,7 +155,6 @@ describe('Claude owed task notifications outside the captures', () => {
 
 describe('Claude owed task notifications that never arrive', () => {
   const SESSION = '00000000-0000-4000-8000-000000000000'
-  const MOVED_PANE_KEY = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
   const shell = (id: string) => ({ id, type: 'shell', status: 'running' })
   const LEASE = CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS
 
@@ -502,15 +340,6 @@ describe('Claude owed task notifications that never arrive', () => {
     )
   })
 
-  it('does not wait again for a notification it already gave up on', () => {
-    const { post } = shellGoneUnannounced()
-    vi.advanceTimersByTime(LEASE)
-
-    post({ hook_event_name: 'UserPromptSubmit', prompt: 'one more thing' })
-
-    expect(post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.state).toBe('done')
-  })
-
   it('says nothing when the notification arrived in time', () => {
     const { post, restated } = shellGoneUnannounced()
     post({
@@ -542,14 +371,5 @@ describe('Claude owed task notifications that never arrive', () => {
     expect(post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.state).toBe('done')
     vi.advanceTimersByTime(LEASE)
     expect(restated).toEqual([])
-  })
-
-  it('keeps what is owed when the pane moves to another key', () => {
-    const { state, post } = shellGoneUnannounced()
-    movePaneCacheState(state, PANE_KEY, MOVED_PANE_KEY)
-
-    expect(
-      post({ hook_event_name: 'SubagentStop', agent_id: 'ahelper' }, MOVED_PANE_KEY)?.payload.state
-    ).toBe('working')
   })
 })

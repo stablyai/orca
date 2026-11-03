@@ -6,9 +6,13 @@ import { execFile } from 'node:child_process'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { buildWslExecArgs } from '../../../src/shared/wsl-login-shell-command'
-import { readDiagnosticLog, UNC_TOUCH, type DiagnosticRecord } from './wsl-boot-diagnostics-log'
-
-const WSL_EXE = /(^|[\\/])wsl(\.exe)?$/i
+import {
+  PTY_SPAWN,
+  readDiagnosticLog,
+  UNC_TOUCH,
+  type DiagnosticRecord
+} from './wsl-boot-diagnostics-log'
+import { orcaWslLaunches, shouldRetryTerminate, WSL_EXE } from './wsl-terminate-retry'
 
 /** Async with a timeout: a hung wsl.exe must fail the test, never block the worker past its timeout. */
 export function wsl(args: readonly string[], timeoutMs = 60_000): Promise<string> {
@@ -79,11 +83,13 @@ const TERMINATE_GRACE_MS = 10_000
  * Polls the running list once a second, never overlapping, from right after `--terminate`.
  * `stopped` resolves on the first not-running read, which must come within the grace; only
  * running reads before it are forgiven, so a real boot is never waited out. Any running read
- * after it is a boot. Three failed reads in a row fail the guard.
+ * after it is a boot. Three failed reads in a row fail the guard. With `retryTerminate`, a terminate
+ * that never took is re-issued once, and only while Orca has launched nothing since `spawnsBefore`.
  */
 export function watchDistroRunning(
   distro: string,
-  spawnLog: string
+  spawnLog: string,
+  options: { spawnsBefore?: number; retryTerminate?: () => Promise<void> } = {}
 ): {
   stopped: Promise<void>
   stop: () => Promise<{ seenRunning: boolean; reads: number }>
@@ -102,28 +108,30 @@ export function watchDistroRunning(
     resolveStopped = resolve
     rejectStopped = reject
   })
-  const grace = setTimeout(
-    () =>
-      rejectStopped(
-        new Error(`${distro} was still listed ${TERMINATE_GRACE_MS} ms after --terminate`)
-      ),
-    TERMINATE_GRACE_MS
-  )
+  const watchStartedAt = Date.now()
+  let retried = false
+  const armGrace = (): ReturnType<typeof setTimeout> =>
+    setTimeout(
+      () =>
+        rejectStopped(
+          new Error(
+            `${distro} was still listed ${TERMINATE_GRACE_MS} ms after --terminate${retried ? ' (retried once)' : ''}`
+          )
+        ),
+      TERMINATE_GRACE_MS
+    )
+  let grace = armGrace()
   // Spawns are interleaved into the timeline so a boot can be matched to the launch before it.
   let spawnsSeen = readDiagnosticLog(spawnLog).length
   const logNewWslSpawns = (): void => {
     const spawns = readDiagnosticLog(spawnLog)
-    for (const spawn of spawns.slice(spawnsSeen)) {
-      if (WSL_EXE.test(spawn.file) || spawn.file === UNC_TOUCH) {
-        // `at` is when it happened; the line prints at this poll, up to a second later.
-        timeline(
-          `${spawn.file === UNC_TOUCH ? 'unc' : 'spawn'} ${spawn.file} ${spawn.args.join(' ')}`,
-          spawn.at
-        )
-        if (startsDistro(spawn, distro) || spawn.file === UNC_TOUCH) {
-          for (const frame of spawn.stack ?? []) {
-            timeline(`    ${frame}`, spawn.at)
-          }
+    for (const spawn of orcaWslLaunches(spawns.slice(spawnsSeen))) {
+      const kind = spawn.file === UNC_TOUCH ? 'unc' : spawn.file === PTY_SPAWN ? 'pty' : 'spawn'
+      // `at` is when it happened; the line prints at this poll, up to a second later.
+      timeline(`${kind} ${spawn.file} ${spawn.args.join(' ')}`, spawn.at)
+      if (kind !== 'spawn' || startsDistro(spawn, distro)) {
+        for (const frame of spawn.stack ?? []) {
+          timeline(`    ${frame}`, spawn.at)
         }
       }
     }
@@ -138,11 +146,29 @@ export function watchDistroRunning(
         timeline(`running list: ${distro} ${running ? 'RUNNING' : 'stopped'}`)
         if (confirmedStopped) {
           seenRunning ||= running
+        } else if (
+          running &&
+          options.retryTerminate &&
+          shouldRetryTerminate({
+            retried,
+            confirmedStopped,
+            msSinceTerminate: Date.now() - watchStartedAt,
+            spawnsSinceTerminate: readDiagnosticLog(spawnLog).slice(options.spawnsBefore ?? 0)
+          })
+        ) {
+          retried = true
+          // Loud on purpose: a pattern of these is a runner problem worth chasing.
+          timeline(`RETRYING --terminate: ${distro} still listed and Orca launched nothing since`)
+          console.warn(`[e9-guard] WARNING: --terminate of ${distro} did not take; retrying once`)
+          clearTimeout(grace)
+          grace = armGrace()
+          return options.retryTerminate()
         } else if (!running) {
           confirmedStopped = true
           clearTimeout(grace)
           resolveStopped()
         }
+        return undefined
       })
       .catch((error: unknown) => {
         failures += 1

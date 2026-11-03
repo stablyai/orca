@@ -19,7 +19,9 @@ import { requestBrowserExternalAppLaunch } from './browser-external-app-launch'
 
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
-    const gesture = trackBrowserGuestInputGesture(guest)
+    const gesture = trackBrowserGuestInputGesture(guest, {
+      onActivatingInput: () => this.creditPageInput(guest.id)
+    })
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
@@ -46,6 +48,11 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             origin: safeOrigin(newTabUrl),
             action: 'blocked'
           })
+          return { action: 'deny' }
+        }
+        // A new tab's download would miss the agent's `download` claim, so save the link here.
+        if (this.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
+          guest.downloadURL(newTabUrl)
           return { action: 'deny' }
         }
         if (

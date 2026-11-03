@@ -31,6 +31,22 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     ).toBeUndefined()
   })
 
+  it('prefers editorFontFamily for code blocks unless matchTerminalInterface is enabled', () => {
+    const settings = makeSettings({
+      editorFontFamily: 'D2CodingLigature Nerd Font',
+      terminalFontFamily: 'D2CodingLigature Nerd Font Mono'
+    })
+    expect(nativeChatAppearanceStyle(settings)['--chat-code-font-family']).toBe(
+      buildFontFamily('D2CodingLigature Nerd Font')
+    )
+    expect(
+      nativeChatAppearanceStyle({
+        ...settings,
+        nativeChatAppearance: { matchTerminalInterface: true }
+      })['--chat-code-font-family']
+    ).toBe(buildFontFamily('D2CodingLigature Nerd Font Mono'))
+  })
+
   it('uses the selected theme and live overrides as the two palette sources', () => {
     const settings = makeSettings({
       nativeChatAppearance: { matchTerminalInterface: true, contrast: 150 },
@@ -42,6 +58,22 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     expect(style['--chat-canvas-mix']).toBe('0%')
     expect(style['--chat-foreground-mix']).toBe('100%')
     expect(style['--chat-code-base']).toBe('transparent')
+  })
+
+  it("drops a switched-off plugin's palette like the app does", () => {
+    const id = 'plugin:samples.dawn/dawn'
+    const settings = makeSettings({
+      theme: 'dark',
+      terminalThemeDark: id,
+      terminalPluginPalettes: [
+        { id, colors: { background: '#fdf6e3', foreground: '#586e75', blue: '#268bd2' } }
+      ],
+      nativeChatAppearance: { matchTerminalInterface: true }
+    })
+    expect(nativeChatAppearanceStyle(settings).colorScheme).toBe('light')
+    expect(
+      nativeChatAppearanceStyle({ ...settings, disabledPlugins: ['samples.dawn'] }).colorScheme
+    ).toBe('dark')
   })
 
   it('resolves custom themes and falls back when the selected theme was removed', () => {

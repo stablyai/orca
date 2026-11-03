@@ -53,6 +53,48 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(600)).toEqual([])
   })
 
+  it('marks a background orca orchestration check --wait as the worker wait it is', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    decoder.observe({
+      type: 'assistant',
+      session_id: 'provider-1',
+      uuid: 'assistant-1',
+      parent_tool_use_id: null,
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_wait',
+            name: 'Bash',
+            input: {
+              command: `ORCA_RUN=${'x'.repeat(200)} orca orchestration check --wait --json`,
+              run_in_background: true
+            }
+          }
+        ]
+      }
+    })
+    decoder.observe(
+      system('task_started', {
+        task_id: 'wait-1',
+        tool_use_id: 'toolu_wait',
+        task_type: 'local_bash',
+        description: 'Wait for next worker message',
+        is_backgrounded: true
+      })
+    )
+    expect(decoder.drain(500)).toMatchObject([
+      {
+        type: 'live',
+        child: {
+          kind: 'command',
+          operation: { toolName: 'Bash', input: 'orca orchestration check --wait' }
+        }
+      }
+    ])
+  })
+
   it("carries a child's progress: the tool it last ran, its summary and its usage", () => {
     const decoder = decoderWith(foregroundAgent)
     decoder.observe(
@@ -115,6 +157,16 @@ describe('Claude child-work decoder', () => {
     expect(decoder.drain(500)).toEqual([
       expect.objectContaining({ type: 'ended', outcome: 'failed', lastMessage: 'OOM' })
     ])
+  })
+
+  it('ends a background agent at the notification that wakes its launcher, not the update before it', () => {
+    for (const status of ['completed', 'failed', 'killed']) {
+      const decoder = decoderWith(backgroundAgent)
+      decoder.observe(system('task_updated', { task_id: 'agent-bg', patch: { status } }))
+      expect(decoder.drain(500)).toEqual([])
+      decoder.observe(system('task_notification', { task_id: 'agent-bg', status }))
+      expect(decoder.drain(600)).toEqual([expect.objectContaining({ type: 'ended' })])
+    }
   })
 
   it("reads nothing from a roster, a turn's end or a spawn call's result", () => {

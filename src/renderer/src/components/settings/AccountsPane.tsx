@@ -29,8 +29,8 @@ import {
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
-import { SettingsSectionStack } from './SettingsSectionStack'
-import { matchesSettingsSearch } from './settings-search'
+import { SettingsSectionStack } from './section-layout/SettingsSectionStack'
+import { matchesSettingsSearch } from './search/settings-search'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import {
@@ -78,7 +78,10 @@ export { getAccountsPaneSearchEntries }
 export function AccountsPane({
   settings,
   updateSettings,
+  updateSettingsOrThrow,
   hostScope,
+  nativeAccounts = false,
+  onAccountLocationChange,
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -97,7 +100,7 @@ export function AccountsPane({
     new Set()
   )
   const localAccountRuntime = getSelectedAccountRuntime(
-    settings,
+    nativeAccounts ? { ...settings, localAccountRuntime: 'host' } : settings,
     wslSupportedPlatform,
     wslAvailable,
     wslDistros,
@@ -284,6 +287,8 @@ export function AccountsPane({
     settings,
     accountOwner,
     updateSettings,
+    updateSettingsOrThrow,
+    onAccountLocationChange,
     searchQuery,
     recordFeatureInteraction,
     wslSupportedPlatform,

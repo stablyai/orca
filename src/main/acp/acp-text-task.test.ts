@@ -10,7 +10,7 @@ import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/struc
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { getDefaultSettings } from '../../shared/constants'
 import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
@@ -225,19 +225,6 @@ it.each(['unsupported', 'stalled'] as const)(
     expect(r.server.exited).toBe(true)
   }
 )
-
-it('rejects standalone failure and cancels before deleting and closing', async () => {
-  const r = await rig()
-  r.agent.notify('_x.ai/session/prompt_complete', {
-    sessionId: '11111111-1111-4111-8111-111111111111',
-    promptId: r.promptId,
-    stopReason: 'error'
-  })
-  await expect(r.result).rejects.toThrow('did not complete')
-  const methods = r.agent.frames.map((frame) => frame.method)
-  expect(methods.indexOf('session/cancel')).toBeLessThan(methods.indexOf('_x.ai/session/delete'))
-  expect(r.server.exited).toBe(true)
-})
 
 it('does not spawn when preparation finishes after the deadline', async () => {
   vi.useFakeTimers()

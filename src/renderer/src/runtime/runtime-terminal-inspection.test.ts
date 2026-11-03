@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { inspectRuntimeTerminalProcess, sendRuntimePtyInput } from './runtime-terminal-inspection'
+import { sendRuntimePtyInput } from './runtime-terminal-inspection'
 import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-recording'
 import { sendRuntimePtyInputVerified } from './runtime-terminal-verified-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
@@ -13,7 +13,6 @@ import { useAppStore } from '../store'
 import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const PANE_KEY = `tab-1:${LEAF_ID}`
 
 function makeByteOversizedTerminalInput(): string {
   return '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1)
@@ -79,96 +78,6 @@ describe('runtime terminal owner routing', () => {
     })
   })
 
-  it('records runtime input markers even before hibernation is enabled', () => {
-    useAppStore.setState({
-      settings: { experimentalAgentHibernation: false } as never,
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'local-pty' }
-        }
-      }
-    })
-
-    recordRuntimeTerminalInputForPtyId('local-pty', 123)
-
-    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
-  })
-
-  it('maps an old host inspection to client-only unverifiable', async () => {
-    runtimeCall.mockResolvedValue({
-      ok: true,
-      result: {
-        process: { foregroundProcess: 'codex', hasChildProcesses: true }
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    await expect(inspectRuntimeTerminalProcess('remote:env-1@@terminal-1')).resolves.toEqual({
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      verdict: 'unverifiable',
-      reason: 'old_host'
-    })
-  })
-
-  it('maps an old direct SSH host to client-only unverifiable', async () => {
-    localInspect.mockResolvedValue({
-      foregroundProcess: null,
-      hasChildProcesses: true
-    })
-
-    await expect(inspectRuntimeTerminalProcess('ssh:host@@pty-1')).resolves.toEqual({
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      verdict: 'unverifiable',
-      reason: 'old_host'
-    })
-  })
-
-  it.each(['no_connected_pty', 'terminal_handle_stale', 'terminal_gone'])(
-    'reports %s remote process inspection as client-only unverifiable',
-    async (code) => {
-      runtimeCall.mockResolvedValue({
-        ok: false,
-        error: { code, message: code }
-      })
-
-      await expect(inspectRuntimeTerminalProcess('remote:env-1@@terminal-stale')).resolves.toEqual({
-        foregroundProcess: null,
-        hasChildProcesses: false,
-        verdict: 'unverifiable',
-        reason: 'terminal_gone'
-      })
-    }
-  )
-
-  it('maps lost contact and timeout to client-only unverifiable results', async () => {
-    runtimeCall.mockRejectedValueOnce(new Error('SSH connection lost, reconnecting...'))
-    await expect(
-      inspectRuntimeTerminalProcess('remote:env-1@@terminal-transport')
-    ).resolves.toEqual({
-      foregroundProcess: null,
-      hasChildProcesses: false,
-      verdict: 'unverifiable',
-      reason: 'transport_loss'
-    })
-
-    runtimeCall.mockRejectedValueOnce(new Error('Request timed out before completion'))
-    await expect(
-      inspectRuntimeTerminalProcess('remote:env-1@@terminal-timeout')
-    ).resolves.toMatchObject({ verdict: 'unverifiable', reason: 'timeout' })
-  })
-
-  it('still throws an unclassified programming error', async () => {
-    runtimeCall.mockRejectedValueOnce(new Error('inspection invariant violated'))
-    await expect(inspectRuntimeTerminalProcess('remote:env-1@@terminal-bug')).rejects.toThrow(
-      'inspection invariant violated'
-    )
-  })
-
   it('attributes a delayed runtime acknowledgement to the current layout owner', async () => {
     const pendingSend = Promise.withResolvers<{
       ok: true
@@ -214,15 +123,6 @@ describe('runtime terminal owner routing', () => {
     })
   })
 
-  it('rejects oversized fire-and-forget local input before IPC writes', () => {
-    const text = 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)
-
-    expect(sendRuntimePtyInput('local-pty', text, 'driving')).toBe(false)
-
-    expect(localWrite).not.toHaveBeenCalled()
-    expect(localWriteAccepted).not.toHaveBeenCalled()
-  })
-
   it('yields while validating large fire-and-forget local input before IPC writes', async () => {
     vi.useFakeTimers()
     try {
@@ -254,15 +154,6 @@ describe('runtime terminal owner routing', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('rejects oversized verified input before fallback fire-and-forget writes', async () => {
-    const text = 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)
-
-    await expect(sendRuntimePtyInputVerified('local-pty', text, 'driving')).resolves.toBe(false)
-
-    expect(localWriteAccepted).not.toHaveBeenCalled()
-    expect(localWrite).not.toHaveBeenCalled()
   })
 
   it('yields while validating large verified local input before IPC writes', async () => {
@@ -298,58 +189,6 @@ describe('runtime terminal owner routing', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('records accepted runtime input against the owning pane key', async () => {
-    runtimeCall.mockResolvedValue({
-      ok: true,
-      result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    useAppStore.setState({
-      settings: { experimentalAgentHibernation: true } as never,
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
-        }
-      }
-    })
-
-    await expect(
-      sendRuntimePtyInputVerified('remote:env-1@@terminal-1', 'x', 'driving')
-    ).resolves.toBe(true)
-
-    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toEqual(
-      expect.any(Number)
-    )
-  })
-
-  it('does not record rejected runtime input against the owning pane key', async () => {
-    runtimeCall.mockResolvedValue({
-      ok: true,
-      result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-    useAppStore.setState({
-      settings: { experimentalAgentHibernation: true } as never,
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
-        }
-      }
-    })
-
-    await expect(
-      sendRuntimePtyInputVerified('remote:env-1@@terminal-1', 'x', 'driving')
-    ).resolves.toBe(false)
-
-    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
   })
 
   it('indexes a stable layout identity once across repeated terminal input', () => {

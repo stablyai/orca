@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
@@ -23,15 +23,23 @@ import { useAgentMessageSenderView } from './native-chat-agent-message-sender-vi
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
-function heading(from: AgentMessageSource, agentStart: boolean): string {
-  switch (agentMessageHeading(from, agentStart)) {
+function heading(from: AgentMessageSource, message: NativeChatMessage): string {
+  switch (agentMessageHeading(from, message)) {
     case 'started':
       return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'handed-off':
+      return translate(
+        'components.native-chat.agentMessage.handedOffToAgent',
+        'Handed off to agent'
+      )
+    case 'started-agent':
+      return translate('components.native-chat.agentMessage.startedAgent', 'Started agent')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',
@@ -55,6 +63,7 @@ export function NativeChatAgentMessageCard({
   runtimeContext,
   onLinkClick,
   allowFileUriLinks,
+  textAttachmentContent,
   onRefolded
 }: {
   message: NativeChatMessage
@@ -62,6 +71,7 @@ export function NativeChatAgentMessageCard({
   runtimeContext?: RuntimeFileOperationArgs | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  textAttachmentContent?: string
   onRefolded: () => void
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
@@ -90,12 +100,13 @@ export function NativeChatAgentMessageCard({
     <div className="group flex w-full gap-3 rounded-xl border border-border bg-card p-3 text-sm text-card-foreground">
       <AgentMessageAvatar
         sender={agentMessagePrimarySender(from)}
+        dispatchId={message.agentStartDispatchId}
         worktreeId={worktreeId}
         target={target}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>{heading(from, message.agentStart === true)}</span>
+          <span>{heading(from, message)}</span>
           <div className="flex items-center gap-1">
             {agentMessageCanCopy(text) ? (
               // Why: -my-1 keeps the 24px button inside the text-xs header line, so copy costs no row of its own.
@@ -110,7 +121,12 @@ export function NativeChatAgentMessageCard({
             />
           </div>
         </div>
-        <NativeChatAgentMessageSenders from={from} chatWorktreeId={worktreeId} target={target} />
+        <NativeChatAgentMessageSenders
+          dispatchId={message.agentStartDispatchId}
+          from={from}
+          chatWorktreeId={worktreeId}
+          target={target}
+        />
         <NativeChatImageAttachments
           blocks={message.blocks}
           runtimeContext={runtimeContext}
@@ -130,14 +146,21 @@ export function NativeChatAgentMessageCard({
             }
           }}
         >
-          <NativeChatMarkdown
-            rowKey={message.id}
-            content={text}
-            variant="document"
-            className="text-sm"
-            renderCodeBlock={NativeChatCodeBlock}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={allowFileUriLinks}
+          <NativeChatTextAttachments
+            content={textAttachmentContent ?? text}
+            structured={textAttachmentContent !== undefined}
+            runtimeContext={runtimeContext}
+            renderText={() => (
+              <NativeChatMarkdown
+                rowKey={message.id}
+                content={text}
+                variant="document"
+                className="text-sm"
+                renderCodeBlock={NativeChatCodeBlock}
+                onLinkClick={onLinkClick}
+                allowFileUriLinks={allowFileUriLinks}
+              />
+            )}
           />
         </div>
         {overflows ? (
@@ -165,20 +188,23 @@ export function NativeChatAgentMessageCard({
 }
 
 function AgentMessageAvatar({
+  dispatchId,
   sender,
   worktreeId,
   target
 }: {
+  dispatchId?: string
   sender: AgentMessageSource['senders'][number] | undefined
   worktreeId: string | null
   target?: RuntimeClientTarget
 }): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target)
+  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
     <div className="relative mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
       <AgentTypeIcon agentType={view.agentType} size={16} />
       {view.dot ? (
-        <span className="absolute -right-0.5 -bottom-0.5 rounded-full bg-card ring-2 ring-card">
+        // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
+        <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full border border-border bg-card ring-2 ring-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}

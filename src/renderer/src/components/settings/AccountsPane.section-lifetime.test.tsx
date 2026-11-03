@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AccountsPane } from './AccountsPane'
-import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './host-scope/settings-host-scope'
 
 const fake = vi.hoisted(() => ({
   query: '',
@@ -123,6 +123,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
@@ -147,6 +148,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
@@ -181,6 +183,7 @@ it('preserves explicit Grok refresh and real hide/reopen status reads', async ()
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -203,6 +206,7 @@ it('keeps usage-driven Grok status refreshes while the section stays mounted', a
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -222,6 +226,7 @@ it('keeps the login subscription until Codex genuinely hides', async () => {
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)
@@ -246,6 +251,7 @@ it.each([false, true])(
     const props = {
       settings: getDefaultSettings('/synthetic'),
       updateSettings: fake.write,
+      updateSettingsOrThrow: fake.write,
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
@@ -268,6 +274,7 @@ it('keeps Cursor refresh driven by usage updates and genuine reopen', async () =
   const props = {
     settings: getDefaultSettings('/synthetic'),
     updateSettings: fake.write,
+    updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
   const view = render(<AccountsPane {...props} />)

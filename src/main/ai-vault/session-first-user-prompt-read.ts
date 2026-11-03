@@ -11,11 +11,11 @@ import {
   parseOpenCodeSqliteSessionViaWorker,
   parseOpenCode2SqliteSessionViaWorker,
   parseZcodeSqliteSessionViaWorker
-} from './session-scanner-opencode-sqlite-worker-spawn'
-import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+} from './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
+import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { FileWithMtime } from './session-scanner-types'
-import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
-import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
+import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent

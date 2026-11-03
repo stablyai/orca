@@ -5,8 +5,10 @@ import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset
 import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 
 type UseFileExplorerTreeLoadEffectsParams = {
   /** The store worktree id, keying the user's own switches to this workspace. */
@@ -106,6 +108,28 @@ export function useFileExplorerTreeLoadEffects({
       }
     }
   }, [sshConnectedGeneration, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The same for a runtime host (WSL or SSH server): a relaunch can load before it answers.
+  const runtimeEnvironmentId = useAppStore((s) =>
+    runtimeEnvironmentIdOrLocalUnlessTwin(s, workspaceKey)
+  )
+  const retryAfterContactRef = useRef(() => {})
+  // Kept current from an effect, not render; the subscription below outlives renders.
+  useEffect(() => {
+    retryAfterContactRef.current = () => {
+      if (visibleFilesWorktreePath && rootError) {
+        resetAndLoad()
+      }
+    }
+  }, [visibleFilesWorktreePath, rootError, resetAndLoad])
+  useEffect(() => {
+    if (!runtimeEnvironmentId) {
+      return
+    }
+    return subscribeRuntimeHostContactRegained(runtimeEnvironmentId, () =>
+      retryAfterContactRef.current()
+    )
+  }, [runtimeEnvironmentId])
 
   useEffect(() => {
     if (

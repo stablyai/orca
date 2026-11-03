@@ -1,4 +1,7 @@
-import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
+import {
+  getWindowsInputRecordPasteBurstMs,
+  resolveAgentPromptSubmitDelayForAgent
+} from '../../shared/agent-prompt-injection'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import type { TerminalInputSource } from './terminal-input-admission'
@@ -19,6 +22,8 @@ export type RuntimeTerminalWriteOptions = {
   afterWrite?: (ptyId: string) => void | Promise<void>
   suffixFailureError?: string
   requireWriteSettlement?: true
+  /** Hold an Enter until a fresh launch's composer is up, refusing the send if it never comes (#34580). */
+  waitForLaunchComposer?: true
 }
 
 export class RuntimeTerminalWriter {
@@ -31,7 +36,8 @@ export class RuntimeTerminalWriter {
       ptyId: string,
       data: string,
       inputKind: TerminalInputKind
-    ) => WriteSettlement | Promise<WriteSettlement>
+    ) => WriteSettlement | Promise<WriteSettlement>,
+    private readonly claimIdleShellPrompt: (ptyId: string) => Promise<boolean> = async () => false
   ) {}
 
   async writeAction(
@@ -80,16 +86,30 @@ export class RuntimeTerminalWriter {
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      if (text) {
+      const claimStartedAt = performance.now()
+      // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
+      if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
+        const platform = this.getWriteHostPlatform(ptyId)
+        const agent = this.getAgent(ptyId)
+        const ingestDelayMs = resolveAgentPromptSubmitDelayForAgent(platform, text, agent)
         // Enter must wait for host ingestion; a flat 500ms cannot cover 16MB.
+        // Windows Codex also reads typed text one key event at a time and keeps a mid-burst Enter
+        // as a newline, so add that burst, capped so the send still answers inside a phone's RPC timeout.
+        const delayMs = Math.max(
+          ingestDelayMs,
+          Math.min(
+            ingestDelayMs + getWindowsInputRecordPasteBurstMs(platform, agent, text),
+            MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS
+          )
+        )
+        // A failed idle proof already spent part of that wait, so a send is never slower than before.
         await waitForTerminalWriteDelay(
-          resolveAgentPromptSubmitDelayForAgent(
-            this.getWriteHostPlatform(ptyId),
-            text,
-            this.getAgent(ptyId)
-          ),
+          Math.max(0, delayMs - (performance.now() - claimStartedAt)),
           options.signal
         )
+      } else if (options.signal?.aborted) {
+        // Match the settle path: a send cancelled during the idle proof must not submit.
+        throw new Error('request_aborted')
       }
       try {
         await options.beforeWrite?.(ptyId)
@@ -163,6 +183,14 @@ export class RuntimeTerminalWriter {
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+}
+
+// Why 20 s: a phone's terminal.send times out at 30 s and a lost reply is unknown delivery, so the
+// held Enter leaves room for the launch-composer wait and relay latency.
+const MAX_KEY_EVENT_BURST_SUBMIT_DELAY_MS = 20_000
+
+function isSingleLine(text: string): boolean {
+  return !text.includes('\n') && !text.includes('\r')
 }
 
 function yieldBetweenTerminalInputChunks(): Promise<void> {
