@@ -33,6 +33,8 @@ function fakeEditor(initial: string) {
   const instance = {
     getModel: () => model,
     getValue: () => value,
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => true,
     onDidChangeModelContent: (listener: () => void) => {
       listeners.add(listener)

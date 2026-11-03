@@ -49,7 +49,11 @@ function replaceModelContent(
     return
   }
   const fullRange = model.getFullModelRange()
+  const viewState = mode === 'undoable' ? editorInstance.saveViewState() : null
   applyModelEdit(editorInstance, model, { range: fullRange, text: content }, mode, withUndoStops)
+  if (viewState) {
+    editorInstance.restoreViewState(viewState)
+  }
 }
 
 /** Reconcile retained models on remount: the React wrapper skips its initial value sync, hiding intervening external writes. */

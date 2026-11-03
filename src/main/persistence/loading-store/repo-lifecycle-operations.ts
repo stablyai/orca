@@ -167,6 +167,7 @@ export class RepoLifecycleOperations {
         | 'gitRemoteIdentity'
         | 'defaultJiraProject'
         | 'hookSettings'
+        | 'editorFormatter'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'

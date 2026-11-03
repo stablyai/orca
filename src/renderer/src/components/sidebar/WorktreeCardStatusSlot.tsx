@@ -115,6 +115,7 @@ export function WorktreeCardStatusSlot({
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
+  const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
   const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
@@ -145,7 +146,7 @@ export function WorktreeCardStatusSlot({
           ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
           : statusLabel
   const reviewLabel =
-    reviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
+    isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
   const passiveStatusAnnouncement =
@@ -155,11 +156,11 @@ export function WorktreeCardStatusSlot({
   // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
   const showNewCardUnreadAlert =
     newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
-  const reviewStaleRef = reviewStale ? observeOffscreenAnimation : undefined
+  const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    reviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
