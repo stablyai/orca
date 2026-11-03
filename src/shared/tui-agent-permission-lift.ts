@@ -6,6 +6,7 @@ import {
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
 import type { GlobalSettings } from './global-settings-types'
 import {
+  agentPermissionArgs,
   agentPermissionEnv,
   hasTypedAgentPermission,
   normalizeAgentPermissionOverrides,
@@ -107,6 +108,10 @@ export function migrateAgentPermissionChoice(
   const args = { ...settings.agentDefaultArgs }
   const env = { ...settings.agentDefaultEnv }
   const typed = hasTypedAgentPermission(settings)
+  // The former exact Kimi preset expressed Full access before permissions had their own field.
+  if (!typed && args.kimi?.trim() === '--yolo') {
+    args.kimi = agentPermissionArgs('kimi', 'full-access')
+  }
   const agentLaunchChoices = normalizeAgentLaunchChoices(settings.agentLaunchChoices)
   if (typed && settings.agentLaunchChoices !== undefined) {
     return {

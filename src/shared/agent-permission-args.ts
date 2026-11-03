@@ -63,7 +63,8 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   'claude-agent-teams': CLAUDE_PERMISSION_OPTIONS,
   codex: ['-a', '--ask-for-approval', '-s', '--sandbox', '--yolo', '--not-so-yolo', '--full-auto'],
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
-  gemini: ['--approval-mode', '-y']
+  gemini: ['--approval-mode', '-y'],
+  kimi: ['--yolo', '-y', '--yes', '--auto-approve']
 }
 const CODEX_VALUES = [
   '-a',
@@ -102,6 +103,9 @@ function words(text: string): string[] {
 }
 
 export function optionName(agent: TuiAgent, token: string): string {
+  if (agent === 'kimi' && /^-[cCy]*y[cCy]*$/.test(token)) {
+    return '-y'
+  }
   if ((agent === 'codex' && /^-[acs].+/.test(token)) || /^-m.+/.test(token)) {
     return token.slice(0, 2)
   }
