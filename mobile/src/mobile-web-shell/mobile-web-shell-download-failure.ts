@@ -1,4 +1,8 @@
-import type { MobileWebShellSession, MobileWebShellStep } from './mobile-web-shell-session-contract'
+import type {
+  MobileWebShellSession,
+  MobileWebShellStep,
+  MobileWebShellUpdateNotice
+} from './mobile-web-shell-session-contract'
 import {
   readFailureSide,
   type MobileWebShellUpdateFailureCause,
@@ -14,7 +18,10 @@ export function onDownloadFailed(
   session: MobileWebShellSession,
   cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
-  const decided = decideDownloadFailed(session, cause)
+  const decided = openFallbackGeneration(
+    session,
+    readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null
+  )
   const failure: MobileWebShellUpdateFailureFacts = {
     ...cause,
     offeredBuildId: session.requestedBuildId,
@@ -26,9 +33,9 @@ export function onDownloadFailed(
 
 // Fall back to intact cached bytes under their own routes, checking compatibility when the host remains reachable.
 // Name only bundle refusals: link loss cannot establish an update existed; absent cache still gets download failure.
-function decideDownloadFailed(
+export function openFallbackGeneration(
   session: MobileWebShellSession,
-  cause: MobileWebShellUpdateFailureCause
+  notice: MobileWebShellUpdateNotice | null
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
@@ -46,7 +53,7 @@ function decideDownloadFailed(
   return openByOwnRoutes(session, cached, {
     // Missing cached routes remain a retryable download failure after the new manifest claimed them or never arrived.
     unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
-    served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
+    served: { updateNotice: notice },
     wall: cachedGenerationWall(verdict, gates, cached.compat)
   })
 }

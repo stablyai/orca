@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { Linking, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
@@ -260,13 +260,14 @@ export function MobileWebShellScreen({
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
 
+  const reportProfileFailure = useEffectEvent(() => reportShellFailure('host-profile-unreadable'))
   // Profile failures preserve verified bundle bytes and retry the device store.
   useEffect(() => {
     if (unreadable) {
       console.warn('[web-shell] this host could not be read from the app store')
-      reportShellFailure('host-profile-unreadable')
+      reportProfileFailure()
     }
-  }, [reportShellFailure, unreadable])
+  }, [unreadable])
   useEffect(() => {
     if (unreadable) {
       recordShellLifecycleLine(hostId, hostProfileUnreadableLine())

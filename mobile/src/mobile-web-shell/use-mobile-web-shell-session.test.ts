@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
@@ -7,9 +7,18 @@ import type {
   MobileWebBundleFetchResult
 } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
-import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
+import {
+  createGenerationStore,
+  type ActiveGeneration,
+  type GenerationStore,
+  type StagedGeneration
+} from './generation-store'
 import type { DownloadProgressFeed } from './download-progress-feed'
+import { createTimerSeam, live } from './mobile-web-shell-timer-test-driver'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
+import { createFakeGenerationFileSystem } from './generation-file-system-fake'
+import { deriveHostCacheKey } from './host-cache-key'
+import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 
 // Test effect abandonment, fetch aborts and retry wiring around the table-tested reducer; cancellation must free read slots and prevent writes for retired screens.
@@ -135,6 +144,10 @@ function createFakeStore(): {
   let committed = 0
   let aborted = 0
   const store: GenerationStore = {
+    acquireGeneration: async () => ({ generation: activeGeneration() }),
+    releaseGeneration: () => undefined,
+    confirmGeneration: async () => undefined,
+    rejectGeneration: async () => undefined,
     readActiveGeneration: () =>
       new Promise<ActiveGeneration | null>((resolve) => {
         settleCacheRead = resolve
@@ -150,7 +163,7 @@ function createFakeStore(): {
     },
     commitGeneration: async () => {
       committed += 1
-      return activeGeneration()
+      return { generation: activeGeneration() }
     },
     abortStagedGeneration: async () => {
       aborted += 1
@@ -175,34 +188,9 @@ function createFakeStore(): {
   }
 }
 
-// Use recorded timers so deadline tests assert requested delays without wall-clock waits.
-type ArmedTimer = { delayMs: number; run: () => void; cancelled: boolean }
-
-function createTimerSeam() {
-  const armed: ArmedTimer[] = []
-  return {
-    armed,
-    setTimer: (run: () => void, delayMs: number): (() => void) => {
-      const timer: ArmedTimer = { delayMs, run, cancelled: false }
-      armed.push(timer)
-      return () => {
-        timer.cancelled = true
-      }
-    },
-    fire: (): void => {
-      // Fire a snapshot so timers armed by callbacks wait until the next round.
-      const round = armed.slice()
-      for (const timer of round) {
-        if (!timer.cancelled) {
-          timer.run()
-        }
-      }
-    }
-  }
-}
-
 type Mounted = {
   tree: ReactTestRenderer
+  documentMounted: () => boolean
   retry: () => void
   rerender: () => void
   states: () => readonly MobileWebShellSessionState[]
@@ -211,12 +199,9 @@ type Mounted = {
   documentLoaded: () => void
   pageReady: () => void
   pagePainted: () => void
+  captureDocumentSignals: () => { loaded: () => void; ready: () => void; painted: () => void }
   downloadProgress: () => DownloadProgressFeed
   timers: ReturnType<typeof createTimerSeam>
-}
-
-function live(timers: readonly ArmedTimer[]): ArmedTimer[] {
-  return timers.filter((timer) => !timer.cancelled)
 }
 
 const mountedTrees: ReturnType<typeof create>[] = []
@@ -256,6 +241,16 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handshakes: [],
     downloadProgress: null
   }
+  let documentMounted = false
+  function Document() {
+    useLayoutEffect(() => {
+      documentMounted = true
+      return () => {
+        documentMounted = false
+      }
+    }, [])
+    return null
+  }
   function Probe() {
     const session = useMobileWebShellSession({
       hostId: HOST_ID,
@@ -275,7 +270,9 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     handle.states.push(session.state)
     handle.handshakes.push(session.pageReady)
     handle.downloadProgress = session.downloadProgress
-    return null
+    return session.state.kind === 'ready'
+      ? createElement(Document, { key: session.state.sessionId })
+      : null
   }
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
@@ -287,6 +284,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   }
   return {
     tree,
+    documentMounted: () => documentMounted,
     retry: () => handle.retry(),
     rerender: () => tree.update(createElement(Probe)),
     states: () => handle.states,
@@ -295,6 +293,11 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     documentLoaded: () => handle.documentLoaded(),
     pageReady: () => handle.pageReady(),
     pagePainted: () => handle.pagePainted(),
+    captureDocumentSignals: () => ({
+      loaded: handle.documentLoaded,
+      ready: handle.pageReady,
+      painted: handle.pagePainted
+    }),
     downloadProgress: () => {
       if (handle.downloadProgress === null) {
         throw new Error('the hook never rendered')
@@ -538,14 +541,12 @@ describe('the wait for the page to speak', () => {
     await act(async () => {
       mounted.documentLoaded()
       mounted.pageReady()
+      mounted.pagePainted()
     })
     await act(async () => {
       mounted.timers.fire()
     })
     expect(mounted.states().at(-1)?.kind).toBe('ready')
-    await act(async () => {
-      mounted.tree.unmount()
-    })
   })
 
   it('reports the handshake the page completed, for the host that is rebuilt over it', async () => {
@@ -704,5 +705,148 @@ describe('the wait for the page to speak', () => {
     })
     // Cancel real timers on unmount as well as rejecting their results by epoch.
     expect(mounted.timers.armed.every((timer) => timer.cancelled)).toBe(true)
+  })
+
+  it('pins a retired document until React commits removing its view', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store)
+    await act(async () => fake.settleCacheRead(activeGeneration()))
+    expect(mounted.documentMounted()).toBe(true)
+    const stillMounted: boolean[] = []
+    fake.store.releaseGeneration = () => {
+      stillMounted.push(mounted.documentMounted())
+    }
+    await act(async () => mounted.retry())
+    expect(stillMounted).toEqual([false])
+  })
+})
+
+describe('page health commits the production generation selection', () => {
+  beforeEach(() => {
+    doubles.fetches.length = 0
+    doubles.manifestRejection = null
+    doubles.connection = { client: {}, state: 'connected' }
+    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
+    doubles.gates.hostProtocolWindow.minCompatibleMobileVersion = 1
+  })
+  function result(size: number, runtimeProtocolVersion = 5): MobileWebBundleFetchResult {
+    const assets = [
+      { path: 'index.html', sha256: 'c'.repeat(64), byteLength: size, contentType: 'text/html' }
+    ]
+    const manifest = {
+      ...doubles.manifest,
+      buildId: computeMobileWebBundleId(assets),
+      totalBytes: size,
+      assets,
+      runtimeProtocolVersion
+    }
+    return {
+      manifest,
+      assets: new Map([['index.html', new Uint8Array(size)]]),
+      reused: [],
+      totalBytes: size,
+      elapsedMs: 0
+    }
+  }
+
+  async function installed() {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    const old = result(4)
+    const lease = await store.commitGeneration(
+      await store.stageGeneration(deriveHostCacheKey(HOST_ID), old)
+    )
+    await store.confirmGeneration(lease, () => true)
+    store.releaseGeneration(lease)
+    return { fileSystem, store, old }
+  }
+
+  it('confirms only after current-document load, ready and paint and rejects retired callbacks', async () => {
+    const { store, old } = await installed()
+    const update = result(8)
+    doubles.manifest = update.manifest
+    const mounted = await mount(store)
+    await act(async () => doubles.fetches[0]?.settle(update))
+    const retired = mounted.captureDocumentSignals()
+    await act(async () => mounted.retry())
+    await act(async () => doubles.fetches[1]?.settle(update))
+    await act(async () => {
+      retired.loaded()
+      retired.ready()
+      retired.painted()
+    })
+    expect((await store.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      old.manifest.buildId
+    )
+    await act(async () => {
+      mounted.documentLoaded()
+      mounted.pageReady()
+    })
+    expect((await store.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      old.manifest.buildId
+    )
+    await act(async () => mounted.pagePainted())
+    expect((await store.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      update.manifest.buildId
+    )
+  })
+
+  it('rolls a ready-but-unpainted candidate back without refetching and keeps it on restart', async () => {
+    const { fileSystem, store, old } = await installed()
+    const update = result(8)
+    doubles.manifest = update.manifest
+    const mounted = await mount(store)
+    await act(async () => doubles.fetches[0]?.settle(update))
+    await act(async () => {
+      mounted.documentLoaded()
+      mounted.pageReady()
+      mounted.timers.fire()
+    })
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', buildId: old.manifest.buildId })
+    expect(doubles.fetches).toHaveLength(1)
+    const restarted = createGenerationStore({ fileSystem })
+    expect((await restarted.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      old.manifest.buildId
+    )
+  })
+
+  it('shows the existing compatibility wall when the retained confirmed page is too old', async () => {
+    const { store, old } = await installed()
+    const update = result(8, 6)
+    doubles.manifest = update.manifest
+    doubles.gates.hostProtocolWindow.minCompatibleMobileVersion = 6
+    const mounted = await mount(store)
+    await act(async () => doubles.fetches[0]?.settle(update))
+    await act(async () => {
+      mounted.documentLoaded()
+      mounted.pageReady()
+      mounted.timers.fire()
+    })
+    expect(mounted.states().at(-1)).toMatchObject({
+      kind: 'wall',
+      verdict: {
+        reason: 'bundle-incompatible',
+        side: 'mobile',
+        bundleRuntimeProtocolVersion: 5,
+        requiredBundleRuntimeProtocolVersion: 6
+      }
+    })
+    expect((await store.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      old.manifest.buildId
+    )
+  })
+
+  it('opens the retained confirmed page when restart discovers an abandoned pending build', async () => {
+    const { fileSystem, store, old } = await installed()
+    const update = result(8)
+    doubles.manifest = update.manifest
+    await store.commitGeneration(await store.stageGeneration(deriveHostCacheKey(HOST_ID), update))
+    const restarted = createGenerationStore({ fileSystem })
+    const mounted = await mount(restarted)
+    await act(async () => doubles.fetches[0]?.settle(update))
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', buildId: old.manifest.buildId })
+    expect((await restarted.readActiveGeneration(deriveHostCacheKey(HOST_ID)))?.buildId).toBe(
+      old.manifest.buildId
+    )
   })
 })

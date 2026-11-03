@@ -132,7 +132,7 @@ describe('recovery follows the shell view contract', () => {
       reason: 'status-unreadable',
       retriedOnce: true
     })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(step.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
     const rearmed = run(step.session, { type: 'gates-changed', gates: gates() })
     expect(rearmed.session.state).toEqual({ kind: 'checking' })
     expect(rearmed.effects).toEqual([{ kind: 'open-cache' }])
@@ -145,7 +145,7 @@ describe('recovery follows the shell view contract', () => {
     })
     const step = run(stale.session, { type: 'shell-failed', reason: 'document-load-failed' })
     expect(step.session.state).toEqual(NO_BUNDLE_WALL)
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(step.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
   })
 
   it('deletes the suspect cache and waits when the recovery lands mid-reconnect', () => {
@@ -155,7 +155,7 @@ describe('recovery follows the shell view contract', () => {
     })
     const step = run(dialling.session, { type: 'shell-failed', reason: 'generation-unreadable' })
     expect(step.session.state).toEqual({ kind: 'checking' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }])
+    expect(step.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
     expect(run(step.session, { type: 'gates-changed', gates: gates() }).effects).toEqual([
       { kind: 'open-cache' }
     ])
@@ -172,19 +172,16 @@ describe('recovery follows the shell view contract', () => {
     }
   )
 
-  it('is terminal the second time the render process is gone, still without a delete', () => {
+  it('rolls back when the render process is lost again after its one remount', () => {
     const first = run(readySession().session, {
       type: 'shell-failed',
       reason: 'render-process-gone'
     })
     const remounted = run(first.session, { type: 'remounted', sessionId: 'session-two' })
     const second = run(remounted.session, { type: 'shell-failed', reason: 'render-process-gone' })
-    expect(second.effects).toEqual([])
-    expect(second.session.state).toEqual({
-      kind: 'failed',
-      reason: 'render-process-gone',
-      retriedOnce: false
-    })
+    expect(second.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
+    expect(second.session.state.kind).toBe('checking')
+    expect(second.session.retriedOnce).toBe(true)
   })
 })
 
@@ -221,7 +218,7 @@ describe('try again', () => {
       },
       { type: 'shell-failed', reason: 'document-load-failed' }
     )
-    expect(again.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+    expect(again.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
   })
 })
 
@@ -417,7 +414,7 @@ describe('the page has to speak for the document that loaded', () => {
   it('deletes the cache and runs the flow again when the wait expires', () => {
     const ready = run(readySession().session, { type: 'document-loaded' })
     const step = run(ready.session, { type: 'page-ready-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+    expect(step.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
     expect(step.session.retriedOnce).toBe(true)
     expect(step.session.state.kind).toBe('checking')
   })
@@ -474,15 +471,29 @@ describe('the view has to finish the document it was given', () => {
   it('deletes the cache and runs the flow again when no document ever finished', () => {
     const started = run(readySession().session, { type: 'document-started' })
     const step = run(started.session, { type: 'document-load-deadline' })
-    expect(step.effects).toEqual([{ kind: 'delete-cache' }, { kind: 'open-cache' }])
+    expect(step.effects).toEqual([{ kind: 'rollback-generation', buildId: MANIFEST.buildId }])
     expect(step.session.state.kind).toBe('checking')
   })
 
-  it('does nothing once the document finished or the page spoke', () => {
-    const loaded = run(readySession().session, { type: 'document-loaded' })
-    expect(run(loaded.session, { type: 'document-load-deadline' }).effects).toEqual([])
-    const spoke = run(readySession().session, { type: 'page-ready' })
-    expect(run(spoke.session, { type: 'document-load-deadline' }).session.state.kind).toBe('ready')
+  it('requires load, ready and paint before the boot deadline accepts the document', () => {
+    for (const event of [
+      { type: 'document-loaded' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    ] as const) {
+      const incomplete = run(readySession().session, event)
+      expect(run(incomplete.session, { type: 'document-load-deadline' }).effects).toEqual([
+        { kind: 'rollback-generation', buildId: MANIFEST.buildId }
+      ])
+    }
+    const healthy = run(
+      readySession().session,
+      { type: 'document-loaded' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    )
+    expect(healthy.effects).toEqual([{ kind: 'confirm-generation' }])
+    expect(run(healthy.session, { type: 'document-load-deadline' }).effects).toEqual([])
   })
 
   it('drops the wait a replaced document left behind', () => {
@@ -544,5 +555,40 @@ describe('the page reporting a frame on screen', () => {
     )
     expect(painted.session.pagePainted).toBe(true)
     expect(shellPageFrame(painted.session)).toBe('painted')
+  })
+})
+
+describe('confirmed fallback activation and deferred health', () => {
+  it('preserves the update notice when actual persisted metadata is activated', () => {
+    const fallback = {
+      ...readySession().session,
+      state: { kind: 'activating', source: 'cache' } as const,
+      updateNotice: 'update-failed' as const
+    }
+    const activated = run(fallback, {
+      type: 'activated',
+      generation: CACHED,
+      generationDirectory: CACHED.directory,
+      sessionId: 'fallback',
+      buildId: CACHED.buildId,
+      totalBytes: CACHED.totalBytes,
+      elapsedMs: 0
+    })
+    expect(activated.session.updateNotice).toBe('update-failed')
+  })
+
+  it('confirms a healthy document after temporary host gates become readable again', () => {
+    const pending = run(readySession().session, {
+      type: 'gates-changed',
+      gates: gates({ statusPending: true })
+    })
+    const healthy = run(
+      pending.session,
+      { type: 'document-loaded' },
+      { type: 'page-ready' },
+      { type: 'page-painted' }
+    )
+    const reopened = run(healthy.session, { type: 'gates-changed', gates: gates() })
+    expect(reopened.effects).toEqual([{ kind: 'confirm-generation' }])
   })
 })

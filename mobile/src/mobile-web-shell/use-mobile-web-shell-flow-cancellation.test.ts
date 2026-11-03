@@ -205,13 +205,12 @@ it.each([8, 80])(
     await act(async () => {
       host.release()
     })
-    const active = await store.readActiveGeneration(deriveHostCacheKey('host-1'))
+    expect(await store.readActiveGeneration(deriveHostCacheKey('host-1'))).toBeNull()
     expect({
       oldReads: host.oldReads.length,
       stagedOld: staged.filter((id) => id === host.old.manifest.buildId).length,
-      committedOld: committed.filter((id) => id === host.old.manifest.buildId).length,
-      activeIsLive: active?.buildId === host.live.manifest.buildId
-    }).toEqual({ oldReads: 4, stagedOld: 0, committedOld: 0, activeIsLive: true })
+      committedOld: committed.filter((id) => id === host.old.manifest.buildId).length
+    }).toEqual({ oldReads: 4, stagedOld: 0, committedOld: 0 })
     expect(committed).toEqual([host.live.manifest.buildId])
   }
 )

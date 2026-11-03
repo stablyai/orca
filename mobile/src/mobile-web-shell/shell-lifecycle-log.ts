@@ -1,5 +1,6 @@
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import { gateVerdict } from './mobile-web-shell-gates'
+import { generationDocumentHealthy } from './page-document-state'
 import type {
   MobileWebShellSession,
   MobileWebShellSessionEvent,
@@ -40,6 +41,7 @@ export function traceShellStep(
   }
   switch (event.type) {
     case 'cache-read':
+    case 'rollback-read':
       return { ...trace, cacheReadFlow: event.flow }
     case 'activated':
       return {
@@ -59,6 +61,7 @@ export function traceShellStep(
     case 'manifest-read':
     case 'fetch-progress':
     case 'download-staged':
+    case 'generation-open-failed':
     case 'download-failed':
     case 'shell-failed':
     case 'retry-pressed':
@@ -173,14 +176,16 @@ function eventLines(
         ? []
         : [pageLine('warn', 'Web shell: page never said ready before the deadline')]
     case 'document-load-deadline':
-      return before.documentLoaded || before.pageReady
+      return generationDocumentHealthy(before)
         ? []
-        : [pageLine('warn', 'Web shell: document never finished loading before the deadline')]
+        : [pageLine('warn', 'Web shell: page did not finish booting before the load deadline')]
     case 'document-started':
     case 'document-loaded':
     case 'page-ready':
     case 'gates-changed':
     case 'cache-read':
+    case 'rollback-read':
+    case 'generation-open-failed':
     case 'manifest-read':
     case 'fetch-progress':
     case 'download-staged':

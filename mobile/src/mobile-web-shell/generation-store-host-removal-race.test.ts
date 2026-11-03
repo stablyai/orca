@@ -91,7 +91,12 @@ function slowReadsOf(
 async function seedHosts(store: GenerationStore): Promise<void> {
   for (const hostId of [REMOVED, KEPT]) {
     const key = deriveHostCacheKey(hostId)
-    await store.commitGeneration(await store.stageGeneration(key, bundle()))
+    const lease = await store.commitGeneration(await store.stageGeneration(key, bundle()))
+    if (lease === null) {
+      throw new Error('missing cached generation')
+    }
+    await store.confirmGeneration(lease, () => true)
+    store.releaseGeneration(lease)
   }
 }
 
@@ -148,11 +153,18 @@ describe('host removal and the mounted shell session', () => {
       [deriveHostCacheKey(KEPT), deriveHostCacheKey(OPENED)].sort()
     )
     for (const hostId of [KEPT, OPENED]) {
-      expect(
-        await createMobileWebShellRuntime()
-          .createStore()
-          .readActiveGeneration(deriveHostCacheKey(hostId))
-      ).not.toBeNull()
+      const active = await createMobileWebShellRuntime()
+        .createStore()
+        .readActiveGeneration(deriveHostCacheKey(hostId))
+      if (hostId === KEPT) {
+        expect(active).not.toBeNull()
+      } else {
+        expect(
+          fileSystem
+            .paths()
+            .some((path) => path.startsWith(`${deriveHostCacheKey(hostId)}/generations/`))
+        ).toBe(true)
+      }
     }
   })
 

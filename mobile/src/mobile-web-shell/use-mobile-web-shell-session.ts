@@ -8,13 +8,10 @@ import {
 } from './download-progress-feed'
 import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
-import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
-import {
-  createMobileWebShellRuntime,
-  DOCUMENT_LOAD_DEADLINE_MS,
-  PAGE_READY_DEADLINE_MS,
-  type MobileWebShellRuntime
-} from './mobile-web-shell-runtime'
+import { useGenerationDocumentLease } from './use-generation-document-lease'
+import { runMobileWebShellSessionEffect } from './mobile-web-shell-session-effect-runner'
+import { canConfirmGenerationDocument } from './page-document-state'
+import { createMobileWebShellRuntime, type MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useMobileWebShellGates } from './use-mobile-web-shell-gates'
 import { shellPageBackClaimed } from './shell-page-back-claim'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
@@ -85,6 +82,7 @@ export function useMobileWebShellSession(args: {
 
   const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)
+  const { leaseRef, retireLease, adoptLease } = useGenerationDocumentLease(storeRef.current, state)
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
@@ -111,10 +109,16 @@ export function useMobileWebShellSession(args: {
 
   const dispatch = useCallback(
     (epoch: number, event: MobileWebShellSessionEvent): void => {
-      if (epoch !== epochRef.current) {
+      const previous = sessionRef.current
+      if (epoch !== epochRef.current || ('flow' in event && event.flow !== previous.flow)) {
+        if (event.type === 'activated' && event.lease !== undefined) {
+          storeRef.current?.releaseGeneration(event.lease)
+        }
         return
       }
-      const previous = sessionRef.current
+      if (event.type === 'activated' && event.lease !== undefined) {
+        adoptLease(event.lease, previous.state)
+      }
       const stepped = reduceMobileWebShellSession(previous, event)
       const trace = traceShellStep(logTraceRef.current, previous, event, stepped.session)
       logTraceRef.current = trace
@@ -137,14 +141,18 @@ export function useMobileWebShellSession(args: {
         // Echo the resulting flow so reducer restarts can reject superseded completions.
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
+      if (next.kind !== 'ready') {
+        retireLease(previous.state)
+      }
     },
-    [cancelPending, downloadProgress]
+    [adoptLease, cancelPending, downloadProgress, retireLease, leaseRef]
   )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
     cancelPending()
-  }, [cancelPending])
+    retireLease(sessionRef.current.state)
+  }, [cancelPending, retireLease])
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
@@ -153,65 +161,37 @@ export function useMobileWebShellSession(args: {
         return
       }
       const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
-      switch (effect.kind) {
-        case 'delete-cache':
-          // No completion event needed: the store queue orders the following sweep/read after deletion.
-          await store.deleteHostCache(hostKey).catch(() => undefined)
-          return
-        case 'record-update-failure':
-          // The runner owns host/time; best-effort store failures must not affect the decision.
-          await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
-          return
-        case 'forget-update-failures':
-          await store.forgetHostUpdateFailures(hostId)
-          return
-        case 'open-cache':
-          send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
-          return
-        case 'read-manifest':
-          await readManifest(client, flow, send)
-          return
-        case 'download':
-          await download({
-            client,
-            store,
-            hostKey,
-            flow,
-            runtime,
-            startedAt: startedAtRef.current,
-            downloads: downloadsRef.current,
-            send
-          })
-          return
-        case 'open-generation':
-          send({
-            type: 'activated',
-            flow,
-            generationDirectory: effect.directory,
-            sessionId: runtime.mintSessionId(),
-            buildId: effect.buildId,
-            totalBytes: effect.totalBytes,
-            elapsedMs: runtime.now() - startedAtRef.current
-          })
-          return
-        case 'remount':
-          send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
-          return
-        case 'await-page-ready':
-        case 'await-document-load': {
-          const pageReady = effect.kind === 'await-page-ready'
-          const cancel = runtime.setTimer(
-            () => {
-              timersRef.current.delete(cancel)
-              send({ type: pageReady ? 'page-ready-deadline' : 'document-load-deadline', flow })
-            },
-            pageReady ? PAGE_READY_DEADLINE_MS : DOCUMENT_LOAD_DEADLINE_MS
+      const lease = leaseRef.current
+      const sessionId =
+        sessionRef.current.state.kind === 'ready' ? sessionRef.current.state.sessionId : null
+      await runMobileWebShellSessionEffect({
+        effect,
+        store,
+        lease,
+        hostKey,
+        hostId,
+        client,
+        flow,
+        runtime,
+        send,
+        startedAt: startedAtRef.current,
+        downloads: downloadsRef.current,
+        timers: timersRef.current,
+        isCurrentDocument: () => {
+          const current = sessionRef.current
+          return (
+            epoch === epochRef.current &&
+            flow === current.flow &&
+            leaseRef.current === lease &&
+            current.state.kind === 'ready' &&
+            current.state.sessionId === sessionId &&
+            lease !== null &&
+            canConfirmGenerationDocument(current, lease.generation.manifest)
           )
-          timersRef.current.add(cancel)
         }
-      }
+      })
     },
-    [client, dispatch, hostId, hostKey, runtime]
+    [client, dispatch, hostId, hostKey, runtime, leaseRef]
   )
   // Install the runner after commit, before dispatching effects, so discarded renders cannot execute work.
   useEffect(() => {
@@ -266,28 +246,48 @@ export function useMobileWebShellSession(args: {
     dispatch(epochRef.current, { type: 'retry-pressed' })
   }, [dispatch, invalidate, runtime])
 
-  const reportShellFailure = useCallback(
-    (reason: MobileWebShellReportedFailure) => {
-      dispatch(epochRef.current, { type: 'shell-failed', reason })
+  const documentSessionId = state.kind === 'ready' ? state.sessionId : null
+  const documentEpoch = epochRef.current
+  const reportDocumentEvent = useCallback(
+    (event: MobileWebShellSessionEvent): void => {
+      const current = sessionRef.current.state
+      if (
+        documentEpoch === epochRef.current &&
+        current.kind === 'ready' &&
+        current.sessionId === documentSessionId
+      ) {
+        dispatch(documentEpoch, event)
+      }
     },
-    [dispatch]
+    [dispatch, documentEpoch, documentSessionId]
   )
 
-  const reportDocumentStarted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-started' })
-  }, [dispatch])
-
-  const reportDocumentLoaded = useCallback(() => {
-    dispatch(epochRef.current, { type: 'document-loaded' })
-  }, [dispatch])
-
-  const reportPageReady = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-ready' })
-  }, [dispatch])
-
-  const reportPagePainted = useCallback(() => {
-    dispatch(epochRef.current, { type: 'page-painted' })
-  }, [dispatch])
+  const reportShellFailure = useCallback(
+    (reason: MobileWebShellReportedFailure) => {
+      if (reason === 'host-profile-unreadable') {
+        dispatch(epochRef.current, { type: 'shell-failed', reason })
+      } else {
+        reportDocumentEvent({ type: 'shell-failed', reason })
+      }
+    },
+    [dispatch, reportDocumentEvent]
+  )
+  const reportDocumentStarted = useCallback(
+    () => reportDocumentEvent({ type: 'document-started' }),
+    [reportDocumentEvent]
+  )
+  const reportDocumentLoaded = useCallback(
+    () => reportDocumentEvent({ type: 'document-loaded' }),
+    [reportDocumentEvent]
+  )
+  const reportPageReady = useCallback(
+    () => reportDocumentEvent({ type: 'page-ready' }),
+    [reportDocumentEvent]
+  )
+  const reportPagePainted = useCallback(
+    () => reportDocumentEvent({ type: 'page-painted' }),
+    [reportDocumentEvent]
+  )
 
   const reportPageBackClaim = useCallback(
     (claimed: boolean) => {

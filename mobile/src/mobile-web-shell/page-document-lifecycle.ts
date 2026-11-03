@@ -57,7 +57,8 @@ export function reducePageDocumentLifecycle(
       return session.pageReady ? step(session, {}) : failDocument(session)
     case 'document-load-deadline':
       // iOS 18 can cancel its own document without reporting load failure (#28626); bound the otherwise endless blank cover.
-      return session.state.kind !== 'ready' || session.documentLoaded || session.pageReady
+      return session.state.kind !== 'ready' ||
+        (session.documentLoaded && session.pageReady && session.pagePainted)
         ? step(session, {})
         : failDocument(session)
   }

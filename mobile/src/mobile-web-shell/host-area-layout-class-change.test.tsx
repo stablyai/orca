@@ -67,6 +67,16 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
 const store: GenerationStore = {
+  acquireGeneration: async () => ({
+    generation: {
+      buildId: 'b'.repeat(64),
+      directory: 'file:///cache/gen',
+      manifest: doubles.manifest()
+    }
+  }),
+  releaseGeneration: () => undefined,
+  confirmGeneration: async () => undefined,
+  rejectGeneration: async () => undefined,
   readActiveGeneration: async () => ({
     buildId: 'b'.repeat(64),
     directory: 'file:///cache/gen',

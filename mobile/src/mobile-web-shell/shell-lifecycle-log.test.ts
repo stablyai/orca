@@ -165,7 +165,7 @@ describe('shell lifecycle log lines', () => {
       opened
     )
     expect(summary(lines)).toEqual([
-      'web-shell-page Web shell: document never finished loading before the deadline',
+      'web-shell-page Web shell: page did not finish booting before the load deadline',
       'web-shell-flow Web shell: checking host'
     ])
   })

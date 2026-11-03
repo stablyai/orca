@@ -57,7 +57,12 @@ async function activate(
   hostKey: string,
   result = buildResult({})
 ): Promise<void> {
-  await store.commitGeneration(await store.stageGeneration(hostKey, result))
+  const lease = await store.commitGeneration(await store.stageGeneration(hostKey, result))
+  if (lease === null) {
+    throw new Error('cannot open installed generation')
+  }
+  await store.confirmGeneration(lease, () => true)
+  store.releaseGeneration(lease)
 }
 
 function hostKeys(count: number): string[] {
@@ -72,17 +77,10 @@ describe('generation store', () => {
     await activate(store, HOST)
 
     const build = BUILD
-    expect(fs.paths()).toEqual([
-      HOST,
-      `${HOST}/generations`,
-      `${HOST}/generations/${build}`,
-      `${HOST}/generations/${build}/assets`,
-      `${HOST}/generations/${build}/assets/app.js`,
-      `${HOST}/generations/${build}/index.html`,
-      `${HOST}/generations/${build}/manifest.json`,
-      `${HOST}/tmp`,
-      'hosts.json'
-    ])
+    expect(fs.bytes(`${HOST}/generations/${build}/index.html`)).toEqual(new Uint8Array(4).fill(7))
+    expect(fs.bytes(`${HOST}/generations/${build}/assets/app.js`)).toEqual(
+      new Uint8Array(2).fill(7)
+    )
     const staged = fs.writes.filter((path) => path.includes('/tmp/'))
     expect(staged.at(-1)).toBe(`${HOST}/tmp/${build}/manifest.json`)
     expect(staged).toHaveLength(3)
@@ -137,7 +135,7 @@ describe('generation store', () => {
 
     await store.stageGeneration(HOST, buildResult({}))
     await store.stageGeneration(other, buildResult({}))
-    await store.sweepStagedGenerations()
+    await createGenerationStore({ fileSystem: fs }).sweepStagedGenerations()
 
     expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
@@ -151,24 +149,24 @@ describe('generation store', () => {
     await activate(store, HOST)
     const before = fs.paths()
     const staged = await store.stageGeneration(HOST, buildResult({}))
-    const active = await store.commitGeneration(staged)
+    const lease = await store.commitGeneration(staged)
 
-    expect(active.buildId).toBe(BUILD)
+    expect(lease.generation.buildId).toBe(BUILD)
     expect(fs.paths()).toEqual(before)
   })
 
-  it('replaces the previous generation when the build id changes', async () => {
+  it('retains the previous confirmed generation when the build id changes', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
 
     await activate(store, HOST)
     await activate(store, HOST, buildResult(SECOND))
 
-    expect(fs.paths().some((path) => path.includes(BUILD))).toBe(false)
+    expect(fs.paths().some((path) => path.includes(BUILD))).toBe(true)
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
   })
 
-  it('reads two generations as no activation and drops the host tree', async () => {
+  it('uses confirmed authority when an unrelated generation directory exists', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
@@ -177,11 +175,11 @@ describe('generation store', () => {
       bytes: new TextEncoder().encode('{}')
     })
 
-    expect(await store.readActiveGeneration(HOST)).toBeNull()
-    expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
+    expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(true)
   })
 
-  it('reads an unparseable or mismatched manifest as no activation and drops the host tree', async () => {
+  it('refuses an unparseable or mismatched selected manifest without deleting its host', async () => {
     for (const body of [
       'not json',
       JSON.stringify({ ...buildResult({}).manifest, buildId: 'd'.repeat(64) })
@@ -195,7 +193,7 @@ describe('generation store', () => {
       })
 
       expect(await store.readActiveGeneration(HOST)).toBeNull()
-      expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
+      expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(true)
     }
   })
 
@@ -333,8 +331,9 @@ describe('generation store', () => {
     // Count activations only; eviction must leave staged downloads intact.
     expect(fs.paths().some((path) => path.startsWith(oldest))).toBe(false)
     expect(fs.text(`${staged.directory.slice(ROOT.length + 1)}/manifest.json`)).not.toBeNull()
-    await store.commitGeneration(staged)
-    expect((await store.readActiveGeneration(downloading))?.buildId).toBe(BUILD)
+    const lease = await store.commitGeneration(staged)
+    expect(lease.generation.buildId).toBe(BUILD)
+    expect(await store.readActiveGeneration(downloading)).toBeNull()
   })
 
   it('serializes two stage calls for one host and build', async () => {
@@ -424,10 +423,10 @@ describe('generation store', () => {
     await expect(store.commitGeneration(staged)).rejects.toThrow('did not carry its manifest')
 
     expect(await store.readActiveGeneration(HOST)).toBeNull()
-    expect(fs.paths().some((path) => path.includes('generations/'))).toBe(false)
+    expect(fs.text(`${HOST}/generations/${BUILD}/manifest.json`)).toBeNull()
   })
 
-  it('keeps the host tree when the manifest read fails, and drops it when it is missing', async () => {
+  it('keeps the host tree when a selected manifest is unreadable or missing', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     const manifest = `${HOST}/generations/${BUILD}/manifest.json`
@@ -441,7 +440,7 @@ describe('generation store', () => {
     fs.failReadsAt(null)
     await fs.delete(`${ROOT}/${manifest}`)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
-    expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
+    expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(true)
   })
 
   it('activates normally when the recency index cannot be read', async () => {
@@ -491,9 +490,13 @@ describe('generation store', () => {
     fs.failWritesAt('hosts.json')
 
     const staged = await store.stageGeneration(HOST, buildResult({}))
-    const active = await store.commitGeneration(staged)
+    const lease = await store.commitGeneration(staged)
 
-    expect(active.buildId).toBe(BUILD)
+    expect(lease.generation.buildId).toBe(BUILD)
+    if (lease === null) {
+      throw new Error('missing pending generation')
+    }
+    await store.confirmGeneration(lease, () => true)
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
     expect(fs.text('hosts.json')).toBeNull()
   })
@@ -645,7 +648,7 @@ describe('a pending manifest left by an older build', () => {
     expect(fs.text(MANIFEST_PATH)).toBe(stored)
   })
 
-  it('drops the host tree for a redownload when it is the only manifest left', async () => {
+  it('refuses the incomplete selection when only a legacy pending manifest remains', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
@@ -654,6 +657,6 @@ describe('a pending manifest left by an older build', () => {
 
     expect(await store.readActiveGeneration(HOST)).toBeNull()
 
-    expect(fs.paths().some((path) => path.startsWith(`${HOST}/generations`))).toBe(false)
+    expect(fs.text(MANIFEST_PATH)).toBeNull()
   })
 })

@@ -1,3 +1,5 @@
+import type { MobileWebBundleCompatManifest } from '../transport/web-bundle/mobile-web-bundle-compat'
+import { cachedGenerationWall, gateVerdict } from './mobile-web-shell-gates'
 import type {
   MobileWebShellSession,
   MobileWebShellSessionEvent
@@ -32,4 +34,37 @@ export function pageDocumentStatePatch(
     return { pageReady: true, pageBackClaimed: false }
   }
   return { pagePainted: true }
+}
+
+export function generationDocumentHealthy(session: MobileWebShellSession): boolean {
+  return (
+    session.state.kind === 'ready' &&
+    session.documentLoaded &&
+    session.pageReady &&
+    session.pagePainted
+  )
+}
+
+export function canConfirmGenerationDocument(
+  session: MobileWebShellSession,
+  manifest: MobileWebBundleCompatManifest
+): boolean {
+  const gates = session.gates
+  if (!generationDocumentHealthy(session) || gates === null) {
+    return false
+  }
+  const verdict = gateVerdict(gates)
+  return (
+    (verdict.kind === 'open' || verdict.kind === 'offline') &&
+    cachedGenerationWall(verdict, gates, manifest) === null
+  )
+}
+
+export function canConfirmSelectedGeneration(session: MobileWebShellSession): boolean {
+  return (
+    session.cached !== null &&
+    session.state.kind === 'ready' &&
+    session.cached.buildId === session.state.buildId &&
+    canConfirmGenerationDocument(session, session.cached.compat)
+  )
 }

@@ -55,12 +55,20 @@ function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
   }
   const staged = { hostKey: 'k', buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }
   return {
+    acquireGeneration: async () => ({
+      generation: { buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }
+    }),
+    releaseGeneration: () => undefined,
+    confirmGeneration: async () => undefined,
+    rejectGeneration: async () => undefined,
     readActiveGeneration: async () => null,
     stageGeneration: fail === 'stage' ? reject : async () => staged,
     commitGeneration:
       fail === 'commit'
         ? reject
-        : async () => ({ buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }),
+        : async () => ({
+            generation: { buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }
+          }),
     abortStagedGeneration: async () => undefined,
     openReusableAssets: async () => ({ has: () => false, check: async () => false }),
     sweepStagedGenerations: async () => undefined,
@@ -203,7 +211,7 @@ describe('the download', () => {
       expect(downloads.size).toBe(1)
       return fetch()
     }
-    expect(await downloadEvents(CLIENT, storeThat(null), downloads)).toEqual([
+    expect(await downloadEvents(CLIENT, storeThat(null), downloads)).toMatchObject([
       { type: 'download-staged', flow: 3 },
       {
         type: 'activated',
@@ -251,7 +259,12 @@ describe('a download that reuses the cached generation', () => {
   async function cachedStore() {
     const fileSystem = createFakeGenerationFileSystem()
     const store = createGenerationStore({ fileSystem })
-    await store.commitGeneration(await store.stageGeneration(HOST, CACHED))
+    const lease = await store.commitGeneration(await store.stageGeneration(HOST, CACHED))
+    if (lease === null) {
+      throw new Error('missing cached generation')
+    }
+    await store.confirmGeneration(lease, () => true)
+    store.releaseGeneration(lease)
     return { fileSystem, store }
   }
 
@@ -348,7 +361,7 @@ describe('a download that reuses the cached generation', () => {
 
     expect(events.filter((event) => event.type === 'download-failed')).toEqual([])
     const active = await store.readActiveGeneration(HOST)
-    expect(active?.buildId).toBe(UPDATE.manifest.buildId)
+    expect(active?.buildId).toBe(CACHED.manifest.buildId)
     expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
       new Uint8Array(2)
     )
@@ -424,8 +437,8 @@ describe('a download that reuses the cached generation', () => {
           elapsedMs: 0
         }
       ]
-      expect(first).toEqual(expected)
-      expect(second).toEqual(expected)
+      expect(first).toMatchObject(expected)
+      expect(second).toMatchObject(expected)
       expect(moves).toEqual([
         [
           `${fileSystem.rootUri}/${HOST}/tmp/${UPDATE.manifest.buildId}`,
@@ -433,9 +446,9 @@ describe('a download that reuses the cached generation', () => {
         ]
       ])
       expect(await store.readActiveGeneration(HOST)).toEqual({
-        buildId: UPDATE.manifest.buildId,
-        directory: `${fileSystem.rootUri}/${HOST}/generations/${UPDATE.manifest.buildId}`,
-        manifest: UPDATE.manifest
+        buildId: CACHED.manifest.buildId,
+        directory: `${fileSystem.rootUri}/${HOST}/generations/${CACHED.manifest.buildId}`,
+        manifest: CACHED.manifest
       })
       expect(fileSystem.bytes(`${HOST}/generations/${UPDATE.manifest.buildId}/app.js`)).toEqual(
         new Uint8Array(2)
@@ -443,5 +456,23 @@ describe('a download that reuses the cached generation', () => {
     } finally {
       fileSystem.moveDirectory = moveDirectory
     }
+  })
+  it('opens its confirmed cache when another host has an unreadable cleanup journal', async () => {
+    const { fileSystem, store } = await cachedStore()
+    const otherHost = deriveHostCacheKey('unreadable-host')
+    const other = await store.commitGeneration(await store.stageGeneration(otherHost, CACHED))
+    await store.confirmGeneration(other, () => true)
+    store.releaseGeneration(other)
+    const record = fileSystem
+      .paths()
+      .find((path) => path.startsWith(`${otherHost}/activation/`) && path.endsWith('.json'))
+    if (record === undefined) {
+      throw new Error('missing other host journal')
+    }
+    fileSystem.failReadsAt(record)
+    expect((await openCache(store, HOST))?.buildId).toBe(CACHED.manifest.buildId)
+    expect(
+      fileSystem.bytes(`${otherHost}/generations/${CACHED.manifest.buildId}/index.html`)
+    ).not.toBeNull()
   })
 })

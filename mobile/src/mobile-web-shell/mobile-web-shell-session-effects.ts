@@ -2,7 +2,7 @@ import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-
 import { mobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-operations'
 import { runRpcOperation } from '../transport/rpc-operation'
 import type { RpcClient } from '../transport/rpc-client'
-import type { GenerationStore } from './generation-store'
+import type { ActiveGeneration, GenerationStore } from './generation-store'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { generationDirectoryPath } from './generation-store-file-system'
 import type {
@@ -22,24 +22,25 @@ export async function openCache(
     // Sweep lazily from mounted shells so disabling the feature leaves cache untouched.
     await store.sweepStagedGenerations()
     const active = await store.readActiveGeneration(hostKey)
-    return active === null
-      ? null
-      : {
-          buildId: active.buildId,
-          directory: generationDirectoryPath(active.directory),
-          totalBytes: active.manifest.totalBytes,
-          routes: active.manifest.routes,
-          compat: {
-            schemaVersion: active.manifest.schemaVersion,
-            runtimeProtocolVersion: active.manifest.runtimeProtocolVersion,
-            minCompatibleRuntimeProtocolVersion:
-              active.manifest.minCompatibleRuntimeProtocolVersion,
-            pageVersion: active.manifest.pageVersion
-          }
-        }
+    return active === null ? null : cachedGenerationOf(active)
   } catch {
     // Unreadable is not corrupt: leave cache intact and let connectivity decide download versus offline failure.
     return null
+  }
+}
+
+export function cachedGenerationOf(active: ActiveGeneration): CachedGeneration {
+  return {
+    buildId: active.buildId,
+    directory: generationDirectoryPath(active.directory),
+    totalBytes: active.manifest.totalBytes,
+    routes: active.manifest.routes,
+    compat: {
+      schemaVersion: active.manifest.schemaVersion,
+      runtimeProtocolVersion: active.manifest.runtimeProtocolVersion,
+      minCompatibleRuntimeProtocolVersion: active.manifest.minCompatibleRuntimeProtocolVersion,
+      pageVersion: active.manifest.pageVersion
+    }
   }
 }
 
@@ -120,14 +121,20 @@ export async function download(args: {
       await store.abortStagedGeneration(staged).catch(() => undefined)
       return
     }
-    const committed = await store.commitGeneration(staged)
+    const lease = await store.commitGeneration(staged)
+    if (controller.signal.aborted) {
+      store.releaseGeneration(lease)
+      return
+    }
     send({
+      lease,
+      generation: cachedGenerationOf(lease.generation),
       type: 'activated',
       flow,
-      generationDirectory: generationDirectoryPath(committed.directory),
+      generationDirectory: generationDirectoryPath(lease.generation.directory),
       sessionId: runtime.mintSessionId(),
-      buildId: committed.buildId,
-      totalBytes: committed.manifest.totalBytes,
+      buildId: lease.generation.buildId,
+      totalBytes: lease.generation.manifest.totalBytes,
       elapsedMs: runtime.now() - args.startedAt
     })
   } catch (error) {
