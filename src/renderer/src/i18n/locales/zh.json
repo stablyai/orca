@@ -8493,7 +8493,9 @@
           "048aac8a64": "终端排版",
           "4415beb958": "已禁用",
           "4e7d41a9f0": "已启用",
-          "dimUnfocusedPanes": "调暗未聚焦的窗格。"
+          "dimUnfocusedPanes": "调暗未聚焦的窗格。",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -10469,6 +10471,12 @@
             "process": "过程",
             "prompt": "提示词",
             "stop": "停止",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "色彩对比",
               "description": "提高文本可读性或保留终端程序选择的颜色。",

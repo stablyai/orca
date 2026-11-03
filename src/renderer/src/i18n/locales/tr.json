@@ -9168,7 +9168,9 @@
           "048aac8a64": "Terminal Tipografisi",
           "4415beb958": "devre dışı",
           "4e7d41a9f0": "etkin",
-          "dimUnfocusedPanes": "Odaklanılmayan bölmeleri soluklaştır."
+          "dimUnfocusedPanes": "Odaklanılmayan bölmeleri soluklaştır.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Kalın Yazı Tipi Kalınlığı",
@@ -11144,6 +11146,12 @@
             "process": "işlem",
             "prompt": "prompt",
             "stop": "durdur",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Renk Kontrastı",
               "description": "Metin okunabilirliğini artırın veya terminal programlarının seçtiği renkleri koruyun.",

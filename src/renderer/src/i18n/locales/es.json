@@ -8788,7 +8788,9 @@
           "048aac8a64": "Tipografía del terminal",
           "4415beb958": "desactivado",
           "4e7d41a9f0": "activado",
-          "dimUnfocusedPanes": "Atenuar paneles sin foco."
+          "dimUnfocusedPanes": "Atenuar paneles sin foco.",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -10775,6 +10777,12 @@
             "process": "proceso",
             "prompt": "inmediato",
             "stop": "detener",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Contraste de color",
               "description": "Mejore la legibilidad del texto o conserve los colores elegidos por los programas de terminal.",

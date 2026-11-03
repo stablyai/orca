@@ -9357,7 +9357,9 @@
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
           "dimUnfocusedPanes": "Dim unfocused panes.",
-          "kitty_import": "Import from Kitty"
+          "kitty_import": "Import from Kitty",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
@@ -11340,6 +11342,12 @@
             "process": "process",
             "prompt": "prompt",
             "stop": "stop",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "Color Contrast",
               "description": "Improve text readability or preserve the colors chosen by terminal programs.",

@@ -110,10 +110,6 @@ export function TabBarQuickCommandsButton({
     ? executionHostId
     : hosts[0].hostId
 
-  if (!showQuickCommandsButton) {
-    return null
-  }
-
   const addRepoCommand = (hostId: ExecutionHostId): void => {
     setEditor({
       mode: 'add',
@@ -163,6 +159,11 @@ export function TabBarQuickCommandsButton({
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
     : repos
+
+  // The visibility setting can change on an already mounted button. Return only after every hook.
+  if (!showQuickCommandsButton) {
+    return null
+  }
 
   // Hide without a repo run target, including folder workspaces and floating terminals.
   if (!repoId) {

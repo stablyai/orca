@@ -198,6 +198,10 @@ export const getTerminalChromeSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.quickKeyword', 'quick'),
       ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.quickCommandPhrase',
+        'quick command'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.terminal.search.toolbarKeyword',
         'toolbar'
       )

@@ -9005,7 +9005,9 @@
           "048aac8a64": "終端機排版",
           "4415beb958": "已停用",
           "4e7d41a9f0": "已啟用",
-          "dimUnfocusedPanes": "調暗未聚焦的窗格。"
+          "dimUnfocusedPanes": "調暗未聚焦的窗格。",
+          "terminalChromeTitle": "Terminal Toolbar",
+          "commandButtonLabel": "Command Button"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "粗體字體粗細",
@@ -10981,6 +10983,12 @@
             "process": "行程",
             "prompt": "提示詞",
             "stop": "停止",
+            "commandButtonTitle": "Command Button",
+            "commandButtonDescription": "Show the quick-command button in focused terminal toolbars.",
+            "commandKeyword": "command",
+            "quickKeyword": "quick",
+            "quickCommandPhrase": "quick command",
+            "toolbarKeyword": "toolbar",
             "minimumContrast": {
               "title": "色彩對比",
               "description": "提高文字可讀性或保留終端機程式選擇的顏色。",
