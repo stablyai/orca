@@ -146,7 +146,21 @@ export async function rewindStructuredAgentSession(
                 }
               : {})
           }
-          await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+          try {
+            await persistRewindRecord(store, sessionId, ctx.fence, prepared)
+          } catch (error) {
+            // The chat stays on its source, so stop a child that may already sit on the unrecorded fork.
+            if (fork?.ok) {
+              await stopForFork(context, sessionId).catch((cause: unknown) =>
+                context.deps.logger.warn('agent was not stopped after an unrecorded rewind fork', {
+                  scope: 'rewind-fork',
+                  sessionId,
+                  error: cause
+                })
+              )
+            }
+            throw error
+          }
           ctx.publish()
           store.requireWritableRecord(sessionId)
           const provider =

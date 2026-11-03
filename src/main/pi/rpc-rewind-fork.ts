@@ -72,6 +72,16 @@ async function readPiRewindTarget(
     : { ok: false, reason: 'proof-mismatch' }
 }
 
+/** Restart from the recorded conversation rather than keep a child on an unrecorded fork. */
+async function closeOnUnrecordedFork(
+  session: { close(): Promise<unknown> },
+  error: unknown
+): Promise<never> {
+  // The fork's own failure is what the rewind reports, even when closing fails too.
+  await session.close().catch(() => undefined)
+  throw error
+}
+
 /** Rewind with Pi's own `fork`, which leaves the running Pi on a new session file. */
 export async function forkPiRpcSessionForRewind(
   session: { connection: Pick<PiRpcConnection, 'request'>; close(): Promise<unknown> },
@@ -94,7 +104,8 @@ export async function forkPiRpcSessionForRewind(
     if (error instanceof JsonlRpcResponseError) {
       return { ok: false, reason: 'provider-refused' }
     }
-    throw error
+    // Pi may have forked before the reply failed, so the outcome is unknown.
+    return closeOnUnrecordedFork(session, error)
   }
   if (reply.cancelled) {
     return { ok: false, reason: 'provider-refused' }
@@ -116,9 +127,7 @@ export async function forkPiRpcSessionForRewind(
       }
     }
   } catch (error) {
-    // Restart from the recorded conversation rather than keep a child on an unrecorded fork.
-    await session.close()
-    throw error
+    return closeOnUnrecordedFork(session, error)
   }
 }
 

@@ -33,7 +33,7 @@ const ENTRIES = [
   answer('a3', 'u3')
 ]
 
-function piChild(options: { forks?: boolean } = {}) {
+function piChild(options: { forks?: boolean; forkReply?: unknown } = {}) {
   let sessionFile = SOURCE
   const request = vi.fn(async (command: string, _params?: Record<string, unknown>) => {
     if (command === 'get_state') {
@@ -44,7 +44,7 @@ function piChild(options: { forks?: boolean } = {}) {
     }
     if (command === 'fork') {
       sessionFile = options.forks === false ? SOURCE : FORK
-      return { text: 'second', cancelled: false }
+      return 'forkReply' in options ? options.forkReply : { text: 'second', cancelled: false }
     }
     throw new Error(`unexpected ${command}`)
   })
@@ -90,6 +90,15 @@ describe('Pi rewind fork', () => {
     await expect(
       forkPiRpcSessionForRewind(child, { sessionId: SOURCE, prompts: ['third'] })
     ).rejects.toThrow('did not report its rewind fork')
+    expect(child.close).toHaveBeenCalledOnce()
+  })
+
+  it('stops a Pi whose fork reply is unreadable, since Pi may have forked anyway', async () => {
+    const child = piChild({ forkReply: { text: 'second' } })
+    child.close.mockRejectedValueOnce(new Error('Pi writer killed'))
+    await expect(
+      forkPiRpcSessionForRewind(child, { sessionId: SOURCE, prompts: ['third'] })
+    ).rejects.toThrow('cancelled')
     expect(child.close).toHaveBeenCalledOnce()
   })
 })

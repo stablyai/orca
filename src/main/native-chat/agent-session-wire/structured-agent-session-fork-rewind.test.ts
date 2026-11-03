@@ -269,6 +269,23 @@ describe('rewinding a chat whose agent forks', () => {
     expect(closeSession).not.toHaveBeenCalled()
   })
 
+  it('stops the agent when the fork is made but the rewind cannot be recorded', async () => {
+    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const fork = forkForRewind.getMockImplementation()!
+    forkForRewind.mockImplementationOnce(async (input) => {
+      vi.spyOn(store, 'transitionHandoff').mockRejectedValueOnce(new Error('record write failed'))
+      return fork(input)
+    })
+    await expect(rewindSecondPrompt()).rejects.toThrow('record write failed')
+    expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
+    expect(
+      agentSessionProviderHandleChainHead(store.getRecord(HOST_TEST_SESSION)!.providerHandleChain)
+        ?.handle.nativeId
+    ).toBe(SOURCE)
+    expect(closeSession).toHaveBeenCalled()
+  })
+
   it('rolls back both history and handle when the receipt fails, then recovers the same fork', async () => {
     host.deps.usageLimitAutoContinue = {
       isEnabled: () => true,
