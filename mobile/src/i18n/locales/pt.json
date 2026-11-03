@@ -1314,10 +1314,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "Uso da conta",
+      "sessionWindow": "5h",
+      "systemDefault": "Padrão do sistema",
+      "weeklyWindow": "7d"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",
       "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar"
+    },
+    "arrange": {
+      "done": "Concluído",
+      "hint": "Arraste para mover. Desative uma seção para ocultá-la.",
+      "reset": "Redefinir",
+      "showSection": "Mostrar {{section}}",
+      "title": "Organizar Início"
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1342,6 +1355,15 @@
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "removeHostTitle": "Remover host",
       "tryAgain": "Tente novamente."
+    },
+    "stats": {
+      "agentTime": "Tempo de agente",
+      "agentsSpawned": "Agentes iniciados",
+      "days": "{{days}}d",
+      "heading": "Suas estatísticas",
+      "hours": "{{hours}}h",
+      "minutes": "{{minutes}}min",
+      "prsCreated": "PRs criados"
     }
   },
   "hooks": {

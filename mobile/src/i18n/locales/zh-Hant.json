@@ -1272,10 +1272,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "帳戶用量",
+      "sessionWindow": "5 小時",
+      "systemDefault": "系統預設",
+      "weeklyWindow": "7 天"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
       "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
+    },
+    "arrange": {
+      "done": "完成",
+      "hint": "拖曳以移動。關閉區塊即可隱藏。",
+      "reset": "重設",
+      "showSection": "顯示{{section}}",
+      "title": "排列首頁"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1300,6 +1313,15 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
+    },
+    "stats": {
+      "agentTime": "代理程式時間",
+      "agentsSpawned": "已啟動代理程式",
+      "days": "{{days}} 天",
+      "heading": "你的統計",
+      "hours": "{{hours}} 小時",
+      "minutes": "{{minutes}} 分鐘",
+      "prsCreated": "已建立 PR"
     }
   },
   "hooks": {

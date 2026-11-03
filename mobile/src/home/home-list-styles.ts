@@ -5,6 +5,10 @@ import { themedStyleSheet } from '../theme/themed-styles'
 // Text starts after the status column, so separators inset to it.
 const STATUS_COLUMN_WIDTH = 24
 const ROW_LEADING_PADDING = spacing.lg
+const TILE_SIZE = 36
+const TILE_GAP = 12
+const TILE_DOT_SIZE = 12
+const TILE_DOT_RING = 2.5
 
 /** Home's grouped lists: one inset group per section, a status column, a title and a wrapping detail line. */
 export const homeListStyles = themedStyleSheet(() => ({
@@ -27,14 +31,35 @@ export const homeListStyles = themedStyleSheet(() => ({
     marginLeft: ROW_LEADING_PADDING + STATUS_COLUMN_WIDTH
   },
   fullSeparator: { marginLeft: ROW_LEADING_PADDING },
+  tileSeparator: { marginLeft: ROW_LEADING_PADDING + TILE_SIZE + TILE_GAP },
   status: {
     width: STATUS_COLUMN_WIDTH,
     height: 22,
     marginTop: 12,
     justifyContent: 'center'
   },
-  // AgentSpinner's box, so connection dots and agent dots share one column.
-  statusDotBox: { width: 12, alignItems: 'center' },
+  // A machine tile in place of the status column, top-aligned with the title like it.
+  tile: {
+    width: TILE_SIZE,
+    height: TILE_SIZE,
+    marginTop: 12,
+    marginRight: TILE_GAP,
+    borderRadius: radii.tile,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  // The connection dot on the tile's corner, ringed in the group's colour.
+  tileDot: {
+    position: 'absolute',
+    right: -3 - TILE_DOT_RING,
+    bottom: -3 - TILE_DOT_RING,
+    width: TILE_DOT_SIZE + TILE_DOT_RING * 2,
+    height: TILE_DOT_SIZE + TILE_DOT_RING * 2,
+    borderRadius: radii.pill,
+    borderWidth: TILE_DOT_RING,
+    borderColor: colors.bgPanel
+  },
   text: { flex: 1, minWidth: 0, paddingVertical: 12 },
   title: { fontSize: 17, lineHeight: 22, color: colors.textPrimary },
   subtitle: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, marginTop: 1 },
@@ -48,7 +73,6 @@ export const homeListStyles = themedStyleSheet(() => ({
     paddingLeft: 10,
     paddingRight: 14
   },
-  time: { fontSize: 15, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',

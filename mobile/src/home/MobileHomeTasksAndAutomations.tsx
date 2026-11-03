@@ -7,56 +7,60 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { HostProfile } from '../transport/types'
 import { homeListStyles as styles } from './home-list-styles'
+import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
-/** Home's Tasks and Automations sections, each opening on a connected desktop. */
-export function MobileHomeTasksAndAutomations(props: {
+type HomeHostSectionProps = {
   connectedHosts: HostProfile[]
-  onOpenTasks: (hostId: string) => void
-  onOpenAutomations: (hostId: string) => void
-}) {
+  first: boolean
+  onOpen: (hostId: string) => void
+}
+
+/** Home's Tasks section, opening on a connected desktop. */
+export function MobileHomeTasksSection(props: HomeHostSectionProps) {
   const t = useMobileTranslation()
   return (
-    <>
-      <HomeSection
-        icon={ListTodo}
-        title={t('home.sections.tasks', 'Tasks')}
-        subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
-        pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
-        connectedHosts={props.connectedHosts}
-        onOpen={props.onOpenTasks}
-      />
-      <HomeSection
-        icon={CalendarClock}
-        title={t('home.listFooter.automationsHeading', 'Automations')}
-        subtitle={t(
-          'automations.mobile.scheduleAgentWorkAndViewRuns',
-          'Schedule agent work and view runs'
-        )}
-        pickerTitle={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
-        connectedHosts={props.connectedHosts}
-        onOpen={props.onOpenAutomations}
-      />
-    </>
+    <HomeSection
+      {...props}
+      icon={ListTodo}
+      title={t('home.sections.tasks', 'Tasks')}
+      subtitle={t('home.sections.tasksSubtitle', 'Browse your issues and reviews')}
+      pickerTitle={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
+    />
   )
 }
 
-function HomeSection(props: {
-  icon: LucideIcon
-  title: string
-  subtitle: string
-  pickerTitle: string
-  connectedHosts: HostProfile[]
-  onOpen: (hostId: string) => void
-}) {
+/** Home's Automations section, opening on a connected desktop. */
+export function MobileHomeAutomationsSection(props: HomeHostSectionProps) {
+  const t = useMobileTranslation()
+  return (
+    <HomeSection
+      {...props}
+      icon={CalendarClock}
+      title={t('home.listFooter.automationsHeading', 'Automations')}
+      subtitle={t(
+        'automations.mobile.scheduleAgentWorkAndViewRuns',
+        'Schedule agent work and view runs'
+      )}
+      pickerTitle={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
+    />
+  )
+}
+
+function HomeSection(
+  props: HomeHostSectionProps & {
+    icon: LucideIcon
+    title: string
+    subtitle: string
+    pickerTitle: string
+  }
+) {
   useMobileColorScheme()
   const hostPicker = useConnectedHostPicker(props.connectedHosts)
   const enabled = props.connectedHosts.length > 0
   const Icon = props.icon
   return (
     <>
-      <Text style={styles.sectionHeading} accessibilityRole="header">
-        {props.title}
-      </Text>
+      <MobileHomeSectionHeading title={props.title} first={props.first} />
       <View style={styles.group}>
         <Pressable
           accessibilityRole="button"

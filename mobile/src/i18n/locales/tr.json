@@ -1276,10 +1276,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "Hesap kullanımı",
+      "sessionWindow": "5 sa",
+      "systemDefault": "Sistem varsayılanı",
+      "weeklyWindow": "7g"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
       "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun"
+    },
+    "arrange": {
+      "done": "Bitti",
+      "hint": "Taşımak için sürükleyin. Gizlemek için bir bölümü kapatın.",
+      "reset": "Sıfırla",
+      "showSection": "{{section}} göster",
+      "title": "Ana sayfayı düzenle"
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -1304,6 +1317,15 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "removeHostTitle": "Sunucuyu Kaldır",
       "tryAgain": "Lütfen tekrar deneyin."
+    },
+    "stats": {
+      "agentTime": "Ajan süresi",
+      "agentsSpawned": "Başlatılan ajanlar",
+      "days": "{{days}} g",
+      "heading": "İstatistiklerin",
+      "hours": "{{hours}} sa",
+      "minutes": "{{minutes}} dk",
+      "prsCreated": "Oluşturulan PR'lar"
     }
   },
   "hooks": {

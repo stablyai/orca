@@ -3,15 +3,15 @@ import { Fragment } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from '../components/AgentSpinner'
-import { useNow } from '../hooks/use-now'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useHostDisplay } from '../transport/use-host-display'
 import type { HostCatalogEntry } from '../transport/types'
 import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
-import { agentStateLabel, formatTimeAgo, type AgentDotState } from '../worktree/agent-row-display'
+import { agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import { homeListStyles as styles } from './home-list-styles'
+import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 const LABEL_STATE: Partial<Record<WorktreeStatus, AgentDotState>> = {
   permission: 'waiting',
@@ -27,21 +27,22 @@ const TINTED_STATUSES: ReadonlySet<WorktreeStatus> = new Set(['permission', 'fai
 export function MobileHomeJumpBackIn(props: {
   rows: readonly HomeJumpBackInRow[]
   hosts: readonly HostCatalogEntry[]
+  first: boolean
   onOpen: (row: HomeJumpBackInRow) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const now = useNow()
   if (props.rows.length === 0) {
     return null
   }
-  // One desktop needs no naming; the repo says more.
+  // One desktop needs no naming.
   const nameDesktops = props.hosts.length > 1
   return (
     <>
-      <Text style={[styles.sectionHeading, styles.firstSectionHeading]} accessibilityRole="header">
-        {t('home.jumpBackIn.heading', 'Jump back in')}
-      </Text>
+      <MobileHomeSectionHeading
+        title={t('home.jumpBackIn.heading', 'Jump back in')}
+        first={props.first}
+      />
       <View style={styles.group}>
         {props.rows.map((row, index) => (
           <Fragment key={`${row.hostId}:${row.worktree.worktreeId}`}>
@@ -50,7 +51,6 @@ export function MobileHomeJumpBackIn(props: {
               row={row}
               host={props.hosts.find((host) => host.id === row.hostId) ?? null}
               nameDesktop={nameDesktops}
-              now={now}
               onOpen={props.onOpen}
             />
           </Fragment>
@@ -64,7 +64,6 @@ function JumpBackInRow(props: {
   row: HomeJumpBackInRow
   host: HostCatalogEntry | null
   nameDesktop: boolean
-  now: number
   onOpen: (row: HomeJumpBackInRow) => void
 }) {
   const t = useMobileTranslation()
@@ -82,25 +81,24 @@ function JumpBackInRow(props: {
     : labelState
       ? agentStateLabel(labelState)
       : ''
-  const where = props.nameDesktop ? desktopName : row.worktree.repo
-  const showWhere = Boolean(where) && (row.actionable || !row.lastOpened)
+  // Branch names repeat across projects, so the repo is always named (#37642); "Connect X" already names the desktop.
   // A named conversation takes the title and moves the workspace to the subtitle (#38007).
-  const details = [...new Set([conversation ? workspace : null, showWhere ? where : null])].filter(
-    Boolean
-  )
+  const where = [
+    conversation ? workspace : null,
+    row.worktree.repo && row.worktree.repo !== workspace ? row.worktree.repo : null,
+    props.nameDesktop && (row.actionable || !row.lastOpened) ? desktopName : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const statusColor =
     !row.lastOpened && TINTED_STATUSES.has(row.worktree.dotStatus)
       ? agentStatusColors()[row.worktree.dotStatus]
       : colors.textSecondary
-  const time =
-    typeof row.worktree.lastOutputAt === 'number'
-      ? formatTimeAgo(row.worktree.lastOutputAt, props.now)
-      : null
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={[title, status, ...details, time].filter(Boolean).join(', ')}
+      accessibilityLabel={[title, status, where].filter(Boolean).join(', ')}
       accessibilityState={{ disabled: !row.actionable }}
       disabled={!row.actionable}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -115,11 +113,10 @@ function JumpBackInRow(props: {
         </Text>
         <Text style={styles.subtitle} numberOfLines={1}>
           <Text style={{ color: statusColor }}>{status}</Text>
-          {details.map((detail) => ` · ${detail}`).join('')}
+          {where ? `${status ? ' · ' : ''}${where}` : ''}
         </Text>
       </View>
       <View style={styles.trailing}>
-        {time ? <Text style={styles.time}>{time}</Text> : null}
         <ChevronRight size={16} color={colors.textMuted} />
       </View>
     </Pressable>

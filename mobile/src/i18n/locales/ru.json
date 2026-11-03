@@ -1352,10 +1352,23 @@
     }
   },
   "home": {
+    "accountUsage": {
+      "heading": "Использование учётной записи",
+      "sessionWindow": "5 ч",
+      "systemDefault": "Как в системе",
+      "weeklyWindow": "7 дн."
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",
       "updateAccessibilityLabel": "Доступна Orca {{version}}. Нажмите, чтобы обновить"
+    },
+    "arrange": {
+      "done": "Готово",
+      "hint": "Перетащите, чтобы переместить. Выключите раздел, чтобы скрыть его.",
+      "reset": "Сбросить",
+      "showSection": "Показывать «{{section}}»",
+      "title": "Настроить главный экран"
     },
     "emptyState": {
       "connectedDescription": "Здесь появится ваш компьютер. Все данные защищены сквозным шифрованием.",
@@ -1380,6 +1393,15 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "removeHostTitle": "Удалить сервер",
       "tryAgain": "Попробуйте ещё раз."
+    },
+    "stats": {
+      "agentTime": "Время агентов",
+      "agentsSpawned": "Запущено агентов",
+      "days": "{{days}} дн.",
+      "heading": "Ваша статистика",
+      "hours": "{{hours}} ч",
+      "minutes": "{{minutes}} мин",
+      "prsCreated": "Создано PR"
     }
   },
   "hooks": {
