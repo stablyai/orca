@@ -73,8 +73,9 @@ export function shouldKeepClaudePermissionVisible(
   }
   // The program's own fresh report passed the hook-silence gate (#37003): a declined permission
   // emits no hook, so resumed program work is the answer evidence. Lease renewals never reach
-  // here — the yield gate holds them without end.
-  if (programStatusRelease === true) {
+  // here — the yield gate holds them without end. A child-owned wait answers to its child's
+  // settlement below, not to pane-level program work.
+  if (programStatusRelease === true && !previous.toolAgentId?.trim()) {
     return false
   }
   if (next.hasExplicitPrompt === true) {
