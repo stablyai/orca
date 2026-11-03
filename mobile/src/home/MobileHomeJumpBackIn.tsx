@@ -109,7 +109,7 @@ function JumpBackInRow(props: {
         <Text style={styles.title} numberOfLines={1}>
           {name}
         </Text>
-        <Text style={styles.subtitle} numberOfLines={1}>
+        <Text style={styles.subtitle} numberOfLines={2}>
           <Text style={{ color: statusColor }}>{status}</Text>
           {where ? `${status ? ' · ' : ''}${where}` : ''}
         </Text>
