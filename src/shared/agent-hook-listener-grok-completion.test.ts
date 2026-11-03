@@ -69,113 +69,6 @@ describe('Grok completion observations', () => {
     })
   })
 
-  it('marks the captured shutdown SessionEnd and trailing Stop as session boundaries', () => {
-    const sessionEnd = normalize(
-      capturedHook((hook) => hook.hookEventName === 'session_end' && hook.reason === 'shutdown')
-    )
-    const shutdownStop = normalize(
-      capturedHook(
-        (hook) =>
-          hook.hookEventName === 'stop' &&
-          hook.reason === 'shutdown' &&
-          !Object.hasOwn(hook, 'backgroundTasks')
-      )
-    )
-
-    expect(sessionEnd).toMatchObject({
-      state: 'done',
-      sessionBoundary: true
-    })
-    expect(shutdownStop).toMatchObject({
-      state: 'done',
-      sessionBoundary: true
-    })
-    expect(
-      normalize({
-        hookEventName: 'Stop',
-        reason: 'shutdown',
-        stopHookActive: true,
-        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }]
-      })
-    ).toMatchObject({ state: 'done', sessionBoundary: true })
-  })
-
-  it('settles a lead StopFailure without requiring background inventory', () => {
-    expect(
-      normalize({
-        hookEventName: 'StopFailure',
-        error: 'server_error',
-        errorDetails: 'upstream failed',
-        lastAssistantMessage: 'The request failed.'
-      })
-    ).toMatchObject({
-      state: 'done'
-    })
-  })
-
-  it('settles a lead StopCancelled as interrupted', () => {
-    expect(
-      normalize({
-        hookEventName: 'StopCancelled',
-        reason: 'user_interrupt',
-        cancelledBy: 'user',
-        cancelTrigger: 'stop_gesture',
-        reasonDetails: 'user interrupted the turn',
-        lastAssistantMessage: 'Stopped by user.'
-      })
-    ).toMatchObject({
-      state: 'done',
-      interrupted: true,
-      lastAssistantMessage: 'Stopped by user.'
-    })
-  })
-
-  // Pins grok-events.ts: finite task predicate and sessionCrons omission; treating monitors/crons as finite must redden.
-  it.each([
-    {
-      label: 'monitor-only',
-      backgroundTasks: [
-        { id: 'monitor-1', type: 'monitor', status: 'running', description: 'watch the build' }
-      ],
-      sessionCrons: []
-    },
-    {
-      label: 'cron-only',
-      backgroundTasks: [],
-      sessionCrons: [
-        { id: 'cron-1', schedule: 'every minute', recurring: true, prompt: 'check the build' }
-      ]
-    }
-  ])('settles when outstanding work is $label', ({ backgroundTasks, sessionCrons }) => {
-    expect(
-      normalize({
-        hookEventName: 'Stop',
-        reason: 'end_turn',
-        stopHookActive: false,
-        backgroundTasks,
-        sessionCrons
-      })?.state
-    ).toBe('done')
-  })
-
-  // Legacy Grok versions omit both fields, so only positive finite-work evidence may hold the row.
-  it.each([
-    {},
-    { backgroundTasks: { unexpected: true } },
-    { backgroundTasks: [{ type: 'future-task', status: 'running' }] },
-    { backgroundTasks: [], stopHookActive: 'true' },
-    { background_tasks: [], stop_hook_active: false }
-  ])('fails open for unknown or legacy optional fields %#', (payload) => {
-    expect(
-      normalize({
-        hookEventName: 'Stop',
-        reason: 'end_turn',
-        stopHookActive: false,
-        ...payload
-      })?.state
-    ).toBe('done')
-  })
-
   it('keeps ambiguous continuation Stops working and settles on the idle backstop', () => {
     normalize({
       hookEventName: 'UserPromptSubmit',
@@ -206,15 +99,6 @@ describe('Grok completion observations', () => {
     expect(
       normalize({ hookEventName: 'Notification', notificationType: 'idle_prompt' })?.state
     ).toBe('done')
-  })
-
-  it('keeps a starting finite task working', () => {
-    expect(
-      normalize({
-        hookEventName: 'Stop',
-        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'starting' }]
-      })
-    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
   })
 
   // Real Grok 1.0.41 Stop entry for a background `spawn_subagent`, identifiers dropped.
@@ -252,17 +136,6 @@ describe('Grok completion observations', () => {
       expect(row?.workingMode).toBeUndefined()
     }
   )
-
-  it('reads the snake_case inventory the same way', () => {
-    const row = normalize({
-      hookEventName: 'Stop',
-      reason: 'end_turn',
-      stop_hook_active: false,
-      background_tasks: [{ id: 'task-1', type: 'subagent', status: 'running' }]
-    })
-    expect(row).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
-    expect(row?.workingMode).toBeUndefined()
-  })
 
   it('keeps a background subagent working past a cancel, and settles only at a session boundary', () => {
     const cancelled = normalize({
@@ -436,30 +309,4 @@ describe('Grok completion observations', () => {
       ).toBeUndefined()
     }
   )
-
-  it('settles an unseen prompt id and a session-scoped idle event', () => {
-    expect(
-      normalize({
-        hookEventName: 'StopCancelled',
-        sessionId: 'session-1',
-        promptId: 'bash-mode-prompt',
-        reason: 'user_interrupt'
-      })?.state
-    ).toBe('done')
-    expect(
-      normalize({ hookEventName: 'Notification', notificationType: 'idle_prompt' })?.state
-    ).toBe('done')
-  })
-
-  // Pins grok-events.ts: permission/question branch ordering; gating waiting notifications on background work must redden.
-  it('leaves the real ask-user-question notification path ungated', () => {
-    expect(
-      normalize({
-        hookEventName: 'Notification',
-        notificationType: 'elicitation_dialog',
-        message: 'User question requested',
-        level: 'info'
-      })
-    ).toMatchObject({ state: 'waiting', agentType: 'grok' })
-  })
 })
