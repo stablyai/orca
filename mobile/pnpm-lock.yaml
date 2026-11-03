@@ -170,6 +170,7 @@ overrides:
   katex@>=0.11.0 <0.18.2: 0.18.10
   xcode>uuid: 11.1.1
   query-string: 9.5.1
+  node-forge@<1.4.2: 1.4.2
 
 patchedDependencies:
   '@expo/cli@55.0.36': 9ccdef43e1ef80ee4d68b4ed213c145660c2dcf4241cab6593da42f0847583c7
@@ -178,7 +179,7 @@ patchedDependencies:
   expo-constants@55.0.17: d04144bdf6a998301b835602c910db11740c5ebe0eaeb11d377d967a31440ff0
   expo-notifications@55.0.27: ce20843a3daad4185d7e8571788fa323ba4d11984936188790858650a61749c0
   expo-router@55.0.18: 5cdc178be0ec617ebb8dec85eebe4effeca13a6551b87fcb7bcd20ec0d2a313d
-  node-forge@1.4.0: 2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8
+  node-forge@1.4.2: ac041659589a59bcdd85cf3bbde4133f70934ed1bf36cb2b3e4c66999df09acf
   query-string@9.5.1: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
   react-native-webview@13.16.2: 55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06
   react-native@0.83.10: 22bc31f0a057b1f96d9949b38a7ccde81225f617c0f243820dc8a455c91debfb
@@ -5984,8 +5985,8 @@ packages:
       encoding:
         optional: true
 
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+  node-forge@1.4.2:
+    resolution: {integrity: sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==}
     engines: {node: '>= 6.13.0'}
 
   node-int64@0.4.0:
@@ -6724,13 +6725,13 @@ packages:
     resolution: {integrity: sha512-ZA6oR3T/pEyuqwMgAKT0/hAv8oAXckzbkmR0UkUosQ+Mc4RxGoJkRmwHgHufaenlyAgE1Mxgpdcrf75y6XcnDg==}
     engines: {node: '>=14.16'}
 
-  smol-toml@1.9.1:
-    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
-    engines: {node: '>= 18'}
-
   slugify@1.6.9:
     resolution: {integrity: sha512-vZ7rfeehZui7wQs438JXBckYLkIIdfHOXsaVEUMyS5fHo1483l1bMdo0EDSWYclY0yZKFOipDy4KHuKs6ssvdg==}
     engines: {node: '>=8.0.0'}
+
+  smol-toml@1.9.1:
+    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
+    engines: {node: '>= 18'}
 
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
@@ -8907,7 +8908,7 @@ snapshots:
       glob: 13.0.6
       lan-network: 0.2.1
       multitars: 1.0.2
-      node-forge: 1.4.0(patch_hash=2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8)
+      node-forge: 1.4.2(patch_hash=ac041659589a59bcdd85cf3bbde4133f70934ed1bf36cb2b3e4c66999df09acf)
       npm-package-arg: 11.0.3
       ora: 3.4.0
       picomatch: 4.0.4
@@ -8944,7 +8945,7 @@ snapshots:
 
   '@expo/code-signing-certificates@0.0.6':
     dependencies:
-      node-forge: 1.4.0(patch_hash=2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8)
+      node-forge: 1.4.2(patch_hash=ac041659589a59bcdd85cf3bbde4133f70934ed1bf36cb2b3e4c66999df09acf)
 
   '@expo/config-plugins@55.0.11(supports-color@8.1.1)':
     dependencies:
@@ -14242,7 +14243,7 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
-  node-forge@1.4.0(patch_hash=2798686e4488058ad81c3b8e32eb763c0feff21f4c717ce4d13b6ef2432cd5b8): {}
+  node-forge@1.4.2(patch_hash=ac041659589a59bcdd85cf3bbde4133f70934ed1bf36cb2b3e4c66999df09acf): {}
 
   node-int64@0.4.0: {}
 
@@ -15092,9 +15093,9 @@ snapshots:
 
   slash@5.1.0: {}
 
-  smol-toml@1.9.1: {}
-
   slugify@1.6.9: {}
+
+  smol-toml@1.9.1: {}
 
   source-map-js@1.2.2: {}
 

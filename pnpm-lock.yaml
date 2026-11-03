@@ -165,6 +165,7 @@ settings:
 
 overrides:
   hono@>=4.12.4 <4.13.11: 4.13.11
+  '@hono/node-server@<2.1.3': 2.1.5
   dompurify@<3.4.17: 3.4.17
   katex@>=0.11.0 <0.18.2: 0.18.10
 
@@ -1237,8 +1238,8 @@ packages:
       '@types/graphql':
         optional: true
 
-  '@hono/node-server@2.1.0':
-    resolution: {integrity: sha512-XovyyCCnBzW+zKu+z/zq8hwNs4KOR5rEMAOxo2f40Q5xoOI37IMm6MIg2COOUtUApo0i6850MTBKH2u4QLGIqg==}
+  '@hono/node-server@2.1.5':
+    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
     engines: {node: '>=20'}
     peerDependencies:
       '@types/hono': '*'
@@ -8651,7 +8652,7 @@ snapshots:
     dependencies:
       graphql: 16.14.2
 
-  '@hono/node-server@2.1.0(hono@4.13.11)':
+  '@hono/node-server@2.1.5(hono@4.13.11)':
     dependencies:
       hono: 4.13.11
 
@@ -8890,7 +8891,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.32.1(supports-color@7.2.0)(zod@4.6.7)':
     dependencies:
-      '@hono/node-server': 2.1.0(hono@4.13.11)
+      '@hono/node-server': 2.1.5(hono@4.13.11)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5

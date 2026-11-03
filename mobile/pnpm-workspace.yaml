@@ -17,6 +17,7 @@ overrides:
   xcode>uuid: 11.1.1
   # Expo Router still requests query-string 7 and its vulnerable URI decoder.
   query-string: 9.5.1
+  node-forge@<1.4.2: 1.4.2
 
 patchedDependencies:
   zod@3.25.76: patches/zod@3.25.76.patch
@@ -27,7 +28,7 @@ patchedDependencies:
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch
   braces@3.0.3: patches/braces@3.0.3.patch
-  node-forge@1.4.0: patches/node-forge@1.4.0.patch
+  node-forge@1.4.2: patches/node-forge@1.4.2.patch
   '@expo/cli@55.0.36': patches/@expo__cli@55.0.36.patch
   expo-router@55.0.18: patches/expo-router@55.0.18.patch
   expo-constants@55.0.17: patches/expo-constants@55.0.17.patch
