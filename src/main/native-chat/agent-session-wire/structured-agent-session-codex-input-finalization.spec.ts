@@ -46,7 +46,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     } = current()
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const uncertain = failure.startsWith('lost-')
-    const written = uncertain || failure === 'post-write-stop'
     const { sessions, runtimeState } = host.collaboratorsForTests()
     const journal = sessions.get(SESSION)!.journal
     const persisted = vi.spyOn(journal, 'resolveDispatch')
@@ -69,7 +68,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     )
     const id = await permissionSend('preserve me', { personality: 'friendly' })
     await preparing.promise
-    await pick('auto')
+    await pick(failure === 'lost-steer' ? 'full-access' : 'auto')
     if (failure === 'refusal') {
       codex.routes['thread/start'] = codex.routes['thread/resume'] = () => {
         throw new AgentSessionAcquisitionRefusal('missing Codex', 'cliMissing')
@@ -199,7 +198,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       )
     }
     expect(continuingStructuredAgentSessionInput(journal, id)).toBe(false)
-    expect(starts()).toHaveLength(written ? 1 : 0)
+    expect(starts()).toHaveLength(uncertain || failure === 'post-write-stop' ? 1 : 0)
     lost.resolve({})
     await responseObserved
     expect(codex.connections).toHaveLength(
@@ -568,18 +567,21 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       signals.push(signal)
       return dispatch(input)
     })
-    const retire = deps.retireOutgrownChild
-    const retired = vi.spyOn(deps, 'retireOutgrownChild').mockImplementation(async (...args) => {
-      if (
-        boundary === 'retire' &&
-        args[1] &&
-        continuingStructuredAgentSessionInput(journal, args[1])
-      ) {
-        entered.resolve()
-        await held.promise
-      }
-      return retire(...args)
-    })
+    const retire = deps.stopPermissionTransitionChild!
+    const retired = vi
+      .spyOn(deps, 'stopPermissionTransitionChild')
+      .mockImplementation(async (...args) => {
+        if (
+          boundary === 'retire' &&
+          journal
+            .submissions()
+            .some((s) => continuingStructuredAgentSessionInput(journal, s.clientMessageId))
+        ) {
+          entered.resolve()
+          await held.promise
+        }
+        return retire(...args)
+      })
     const open = codex.routes['thread/start']!
     const opening = vi.fn(async (params: Parameters<typeof open>[0]) => {
       if (boundary === 'acquire' || boundary === 'starting-exit') {

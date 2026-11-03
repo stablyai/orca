@@ -8,7 +8,7 @@ import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'el
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
+import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'

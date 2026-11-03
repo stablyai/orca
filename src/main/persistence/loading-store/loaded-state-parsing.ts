@@ -13,7 +13,7 @@ import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease

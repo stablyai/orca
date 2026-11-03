@@ -11,6 +11,13 @@ export const MAX_PROMPT_BYTES = 256 * 1024
 export const MAX_BLOCKS = 64
 export const MAX_OPTION_LABEL = 512
 
+export const CompactInstructions = z
+  .string()
+  .min(1)
+  .refine(
+    (text) => !measureUtf8ByteLength(text, { stopAfterBytes: MAX_PROMPT_BYTES }).exceededLimit
+  )
+
 export const SendImageRefBlock = z
   .object({
     type: z.literal('image-ref'),

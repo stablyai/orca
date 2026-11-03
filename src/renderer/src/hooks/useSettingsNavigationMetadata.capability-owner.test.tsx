@@ -9,8 +9,8 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,

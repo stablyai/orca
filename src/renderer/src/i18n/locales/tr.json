@@ -215,7 +215,10 @@
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
-      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
+      "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "existingAccept": "Ana makineye ekle"
     }
   },
   "app": {
@@ -602,7 +605,7 @@
         "inheritFont": "IDE yazı tipiyle aynı",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
-        "title": "Sohbet",
+        "title": "Sohbet arayüzü",
         "textSize": "Metin boyutu",
         "textSizeDescription": "Mesajlar, araç etkinlikleri ve mesaj kutusu. Sohbet içindeki {{increase}} / {{decrease}} kısayolları da bu ayarı değiştirir.",
         "codeTextSize": "Kod metni boyutu",
@@ -2558,8 +2561,6 @@
         "25690a3855": "PR'dan çalışma alanı başlat",
         "a459866967": "PR'a bağlı çalışma alanını sürdür",
         "347034903a": "GitHub bağlantısını kopyala",
-        "5a01ca7253": "Görülme durumu GitHub ile eşitlenemedi.",
-        "996a1897d2": "Bu pull request için görülme durumu eşitlenemiyor.",
         "e0b15c793f": "GitHub bağlantısı kopyalanamadı",
         "992e799227": "GitHub bağlantısı kopyalandı",
         "61bfc81ada": "Bu pull request'e bağlı çalışma alanı açılamıyor.",
@@ -8065,7 +8066,6 @@
           "9d3e56ca36": "Değişiklikleri Uygula",
           "f96688b6bc": "İptal",
           "b7ddae600c": "Tamam",
-          "e4bda7ce6f": "Bu sistemde Ghostty yapılandırması bulunamadı.",
           "b58d4c9051": "Desteklenmeyen anahtarlar",
           "674b5ccd6b": "İçe aktarılacak yeni ayar yok, mevcut ayarlarınız zaten eşleşiyor.",
           "a4c5dec640": "Güncellenecek ayarlar",
@@ -19058,6 +19058,7 @@
       "failureWords": {
         "theAgent": "Ajan",
         "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+        "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
         "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
         "sendToTryAgain": "Tekrar denemek için mesajınızı gönderin.",
         "sendAgainToTryOnceMore": "Tekrar denemek için mesajınızı yeniden gönderin.",
@@ -19110,6 +19111,7 @@
         "attachmentNotAFile": "Bu mesajdaki bir görsel dosya olmadığı için mesaj gönderilmedi.",
         "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
         "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+        "attachmentsExpired": "Süresi doldu: {{names}}.",
         "attachmentUnreadable": "Bu mesajdaki bir ek okunamadığı için mesaj gönderilmedi.",
         "emptyMessage": "Bu mesaj boş olduğu için gönderilmedi.",
         "commandUnavailable": "Bu komut {{agent}} sohbetlerinde kullanılamadığı için gönderilmedi.",
@@ -19199,6 +19201,7 @@
         "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
         "attachmentExpired": "Bu ekin süresi doldu.",
         "reattachFile": "Kaldırıp yeniden ekleyin.",
+        "reattachFiles": "Kaldırıp yeniden ekleyin.",
         "conversationCleared": "Bu konuşma temizlendi.",
         "openCurrentConversation": "Devam etmek için mevcut konuşmayı açın.",
         "clearUnfinished": "Son /clear işlemi tamamlanmadı.",
@@ -19594,7 +19597,8 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
+        "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin.",
+        "exitUnconfirmed": "{{agent}} bu sohbeti başka bir terminalde yürütüyor. Oradan çıkın veya o terminali kapatın, ardından yeniden deneyin."
       },
       "state": {
         "loading": {
@@ -20529,6 +20533,9 @@
         "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "WSL üzerinde çalışır: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22302,6 +22309,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: okunabilir yedek yok, bu yüzden boş başlayacak.",
+      "sectionKeptCurrent": "{{section}}: mevcut çalıştırmalarınız korunacak",
       "sectionRestored": "{{section}}: {{time}} kaydedilen yedekten geri yüklendi.",
       "projectsForgotten": "Orca projelerinizi ve çalışma alanı ayrıntılarını unutacak. Diskteki dosyalara dokunulmaz.",
       "newerProjectsRemoved": "Bu yedekten sonra eklenen projeler, çalışma alanı ayrıntılarıyla birlikte Orca'dan kaldırılacak. Diskteki dosyalara dokunulmaz.",
@@ -22344,7 +22352,7 @@
       "noneFound": "(bulunamadı)",
       "sqlitePath": "SQLite yolu: {{path}}",
       "sectionsDamaged": "Bu profilin kayıtlı durumunun bir bölümü hasarlı: {{sections}}. Diğer her şey sağlam.",
-      "repairCommand": "Orca'yı kapatın, ardından yalnızca hasarlı bölümleri yedeklerden değiştirip diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
+      "repairCommand": "Orca’yı durdurun, ardından yalnızca hasarlı kısımları onarmak ve diğer her şeyi korumak için `{{command}}` komutunu çalıştırın. Orca hasarlı dosyanın bir kopyasını saklar.",
       "restoreWholeBackup": "Bunun yerine bir yedeği bütünüyle geri yüklemek için önce `{{exportsCommand}}`, ardından `{{rollbackCommand}}` komutunu çalıştırın.",
       "sqliteUnreadable": "SQLite durumu okunamadığı için etkin profil Orca'da güvenli bir şekilde açılamadı.",
       "legacyJsonPath": "Eski JSON yolu: {{path}}",
@@ -22590,7 +22598,8 @@
       "changed": "Daha önce taşındı, ardından burada Orca'nın eski bir sürümü tarafından değiştirildi. Yeniden taşınmaz.",
       "chatsStay": "Mevcut sohbetler bu bilgisayarda kalır. Bu projedeki yeni sohbetler WSL ana makinesinde başlar.",
       "browserLoginsConflict": "Ana makinenin tarayıcı profili zaten kullanımda olduğundan tarayıcı oturumları aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
-      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın."
+      "browserLoginsNotCarried": "Tarayıcı oturumları bu ana makineye aktarılmayacak. Taşımadan sonra ana makinenin tarayıcı sekmelerinde yeniden oturum açın.",
+      "why": "Çalışma artık dosyalarınızın yanında, Linux içinde yürür; bu sayede terminaller, Git ve dosya değişiklikleri daha hızlı ve daha güvenilir olur. Projeleriniz değişmez ve herhangi bir projeyi “Bu bilgisayarda yeniden kullan” ile geri taşıyabilirsiniz."
     },
     "cancel": "İptal",
     "progress": {
@@ -23082,6 +23091,8 @@
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
-    "launchTerminal": "Terminal başlat"
+    "launchTerminal": "Terminal başlat",
+    "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
+    "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @"
   }
 }

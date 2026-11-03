@@ -70,6 +70,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
         markdownAnnotationsEnabled: true,
         markdownReviewContent: 'abc',
         markdownSourceLineOffset: 0,
+        noteSource: {},
         rootRef,
         scrollContainerRef,
         worktreeId: 'wt-1',

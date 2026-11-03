@@ -92,6 +92,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           setOption: controller.setStructuredOption,
           sessionCommands: controller.sessionCommands,
           conversationCommands: controller.conversationCommands,
+          compactInstructions: controller.compactInstructions,
           runConversationCommand: controller.runConversationCommand,
           ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
         }).then(localizeStructuredComposerOutcome),
@@ -101,6 +102,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
+      compactInstructions: controller.compactInstructions,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,

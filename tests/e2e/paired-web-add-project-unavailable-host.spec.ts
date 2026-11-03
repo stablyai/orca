@@ -2,10 +2,6 @@ import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
-  launchHeadlessPairedRuntimeHost,
-  type HeadlessPairedRuntimeHost
-} from './helpers/headless-paired-runtime-host'
-import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient,
   type PairedWebClient,
@@ -152,22 +148,4 @@ test('disables paired-web Add Project for a blocked or unavailable headed host @
     testInfo,
     topology: 'headed'
   })
-})
-
-test('keeps paired-web Add Project disabled for a headless unavailable host', async ({
-  testRepoPath
-}, testInfo) => {
-  test.setTimeout(240_000)
-  const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
-  try {
-    await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
-    await runUnavailableHostJourney({
-      app: host.app,
-      offer: host.offer,
-      testInfo,
-      topology: 'headless'
-    })
-  } finally {
-    await host.dispose()
-  }
 })

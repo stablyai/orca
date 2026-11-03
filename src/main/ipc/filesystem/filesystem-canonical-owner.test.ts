@@ -18,7 +18,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 const mocks = vi.hoisted(() => ({
   graph: vi.fn(),
@@ -29,15 +29,18 @@ const mocks = vi.hoisted(() => ({
   projectRuntimes: vi.fn()
 }))
 vi.mock('node:fs/promises', () => ({ stat: mocks.stat, realpath: mocks.realpath }))
-vi.mock('../../repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph, isRepoRoot: vi.fn() }))
+vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
+  listRepoWorktreeGraph: mocks.graph,
+  isRepoRoot: vi.fn()
+}))
 vi.mock('../worktree-logic', () => ({
   computeWorkspaceRootWithin: async (...args: unknown[]) => mocks.workspaceRoot(...args),
   getWorktreePathSettings: mocks.pathSettings
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getWorktreeMirrorDistroForRuntime: vi.fn()
 }))
-vi.mock('../../local-project-runtime-resolution', () => ({
+vi.mock('../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.projectRuntimes
 }))
 

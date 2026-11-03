@@ -10,7 +10,7 @@ import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../shared/file-name-sort'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,

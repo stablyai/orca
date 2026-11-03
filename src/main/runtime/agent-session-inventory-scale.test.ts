@@ -388,12 +388,13 @@ describe('real conversation inventory work', () => {
         views: 4 * n + 2,
         inventories: 2,
         keyed: 2 * (n + 1),
-        tabReads: n + 2,
+        // Each mail-reach check asks the keyed retirement read; one index read remains.
+        tabReads: 1,
         clones: 0,
         decodes: 0
       })
-      // The nested membership walk predates this change; only its discarded allocations are removed.
-      expect(visits).toHaveBeenCalledTimes((n + 2) * (n + 2))
+      // Keyed: the visible-tab list built once, then one membership question per row.
+      expect(visits).toHaveBeenCalledTimes(2 * n + 3)
       expect(queries()).toEqual({ executions: 0, rows: 0 })
       work.reset()
       visits.mockClear()

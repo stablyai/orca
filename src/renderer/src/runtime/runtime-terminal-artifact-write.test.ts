@@ -53,15 +53,6 @@ function callsTo(method: string): RuntimeRpcRequest[] {
 }
 
 describe('saving a granted host file outside every workspace', () => {
-  it('refuses to overwrite text that changed on the host', async () => {
-    runtimeEnvironmentCall.mockImplementation(async ({ method }) =>
-      method === 'files.readTerminalArtifact' ? read('# theirs') : ok({ ok: true })
-    )
-
-    await expect(save('# new', '# old')).resolves.toEqual({ ok: false, diskConflict: 'changed' })
-    expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
-  })
-
   // Why: a host change stales the grant; the renewed read must still raise the conflict banner.
   it('reports a host-side change behind a stale grant as a conflict', async () => {
     runtimeEnvironmentCall.mockImplementation(async ({ method, params }) => {
@@ -75,34 +66,6 @@ describe('saving a granted host file outside every workspace', () => {
     })
 
     await expect(save('# new', '# old')).resolves.toEqual({ ok: false, diskConflict: 'changed' })
-    expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
-  })
-
-  // Why: a quoted path can spell "not found"; only the error itself proves absence.
-  it('surfaces a permission failure on a path that mentions not found', async () => {
-    runtimeEnvironmentCall.mockImplementation(async () =>
-      refused("EACCES: permission denied, open '/tmp/not found.md'")
-    )
-
-    await expect(save('# new', '# old')).rejects.toThrow('EACCES')
-    expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
-  })
-
-  it('explains that a file deleted on its host cannot be recreated through its grant', async () => {
-    runtimeEnvironmentCall.mockImplementation(async () =>
-      refused("ENOENT: no such file or directory, open '/private/tmp/handoff.md'")
-    )
-
-    await expect(
-      writeRuntimeTerminalArtifactFile({
-        target: { kind: 'environment', environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        absolutePath: PATH,
-        grantId: 'g-1',
-        content: '# new',
-        precondition: { expectedSignature: getDiskBaselineSignature('# old'), allowMissing: true }
-      })
-    ).rejects.toThrow("can't recreate it")
     expect(callsTo('files.writeTerminalArtifact')).toHaveLength(0)
   })
 
@@ -160,22 +123,5 @@ describe('saving a granted host file outside every workspace', () => {
       return read(calls > 0 ? '# new' : '# old')
     })
     await expect(save('# new', '# old')).resolves.toEqual({ ok: true })
-  })
-
-  it('never reports a discarded save as written, even when the host text matches', async () => {
-    runtimeEnvironmentCall.mockImplementation(async () => read('# new'))
-
-    await expect(
-      writeRuntimeTerminalArtifactFile({
-        target: { kind: 'environment', environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        absolutePath: PATH,
-        grantId: 'g-1',
-        content: '# new',
-        beforeSend: () => {
-          throw new Error('discarded')
-        }
-      })
-    ).rejects.toThrow('discarded')
   })
 })

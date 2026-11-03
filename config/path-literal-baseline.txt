@@ -11,6 +11,7 @@ config/scripts/pr-code-change-scope.mjs src/shared/agent-session-resume-marker
 config/scripts/pr-code-change-scope.mjs src/shared/agent-session-turn-record
 config/scripts/pr-layout-oracle-route.mjs src/main/runtime/old-session-tabs-stream/
 config/scripts/pr-layout-oracle-route.mjs src/renderer/src/runtime/remote-workspace-frozen/
+config/scripts/run-linux-lid-sleep-assertion-docker.mjs src/main/linux-lid-sleep-assertion.ts
 config/scripts/run-ssh-staged-upload-reliability.mjs src/main/ssh/ssh-relay-install-namespace.test.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts

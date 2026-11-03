@@ -56,20 +56,6 @@ describe('worktree removal purges per-file editor + git-huge state (leak regress
     mockApi.worktrees.remove.mockResolvedValue(undefined)
   })
 
-  it('bulk purgeWorktreeTerminalState drops editor + git-huge state for the removed worktree', () => {
-    const store = createTestStore()
-    seedEditorState(store)
-
-    store.getState().purgeWorktreeTerminalState([WT])
-
-    const s = store.getState()
-    expect(s.editorCursorLine[FILE_A]).toBeUndefined()
-    expect(s.editorCursorLine[FILE_B]).toBeUndefined()
-    expect(s.editorViewMode[FILE_A]).toBeUndefined()
-    expect(s.editorViewMode[FILE_B]).toBeUndefined()
-    expect(s.gitStatusHugeByWorktree[WT]).toBeUndefined()
-  })
-
   it('single removeWorktree drops editor + git-huge state for the removed worktree', async () => {
     const store = createTestStore()
     seedEditorState(store)

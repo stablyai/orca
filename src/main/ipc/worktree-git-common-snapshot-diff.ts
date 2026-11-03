@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { WorktreeBasePollEvent } from './worktree-base-directory-poller'
+import type { WorktreeBasePollEvent } from './worktrees/creation/worktree-base-directory-poller'
 import type { GitCommonEntrySnapshot } from './worktree-git-common-entry-snapshot'
 
 const LINKED_WORKTREE_INDEX_FILE = 'index'

@@ -412,10 +412,23 @@ function renderCli({ cli, cliView }) {
   const exitCodes = specs
     .flatMap((spec) => spec.notes ?? [])
     .find((note) => note.startsWith('Exit codes'))
+  // Why: commands whose exit codes differ (such as check's plugin_check_failed) would otherwise be invisible here.
+  const otherExitCodes = specs.flatMap((spec) =>
+    (spec.notes ?? [])
+      .filter((note) => note.startsWith('Exit codes') && note !== exitCodes)
+      .map((note) => `\`${spec.path.join(' ')}\`: ${note.replace(/^Exit codes: /u, '')}`)
+  )
   return document(
     'Plugin CLI commands',
     [
-      `\`ORCA\` is the Orca executable you resolved. Every command takes \`--json\`; branch on \`error.code\`. ${exitCodes ?? ''} Run \`ORCA <command> --help\` for a command's notes.`,
+      [
+        '`ORCA` is the Orca executable you resolved. Every command takes `--json`; branch on `error.code`.',
+        exitCodes,
+        ...otherExitCodes.map((note) => `Except ${note}`),
+        "Run `ORCA <command> --help` for a command's notes."
+      ]
+        .filter(Boolean)
+        .join(' '),
       ''
     ],
     [specs.map((spec) => `- ${code(spec.usage.replace(/^orca /u, 'ORCA '))}: ${spec.summary}`)]
