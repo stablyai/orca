@@ -431,4 +431,21 @@ it('updates the mounted indicator on complete same-head failure → cancellation
   expect(store.getState().prCache[cacheKey]?.data?.checksSummary).toBeUndefined()
   expect(store.getState().hostedReviewCache[hostedKey]?.data?.checksSummary).toBeUndefined()
   expect(view.getByLabelText('Checks: Failing').className).toContain('rose')
+
+  act(() => refresh(summarizeProviderChecks(checks)))
+  expect(view.getByLabelText('Checks: Cancelled').className).toContain('muted')
+  mockApi.gh.prChecks.mockResolvedValue([
+    { name: 'new run', status: 'queued', conclusion: null, url: null }
+  ])
+  await act(async () => {
+    await store.getState().fetchPRChecks('/repo', 12, branch, headSha, undefined, {
+      repoId: 'repo-1',
+      force: true
+    })
+  })
+  expect(store.getState().prCache[cacheKey]?.data).toMatchObject({ checksStatus: 'pending' })
+  expect(store.getState().prCache[cacheKey]?.data?.checksSummary).toBeUndefined()
+  expect(store.getState().hostedReviewCache[hostedKey]?.data).toMatchObject({ status: 'pending' })
+  expect(store.getState().hostedReviewCache[hostedKey]?.data?.checksSummary).toBeUndefined()
+  expect(view.getByLabelText('Checks: Pending')).toBeDefined()
 })
