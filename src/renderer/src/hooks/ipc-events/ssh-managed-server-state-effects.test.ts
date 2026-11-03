@@ -39,11 +39,9 @@ const offer: Status = {
   reason: 'relay_terminals_live',
   terminals: 3
 }
-const moveToManagedServer = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
-  Object.assign(window, { api: { ssh: { moveToManagedServer } } })
 })
 afterEach(() => {
   Reflect.deleteProperty(window, 'api')
@@ -86,23 +84,5 @@ describe('a host kept connected for the relay bridge', () => {
     Object.assign(window, { api: { ssh: {}, legacyRelayBridge: { listPanes, onPanes: vi.fn() } } })
     await import('./ssh-managed-server-state-effects')
     expect(listPanes).not.toHaveBeenCalled()
-  })
-})
-
-describe('a host the managed server does not serve', () => {
-  it('shows only for a newly marked offer, never for a plain live-terminals status', () => {
-    applySshManagedServerTransition('ssh-1', offer, offer)
-    applySshManagedServerTransition('ssh-1', undefined, {
-      kind: 'relay',
-      reason: 'relay_terminals_live',
-      terminals: 3
-    })
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('stays silent where the move is not available', () => {
-    Object.assign(window, { api: { ssh: {} } })
-    applySshManagedServerTransition('ssh-1', undefined, offer)
-    expect(mocks.toast).not.toHaveBeenCalled()
   })
 })

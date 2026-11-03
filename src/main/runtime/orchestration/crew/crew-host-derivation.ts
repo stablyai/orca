@@ -9,7 +9,11 @@ import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
 import type { CrewReadDependencies } from './crew-read-model'
 
-export function createCrewHostDerivation(deps: CrewReadDependencies, now: number) {
+export function createCrewHostDerivation(
+  deps: CrewReadDependencies,
+  now: number,
+  capacity?: () => number
+) {
   const { statuses, ...sources } = captureCrewIdentityInputs(deps)
   const registry = createCrewPartyRegistry({ ...sources, statuses })
   const { alias } = registry
@@ -145,8 +149,8 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, now: number
       }
     }
   }
-  const sourceInputs = createCrewSourceInputs(deps.db)
-  return refreshCrewStatuses(
+  const sourceInputs = createCrewSourceInputs(deps.db, capacity)
+  return indexCrewStatuses(
     {
       registry,
       sourceInputs,
@@ -174,7 +178,12 @@ export function refreshCrewStatuses<
     workersById: Map<string, FleetDurableWorker>
   }
 >(host: T, statuses: CrewReadDependencies['statuses']) {
-  statuses = structuredClone(statuses)
+  return indexCrewStatuses(host, structuredClone(statuses))
+}
+
+function indexCrewStatuses<
+  T extends { deps: CrewReadDependencies; workersById: Map<string, FleetDurableWorker> }
+>(host: T, statuses: CrewReadDependencies['statuses']) {
   const statusIndex = createFleetStatusIndex(statuses, [...host.workersById.values()])
   const statusesByPane = new Map<string, (typeof statuses)[number]>()
   for (const status of statuses) {

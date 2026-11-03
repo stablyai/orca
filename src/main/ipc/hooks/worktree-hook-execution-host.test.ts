@@ -18,14 +18,14 @@ vi.mock('electron', () => ({
       mocks.handlers.set(channel, handler)
   }
 }))
-vi.mock('../../hooks', () => ({
+vi.mock('../../workspace-hooks/hooks', () => ({
   hasHooksFile: mocks.hasHooks,
   loadHooks: mocks.loadHooks,
   getEffectiveHooks: mocks.effectiveHooks,
   hasUnrecognizedOrcaYamlKeys: () => false,
   parseOrcaYaml: () => ({ issueCommand: 'shared' })
 }))
-vi.mock('../../issue-command-file', () => ({
+vi.mock('../../workspace-hooks/issue-command-file', () => ({
   readIssueCommandUnlessWslStopped: mocks.localRead,
   writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
@@ -46,7 +46,7 @@ vi.mock('../../../shared/setup-script-imports', () => ({
     return []
   }
 }))
-vi.mock('../../effective-hook-config', () => ({
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveSetupRunPolicy: () => 'manual'
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'

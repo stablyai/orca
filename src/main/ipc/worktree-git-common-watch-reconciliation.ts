@@ -3,7 +3,7 @@ import type {
   WorktreeBasePollEvent,
   WorktreeBaseSubscription,
   WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
 import { startGitCommonPolling } from './worktree-git-common-polling'
 import { createSingleFlight } from './single-flight-promise'
 

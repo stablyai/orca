@@ -18,7 +18,7 @@ import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 
 vi.mock('../../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../../repo-worktrees')

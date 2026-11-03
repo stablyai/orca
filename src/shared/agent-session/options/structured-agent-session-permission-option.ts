@@ -1,4 +1,4 @@
-// A live agent's report wins; otherwise the chat's saved mode, never a guessed one for own.
+// Codex picks describe the next turn; other modes follow the running agent’s report.
 
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -62,9 +62,9 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   if (!support || (!own && !support.modes.some((mode) => mode === state.permissionMode))) {
     return null
   }
-  // Without a report an explicit chat shows the saved mode its next turn applies; own has none.
+  const selectedForNextTurn = state.record.agent === 'codex' && !own
   const current =
-    state.reportedPermissionMode !== undefined
+    !selectedForNextTurn && state.reportedPermissionMode !== undefined
       ? (state.reportedPermissionMode ?? undefined)
       : own
         ? undefined
@@ -94,9 +94,9 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     valueSource:
       current === undefined
         ? 'unknown'
-        : state.reportedPermissionMode === undefined
-          ? 'applied'
-          : 'reported',
+        : current === state.reportedPermissionMode
+          ? 'reported'
+          : 'applied',
     transport: 'agent-session',
     settable: state.permissionOwnSupported !== null && current !== undefined
   }

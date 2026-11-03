@@ -7,8 +7,8 @@ import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
-} from '../local-worktree-filesystem'
-import { isWorktreePathMissing } from '../worktree-removal-safety'
+} from '../workspaces/removal/local-worktree-filesystem'
+import { isWorktreePathMissing } from '../workspaces/removal/worktree-removal-safety'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'

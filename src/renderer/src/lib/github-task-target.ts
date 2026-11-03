@@ -1,3 +1,4 @@
+import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { githubTaskBinding } from './github-task-observation'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -80,6 +81,7 @@ export function captureGitHubTaskTarget(
     source,
     repo,
     ownerRepo,
+    expectedGhAccount: normalizeGhAccountBinding(repo.ghAccount),
     key: `${githubTaskSourceKey(source)}\0${githubTaskBinding(repo)}\0${githubTaskIdentity(item)}`
   }
 }

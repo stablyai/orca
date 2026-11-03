@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../durable-file-write'
+import type * as DurableFileWrite from '../filesystem/durable-file-write'
 import { JIRA_IMAGE_SCHEME } from '../../shared/jira/jira-attachment-image'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   writeFileDurableSync: vi.fn()
 }))
 
-vi.mock('../durable-file-write', async (importOriginal) => {
+vi.mock('../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,
@@ -153,7 +153,7 @@ vi.mock('../git/runner', () => ({
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()

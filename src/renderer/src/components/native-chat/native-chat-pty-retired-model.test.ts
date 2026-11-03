@@ -10,7 +10,7 @@ import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   seedNativeChatAppliedSessionOptions
-} from './native-chat-session-option-cache'
+} from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import {
   createNativeChatPtySessionOptions,
   type CreateNativeChatPtySessionOptionsArgs,

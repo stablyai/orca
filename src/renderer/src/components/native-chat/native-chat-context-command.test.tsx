@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat/input/native-chat-pty-session-options'
-import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
+import { clearNativeChatSessionOptionCacheForTests } from '../../../../shared/native-chat/input/native-chat-session-option-cache'
 import {
   answerNativeChatLocalCommand,
   type NativeChatLocalCommandAnswer

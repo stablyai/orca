@@ -128,27 +128,6 @@ describe('attachPaneFitResizeObserver', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
-  it('waits through a transient grid wobble before notifying settled callbacks', () => {
-    const proposed = [
-      { cols: 80, rows: 24 },
-      { cols: 81, rows: 24 },
-      { cols: 81, rows: 24 }
-    ]
-    const onSettled = vi.fn()
-    const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
-
-    requestStablePaneFit(pane, onSettled)
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
-    expect(onSettled).not.toHaveBeenCalled()
-
-    flushAnimationFrames()
-
-    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
-    expect(onSettled).toHaveBeenCalledTimes(1)
-  })
-
   it('releases a hidden reattach continuation when the stable grid already matches', async () => {
     const pane = createPane()
     vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)

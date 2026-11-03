@@ -29,6 +29,7 @@ export type MobileComposerStructuredCatalog = {
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -56,7 +57,12 @@ export function mobileComposerCatalog({
   }
   const reported = structured?.reported
   const commands = structured
-    ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
+    ? structuredSessionSlashCommands(
+        agent,
+        structured.conversationCommands,
+        reported,
+        structured.compactInstructions
+      )
     : getMobileNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),
