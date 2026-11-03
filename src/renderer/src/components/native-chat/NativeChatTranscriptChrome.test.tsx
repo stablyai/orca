@@ -48,6 +48,13 @@ async function flushPromises(): Promise<void> {
   await Promise.resolve()
 }
 
+async function flushImageLoad(): Promise<void> {
+  await flushPromises()
+  await flushPromises()
+  await flushPromises()
+  await flushPromises()
+}
+
 beforeEach(() => {
   mocks.callRuntimeRpc.mockReset().mockResolvedValue({
     content: 'AA==',
@@ -402,6 +409,88 @@ describe('NativeChatImageAttachments', () => {
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-2')
     root.unmount()
+  })
+
+  it('keeps a shown image cached after it scrolls away and its row unmounts', async () => {
+    let callback: IntersectionObserverCallback | undefined
+    class FakeIntersectionObserver {
+      readonly observe = vi.fn()
+      readonly unobserve = vi.fn()
+      readonly disconnect = vi.fn()
+
+      constructor(nextCallback: IntersectionObserverCallback) {
+        callback = nextCallback
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver)
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    const props = {
+      blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
+      runtimeContext: runtimeContext('wt-1')
+    }
+    // The observed element is the preview's own box, inside the attachments wrapper.
+    const observedElement = (): Element | undefined =>
+      container.firstElementChild?.firstElementChild ?? undefined
+    const notify = (isIntersecting: boolean): Promise<void> =>
+      act(async () => {
+        const element = observedElement()
+        if (!element || !callback) {
+          throw new Error('image preview did not register visibility observation')
+        }
+        callback(
+          [{ target: element, isIntersecting } as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+        await flushImageLoad()
+      })
+
+    try {
+      await act(async () => {
+        root.render(createElement(NativeChatImageAttachments, props))
+        await flushPromises()
+      })
+      await notify(true)
+      expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
+
+      await notify(false)
+      // Scrolling away keeps the shown image: no revoke, no re-read.
+      expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+
+      await act(async () => {
+        root.unmount()
+      })
+      const remountContainer = document.createElement('div')
+      const remountRoot = createRoot(remountContainer)
+      const remountNotify = (isIntersecting: boolean): Promise<void> =>
+        act(async () => {
+          const element = remountContainer.firstElementChild?.firstElementChild
+          if (!element || !callback) {
+            throw new Error('remounted preview did not register visibility observation')
+          }
+          callback(
+            [{ target: element, isIntersecting } as IntersectionObserverEntry],
+            {} as IntersectionObserver
+          )
+          await flushImageLoad()
+        })
+      try {
+        await act(async () => {
+          remountRoot.render(createElement(NativeChatImageAttachments, props))
+          await flushPromises()
+        })
+        await remountNotify(true)
+        expect(remountContainer.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
+        expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+        expect(window.api.fs.readFile).toHaveBeenCalledOnce()
+      } finally {
+        remountRoot.unmount()
+      }
+    } catch (error) {
+      root.unmount()
+      throw error
+    }
   })
 
   it('keeps the observed element stable while a preview is materialized', async () => {

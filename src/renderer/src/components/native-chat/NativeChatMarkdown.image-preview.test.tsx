@@ -289,36 +289,35 @@ describe('native chat Markdown image preview', () => {
     }
   )
 
-  it('loads only visible nearby images and releases their bytes when they leave the viewport', async () => {
+  it('keeps a loaded nearby image across scroll-away and chat hiding', async () => {
     vi.stubGlobal('IntersectionObserver', ImageVisibilityObserver)
     const { rerender } = render(<Transcript owner={{ ...localOwner, isVisible: false }} />)
     const trigger = screen.getByRole('button', { name: 'View image: Chart' })
     act(() => ImageVisibilityObserver.current.emit(trigger, true))
     expect(mocks.readRuntimeFilePreview).not.toHaveBeenCalled()
     rerender(<Transcript />)
-    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    const loaded = await screen.findByRole('img')
+    expect(loaded).toHaveAttribute('src', 'blob:image-1')
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 640, 360))
     act(() => ImageVisibilityObserver.current.emit(trigger, false))
-    expect(screen.queryByRole('img')).toBeNull()
-    expect(trigger).toHaveStyle({ width: '640px', aspectRatio: '640 / 360' })
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image-1')
-    act(() => ImageVisibilityObserver.current.emit(trigger, true))
-    const reloaded = await screen.findByRole('img')
-    expect(reloaded).toHaveAttribute('src', 'blob:image-2')
-    expect(trigger).toHaveStyle({ aspectRatio: '640 / 360' })
-    fireEvent.load(reloaded)
+    expect(screen.getByRole('img')).toBe(loaded)
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+    fireEvent.load(loaded)
     expect(trigger.style.width).toBe('')
     expect(trigger.style.aspectRatio).toBe('')
     rerender(<Transcript owner={{ ...localOwner, isVisible: false }} />)
     expect(screen.queryByRole('img')).toBeNull()
     expect(trigger).toHaveStyle({ width: '640px', aspectRatio: '640 / 360' })
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:image-2')
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
     rerender(<Transcript />)
-    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-3')
-    expect(trigger).toHaveStyle({ aspectRatio: '640 / 360' })
+    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    expect(trigger.style.width).toBe('')
+    expect(trigger.style.aspectRatio).toBe('')
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledOnce()
   })
 
-  it('retries a cache-byte-budget rejection on open after another image releases its lease', async () => {
+  it('fails closed when visible images consume the cache byte budget', async () => {
     vi.stubGlobal('IntersectionObserver', ImageVisibilityObserver)
     imageCache.pinLocalImageCache('reserved')
     expect(imageCache.cacheLocalImageBlob('reserved', 'blob:reserved', 2 ** 27 - 2)).toBe(true)
@@ -333,20 +332,11 @@ describe('native chat Markdown image preview', () => {
     })
     expect(container.querySelectorAll('img')).toHaveLength(2)
     expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(3)
-    act(() => ImageVisibilityObserver.current.emit(triggers[0]!, false))
     fireEvent.click(triggers[2]!)
     const dialog = screen.getByRole('dialog', { name: 'Chart 2' })
-    expect(await within(dialog).findByRole('img')).toHaveAttribute('src', 'blob:image-4')
     expect(mocks.readRuntimeFilePreview).toHaveBeenCalledTimes(4)
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
-    act(() => {
-      for (const trigger of triggers) {
-        ImageVisibilityObserver.current.emit(trigger, false)
-      }
-    })
-    expect(container.querySelectorAll('img')).toHaveLength(0)
+    expect(within(dialog).queryByRole('img')).toBeNull()
     imageCache.unpinLocalImageCache('reserved')
-    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(4)
   })
 
   it.each([false, true])(

@@ -7,12 +7,7 @@ import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
 } from '@/components/sidebar/comment-markdown-github-attachment-media'
-import {
-  getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
-  releaseLocalImageSrcByKey,
-  useLocalImageSrc
-} from '@/components/editor/useLocalImageSrc'
+import { getLocalImageCacheKey, useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -110,13 +105,13 @@ function NativeChatMarkdownImagePreview({
   const external = Boolean(src && /^(?:https?|data|blob):/i.test(src))
   const attachment = src ? jiraImageReference(src) !== null : false
   const visible = owner?.isVisible ?? true
-  const leaseActive = visible && (near || open)
+  const imageActive = visible && (near || open)
   const media = useNativeChatMediaHref({
     href: originalImageHref,
     runtimeContext,
     tabId: fileLinkContext?.sourceTabId,
     sessionId: owner?.sessionId,
-    active: leaseActive,
+    active: imageActive,
     retryKey
   })
   const imageHref = media.href
@@ -131,45 +126,31 @@ function NativeChatMarkdownImagePreview({
   const localSrc =
     !external && !attachment && target ? filesystemPathToFileUri(target.absolutePath) : undefined
   const loadedSrc = useLocalImageSrc(
-    leaseActive ? localSrc : undefined,
+    imageActive ? localSrc : undefined,
     target?.absolutePath ?? '',
     runtimeContext?.connectionId,
     imageRuntimeContext,
     IMAGE_ACCESS,
     retryKey
   )
-  const releaseKey = getLocalImageSrcCacheKey(
-    localSrc,
-    target?.absolutePath ?? '',
-    runtimeContext?.connectionId,
-    imageRuntimeContext,
-    IMAGE_ACCESS
-  )
   useEffect(() => {
     const element = triggerRef.current
-    if (!element) {
+    if (!element || near) {
       return
     }
+    // Why latch: releasing on scroll-away or a workspace switch revoked the cached image, so it re-read on return.
     return observeTranscriptVisibility(element, (nextNear) => {
-      if (!nextNear) {
+      if (nextNear) {
+        setNear(true)
+      } else {
         const { width, height } = element.getBoundingClientRect()
         if (width > 0 && height > 0) {
           setFootprint({ width, aspectRatio: `${width} / ${height}` })
         }
       }
-      setNear(nextNear)
     })
-  }, [])
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
-  const imageSrc = external || attachment ? src : leaseActive ? loadedSrc : undefined
+  }, [near])
+  const imageSrc = external || attachment ? src : imageActive ? loadedSrc : undefined
   const displaySrc = imageSrc === failedSrc ? undefined : imageSrc
   const onFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
   const title =

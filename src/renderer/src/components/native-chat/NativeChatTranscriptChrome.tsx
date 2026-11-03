@@ -9,12 +9,7 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
-import {
-  getLocalImageCacheKey,
-  getLocalImageSrcCacheKey,
-  useLocalImageSrc,
-  releaseLocalImageSrcByKey
-} from '@/components/editor/useLocalImageSrc'
+import { getLocalImageCacheKey, useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
@@ -81,24 +76,6 @@ function transcriptImageIdentity(
 // Roles do not prove who chose an auto-loaded path; main must validate local images by real file type.
 const TRANSCRIPT_IMAGE_ACCESS = chatImageAccess()
 
-// Key release by value: equal rebuilt owner contexts must not revoke a URL still shown by img.
-function transcriptImageReleaseKey(
-  source: string | undefined,
-  filePath: string,
-  runtimeContext: RuntimeFileOperationArgs | null | undefined
-): string | null {
-  if (!runtimeContext) {
-    return null
-  }
-  return getLocalImageSrcCacheKey(
-    source,
-    filePath,
-    runtimeContext.connectionId,
-    runtimeContext,
-    TRANSCRIPT_IMAGE_ACCESS
-  )
-}
-
 function TranscriptImagePreview({
   block,
   runtimeContext
@@ -113,15 +90,15 @@ function TranscriptImagePreview({
   const source = block.url?.trim() || block.path
   const filePath = block.path ?? source ?? ''
   const external = renderableImageSource(source)
-  const leaseActive = near || open
+  const previewActive = near || open
   const localSrc = useLocalImageSrc(
-    leaseActive && !external && runtimeContext !== undefined ? source : undefined,
+    previewActive && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
     runtimeContext?.connectionId,
     runtimeContext,
     TRANSCRIPT_IMAGE_ACCESS
   )
-  const displaySrc = external && leaseActive ? source : localSrc
+  const displaySrc = external && previewActive ? source : localSrc
   const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label = nativeChatImageLabel(block)
   const viewImageLabel = translate('components.native-chat.composer.viewAttachment', 'View image')
@@ -137,25 +114,20 @@ function TranscriptImagePreview({
 
   useEffect(() => {
     const element = ref.current
-    if (!element) {
+    if (!element || near) {
       return
     }
-    return observeTranscriptVisibility(element, setNear)
-  }, [])
-  const releaseKey = transcriptImageReleaseKey(source, filePath, runtimeContext)
-  useEffect(() => {
-    if (!releaseKey) {
-      return
-    }
-    if (!leaseActive) {
-      releaseLocalImageSrcByKey(releaseKey)
-    }
-    return () => releaseLocalImageSrcByKey(releaseKey)
-  }, [leaseActive, releaseKey])
+    // Why latch: releasing on scroll-away revoked the cached image, so scrolling back re-read it.
+    return observeTranscriptVisibility(element, (visible) => {
+      if (visible) {
+        setNear(true)
+      }
+    })
+  }, [near])
 
   const previewable = Boolean(source) && (external || runtimeContext !== null)
   const showPreview =
-    previewable && leaseActive && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
+    previewable && previewActive && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
 
   if (!previewable) {
     return <div ref={ref}>{fallback}</div>
