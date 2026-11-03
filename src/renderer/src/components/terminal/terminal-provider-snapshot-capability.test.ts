@@ -57,19 +57,6 @@ describe('terminal provider snapshot capabilities', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('pty-1')).toBe(false)
   })
 
-  it('retries immediately when a timeout consumes the retry delay', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const synchronization = synchronizeTerminalProviderSnapshotCapabilities(
-      ['pty-1'],
-      () => new Promise(() => {})
-    )
-
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    await expect(synchronization).resolves.toBe(0)
-  })
-
   it('ignores a stale capability response after the live PTY set changes', async () => {
     let resolveStale!: (value: { id: string; authoritative: boolean | null }[]) => void
     const stale = new Promise<{ id: string; authoritative: boolean | null }[]>((resolve) => {

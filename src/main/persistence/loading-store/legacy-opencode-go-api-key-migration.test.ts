@@ -8,7 +8,8 @@ const secretStore = vi.hoisted(() => ({
 
 vi.mock('../../../shared/secret-store', () => ({ getSecretStore: () => secretStore }))
 
-const { ProtectedSecretPersistence } = await import('../../protected-secret-persistence')
+const { ProtectedSecretPersistence } =
+  await import('../../credentials/protected-secret-persistence')
 const {
   LEGACY_OPENCODE_GO_API_KEY_SLOT,
   migrateLegacyOpenCodeGoApiKey,

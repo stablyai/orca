@@ -1,9 +1,10 @@
 // Avoid tested-module imports: vi.mock factories must not re-enter fs.
-import { vi } from 'vitest'
-import type { Mock } from 'vitest'
+// Avoid tested-module imports: vi.mock factories must not re-enter fs.
+import { vi, type Mock } from 'vitest'
+
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
-import type * as FilesystemAuth from '../ipc/filesystem/filesystem-auth'
+import type * as FilesystemAuth from '../ipc/filesystem/access/filesystem-auth'
 import type * as GitRunner from '../git/runner'
 import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
 
@@ -75,7 +76,9 @@ export const fileWatcherHostMock = {
 }
 
 export async function filesystemAuthModuleMock() {
-  const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem/filesystem-auth')
+  const actual = await vi.importActual<typeof FilesystemAuth>(
+    '../ipc/filesystem/access/filesystem-auth'
+  )
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock

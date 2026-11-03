@@ -2,7 +2,7 @@ import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
 } from '../../../shared/file-preview-kind'
-import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
+import { localLogFileIdentity } from '../../ai-vault/transcripts/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
 import {
   fileTooLargeError,

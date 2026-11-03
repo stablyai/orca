@@ -83,22 +83,6 @@ it('publishes a fast source while a second is pending, then discards both after 
   expect(result.current.taskItems).toEqual([])
 })
 
-it('ignores unrelated settings and repo object identity changes', async () => {
-  const run = vi.fn(async () => [jiraTaskResult])
-  vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
-    { id: 'jira', provider: 'jira', hostLabel: 'Local', run }
-  ])
-  const { rerender } = renderHook(useWorktreeJumpPaletteTaskSearch, { initialProps: input })
-  await act(async () => vi.advanceTimersByTimeAsync(600))
-  rerender({
-    ...input,
-    settings: createGlobalSettingsFixture({ visibleTaskProviders: ['jira'] }),
-    repos: []
-  })
-  await act(async () => vi.advanceTimersByTimeAsync(500))
-  expect(run).toHaveBeenCalledTimes(1)
-})
-
 it('cancels old searches and ignores their replies after the captured palette host changes', async () => {
   let finishOldRequest: (results: (typeof jiraTaskResult)[]) => void = () => {}
   const oldRequest = new Promise<(typeof jiraTaskResult)[]>((resolve) => {

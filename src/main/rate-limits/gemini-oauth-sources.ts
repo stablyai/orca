@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { getMainHttpClient } from '../network/http-client'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
+import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 
 const API_TIMEOUT_MS = 10_000
 const OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')

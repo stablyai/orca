@@ -547,11 +547,31 @@ it.each([
       await main(['orchestration', 'worker-show', '--dispatch', dispatch.id, '--json', '--full'])
       expect(requests).toContain('orchestration.workerShow')
       await eventually(async () => {
-        const items = (await current.host.journalSnapshot(COORD)).items
-        const mail = items.flatMap(({ body }) =>
+        // Each message is its own chat message, one per turn: the coordinator accepts the one it was
+        // handed so the next is sent, and any still behind a turn wait as cards.
+        for (const { clientMessageId, dispatchState } of (await current.host.journalSnapshot(COORD))
+          .submissions) {
+          if (dispatchState === 'pending') {
+            await current.host.settleLateDispatch({
+              sessionId: COORD,
+              clientMessageId,
+              providerIdentity: {
+                provider: 'claude',
+                sessionId: 'coordinator-thread',
+                uuid: `turn-${clientMessageId}`
+              }
+            })
+          }
+        }
+        const page = await current.host.history({ sessionId: COORD, direction: 'tail' })
+        const bodies = [
+          ...(await current.host.journalSnapshot(COORD)).items.map(({ body }) => body),
+          ...((page.ok ? page.page.queuedMessages : undefined) ?? []).map(({ body }) => body)
+        ]
+        const mail = bodies.flatMap((body) =>
           body.kind === 'message' ? (readAgentMessageSource(body.from)?.senders ?? []) : []
         )
-        const messages = items.flatMap(({ body }) => {
+        const messages = bodies.flatMap((body) => {
           const source = body.kind === 'message' ? readAgentMessageSource(body.from) : null
           return source?.orchestration?.message === 'mail-notice'
             ? source.orchestration.messages
@@ -633,7 +653,7 @@ it.each([
     expect(prompt).toContain(`Your task ID is: ${from.orchestration.taskId}`)
     if (queued) {
       expect(agentMessageHeading(from, { blocks: [] })).toBe('task')
-      expect(agentMessageSenderCanOpen(from.senders[0], true)).toBe(true)
+      expect(agentMessageSenderCanOpen(from.senders[0])).toBe(true)
       expect(agentSessionMessagePayload(body)).not.toHaveProperty('from')
       expect(agentSessionSendBodyFingerprint(WORKER, body)).toBe(
         agentSessionSendBodyFingerprint(WORKER, agentSessionMessagePayload(body))

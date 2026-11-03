@@ -5,10 +5,10 @@ import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../../../durable-file-write'
+import type * as DurableFileWrite from '../../../filesystem/durable-file-write'
 
 const writes = vi.hoisted(() => ({ fail: false }))
-vi.mock('../../../durable-file-write', async (importOriginal) => {
+vi.mock('../../../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,

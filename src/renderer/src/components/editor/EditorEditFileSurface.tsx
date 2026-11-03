@@ -246,6 +246,7 @@ export function EditorEditFileSurface({
         key={monacoRemountKey}
         fileId={activeFile.id}
         filePath={activeFile.filePath}
+        noteSource={activeFile}
         viewStateKey={editorViewStateKey}
         viewStateId={viewStateScopeId}
         relativePath={activeFile.relativePath}

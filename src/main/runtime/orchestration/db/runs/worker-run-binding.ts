@@ -7,6 +7,9 @@ import {
   type OrchestrationCoordinatorKey
 } from '../../orchestration-caller-identity'
 
+const WORKER_MAIL_ROUTE =
+  'Your mail arrives through plain `orchestration check` (no --run); report with `orchestration send`.'
+
 /** The caller's active delegated Dispatches, matched by address then pane as check and send do. */
 export function findCallerWorkerDispatches(
   db: OrchestrationDb,
@@ -57,7 +60,7 @@ export function workerRunBindingRefusal(
         : `You work Dispatch ${own.id} in Run ${own.run_id}, which was started from work in Run ${runId}, so you cannot coordinate Run ${runId}.`
     return new OrchestrationError(
       'worker_cannot_coordinate_own_run',
-      `${role} Your mail arrives through plain \`orchestration check\` (no --run); report with \`orchestration send\`. No effects were applied.`,
+      `${role} ${WORKER_MAIL_ROUTE} No effects were applied.`,
       { effectsApplied: false, dispatchId: own.id }
     )
   }
@@ -72,7 +75,21 @@ export function workerRunBindingRefusal(
   return null
 }
 
+/** A bound Run is not all a caller may be working on: run-current also names the Dispatch it works elsewhere. */
+export function boundRunWorkerNext(
+  db: OrchestrationDb,
+  caller: OrchestrationCoordinatorKey,
+  boundRunId: string
+): string | undefined {
+  const worked = findCallerWorkerDispatches(db, caller).find(
+    (dispatch) => dispatch.run_id !== boundRunId
+  )
+  return worked
+    ? `You work Dispatch ${worked.id} in Run ${worked.run_id}. ${WORKER_MAIL_ROUTE} Only if you no longer coordinate Run ${boundRunId}: read your mail first, because unread mail moves with that Run, then have a terminal that coordinates no other Run run \`orca orchestration run-use --id ${boundRunId}\`, since run-use unbinds any others it holds. Its history stays.`
+    : undefined
+}
+
 /** What a worker with no Run binding is told instead of a Run binding command. */
 export function unboundWorkerMessage(dispatch: DispatchContextRow): string {
-  return `You work Dispatch ${dispatch.id} in Run ${dispatch.run_id} and are not bound to a Run. Your mail arrives through plain \`orchestration check\` (no --run); report with \`orchestration send\`. No effects were applied.`
+  return `You work Dispatch ${dispatch.id} in Run ${dispatch.run_id} and are not bound to a Run. ${WORKER_MAIL_ROUTE} No effects were applied.`
 }

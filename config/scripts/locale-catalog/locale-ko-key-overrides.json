@@ -5114,9 +5114,6 @@
   "auto.components.settings.RepositoryPane.nestedHostLabel": {
     "ko": "{{value0}} ({{value1}} 경유)"
   },
-  "auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a": {
-    "ko": "기본 에이전트 사용"
-  },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.0704dd55cd": {
     "ko": "저장소 명령"
   },
@@ -5519,9 +5516,6 @@
   "auto.components.settings.CommitMessageAiPane.47e45cbd5a": {
     "ko": "사용자 지정 명령"
   },
-  "auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b": {
-    "ko": "사용자 지정 명령"
-  },
   "auto.components.settings.RepositorySourceControlAiCustomCommand.ebffc5a28c": {
     "ko": "사용자 지정 명령"
   },
@@ -5656,5 +5650,23 @@
   },
   "auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedPlural": {
     "ko": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다."
+  },
+  "auto.components.settings.browser.search.terminalLinkActions.actions": {
+    "ko": "작업"
+  },
+  "auto.components.right.sidebar.source.control.branch.line.total.chip.c8d5b21e07": {
+    "ko": "소스 코드"
+  },
+  "auto.components.artifacts.ArtifactListTableHeader.actions": {
+    "ko": "작업"
+  },
+  "components.workspace.cleanup.browse.host": {
+    "ko": "호스트"
+  },
+  "components.workspace.cleanup.browse.sort.host": {
+    "ko": "호스트"
+  },
+  "components.workspace.cleanup.browse.agent.idle": {
+    "ko": "유휴 상태"
   }
 }

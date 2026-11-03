@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import {
   createSessionParseStats,
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../../src/main/ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/session-transcript-consumers'
-import { requestWholeTranscriptRead } from '../../src/main/ai-vault/session-transcript-reader'
+  parseAgentSessionFileCached
+} from '../../src/main/ai-vault/parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../../src/main/ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/transcripts/session-transcript-consumers'
+import { requestWholeTranscriptRead } from '../../src/main/ai-vault/transcripts/session-transcript-reader'
 import { registerSessionSearchIndexConsumer } from '../../src/main/ai-vault-search/session-search-index-consumer'
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
 import { writeSyntheticTranscriptCorpus } from '../../src/main/ai-vault-search/session-search-synthetic-corpus'

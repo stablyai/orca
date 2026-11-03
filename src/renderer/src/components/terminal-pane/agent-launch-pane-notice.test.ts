@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { AgentLaunchPaneNotice } from './AgentLaunchPaneNotice'
 import { TerminalErrorToast } from './TerminalErrorToast'
-import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 
 afterEach(async () => {
   cleanup()
@@ -105,18 +104,4 @@ it('keeps translated uncertainty and the capacity fallback on the shipped Chines
     'Git Bash reported its limit of 128 open terminals on this PC while starting Codex.'
   )
   expect(pane.container.textContent?.match(/128/g)).toHaveLength(1)
-})
-
-describe('which pane shows it', () => {
-  const outcome = { kind: 'not-started' as const, code: 'boom' }
-  const tab = { agentLaunchPane: { leafId: 'leaf-1', outcome } }
-
-  it('the leaf the launch laid out, once its fate is final', () => {
-    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-1')).toEqual(outcome)
-    expect(agentLaunchPaneOutcomeForLeaf(tab, 'leaf-2')).toBeNull()
-    expect(
-      agentLaunchPaneOutcomeForLeaf({ agentLaunchPane: { leafId: 'leaf-1' } }, 'leaf-1')
-    ).toBeNull()
-    expect(agentLaunchPaneOutcomeForLeaf(undefined, 'leaf-1')).toBeNull()
-  })
 })

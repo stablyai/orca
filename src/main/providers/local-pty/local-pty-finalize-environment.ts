@@ -1,27 +1,27 @@
 import { win32 as pathWin32 } from 'node:path'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { expandWindowsPathEnvironmentVariables } from '../../../shared/windows-environment-expansion'
-import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
-import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
-import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
+import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
+import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
+import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
-} from '../../pty/powerlevel10k-wizard-env'
+} from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import {
   POSIX_SHELL_STARTUP_COMMAND_ENV,
   supportsPosixShellStartupCommand
-} from '../../pty/posix-shell-startup-command'
-import { resolvePathEnvKey } from '../../pty/windows-path-segment-merge'
-import { selectShellStartupFeatures } from '../../shell-startup-features'
+} from '../../pty/shell-startup/posix-shell-startup-command'
+import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
+import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import {
   injectHistoryEnv,
   injectWslFishHistoryEnv,
   logHistoryInjection,
   type HistoryInjectionResult
-} from '../../terminal-history'
+} from '../../pty/history/terminal-history'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
-import { dropInheritedOrcaHistFile } from '../../worktree-history-file-path'
+import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
 import { promoteAgentTeamsShimPath } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'

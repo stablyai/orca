@@ -8,7 +8,9 @@ import { promisify } from 'node:util'
 import { build } from 'esbuild'
 
 const ENTRY_PATH = resolve('out/main/parcel-watcher-process-entry.js')
-const POOL_SOURCE = resolve('src/main/ipc/runtime-watcher-process-pool.ts')
+const POOL_SOURCE = resolve(
+  'src/main/ipc/filesystem/watcher-process/runtime-watcher-process-pool.ts'
+)
 const FAILURE_SOURCE = resolve(
   'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-failure.ts'
 )

@@ -20,7 +20,7 @@ import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
 import {
   listWslDriveUncConversions,
   writeWslDriveUncConversion
-} from '../../src/main/wsl/wsl-drive-unc-conversion-journal'
+} from '../../src/main/wsl/filesystem/wsl-drive-unc-conversion-journal'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 
 test.use({ seedTestRepo: false })

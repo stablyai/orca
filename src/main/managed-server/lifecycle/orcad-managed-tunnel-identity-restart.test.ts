@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,12 +22,32 @@ import {
   refreshWslHostPairing
 } from '../../../shared/runtime-environment-wsl-host-store'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
-import { WslOrcadConnectionManager } from '../../wsl/wsl-orcad-connection'
+import { WslOrcadConnectionManager } from '../../wsl/orcad/wsl-orcad-connection'
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const servers: OrcaRuntimeRpcServer[] = []
 afterEach(async () => {

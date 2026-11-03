@@ -9,7 +9,10 @@ const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
 let tempHome = ''
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: vi.fn() }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
 
 async function loadModules() {
   vi.resetModules()

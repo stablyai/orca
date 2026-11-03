@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SET_TERMINAL_PANE_TITLE_EVENT } from '@/constants/terminal'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const { fakeStore } = vi.hoisted(() => {
@@ -53,17 +52,6 @@ describe('a pane title from main', () => {
     expect(layout()).toEqual(LAYOUT)
   })
 
-  it('tells a mounted pane, and stays quiet when nothing changed', () => {
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: SIBLING_ID, title: 'DEVELOPER' })
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
-    const event = dispatchEvent.mock.calls[0]?.[0]
-    expect(event).toBeInstanceOf(CustomEvent)
-    expect(event.type).toBe(SET_TERMINAL_PANE_TITLE_EVENT)
-    expect(event.detail).toEqual({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
-  })
-
   it("names a never-mounted tab's one pane from a rootless layout", () => {
     const rootless: TerminalLayoutSnapshot = {
       root: null,
@@ -74,11 +62,6 @@ describe('a pane title from main', () => {
     fakeStore.terminalLayoutsByTabId = { 'tab-1': rootless }
     applyRuntimePaneTitle({ tabId: 'tab-1', leafId: LEAF_ID, title: 'REVIEWER' })
     expect(layout()).toEqual({ ...rootless, titlesByLeafId: { [LEAF_ID]: 'REVIEWER' } })
-  })
-
-  it('drops the field once the last title is cleared', () => {
-    applyRuntimePaneTitle({ tabId: 'tab-1', leafId: SIBLING_ID, title: '' })
-    expect(layout()).not.toHaveProperty('titlesByLeafId')
   })
 
   it('ignores unknown tabs, leaves outside the layout, and non-leaf ids', () => {

@@ -211,6 +211,25 @@ describe('deferred PostHog client start', () => {
     ])
   })
 
+  it('samples prompts once before holding them and preserves the rate on replay', () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0.01).mockReturnValueOnce(0.0099)
+    const prompt = {
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup'
+    } as const
+
+    expect(track('agent_prompt_sent', prompt)).toBe(false)
+    expect(track('agent_prompt_sent', prompt)).toBe(true)
+    expect(sdk.capture).not.toHaveBeenCalled()
+
+    random.mockReturnValue(0.99)
+    scheduleClientStart.mock.calls[0][0]()
+
+    expect(sdk.capture).toHaveBeenCalledOnce()
+    expect(sdk.capture.mock.calls[0][0].properties).toMatchObject({ ...prompt, sample_rate: 0.01 })
+  })
+
   it('flushes held events 10s after the first one, as an eager client would', () => {
     track('app_opened', {})
     vi.advanceTimersByTime(2_000)

@@ -89,7 +89,9 @@ it(
             snapshotRepublished: true
           }
         })
-        expect(listMobileSessionTabs).toHaveBeenCalledWith('id:wt-1', pairing.pairedDeviceId)
+        expect(listMobileSessionTabs).toHaveBeenCalledWith('id:wt-1', pairing.pairedDeviceId, {
+          includeAgentSenders: false
+        })
         expect(refuseUnattributedMobileSessionTabClose).toHaveBeenCalledWith('id:wt-1', 'tab-1')
         expect(closeMobileSessionTab).not.toHaveBeenCalled()
       } finally {

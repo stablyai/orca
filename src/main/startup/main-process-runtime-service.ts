@@ -13,7 +13,7 @@ import { clearProviderPtyState } from '../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../agent-hooks/server/server-status-identity'
 import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { loadAgentSessionClaimSigner } from '../runtime/agent-session/ownership/agent-session-claim-identity'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'
@@ -26,7 +26,7 @@ import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
+import { pairedOrchestrationPeers } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
@@ -72,7 +72,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return {
         environmentId: environment.id,
         name: environment.name,
-        peerFingerprint: fingerprintOrchestrationPeer(connection.hostPublicKeyB64),
+        ...pairedOrchestrationPeers(connection.hostPublicKeyB64, connection.credential.deviceToken),
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },

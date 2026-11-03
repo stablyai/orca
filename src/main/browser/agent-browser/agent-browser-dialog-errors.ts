@@ -1,5 +1,5 @@
 import { BrowserError } from '../browser-error'
-import { getBrowserJavaScriptDialog } from '../browser-javascript-dialogs'
+import { getBrowserJavaScriptDialog } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import type { BrowserJavaScriptDialog } from '../../../shared/browser-javascript-dialog'
 
 const DIALOG_MESSAGE_QUOTE_MAX_CHARS = 500

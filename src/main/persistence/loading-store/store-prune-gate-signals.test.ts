@@ -31,7 +31,7 @@ const {
   __resetLocalWorktreeMetadataPruneGateForTests,
   isLocalWorktreeMetadataPruneDue,
   markLocalWorktreeMetadataPruneStarted
-} = await import('../../local-worktree-metadata-prune-gate')
+} = await import('../../workspaces/catalog/local-worktree-metadata-prune-gate')
 
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/tmp/worktree-a`

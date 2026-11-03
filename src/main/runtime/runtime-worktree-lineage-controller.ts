@@ -15,7 +15,7 @@ import {
   worktreeRowTarget
 } from '../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   RuntimeLineageError,

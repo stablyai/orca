@@ -21,13 +21,13 @@ import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
 import type { ClientHostedBrowserRpcRoute } from '../runtime-browser-client-automation'
 import { routeRuntimeBrowserClientAutomation } from '../runtime-browser-client-automation'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'

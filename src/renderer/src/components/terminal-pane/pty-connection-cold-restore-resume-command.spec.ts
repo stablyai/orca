@@ -162,7 +162,11 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
         expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'restored-session')
         expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-resume-pty')
-        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          paneKey,
+          origin: 'quit',
+          restoreOnTabOpenOnly: true
+        })
         expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(paneKey, 1)
       } finally {
         globalThis.setTimeout = originalSetTimeout

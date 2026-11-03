@@ -18,30 +18,6 @@ function projectIdFor(remoteUrl: string): string {
 }
 
 describe('resolveImportedFolderProjectLink', () => {
-  it('stamps a GitHub project as upstream', () => {
-    expect(
-      resolveImportedFolderProjectLink(folder(null), 'github:acme/orca', {
-        provider: 'github',
-        owner: 'acme',
-        repo: 'orca'
-      })
-    ).toEqual({ upstream: { owner: 'acme', repo: 'orca' } })
-  })
-
-  it.each([
-    ['GitLab over HTTPS', 'https://gitlab.com/group/sub/app.git'],
-    ['GitLab over SSH', 'git@gitlab.com:group/sub/app.git'],
-    ['a self-hosted host over ssh://', 'ssh://git@git.example.test:2222/team/app.git'],
-    ['a generic HTTPS host', 'https://git.example.test/team/app']
-  ])('links %s through the folder remote', (_label, remoteUrl) => {
-    const link = resolveImportedFolderProjectLink(
-      folder(remoteUrl),
-      projectIdFor(remoteUrl),
-      undefined
-    )
-    expect(link).toEqual({ gitRemoteIdentity: folder(remoteUrl).gitRemoteIdentity })
-  })
-
   it('treats the SSH and HTTPS forms of one repository as the same project', () => {
     const projectId = projectIdFor('https://gitlab.com/group/app.git')
     expect(

@@ -8,8 +8,8 @@ import {
   validateAiVaultSessionDeleteTarget,
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
-import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl/filesystem/wsl-unc-delete'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 
 /** Desktop moves to Trash; a plain-Node host has none, so it removes permanently after the user confirmed. */
 export type AiVaultSessionPathRemover = (removal: AiVaultSessionDeleteRemoval) => Promise<void>

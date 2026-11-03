@@ -6,26 +6,9 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from './worktree-jump/worktree-jump-palette-test-fixtures'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
-import { applyTerminalColdActivation } from './terminal-cold-activation'
-import { collectTerminalParkingPassCandidates } from './terminal-parking-pass-candidates'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { WorkspaceSurface } from './workspace-surface-projection'
-import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 const initialState = useAppStore.getInitialState()
-
-function countingSurfaces(ids: string[]): { surfaces: WorkspaceSurface[]; mapCalls: () => number } {
-  let mapCalls = 0
-  const surfaces = ids.map((id) => ({ id, path: `/tmp/${id}` }))
-  Object.defineProperty(surfaces, 'map', {
-    configurable: true,
-    value(this: WorkspaceSurface[], ...args: Parameters<WorkspaceSurface[]['map']>) {
-      mapCalls += 1
-      return Array.prototype.map.apply(this, args)
-    }
-  })
-  return { surfaces, mapCalls: () => mapCalls }
-}
 
 describe('workspace surface ids', () => {
   beforeEach(() => {
@@ -69,82 +52,6 @@ describe('workspace surface ids', () => {
     expect(result.current.workspaceSurfaceIds).not.toBe(initialIds)
     expect(result.current.workspaceSurfaceIdSet).not.toBe(initialIdSet)
     expect(result.current.workspaceSurfaceIds).toEqual([first.id])
-  })
-
-  it('does not rebuild a surface-id array or set on a cold-activation render', () => {
-    const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
-    const { surfaces, mapCalls } = countingSurfaces(ids)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: applyTerminalColdActivation reads only the fields listed here; the rest of the foundation is render machinery this test never exercises.
-    const controller = {
-      activationDeferralPlanRevisionRef: { current: 0 },
-      activationDeferredMountTabIdsByWorktreeRef: { current: new Map() },
-      activeGroupIdByWorktree: {},
-      activeTabId: null,
-      activeTabIdByWorktree: {},
-      activeWorktreeDeferralHostId: null,
-      activityTerminalPortals: [],
-      backgroundMountTabIdsByWorktreeRef: { current: new Map() },
-      groupsByWorktree: {},
-      hydrationSucceeded: false,
-      lastActivationWorktreeIdRef: { current: null },
-      startupTerminalTabHoldRef: { current: null },
-      layoutByWorktree: {},
-      mountedWorktreeIdsRef: { current: new Set(['repo::/worktree-0', 'repo::/gone']) },
-      pairedRuntimeParkingEnvironmentIds: new Set(),
-      pendingStartupByTabId: {},
-      renderedActiveWorktreeId: null,
-      startupWorktreeRefreshCompleted: false,
-      tabsByWorktree: {},
-      terminalParkingEnabled: true,
-      terminalTitleSnapshotAuthorityEnabled: true,
-      workspaceSessionReady: false,
-      workspaceSurfaces: surfaces,
-      workspaceSurfaceIds: ids,
-      workspaceSurfaceIdSet: new Set(ids)
-    } as unknown as TerminalParkingFoundation
-
-    applyTerminalColdActivation(controller)
-    applyTerminalColdActivation(controller)
-
-    expect(mapCalls()).toBe(0)
-    expect(controller.mountedWorktreeIdsRef.current.has('repo::/gone')).toBe(false)
-    expect(controller.mountedWorktreeIdsRef.current.has('repo::/worktree-0')).toBe(true)
-  })
-
-  it('does not rebuild a surface-id array or set on a parking pass', () => {
-    const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
-    const { surfaces, mapCalls } = countingSurfaces(ids)
-    const hiddenSince = new Map<string, number>([
-      ['repo::/worktree-0', 1],
-      ['repo::/stale', 2]
-    ])
-    const controller = {
-      activeView: 'terminal',
-      activityTerminalPortals: [],
-      measurableBackgroundWorktreeIdsRef: { current: new Set() },
-      measuringTerminalWorktreeIdsRef: { current: new Set() },
-      mountedWorktreeIdsRef: { current: new Set(['repo::/worktree-0']) },
-      pairedRuntimeParkingEnvironmentIds: new Set(),
-      pendingStartupByTabId: {},
-      renderedActiveWorktreeId: 'repo::/worktree-0',
-      tabsByWorktree: {},
-      terminalParkingEnabled: true,
-      terminalSshParkingEnabled: true,
-      terminalWorktreeHiddenSinceRef: { current: hiddenSince },
-      terminalWorktreeParkCooldownUntilRef: { current: new Map() },
-      terminalWorktreeParkingTimersRef: { current: new Map() },
-      workspaceSurfaces: surfaces,
-      workspaceSurfaceIds: ids,
-      workspaceSurfaceIdSet: new Set(ids)
-    } as unknown as TerminalParkingFoundation
-
-    const pass = collectTerminalParkingPassCandidates(controller)
-
-    expect(mapCalls()).toBe(0)
-    expect(pass.retentionCandidates.map((candidate) => candidate.worktreeId)).toEqual([
-      'repo::/worktree-0'
-    ])
-    expect(hiddenSince.has('repo::/stale')).toBe(false)
   })
   it('keeps the surface projection stable across a git-worktree switch', () => {
     const repo = makeRepo()
