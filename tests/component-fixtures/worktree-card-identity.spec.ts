@@ -32,4 +32,10 @@ test('keeps details closed while an identity icon has keyboard focus', async ({ 
   await expect(sparse).toBeFocused()
   await expect(page.getByRole('tooltip', { name: /Sparse checkout/ })).toBeVisible()
   await expect(details).toBeHidden()
+
+  await page.clock.install()
+  await page.mouse.move(0, 0)
+  await title.hover()
+  await page.clock.runFor(1000)
+  await expect(details).toBeHidden()
 })
