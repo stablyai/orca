@@ -8,6 +8,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { terminalHostAliasMatchesTab } from '../../../../shared/terminal-host-alias'
 import {
   getRepoExecutionHostId,
   getConnectionExecutionHostId,
@@ -30,9 +31,18 @@ export function resolveTerminalPaneOwnerContext(
   restoredPtyId?: string | null
 ) {
   const tab = state.tabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
-  const tabHost = state.unifiedTabsByWorktree[worktreeId]?.find(
+  const unifiedTab = state.unifiedTabsByWorktree[worktreeId]?.find(
     (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
-  )?.executionHostId
+  )
+  const alias = tab?.hostTerminalAlias
+  const tabHost = alias?.executionHostId ?? unifiedTab?.executionHostId
+  const conflictingOwner = Boolean(
+    (tabHost && !parseExecutionHostId(tabHost)) ||
+    (alias &&
+      (parseExecutionHostId(alias.executionHostId)?.kind !== 'runtime' ||
+        !terminalHostAliasMatchesTab(alias, tabId) ||
+        (unifiedTab?.executionHostId && unifiedTab.executionHostId !== alias.executionHostId)))
+  )
   const selectedHost = parseExecutionHostId(tabHost)
   const scope = parseWorkspaceKey(worktreeId)
   const result =
@@ -88,6 +98,7 @@ export function resolveTerminalPaneOwnerContext(
   )
   const mirroredRuntimeEnvironmentId = runtimeOwners.values().next().value ?? null
   const unresolved =
+    conflictingOwner ||
     runtimeOwners.size > 1 ||
     (route?.runtimeEnvironmentId &&
       mirroredRuntimeEnvironmentId &&

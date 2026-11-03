@@ -1,3 +1,4 @@
+import { terminalHostAliasSchema, terminalHostAliasMatchesTab } from './terminal-host-alias'
 // Validate persisted sessions at read boundaries so malformed legacy data never reaches React. Ignore unknown fields, validate fields we read, and salvage independent entries via zod-salvage; only non-session payloads reset to defaults.
 import { z } from 'zod'
 import {
@@ -37,7 +38,8 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
 
-export const terminalTabSchema = z.object({
+export const terminalTabRowSchema = z.object({
+  hostTerminalAlias: terminalHostAliasSchema.optional(),
   id: terminalTabIdSchema,
   ptyId: z.string().nullable(),
   worktreeId: z.string(),
@@ -69,6 +71,11 @@ export const terminalTabSchema = z.object({
     .optional()
     .catch(undefined)
 })
+
+export const terminalTabSchema = terminalTabRowSchema.refine(
+  (row) => !row.hostTerminalAlias || terminalHostAliasMatchesTab(row.hostTerminalAlias, row.id),
+  'Terminal alias must reference its host tab'
+)
 
 const executionHostIdSchema = z.custom<ExecutionHostId>(
   (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))

@@ -80,7 +80,23 @@ export function closeTerminalTab(
     options?.onClosed?.()
     return
   }
-  const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const terminalTabId = target.terminalTabId
+  const hostAlias =
+    state.tabsByWorktree[state.activeWorktreeId ?? '']?.find(
+      (row) => row.id === terminalTabId && row.hostTerminalAlias
+    ) ??
+    Object.values(state.tabsByWorktree)
+      .flat()
+      .find((row) => row.id === terminalTabId && row.hostTerminalAlias)
+  const owningWorktreeId = hostAlias?.worktreeId ?? target.worktreeId
+  const pinnedWorktreeId = hostAlias
+    ? (Object.keys(state.unifiedTabsByWorktree ?? {}).find((worktreeId) =>
+        isUnifiedTabPinned(state, worktreeId, terminalTabId)
+      ) ?? owningWorktreeId)
+    : owningWorktreeId
+  if (hostAlias && (options?.reason ?? options?.hostCloseReason ?? 'user') !== 'user') {
+    return
+  }
   // Unrouted closes still prune and record locally; unproven-host PTY teardown fails closed independently.
   const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
@@ -90,7 +106,7 @@ export function closeTerminalTab(
   if (
     options?.reason !== 'pty-exit' &&
     !options?.force &&
-    isUnifiedTabPinned(state, owningWorktreeId, terminalTabId)
+    isUnifiedTabPinned(state, pinnedWorktreeId, terminalTabId)
   ) {
     // Unattended lifecycle callers cannot wait on a modal; reject pinned closes without bypassing consent.
     if (options?.rejectPinned) {
@@ -101,7 +117,7 @@ export function closeTerminalTab(
     if (shouldConfirmPinnedTabClose(state)) {
       guardPinnedTabClose({
         isPinned: true,
-        tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+        tabLabel: resolvePinnedTabLabel(state, pinnedWorktreeId, terminalTabId),
         onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
         ...(options?.onCancel ? { onCancel: options.onCancel } : {})
       })
@@ -128,6 +144,15 @@ export function closeTerminalTab(
     return
   }
 
+  if (hostAlias) {
+    state.closeTab(terminalTabId, {
+      worktreeId: hostAlias.worktreeId,
+      reason: 'user',
+      force: options?.force || pinnedCloseConsented
+    })
+    options?.onClosed?.()
+    return
+  }
   const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {

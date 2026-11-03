@@ -71,7 +71,8 @@ export function saveTerminalRow(
       'shellOverride',
       'forceHostRuntime',
       'startupCwd',
-      'launchAgent'
+      'launchAgent',
+      'hostTerminalAlias'
     ])
   }
 }

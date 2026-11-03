@@ -313,6 +313,41 @@ describe('closeTerminalTab', () => {
     expect(onClosed).toHaveBeenCalledTimes(1)
   })
 
+  it('checks alias pin consent in its own workspace when an ordinary mirror is listed first', () => {
+    const requestPinnedTabCloseConfirm = vi.fn()
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue(
+      makePinnedTabState({
+        confirmClosePinnedTab: true,
+        requestPinnedTabCloseConfirm,
+        closeTab,
+        tabsByWorktree: {
+          host: [{ id: 'pinned-entity-1', worktreeId: 'host' }],
+          'wt-1': [
+            {
+              id: 'pinned-entity-1',
+              worktreeId: 'wt-1',
+              hostTerminalAlias: {
+                executionHostId: 'runtime:host',
+                worktreeId: 'host',
+                tabId: 'host-tab'
+              }
+            }
+          ]
+        }
+      })
+    )
+    closeTerminalTab('pinned-entity-1', { skipRunningProcessConfirm: true })
+    expect(closeTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledTimes(1)
+    requestPinnedTabCloseConfirm.mock.calls[0]![0].onConfirm()
+    expect(closeTab).toHaveBeenCalledWith('pinned-entity-1', {
+      worktreeId: 'wt-1',
+      reason: 'user',
+      force: true
+    })
+  })
+
   it('guards a pinned tab closed by its unified id (workspace overlay path)', () => {
     const requestPinnedTabCloseConfirm = vi.fn()
     const closeUnifiedTab = vi.fn()

@@ -128,6 +128,8 @@ const ROW = {
   forceHostRuntime: own('tab.terminal', 'forceHostRuntime'),
   startupCwd: own('tab.terminal', 'startupCwd'),
   launchAgent: own('tab.terminal', 'launchAgent'),
+  hostTerminalAlias: own('tab.terminal', 'hostTerminalAlias'),
+  hostTerminalAliasGone: 'unwritten',
   // Drop transient legacy pendingActivationSpawn writes. agentLaunchPane may survive a window reload while pending, but restart treats the pane as ordinary.
   agentLaunchPane: 'unwritten',
   pendingActivationSpawn: 'unwritten',
@@ -152,7 +154,7 @@ const ENTRY_FIELDS = {
 
 const TERMINAL_ENTRY = {
   ...ENTRY_FIELDS,
-  executionHostId: own('model', 'hostId'),
+  executionHostId: { from: 'model.hostId', via: ['tab.terminal.hostTerminalAlias'] },
   label: own('terminalRow', 'title')
 } as const satisfies Record<keyof Tab, DiskFieldWritten>
 
