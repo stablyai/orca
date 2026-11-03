@@ -7,7 +7,7 @@ import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type * as CachedSessionListModule from '../ai-vault/cached-session-list'
-import type * as SessionParseCacheModule from '../ai-vault/session-scanner-parse-cache'
+import type * as SessionParseCacheModule from '../ai-vault/parse-cache/session-parse-cache-store'
 
 const mocks = vi.hoisted(() => ({
   scanLocalSessions: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
   shell: { trashItem: mocks.trashItem }
 }))
 
-vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanLocalSessions,
   resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService,
@@ -49,7 +49,7 @@ vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   }
 })
 
-vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
+vi.mock('../ai-vault/parse-cache/session-parse-cache-store', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionParseCacheModule>()
   return {
     ...actual,
@@ -57,13 +57,13 @@ vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
   }
 })
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)
 }))
 
-const { resolveOmpSessionsDir } = await import('../ai-vault/omp-session-root')
+const { resolveOmpSessionsDir } = await import('../ai-vault/scanners/omp/omp-session-root')
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 const { deleteAiVaultSession: deleteAiVaultSessionWithDeps } = await import('./ai-vault-delete')
 const { deleteAiVaultSessionForRemoteClient } = await import('../ai-vault/host-session-delete')

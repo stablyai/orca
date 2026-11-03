@@ -7,7 +7,7 @@ const settings = {
   experimentalOrchestrationPanel: true
 }
 
-export const suspendedOrchestrationPanel = defineFixture({
+export const orchestrationPanel = defineFixture({
   width: 760,
   store: { settings },
   render: () => <ExperimentalPane settings={settings} updateSettings={() => {}} />

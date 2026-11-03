@@ -20,7 +20,10 @@ import {
 } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { publishSyntheticExit, stopLegacyRelayBridgedPty } from '../runtime/kill'
-import { PtyExitProof, PtyRetirementWithoutProof } from '../../../pty-exit-proof'
+import {
+  PtyExitProof,
+  PtyRetirementWithoutProof
+} from '../../../pty/process-retirement/pty-exit-proof'
 
 export type PtyKillIpcDeps = {
   store?: Store

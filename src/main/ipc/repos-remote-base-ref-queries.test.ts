@@ -3,7 +3,7 @@ import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
-import type * as WslUncAccessGate from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGate from '../wsl/filesystem/wsl-unc-access-gate'
 
 const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
@@ -44,7 +44,7 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 // The stopped-distro gate has its own tests; here it must not hide the routing under test.
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGate>()),
   blockedWslDistroForPath: vi.fn(async () => null)
 }))

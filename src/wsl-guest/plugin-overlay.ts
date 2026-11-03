@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeOverlayOpenCodePluginAtomically } from '../shared/opencode-plugin-atomic-write'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import { safeRemoveOverlay } from '../main/pty/scrollback/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 import {
   installOpenCodePluginInCanonicalConfig,

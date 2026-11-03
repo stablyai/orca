@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 
 const mocks = vi.hoisted(() => ({
   stopped: true,
@@ -15,7 +15,7 @@ vi.mock('./repo-git-remote-identity', () => ({
 vi.mock('../../git/git-username', () => ({
   resolveLocalGitUsernameDetailed: mocks.resolveLocalGitUsernameDetailed
 }))
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   blockedWslDistroForPath: mocks.blockedWslDistroForPath,
   wslDistroForPath: mocks.wslDistroForPath

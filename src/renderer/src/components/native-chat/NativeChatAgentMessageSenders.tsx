@@ -85,7 +85,7 @@ function SenderName({
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
-      <span className={`max-w-48 truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>
+      <span className={`min-w-0 max-w-full truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>
         {label}
       </span>
     )
@@ -95,6 +95,7 @@ function SenderName({
       type="button"
       variant={queued ? 'link' : 'ghost'}
       size={queued ? 'xs' : 'sm'}
+      className="min-w-0 max-w-full"
       title={
         queued ? label : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
@@ -102,7 +103,7 @@ function SenderName({
         void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
       }
     >
-      <span className="max-w-48 truncate">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       {!queued ? <ArrowUpRight className="size-3" aria-hidden /> : null}
     </Button>
   )

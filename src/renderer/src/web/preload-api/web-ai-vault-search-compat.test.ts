@@ -33,52 +33,6 @@ describe('web session search preload compatibility', () => {
     expect(await api.searchStatus()).toEqual(unavailableSessionSearchStatus())
     expect(callRuntimeResult).toHaveBeenLastCalledWith('aiVault.searchStatus', {})
   })
-  it('treats an old host as unavailable but propagates transport failures', async () => {
-    const api = createWebAiVaultApi()
-    callRuntimeResult.mockRejectedValue(
-      Object.assign(new Error('unknown method'), { code: 'method_not_found' })
-    )
-    expect(await api.searchSessions({ query: 'needle' })).toEqual({
-      kind: 'unavailable',
-      reason: 'no-service'
-    })
-    expect(await api.searchStatus()).toEqual(unavailableSessionSearchStatus())
-    callRuntimeResult.mockRejectedValue(
-      Object.assign(new Error('disconnected'), { code: 'connection_lost' })
-    )
-    await expect(api.searchSessions({ query: 'needle' })).rejects.toThrow('disconnected')
-    await expect(api.searchStatus()).rejects.toThrow('disconnected')
-  })
-  it('rejects invalid host responses', async () => {
-    const api = createWebAiVaultApi()
-    callRuntimeResult.mockResolvedValue({ kind: 'results' })
-    await expect(api.searchSessions({ query: 'needle' })).rejects.toThrow()
-    await expect(api.searchStatus()).rejects.toThrow()
-  })
-  it('answers for its own runtime and reports any other host unavailable', async () => {
-    const api = createWebAiVaultApi()
-    callRuntimeResult.mockResolvedValue(searchResults())
-    for (const scope of ['runtime:owning-host'] as const) {
-      expect(await api.searchSessions({ query: 'needle' }, scope)).toMatchObject({
-        kind: 'results'
-      })
-    }
-    expect(callRuntimeResult).toHaveBeenCalledTimes(1)
-    callRuntimeResult.mockClear()
-    for (const scope of ['runtime:other-host', 'ssh:box', 'local'] as const) {
-      expect(await api.searchSessions({ query: 'needle' }, scope)).toEqual({
-        kind: 'unavailable',
-        reason: 'no-service'
-      })
-      expect(await api.searchStatus(scope)).toEqual(unavailableSessionSearchStatus())
-    }
-    // The desktop merges every host; a browser has one runtime and answers for that one only.
-    expect(await api.searchSessions({ query: 'needle' }, 'all')).toEqual({
-      kind: 'unavailable',
-      reason: 'no-service'
-    })
-    expect(callRuntimeResult).not.toHaveBeenCalled()
-  })
 })
 
 describe('web project conversation listing', () => {

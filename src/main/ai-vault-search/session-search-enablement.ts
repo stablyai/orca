@@ -1,6 +1,6 @@
 import { changedAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { updateSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
+import { updateSessionSearchInService } from '../ai-vault/scan-service/session-scanner-service-spawn'
 import { createChildSessionSearchService } from './session-search-child-service'
 import { installSessionSearchPolicySource } from './session-search-policy'
 import {

@@ -18,7 +18,7 @@ import {
 import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { needsWslHostResolution } from './host-readable-transcript-path'
-import { parseWslPath } from '../wsl'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 import { admitTranscriptPath } from './transcript-path-admission'
 
 export type NativeChatMediaPathResolution =

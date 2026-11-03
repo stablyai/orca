@@ -26,8 +26,11 @@ import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { grantRemoteFilePreview, readLocalFilePreview } from '../../media/media-preview-protocol'
 import { readPreviewGrantRange } from '../../media/preview-grant-range-read'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
-import { assertWslUncPathRunning, guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import {
+  assertWslUncPathRunning,
+  guardWslUncPathAccess
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
 import {
   readLocalFileContent,
