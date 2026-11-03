@@ -13188,13 +13188,16 @@
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
           "moreThemesLoading": "Loading themes…",
-          "installingTheme": "Installing {{value0}}…"
+          "installingTheme": "Installing {{value0}}…",
+          "searchThemes": "Search themes…",
+          "noThemes": "No themes match your search."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Icon theme",
             "description": "File and folder icons from an enabled plugin.",
-            "builtIn": "Built-in"
+            "builtIn": "Built-in",
+            "search": "Search icon themes…"
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
@@ -13603,6 +13606,9 @@
           "kitty_title": "Import from Kitty",
           "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "No matches."
         }
       },
       "right": {
