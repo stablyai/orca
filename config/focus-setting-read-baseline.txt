@@ -128,6 +128,7 @@
 2 src/renderer/src/components/sidebar/visible-worktrees.ts
 4 src/renderer/src/components/sidebar/workspace-board-task-status-sync.ts
 1 src/renderer/src/components/sidebar/workspace-options-menu-items.tsx
+1 src/renderer/src/components/sidebar/workspace-card/card-activity-parts.tsx # parity oracle keeps the old secondary-rows read until it is deleted
 2 src/renderer/src/components/sidebar/workspace-reference-details.ts
 1 src/renderer/src/components/sidebar/workspace-reference-refresh-targets.ts
 1 src/renderer/src/components/sidebar/WorkspaceAttachmentSearch.tsx
