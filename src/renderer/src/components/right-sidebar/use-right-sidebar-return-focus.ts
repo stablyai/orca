@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 
+/** Remembers focus before terminal pointer handlers blur it; restores it on toggles only when no other control or overlay owns focus. */
 export function useRightSidebarReturnFocus(
   open: boolean,
   sidebarRef: RefObject<HTMLDivElement | null>

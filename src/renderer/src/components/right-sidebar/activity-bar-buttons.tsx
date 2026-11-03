@@ -43,6 +43,7 @@ function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | nul
     : base
 }
 
+/** Marks portaled menu content as sidebar-owned so it cannot replace the remembered pane focus. */
 export function TopActivityOverflowMenu({
   items,
   activeTab,

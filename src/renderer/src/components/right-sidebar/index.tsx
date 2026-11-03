@@ -32,6 +32,7 @@ import { useWindowWidth } from './use-window-width'
 import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 
+/** Stays mounted while closed so the return-focus hook can remember pane focus before the sidebar opens. */
 function RightSidebarInner(): React.JSX.Element {
   useUiLanguageRevision()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
