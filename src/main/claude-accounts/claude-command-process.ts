@@ -12,7 +12,7 @@ import {
   isWindowsOnlyAgentCommand,
   windowsOnlyCliMessage
 } from '../codex-cli/windows-only-agent-cli'
-import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
 

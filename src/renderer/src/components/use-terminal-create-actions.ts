@@ -16,6 +16,7 @@ import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-e
 import { translate } from '@/i18n/i18n'
 import { getActiveWorktreeRuntimeEnvironmentId } from './terminal-workspace-model'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
+import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export function useTerminalCreateActions(controller: TerminalColdActivationController) {
   const {
@@ -37,13 +38,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-        void createWebRuntimeSessionTerminal({
-          worktreeId: activeWorktreeId,
-          environmentId: runtimeEnvironmentId,
-          targetGroupId,
-          shell: shellOverride,
-          activate: true
-        })
+        void createWebRuntimeSessionTerminal(
+          {
+            worktreeId: activeWorktreeId,
+            environmentId: runtimeEnvironmentId,
+            targetGroupId,
+            shell: shellOverride,
+            activate: true
+          },
+          { userAct: true }
+        )
         return
       }
       if (!shellOverride && targetGroupId) {
@@ -72,41 +76,53 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     }).catch(showClientCreationActionError)
   }, [activeWorktreeId])
 
+  const openNewBrowserTab = useCallback(
+    (splitDirection?: TabSplitDirection) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      const targetGroupId =
+        useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+        useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+      if (targetGroupId) {
+        void openNewBrowserTabInActiveWorkspace(targetGroupId, splitDirection).catch(
+          showClientCreationActionError
+        )
+        return
+      }
+      const state = useAppStore.getState()
+      const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
+        'managed-browser'
+      ]
+      if (browserAvailability.state !== 'enabled') {
+        toast.error(browserAvailability.reason)
+        return
+      }
+      const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
+      const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (browserAvailability.provider === 'paired-runtime' && runtimeEnvironmentId) {
+        void createWebRuntimeSessionBrowserTab({
+          worktreeId: activeWorktreeId,
+          environmentId: runtimeEnvironmentId,
+          url: defaultUrl
+        }).catch(showClientCreationActionError)
+        return
+      }
+      createBrowserTab(activeWorktreeId, defaultUrl, {
+        title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
+        focusAddressBar: true,
+        ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+      })
+    },
+    [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace]
+  )
+  // Why wrappers: menus pass their select event as the first argument.
   const handleNewBrowserTab = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const targetGroupId =
-      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
-      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
-    if (targetGroupId) {
-      void openNewBrowserTabInActiveWorkspace(targetGroupId).catch(showClientCreationActionError)
-      return
-    }
-    const state = useAppStore.getState()
-    const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
-      'managed-browser'
-    ]
-    if (browserAvailability.state !== 'enabled') {
-      toast.error(browserAvailability.reason)
-      return
-    }
-    const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
-    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
-    if (browserAvailability.provider === 'paired-runtime' && runtimeEnvironmentId) {
-      void createWebRuntimeSessionBrowserTab({
-        worktreeId: activeWorktreeId,
-        environmentId: runtimeEnvironmentId,
-        url: defaultUrl
-      }).catch(showClientCreationActionError)
-      return
-    }
-    createBrowserTab(activeWorktreeId, defaultUrl, {
-      title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
-      focusAddressBar: true,
-      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
-    })
-  }, [activeWorktreeId, createBrowserTab, openNewBrowserTabInActiveWorkspace])
+    openNewBrowserTab()
+  }, [openNewBrowserTab])
+  const handleNewBrowserTabSplitRight = useCallback(() => {
+    openNewBrowserTab('right')
+  }, [openNewBrowserTab])
 
   const handleOpenEntry = useCallback(async (args: TabCreateEntryArgs) => {
     await openTabBarEntry(args)
@@ -175,6 +191,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     handleNewTab,
     handleNewSimulatorTab,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleOpenEntry,
     handleDuplicateBrowserTab,
     handleNewFile

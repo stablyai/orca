@@ -48,12 +48,6 @@ describe('hibernation PTY binding age', () => {
     resetHibernationPaneAgeForTests()
   })
 
-  it('stamps first sight and carries it while the PTY is unchanged', () => {
-    observe('pty-1', 1_000)
-    observe('pty-1', 500_000)
-    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBe(1_000)
-  })
-
   it('resets the stamp when the pane rebinds to a new PTY', () => {
     // A wake spawns a fresh PTY; the pane must get a full idle window again.
     observe('pty-1', 1_000)

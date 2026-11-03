@@ -54,6 +54,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatController.nativeChatAgent
   )
   const handlePaste = useMobileTerminalPaste({
+    sendTerminalUserInput: scope.sendTerminalUserInput,
     client,
     agent,
     activeHandle,
@@ -114,6 +115,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
     conversationCommands:
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
+    compactInstructions:
+      nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
     files: nativeChatFiles
   })
 

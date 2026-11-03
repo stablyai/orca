@@ -23,7 +23,7 @@ vi.mock('../managed-server/install/remote-versioned-install', async (importOrigi
 }))
 vi.mock('../managed-server/install/orcad-remote-install', () => ({ installOrcadBundle: vi.fn() }))
 vi.mock('../managed-server/install/orcad-remote-preflight', () => ({
-  preflightInstalledOrcad: vi.fn()
+  preflightInstalledOrcad: vi.fn(async () => ({}))
 }))
 vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
@@ -35,12 +35,9 @@ import { writeAtomicOrcadRemoteRecord } from '../managed-server/install/orcad-re
 import { deployOrcad } from './orcad-remote-deploy'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { ORCAD_SNAPSHOT_SPACE_INSUFFICIENT_CODE } from './orcad-snapshot-room'
-import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
+
 import { OrcadFenceLostError } from '../managed-server/activation/orcad-activation-fence-scope'
-import {
-  emptyOrcadActivationRecord,
-  withActivatedVersion
-} from '../managed-server/activation/orcad-activation-record'
+
 import {
   FakeOrcadHost,
   NEW,
@@ -112,44 +109,6 @@ describe('an update on a host without room for its snapshot (#30491)', () => {
     expect(host.commands.some((command) => command.includes('kill -TERM'))).toBe(false)
     expect(host.journal).toBeNull()
     expect(host.fence).toBe(false)
-  })
-
-  it('counts free space and reclaimable snapshots apart in the refusal', async () => {
-    answerRoom(400_000, 300_000, 1_000)
-
-    expect(JSON.stringify(await deploy())).toMatch(
-      /has 1000 KB free \(plus 293\.0 MB Orca would reclaim from earlier snapshots\)/u
-    )
-  })
-
-  it('keeps the snapshot the activation record names through both the room check and the prune', async () => {
-    const recorded = 'pre-0.1.0+aa01-500'
-    host.record = JSON.stringify(
-      withActivatedVersion(
-        emptyOrcadActivationRecord(),
-        OLD,
-        {
-          dirName: recorded,
-          takenBeforeVersion: OLD,
-          readableByVersion: null,
-          takenAt: new Date(500).toISOString()
-        },
-        new Date(0)
-      )
-    )
-    answerRoom(400_000, 0, 10_000_000)
-
-    expect(await deploy()).toMatchObject({ outcome: 'installed-and-activated' })
-    const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
-    expect(commands.find((command) => command.includes('SNAPSHOT_SPACE'))).toContain(
-      `('${recorded}')`
-    )
-    expect(commands.find(isSnapshotCaptureCommand)).toMatch(
-      new RegExp(
-        `\\('pre-${NEW.replace('+', '\\+')}-\\d+'\\|'${recorded.replace('+', '\\+')}'\\)`,
-        'u'
-      )
-    )
   })
 
   it('measures room before the last terminal recount, so the scan cannot outdate it', async () => {

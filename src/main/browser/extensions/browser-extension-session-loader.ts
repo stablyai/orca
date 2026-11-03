@@ -1,4 +1,5 @@
 import { session } from 'electron'
+import { forgetBrowserExtensionActionProfile } from './browser-extension-action-registry'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
@@ -168,8 +169,12 @@ export async function detachBrowserExtensionsFromProfileSession(
   await retireBrowserExtensionProfileStorage(sess, profile.partition).catch((error: unknown) => {
     console.warn('[browser-extensions] Could not clear deleted profile storage:', error)
   })
-  if (state) {
-    await unloadProfileSession(state)
+  try {
+    if (state) {
+      await unloadProfileSession(state)
+    }
+  } finally {
+    forgetBrowserExtensionActionProfile(profile.id)
   }
   getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
   getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)

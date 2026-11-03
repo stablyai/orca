@@ -2,7 +2,10 @@ import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../shared/browser-c
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
+import {
+  BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+  BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
+} from '../../shared/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../shared/browser-client-file-channel-protocol'
 import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
@@ -23,6 +26,7 @@ import { registerBrowserClientHostEnvironmentRoutes } from './browser-client-hos
 import { BrowserClientPageCommandExecutor } from './browser-client-page-command-executor'
 import { createBrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
 import { browserManager } from './browser-manager'
+import { browserSessionRegistry } from './browser-session-registry'
 import { BrowserClientUploadStaging } from './browser-client-upload-staging'
 import {
   executeBrowserClientPageAutomation,
@@ -120,6 +124,7 @@ const browserClientHosts =
               'webview',
               BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
+              BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
             handler,
@@ -190,7 +195,11 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     environmentLabel: options.environment.name,
     ...authorityIdentity
   })
+  const previous = clientHostRouteIdentities.get(options.environment.id)
   clientHostRouteIdentities.set(options.environment.id, routeIdentity)
+  if (JSON.stringify(previous) !== JSON.stringify(routeIdentity)) {
+    notifyRouteProfilesChanged()
+  }
   return authority
 }
 
@@ -211,7 +220,9 @@ export function closePairedRuntimeBrowserClientHostEnvironment(
   environmentId: string,
   error?: Error
 ): Promise<boolean> {
-  clientHostRouteIdentities.delete(environmentId)
+  if (clientHostRouteIdentities.delete(environmentId)) {
+    notifyRouteProfilesChanged()
+  }
   return browserClientHosts.closeEnvironment(environmentId, error)
 }
 
@@ -220,12 +231,17 @@ export function retirePairedRuntimeBrowserClientHostEnvironment(
   environmentId: string,
   error?: Error
 ): Promise<boolean> {
-  clientHostRouteIdentities.delete(environmentId)
+  if (clientHostRouteIdentities.delete(environmentId)) {
+    notifyRouteProfilesChanged()
+  }
   return browserClientHosts.retireEnvironment(environmentId, error)
 }
 
 export function shutdownPairedRuntimeBrowserClientHosts(): Promise<void> {
-  clientHostRouteIdentities.clear()
+  if (clientHostRouteIdentities.size > 0) {
+    clientHostRouteIdentities.clear()
+    notifyRouteProfilesChanged()
+  }
   return browserClientHosts.close()
 }
 
@@ -269,4 +285,12 @@ function retireFailedEnvironmentHost(environmentId: string, error: Error): void 
       closeError instanceof Error ? closeError.message : String(closeError)
     )
   })
+}
+
+function notifyRouteProfilesChanged(): void {
+  try {
+    browserSessionRegistry.onProfilesChanged?.()
+  } catch (error) {
+    console.warn('[browser-client-host] Profile notification failed:', error)
+  }
 }

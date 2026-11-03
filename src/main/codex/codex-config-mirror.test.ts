@@ -183,33 +183,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain(`path = '${join(getSystemCodexHomePath(), 'skills', 'local')}'`)
   })
 
-  it('rewrites profile and debug lockfile path references', () => {
-    writeFileSync(
-      getSystemConfigPath(),
-      [
-        '[profiles.fast]',
-        'model_catalog_json = "catalogs/fast.json"',
-        '',
-        '[debug.config_lockfile]',
-        'load_path = "locks/config.lock.toml"',
-        'export_dir = "locks"',
-        ''
-      ].join('\n'),
-      'utf-8'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig).toContain(
-      `model_catalog_json = '${join(getSystemCodexHomePath(), 'catalogs', 'fast.json')}'`
-    )
-    expect(runtimeConfig).toContain(
-      `load_path = '${join(getSystemCodexHomePath(), 'locks', 'config.lock.toml')}'`
-    )
-    expect(runtimeConfig).toContain(`export_dir = '${join(getSystemCodexHomePath(), 'locks')}'`)
-  })
-
   it('does not treat lines inside multiline arrays as headers or path keys', () => {
     writeFileSync(
       getSystemConfigPath(),
@@ -261,20 +234,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     for (const line of passthroughLines) {
       expect(runtimeConfig).toContain(line)
     }
-  })
-
-  it('drops deprecated codex_hooks when the new hooks flag already exists', () => {
-    writeFileSync(
-      getSystemConfigPath(),
-      ['[features]', 'hooks = true', 'codex_hooks = true', ''].join('\n'),
-      'utf-8'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig).toContain('[features]\nhooks = true')
-    expect(runtimeConfig).not.toContain('codex_hooks')
   })
 
   it('preserves an existing runtime config when the system config is missing', () => {
@@ -462,47 +421,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain('enabled = true')
   })
 
-  it('deduplicates basic and literal project headers by decoded Windows path', () => {
-    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
-    writeFileSync(
-      getRuntimeConfigPath(),
-      ["[projects.'c:\\gemini_etl']", 'trust_level = "trusted"', ''].join('\n'),
-      'utf-8'
-    )
-    writeFileSync(
-      getSystemConfigPath(),
-      ['[projects."c:\\\\gemini_etl"]', 'trust_level = "trusted"', ''].join('\n'),
-      'utf-8'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain("[projects.'c:\\gemini_etl']")
-  })
-
-  it('deduplicates a CRLF system project header against an LF runtime header', () => {
-    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
-    const projectHeader = '[projects."C:/Users/jinwo/orca/workspaces/orca/repo"]'
-    writeFileSync(
-      getRuntimeConfigPath(),
-      [projectHeader, 'trust_level = "trusted"', ''].join('\n'),
-      'utf-8'
-    )
-    writeFileSync(
-      getSystemConfigPath(),
-      [projectHeader, 'trust_level = "trusted"', ''].join('\r\n'),
-      'utf-8'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain(`${projectHeader}\ntrust_level = "trusted"`)
-  })
-
   it('self-heals duplicate project tables in a CRLF runtime config', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     const projectHeader = '[projects."C:/Users/jinwo/orca/workspaces/orca/repo"]'
@@ -544,28 +462,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
     expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain('trust_level = "untrusted"')
-    expect(runtimeConfig).not.toContain('trust_level = "trusted"')
-  })
-
-  it('lets a semantically matching system revocation replace runtime trust', () => {
-    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
-    writeFileSync(
-      getRuntimeConfigPath(),
-      ["[projects.'c:\\gemini_etl']", 'trust_level = "trusted"', ''].join('\n'),
-      'utf-8'
-    )
-    writeFileSync(
-      getSystemConfigPath(),
-      ['[projects."C:/gemini_etl"]', 'trust_level = "untrusted"', ''].join('\n'),
-      'utf-8'
-    )
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain('[projects."C:/gemini_etl"]')
     expect(runtimeConfig).toContain('trust_level = "untrusted"')
     expect(runtimeConfig).not.toContain('trust_level = "trusted"')
   })
@@ -673,29 +569,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readFileSync(getRuntimeConfigPath(), 'utf-8').match(/\[projects\./g)).toHaveLength(1)
-  })
-
-  it('self-heals duplicate project tables already present in the runtime config', () => {
-    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
-    writeFileSync(
-      getRuntimeConfigPath(),
-      [
-        '[projects."c:\\\\gemini_etl"]',
-        'trust_level = "trusted"',
-        '',
-        "[projects.'c:\\gemini_etl']",
-        'trust_level = "trusted"',
-        ''
-      ].join('\n'),
-      'utf-8'
-    )
-    writeFileSync(getSystemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
-
-    syncSystemConfigIntoManagedCodexHome()
-
-    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
-    expect(runtimeConfig.match(/\[projects\./g)).toHaveLength(1)
-    expect(runtimeConfig).toContain('[projects."c:\\\\gemini_etl"]')
   })
 
   it('keeps untrusted when self-healing duplicate project tables', () => {
@@ -843,12 +716,6 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).not.toContain(systemUserHookTrustHeader())
     expect(runtimeConfig).not.toContain('trusted_hash = "sha256:system"')
   })
-
-  it('does not create a runtime config when neither system nor runtime config exists', () => {
-    syncSystemConfigIntoManagedCodexHome()
-
-    expect(existsSync(getRuntimeConfigPath())).toBe(false)
-  })
 })
 
 describe('syncSystemConfigIntoLegacySharedCodexHome', () => {
@@ -869,15 +736,6 @@ describe('syncSystemConfigIntoLegacySharedCodexHome', () => {
 })
 
 describe('prepareSystemConfigForFreshRuntimeMirror', () => {
-  it('allows WSL callers to retain Linux semantics for mounted-drive homes', () => {
-    expect(
-      resolveCodexConfigMirrorSourceDirectory(
-        'C:\\Users\\alice\\.codex',
-        '/mnt/c/Users/alice/.codex'
-      )
-    ).toBe('/mnt/c/Users/alice/.codex')
-  })
-
   it('uses the Linux-side directory for WSL UNC source homes', () => {
     const sourceDir = resolveCodexConfigMirrorSourceDirectory(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'

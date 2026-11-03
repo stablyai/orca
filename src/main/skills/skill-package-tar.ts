@@ -7,7 +7,11 @@ import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
 import { SKILL_PACKAGE_MAX_COMPRESSED_BYTES } from '../../shared/skill-package-manifest'
 import { createDeterministicGzipStore } from './skill-package-deterministic-gzip'
-import { buildUstarEntryHeader, USTAR_BLOCK_BYTES, ustarPaddingBytes } from '../ustar-entry-header'
+import {
+  buildUstarEntryHeader,
+  USTAR_BLOCK_BYTES,
+  ustarPaddingBytes
+} from '../archive/ustar-entry-header'
 
 const TAR_BLOCK_BYTES = USTAR_BLOCK_BYTES
 const TAR_EXPANDED_LIMIT = 40 * 1024 * 1024

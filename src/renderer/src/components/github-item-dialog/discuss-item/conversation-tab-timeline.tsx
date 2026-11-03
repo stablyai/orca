@@ -5,12 +5,14 @@ import type {
   GitHubIssueTimelineItem,
   GitHubIssueTimelineTarget
 } from '../../../../../shared/github/comment-types'
-import { translate } from '@/i18n/i18n'
-import { getTimelineStateReasonLabel, getTimelineTargetLabel } from './issue-conversation-entries'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
+import { getTimelineTargetLabel } from './issue-conversation-entries'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function renderTimelineTarget(
   target: GitHubIssueTimelineTarget | undefined
-): React.ReactNode {
+): React.JSX.Element | null {
   if (!target) {
     return null
   }
@@ -20,92 +22,147 @@ export function renderTimelineTarget(
       type="button"
       className="min-w-0 truncate font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground"
       title={getTimelineTargetLabel(target)}
-      onClick={() => window.api.shell.openUrl(target.url)}
+      onClick={(event) => openAppHttpLink(target.url, { event })}
     >
       {getTimelineTargetLabel(target)}
     </button>
   )
 }
 
-export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem): React.ReactNode {
-  const assignee =
-    activity.assignee ?? translate('auto.components.GitHubItemDialog.timeline.someone', 'someone')
-  if (activity.event === 'assigned') {
-    return (
-      <>
-        {translate('auto.components.GitHubItemDialog.timeline.assigned', 'assigned')}{' '}
-        <span className="font-medium text-foreground">{assignee}</span>
-      </>
-    )
-  }
-  if (activity.event === 'unassigned') {
-    return (
-      <>
-        {translate('auto.components.GitHubItemDialog.timeline.unassigned', 'unassigned')}{' '}
-        <span className="font-medium text-foreground">{assignee}</span>
-      </>
-    )
-  }
-  if (activity.event === 'mentioned' || activity.event === 'cross-referenced') {
-    return (
-      <>
-        {translate('auto.components.GitHubItemDialog.timeline.mentioned', 'mentioned this')}
-        {activity.source ? (
-          <>
-            {' '}
-            {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
-            {renderTimelineTarget(activity.source)}
-          </>
-        ) : null}
-      </>
-    )
-  }
-  if (activity.event === 'closed') {
-    const stateReason = getTimelineStateReasonLabel(activity.stateReason)
-    return (
-      <>
-        {translate('auto.components.GitHubItemDialog.timeline.closed', 'closed this')}
-        {stateReason ? ` ${stateReason}` : ''}
-        {activity.closer ? (
-          <>
-            {' '}
-            {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
-            {renderTimelineTarget(activity.closer)}
-          </>
-        ) : null}
-      </>
-    )
-  }
-  if (activity.event === 'reopened') {
-    return translate('auto.components.GitHubItemDialog.timeline.reopened', 'reopened this')
-  }
+function getMovedTimelineTemplate(activity: GitHubIssueTimelineItem): string {
   const hasFrom = Boolean(activity.previousColumnName)
   const hasTo = Boolean(activity.columnName)
+  const hasProject = Boolean(activity.projectName)
+  if (hasFrom && hasTo) {
+    return hasProject
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.movedFromToInProject',
+          '<actor/> moved this from <from/> to <to/> in <project/>'
+        )
+      : translate(
+          'auto.components.GitHubItemDialog.timeline.movedFromTo',
+          '<actor/> moved this from <from/> to <to/>'
+        )
+  }
+  if (hasTo) {
+    return hasProject
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.movedToInProject',
+          '<actor/> moved this to <to/> in <project/>'
+        )
+      : translate(
+          'auto.components.GitHubItemDialog.timeline.movedTo',
+          '<actor/> moved this to <to/>'
+        )
+  }
+  if (hasFrom) {
+    return hasProject
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.movedFromInProject',
+          '<actor/> moved this from <from/> in <project/>'
+        )
+      : translate(
+          'auto.components.GitHubItemDialog.timeline.movedFrom',
+          '<actor/> moved this from <from/>'
+        )
+  }
+  return hasProject
+    ? translate(
+        'auto.components.GitHubItemDialog.timeline.movedInProject',
+        '<actor/> moved this in <project/>'
+      )
+    : translate('auto.components.GitHubItemDialog.timeline.movedThis', '<actor/> moved this')
+}
+
+function getClosedTimelineTemplate(activity: GitHubIssueTimelineItem): string {
+  const hasCloser = Boolean(activity.closer)
+  if (activity.stateReason === 'completed') {
+    return hasCloser
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.closedCompletedIn',
+          '<actor/> closed this as completed in <target/>'
+        )
+      : translate(
+          'auto.components.GitHubItemDialog.timeline.closedCompleted',
+          '<actor/> closed this as completed'
+        )
+  }
+  if (activity.stateReason === 'not_planned') {
+    return hasCloser
+      ? translate(
+          'auto.components.GitHubItemDialog.timeline.closedNotPlannedIn',
+          '<actor/> closed this as not planned in <target/>'
+        )
+      : translate(
+          'auto.components.GitHubItemDialog.timeline.closedNotPlanned',
+          '<actor/> closed this as not planned'
+        )
+  }
+  return hasCloser
+    ? translate(
+        'auto.components.GitHubItemDialog.timeline.closedIn',
+        '<actor/> closed this in <target/>'
+      )
+    : translate('auto.components.GitHubItemDialog.timeline.closedThis', '<actor/> closed this')
+}
+
+function getTimelineActivityTemplate(activity: GitHubIssueTimelineItem): string {
+  switch (activity.event) {
+    case 'assigned':
+      return translate(
+        'auto.components.GitHubItemDialog.timeline.assignedUser',
+        '<actor/> assigned <assignee/>'
+      )
+    case 'unassigned':
+      return translate(
+        'auto.components.GitHubItemDialog.timeline.unassignedUser',
+        '<actor/> unassigned <assignee/>'
+      )
+    case 'mentioned':
+    case 'cross-referenced':
+      return activity.source
+        ? translate(
+            'auto.components.GitHubItemDialog.timeline.mentionedIn',
+            '<actor/> mentioned this in <target/>'
+          )
+        : translate(
+            'auto.components.GitHubItemDialog.timeline.mentionedThis',
+            '<actor/> mentioned this'
+          )
+    case 'closed':
+      return getClosedTimelineTemplate(activity)
+    case 'reopened':
+      return translate(
+        'auto.components.GitHubItemDialog.timeline.reopenedThis',
+        '<actor/> reopened this'
+      )
+    case 'moved_columns_in_project':
+      return getMovedTimelineTemplate(activity)
+  }
+}
+
+export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem): React.ReactNode {
+  const emphasis = 'font-medium text-foreground'
   return (
-    <>
-      {translate('auto.components.GitHubItemDialog.timeline.moved', 'moved this')}
-      {hasFrom ? (
-        <>
-          {' '}
-          {translate('auto.components.GitHubItemDialog.timeline.from', 'from')}{' '}
-          <span className="font-medium text-foreground">{activity.previousColumnName}</span>
-        </>
-      ) : null}
-      {hasTo ? (
-        <>
-          {' '}
-          {translate('auto.components.GitHubItemDialog.timeline.to', 'to')}{' '}
-          <span className="font-medium text-foreground">{activity.columnName}</span>
-        </>
-      ) : null}
-      {activity.projectName ? (
-        <>
-          {' '}
-          {translate('auto.components.GitHubItemDialog.timeline.in', 'in')}{' '}
-          <span className="font-medium text-foreground">{activity.projectName}</span>
-        </>
-      ) : null}
-    </>
+    <Trans
+      i18n={i18n}
+      defaults={getTimelineActivityTemplate(activity)}
+      components={{
+        actor: <span className={emphasis}>{activity.actor}</span>,
+        assignee: (
+          <span className={emphasis}>
+            {activity.assignee ??
+              translate('auto.components.GitHubItemDialog.timeline.someone', 'someone')}
+          </span>
+        ),
+        target: renderTimelineTarget(
+          activity.event === 'closed' ? activity.closer : activity.source
+        ) ?? <span />,
+        from: <span className={emphasis}>{activity.previousColumnName}</span>,
+        to: <span className={emphasis}>{activity.columnName}</span>,
+        project: <span className={emphasis}>{activity.projectName}</span>
+      }}
+    />
   )
 }
 
@@ -135,7 +192,6 @@ export function renderTimelineActivity(activity: GitHubIssueTimelineItem): React
       ) : null}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <span className="font-medium text-foreground">{activity.actor}</span>
           <span className="contents">{renderTimelineActivityMessage(activity)}</span>
           <span className="text-[12px] text-muted-foreground">
             {formatRelativeTime(activity.createdAt)}

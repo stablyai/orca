@@ -423,7 +423,10 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   )
   const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
   mkdirSync(securityDir, { recursive: true })
-  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
+  )
 }
 
 function writeNodePtyPatchFile(projectDir) {

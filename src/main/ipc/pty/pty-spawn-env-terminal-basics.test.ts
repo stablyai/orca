@@ -7,9 +7,9 @@ import {
 } from './pty-ipc-mock-registry'
 import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
-import { __resetPersistedWindowsPathCacheForTests } from '../../pty/windows-environment-path'
-import { __setWindowsPathRegistryLoaderForTests } from '../../pty/windows-path-registry-reader'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
+import { __resetPersistedWindowsPathCacheForTests } from '../../pty/environment/windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from '../../pty/environment/windows-path-registry-reader'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './register-handlers'
 import { buildPtyHostEnv } from './host-env/assembly'
@@ -18,11 +18,12 @@ import {
   shouldInjectJcodeRuntimeDir
 } from '../../../shared/jcode-runtime-dir'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { selectShellStartupFeatures } from '../../shell-startup-features'
+import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import {
-  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
-  PI_CLIPBOARD_OSC52_ENV
-} from './host-env/remote-viewer-clipboard-env'
+  REMOTE_VIEWER_CLIPBOARD_ENV,
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION
+} from '../../../shared/remote-viewer-clipboard-env'
+import { PI_CLIPBOARD_OSC52_ENV } from './host-env/remote-viewer-clipboard-env'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,8 +48,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -299,8 +302,7 @@ describe('registerPtyHandlers', () => {
         }
       )
 
-      // #33937: pi started by hand in a headless host's shell copied only to the host clipboard.
-      it('asks a hand-started pi for OSC 52 copies in a plain shell', () => {
+      it('installs clipboard forwarding for agents started by hand in a remote shell', () => {
         vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
         try {
           const env = buildPtyHostEnv(
@@ -315,7 +317,17 @@ describe('registerPtyHandlers', () => {
             }
           )
           expect(env[PI_CLIPBOARD_OSC52_ENV]).toBe('1')
+          expect(env[REMOTE_VIEWER_CLIPBOARD_ENV]).toBe('1')
           expect(env.SSH_CONNECTION).toBeUndefined()
+          expect(
+            selectShellStartupFeatures({
+              shellPath: '/bin/bash',
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toContain('overlay')
         } finally {
           vi.unstubAllEnvs()
         }

@@ -3,12 +3,16 @@ import type React from 'react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
+import { emulatorMessageText } from '@/lib/emulator-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
+
+type CodedMessage = { message?: string; messageCode?: unknown; messageParams?: unknown }
 
 type EmulatorAvailability = {
   platform: string
-  simctl: { ok: boolean; message?: string }
-  serveSim: { ok: boolean; message?: string }
-  android: { sdkFound: boolean; sdkPath?: string; message: string }
+  simctl: { ok: boolean } & CodedMessage
+  serveSim: { ok: boolean } & CodedMessage
+  android: { sdkFound: boolean; sdkPath?: string } & CodedMessage
 }
 
 type MobileEmulatorAvailabilityDetailsProps = {
@@ -127,7 +131,7 @@ export function MobileEmulatorAvailabilityDetails({
                 <code className="rounded bg-muted px-1 py-0.5">{android.sdkPath}</code>
               </>
             ) : (
-              android.message ||
+              emulatorMessageText(android) ||
               translate(
                 'auto.components.settings.MobileEmulatorSdkStatus.2784f0b22d',
                 'Not found. Install Android Studio, then create a Virtual Device.'
@@ -141,7 +145,7 @@ export function MobileEmulatorAvailabilityDetails({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => void window.api.shell.openUrl(ANDROID_STUDIO_URL)}
+                  onClick={(event) => openAppHttpLink(ANDROID_STUDIO_URL, { event })}
                 >
                   {translate(
                     'auto.components.settings.MobileEmulatorSdkStatus.b94ff260e6',
@@ -191,8 +195,10 @@ export function MobileEmulatorAvailabilityDetails({
             detail={
               iosOk
                 ? translate('auto.components.settings.MobileEmulatorSdkStatus.c6f3ea4f12', 'Ready')
-                : availability.simctl?.message ||
-                  availability.serveSim?.message ||
+                : emulatorMessageText(
+                    [availability.simctl, availability.serveSim].find((check) => check?.message) ??
+                      {}
+                  ) ||
                   translate(
                     'auto.components.settings.MobileEmulatorSdkStatus.e4f14b50d7',
                     'Install Xcode and add an iOS Simulator runtime.'

@@ -1,4 +1,4 @@
-import { ipcMain, Menu, type BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
 import { isCrashReportReason } from '../../shared/crash-reporting'
 import {
   plainTextContextMenuTargetChannel,
@@ -16,6 +16,7 @@ import {
   matchingRichMarkdownContextMenuTableTarget,
   parseRichMarkdownContextMenuTableTarget
 } from './editable-context-menu'
+import { createEditableContextMenuPopup } from './editable-context-menu-popup'
 import type { CreateMainWindowOptions, MainWindowLoadObserver } from './main-window-contracts'
 import { browserRouteWebContentsRegistry } from '../browser/browser-route-session-runtime'
 import {
@@ -114,6 +115,7 @@ export function installMainWindowFocusLifecycle(args: {
     }
   }
   ipcMain.on(plainTextContextMenuTargetChannel, onPlainTextContextMenuTarget)
+  const editableContextMenuPopup = createEditableContextMenuPopup(mainWindow, rendererWebContents)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
     const tableTarget = matchingRichMarkdownContextMenuTableTarget(
       params,
@@ -130,12 +132,13 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     // Context menu may precede focus mirroring; trust Electron's editable params.
-    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
+    editableContextMenuPopup.open(template, params)
   }
   rendererWebContents.on('context-menu', onMainContextMenu)
 
   // Dead renderers cannot clear focus mirrors; reset carve-outs so later lifecycles retain app shortcuts.
   const resetMarkdownEditorFocus = (): void => {
+    editableContextMenuPopup.close()
     markdownEditorFocused = false
     pendingRichMarkdownContextMenuTableTarget = null
     pendingPlainTextContextMenuTarget = false
@@ -205,8 +208,7 @@ export function installMainWindowFocusLifecycle(args: {
       return
     }
     const launchFailed = details.reason === 'launch-failed'
-    const useLaunchBackoff = launchFailed && process.platform !== 'win32'
-    const launchRetryDelayMs = useLaunchBackoff ? launchFailureBackoff.nextDelayMs() : null
+    const launchRetryDelayMs = launchFailed ? launchFailureBackoff.nextDelayMs() : null
     const goneAt = Date.now()
     // Read commit at death; the next sampler tick would see memory the dead renderer released.
     const lowCommit = lowCommitOomGate.assess(details, goneAt)
@@ -234,7 +236,7 @@ export function installMainWindowFocusLifecycle(args: {
         return
       }
       // Spawn refusal needs its own bounded backoff, independent of crash-loop accounting.
-      if (useLaunchBackoff) {
+      if (launchFailed) {
         const subject = { details, recentRecoveryCount: launchFailureBackoff.attempts() }
         if (launchRetryDelayMs === null) {
           recoveryReloadWatchdog.escalate(subject, 'launch-failed')
@@ -248,7 +250,7 @@ export function installMainWindowFocusLifecycle(args: {
         // Stop repeated crashes through the one-prompt watchdog; it also watches manual retry so another stall cannot strand a blank window.
         recoveryReloadWatchdog.escalate(
           { details, recentRecoveryCount: recovery.recentRecoveryCount },
-          launchFailed ? 'launch-failed' : 'crash-loop'
+          'crash-loop'
         )
         return
       }

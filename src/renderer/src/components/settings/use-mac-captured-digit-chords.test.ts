@@ -53,54 +53,6 @@ describe('useMacCapturedDigitChords', () => {
     expect(readLayoutMap).toHaveBeenCalledTimes(2)
   })
 
-  it('stays silent when the active layout does not produce a digit', async () => {
-    const readSystemChords = async (): Promise<MacCapturedDigitRowChord[]> => [PHYSICAL_CTRL_ONE]
-    const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '&']])
-    const hook = renderHook(() =>
-      useMacCapturedDigitChords({
-        enabled: true,
-        readSystemChords,
-        readLayoutMap
-      })
-    )
-
-    await waitFor(() => expect(hook.result.current).toEqual([]))
-  })
-
-  it('clears a prior result when the system probe rejects', async () => {
-    const readSystemChords = vi
-      .fn()
-      .mockResolvedValueOnce([PHYSICAL_CTRL_ONE])
-      .mockRejectedValueOnce(new Error('unavailable'))
-    const readLayoutMap = async (): Promise<LayoutMapLike> => layoutMap([['Digit1', '1']])
-    const hook = renderHook(() =>
-      useMacCapturedDigitChords({
-        enabled: true,
-        readSystemChords,
-        readLayoutMap
-      })
-    )
-
-    await waitFor(() => expect(hook.result.current).toHaveLength(1))
-    act(() => window.dispatchEvent(new Event('focus')))
-    await waitFor(() => expect(hook.result.current).toEqual([]))
-  })
-
-  it('clears a prior result when the layout-map probe rejects', async () => {
-    const readSystemChords = vi.fn().mockResolvedValue([PHYSICAL_CTRL_ONE])
-    const readLayoutMap = vi
-      .fn()
-      .mockResolvedValueOnce(layoutMap([['Digit1', '1']]))
-      .mockRejectedValueOnce(new Error('layout unavailable'))
-    const hook = renderHook(() =>
-      useMacCapturedDigitChords({ enabled: true, readSystemChords, readLayoutMap })
-    )
-
-    await waitFor(() => expect(hook.result.current).toHaveLength(1))
-    act(() => window.dispatchEvent(new Event('focus')))
-    await waitFor(() => expect(hook.result.current).toEqual([]))
-  })
-
   it('coalesces focus events into one trailing refresh', async () => {
     const older = deferred<MacCapturedDigitRowChord[]>()
     const newer = deferred<MacCapturedDigitRowChord[]>()

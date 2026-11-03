@@ -22,7 +22,7 @@ vi.mock('./local-file-access-resolution', () => ({
   resolveUserNamedRegularFile: resolveAuthorizedPathMock
 }))
 
-vi.mock('../ai-vault/local-log-tail-reader', () => ({
+vi.mock('../ai-vault/transcripts/local-log-tail-reader', () => ({
   readLocalLogTailRange: readRangeMock
 }))
 
@@ -31,7 +31,7 @@ import {
   getActiveLocalLogTailWatcherCount,
   registerLocalLogTailHandlers
 } from './local-log-tail'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: path resolution is mocked, so the store is never read.
 const NO_STORE = {} as Store

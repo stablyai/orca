@@ -2,7 +2,12 @@ import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
+import {
+  normalizeProxyBypassRules,
+  normalizeProxyUrl,
+  PROXY_URL_FAILURE_COPY,
+  type ProxyUrlFailureCode
+} from '../../../../shared/network-proxy'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
@@ -35,7 +40,27 @@ export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
 export type HttpProxyUrlDraftState = {
   sourceValue: string
   draft: string
-  error: string | null
+  // A code, so the message follows the UI language.
+  error: ProxyUrlFailureCode | null
+}
+
+function proxyUrlErrorText(code: ProxyUrlFailureCode): string {
+  switch (code) {
+    case 'tooLong':
+      return translate('settings.network.proxyUrlErrors.tooLong', PROXY_URL_FAILURE_COPY.tooLong)
+    case 'invalid':
+      return translate('settings.network.proxyUrlErrors.invalid', PROXY_URL_FAILURE_COPY.invalid)
+    case 'unsupportedProtocol':
+      return translate(
+        'settings.network.proxyUrlErrors.unsupportedProtocol',
+        PROXY_URL_FAILURE_COPY.unsupportedProtocol
+      )
+    case 'missingHost':
+      return translate(
+        'settings.network.proxyUrlErrors.missingHost',
+        PROXY_URL_FAILURE_COPY.missingHost
+      )
+  }
 }
 
 export function createHttpProxyUrlDraftState(
@@ -73,7 +98,7 @@ export function updateHttpProxyUrlDraftState(
 export function setHttpProxyUrlDraftErrorState(
   state: HttpProxyUrlDraftState,
   httpProxyUrl: string | undefined,
-  error: string
+  error: ProxyUrlFailureCode
 ): HttpProxyUrlDraftState {
   return {
     ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
@@ -176,7 +201,7 @@ export function AdvancedNetworkSettingsSection({
     const normalized = normalizeProxyUrl(httpProxyUrlDraft)
     if (!normalized.ok) {
       setHttpProxyUrlDraftState((current) =>
-        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.message)
+        setHttpProxyUrlDraftErrorState(current, settings.httpProxyUrl, normalized.code)
       )
       return
     }
@@ -288,7 +313,7 @@ export function AdvancedNetworkSettingsSection({
                 className="font-mono text-xs"
               />
               {httpProxyUrlError ? (
-                <p className="text-xs text-destructive">{httpProxyUrlError}</p>
+                <p className="text-xs text-destructive">{proxyUrlErrorText(httpProxyUrlError)}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   {translate(

@@ -16,7 +16,7 @@ import {
   windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
@@ -69,7 +69,8 @@ export function installMainWindowShortcutRouting(args: {
     // Hold dictation needs renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+      // No model still forwards: the renderer's startDictation shows the setup toast.
+      if (!voiceSettings?.enabled) {
         return false
       }
       const dictationMode = voiceSettings.dictationMode ?? 'toggle'

@@ -35,9 +35,36 @@ function placeholders(value) {
   return [...(value.match(PLACEHOLDER_RE) ?? [])].sort().join('|')
 }
 
+// Plural extraction splits every count-bearing key; one that only fills {{count}} stays singular in en.json.
+function collapseCountOnlyKeys(extracted, english) {
+  for (const [key, value] of extracted) {
+    // Plural extraction fills a non-literal default with the dotted base key; treat it as dynamic like other calls.
+    const base = key.replace(PLURAL_SUFFIX_RE, '')
+    if (base !== key && base.includes('.') && value === base) {
+      extracted.set(key, '')
+    }
+  }
+  for (const [key, value] of extracted) {
+    const base = key.endsWith('_other') ? key.slice(0, -'_other'.length) : null
+    // A suffixed key with count (x_one_other) is a pre-native plural call; keep it reported.
+    if (
+      base &&
+      !PLURAL_SUFFIX_RE.test(base) &&
+      !english.has(key) &&
+      english.has(base) &&
+      extracted.get(`${base}_one`) === value
+    ) {
+      extracted.delete(key)
+      extracted.delete(`${base}_one`)
+      extracted.set(base, value)
+    }
+  }
+  return extracted
+}
+
 export function compareExtraction(extractedCatalog, englishCatalog) {
-  const extracted = flattenCatalog(extractedCatalog)
   const english = flattenCatalog(englishCatalog)
+  const extracted = collapseCountOnlyKeys(flattenCatalog(extractedCatalog), english)
   const dynamicDefaults = [...extracted.entries()]
     .filter(([, value]) => value.length === 0)
     .map(([key]) => key)

@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import type { MarkdownPreviewDocument } from './markdown-preview-document-types'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
@@ -162,6 +163,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
+      revealMarkdownNavigationDetails(target)
       container.scrollTo({ top: getMarkdownPreviewAnchorScrollTop(container, target) })
       target.focus({ preventScroll: true })
       return true

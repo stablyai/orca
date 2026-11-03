@@ -88,6 +88,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
+    setHostRepoCatalogSnapshot: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -95,6 +96,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     activeRuntimeEnvironmentId = null
     store = {
       getSettings: () => ({ activeRuntimeEnvironmentId }),
+      setHostRepoCatalogSnapshot: vi.fn(),
       updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
         activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
       })
@@ -120,6 +122,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     resetRuntimeEnvironmentStatusOwners()
+    vi.unstubAllGlobals()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -205,6 +208,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeConnectionRequestMock).not.toHaveBeenCalled()
+    // Only WSL hosts keep a saved project list; a paired server is listed live.
+    expect(store.setHostRepoCatalogSnapshot).not.toHaveBeenCalled()
   })
 
   it('falls back to one-shot RPC when the saved runtime lacks shared-control support', async () => {

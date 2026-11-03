@@ -29,9 +29,13 @@ import {
 } from './repo-lifecycle-operations'
 import { scheduleSave } from './write-scheduling'
 import { removeWorkspaceLineageForFolderParent } from './metadata-lineage-operations'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  applyWslMoveRetainedMarks,
+  type WslMoveRetainedMark
+} from '../moving-wsl-projects/wsl-move-retained-marks'
 
 type ProjectCollectionOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -167,6 +171,16 @@ export class ProjectCollectionOperations {
 
   moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
     return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
+  }
+
+  /** The WSL mover's retention pass only; returns how many rows changed. */
+  setWslMoveRetainedMarks(marks: readonly WslMoveRetainedMark[]): number {
+    const { runtime, scheduling } = this[projectCollectionOperationsContext]
+    const changed = applyWslMoveRetainedMarks(runtime.state, marks)
+    if (changed > 0) {
+      scheduleSave(scheduling)
+    }
+    return changed
   }
 }
 

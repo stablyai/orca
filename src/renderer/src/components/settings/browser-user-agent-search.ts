@@ -7,7 +7,7 @@ export const getBrowserUserAgentSearchEntry = createLocalizedCatalog((): Setting
   title: translate('settings.browser.userAgent.title', 'Browser identity'),
   description: translate(
     'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.'
+    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
   ),
   keywords: [
     ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),

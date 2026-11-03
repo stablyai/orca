@@ -5,9 +5,14 @@ import {
   OctagonXIcon,
   TriangleAlertIcon
 } from 'lucide-react'
-import type { SyntheticEvent } from 'react'
+import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
+import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
+import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
+import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
+import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
+import { useToasterModalLayer } from './toaster-modal-layer'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
 export const INLINE_ACTION_CLASS_NAMES = {
@@ -17,11 +22,7 @@ export const INLINE_ACTION_CLASS_NAMES = {
 
 // Why: scope to real modals; Radix menus/selects also set body pointer-events:none.
 function isModalOverlayOpen(element: Element): boolean {
-  return (
-    element.ownerDocument.body.querySelector(
-      ":scope > [data-slot='dialog-overlay'], :scope > [data-slot='sheet-overlay']"
-    ) !== null
-  )
+  return element.ownerDocument.body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null
 }
 
 function blockModalToastInteraction(event: SyntheticEvent): void {
@@ -37,11 +38,30 @@ function blockModalToastInteraction(event: SyntheticEvent): void {
   }
 }
 
+const TOASTER_OFFSET = {
+  bottom: `calc(${NOTIFICATION_CARD_STACK_BOTTOM} + env(safe-area-inset-bottom, 0px) + var(${NOTIFICATION_CARD_STACK_HEIGHT_VAR}, 0px))`,
+  // Why 1rem: the cards' right edge, so a toast above them lines up instead of jutting left.
+  right: '1rem'
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const theme = useAppStore((s) => s.settings?.theme) || 'system'
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  useNotificationCardLayoutVarReader(wrapperRef)
+  const { raised, trackActionOverModal } = useToasterModalLayer(wrapperRef)
+  // Lowered behind a modal, toasts keep #32065's close-only gate; raised, their actions run.
+  const gateModalToastInteraction = (event: SyntheticEvent): void => {
+    if (raised) {
+      trackActionOverModal(event)
+    } else {
+      blockModalToastInteraction(event)
+    }
+  }
 
   return (
     <div
+      ref={wrapperRef}
+      data-toasts-raised={raised ? '' : undefined}
       onPointerDownCapture={(event) => {
         if (
           event.target instanceof Element &&
@@ -55,16 +75,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
           blockModalToastInteraction(event)
         }
       }}
-      onClickCapture={blockModalToastInteraction}
-      onAuxClickCapture={blockModalToastInteraction}
-      onContextMenuCapture={blockModalToastInteraction}
+      onClickCapture={gateModalToastInteraction}
+      onAuxClickCapture={raised ? undefined : blockModalToastInteraction}
+      onContextMenuCapture={raised ? undefined : blockModalToastInteraction}
     >
       <Sonner
         theme={theme as ToasterProps['theme']}
         position="bottom-right"
-        // Reserve status-bar clearance at both normal and sub-600px mobileOffset breakpoints.
-        offset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
-        mobileOffset={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
+        // Clear the status bar, then any notification cards in this corner, at both breakpoints.
+        offset={TOASTER_OFFSET}
+        mobileOffset={TOASTER_OFFSET}
         className="toaster group"
         icons={{
           success: <CircleCheckIcon className="size-4" />,

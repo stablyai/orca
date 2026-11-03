@@ -256,7 +256,7 @@ describe('terminal pane recovery uses the current Root state', () => {
       expect(this).toBe(runtime)
       expect(arguments.length).toBe(2)
       expect(selector).toBe(`id:${TEST_WORKTREE_ID}`)
-      expect(options).toEqual({ tabId, leafId: HEADLESS_LEAF_ID, focus: false })
+      expect(options).toEqual({ tabId, leafId: HEADLESS_LEAF_ID, focus: false, reopensPane: true })
       return creation.promise
     })
     const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, handle)

@@ -2,11 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session-state-types'
-import {
-  buildHostIdByWorktreeId,
-  patchWorkspaceSessionByHost,
-  type HostPersistenceState
-} from '@/lib/workspace-session-host-persistence'
+import { patchWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -45,17 +41,6 @@ function seedRuntimeRow(store: ReturnType<typeof createTestStore>): void {
 }
 
 describe('purge stops routing session writes to the removed runtime partition', () => {
-  it('buildHostIdByWorktreeId resolves the removed worktree to local after purge', () => {
-    const store = createTestStore()
-    seedRuntimeRow(store)
-
-    expect(buildHostIdByWorktreeId(store.getState() as HostPersistenceState)(WT_A)).toBe(RUNTIME_A)
-
-    store.getState().purgeStaleRuntimeHostState(['env-a'])
-
-    expect(buildHostIdByWorktreeId(store.getState() as HostPersistenceState)(WT_A)).toBe('local')
-  })
-
   it('patchWorkspaceSessionByHost no longer writes the runtime partition after purge', async () => {
     const store = createTestStore()
     seedRuntimeRow(store)

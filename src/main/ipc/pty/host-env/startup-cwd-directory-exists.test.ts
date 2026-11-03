@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { stat } from 'node:fs/promises'
-import { wslUncDirectoryExistsAsync } from '../../../wsl'
+import { wslUncDirectoryExistsAsync } from '../../../wsl/filesystem/unc-path-access'
 import { probeRecoveredStartupCwdDirectory } from './startup-cwd-directory-exists'
 
 vi.mock('node:fs/promises', () => ({ stat: vi.fn() }))
-vi.mock('../../../wsl', () => ({ wslUncDirectoryExistsAsync: vi.fn() }))
+vi.mock('../../../wsl/filesystem/unc-path-access', () => ({ wslUncDirectoryExistsAsync: vi.fn() }))
 
 describe('recovered folder evidence', () => {
   it.each([

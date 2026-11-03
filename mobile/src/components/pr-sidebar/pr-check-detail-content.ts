@@ -4,6 +4,7 @@ import type {
   PRCheckRunDetails
 } from '../../../../src/shared/github/check-types'
 import { resolveStepOutcome, summarizeJobSteps } from '../../../../src/shared/pr-check-step-status'
+import { translate } from '../../i18n/mobile-i18n'
 
 // Map check payload to desktop-equivalent summary/annotations/failed jobs without React/RN imports for Node tests.
 
@@ -34,13 +35,14 @@ export type CheckDetailContent = {
   summaryLines: string[]
   annotations: CheckDetailAnnotation[]
   annotationsTruncated: boolean
-  jobsLabel: 'Failed jobs' | 'Jobs'
+  jobsLabel: string
   jobs: CheckDetailJob[]
   jobsTruncated: boolean
 }
 
 function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
-  const path = annotation.path ?? 'Annotation'
+  const path =
+    annotation.path ?? translate('pullRequest.prCheckDetailContent.annotation', 'Annotation')
   const locator = annotation.startLine ? `${path}:${annotation.startLine}` : path
   return {
     locator,
@@ -53,11 +55,17 @@ function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
 function mapJob(job: PRCheckJob): CheckDetailJob {
   const failedSteps = summarizeJobSteps(job).failed.map((step) => ({
     name: step.name,
-    state: step.conclusion ?? step.status ?? 'unknown'
+    state:
+      step.conclusion ??
+      step.status ??
+      translate('pullRequest.prCheckDetailContent.unknown', 'unknown')
   }))
   return {
     name: job.name,
-    state: job.conclusion ?? job.status ?? 'unknown',
+    state:
+      job.conclusion ??
+      job.status ??
+      translate('pullRequest.prCheckDetailContent.unknown', 'unknown'),
     failedSteps,
     logTail: job.logTail
   }
@@ -78,7 +86,10 @@ export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailConte
     summaryLines,
     annotations: details.annotations.slice(0, MAX_ANNOTATIONS).map(mapAnnotation),
     annotationsTruncated: details.annotations.length > MAX_ANNOTATIONS,
-    jobsLabel: failedJobs.length > 0 ? 'Failed jobs' : 'Jobs',
+    jobsLabel:
+      failedJobs.length > 0
+        ? translate('pullRequest.prCheckDetailContent.failedJobs', 'Failed jobs')
+        : translate('pullRequest.prCheckDetailContent.jobs', 'Jobs'),
     jobs: visibleJobs.slice(0, MAX_JOBS).map(mapJob),
     jobsTruncated: details.jobs.length > MAX_JOBS
   }

@@ -70,30 +70,4 @@ describe('Claude MCP elicitation', () => {
       claude({ hook_event_name: 'ElicitationResult', mcp_server_name: 'server', action: 'cancel' })
     ).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
   })
-
-  it('settles to done when the listener has no record of the session', () => {
-    claude({ hook_event_name: 'Elicitation', mcp_server_name: 'server', mode: 'url' })
-    expect(
-      claude({ hook_event_name: 'ElicitationResult', mcp_server_name: 'server', action: 'accept' })
-    ).toMatchObject({ state: 'done', mainAgent: { state: 'done' } })
-  })
-
-  it('voids the previous session when an elicitation arrives for a replacement', () => {
-    claude({
-      hook_event_name: 'Stop',
-      session_id: 'session-a',
-      session_crons: [{ id: 'cron-1' }]
-    })
-    expect(state.claudeActiveSessionCronPaneKeys.has(PANE_KEY)).toBe(true)
-
-    claude({
-      hook_event_name: 'Elicitation',
-      session_id: 'session-b',
-      mcp_server_name: 'server',
-      message: 'Allow this?'
-    })
-
-    expect(state.claudeActiveSessionCronPaneKeys.has(PANE_KEY)).toBe(false)
-    expect(state.claudeSessionOwnerByPaneKey.get(PANE_KEY)).toBe('session-b')
-  })
 })

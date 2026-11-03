@@ -18,7 +18,7 @@ import {
   maintainRepoPackIndex
 } from './repo-pack-index-maintenance'
 import { gitExecFileAsync } from './runner'
-import { assertWslUncPathRunning, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { readRepoCommonDirFromGit } from './worktree-list-reader'
 
 // Maintain native/WSL repos locally; SSH maintenance belongs on its execution host.

@@ -42,6 +42,7 @@ export function buildCapabilitySettingsSections({
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
+        includeAgentChatChoice: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
         includeCodexTerminalServerIsolation: !isWebClient

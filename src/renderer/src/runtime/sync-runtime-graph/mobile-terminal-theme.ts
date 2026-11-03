@@ -30,9 +30,8 @@ export function resolveMobileTerminalTheme(
     return undefined
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-  const resolvedTheme = appearance.theme
-    ? { ...appearance.theme, ...settings.terminalColorOverrides }
-    : undefined
+  // Copy: the opacity writes below must not mutate the shared theme catalog entry.
+  const resolvedTheme = appearance.theme ? { ...appearance.theme } : undefined
   if (!resolvedTheme) {
     return undefined
   }

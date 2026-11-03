@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -166,7 +167,7 @@ export function useTaskPageJiraSummaryGeneration<T extends SummaryGenerationMode
           setGenerationError({
             draftKey,
             message:
-              result.error ||
+              taskProviderErrorMessage(result) ||
               translate(
                 'components.jiraIssueTitleField.failed',
                 'Failed to generate a summary from the description.'
@@ -185,7 +186,7 @@ export function useTaskPageJiraSummaryGeneration<T extends SummaryGenerationMode
           draftKey,
           message:
             error instanceof Error
-              ? error.message
+              ? taskProviderErrorText(error.message)
               : translate(
                   'components.jiraIssueTitleField.failed',
                   'Failed to generate a summary from the description.'

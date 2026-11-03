@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   NATIVE_CHAT_RAIL_ROOMY_TICKS,
   type NativeChatRailItem
@@ -56,6 +57,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   /** A tick whose older history is still paging in. */
   pendingId?: string | null
 }): React.JSX.Element | null {
+  useUiLanguageRevision()
   const [target, setTarget] = useState<NativeChatRailPreviewTarget | null>(null)
   const railRef = useRef<HTMLDivElement>(null)
   /** A message an arrow key asked to focus, whose tick may not be drawn until the next render. */

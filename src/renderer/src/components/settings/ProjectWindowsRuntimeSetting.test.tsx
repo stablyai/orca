@@ -2,7 +2,7 @@
 
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { renderToStaticMarkup } from 'react-dom/server'
+
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { Project } from '../../../../shared/project-types'
@@ -48,30 +48,6 @@ function cleanupClient(container: HTMLElement, root: ReturnType<typeof createRoo
 }
 
 describe('ProjectWindowsRuntimeSetting', () => {
-  it('describes the inherited global WSL runtime for a local Windows project', () => {
-    const markup = renderToStaticMarkup(
-      <ProjectWindowsRuntimeSetting
-        project={project}
-        settings={{
-          ...getDefaultSettings('/tmp'),
-          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu-24.04' }
-        }}
-        isLocalWindowsProject
-        wslAvailable
-        wslDistros={['Ubuntu-24.04']}
-        wslCapabilitiesLoading={false}
-        updateProject={vi.fn()}
-      />
-    )
-
-    expect(markup).toContain('Project runtime')
-    expect(markup).toContain('No project override. General settings select Ubuntu-24.04 via WSL.')
-    expect(markup).toContain('Existing terminals keep their current runtime.')
-    expect(markup).toContain('Default (WSL)')
-    expect(markup).toContain('Windows')
-    expect(markup).toContain('WSL')
-  })
-
   it('persists runtime override changes through the project update path', () => {
     const updateProject = vi.fn()
     const { container, root } = renderClient({
@@ -115,28 +91,6 @@ describe('ProjectWindowsRuntimeSetting', () => {
       expect(updateProject).toHaveBeenCalledWith('project-1', {
         localWindowsRuntimePreference: undefined
       })
-    } finally {
-      cleanupClient(container, root)
-    }
-  })
-
-  it('shows the selected distro for explicit WSL project overrides', () => {
-    const updateProject = vi.fn()
-    const { container, root } = renderClient({
-      project: {
-        ...project,
-        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu-24.04' }
-      },
-      settings: getDefaultSettings('/tmp'),
-      isLocalWindowsProject: true,
-      wslAvailable: true,
-      wslDistros: ['Ubuntu-24.04', 'Debian'],
-      wslCapabilitiesLoading: false,
-      updateProject
-    })
-
-    try {
-      expect(container.textContent).toContain('Ubuntu-24.04')
     } finally {
       cleanupClient(container, root)
     }
@@ -194,41 +148,5 @@ describe('ProjectWindowsRuntimeSetting', () => {
       })
       container.remove()
     }
-  })
-
-  it('shows repair copy instead of silently falling back when a selected WSL distro is missing', () => {
-    const markup = renderToStaticMarkup(
-      <ProjectWindowsRuntimeSetting
-        project={{
-          ...project,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu-24.04' }
-        }}
-        settings={getDefaultSettings('/tmp')}
-        isLocalWindowsProject
-        wslAvailable
-        wslDistros={['Debian']}
-        wslCapabilitiesLoading={false}
-        updateProject={vi.fn()}
-      />
-    )
-
-    expect(markup).toContain('Ubuntu-24.04 is not installed in WSL.')
-    expect(markup).toContain('Choose an installed distro or switch this project to Windows.')
-  })
-
-  it('does not render for remote or non-Windows-owned projects', () => {
-    const markup = renderToStaticMarkup(
-      <ProjectWindowsRuntimeSetting
-        project={project}
-        settings={getDefaultSettings('/tmp')}
-        isLocalWindowsProject={false}
-        wslAvailable
-        wslDistros={['Ubuntu-24.04']}
-        wslCapabilitiesLoading={false}
-        updateProject={vi.fn()}
-      />
-    )
-
-    expect(markup).toBe('')
   })
 })

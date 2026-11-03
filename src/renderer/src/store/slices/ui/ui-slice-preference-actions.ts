@@ -195,6 +195,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
         .catch(console.error)
     },
+    showAgentModels: true,
+    setShowAgentModels: (show) => {
+      set({ showAgentModels: show })
+      window.api.ui.set({ showAgentModels: show }).catch(console.error)
+    },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     setAgentActivityDisplayMode: (mode) => {
       const normalized = normalizeAgentActivityDisplayMode(mode)

@@ -100,7 +100,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
           // Kimi requires provider/model IDs; bare names fail with LLM not set.
           id: 'kimi-code/kimi-for-coding',
           label: 'Kimi K2.6'
-        }
+        },
+        { id: 'kimi-code/k3', label: 'Kimi K3' }
       ],
       defaultModelId: 'default'
     },
@@ -238,7 +239,8 @@ export function buildSecondaryCommitMessageAgentSpecs({
           defaultThinkingLevel: 'low'
         }
       ],
-      defaultModelId: 'gpt-5.4'
+      // Plans hide models they do not offer; Auto runs on any plan.
+      defaultModelId: 'auto'
     },
     antigravity: {
       id: 'antigravity',

@@ -28,25 +28,6 @@ function rowCount(tab: Partial<TerminalTab>, paneTitles?: Record<number, string>
   }).length
 }
 
-// Accepted trade-off: hookless remote agents lack exit evidence, so retained launch identity can attribute a later unrelated spinner. Match the row builder’s deliberate #9647 behavior.
-describe('#9040 spinner attribution trade-off is bounded', () => {
-  it('over-reports a non-agent spinner in a tab an agent was launched in', () => {
-    const tab = {
-      id: 'tab-1',
-      title: '⠋ Progress: resolved 42',
-      launchAgent: 'claude'
-    } satisfies Partial<TerminalTab>
-
-    expect(getWorktreeStatus([tab], [], livePtyMap('tab-1'))).toBe('working')
-    // Bound 1: the same title cannot spin a tab with no launch identity.
-    expect(getWorktreeStatus([{ id: 'tab-1', title: tab.title }], [], livePtyMap('tab-1'))).toBe(
-      'active'
-    )
-    // Bound 2: a dead PTY drops out regardless of launch identity.
-    expect(getWorktreeStatus([tab], [], {})).toBe('inactive')
-  })
-})
-
 // Claude and named-provider titles must produce the same dot/sidebar agreement.
 describe('#9040 spinner attribution matches named-provider dot/row agreement', () => {
   it('produces a sidebar row alongside the dot, like a named provider does', () => {

@@ -131,7 +131,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -228,7 +228,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: `codex 'resume' 'codex-session-1'"'"'s'`,
+          command: `codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"'"'s'`,
           env: expect.objectContaining({
             ORCA_PANE_KEY: paneKey,
             ORCA_TAB_ID: 'tab-1',
@@ -320,7 +320,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'",
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'",
           resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
@@ -490,7 +490,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       expect(transport.connect).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 'lost-pty',
-          command: "codex 'resume' 'codex-session-1'"
+          command: "codex '-c' 'disable_paste_burst=true' 'resume' 'codex-session-1'"
         })
       )
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(legacyPaneKey)

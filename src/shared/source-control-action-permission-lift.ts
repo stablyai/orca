@@ -1,13 +1,20 @@
 import { isTuiAgent } from './tui-agent-config'
-import { liftAgentPermissionArgs } from './tui-agent-permission-lift'
+import {
+  normalizeActionArgumentDocument,
+  reconcileActionArgumentDocument
+} from './source-control-action-argument-choices'
 import {
   SOURCE_CONTROL_LAUNCH_ACTION_IDS,
+  canonicalActionLaunchPreferences,
   type AiActionId,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 
-type PermissionRecipe = Pick<SourceControlActionRecipe, 'agentId' | 'launchPreferences'> & {
+type PermissionRecipe = Pick<
+  SourceControlActionRecipe,
+  'agentId' | 'launchPreferences' | 'argumentChoices'
+> & {
   agentArgs?: string | null
 }
 
@@ -20,26 +27,21 @@ export function liftActionPermissionArgs<T extends PermissionRecipe>(
   if (actionId && !SOURCE_CONTROL_LAUNCH_ACTION_IDS.some((id) => id === actionId)) {
     return recipe
   }
+  const canonical = canonicalActionLaunchPreferences(recipe.launchPreferences)
+  const authored =
+    JSON.stringify(canonical) === JSON.stringify(recipe.launchPreferences)
+      ? recipe
+      : { ...recipe, launchPreferences: canonical }
   if (!isTuiAgent(recipe.agentId) || typeof recipe.agentArgs !== 'string') {
-    return recipe
+    return authored
   }
-  const lifted = liftAgentPermissionArgs(recipe.agentId, recipe.agentArgs)
-  if (!lifted.choice) {
-    return recipe
-  }
-  const previous = recipe.launchPreferences
-  if (
-    previous &&
-    (previous.agentId !== recipe.agentId ||
-      (!edited && previous.permissionMode && previous.permissionMode !== lifted.choice))
-  ) {
-    return recipe
-  }
-  return {
-    ...recipe,
-    agentArgs: lifted.args,
-    launchPreferences: { ...previous, agentId: recipe.agentId, permissionMode: lifted.choice }
-  }
+  const document = normalizeActionArgumentDocument(
+    { ...authored, agentArgs: recipe.agentArgs },
+    recipe.argumentChoices,
+    recipe.agentId
+  )
+  const result = reconcileActionArgumentDocument(document, edited ? 'arguments-edit' : 'load')
+  return JSON.stringify(result) === JSON.stringify(recipe) ? recipe : { ...recipe, ...result }
 }
 
 /** Only the row's own concrete agent proves which CLI grammar its saved text uses. */

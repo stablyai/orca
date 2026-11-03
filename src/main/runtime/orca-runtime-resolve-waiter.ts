@@ -9,10 +9,6 @@ export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithResolv
     this.terminalWaiters.resolve(waiter, result)
   }
 
-  protected rejectWaitersForHandle(handle: string, code: string): void {
-    this.terminalWaiters.rejectHandle(handle, code)
-  }
-
   protected rejectAllWaiters(code: string): void {
     this.terminalWaiters.rejectAll(code)
   }

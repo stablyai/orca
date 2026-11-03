@@ -25,6 +25,7 @@ import {
   assertNoIndependentSshAccess,
   assertPairingReplaceableByAdd
 } from './runtime-environment-pairing-replace-guards'
+import { remoteServerPairingStoreError } from './runtime-environment-store-records'
 
 export {
   getEnvironmentStorePath,
@@ -86,10 +87,7 @@ function saveEnvironmentFromPairingCode(
     samePersisted &&
     readEnvironmentStore(userDataPath).environments.find((entry) => entry.id === samePersisted.id)
   if (samePersisted && !samePaired) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `This server is already paired as "${samePersisted.name}", whose saved settings this version of Orca cannot read.`
-    )
+    throw remoteServerPairingStoreError('alreadyPairedUnreadable', { name: samePersisted.name })
   }
   if (samePaired) {
     assertPairingReplaceableByAdd(samePaired, args.source, refreshSameServer)
@@ -103,10 +101,7 @@ function saveEnvironmentFromPairingCode(
   }
   const existing = findCollidingEnvironmentName(store.environments, args.name)
   if (existing) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server named "${existing.name}" already exists.`
-    )
+    throw remoteServerPairingStoreError('nameTaken', { name: existing.name })
   }
   const environment = createEnvironmentFromPairingOffer({
     id: randomUUID(),
@@ -131,17 +126,11 @@ function saveEnvironmentFromPairingCode(
 function parseRemotePairingCode(userDataPath: string, pairingCode: string): PairingOffer {
   const offer = parsePairingCode(pairingCode)
   if (!offer) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'Invalid pairing code. Expected an orca://pair?... URL or bare pairing payload.'
-    )
+    throw remoteServerPairingStoreError('invalidPairingCode')
   }
   // Why the key, not the address: a loopback or LAN address proves nothing either way.
   if (isProfileRuntimePublicKey(userDataPath, offer.publicKeyB64)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'This pairing code is for this Orca itself. Generate the code on the other computer instead.'
-    )
+    throw remoteServerPairingStoreError('selfPairingCode')
   }
   return offer
 }

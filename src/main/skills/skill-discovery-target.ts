@@ -4,7 +4,9 @@ import {
 } from './skill-discovery-wsl-observation'
 import type { Repo } from '../../shared/repo-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
-import { getDefaultWslDistro, getWslHomeAsync, parseWslPath, toLinuxPath } from '../wsl'
+import { getDefaultWslDistro, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { toLinuxPath } from '../../shared/wsl-paths'
 import { clearSkillRootScanCache, discoverSkills } from './discovery'
 import { discoverSkillObservationInWsl } from './skill-discovery-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
@@ -12,7 +14,11 @@ import { stablePathId } from './skill-discovery-sources'
 import { skillScanSourceKinds } from './skill-discovery-source-filter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
-import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
+import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
+import {
+  stoppedWslRootsReadScopeKey,
+  type StoppedWslRootsReadScope
+} from './skill-discovery-stopped-wsl-roots'
 
 // Cache whole WSL results to amortize process boots; native roots already cache, so only coalesce concurrent targets.
 const WSL_RESULT_TTL_MS = 10_000
@@ -114,7 +120,7 @@ function repoDigest(repos: readonly Repo[]): string {
     repos
       // Execution host changes which repos are locally scannable even when their paths match.
       .map((repo) => `${getRepoExecutionHostId(repo)}\0${repo.path}`)
-      .sort((left, right) => left.localeCompare(right))
+      .sort((left, right) => left.localeCompare(right, 'en'))
       // NUL cannot occur in paths, preventing ambiguous joined repo lists.
       .join('\0')
   )
@@ -156,16 +162,19 @@ export async function discoverSkillsOnTarget(
   options: {
     refresh?: boolean
     providerRootOverrides?: SkillProviderRootOverrides
-    /** False for a user act (Share), which may read a stopped distro's folders. */
-    gateStoppedWslDistros?: boolean
+    /** A user act (Share) may read stopped distros' folders; see `StoppedWslRootsReadScope`. */
+    readStoppedWslRootsFor?: StoppedWslRootsReadScope
   } = {}
 ): Promise<SkillDiscoveryResult> {
   const refresh = options.refresh === true
-  const gate = options.gateStoppedWslDistros === false ? { gateStoppedWslDistros: false } : {}
+  const readFor = options.readStoppedWslRootsFor
+  const gate = readFor ? { readStoppedWslRootsFor: readFor } : {}
+  const userActKey =
+    readFor === undefined ? '' : `:user-act:${stoppedWslRootsReadScopeKey(readFor)}`
   try {
     const outcome = await targetScans.run(
       // A gated and an ungated scan of one target must not answer for each other.
-      `${scanKey(target, repos, options.providerRootOverrides)}${options.gateStoppedWslDistros === false ? ':user-act' : ''}`,
+      `${scanKey(target, repos, options.providerRootOverrides)}${userActKey}`,
       { ttlMs: target.kind === 'wsl' ? WSL_RESULT_TTL_MS : 0, refresh },
       async (): Promise<TargetScanObservation> => {
         if (target.kind === 'wsl') {

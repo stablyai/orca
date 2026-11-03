@@ -17,11 +17,16 @@ import {
 } from '../contextual-tours/request-contextual-tour-when-ready'
 import { translate } from '@/i18n/i18n'
 
-export const SETUP_GUIDE_PROJECT_PROMPT = "First add a project you'd like to work on."
+export function setupGuideProjectPrompt(): string {
+  return translate(
+    'auto.components.feature.wall.FeatureWallSetupWorkflowActions.addProjectFirst',
+    "First add a project you'd like to work on."
+  )
+}
 
 export function promptForSetupGuideProject(openModal: (modal: 'add-repo') => void): void {
   openModal('add-repo')
-  toast.message(SETUP_GUIDE_PROJECT_PROMPT)
+  toast.message(setupGuideProjectPrompt())
 }
 
 export function getSetupGuideGitRepo(

@@ -76,7 +76,8 @@ describe('orca computer action CLI routing', () => {
       clickCount: undefined,
       mouseButton: undefined,
       modifiers: 'CmdOrCtrl+Shift',
-      noScreenshot: undefined
+      noScreenshot: undefined,
+      treeDiff: true
     })
   })
 
@@ -132,6 +133,68 @@ describe('orca computer action CLI routing', () => {
     )
   })
 
+  it('asks for a tree diff unless --full-tree is passed', async () => {
+    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+    await main(
+      ['computer', 'click', '--session', 'manual', '--app', 'Finder', '--element-index', '3'],
+      '/tmp/repo/src'
+    )
+    expect(callMock).toHaveBeenLastCalledWith(
+      'computer.click',
+      expect.objectContaining({ treeDiff: true })
+    )
+
+    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+    await main(
+      [
+        'computer',
+        'click',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--element-index',
+        '3',
+        '--full-tree'
+      ],
+      '/tmp/repo/src'
+    )
+    expect(callMock.mock.lastCall?.[1]).not.toHaveProperty('treeDiff')
+  })
+
+  it('prints a returned tree diff after the action summary', async () => {
+    const diffText = [
+      'App=com.apple.finder (pid 100)',
+      'Window: "Finder", App: Finder.',
+      '',
+      'Changes since the previous snapshot (~ changed, + added, - removed). Unchanged elements are omitted and keep their indexes.',
+      '~ \t\t3 text field (settable) Search, Value: notes',
+      '',
+      'The focused UI element is 3 text field (settable) Search, Value: notes.'
+    ].join('\n')
+    const result = sampleSnapshot()
+    queueFixtures(
+      callMock,
+      okFixture('req_click', {
+        ...result,
+        snapshot: {
+          ...result.snapshot,
+          treeText: diffText,
+          treeDiff: { baseSnapshotId: 'snap-before', changed: 1, added: 0, removed: 0 }
+        }
+      })
+    )
+
+    await main(
+      ['computer', 'click', '--session', 'manual', '--app', 'Finder', '--element-index', '3'],
+      '/tmp/repo/src'
+    )
+
+    const output = vi.mocked(console.log).mock.calls[0][0]
+    expect(output).toMatch(/^Click attempted, unverified/u)
+    expect(output).toContain(`\n\n${diffText}`)
+  })
+
   it('maps action command flags to RPC payloads', async () => {
     queueFixtures(
       callMock,
@@ -167,7 +230,8 @@ describe('orca computer action CLI routing', () => {
       fromY: 2,
       toX: 3,
       toY: 4,
-      noScreenshot: undefined
+      noScreenshot: undefined,
+      treeDiff: true
     })
   })
 
@@ -203,7 +267,8 @@ describe('orca computer action CLI routing', () => {
       y: 20,
       direction: 'down',
       pages: 0.5,
-      noScreenshot: undefined
+      noScreenshot: undefined,
+      treeDiff: true
     })
   })
 
@@ -229,7 +294,8 @@ describe('orca computer action CLI routing', () => {
       session: 'manual',
       app: 'Finder',
       key: 'CmdOrCtrl+L',
-      noScreenshot: true
+      noScreenshot: true,
+      treeDiff: true
     })
 
     callMock.mockReset()
@@ -254,7 +320,8 @@ describe('orca computer action CLI routing', () => {
       session: 'manual',
       app: 'Finder',
       text: 'hello world',
-      noScreenshot: undefined
+      noScreenshot: undefined,
+      treeDiff: true
     })
   })
 })

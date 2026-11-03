@@ -1,6 +1,6 @@
 import { ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../browser/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {

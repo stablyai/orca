@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as FsPromises from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
-import type * as WslUncAccessGateModule from '../wsl/wsl-unc-access-gate'
+import type * as WslUncAccessGateModule from '../wsl/filesystem/wsl-unc-access-gate'
 
 type GateState = 'stopped' | 'unverifiable' | 'running'
 
@@ -31,7 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     open: record(actual.open)
   }
 })
-vi.mock('../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslUncAccessGateModule>()),
   // Off Windows no path maps to a distro; stand in for the WSL project's UNC root.
   wslDistroForPath: (path: string) =>
@@ -132,13 +132,39 @@ describe('skill discovery for a stopped WSL distro (E9)', () => {
     )
   })
 
-  it('lets a user act (Share) read a stopped distro’s repo folders and find its skill', async () => {
+  it('lets Share read only the stopped roots holding the chosen skills, leaving the rest down', async () => {
+    const chosen = join(mocks.wslRepoRoot, '.agents', 'skills', 'repo-skill')
     const result = await discoverSkills({
       homeDir: join(root, 'home'),
       repos: [repo('wsl', mocks.wslRepoRoot), repo('host', hostRepo)],
       includeCwd: false,
       sourceKinds: ['repo'],
-      gateStoppedWslDistros: false
+      readStoppedWslRootsFor: [chosen]
+    })
+    expect(result.skills.map((skill) => skill.name).sort()).toEqual([
+      'Skill in host',
+      'Skill in wsl'
+    ])
+    const chosenRoot = join(mocks.wslRepoRoot, '.agents', 'skills')
+    // The chosen skill's root is read; the distro's other roots stay unread and unavailable.
+    const otherWslTouches = mocks.touched.filter(
+      (path) => path.startsWith(mocks.wslRepoRoot) && !path.startsWith(chosenRoot)
+    )
+    expect(otherWslTouches).toEqual([])
+    const otherWslSources = result.sources.filter(
+      (source) => source.path.startsWith(mocks.wslRepoRoot) && source.path !== chosenRoot
+    )
+    expect(otherWslSources.length).toBeGreaterThan(0)
+    expect(otherWslSources.every((source) => source.skippedReason === 'unavailable')).toBe(true)
+  })
+
+  it("lets Share read every stopped root when it can't name the skills' folders", async () => {
+    const result = await discoverSkills({
+      homeDir: join(root, 'home'),
+      repos: [repo('wsl', mocks.wslRepoRoot), repo('host', hostRepo)],
+      includeCwd: false,
+      sourceKinds: ['repo'],
+      readStoppedWslRootsFor: 'all'
     })
     expect(mocks.blockedWslDistroForPath).not.toHaveBeenCalled()
     expect(result.skills.map((skill) => skill.name).sort()).toEqual([

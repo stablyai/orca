@@ -28,10 +28,7 @@ import { getDnrSessionRuntime } from '../browser-extension-dnr-session'
 import { observeBrowserExtensionWebRequests } from '../browser-extension-web-request'
 
 const USER_GESTURE_WINDOW_MS = 5_000
-const recentGestures = new WeakMap<
-  Electron.Session,
-  Map<string, { at: number; signal: AbortSignal }>
->()
+const recentGestures = new WeakMap<AbortSignal, number>()
 const pendingRequests = new Set<string>()
 
 const permissionsSchema = z
@@ -56,24 +53,20 @@ export function noteBrowserExtensionUserGesture(
     return
   }
   const signal = getBrowserExtensionContextSignal(state, extensionId)
-  let gestures = recentGestures.get(session)
-  if (!gestures) {
-    gestures = new Map()
-    recentGestures.set(session, gestures)
-  }
-  gestures.set(extensionId, { at: Date.now(), signal })
+  recentGestures.set(signal, Date.now())
 }
 
 export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
   if (caller.userGesture === true) {
     return true
   }
-  const gesture = recentGestures.get(caller.session)?.get(caller.extension.id)
-  return (
-    gesture !== undefined &&
-    !gesture.signal.aborted &&
-    Date.now() - gesture.at <= USER_GESTURE_WINDOW_MS
-  )
+  const state = getHostSessionState(caller.session)
+  if (!state) {
+    return false
+  }
+  const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
+  const at = recentGestures.get(signal)
+  return at !== undefined && !signal.aborted && Date.now() - at <= USER_GESTURE_WINDOW_MS
 }
 
 function readGrants(profileId: string, extensionId: string) {

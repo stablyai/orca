@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as nativeFs from '../asar-transparent-fs'
+import * as nativeFs from '../filesystem/asar-transparent-fs'
 import * as diskFs from 'node:fs/promises'
 import * as runner from './runner'
 import {
@@ -16,15 +16,18 @@ import {
 } from './worktree-delete-limit'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { canSafelyRemoveOrphanedWorktreeDirectory } from '../worktree-removal-safety'
-import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
+import { canSafelyRemoveOrphanedWorktreeDirectory } from '../workspaces/removal/worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../workspaces/removal/worktree-removal-home-guard'
 import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
 import { assertWorktreeCleanForRemoval, listWorktreesStrict, removeWorktree } from './worktree'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
-import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
-import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
-import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-trash'
+import { isPrunableGitFileWorktree } from '../workspaces/removal/worktree-prunable-git-file'
+import { removeStaleLocalWorktreeRegistration } from '../workspaces/removal/local-worktree-removal-recovery'
+import {
+  sweepStaleWorktreeTrash,
+  WORKTREE_TRASH_DIR_NAME
+} from '../workspaces/removal/worktree-trash'
 
 const execFileAsync = promisify(execFile)
 
@@ -286,6 +289,26 @@ describe('worktree removal against the real Git binary', () => {
 
     await removeWorktree(repoPath, subWorktreePath, true)
     expect(await isRegistered(subWorktreePath)).toBe(false)
+  })
+
+  it.each([
+    ['a checked-out submodule', false],
+    ['a deinitialized submodule whose repository stays in the admin directory', true]
+  ])('refuses a clean checkout with %s before teardown, as Git would', async (_name, deinit) => {
+    // A background delete that Git refuses would surface only after terminals were stopped (#35135).
+    const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+    if (deinit) {
+      await git(['submodule', '-q', 'deinit', '-f', 'vendor'], subWorktreePath)
+    }
+
+    const refusal = await assertWorktreeCleanForRemoval(subWorktreePath).catch((error) => error)
+    expect(refusal).toBeInstanceOf(Error)
+    const message = formatWorktreeRemovalError(refusal, subWorktreePath, false)
+    expect(classifyWorktreeForceDeleteReason(message)).toBe('submodules')
+    // Git itself, not Orca's native Windows remover, decides what counts.
+    const gitRefusal = await git(['worktree', 'remove', subWorktreePath], repoPath).catch((e) => e)
+    expect(String(gitRefusal?.stderr)).toContain('containing submodules')
   })
 
   it('names submodules when the dirty check refuses a checkout that has them', async () => {

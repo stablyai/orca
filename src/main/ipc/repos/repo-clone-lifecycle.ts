@@ -3,7 +3,7 @@ import { ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
@@ -19,14 +19,14 @@ import {
   getClonePathComparisonKey
 } from '../../git/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
-import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
-import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
+import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 type ActiveCloneMetadata = {
   path: string
@@ -157,6 +157,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               ['clone', '--progress', '--', args.url, clonePath],
               {
                 cwd: args.destination,
+                // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+                hostGit: true,
                 admissionTier: 'interactive',
                 // Suppress Windows Git Credential Manager OAuth windows during noninteractive cloning (#7652).
                 env: promptGuardGitEnv(),

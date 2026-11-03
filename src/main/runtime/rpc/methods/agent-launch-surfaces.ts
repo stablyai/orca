@@ -4,8 +4,8 @@ import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,
   type AgentLaunchSurfaceFactory
@@ -19,8 +19,8 @@ import { createStructuredAgentSessionForWorktree } from './structured-agent-sess
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
-import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
+import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
 import {
@@ -140,6 +140,8 @@ export function agentLaunchSurfaceFactory(
         terminalSpawn.rethrow(new AgentLaunchTabClosedError())
       }
       const created = context.runtime.createTerminal(`id:${worktreeId}`, {
+        // An agent launch the caller asked for (CLI, window or paired client) is the user's act.
+        wslUserAct: true,
         // Let the runtime build the configured launcher: agent ids are not commands (cursor uses cursor-agent).
         startupAgent: agent,
         terminalImageViewerSupported: terminalImageViewerSupported(context),
@@ -183,6 +185,7 @@ export function agentLaunchSurfaceFactory(
       }
       return {
         handle: terminal.handle,
+        terminalCreation: terminal,
         // Keep the runtime-minted paneKey so the caller can identify the tab already created.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         // A caller that shows the tab itself reports a failed reveal; the fallback it can't know.
@@ -193,14 +196,21 @@ export function agentLaunchSurfaceFactory(
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },
-    deliverTerminalPrompt: async ({ handle, agent, freshLaunch, prompt, signal }) => {
+    deliverTerminalPrompt: async ({
+      handle,
+      agent,
+      freshLaunch,
+      terminalCreation,
+      prompt,
+      signal
+    }) => {
       const { runtime } = context
       // A stdin-after-start prompt cannot ride a Windows launch line, so it needs the startup path's Windows proof (#10336).
       if (freshLaunch && typeof runtime.deliverStartupFollowup === 'function') {
         return runtime.deliverStartupFollowup(
           handle,
           { agent, prompt: prompt.text },
-          { agentLaunch: true, ...(signal ? { signal } : {}) }
+          { agentLaunch: true, terminalCreation, ...(signal ? { signal } : {}) }
         )
       }
       return deliverTerminalAgentLaunchPrompt({
@@ -208,6 +218,7 @@ export function agentLaunchSurfaceFactory(
         handle,
         agent,
         freshLaunch,
+        terminalCreation,
         text: prompt.text,
         ...(signal ? { signal } : {})
       })

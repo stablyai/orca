@@ -6,7 +6,7 @@ import {
   createDaemonActiveProviderFixtures
 } from './pty-ipc-daemon-provider-fixtures'
 import { delimiter, join } from 'node:path'
-import { _setWslCachesForTests } from '../../wsl'
+import { _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
 import { registerPtyHandlers } from './register-handlers'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -27,8 +27,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -52,6 +54,11 @@ vi.mock('../../codex/codex-pane-account-registry', () =>
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+// Fake-win32 runs have no wsl.exe: the distro runs, so main's background-start hold passes (E9).
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readWslDistroRunningState: vi.fn(async () => 'running')
+}))
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
@@ -592,6 +599,13 @@ describe('registerPtyHandlers', () => {
         expect(env.GIT_CONFIG_COUNT).toBe('1')
         expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
         expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+      })
+      it('forwards the sequenced setup script into WSLENV before the daemon boundary', async () => {
+        const env = await withWin32Platform(() =>
+          daemonSpawnAndGetEnv({ ORCA_SEQUENCED_SETUP_SCRIPT: 'true', WSLENV: 'EXISTING/p' })
+        )
+
+        expect(env.WSLENV).toBe('EXISTING/p:ORCA_SEQUENCED_SETUP_SCRIPT')
       })
     })
   })

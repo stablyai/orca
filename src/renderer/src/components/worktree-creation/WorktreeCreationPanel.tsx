@@ -1,7 +1,6 @@
 import React from 'react'
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import {
   getCreationProgressLabel,
@@ -10,6 +9,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
+import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
@@ -20,17 +20,9 @@ export default function WorktreeCreationPanel({
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
-  const [now, setNow] = React.useState(() => Date.now())
   const progressLabelId = React.useId()
   // Depend on primitive status so stderr’s fresh entry objects cannot continuously reset the interval.
-  const entryStatus = entry?.status
-  React.useEffect(() => {
-    if (entryStatus !== 'creating') {
-      return
-    }
-    // Pause the clock while hidden to avoid unseen panel rerenders.
-    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
-  }, [entryStatus])
+  const now = useWorktreeCreationClock(entry?.status === 'creating')
   if (!entry) {
     return null
   }
@@ -257,14 +249,4 @@ function RecipeOutputLog({
       {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
     </pre>
   )
-}
-
-function formatElapsedTime(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes === 0) {
-    return `${seconds}s`
-  }
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }

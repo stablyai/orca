@@ -20,11 +20,16 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   primarySelectionMiddleClickPaste: 'Middle-click Paste from Selection',
   terminalFocusFollowsMouse: 'Focus Follows Mouse',
   terminalColorOverrides: 'Color Overrides',
+  terminalColorOverridesLight: 'Light Color Overrides',
+  terminalThemeDark: 'Terminal Theme',
+  terminalThemeLight: 'Light Terminal Theme',
+  terminalUseSeparateLightTheme: 'Separate Light Theme',
+  terminalCustomThemes: 'Imported Themes',
   terminalMacOptionAsAlt: 'Option as Alt',
   terminalPaddingX: 'Padding X',
   terminalPaddingY: 'Padding Y',
   terminalDividerColorDark: 'Divider Color (Dark)',
   terminalDividerColorLight: 'Divider Color (Light)',
   terminalInactivePaneOpacity: 'Inactive Pane Opacity',
-  windowBackgroundBlur: 'Window Background Blur'
+  windowMaterial: 'Window Material'
 }

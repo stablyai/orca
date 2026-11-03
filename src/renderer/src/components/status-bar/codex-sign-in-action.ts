@@ -12,7 +12,7 @@ import type { CodexStatusRuntimeTarget } from './status-bar-runtime-targets'
 
 type CodexSignInActionDependencies = {
   accountState: CodexRateLimitAccountsState
-  accountsExpandedRef: MutableRefObject<boolean>
+  menuOpenRef: MutableRefObject<boolean>
   fetchInactiveCodexAccountUsage: AppState['fetchInactiveCodexAccountUsage']
   fetchSettings: AppState['fetchSettings']
   isSwitching: boolean
@@ -20,7 +20,6 @@ type CodexSignInActionDependencies = {
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
   setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
-  setAccountsExpanded: Dispatch<SetStateAction<boolean>>
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
@@ -31,7 +30,7 @@ export async function signInCodexAccount(
 ): Promise<void> {
   const {
     accountState,
-    accountsExpandedRef,
+    menuOpenRef,
     fetchInactiveCodexAccountUsage,
     fetchSettings,
     isSwitching,
@@ -39,7 +38,6 @@ export async function signInCodexAccount(
     reauthenticatingAccountId,
     recordFeatureInteraction,
     setAccounts,
-    setAccountsExpanded,
     setReauthenticatingAccountId
   } = dependencies
   if (isSwitching || reauthenticatingAccountId !== null) {
@@ -73,10 +71,7 @@ export async function signInCodexAccount(
         owner: { kind: 'local' },
         target
       })
-      if (mountedRef.current) {
-        setAccountsExpanded(false)
-      }
-    } else if (mountedRef.current && accountsExpandedRef.current) {
+    } else if (mountedRef.current && menuOpenRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
     toast.success(

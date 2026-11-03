@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
@@ -21,7 +22,7 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as EditNormalization from '../../../../shared/native-chat/tools/native-chat-edit-normalize'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'

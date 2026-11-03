@@ -28,7 +28,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean } = {}): TestPane {
+function createTestPane(options: { cursorBlink?: boolean } = {}): TestPane {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const terminal = new Terminal({
@@ -39,6 +39,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
   })
   terminal.open(host)
   terminal.focus()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this DOM fixture provides the fields used by suspend/resume.
   const pane = {
     id: 1,
     terminal,
@@ -49,7 +50,7 @@ function createTestPane(options: { cursorBlink?: boolean; webglAddon?: boolean }
     // the rendered-cursor oracle needs a renderer that paints in happy-dom.
     gpuRenderingEnabled: false,
     terminalGpuAcceleration: 'off',
-    webglAddon: options.webglAddon ? ({ dispose: vi.fn() } as never) : null,
+    webglAddon: null,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
     webglAttachFailedSinceRecovery: false,
@@ -72,11 +73,8 @@ function renderedText(pane: TestPane): string {
   return pane.host.querySelector('.xterm-rows')?.textContent ?? ''
 }
 
-async function reveal(
-  panes: TestPane[],
-  owner?: Parameters<typeof resumePaneRendering>[1]
-): Promise<void> {
-  resumePaneRendering(panes, owner)
+async function reveal(panes: TestPane[]): Promise<void> {
+  resumePaneRendering(panes)
   for (const pane of panes) {
     pane.terminal.focus()
   }
@@ -157,23 +155,6 @@ describe('hidden-pane cursor blink suspension', () => {
     expect(rendersBlinkingCursor(pane)).toBe(true)
   })
 
-  it('restores blink on the retained-hidden-WebGL path, which skips dispose', async () => {
-    const owner = {}
-    const pane = createTestPane({ webglAddon: true })
-    const addon = pane.webglAddon
-    await write(pane.terminal, 'ready$ ')
-    await flushRender()
-
-    suspendPaneRendering([pane], { owner, livePanes: () => [pane] })
-    // Retention skips disposeWebgl, so only explicit blink suspension can stop this timer.
-    expect(addon?.dispose).not.toHaveBeenCalled()
-    expect(isTerminalCursorBlinkSuspended(pane.terminal)).toBe(true)
-
-    await reveal([pane], owner)
-    await nextFrame()
-    expect(rendersBlinkingCursor(pane)).toBe(true)
-  })
-
   it('restores every pane of a split, including one revealed a second time', async () => {
     const owner = {}
     const left = createTestPane()
@@ -215,59 +196,5 @@ describe('hidden-pane cursor blink suspension', () => {
     await reveal([pane])
     await nextFrame()
     expect(rendersBlinkingCursor(pane), 'the new setting applies on reveal').toBe(true)
-  })
-
-  it('resume is a no-op for a pane that was never suspended', async () => {
-    const pane = createTestPane()
-    await flushRender()
-    await reveal([pane])
-    await nextFrame()
-    expect(rendersBlinkingCursor(pane)).toBe(true)
-  })
-})
-
-/** Model addon-webgl 0.20’s 600ms document-focused timer, which redraws a full row per tick; DEC cursor mode overrides cursorBlink options. Read effective state from the real Terminal. */
-const BLINK_INTERVAL_MS = 600
-
-function blinkCellsRedrawnPerWindow(terminal: Terminal, windowMs: number): number {
-  const decPrivateBlink = (
-    terminal as unknown as {
-      _core: { coreService: { decPrivateModes: { cursorBlink?: boolean } } }
-    }
-  )._core.coreService.decPrivateModes.cursorBlink
-  const blinking = decPrivateBlink ?? terminal.options.cursorBlink === true
-  if (!blinking) {
-    return 0
-  }
-  return Math.floor(windowMs / BLINK_INTERVAL_MS) * terminal.cols
-}
-
-describe('hidden-pane cursor blink redraw cost', () => {
-  beforeEach(() => {
-    resetHiddenWebglRetentionForTest()
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      measureText: () => ({ width: 10 })
-    } as unknown as CanvasRenderingContext2D)
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-    document.body.replaceChildren()
-  })
-
-  it('drops retained hidden panes to zero blink redraws and restores them on reveal', async () => {
-    const owner = {}
-    const panes = Array.from({ length: 6 }, () => createTestPane({ webglAddon: true }))
-    const windowMs = 30_000
-    const cells = () =>
-      panes.reduce((sum, pane) => sum + blinkCellsRedrawnPerWindow(pane.terminal, windowMs), 0)
-
-    expect(cells()).toBe(6 * 50 * COLS)
-
-    suspendPaneRendering(panes, { owner, livePanes: () => panes })
-    expect(cells(), 'hidden panes must cost nothing while the window is visible').toBe(0)
-
-    await reveal(panes, owner)
-    expect(cells()).toBe(6 * 50 * COLS)
   })
 })

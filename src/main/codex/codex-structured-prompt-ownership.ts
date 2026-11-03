@@ -1,5 +1,8 @@
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import * as turnEnd from './codex-structured-turn-end-settlement'
 import {
   AgentSessionPromptAnswerRejectedError,

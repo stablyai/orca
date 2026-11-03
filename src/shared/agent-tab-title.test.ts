@@ -60,6 +60,7 @@ describe('deriveGeneratedTabTitle', () => {
 
   it('returns null when the prompt has no useful title text', () => {
     expect(deriveGeneratedTabTitle('please!!!')).toBeNull()
+    expect(deriveGeneratedTabTitle('{ "tool": "orca diagnostics", "takenAt": "2026"')).toBeNull()
   })
 
   it('bounds normalization work for paste-sized prompts before truncating the title', () => {

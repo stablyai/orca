@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
-import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
+import type { BaseAgent, ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
+import { loadSsh2 } from './ssh2-module-load'
 import { resolveSshConfigHomePath } from './config/ssh-config-path-expansion'
 import { isOpenSshConfigBackedTarget } from './system-transport/system-ssh-args'
 import { readSshIdentityFileSync } from './ssh-identity-file-read'
@@ -195,6 +196,7 @@ export function withSkippedIdentityFileDetail(
 }
 
 export function isUnencryptedPrivateKey(contents: Buffer): boolean {
+  const { utils } = loadSsh2()
   const parsed = utils.parseKey(contents) as ParsedKey | ParsedKey[] | Error
   if (parsed instanceof Error) {
     return false
@@ -214,6 +216,7 @@ export function resolveUnencryptedExplicitPrivateKeys(
 }
 
 export function findEncryptedPrivateKeyPath(keys: PrivateKeyFile[]): string | undefined {
+  const { utils } = loadSsh2()
   for (const key of keys) {
     const parsed = utils.parseKey(key.contents) as ParsedKey | ParsedKey[] | Error
     if (parsed instanceof Error && /passphrase|encrypted key|bad decrypt/i.test(parsed.message)) {

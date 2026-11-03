@@ -1,3 +1,4 @@
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
@@ -9,6 +10,7 @@ import { installOpenDraftAddReviewNoteGuard } from './editor-shortcuts'
 import { NotesSendMenu } from './NotesSendMenu'
 
 export function MarkdownPreviewSingleNoteSendMenu({
+  owner,
   worktreeId,
   filePath,
   content,
@@ -16,6 +18,7 @@ export function MarkdownPreviewSingleNoteSendMenu({
   modeSlot,
   onDelivered
 }: {
+  owner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   content: string
@@ -25,6 +28,7 @@ export function MarkdownPreviewSingleNoteSendMenu({
 }): React.JSX.Element {
   return (
     <NotesSendMenu
+      owner={owner}
       worktreeId={worktreeId}
       groupId={worktreeId}
       modeIdParts={['markdown-notes', worktreeId, filePath, modeSlot, note.id]}
@@ -36,9 +40,12 @@ export function MarkdownPreviewSingleNoteSendMenu({
           formatPrompt: (notes) => formatMarkdownReviewNotes(notes, content)
         }
       ]}
-      targetModeLabel="This note"
+      targetModeLabel={translate('auto.components.editor.NotesSendMenu.thisNote', 'This note')}
       triggerClassName="orca-diff-comment-pill-btn"
-      disabledTooltip="Note already sent"
+      disabledTooltip={translate(
+        'auto.components.editor.NotesSendMenu.noteAlreadySent',
+        'Note already sent'
+      )}
       onDelivered={onDelivered}
     />
   )

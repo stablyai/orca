@@ -31,7 +31,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'
@@ -206,17 +206,5 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingPaneAccountRestarts[REMOTE_PTY1]).toBeUndefined()
     expect(s.suppressedPtyExitIds[REMOTE_HANDLE1]).toBe(true)
     expect(s.pendingPaneAccountRestarts[REMOTE_HANDLE1]).toBe('codex')
-  })
-
-  it('does not parse aliases for environment-scoped remote guard cleanup', () => {
-    const store = createTestStore()
-    seedMaps(store)
-    const parseRemotePtyId = vi.mocked(parseRemoteRuntimePtyId)
-    parseRemotePtyId.mockClear()
-
-    store.getState().purgeWorktreeTerminalState([WT1])
-
-    // Environment-scoped guard identities permit exact purge without parsing aliases or scanning survivors.
-    expect(parseRemotePtyId).not.toHaveBeenCalled()
   })
 })

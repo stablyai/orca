@@ -1,3 +1,5 @@
+import { mobileSessionRouteTarget } from '../session/mobile-session-route'
+import { hostStackRouteHref } from './host-stack-navigation'
 import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -172,6 +174,34 @@ afterEach(() => {
 })
 
 describe('a route the page does not render', () => {
+  it('hands an automation original-pane target to the shell with its route identity intact', () => {
+    const { posted, handoff } = mount({
+      ...INIT,
+      pageRoutes: ['/h/[hostId]/automations'],
+      route: { pathname: '/h/host-a/automations' }
+    })
+    handoff.push(
+      hostStackRouteHref(
+        mobileSessionRouteTarget({
+          hostId: 'host-a',
+          worktreeId: 'repo::/same path',
+          paneKey: 'original:11111111-1111-4111-8111-111111111111',
+          executionHost: 'runtime:server'
+        })
+      )
+    )
+    const frames = navigations(posted)
+    expect(frames).toHaveLength(1)
+    expect(frames[0]).toMatchObject({
+      name: 'navigate',
+      href: expect.stringContaining('/h/host-a/session/repo%3A%3A%2Fsame%20path')
+    })
+    expect(frames[0]).toMatchObject({
+      href: expect.stringContaining('paneKey=original%3A11111111-1111-4111-8111-111111111111')
+    })
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
   it('goes to the shell, and nowhere inside this document', () => {
     const { posted, handoff } = mount(INIT)
     handoff.push('/h/host-a/session/wt-1?name=a+b')

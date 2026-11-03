@@ -7,12 +7,12 @@ import { getWatcherProcessEntryPath } from '../ipc/filesystem/watcher-process/pa
 import {
   AI_VAULT_SERVICE_ENTRY_FILENAME,
   getAiVaultServiceEntryPath
-} from '../ai-vault/session-scanner-service-entry-path'
+} from '../ai-vault/scan-service/session-scanner-service-entry-path'
 import {
   FOREIGN_SQLITE_READER_ENTRY_FILENAME,
   resolveForeignSqliteReaderEntryPath
 } from '../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
-import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
+import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { installOrcadHostAdapters } from './orcad-host-adapters'
 
 // Compose real adapters and deployment paths: isolated resolver tests missed nonexistent fork targets.

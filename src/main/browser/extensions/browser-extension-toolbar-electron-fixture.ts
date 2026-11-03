@@ -15,6 +15,7 @@ import {
   getBrowserExtensionToolbarState
 } from './browser-extension-toolbar'
 import {
+  closeBrowserExtensionPopup,
   getOpenBrowserExtensionPopup,
   openBrowserExtensionPopup
 } from './browser-extension-popup-host'
@@ -237,6 +238,19 @@ async function run(): Promise<void> {
     const { width, height } = quirks.getBounds()
     return width === 170 ? { width, height } : null
   })
+  // A page that vetoes unload after a user gesture still closes when the popup is dismissed.
+  const veto = openBrowserExtensionPopup({
+    session: extensionSession,
+    profileId: profile.id,
+    extensionId,
+    popupPath: 'veto.html',
+    anchor,
+    openTab: () => {}
+  })
+  await waitForReport('veto')
+  await veto.webContents.executeJavaScript('1', true)
+  closeBrowserExtensionPopup()
+  status.vetoPopupClosed = await waitFor(() => (veto.isDestroyed() ? true : null))
   status.done = true
   writeStatus()
 }

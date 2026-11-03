@@ -11,6 +11,7 @@ import {
   scrollTopCache,
   editorSelectionCache,
   diffViewStateCache,
+  editorViewStateCache,
   pdfViewPositionCache
 } from '@/lib/scroll-cache'
 
@@ -127,6 +128,7 @@ export function resetModelLifetimeFixtures(): void {
   scrollTopCache.clear()
   editorSelectionCache.clear()
   diffViewStateCache.clear()
+  editorViewStateCache.clear()
   pdfViewPositionCache.clear()
   vi.restoreAllMocks()
 }
