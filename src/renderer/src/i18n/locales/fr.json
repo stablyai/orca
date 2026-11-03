@@ -19747,7 +19747,7 @@
           "unverifiableCount_other": "{{count}} au statut indisponible",
           "unverifiableCount_many": "{{count}} au statut indisponible"
         },
-        "tokens": "Jetons {{value0}}",
+        "tokens": "{{value0}} tokens",
         "unnamed": "Sous-agent",
         "started_one": "A lancé {{count}} sous-agent",
         "started_other": "A lancé {{count}} sous-agents",
