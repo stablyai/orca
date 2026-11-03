@@ -45,6 +45,17 @@ function edit(
   native: RecordedValue,
   page: RecordedValue
 ): void {
+  if (path.startsWith('effects.')) {
+    const name = path.slice('effects.'.length)
+    const matches = rows(observation.effects).filter(
+      (effect) => effect.name === name && same(effect.value, native)
+    )
+    if (matches.length !== 1) {
+      throw new Error(`Expected one reviewed ${name} effect holding ${JSON.stringify(native)}`)
+    }
+    matches[0]!.value = page
+    return
+  }
   const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.')
   const last = keys.pop()!
   let container: unknown = observation

@@ -1,6 +1,6 @@
 import type * as GithubReplyMergeModule from '../../../tasks/use-mobile-tasks-github-reply-merge-actions'
 import type * as HostedCommentReviewModule from '../../../tasks/use-mobile-tasks-hosted-comment-review-actions'
-import { useTaskActionMountOwners } from '../task-action-mount-owners'
+import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -150,6 +150,7 @@ type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -167,7 +168,7 @@ function mountModelHook<Actions>(
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
-    useTaskActionMountOwners(modules, context, model, spec.fixture)
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -210,6 +211,7 @@ export function taskItemConversationMountAdapters(
           load<typeof HostedCommentReviewModule>(
             'use-mobile-tasks-hosted-comment-review-actions.tsx'
           ).useMobileTasksHostedCommentReviewActions(model),
+        observedFields: ['itemCommentDraft', 'itemReviewersDraft'],
         fixture: {
           copiedLinkResetTimerRef: { current: null },
           detailPayload: payload,
@@ -244,6 +246,7 @@ export function taskItemConversationMountAdapters(
           load<typeof GithubReplyMergeModule>(
             'use-mobile-tasks-github-reply-merge-actions.tsx'
           ).useMobileTasksGithubReplyMergeActions(model),
+        observedFields: ['itemReplyDrafts'],
         fixture: {
           itemReplyDrafts: { '501': 'a reply', 'comment-2': 'a reply' },
           loadTasks: async () => {},

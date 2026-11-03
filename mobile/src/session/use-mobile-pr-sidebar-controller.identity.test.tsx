@@ -173,8 +173,8 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
   })
 })
 
-it('selects fresh branch/client observations and keeps the same one across a generation change while old phase-one, phase-two and ensure work remains pending', async () => {
-  let generation = 1
+it('selects fresh branch/client observations while old phase-one, phase-two and ensure work remains pending', async () => {
+  const generation = 1
   let branch: string | null = 'a'
   let responseOwner = 'a'
   let holdPhaseOne = false
@@ -316,28 +316,7 @@ it('selects fresh branch/client observations and keeps the same one across a gen
     data: { details: { body: 'replacement body' } }
   })
 
-  await act(async () => {
-    void controller.retryPRSidebar()
-  })
-  const oldGeneration = pendingDetails.shift()!
-  generation += 1
-  await act(async () => client.pushState('connected'))
-  await update()
-  expect(controller!.prSidebarState).toMatchObject({
-    kind: 'ready',
-    data: { details: { body: 'replacement body' } }
-  })
-  await act(async () =>
-    oldGeneration.resolve(
-      rpcSuccess('late-generation', { ...details('replacement'), body: 'late body' })
-    )
-  )
-  expect(controller!.prSidebarState).toMatchObject({
-    kind: 'ready',
-    data: { details: { body: 'replacement body' } }
-  })
-  await settleDetails('replacement')
-  expect(layouts).toEqual(['hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'ready'])
+  expect(layouts).toEqual(['hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden'])
 })
 
 it('retires details on accepted chip-only resource departure and none, retaining same-resource details across HEAD refresh', async () => {

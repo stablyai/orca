@@ -312,9 +312,8 @@ it('refreshes through the real loader and records its reset/commit order around 
       detailLoading: false,
       mutatingStatus: false
     })
-    console.info(
-      'real loader committed revisions',
-      f.commits.map((value) => (value?.provider === 'github' ? value.headSha : null))
+    expect(f.commits.map((value) => (value?.provider === 'github' ? value.headSha : null))).toEqual(
+      [null, 'old-head', null, 'new-head']
     )
     await act(async () => {
       pending = f.read().toggleGitHubReviewThread(f.selected, f.comment)

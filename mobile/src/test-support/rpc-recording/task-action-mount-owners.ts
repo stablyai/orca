@@ -56,6 +56,8 @@ function useTaskStateAndSelection(
   return { state, selection }
 }
 
+export type TaskActionObservedField = keyof ReturnType<typeof useTaskStateAndSelection>['state']
+
 // Observe the committed projection, leaving the real owner and every setter untouched.
 export function useCommittedOwnerProjection(
   context: MountContext,
@@ -97,7 +99,8 @@ export function useTaskActionMountOwners(
   modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   model: Record<string, unknown>,
-  fixture: Record<string, unknown>
+  fixture: Record<string, unknown>,
+  observedFields: readonly TaskActionObservedField[] = []
 ): void {
   const { state, selection } = useTaskStateAndSelection(modules, model, fixture)
   const { useMobileTasksMutation } = modules.load<typeof WorkspaceAndProjectStateModule>(
@@ -115,7 +118,12 @@ export function useTaskActionMountOwners(
       }
     }
   })
-  useCommittedOwnerProjection(context, owners)
+  useCommittedOwnerProjection(context, {
+    actionItem: selection.actionItem,
+    detailPayload: state.detailPayload,
+    mutatingStatus: mutation.mutatingStatus,
+    ...Object.fromEntries(observedFields.map((field) => [field, state[field]]))
+  })
 }
 
 export function useTaskDetailMountOwners(

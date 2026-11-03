@@ -532,14 +532,14 @@ describe('actual stream result partitions', () => {
             .filter((input) => input.lineage?.role !== 'prelude')
             .map((input) => input.lineage?.partition)
         ).toEqual(partitions)
-        for (const branch of variants.filter((input) => input.lineage?.role !== 'prelude')) {
-          for (const prelude of variants.filter((input) => input.lineage?.role === 'prelude')) {
-            const before = await runStreamInput(prelude, mode)
-            if ('error' in before.outcome) {
-              throw before.outcome.error
-            }
-            expect(before.outcome.recording.checkpoints.length).toBeGreaterThan(0)
+        for (const prelude of variants.filter((input) => input.lineage?.role === 'prelude')) {
+          const before = await runStreamInput(prelude, mode)
+          if ('error' in before.outcome) {
+            throw before.outcome.error
           }
+          expect(before.outcome.recording.checkpoints.length).toBeGreaterThan(0)
+        }
+        for (const branch of variants.filter((input) => input.lineage?.role !== 'prelude')) {
           const run = await runStreamInput(branch, mode)
           const partition = branch.lineage!.partition!
           const failed = mode !== 'native' && partition === 'result-absent' && position !== 'last'

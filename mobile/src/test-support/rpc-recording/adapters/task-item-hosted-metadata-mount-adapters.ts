@@ -1,7 +1,11 @@
 import type * as WorkspaceAndProjectStateModule from '../../../tasks/use-mobile-tasks-workspace-and-project-state'
 import type * as HostedMetadataModule from '../../../tasks/use-mobile-tasks-hosted-metadata-actions'
 import { useLayoutEffect, useRef } from 'react'
-import { useCommittedOwnerProjection, useTaskActionMountOwners } from '../task-action-mount-owners'
+import {
+  useCommittedOwnerProjection,
+  useTaskActionMountOwners,
+  type TaskActionObservedField
+} from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -148,6 +152,7 @@ type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -165,7 +170,7 @@ function mountModelHook<Actions>(
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
-    useTaskActionMountOwners(modules, context, model, spec.fixture)
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -206,6 +211,12 @@ export function taskItemHostedMetadataMountAdapters(
           load<typeof HostedMetadataModule>(
             'use-mobile-tasks-hosted-metadata-actions.tsx'
           ).useMobileTasksHostedMetadataActions(model),
+        observedFields: [
+          'itemAddLabelsDraft',
+          'itemRemoveLabelsDraft',
+          'itemAddAssigneesDraft',
+          'itemRemoveAssigneesDraft'
+        ],
         fixture: {
           detailPayload: item.provider === 'github' ? githubDetailPayload() : gitlabDetailPayload(),
           loadTasks: async () => {},

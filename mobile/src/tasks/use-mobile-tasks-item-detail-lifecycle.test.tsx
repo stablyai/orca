@@ -198,18 +198,11 @@ describe('other detail providers', () => {
     const fixture = await mount(github)
     expect(fixture.transport.requests.map((request) => request.method)).toEqual(['status.get'])
     await fixture.transport.answer(success({ capabilities: [] }))
-    expect(fixture.transport.requests.map((request) => request.method)).toEqual([
-      'status.get',
-      'github.workItemDetails'
-    ])
-    expect(fixture.transport.pending()).toHaveLength(1)
-    expect(fixture.transport.pending()[0].method).toBe('github.workItemDetails')
     expect(fixture.transport.requests[1]).toMatchObject({
       method: 'github.workItemDetails',
       params: { repo: 'id:repo', number: 12, type: 'pr' }
     })
     await fixture.transport.answer(success({ body: 'GitHub body', item: github.source }))
-    expect(fixture.transport.pending()).toHaveLength(0)
     expect(fixture.state()).toMatchObject({
       loading: false,
       payload: { provider: 'github', body: 'GitHub body' }

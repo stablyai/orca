@@ -1,6 +1,6 @@
 import type * as GitlabGithubStatusModule from '../../../tasks/use-mobile-tasks-gitlab-github-status-actions'
 import type { ActionableTaskItem } from '../../../tasks/mobile-tasks-project-workspace-types'
-import { useTaskActionMountOwners } from '../task-action-mount-owners'
+import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -130,6 +130,7 @@ type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -147,7 +148,7 @@ function mountModelHook<Actions>(
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
-    useTaskActionMountOwners(modules, context, model, spec.fixture)
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -185,6 +186,13 @@ export function taskItemChecksStatusMountAdapters(
     >('use-mobile-tasks-github-check-file-actions.tsx').useMobileTasksGithubCheckFileActions
     return mountModelHook(modules, context, {
       useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
+      observedFields: [
+        'detailRefreshSeq',
+        'expandedPrFilePath',
+        'prFileContents',
+        'prFileLoadingPath',
+        'prFileCommentDrafts'
+      ],
       fixture: {
         actionItem: GITHUB_PR_ITEM,
         detailPayload: githubDetailPayload(),
@@ -237,6 +245,12 @@ export function taskItemChecksStatusMountAdapters(
           load<typeof GitlabGithubStatusModule>(
             'use-mobile-tasks-gitlab-github-status-actions.tsx'
           ).useMobileTasksGitlabGithubStatusActions(model),
+        observedFields: [
+          'itemAddLabelsDraft',
+          'itemRemoveLabelsDraft',
+          'itemAddAssigneesDraft',
+          'itemRemoveAssigneesDraft'
+        ],
         fixture: {
           detailPayload: item.provider === 'github' ? githubDetailPayload() : gitlabDetailPayload(),
           loadTasks: async () => {},

@@ -4,19 +4,14 @@
   "family": "tasks.linear-item",
   "namedDeltas": [],
   "values": {
-    "006426467c20": {
+    "029bb83f402f": {
       "name": "error",
-      "ordinal": 51,
-      "value": "The host sent a reply this app could not read (linear.createIssue)"
+      "ordinal": 21,
+      "value": ""
     },
-    "04391aac001c": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "transport failure"
-    },
-    "06b4df87fd59": {
+    "039c2b59e061": {
       "name": "linear.createIssue#1",
-      "ordinal": 48,
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -46,65 +41,22 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "07ac09fb1d20": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
+          "ok": true,
+          "result": {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "ok": true,
             "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
+            "url": ""
           }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-3",
-          "ok": false
         }
       }
     },
-    "0f61b8abd763": {
-      "name": "detailCommentGroups",
-      "ordinal": 3,
-      "value": []
-    },
-    "1057024ac447": {
-      "name": "itemAvailableLabels",
-      "ordinal": 15,
-      "value": []
+    "104bf14d3af8": {
+      "name": "error",
+      "ordinal": 8,
+      "value": ""
     },
     "10b1d5c98c92": {
       "error": "Failed to create sub-issue",
@@ -162,10 +114,56 @@
         "provider": "linear"
       }
     },
-    "17fbdb2e5bab": {
+    "11b6302399f9": {
       "name": "mutatingStatus",
-      "ordinal": 53,
-      "value": false
+      "ordinal": 10,
+      "value": true
+    },
+    "1412f820054d": {
+      "name": "error",
+      "ordinal": 25,
+      "value": "Unknown method"
+    },
+    "1512ca10da46": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
     },
     "1c50877ad554": {
       "error": "transport failure",
@@ -279,26 +277,68 @@
         "provider": "linear"
       }
     },
-    "232e8ce361e1": {
-      "name": "mutatingStatus",
-      "ordinal": 35,
-      "value": true
-    },
-    "25a174d07c0f": {
-      "name": "error",
-      "ordinal": 51,
-      "value": ""
-    },
-    "2b5f9fb68b50": {
-      "name": "expandedPrFilePath",
-      "ordinal": 8,
-      "value": {
-        "$rpc": "null"
+    "1ed600fc3a73": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
-    "2d2cba4da102": {
+    "2128e20a7cec": {
+      "name": "reply-salvage",
+      "ordinal": 25,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["error"],
+        "method": "linear.createIssue",
+        "operation": "linear.create-issue",
+        "variant": "linear-created-issue"
+      }
+    },
+    "25c2af78ee0c": {
+      "name": "error",
+      "ordinal": 25,
+      "value": "refused"
+    },
+    "29cadc65bcbb": {
+      "name": "error",
+      "ordinal": 15,
+      "value": ""
+    },
+    "2e5b29a82d3e": {
       "name": "linear.createIssue#1",
-      "ordinal": 48,
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -336,24 +376,9 @@
         }
       }
     },
-    "3181ec1d10ac": {
-      "name": "itemAssignableUsersLoading",
-      "ordinal": 14,
-      "value": false
-    },
-    "319037722ca0": {
-      "name": "itemReplyDrafts",
-      "ordinal": 22,
-      "value": {}
-    },
-    "37dc1884db8f": {
-      "name": "itemBodyDraft",
-      "ordinal": 16,
-      "value": ""
-    },
-    "3813cab02da2": {
+    "356ab1982f75": {
       "name": "linear.createIssue#1",
-      "ordinal": 48,
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -383,23 +408,28 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
           "id": "frame-3",
-          "ok": false
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "38e625888db0": {
+    "3abc893d377b": {
       "name": "mutatingStatus",
-      "ordinal": 25,
+      "ordinal": 3,
       "value": false
     },
-    "39adef8f30c1": {
+    "3accbb2a4fcb": {
+      "name": "mutatingStatus",
+      "ordinal": 20,
+      "value": false
+    },
+    "3b3ee1b48010": {
       "name": "actionItem",
-      "ordinal": 45,
+      "ordinal": 19,
       "value": {
         "key": "linear:linear-workspace:issue-2",
         "provider": "linear",
@@ -431,137 +461,48 @@
         "updatedAt": "2020-01-01T00:00:00.000Z"
       }
     },
-    "3b05e3db6e56": {
-      "name": "linear.addIssueComment#1",
-      "ordinal": 34,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.addIssueComment"
+    "3f24b734fd8e": {
+      "name": "detailPayload",
+      "ordinal": 26,
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
         },
-        {
-          "name": "params",
-          "value": {
+        "children": [
+          {
+            "id": "issue-3",
+            "identifier": "ENG-3",
+            "title": "A sub-issue",
+            "url": ""
+          }
+        ],
+        "comments": [
+          {
             "body": "a linear comment",
-            "issueId": "issue-1",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
+            "createdAt": "2026-01-01T00:00:00.000Z",
             "id": "comment-9",
-            "ok": true
+            "user": {
+              "displayName": "You"
+            }
           }
-        }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
       }
     },
-    "3eee93ca46cb": {
-      "name": "detailLoading",
-      "ordinal": 5,
-      "value": false
-    },
-    "403ed2086869": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true
-        }
-      }
-    },
-    "42cf8ac0cd81": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "438ee2551400": {
-      "name": "linear.addIssueComment#1",
-      "ordinal": 36,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.addIssueComment\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"body\":\"a linear comment\"}}"
-    },
-    "460989080ff5": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "Connection closed"
-    },
-    "47d953473ee6": {
+    "3fcdcfa261ee": {
       "name": "mutatingStatus",
-      "ordinal": 52,
-      "value": false
+      "ordinal": 23,
+      "value": true
+    },
+    "44efd00fa69f": {
+      "name": "linearCommentDraft",
+      "ordinal": 7,
+      "value": "a linear comment"
     },
     "48107958be60": {
       "error": "",
@@ -626,74 +567,211 @@
         "provider": "linear"
       }
     },
-    "4cd7428b5e4e": {
-      "name": "copiedLinkKey",
-      "ordinal": 2,
-      "value": {
-        "$rpc": "null"
+    "4dd9211bea32": {
+      "name": "mutatingStatus",
+      "ordinal": 17,
+      "value": true
+    },
+    "575192c18227": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
       }
     },
-    "4ec9e5ee34bc": {
-      "name": "error",
-      "ordinal": 52,
-      "value": "Failed to create sub-issue"
+    "5bb480ca469c": {
+      "name": "detailPayload",
+      "ordinal": 12,
+      "value": {
+        "assignee": {
+          "$rpc": "undefined"
+        },
+        "children": [],
+        "comments": [
+          {
+            "body": "a linear comment",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "comment-9",
+            "user": {
+              "displayName": "You"
+            }
+          }
+        ],
+        "description": "description",
+        "labels": [],
+        "project": {
+          "$rpc": "null"
+        },
+        "provider": "linear"
+      }
     },
-    "524735bad861": {
+    "6a81624ad4bc": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "760659bea59b": {
+      "name": "linear.addIssueComment#1",
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.addIssueComment\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\",\"body\":\"a linear comment\"}}"
+    },
+    "77d8b565e94c": {
       "name": "error",
-      "ordinal": 51,
+      "ordinal": 25,
       "value": "outer refused"
     },
-    "5b510b359c50": {
-      "name": "prFileLoadingPath",
-      "ordinal": 28,
-      "value": {
-        "$rpc": "null"
+    "78f6115849b5": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
       }
     },
-    "5c837825b008": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "refused"
+    "7997a7258e60": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
     },
-    "6a6c66d7a058": {
-      "name": "itemCommentDraft",
-      "ordinal": 17,
+    "7b614cf87045": {
+      "name": "linearSubIssueTitle",
+      "ordinal": 25,
       "value": ""
-    },
-    "6a79fc8cf6e1": {
-      "name": "itemRemoveLabelsDraft",
-      "ordinal": 21,
-      "value": ""
-    },
-    "6cf341d66be9": {
-      "name": "prFileContents",
-      "ordinal": 27,
-      "value": {}
-    },
-    "703a8ddfeff6": {
-      "name": "detailError",
-      "ordinal": 4,
-      "value": ""
-    },
-    "753b87e6252f": {
-      "name": "expandedResolvedCommentGroups",
-      "ordinal": 9,
-      "value": []
-    },
-    "758b66b98306": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "Unknown method"
-    },
-    "7810e7c3912d": {
-      "name": "mutatingStatus",
-      "ordinal": 39,
-      "value": false
-    },
-    "7a9ecc26f674": {
-      "name": "linear.getIssue#1",
-      "ordinal": 44,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-2\",\"workspaceId\":\"linear-workspace\"}}"
     },
     "7c14fba8a1fe": {
       "error": "",
@@ -807,10 +885,10 @@
         "provider": "linear"
       }
     },
-    "83a7da3b31f6": {
-      "name": "itemAddLabelsDraft",
-      "ordinal": 11,
-      "value": ""
+    "856de033b09e": {
+      "name": "error",
+      "ordinal": 26,
+      "value": "Failed to create sub-issue"
     },
     "857b0f423a93": {
       "error": "outer refused",
@@ -868,81 +946,20 @@
         "provider": "linear"
       }
     },
-    "86c7b6516e02": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "90c96fb20cb3": {
+    "87481dc71512": {
       "name": "error",
-      "ordinal": 41,
-      "value": ""
+      "ordinal": 25,
+      "value": "transport failure"
     },
-    "90edb53e0d20": {
-      "name": "detailPayload",
-      "ordinal": 52,
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [
-          {
-            "id": "issue-3",
-            "identifier": "ENG-3",
-            "title": "A sub-issue",
-            "url": ""
-          }
-        ],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
+    "88dbfd66d809": {
+      "name": "linear.createIssue#1",
+      "ordinal": 24,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A sub-issue\",\"workspaceId\":\"linear-workspace\",\"parentIssueId\":\"issue-1\",\"projectId\":null}}"
+    },
+    "8e34e506a7f8": {
+      "name": "linear.getIssue#1",
+      "ordinal": 18,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-2\",\"workspaceId\":\"linear-workspace\"}}"
     },
     "933d48089040": {
       "error": "inner refused",
@@ -1000,14 +1017,83 @@
         "provider": "linear"
       }
     },
-    "9a375f52b681": {
+    "959311b55e6f": {
       "name": "error",
-      "ordinal": 47,
+      "ordinal": 25,
+      "value": "inner refused"
+    },
+    "9c2ca99506b2": {
+      "name": "linear.getIssue#1",
+      "ordinal": 16,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.getIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "id": "issue-2",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "description": "a description",
+            "id": "issue-2",
+            "identifier": "ENG-2",
+            "labels": [],
+            "priority": 0,
+            "state": {
+              "color": "#000",
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "subIssues": [],
+            "team": {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering"
+            },
+            "title": "A sub-issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": "",
+            "workspaceId": "linear-workspace"
+          }
+        }
+      }
+    },
+    "9dc1f136772e": {
+      "name": "linearCommentDraft",
+      "ordinal": 4,
       "value": ""
     },
-    "9b06dac8c736": {
+    "a06ef1ffdd25": {
+      "name": "error",
+      "ordinal": 25,
+      "value": "The host sent a reply this app could not read (linear.createIssue)"
+    },
+    "acff45feb249": {
+      "name": "mutatingStatus",
+      "ordinal": 26,
+      "value": false
+    },
+    "b1f0308d3795": {
       "name": "actionItem",
-      "ordinal": 30,
+      "ordinal": 5,
       "value": {
         "provider": "linear",
         "source": {
@@ -1039,19 +1125,47 @@
         "title": "A Linear issue"
       }
     },
-    "9d27c74981a1": {
-      "name": "error",
-      "ordinal": 33,
-      "value": ""
-    },
-    "a17c0b70b195": {
-      "name": "itemReviewersDraft",
-      "ordinal": 23,
-      "value": ""
-    },
-    "a3366949e8c5": {
+    "b6c6e7b32866": {
       "name": "linear.createIssue#1",
-      "ordinal": 48,
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.createIssue"
+        },
+        {
+          "name": "params",
+          "value": {
+            "parentIssueId": "issue-1",
+            "projectId": {
+              "$rpc": "null"
+            },
+            "teamId": "team-1",
+            "title": "A sub-issue",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b6d87c9f3beb": {
+      "name": "linear.createIssue#1",
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -1084,30 +1198,17 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "inner refused",
+            "error": {
+              "message": "inner refused"
+            },
             "ok": false
           }
         }
       }
     },
-    "a62548709eff": {
-      "name": "mutatingStatus",
-      "ordinal": 43,
-      "value": true
-    },
-    "a8c8101f04d5": {
-      "name": "linearCommentDraft",
-      "ordinal": 29,
-      "value": ""
-    },
-    "a90d225d2218": {
-      "name": "linearSubIssueTitle",
-      "ordinal": 51,
-      "value": ""
-    },
-    "b61f42fb3bbe": {
+    "b8a8e13fff32": {
       "name": "detailPayload",
-      "ordinal": 31,
+      "ordinal": 6,
       "value": {
         "assignee": {
           "$rpc": "undefined"
@@ -1122,15 +1223,10 @@
         "provider": "linear"
       }
     },
-    "b6cbf3a3cb20": {
+    "bce8f337fd46": {
       "name": "linearCommentDraft",
-      "ordinal": 40,
+      "ordinal": 14,
       "value": ""
-    },
-    "bb9cdfde4d67": {
-      "name": "linear.createIssue#1",
-      "ordinal": 50,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.createIssue\",\"params\":{\"teamId\":\"team-1\",\"title\":\"A sub-issue\",\"workspaceId\":\"linear-workspace\",\"parentIssueId\":\"issue-1\",\"projectId\":null}}"
     },
     "bf57d9a0cf81": {
       "error": "The host sent a reply this app could not read (linear.createIssue)",
@@ -1188,178 +1284,53 @@
         "provider": "linear"
       }
     },
-    "c4453b94848c": {
-      "name": "mutatingStatus",
-      "ordinal": 46,
-      "value": false
-    },
-    "cbedc96ba8c3": {
-      "name": "itemAddAssigneesDraft",
-      "ordinal": 10,
+    "c40da88e1087": {
+      "name": "error",
+      "ordinal": 25,
       "value": ""
+    },
+    "c99df17a93d5": {
+      "name": "linear.addIssueComment#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.addIssueComment"
+        },
+        {
+          "name": "params",
+          "value": {
+            "body": "a linear comment",
+            "issueId": "issue-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "id": "comment-9",
+            "ok": true
+          }
+        }
+      }
     },
     "cc2ece9478f0": {
       "name": "actionItem",
       "ordinal": 1,
       "value": {
         "$rpc": "null"
-      }
-    },
-    "cc6a580cc406": {
-      "name": "itemRemoveAssigneesDraft",
-      "ordinal": 20,
-      "value": ""
-    },
-    "cce2282048f5": {
-      "name": "mutatingStatus",
-      "ordinal": 49,
-      "value": true
-    },
-    "cf4fe950dfab": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "d0ec6d957636": {
-      "name": "detailRefreshSeq",
-      "ordinal": 7,
-      "value": 0
-    },
-    "d2b767a23c81": {
-      "name": "itemAssignableUsers",
-      "ordinal": 12,
-      "value": []
-    },
-    "d78181d4c793": {
-      "name": "reply-salvage",
-      "ordinal": 51,
-      "value": {
-        "droppedCount": 1,
-        "droppedPaths": ["error"],
-        "method": "linear.createIssue",
-        "operation": "linear.create-issue",
-        "variant": "linear-created-issue"
-      }
-    },
-    "d90f1cd1fbe5": {
-      "name": "linearCommentDraft",
-      "ordinal": 32,
-      "value": "a linear comment"
-    },
-    "dba3a6270465": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "dbbc159a4702": {
-      "name": "linear.createIssue#1",
-      "ordinal": 48,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.createIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "parentIssueId": "issue-1",
-            "projectId": {
-              "$rpc": "null"
-            },
-            "teamId": "team-1",
-            "title": "A sub-issue",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
       }
     },
     "dcb5a0348220": {
@@ -1418,112 +1389,10 @@
         "provider": "linear"
       }
     },
-    "dd49f34f1fa1": {
-      "name": "detailPayload",
-      "ordinal": 38,
-      "value": {
-        "assignee": {
-          "$rpc": "undefined"
-        },
-        "children": [],
-        "comments": [
-          {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          }
-        ],
-        "description": "description",
-        "labels": [],
-        "project": {
-          "$rpc": "null"
-        },
-        "provider": "linear"
-      }
-    },
-    "dfc8d866099f": {
-      "name": "detailCommentGroups",
-      "ordinal": 37,
-      "value": [
-        {
-          "comment": {
-            "body": "a linear comment",
-            "createdAt": "2026-01-01T00:00:00.000Z",
-            "id": "comment-9",
-            "user": {
-              "displayName": "You"
-            }
-          },
-          "kind": "standalone"
-        }
-      ]
-    },
-    "e02be20157db": {
-      "name": "linear.getIssue#1",
-      "ordinal": 42,
-      "args": [
-        {
-          "name": "method",
-          "value": "linear.getIssue"
-        },
-        {
-          "name": "params",
-          "value": {
-            "id": "issue-2",
-            "workspaceId": "linear-workspace"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "description": "a description",
-            "id": "issue-2",
-            "identifier": "ENG-2",
-            "labels": [],
-            "priority": 0,
-            "state": {
-              "color": "#000",
-              "name": "Todo",
-              "type": "unstarted"
-            },
-            "subIssues": [],
-            "team": {
-              "id": "team-1",
-              "key": "ENG",
-              "name": "Engineering"
-            },
-            "title": "A sub-issue",
-            "updatedAt": "2020-01-01T00:00:00.000Z",
-            "url": "",
-            "workspaceId": "linear-workspace"
-          }
-        }
-      }
-    },
-    "e0f1d706b617": {
-      "name": "itemLabelsError",
-      "ordinal": 18,
-      "value": ""
-    },
-    "e1c1f8e0bac4": {
-      "name": "itemTitleDraft",
-      "ordinal": 24,
-      "value": ""
+    "e0a9defd9b13": {
+      "name": "mutatingStatus",
+      "ordinal": 13,
+      "value": false
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -1533,16 +1402,9 @@
         "$rpc": "undefined"
       }
     },
-    "ec557877b2c3": {
-      "name": "detailPayload",
-      "ordinal": 6,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "f201506584a5": {
+    "ec512a39b2e4": {
       "name": "linear.createIssue#1",
-      "ordinal": 48,
+      "ordinal": 22,
       "args": [
         {
           "name": "method",
@@ -1573,26 +1435,16 @@
         "settledAt": 0,
         "value": {
           "id": "frame-3",
-          "ok": true,
-          "result": {
-            "id": "issue-3",
-            "identifier": "ENG-3",
-            "ok": true,
-            "title": "A sub-issue",
-            "url": ""
-          }
+          "ok": true
         }
       }
     },
-    "f265a2e84da3": {
-      "name": "error",
-      "ordinal": 51,
-      "value": "inner refused"
-    },
-    "f412c646b9ce": {
-      "name": "prFileCommentDrafts",
-      "ordinal": 26,
-      "value": {}
+    "eda130337c99": {
+      "name": "detailPayload",
+      "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
     },
     "f4878d38b306": {
       "error": "refused",
@@ -1650,14 +1502,14 @@
         "provider": "linear"
       }
     },
-    "f59617293fcb": {
-      "name": "itemAssignableUsersError",
-      "ordinal": 13,
-      "value": ""
+    "f8e1ed502792": {
+      "name": "error",
+      "ordinal": 25,
+      "value": "Connection closed"
     },
-    "f82e592ea9f1": {
-      "name": "itemLabelsLoading",
-      "ordinal": 19,
+    "fa2f2de4dfe7": {
+      "name": "mutatingStatus",
+      "ordinal": 27,
       "value": false
     }
   },
@@ -1667,8 +1519,8 @@
       {
         "id": "tk-linear-item.prelude:comment-settled",
         "observation": {
-          "sender": ["3b05e3db6e56"],
-          "payloads": ["438ee2551400"],
+          "sender": ["c99df17a93d5"],
+          "payloads": ["760659bea59b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"
@@ -1676,51 +1528,25 @@
           "state": "dcb5a0348220",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46"
           ]
         }
       },
       {
         "id": "tk-linear-item.prelude:sub-issue-open-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db"],
-          "payloads": ["438ee2551400", "7a9ecc26f674"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2"],
+          "payloads": ["760659bea59b", "8e34e506a7f8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -1729,55 +1555,29 @@
           "state": "7c14fba8a1fe",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb"
           ]
         }
       },
       {
         "id": "tk-linear-item.prelude:cleanup",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "86c7b6516e02"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "575192c18227"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -1787,58 +1587,32 @@
           "state": "1dcf350b71f7",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "460989080ff5"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "f8e1ed502792"
           ]
         }
       },
       {
         "id": "tk-linear-item.normal:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "f201506584a5"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "039c2b59e061"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -1848,60 +1622,34 @@
           "state": "48107958be60",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "a90d225d2218",
-            "90edb53e0d20",
-            "17fbdb2e5bab"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "7b614cf87045",
+            "3f24b734fd8e",
+            "fa2f2de4dfe7"
           ]
         }
       },
       {
         "id": "tk-linear-item.result-absent:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "403ed2086869"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "ec512a39b2e4"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -1911,59 +1659,33 @@
           "state": "bf57d9a0cf81",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "006426467c20",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "a06ef1ffdd25",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.result-null:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "2d2cba4da102"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "2e5b29a82d3e"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -1973,59 +1695,33 @@
           "state": "bf57d9a0cf81",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "006426467c20",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "a06ef1ffdd25",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.inner-ok-missing:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "dbbc159a4702"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "78f6115849b5"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2035,59 +1731,33 @@
           "state": "f4878d38b306",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "5c837825b008",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "25c2af78ee0c",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.inner-false-string-error:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "a3366949e8c5"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "356ab1982f75"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2097,59 +1767,33 @@
           "state": "933d48089040",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "f265a2e84da3",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "959311b55e6f",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.inner-false-object-error:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "dba3a6270465"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "b6d87c9f3beb"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2159,60 +1803,34 @@
           "state": "10b1d5c98c92",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "d78181d4c793",
-            "4ec9e5ee34bc",
-            "17fbdb2e5bab"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "2128e20a7cec",
+            "856de033b09e",
+            "fa2f2de4dfe7"
           ]
         }
       },
       {
         "id": "tk-linear-item.outer-refused:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "07ac09fb1d20"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "1512ca10da46"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2222,59 +1840,33 @@
           "state": "857b0f423a93",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "524735bad861",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "77d8b565e94c",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.outer-refused-no-message:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "3813cab02da2"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "6a81624ad4bc"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2284,59 +1876,33 @@
           "state": "7c14fba8a1fe",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "25a174d07c0f",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "c40da88e1087",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.method-not-found:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "06b4df87fd59"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "7997a7258e60"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2346,59 +1912,33 @@
           "state": "7c4663c87131",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "758b66b98306",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "1412f820054d",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.transport-rejection:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "42cf8ac0cd81"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "b6c6e7b32866"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2408,59 +1948,33 @@
           "state": "1c50877ad554",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "04391aac001c",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "87481dc71512",
+            "acff45feb249"
           ]
         }
       },
       {
         "id": "tk-linear-item.transport-rejection-no-message:sub-issue-create-settled",
         "observation": {
-          "sender": ["3b05e3db6e56", "e02be20157db", "cf4fe950dfab"],
-          "payloads": ["438ee2551400", "7a9ecc26f674", "bb9cdfde4d67"],
+          "sender": ["c99df17a93d5", "9c2ca99506b2", "1ed600fc3a73"],
+          "payloads": ["760659bea59b", "8e34e506a7f8", "88dbfd66d809"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a",
@@ -2470,51 +1984,25 @@
           "state": "7c14fba8a1fe",
           "effects": [
             "cc2ece9478f0",
-            "4cd7428b5e4e",
-            "0f61b8abd763",
-            "703a8ddfeff6",
-            "3eee93ca46cb",
-            "ec557877b2c3",
-            "d0ec6d957636",
-            "2b5f9fb68b50",
-            "753b87e6252f",
-            "cbedc96ba8c3",
-            "83a7da3b31f6",
-            "d2b767a23c81",
-            "f59617293fcb",
-            "3181ec1d10ac",
-            "1057024ac447",
-            "37dc1884db8f",
-            "6a6c66d7a058",
-            "e0f1d706b617",
-            "f82e592ea9f1",
-            "cc6a580cc406",
-            "6a79fc8cf6e1",
-            "319037722ca0",
-            "a17c0b70b195",
-            "e1c1f8e0bac4",
-            "38e625888db0",
-            "f412c646b9ce",
-            "6cf341d66be9",
-            "5b510b359c50",
-            "a8c8101f04d5",
-            "9b06dac8c736",
-            "b61f42fb3bbe",
-            "d90f1cd1fbe5",
-            "9d27c74981a1",
-            "232e8ce361e1",
-            "dfc8d866099f",
-            "dd49f34f1fa1",
-            "7810e7c3912d",
-            "b6cbf3a3cb20",
-            "90c96fb20cb3",
-            "a62548709eff",
-            "39adef8f30c1",
-            "c4453b94848c",
-            "9a375f52b681",
-            "cce2282048f5",
-            "25a174d07c0f",
-            "47d953473ee6"
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "b1f0308d3795",
+            "b8a8e13fff32",
+            "44efd00fa69f",
+            "104bf14d3af8",
+            "11b6302399f9",
+            "5bb480ca469c",
+            "e0a9defd9b13",
+            "bce8f337fd46",
+            "29cadc65bcbb",
+            "4dd9211bea32",
+            "3b3ee1b48010",
+            "3accbb2a4fcb",
+            "029bb83f402f",
+            "3fcdcfa261ee",
+            "c40da88e1087",
+            "acff45feb249"
           ]
         }
       }

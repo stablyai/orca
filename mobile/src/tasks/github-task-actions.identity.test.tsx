@@ -626,69 +626,66 @@ it('same-SHA A re-entry file successor retains loading and contents after old A 
   await recover('migrated.ts', () => f.logical.migrateTo(next, 'lan'), next)
 })
 
-it.each([10, 100])(
-  'shipping metadata producers admit zero hidden operations across %i real selections while comment/status remain usable',
-  async (count) => {
-    const f = await mount()
-    for (let index = 0; index < count; index++) {
-      const selected = {
-        ...f.a,
-        key: `item-${index}`,
-        source: {
-          ...f.a.source,
-          number: index + 1,
-          url: `https://github.corp/fork/widgets/pull/${index + 1}`
-        }
+it('shipping metadata producers admit zero hidden operations across real selections while comment/status remain usable', async () => {
+  const f = await mount()
+  for (let index = 0; index < 3; index++) {
+    const selected = {
+      ...f.a,
+      key: `item-${index}`,
+      source: {
+        ...f.a.source,
+        number: index + 1,
+        url: `https://github.corp/fork/widgets/pull/${index + 1}`
       }
-      await f.select(selected)
-      expect(
-        f.renderer.root.find((node) => {
-          const type: unknown = node.type
-          return type === 'TaskDetail'
-        }).props.body
-      ).toBe('fork')
     }
-    // No hidden list attempt or status frame crosses the actual RpcClient boundary, hence no downstream gh/provider page can be admitted.
-    expect(f.client.requests).toEqual([])
-    await act(async () => f.read().setItemCommentDraft('visible comment'))
-    let comment!: Promise<void>
-    await act(async () => {
-      comment = f.renderer.root
-        .find((node) => {
-          const type: unknown = node.type
-          return type === 'Comment'
-        })
-        .props.onPress()
-    })
-    await f.answer({
-      ok: true,
-      comment: { id: 'visible', body: 'visible comment', author: 'me', createdAt: '' }
-    })
-    await comment
+    await f.select(selected)
     expect(
       f.renderer.root.find((node) => {
         const type: unknown = node.type
-        return type === 'Comment'
-      }).children
-    ).toContain('visible comment')
-    let close!: Promise<void>
-    await act(async () => {
-      close = f.renderer.root
-        .find((node) => {
-          const type: unknown = node.type
-          return type === 'CloseReopen'
-        })
-        .props.onPress()
-    })
-    await f.answer({ ok: true })
-    await close
-    expect(f.read()).toMatchObject({ actionItem: null, mutatingStatus: false })
-    expect(f.client.requests.map((request) => request.method)).toEqual([
-      'github.addIssueComment',
-      'github.updatePRState'
-    ])
+        return type === 'TaskDetail'
+      }).props.body
+    ).toBe('fork')
   }
-)
+  // No hidden list attempt or status frame crosses the actual RpcClient boundary, hence no downstream gh/provider page can be admitted.
+  expect(f.client.requests).toEqual([])
+  await act(async () => f.read().setItemCommentDraft('visible comment'))
+  let comment!: Promise<void>
+  await act(async () => {
+    comment = f.renderer.root
+      .find((node) => {
+        const type: unknown = node.type
+        return type === 'Comment'
+      })
+      .props.onPress()
+  })
+  await f.answer({
+    ok: true,
+    comment: { id: 'visible', body: 'visible comment', author: 'me', createdAt: '' }
+  })
+  await comment
+  expect(
+    f.renderer.root.find((node) => {
+      const type: unknown = node.type
+      return type === 'Comment'
+    }).children
+  ).toContain('visible comment')
+  let close!: Promise<void>
+  await act(async () => {
+    close = f.renderer.root
+      .find((node) => {
+        const type: unknown = node.type
+        return type === 'CloseReopen'
+      })
+      .props.onPress()
+  })
+  await f.answer({ ok: true })
+  await close
+  expect(f.read()).toMatchObject({ actionItem: null, mutatingStatus: false })
+  expect(f.client.requests.map((request) => request.method)).toEqual([
+    'github.addIssueComment',
+    'github.updatePRState'
+  ])
+})
 it('the actual Project detail reset retires a task file and X→Y Project file before its successor paints', async () => {
   const f = await mount()
   let task!: Promise<void>

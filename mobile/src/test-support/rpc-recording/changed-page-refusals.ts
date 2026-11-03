@@ -82,22 +82,22 @@ export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = 
   'matrix-tasks.linear-item-linear.addissuecomment-1': {
     request: 'linear.addIssueComment#1',
     checkpoints: {
-      'tk-linear-item.result-absent:comment-settled': ['state.error', 'effects[34].value'],
-      'tk-linear-item.result-absent:sub-issue-open-settled': ['effects[34].value'],
-      'tk-linear-item.result-absent:sub-issue-create-settled': ['effects[34].value']
+      'tk-linear-item.result-absent:comment-settled': ['state.error', 'effects.error'],
+      'tk-linear-item.result-absent:sub-issue-open-settled': ['effects.error'],
+      'tk-linear-item.result-absent:sub-issue-create-settled': ['effects.error']
     }
   },
   'matrix-tasks.linear-item-linear.createissue-1': {
     request: 'linear.createIssue#1',
     checkpoints: {
-      'tk-linear-item.result-absent:sub-issue-create-settled': ['state.error', 'effects[44].value']
+      'tk-linear-item.result-absent:sub-issue-create-settled': ['state.error', 'effects.error']
     }
   },
   'matrix-tasks.linear-item-linear.getissue-1': {
     request: 'linear.getIssue#1',
     checkpoints: {
-      'tk-linear-item.result-absent:sub-issue-open-settled': ['state.error', 'effects[40].value'],
-      'tk-linear-item.result-absent:sub-issue-create-settled': ['effects[40].value']
+      'tk-linear-item.result-absent:sub-issue-open-settled': ['state.error', 'effects.error'],
+      'tk-linear-item.result-absent:sub-issue-create-settled': ['effects.error']
     }
   },
   'matrix-tasks.linear-team-context-linear.listteams-1': {
@@ -116,7 +116,10 @@ export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = 
   'matrix-tasks.project-row-detail-github.project.workitemdetailsbyslug-1': {
     request: 'github.project.workItemDetailsBySlug#1',
     checkpoints: {
-      'tk-project-row-detail.result-absent:mounted': ['state.error', 'effects[14].value']
+      'tk-project-row-detail.result-absent:mounted': [
+        'state.error',
+        'effects.projectRowDetailError'
+      ]
     }
   },
   'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': {
@@ -124,11 +127,13 @@ export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = 
     checkpoints: {
       'tk-project-row-files-merge.result-absent:file-comment-settled': [
         'state.error',
-        'effects[36].value'
+        'effects.projectRowDetailError'
       ],
-      'tk-project-row-files-merge.result-absent:merge-settled': ['effects[36].value'],
-      'tk-project-row-files-merge.result-absent:issue-state-settled': ['effects[36].value'],
-      'tk-project-row-files-merge.result-absent:pr-state-settled': ['effects[36].value']
+      'tk-project-row-files-merge.result-absent:merge-settled': ['effects.projectRowDetailError'],
+      'tk-project-row-files-merge.result-absent:issue-state-settled': [
+        'effects.projectRowDetailError'
+      ],
+      'tk-project-row-files-merge.result-absent:pr-state-settled': ['effects.projectRowDetailError']
     }
   },
   'matrix-tasks.project-row-files-merge-github.mergepr-1': {
@@ -136,15 +141,15 @@ export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = 
     checkpoints: {
       'tk-project-row-files-merge.result-absent:merge-settled': [
         'state.error',
-        'effects[41].value'
+        'effects.projectRowDetailError'
       ],
       'tk-project-row-files-merge.result-absent:issue-state-settled': [
         'state.error',
-        'effects[41].value'
+        'effects.projectRowDetailError'
       ],
       'tk-project-row-files-merge.result-absent:pr-state-settled': [
         'state.error',
-        'effects[41].value'
+        'effects.projectRowDetailError'
       ]
     }
   },
@@ -153,12 +158,16 @@ export const READ_AND_PROJECT_REFUSALS: Readonly<Record<string, PageRefusal>> = 
     checkpoints: {
       'tk-project-row-files-merge.result-absent:expand-settled': [
         'state.error',
-        'effects[32].value'
+        'effects.projectRowDetailError'
       ],
-      'tk-project-row-files-merge.result-absent:file-comment-settled': ['effects[32].value'],
-      'tk-project-row-files-merge.result-absent:merge-settled': ['effects[32].value'],
-      'tk-project-row-files-merge.result-absent:issue-state-settled': ['effects[32].value'],
-      'tk-project-row-files-merge.result-absent:pr-state-settled': ['effects[32].value']
+      'tk-project-row-files-merge.result-absent:file-comment-settled': [
+        'effects.projectRowDetailError'
+      ],
+      'tk-project-row-files-merge.result-absent:merge-settled': ['effects.projectRowDetailError'],
+      'tk-project-row-files-merge.result-absent:issue-state-settled': [
+        'effects.projectRowDetailError'
+      ],
+      'tk-project-row-files-merge.result-absent:pr-state-settled': ['effects.projectRowDetailError']
     }
   },
   'matrix-tasks.project-row-files-merge-github.updateissue-1': {

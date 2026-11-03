@@ -1,11 +1,5 @@
 import { resolve } from 'node:path'
-import { createElement as _createElement } from 'react'
 import { describe, expect, it } from 'vitest'
-import {
-  hookScreenMount as _hookScreenMount,
-  projectMountedScreen as _projectMountedScreen,
-  screenMount as _screenMount
-} from './mounted-screen-tree'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { runRecording } from './run-recording'
 import { readScenarios } from './scenario-input'
@@ -17,21 +11,7 @@ const manifest = readScenarios(
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 ).scenarios
 
-function _Broken(): never {
-  throw new Error('a reply took the screen down')
-}
-
-function _effectSink(): {
-  calls: { name: string; value: unknown }[]
-  effect: (name: string, value: unknown) => void
-} {
-  const calls: { name: string; value: unknown }[] = []
-  return { calls, effect: (name, value) => calls.push({ name, value }) }
-}
-
 describe('a mounted screen', () => {
-  // Hook projections omit crashes; the effect sink must record them independently.
-
   // Drive the real panel/context/socket so declared props reach wire params and refusal triggers fallback.
   it('sends what the screen sends, with no substitute shaping a param', async () => {
     const scenario = manifest.find(

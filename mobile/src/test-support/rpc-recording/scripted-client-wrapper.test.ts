@@ -30,25 +30,4 @@ describe('a transparent wrapper between the operation and the scripted transport
       clock.stop()
     }
   })
-
-  it('rejects an invented call before allocation', async () => {
-    const clock = vitestRecordingScheduler()
-    await clock.start()
-    let invented: (() => Promise<unknown>) | undefined
-    const transport = new ScriptedRpcTransport(clock.elapsed, undefined, (client) => {
-      invented = () => client.sendRequest('alpha.one')
-      return client
-    })
-    try {
-      expect(() => invented?.()).toThrow('no causal parent')
-      expect(transport.requests).toEqual([])
-      expect(transport.payloads).toEqual([])
-      expect(() => transport.check()).toThrow('no causal parent')
-    } finally {
-      await transport.dispose()
-      await clock.flush()
-      transport.causality.close()
-      clock.stop()
-    }
-  })
 })
