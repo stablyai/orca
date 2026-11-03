@@ -1,3 +1,4 @@
+import { publicJournalItemAt, publicJournalRunningTurn } from './journal-execution-interruption'
 import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
@@ -5,7 +6,7 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
-import { createJournalPublicReader } from './journal-public-read'
+import { createJournalPublicReader, visitJournalItemsWithLinkage } from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalItemBody,
@@ -209,21 +210,21 @@ export class AgentSessionJournal {
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
     this.state.stoppedHistoryCarried
 
-  item = (itemId: string): AgentJournalRenderItem | null => this.state.items.get(itemId) ?? null
+  item = (itemId: string): AgentJournalRenderItem | null =>
+    publicJournalItemAt(this.state.items, itemId)
 
   /** Remember publication even after a rewind removes the row. */
   hasRecordedItem = (itemId: string): boolean =>
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void => {
-    for (const item of this.state.items.values()) {
-      visit(item.itemId, item.sequence, item.body, item)
-    }
-  }
+  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void =>
+    visitJournalItemsWithLinkage(this.state, visit)
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+    publicJournalRunningTurn(
+      runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+    )
 
   newestTurn = (): AgentJournalTurnLifecycle | null =>
     readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)

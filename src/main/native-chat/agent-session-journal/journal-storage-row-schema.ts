@@ -1,3 +1,4 @@
+import { executionInterruptionSchema } from './journal-execution-interruption'
 import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
@@ -33,7 +34,12 @@ const envelope = {
   turnScope: AgentJournalTurnScopeSchema.optional(),
   ...AgentJournalProducerLinkageFields
 }
-const provenance = { ownerFence: value, executionOwner: value, echoOf: value }
+const provenance = {
+  ownerFence: value,
+  executionOwner: value,
+  echoOf: value,
+  executionInterruption: executionInterruptionSchema.optional()
+}
 const legacyOptions = z.record(z.string(), z.unknown()).optional()
 
 const itemMutation = {

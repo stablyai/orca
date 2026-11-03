@@ -14,7 +14,17 @@ export function start(
   const limit = new StructuredAgentSessionUsageLimitContinue({
     host: context.deps,
     sessions: context.sessions,
-    readLoadedCut: delivery.readUsageLimitCut,
+    readLoadedCut: (id) => {
+      const cut = delivery.readUsageLimitCut(id)
+      return cut
+        ? {
+            ...cut,
+            ...(context.sessions.get(id)?.journal.stopMarks.userStopRequestedForItem(cut.turnItemId)
+              ? { personalStop: true as const }
+              : {})
+          }
+        : null
+    },
     readSavedCut: (id) => readSavedUsageLimitCut(context.deps.journalDatabase.db, id),
     serialize: context.serialize,
     send: (params) => host.send({ callerKey: 'trusted-local:usage-limit-continue' }, params),

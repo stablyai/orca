@@ -1,3 +1,4 @@
+import type { ExecutionInterruption } from './journal-execution-interruption'
 import { carryStopCancellations } from './journal-stop-cancellation'
 import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
@@ -70,6 +71,7 @@ export type JournalReplacementItem = AgentJournalProducerLinkage & {
   /** Preserve original execution provenance; history replacement is not new work. */
   ownerFence: number
   executionOwner?: number
+  executionInterruption?: ExecutionInterruption
 }
 
 /** Survivors are restated from the open chat. That loses nothing another build wrote: a chat holding
@@ -153,6 +155,7 @@ export function replaceJournalEpoch(input: {
       fence: input.fence,
       ownerFence: item.ownerFence,
       executionOwner: item.executionOwner,
+      executionInterruption: item.executionInterruption,
       ts: item.observedAt ?? input.now(),
       linkage: item,
       turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
@@ -235,6 +238,17 @@ export function replaceJournalEpoch(input: {
 
   if (input.previous) {
     carryStopCancellations(input.previous, state, state.items.values())
+    for (const row of rows) {
+      if (row.kind !== 'item') {
+        continue
+      }
+      const fact = state.items.get(
+        state.aliases.get(row.itemId) ?? row.itemId
+      )?.executionInterruption
+      if (fact) {
+        row.executionInterruption = fact
+      }
+    }
   }
   journalInputOrder(state).restore(state)
   journalInputOrder(state).finishReconstruction(state)

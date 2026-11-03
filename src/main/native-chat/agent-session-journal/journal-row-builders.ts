@@ -1,3 +1,4 @@
+import type { ExecutionInterruption } from './journal-execution-interruption'
 import { journalInputOrder } from './journal-input-order'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
@@ -224,6 +225,7 @@ export function buildJournalItemRow(
     fence: number
     ownerFence?: number
     executionOwner?: number
+    executionInterruption?: ExecutionInterruption
     ts: number
     recovered?: true
     linkage?: AgentJournalProducerLinkage
@@ -248,6 +250,7 @@ export function buildJournalItemRow(
   )
   return {
     kind: 'item',
+    ...(input.executionInterruption ? { executionInterruption: input.executionInterruption } : {}),
     ...journalItemEchoFields(input),
     itemId,
     revision,

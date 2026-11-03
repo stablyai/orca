@@ -1,3 +1,7 @@
+import { isolateJournalTransition } from './journal-reducer-transition'
+import { applyJournalRow } from './journal-reducer'
+import { journalStopEventRowBuilder } from './journal-stop-and-resume-rows'
+import { activeCancellations } from './journal-stop-cancellation'
 import { it, expect, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,7 +13,10 @@ import {
 import { restoreJournal, startJournalRowFold } from './journal-open'
 import { projectionBase, projectionEpochRow } from './journal-projection-test-support'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { normalizeStopCancellations } from './journal-stop-cancellation'
 import { personStopDecidesTurn } from './journal-stop-turn-end'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -64,7 +71,7 @@ async function turn(
   )
 }
 function pending(f: Awaited<ReturnType<typeof fixture>>) {
-  return f.journal.queuedMessages.inputState().queuePauseMarks.pendingCancellations ?? []
+  return f.journal.stopMarks.cancellations()
 }
 function terminal(f: Awaited<ReturnType<typeof fixture>>, id: string) {
   return f.journal.snapshot().items.find((i) => i.body.kind === 'turn' && i.body.turnId === id)
@@ -73,18 +80,67 @@ function terminal(f: Awaited<ReturnType<typeof fixture>>, id: string) {
 
 it('completed Stops retire at N and 10N, and the next Stop performs the same database work', async () => {
   const work: number[] = []
+  const visits: number[] = []
   for (const n of [40, 400]) {
     const f = await fixture()
     try {
       for (let i = 0; i < n; i++) {
-        await turn(f, `A${i}`)
+        const id = `open-${i}`
+        await f.journal.appendSubmission({
+          clientMessageId: id,
+          payloadFingerprint: id,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+          fence: 0,
+          handoverRecorded: true
+        })
+        await f.journal.resolveDispatch({
+          clientMessageId: id,
+          state: 'pending',
+          fence: 0,
+          turnScope: { kind: 'thread' }
+        })
+        await f.journal.appendItem(
+          identity(`A${i}`),
+          {
+            kind: 'turn',
+            turnId: `A${i}`,
+            state: 'running',
+            userItemId: agentJournalSubmissionKey(id)
+          },
+          { fence: 0, turnScope: { kind: 'thread' } }
+        )
         await f.journal.appendStopEvent({ reason: 'user-stop', turnId: `A${i}` }, 0)
-        await turn(f, `A${i}`, 'interrupted')
+        await f.journal.appendItem(
+          identity(`A${i}`),
+          {
+            kind: 'turn',
+            turnId: `A${i}`,
+            state: 'interrupted',
+            userItemId: agentJournalSubmissionKey(id)
+          },
+          { fence: 0, turnScope: { kind: 'thread' } }
+        )
+        await f.journal.resolveDispatch({
+          clientMessageId: id,
+          state: 'unknown',
+          fence: 0,
+          recovered: true
+        })
       }
       expect(pending(f)).toEqual([])
       await f.restart()
       expect(pending(f)).toEqual([])
       await turn(f, 'probe')
+      const state = f.journal.queuedMessages.inputState()
+      const measured = isolateJournalTransition(state, (draft) => {
+        const row = journalStopEventRowBuilder(
+          () => draft,
+          { reason: 'user-stop' },
+          0
+        )(draft.lastSequence + 1, 9999)
+        applyJournalRow(draft, row)
+      })
+      visits.push(measured.tracked())
       const prepare = vi.spyOn(f.db, 'prepare')
       try {
         await f.journal.appendStopEvent({ reason: 'user-stop', turnId: 'probe' }, 0)
@@ -99,6 +155,7 @@ it('completed Stops retire at N and 10N, and the next Stop performs the same dat
   }
   expect(work[0]).toBeGreaterThan(0)
   expect(work[1]).toBe(work[0])
+  expect(visits[1]).toBeLessThanOrEqual(visits[0]! + 20)
 })
 
 it('removing the closed turn retires its durable obligation', async () => {
@@ -268,14 +325,13 @@ it('legacy input replay and outcome restore keep both unresolved personal target
   }
   const { state, newer, damage } = fold.finish()
   expect({ newer, damage }).toEqual({ newer: null, damage: null })
-  expect(state.queuePauseMarks.pendingCancellations?.map((entry) => entry.target?.turnId)).toEqual([
-    'A',
-    'B'
-  ])
-  const b = state.queuePauseMarks.pendingCancellations![1]!
+  expect(activeCancellations(state).map((entry) => entry.target?.turnId)).toEqual(['A', 'B'])
+  const b = activeCancellations(state)[1]!
   state.queuePauseMarks.pendingCancellations = [{ sequence: b.sequence, event: b.event }]
   normalizeStopCancellations(state)
   expect(
-    state.queuePauseMarks.pendingCancellations?.map((entry) => entry.target?.turnId).sort()
+    activeCancellations(state)
+      .map((entry) => entry.target?.turnId)
+      .sort()
   ).toEqual(['A', 'B'])
 })

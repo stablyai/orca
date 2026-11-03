@@ -1,3 +1,4 @@
+import type { JournalItemProvenance } from './journal-execution-interruption'
 export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
 import type { JournalCancellationTarget } from './journal-cancellation-targets'
 import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
@@ -59,13 +60,6 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
   'schema_unreadable'
 ] as const
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
-
-/** Creation provenance differs from writer authority; legacy rows fall back to their creating fence. */
-type JournalItemProvenance = {
-  ownerFence?: number
-  /** Later execution owner for resumable children; absent falls back to ownerFence. */
-  executionOwner?: number
-}
 
 export type JournalItemRow = JournalRowBase &
   JournalItemProvenance &

@@ -1,3 +1,4 @@
+import { JournalUsageLimitCutIndex } from './journal-usage-limit-cut-index'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
@@ -16,6 +17,7 @@ import {
 /** Owned by the transaction-isolated input order; never saved beside the journal. Every turn and
  * clear sits in a creation-ordered tree, so each row updates only the sources it touches. */
 export class JournalNewestTurn {
+  readonly usageLimitCut: JournalUsageLimitCutIndex
   private root: TurnSourceNode | undefined
   private readonly sources = new Map<string, TurnSource>()
   /** Agent failure rows (usage limit, sign-in, terminal error) and the turn each reports on,
@@ -28,6 +30,7 @@ export class JournalNewestTurn {
 
   /** Only on restore; streamed rows never rescan conversation history. */
   constructor(state: JournalReducerState) {
+    this.usageLimitCut = new JournalUsageLimitCutIndex(state)
     this.boundary = state.lastSequence
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
@@ -53,6 +56,7 @@ export class JournalNewestTurn {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
+    this.usageLimitCut.afterRow(state, row)
     const itemIds =
       row.kind === 'item' || row.kind === 'tombstone'
         ? [row.itemId]

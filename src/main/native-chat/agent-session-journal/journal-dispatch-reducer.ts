@@ -80,6 +80,11 @@ export function applyJournalDispatchRow(
     return
   }
   state.aliases.set(row.providerItemId, agentJournalSubmissionKey(row.clientMessageId))
+  state.derivedTurnScope.cancellations.rememberAlias(
+    row.providerItemId,
+    agentJournalSubmissionKey(row.clientMessageId)
+  )
+  state.derivedTurnScope.cancellations.observeSubmission(state, submission)
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     providerItemId: row.providerItemId,

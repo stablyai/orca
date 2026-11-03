@@ -1,3 +1,4 @@
+import { publicJournalItem, type JournalOwnedItem } from './journal-execution-interruption'
 import { recordStopCancellations } from './journal-stop-cancellation'
 import { journalItemDeclaresEcho } from './journal-item-echo'
 import {
@@ -56,7 +57,7 @@ export type JournalReducerState = {
   /** Earliest individually replayable sequence. */
   oldestSequence: number
   highestFence: number
-  items: Map<string, AgentJournalRenderItem>
+  items: Map<string, JournalOwnedItem>
   /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: Map<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
@@ -206,6 +207,9 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
         const producer = journalBatchMutationProducer(row, mutation)
         const scope = statedOrDerivedTurnScope(state, mutation)
         const item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
+        if (mutation.executionInterruption) {
+          item.executionInterruption = mutation.executionInterruption
+        }
         item.observedAt = mutation.observedAt ?? row.ts
         upsertJournalItem(state, itemId, revision, item, {
           fence: row.fence,
@@ -259,6 +263,7 @@ export function resolveJournalItemId(
     return itemId
   }
   state.aliases.set(itemId, submissionId)
+  state.derivedTurnScope.cancellations.rememberAlias(itemId, submissionId)
   return submissionId
 }
 
@@ -311,7 +316,7 @@ function resolveItemId(state: JournalReducerState, itemId: string): string {
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
   // Map insertion order changes on recreation; journal position alone orders the timeline.
   const items = [...state.items.values()]
-    .map((item) => projectJournalStopNote(item, state.items))
+    .map((item) => projectJournalStopNote(publicJournalItem(item), state.items))
     .sort(compareAgentJournalItems)
   return {
     sessionId: state.sessionId,

@@ -1,6 +1,17 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { renderJournalState, type JournalReducerState } from './journal-reducer'
+import { publicJournalItem } from './journal-execution-interruption'
+import type { JournalItemLinkageVisitor } from './journal-store-contracts'
+
+export function visitJournalItemsWithLinkage(
+  state: JournalReducerState,
+  visit: JournalItemLinkageVisitor
+): void {
+  for (const item of state.items.values()) {
+    visit(item.itemId, item.sequence, item.body, publicJournalItem(item))
+  }
+}
 
 /** Only a committed journal owner can certify reuse across public reads. */
 export function createJournalPublicReader() {

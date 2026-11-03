@@ -1,14 +1,11 @@
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentJournalSubmissionProvenUnwritten } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { turnOpeningClientId, type JournalCancellationTarget } from './journal-cancellation-targets'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalCancellationTarget } from './journal-cancellation-targets'
+import { restoreJournalCancellationTargets } from './journal-cancellation-targets'
 import type { JournalStopSettle } from './queued-message-pause'
+import type { AcceptedInterruption, ExecutionInterruption } from './journal-execution-interruption'
 
 export type PendingCancellation = {
   sequence: number
@@ -17,195 +14,183 @@ export type PendingCancellation = {
   observedAt?: number
   settle?: JournalStopSettle
 }
-
 export function stopIsPersonal(reason: JournalStopEvent['reason']): boolean {
   return reason === 'user-stop' || reason === 'user-close'
 }
-
-function sameExecution(a: JournalCancellationTarget, b: JournalCancellationTarget): boolean {
-  return (
-    a.ownerFence === b.ownerFence &&
-    ((a.turnId !== undefined && a.turnId === b.turnId) ||
-      (a.clientMessageId !== undefined && a.clientMessageId === b.clientMessageId))
-  )
+export function activeCancellations(
+  state: Pick<JournalReducerState, 'derivedTurnScope'>
+): PendingCancellation[] {
+  return state.derivedTurnScope.cancellations.pending()
 }
-
 export function executionCancellation(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>,
+  state: Pick<JournalReducerState, 'derivedTurnScope'>,
   turnId: string | null
 ): PendingCancellation | undefined {
-  return state.queuePauseMarks.pendingCancellations?.find((entry) =>
+  return activeCancellations(state).find((entry) =>
     turnId === null ? entry.settle?.settling === true : entry.target?.turnId === turnId
   )
 }
 
-/** The queue boundary never supplies execution ownership. */
+/** Accepted control is retained on its execution; neither queue replacement nor feedback owns it. */
 export function recordStopCancellations(
   state: JournalReducerState,
   row: JournalTombstoneRow
 ): void {
   const event = row.stopEvent
-  if (!event || !stopIsPersonal(event.reason)) {
+  if (!event || (event.reason !== 'user-stop' && event.reason !== 'user-close')) {
     return
   }
+  const index = state.derivedTurnScope.cancellations
   const targets =
-    event.targets ??
-    (event.turnId === undefined
-      ? []
-      : state.derivedTurnScope.cancellations.capture(row.fence, event.turnId))
+    event.targets ?? (event.turnId === undefined ? [] : index.capture(row.fence, event.turnId))
   for (const target of targets) {
-    const pending = (state.queuePauseMarks.pendingCancellations ??= [])
-    const previous = pending.find((entry) => entry.target && sameExecution(entry.target, target))
-    if (previous) {
-      previous.sequence = row.seq
-      previous.observedAt = Math.max(previous.observedAt ?? previous.event.at, event.at)
-    } else {
-      const { targets: _targets, ...saved } = event
-      pending.push({ sequence: row.seq, event: saved, target, observedAt: event.at })
+    const anchorId = index.anchor(target)
+    const anchor = anchorId === undefined ? undefined : state.items.get(anchorId)
+    if (!anchor) {
+      continue
     }
-  }
-}
-
-function keepCancellations(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>,
-  keep: (entry: PendingCancellation) => boolean
-): void {
-  const kept = state.queuePauseMarks.pendingCancellations?.filter(keep)
-  if (kept?.length) {
-    state.queuePauseMarks.pendingCancellations = kept
-  } else {
-    delete state.queuePauseMarks.pendingCancellations
-  }
-}
-
-/** Provider identity joins only the captured opener in the same execution. */
-export function foldCancellationTurn(
-  state: JournalReducerState,
-  body: AgentJournalItemBody,
-  ownerFence: number
-): void {
-  const turn = readAgentJournalTurn(body)
-  if (!turn) {
-    return
-  }
-  const opener = turnOpeningClientId(state, turn.userItemId)
-  for (const entry of state.queuePauseMarks.pendingCancellations ?? []) {
-    if (
-      entry.target?.ownerFence === ownerFence &&
-      opener !== undefined &&
-      entry.target.clientMessageId === opener
-    ) {
-      entry.target.turnId = turn.turnId
+    const { targets: _targets, ...saved } = event
+    const request: AcceptedInterruption = {
+      epoch: row.epoch,
+      sequence: row.seq,
+      event: { ...saved, reason: event.reason }
     }
-  }
-  if (turn.state !== 'running' && turn.state !== 'unverifiable') {
-    retireCancellation(state, turn.turnId, opener)
+    const previous =
+      anchor.executionInterruption?.target.ownerFence === target.ownerFence
+        ? anchor.executionInterruption
+        : undefined
+    const fact: ExecutionInterruption = {
+      owner: previous?.owner ?? {
+        epoch: row.epoch,
+        sequence: anchor.sequence,
+        ...(anchor.sequenceIndex === undefined ? {} : { sequenceIndex: anchor.sequenceIndex }),
+        itemId: anchor.itemId,
+        ownerFence: target.ownerFence
+      },
+      target: previous?.target ?? { ...target },
+      first: previous?.first ?? request,
+      ...(previous?.userStop || event.reason === 'user-stop'
+        ? { userStop: previous?.userStop ?? request }
+        : {}),
+      observedAt: Math.max(previous?.observedAt ?? event.at, event.at),
+      sequence: row.seq
+    }
+    state.items.set(anchor.itemId, { ...anchor, executionInterruption: fact })
+    index.refresh(state, anchor.itemId)
   }
 }
 
 export function retireCancellation(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>,
+  state: JournalReducerState,
   turnId?: string,
   clientMessageId?: string
 ): void {
-  keepCancellations(
-    state,
-    (entry) =>
-      !(turnId !== undefined && entry.target?.turnId === turnId) &&
-      !(
-        clientMessageId !== undefined &&
-        entry.target?.clientMessageId === clientMessageId &&
-        (turnId !== undefined || entry.target.turnId === undefined)
-      )
-  )
+  state.derivedTurnScope.cancellations.remove(turnId, clientMessageId)
 }
 
-/** Rebuilds carry evidence with retained executions, never by replaying the queue's Stop. */
+/** Both epoch builders carry the same retained owner graph, including terminal history. */
 export function carryStopCancellations(
   previous: JournalReducerState,
   state: JournalReducerState,
-  items: Iterable<AgentJournalRenderItem>
+  _items: Iterable<AgentJournalRenderItem>
 ): void {
-  const survivors = new Map<string, JournalCancellationTarget>()
-  for (const item of items) {
-    const turn = readAgentJournalTurn(item.body)
-    if (turn && (turn.state === 'running' || turn.state === 'unverifiable')) {
-      const target = state.derivedTurnScope.cancellations.turn(turn.turnId)
-      if (target) {
-        survivors.set(turn.turnId, target)
+  for (const item of previous.items.values()) {
+    const fact = item.executionInterruption
+    if (!fact) {
+      continue
+    }
+    const target =
+      fact.target.turnId === undefined
+        ? undefined
+        : state.derivedTurnScope.cancellations.turn(fact.target.turnId)
+    if (fact.target.turnId !== undefined && !target) {
+      if (fact.target.clientMessageId !== undefined) {
+        state.derivedTurnScope.cancellations.retireSubmission(state, fact.target.clientMessageId)
       }
+      continue
     }
-  }
-  const kept = (previous.queuePauseMarks.pendingCancellations ?? []).flatMap((entry) => {
-    const target = entry.target
-    if (!target) {
-      return []
+    const anchorId = target
+      ? state.derivedTurnScope.cancellations.anchor(target)
+      : fact.target.clientMessageId === undefined
+        ? undefined
+        : agentJournalSubmissionKey(fact.target.clientMessageId)
+    const anchor = anchorId === undefined ? undefined : state.items.get(anchorId)
+    if (!anchor || (target && target.ownerFence !== fact.target.ownerFence)) {
+      continue
     }
-    const retained = target.turnId !== undefined ? survivors.get(target.turnId) : undefined
-    const id = target.clientMessageId
-    const key = id === undefined ? undefined : agentJournalSubmissionKey(id)
-    const source = id === undefined ? undefined : previous.submissions.get(id)
-    const openerSurvives =
-      target.turnId === undefined &&
-      key !== undefined &&
-      state.items.has(key) &&
-      source !== undefined &&
-      !agentJournalSubmissionProvenUnwritten(source) &&
-      previous.itemFences.get(key) === state.itemFences.get(key)
-    if (!(retained && sameExecution(target, retained)) && !openerSurvives) {
-      return []
-    }
-    if (openerSurvives && source && id !== undefined) {
-      state.submissions.set(id, { ...source })
-      if (source.providerItemId) {
-        state.aliases.set(source.providerItemId, agentJournalSubmissionKey(id))
+    const moved = { ...fact, target: target ? { ...target } : { ...fact.target } }
+    state.items.set(anchor.itemId, { ...anchor, executionInterruption: moved })
+    const id = fact.target.clientMessageId
+    if (fact.target.turnId === undefined && id !== undefined) {
+      const submission = previous.submissions.get(id)
+      if (submission) {
+        state.submissions.set(id, { ...submission })
       }
       const receipt = previous.receipts.get(id)
       if (receipt) {
-        state.receipts.set(id, receipt)
+        state.receipts.set(id, { ...receipt })
       }
-      state.derivedTurnScope.cancellations.retainOpener(id, target.ownerFence)
+      if (submission?.providerItemId) {
+        state.aliases.set(submission.providerItemId, agentJournalSubmissionKey(id))
+      }
     }
-    const { settle: _settle, ...saved } = entry
-    return [{ ...saved, event: { ...saved.event }, target: { ...target } }]
-  })
-  if (kept.length) {
-    state.queuePauseMarks.pendingCancellations = kept
-  } else {
-    delete state.queuePauseMarks.pendingCancellations
   }
+  restoreJournalCancellationTargets(state)
 }
 
+/** Legacy fields are accepted once, then rewritten into canonical owners rather than active debt. */
 export function normalizeStopCancellations(state: JournalReducerState): void {
-  const converted = (state.queuePauseMarks.pendingCancellations ?? []).flatMap((entry) => {
+  const entries = [...(state.queuePauseMarks.pendingCancellations ?? [])]
+  const latest = state.queuePauseMarks.latestStop
+  if (latest?.event.turnId !== undefined && stopIsPersonal(latest.event.reason)) {
+    if (latest.event.targets !== undefined) {
+      entries.push(...latest.event.targets.map((target) => ({ ...latest, target })))
+    } else {
+      entries.push(latest)
+    }
+  }
+  for (const entry of entries) {
     const target =
       entry.target ??
       (entry.event.turnId === undefined
         ? undefined
-        : state.derivedTurnScope.cancellations.turn(entry.event.turnId))
-    return target ? [{ ...entry, target: { ...target } }] : []
-  })
-  const latest = state.queuePauseMarks.latestStop
-  const target =
-    latest?.event.turnId === undefined
-      ? undefined
-      : state.derivedTurnScope.cancellations.turn(latest.event.turnId)
-  if (
-    latest &&
-    stopIsPersonal(latest.event.reason) &&
-    target &&
-    !converted.some((entry) => sameExecution(entry.target, target))
-  ) {
-    converted.push({
-      sequence: latest.sequence,
-      event: latest.event,
-      target: { ...target },
-      observedAt: latest.event.at
+        : legacyStopTarget(state, entry.event.turnId, entry.sequence))
+    const anchorId = target && state.derivedTurnScope.cancellations.anchor(target)
+    const canonical =
+      target?.turnId === undefined
+        ? undefined
+        : state.derivedTurnScope.cancellations.turn(target.turnId)
+    if (
+      !target ||
+      (canonical && canonical.ownerFence !== target.ownerFence) ||
+      anchorId === undefined ||
+      state.items.get(anchorId)?.executionInterruption
+    ) {
+      continue
+    }
+    recordStopCancellations(state, {
+      kind: 'tombstone',
+      v: 4,
+      epoch: state.epoch,
+      seq: entry.sequence,
+      fence: target.ownerFence,
+      ts: entry.event.at,
+      itemId: 'legacy-stop',
+      revision: 0,
+      stopEvent: { ...entry.event, targets: [target] }
     })
   }
-  if (converted.length) {
-    state.queuePauseMarks.pendingCancellations = converted
-  } else {
-    delete state.queuePauseMarks.pendingCancellations
-  }
+  delete state.queuePauseMarks.pendingCancellations
+}
+
+function legacyStopTarget(state: JournalReducerState, turnId: string, sequence: number) {
+  const index = state.derivedTurnScope.cancellations
+  const target = index.turn(turnId)
+  const itemId = index.turnItem(turnId)
+  const item = itemId === undefined ? undefined : state.items.get(itemId)
+  return item &&
+    item.sequence <= sequence &&
+    state.itemFences.get(item.itemId) === target?.ownerFence
+    ? target
+    : undefined
 }

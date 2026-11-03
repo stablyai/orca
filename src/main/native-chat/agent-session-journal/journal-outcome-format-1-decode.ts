@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalOwnedItem } from './journal-execution-interruption'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import {
@@ -145,7 +145,7 @@ function collectionTargets(state: JournalReducerState): Map<string, Target> {
       }
     }
   })
-  const item = z.custom<AgentJournalRenderItem>()
+  const item = z.custom<JournalOwnedItem>()
   const echo = z.custom<[string] | [string, unknown]>()
   const items = state.items
   return new Map<string, Target>([

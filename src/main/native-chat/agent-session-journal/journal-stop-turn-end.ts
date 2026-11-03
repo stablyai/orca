@@ -1,17 +1,10 @@
 import { journalItemExecutionFence } from './journal-item-provenance'
-import { executionCancellation } from './journal-stop-cancellation'
+import { activeCancellations, executionCancellation } from './journal-stop-cancellation'
 import { turnOpeningClientId } from './journal-cancellation-targets'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
 // and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
 
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
@@ -33,48 +26,25 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
 
 type TurnEndState = Pick<
   JournalReducerState,
-  'items' | 'queuePauseMarks' | 'submissions' | 'aliases' | 'itemFences' | 'itemExecutionOwners'
+  | 'items'
+  | 'queuePauseMarks'
+  | 'submissions'
+  | 'aliases'
+  | 'itemFences'
+  | 'itemExecutionOwners'
+  | 'derivedTurnScope'
 >
-
-/** Find the opening send; this does not decide cancellation ownership. */
-function openingSubmission(
-  state: TurnEndState,
-  userItemId: string | undefined
-): AgentJournalSubmission | undefined {
-  if (userItemId === undefined) {
-    return undefined
-  }
-  const identity = parseAgentJournalItemKey(state.aliases.get(userItemId) ?? userItemId)
-  return identity?.provider === 'orca' && 'clientMessageId' in identity
-    ? state.submissions.get(identity.clientMessageId)
-    : undefined
-}
 
 /** Accepted openers may precede their turn row; steers/folds into running turns open none. */
 export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
-  let latest: { submission: AgentJournalSubmission; sequence: number } | undefined
-  for (const submission of state.submissions.values()) {
-    const item = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))
-    if (
-      submission.dispatchState === 'accepted' &&
-      item !== undefined &&
-      item.turnScope?.kind !== 'turn' &&
-      item.sequence >= (latest?.sequence ?? -1)
-    ) {
-      latest = { submission, sequence: item.sequence }
-    }
-  }
-  if (!latest) {
-    return false
-  }
-  for (const item of state.items.values()) {
-    if (
-      openingSubmission(state, readAgentJournalTurn(item.body)?.userItemId) === latest.submission
-    ) {
-      return false
-    }
-  }
-  return true
+  return state.derivedTurnScope.cancellations
+    .unresolved()
+    .some(
+      (target) =>
+        target.turnId === undefined &&
+        target.clientMessageId !== undefined &&
+        state.submissions.get(target.clientMessageId)?.dispatchState === 'accepted'
+    )
 }
 
 /** Every consumer resolves the same captured execution, independently of the queue boundary. */
@@ -86,7 +56,7 @@ function stopEndsTurnAsCancellation(
   ownerFence?: number
 ): boolean {
   const opener = turnOpeningClientId(state, userItemId)
-  return (state.queuePauseMarks.pendingCancellations ?? []).some(
+  return activeCancellations(state).some(
     (stop) =>
       (ownerFence === undefined || stop.target?.ownerFence === ownerFence) &&
       (stop.target?.turnId === turnId ||
@@ -109,11 +79,11 @@ export function personStopDecidesTurn(
 
 /** Until its child closes, a session-ending Stop owns all turns; other callers stay unnamed-only. */
 export function beginJournalStopSettle(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>,
+  state: Pick<JournalReducerState, 'queuePauseMarks' | 'derivedTurnScope'>,
   endsSession = false,
   sequence?: number
 ): JournalStopSettle | null {
-  const pending = state.queuePauseMarks.pendingCancellations ?? []
+  const pending = activeCancellations(state)
   const stop =
     sequence === undefined
       ? (pending.at(-1) ?? state.queuePauseMarks.latestStop)

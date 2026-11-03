@@ -1,4 +1,5 @@
-import { executionCancellation } from './journal-stop-cancellation'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { activeCancellations, executionCancellation } from './journal-stop-cancellation'
 import type { JournalReducerState } from './journal-reducer'
 import {
   beginJournalStopSettle,
@@ -31,7 +32,16 @@ export class JournalStopMarks {
   }
 
   cancellations() {
-    return this.deps.state().queuePauseMarks.pendingCancellations ?? []
+    return activeCancellations(this.deps.state())
+  }
+
+  userStopRequestedForItem(itemId: string): boolean {
+    const state = this.deps.state()
+    const turn = readAgentJournalTurn(state.items.get(itemId)?.body)
+    return (
+      turn !== null &&
+      state.derivedTurnScope.cancellations.history(state, turn.turnId)?.userStop !== undefined
+    )
   }
 
   observedLiveAt(turnId: string): number | undefined {
