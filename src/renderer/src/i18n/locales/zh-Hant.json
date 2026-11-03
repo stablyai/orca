@@ -1973,6 +1973,9 @@
         "folderAccessFix": "修復"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "沒有需要注意的工作區"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca 無法在此 SSH 主機上完成設定。可在「設定」中的「SSH 主機」查看原因。"
         }
@@ -21841,6 +21844,7 @@
       "workspaceRename": "重新命名工作樹",
       "workspaceDelete": "刪除工作區",
       "workspaceOpenBoard": "顯示或隱藏工作區看板",
+      "workspaceNextAttention": "前往下一個需要注意的工作區",
       "dashboardToggle": "顯示或隱藏代理程式儀表板",
       "workspaceSelectByIndex": "選取工作區 1–9",
       "voiceDictation": "聽寫",

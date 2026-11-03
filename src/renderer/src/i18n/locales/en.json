@@ -2164,6 +2164,9 @@
         "folderAccessFix": "Fix"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "No workspaces need attention"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca couldn’t set itself up on this SSH host. SSH Hosts in Settings shows why."
         }
@@ -22808,6 +22811,7 @@
       "workspaceRename": "Rename worktree",
       "workspaceDelete": "Delete Workspace",
       "workspaceOpenBoard": "Toggle Workspace Board",
+      "workspaceNextAttention": "Go to Next Workspace Needing Attention",
       "dashboardToggle": "Toggle Agent Dashboard",
       "workspaceSelectByIndex": "Select Workspace 1–9",
       "voiceDictation": "Dictation",

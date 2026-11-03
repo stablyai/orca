@@ -2023,6 +2023,9 @@
         "folderAccessFix": "Beheben"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Keine Arbeitsbereiche benötigen Aufmerksamkeit"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca konnte sich auf diesem SSH-Host nicht einrichten. Unter SSH-Hosts in den Einstellungen wird der Grund angezeigt."
         }
@@ -22330,6 +22333,7 @@
       "workspaceRename": "Worktree umbenennen",
       "workspaceDelete": "Arbeitsbereich löschen",
       "workspaceOpenBoard": "Arbeitsbereichsübersicht ein-/ausblenden",
+      "workspaceNextAttention": "Zum nächsten Arbeitsbereich mit Handlungsbedarf",
       "dashboardToggle": "Agenten-Dashboard ein-/ausblenden",
       "workspaceSelectByIndex": "Arbeitsbereich 1–9 auswählen",
       "voiceDictation": "Diktieren",

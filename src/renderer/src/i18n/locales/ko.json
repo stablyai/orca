@@ -1568,6 +1568,9 @@
         "folderAccessFix": "수정"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "확인이 필요한 워크스페이스가 없습니다"
+        },
         "sshManagedServer": {
           "refusedBlocked": "이 SSH 호스트에 Orca를 설정할 수 없습니다. 이유는 설정의 SSH 호스트에서 확인할 수 있습니다."
         }
@@ -21838,6 +21841,7 @@
       "workspaceRename": "워크트리 이름 바꾸기",
       "workspaceDelete": "워크스페이스 삭제",
       "workspaceOpenBoard": "워크스페이스 보드 전환",
+      "workspaceNextAttention": "주의가 필요한 다음 워크스페이스로 이동",
       "dashboardToggle": "에이전트 대시보드 전환",
       "workspaceSelectByIndex": "워크스페이스 1–9 선택",
       "voiceDictation": "받아쓰기",

@@ -1579,6 +1579,9 @@
         "folderAccessFix": "修理"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "対応が必要なワークスペースはありません"
+        },
         "sshManagedServer": {
           "refusedBlocked": "この SSH ホストに Orca をセットアップできませんでした。理由は設定の [SSH ホスト] で確認できます。"
         }
@@ -21849,6 +21852,7 @@
       "workspaceRename": "ワークツリー名を変更",
       "workspaceDelete": "ワークスペースを削除",
       "workspaceOpenBoard": "ワークスペースボードの切り替え",
+      "workspaceNextAttention": "対応が必要な次のワークスペースへ移動",
       "dashboardToggle": "Agent ダッシュボードの切り替え",
       "workspaceSelectByIndex": "ワークスペース 1–9 を選択",
       "voiceDictation": "ディクテーション",

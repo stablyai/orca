@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
-import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
+import { collapseExpandedSibling, handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222' as TerminalLeafId
@@ -119,5 +119,61 @@ describe('handleFocusTerminalPaneDetail', () => {
     expect(container.classList.contains('pane-focus-rim-flash')).toBe(false)
     expect(acknowledgeAgents).not.toHaveBeenCalled()
     expect(surfaceStaleAgentRow).toHaveBeenCalledWith('tab-1', LEAF_ID)
+  })
+
+  it('reveals the target pane before activating it', () => {
+    const { manager } = createManager()
+    const calls: string[] = []
+    manager.setActivePane.mockImplementation(() => calls.push('activate'))
+
+    handleFocusTerminalPaneDetail(
+      { tabId: 'tab-1', leafId: LEAF_ID },
+      {
+        tabId: 'tab-1',
+        manager,
+        acknowledgeAgents: vi.fn(),
+        surfaceStaleAgentRow: vi.fn(),
+        revealPane: (paneId) => calls.push(`reveal:${paneId}`)
+      }
+    )
+
+    expect(calls).toEqual(['reveal:7', 'activate'])
+  })
+
+  it('does not reveal anything when the leaf is stale', () => {
+    const { manager } = createManager({ leafId: OTHER_LEAF_ID })
+    const revealPane = vi.fn()
+
+    handleFocusTerminalPaneDetail(
+      { tabId: 'tab-1', leafId: LEAF_ID },
+      {
+        tabId: 'tab-1',
+        manager,
+        acknowledgeAgents: vi.fn(),
+        surfaceStaleAgentRow: vi.fn(),
+        revealPane
+      }
+    )
+
+    expect(revealPane).not.toHaveBeenCalled()
+  })
+})
+
+describe('collapseExpandedSibling', () => {
+  it('collapses a sibling expanded over the target', () => {
+    const toggleExpandPane = vi.fn()
+
+    collapseExpandedSibling(7, 3, toggleExpandPane)
+
+    expect(toggleExpandPane).toHaveBeenCalledWith(3)
+  })
+
+  it('leaves the layout alone when nothing is expanded or the target itself is', () => {
+    const toggleExpandPane = vi.fn()
+
+    collapseExpandedSibling(7, null, toggleExpandPane)
+    collapseExpandedSibling(7, 7, toggleExpandPane)
+
+    expect(toggleExpandPane).not.toHaveBeenCalled()
   })
 })

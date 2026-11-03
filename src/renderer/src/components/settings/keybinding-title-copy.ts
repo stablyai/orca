@@ -29,6 +29,8 @@ const STATIC_TITLE_COPY = {
   'workspace.delete': () => translate('keybindings.title.workspaceDelete', 'Delete Workspace'),
   'workspace.openBoard': () =>
     translate('keybindings.title.workspaceOpenBoard', 'Toggle Workspace Board'),
+  'workspace.nextAttention': () =>
+    translate('keybindings.title.workspaceNextAttention', 'Go to Next Workspace Needing Attention'),
   'dashboard.toggle': () =>
     translate('keybindings.title.dashboardToggle', 'Toggle Agent Dashboard'),
   'workspace.selectByIndex': () =>
