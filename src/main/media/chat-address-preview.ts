@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   ChatAddressPreviewRequest,
   ChatAddressPreviewResult

@@ -15,7 +15,7 @@ import {
 } from './chat-address-preview-grants'
 import { CHAT_PREVIEW_MAX_TEXT_BYTES } from './chat-address-preview-content'
 import type { ChatAddressPreviewResult } from '../../shared/chat-address-preview'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser-renderer-trust'
 
 const { authorize, ipcHandle } = vi.hoisted(() => ({
