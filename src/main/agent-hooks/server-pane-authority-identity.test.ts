@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
@@ -92,6 +95,55 @@ describe('pane authority identity across a pane move', () => {
       server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', 10, { authorityVerified: true })
 
       expect(server.attestCompatibilityAuthority(candidate)).toBeNull()
+    })
+
+    it('survives a restart whose saved file still holds the moved pane under its source key', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-moved-commitment-'))
+      const server = new AgentHookServer()
+      const now = 1_700_000_000_000
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(now)
+      try {
+        mkdirSync(join(userDataPath, 'agent-hooks'))
+        const saved = { tabId: 'tab-source', worktreeId: 'wt-1', connectionId: 'ssh-target' }
+        writeFileSync(
+          join(userDataPath, 'agent-hooks', 'last-status.json'),
+          JSON.stringify({
+            version: 2,
+            entries: {
+              [SOURCE]: {
+                ...saved,
+                paneKey: SOURCE,
+                launchTokenHash: LAUNCH_TOKEN_HASH,
+                receivedAt: now,
+                stateStartedAt: now,
+                payload: { state: 'working', prompt: 'before', agentType: 'codex' }
+              }
+            },
+            authorityCommitments: {
+              [SOURCE]: {
+                ...saved,
+                paneKey: SOURCE,
+                launchTokenHash: LAUNCH_TOKEN_HASH,
+                observedAt: now
+              }
+            }
+          })
+        )
+        // Store load restores a saved stable-key move this way before the hook server starts.
+        server.transferPaneAuthority(SOURCE, TARGET, 'pty-1', now, { authorityVerified: false })
+
+        await server.start({ env: 'production', userDataPath })
+
+        expect(server.attestCompatibilityAuthority(candidate)).toEqual({
+          paneKey: TARGET,
+          source: 'hydrated_commitment'
+        })
+      } finally {
+        server.stop()
+        vi.useRealTimers()
+        rmSync(userDataPath, { recursive: true, force: true })
+      }
     })
   })
 
