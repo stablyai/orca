@@ -17716,6 +17716,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "El host de ejecución guardado ya no coincide con esta configuración del proyecto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "La configuración de inicio del agente requiere una sesión nueva en cada ejecución."
         }
       },
       "agent": {

@@ -6,4 +6,8 @@ export type AgentPaneLaunchRequest = {
   launch: Omit<z.input<typeof AgentLaunch>, 'paneKey' | 'operationId'>
   /** The window submits a prompt into this agent once it starts, so no startup update may take it. */
   suppressStartupUpdatePrompt?: boolean
+  extraAgentArgs?: string
+  startupPromptCarry?: 'force-line'
+  /** Background owners report the launch failure in their existing run result. */
+  returnLaunchFailure?: boolean
 }

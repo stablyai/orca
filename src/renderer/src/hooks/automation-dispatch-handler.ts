@@ -1,3 +1,4 @@
+import { automationTerminalLaunchInputs } from '../../../shared/automation-launch-setup'
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
@@ -190,7 +191,7 @@ export async function handleAutomationDispatchRequest({
       worktreeId: worktree.id,
       resolvedTarget: { worktree, repo: resolved.repo },
       prompt: automation.prompt,
-      ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+      ...automationTerminalLaunchInputs(automation),
       launchSource: 'unknown',
       title: run.title,
       onData: completion.appendOutput,

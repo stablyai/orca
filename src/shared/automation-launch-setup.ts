@@ -1,32 +1,171 @@
-import type { Automation, AutomationLaunchSetupPatch } from './automations-types'
+import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
+import type {
+  Automation,
+  AutomationLaunchSetup,
+  AutomationLaunchSetupPatch
+} from './automations-types'
 import { AutomationLaunchSetupPatch as PatchSchema } from './rpc-contract/automation-params'
+import {
+  automationLaunchChoices,
+  automationArgumentChoices,
+  automationLaunchInputs,
+  automationLegacyArguments,
+  editAutomationLegacyArguments,
+  patchAutomationChoices
+} from './automation-launch-setup-source'
+import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
+import type { TuiAgent } from './tui-agent'
+
+export function automationCanonicalLaunchSetup(
+  automation: AutomationLaunchSetup & { launchSetup?: AutomationLaunchSetup }
+): AutomationLaunchSetup {
+  if (automation.launchSetup) {
+    return { ...automation.launchSetup }
+  }
+  return {
+    ...(automation.surface !== undefined ? { surface: automation.surface } : {}),
+    ...(automation.extraAgentArgs !== undefined
+      ? { extraAgentArgs: automation.extraAgentArgs }
+      : {}),
+    ...(automation.launchPreferences !== undefined
+      ? { launchPreferences: automation.launchPreferences }
+      : {}),
+    ...(automation.agentArgs !== undefined ? { agentArgs: automation.agentArgs } : {})
+  }
+}
+
+export function hasModernAutomationLaunchSetup(setup: AutomationLaunchSetup): boolean {
+  return setup.launchPreferences !== undefined || setup.agentArgs !== undefined
+}
 
 export function applyAutomationLaunchSetupPatch<
-  T extends { extraAgentArgs?: string; launchSetupPatch?: AutomationLaunchSetupPatch }
->(input: T): Omit<T, 'launchSetupPatch'> & Pick<Automation, 'surface' | 'extraAgentArgs'> {
-  const { launchSetupPatch, ...rest } = input
-  if (launchSetupPatch === undefined) {
-    return rest
+  T extends {
+    agentId?: TuiAgent
+    extraAgentArgs?: string
+    launchSetupPatch?: AutomationLaunchSetupPatch
   }
-  if (input.extraAgentArgs !== undefined) {
+>(
+  input: T,
+  current?: AutomationLaunchSetup & Pick<Automation, 'agentId'>
+): Omit<T, 'launchSetupPatch'> & AutomationLaunchSetup {
+  const { launchSetupPatch, ...rest } = input
+  if (input.extraAgentArgs !== undefined && typeof input.extraAgentArgs !== 'string') {
+    throw new Error('Extra agent arguments must be text.')
+  }
+  const patch = launchSetupPatch === undefined ? undefined : PatchSchema.parse(launchSetupPatch)
+  if (patch && input.extraAgentArgs !== undefined) {
     throw new Error('Save automation arguments through one launch setup change.')
   }
-  const patch = PatchSchema.parse(launchSetupPatch)
+  const agent = input.agentId ?? current?.agentId
+  if (!agent) {
+    throw new Error('Choose an automation agent.')
+  }
+  const rebind = current !== undefined && agent !== current.agentId
+  let setup = current ? automationCanonicalLaunchSetup(current) : {}
+  if (rebind) {
+    const visible = input.extraAgentArgs ?? automationLegacyArguments(current.agentId, setup)
+    setup = { surface: setup.surface }
+    if (patch?.arguments === undefined && patch?.copy === undefined && hasExtraAgentArgs(visible)) {
+      const parsed = parseExtraAgentArgs({ agent, extraAgentArgs: visible })
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      setup.extraAgentArgs = visible
+    }
+  }
+  if (patch?.copy) {
+    setup = { ...patch.copy }
+  }
+  if (patch?.surface !== undefined) {
+    setup.surface = patch.surface
+  }
+  const legacy =
+    patch?.arguments?.kind === 'legacy-extras' ? patch.arguments.value : input.extraAgentArgs
+  if (legacy !== undefined) {
+    // Dormant legacy Chat source keeps its existing grammar and never becomes a modern Chat pick.
+    setup =
+      setup.surface === 'chat' && !hasModernAutomationLaunchSetup(setup)
+        ? { ...setup, extraAgentArgs: hasExtraAgentArgs(legacy) ? legacy : undefined }
+        : editAutomationLegacyArguments(agent, setup, legacy)
+  }
+  if (patch?.arguments && patch.arguments.kind !== 'legacy-extras') {
+    delete setup.extraAgentArgs
+    if (patch.arguments.kind === 'inherit') {
+      delete setup.agentArgs
+    } else {
+      setup.agentArgs = patch.arguments.kind === 'empty' ? null : patch.arguments.value || null
+      const source = automationArgumentChoices(agent, setup.agentArgs ?? '')
+      const accepted = reconcileAgentChoiceArgsDetailed({
+        agent,
+        userArgs: setup.agentArgs ?? '',
+        choices: automationLaunchChoices(setup),
+        mode: 'arguments-edit',
+        keys: new Set(source.recognized.map((entry) => entry.key))
+      })
+      const preferences = {
+        ...setup.launchPreferences,
+        options: { ...setup.launchPreferences?.options }
+      }
+      for (const [key, value] of Object.entries(accepted.effects.options ?? {})) {
+        if (value === null) {
+          preferences.options[key] = null
+        }
+      }
+      for (const occurrence of accepted.recognized) {
+        if (occurrence.key === 'model') {
+          delete preferences.model
+        } else if (occurrence.key === 'permissionMode') {
+          delete preferences.permissionMode
+        } else {
+          delete preferences.options[occurrence.key]
+        }
+      }
+      if (setup.launchPreferences !== undefined) {
+        setup.launchPreferences = preferences
+      }
+    }
+  }
+  if (patch?.choices) {
+    setup = patchAutomationChoices(agent, setup, patch.choices)
+  }
   return {
     ...rest,
-    ...(patch.surface ? { surface: patch.surface } : {}),
-    ...(patch.arguments ? { extraAgentArgs: patch.arguments.value } : {})
+    surface: setup.surface,
+    extraAgentArgs: setup.extraAgentArgs,
+    launchPreferences: setup.launchPreferences,
+    agentArgs: setup.agentArgs
   }
 }
 
 export function automationWithLaunchSetup(automation: Automation): Automation {
+  const launchSetup = automationCanonicalLaunchSetup(automation)
   return {
-    ...automation,
-    launchSetup: {
-      ...(automation.surface ? { surface: automation.surface } : {}),
-      ...(automation.extraAgentArgs !== undefined
-        ? { extraAgentArgs: automation.extraAgentArgs }
-        : {})
-    }
+    ...automationCanonicalDefinition(automation),
+    ...(automationLegacyArguments(automation.agentId, launchSetup) !== undefined
+      ? { extraAgentArgs: automationLegacyArguments(automation.agentId, launchSetup) }
+      : {}),
+    launchSetup
   }
+}
+
+export function automationTerminalLaunchInputs(automation: Automation) {
+  const setup = automationCanonicalLaunchSetup(automation)
+  const { agentArgs, sessionOptions } = automationLaunchInputs(automation.agentId, setup)
+  return {
+    ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(sessionOptions ? { sessionOptions } : {}),
+    ...(setup.extraAgentArgs ? { extraAgentArgs: setup.extraAgentArgs } : {})
+  }
+}
+
+export function automationCanonicalDefinition(automation: Automation): Automation {
+  const {
+    launchSetup: _view,
+    surface: _surface,
+    extraAgentArgs: _extra,
+    launchPreferences: _choices,
+    agentArgs: _args,
+    ...rest
+  } = automation
+  return { ...rest, ...automationCanonicalLaunchSetup(automation) }
 }

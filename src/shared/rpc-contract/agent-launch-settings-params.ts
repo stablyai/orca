@@ -17,7 +17,7 @@ const OptionKey = ChoiceValue.refine(
   (key) =>
     !['__proto__', 'constructor', 'prototype', 'agentId', 'model', 'permissionMode'].includes(key)
 )
-const ChoicePatch = z
+export const ChoicePatch = z
   .object({
     model: ChoiceValue.nullable().optional(),
     options: z

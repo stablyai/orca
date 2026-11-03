@@ -17,8 +17,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
   store: Store
   agentType: AgentType
   worktreeId: string
-  launchConfig: RegisterArgs[1]
-  env: Record<string, string> | undefined
 }): {
   reservedTabId: string
   leafId: string
@@ -37,7 +35,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
     tabId: reservedTabId,
     leafId
   }
-  args.store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
   return {
     reservedTabId,
     leafId,
@@ -45,7 +42,6 @@ export function reserveAgentBackgroundSessionIdentity(args: {
     launchToken,
     launchRegistration,
     paneEnv: {
-      ...args.env,
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: reservedTabId,
       ORCA_WORKTREE_ID: args.worktreeId,
@@ -60,7 +56,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
   reservedTabId: string
   ptyId: string
   paneKey: PaneKey
-  launchConfig: RegisterArgs[1]
+  launchConfig?: RegisterArgs[1]
   launchRegistration: NonNullable<RegisterArgs[2]>
   runtimeTarget: RuntimeClientTarget
   runtimeTerminalHandle: string | null
@@ -105,7 +101,9 @@ export async function adoptAgentBackgroundSessionTab(args: {
     ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { initialLeafId: parsePaneKey(args.paneKey)?.leafId } : {})
   })
   const paneKey = args.paneKey
-  store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  if (args.launchConfig) {
+    store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  }
   const terminalOwnership = bindAutomationTerminal(
     tab,
     paneKey,

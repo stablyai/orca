@@ -1,3 +1,8 @@
+import {
+  hasModernAutomationLaunchSetup,
+  automationCanonicalLaunchSetup
+} from '../../shared/automation-launch-setup'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import {
@@ -236,6 +241,17 @@ async function request(
     requiredOrcadMigrationSourceCapability(manifest.source),
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
+      if (
+        (operation === 'stage' || operation === 'commit') &&
+        (manifest.payload.dormantState?.automations ?? []).some((automation) =>
+          hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
+        ) &&
+        !capabilities.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error(
+          'Update Orca on the destination host to keep automation agent launch settings.'
+        )
+      }
       const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
       if (unsupported) {
         throw new Error(orcadMigrationBlobKindUnsupportedBlocker(unsupported))

@@ -25,6 +25,7 @@ import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 import type { Repo } from '../../../../shared/repo-types'
 import { unscopedAutomationListRows, type AutomationListRow } from './automation-list-row-identity'
 import {
@@ -230,19 +231,37 @@ describe('AutomationsPage edit destination', () => {
     expect(mocks.editorDialog?.editDestination?.moveWarning).toBeFalsy()
   })
 
-  it.each(['legacy', 'chat'] as const)(
+  it.each(['legacy', 'chat', 'modern'] as const)(
     'moves the saved %s record across authorities by creating there and deleting here',
     async (surface) => {
       const automation = makeAutomation({
         id: 'a-1',
-        ...(surface === 'chat' ? { surface, extraAgentArgs: '--model opus' } : {})
+        ...(surface === 'chat' ? { surface, extraAgentArgs: '--model opus' } : {}),
+        ...(surface === 'modern'
+          ? {
+              surface: 'chat',
+              launchSetup: {
+                surface: 'chat',
+                agentArgs: '--verbose',
+                extraAgentArgs: '--add-dir docs',
+                launchPreferences: { model: null, options: { fastMode: 'true' } }
+              }
+            }
+          : {})
       })
       api.automations.list.mockResolvedValue([])
       scopedList([automation])
       runtimeHost([], [])
       addRuntimeProject()
-      if (surface === 'chat') {
+      if (surface !== 'legacy') {
         capableChatDestination()
+      }
+      if (surface === 'modern') {
+        const capabilities = [...CHAT_CAPABILITIES, AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY]
+        mocks.state.runtimeStatusByEnvironmentId = new Map([
+          [RUNTIME_ID, { status: { capabilities } }]
+        ])
+        mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities })
       }
       const removed = Promise.withResolvers<void>()
       api.automations.delete.mockReturnValueOnce(removed.promise)
@@ -288,6 +307,12 @@ describe('AutomationsPage edit destination', () => {
             arguments: { kind: 'legacy-extras', value: '--model opus' }
           }
         })
+      }
+      if (surface === 'modern') {
+        expect(createRpcCalls()[0]?.[2]).toMatchObject({
+          launchSetupPatch: { copy: automation.launchSetup }
+        })
+        expect(createRpcCalls()[0]?.[2]).not.toHaveProperty('extraAgentArgs')
       }
       expect(api.automations.delete).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-1' }))
       const createIndex = mocks.callRuntimeRpc.mock.calls.findIndex(

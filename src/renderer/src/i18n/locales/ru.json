@@ -18501,6 +18501,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "Сохранённый хост запуска больше не соответствует этой настройке проекта."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Настройки запуска агента требуют нового сеанса для каждого запуска."
         }
       },
       "agent": {

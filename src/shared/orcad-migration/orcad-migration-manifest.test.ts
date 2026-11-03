@@ -263,6 +263,8 @@ describe('orcad migration manifest', () => {
       prompt: 'Run tests',
       precheck: null,
       agentId: 'codex',
+      launchPreferences: { model: null, options: { effort: 'high', speed: 'fast' } },
+      agentArgs: '--search --add-dir docs',
       runContext: {
         kind: 'workspace-run',
         projectId: 'repo:repo-1',
@@ -372,6 +374,31 @@ describe('orcad migration manifest', () => {
     }
     const importedChat = parseOrcadMigrationManifest(chatCandidate).payload.dormantState
     expect(importedChat?.automations?.[0].surface).toBe('chat')
+    expect(importedChat?.automations?.[0]).toMatchObject({
+      launchPreferences: automation.launchPreferences,
+      agentArgs: automation.agentArgs
+    })
+    const generatedView = parseOrcadMigrationManifest({
+      ...chatCandidate,
+      payload: {
+        ...chatCandidate.payload,
+        dormantState: {
+          ...chatCandidate.payload.dormantState,
+          automations: [
+            {
+              ...automation,
+              launchSetup: { surface: 'chat', agentArgs: null, launchPreferences: { model: null } }
+            }
+          ]
+        }
+      }
+    }).payload.dormantState?.automations?.[0]
+    expect(generatedView).toMatchObject({
+      surface: 'chat',
+      agentArgs: null,
+      launchPreferences: { model: null }
+    })
+    expect(generatedView).not.toHaveProperty('launchSetup')
     expect(importedChat?.automationRuns?.[0]).toMatchObject({
       sessionKind: 'chat',
       chatSessionId: 'claude_chat',

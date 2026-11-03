@@ -45,6 +45,7 @@ export const AgentLaunchPicker = memo(
     cli,
     children,
     onTriggerEnter,
+    onOpenChange,
     onCatalogOpen,
     onOpenAgentSettings,
     onPick
@@ -65,6 +66,7 @@ export const AgentLaunchPicker = memo(
     cli?: boolean
     children?: ReactNode
     onTriggerEnter?: () => void
+    onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
@@ -81,12 +83,13 @@ export const AgentLaunchPicker = memo(
     const trigger = useRef<HTMLButtonElement>(null)
     const openAgentSettings = useCallback(() => {
       setOpen(false)
+      onOpenChange?.(false)
       if (onOpenAgentSettings) {
         onOpenAgentSettings(trigger.current!)
       } else {
         setSettingsOpen(true)
       }
-    }, [onOpenAgentSettings])
+    }, [onOpenAgentSettings, onOpenChange])
     const [open, setOpen] = useState(false)
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
     const observedEntries = useAgentLaunchPickerInventory(
@@ -121,7 +124,13 @@ export const AgentLaunchPicker = memo(
       : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
     return (
       <div className="space-y-2">
-        <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenu
+          open={open}
+          onOpenChange={(next) => {
+            setOpen(next)
+            onOpenChange?.(next)
+          }}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               ref={trigger}

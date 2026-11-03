@@ -1,4 +1,13 @@
-import type { Automation, AutomationUpdateInput } from '../../../../shared/automations-types'
+import {
+  applyAutomationLaunchSetupPatch,
+  automationCanonicalLaunchSetup,
+  hasModernAutomationLaunchSetup
+} from '../../../../shared/automation-launch-setup'
+import type {
+  Automation,
+  AutomationUpdateInput,
+  AutomationCreateInput
+} from '../../../../shared/automations-types'
 import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -87,10 +96,13 @@ export function automationDraftSurface(
 }
 
 export function automationDraftLaunchSetup(
-  draft: Pick<AutomationDraft, 'extraAgentArgs'>,
+  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'launchSetupPatch'>,
   surface: 'chat' | 'terminal',
   currentAutomation: Automation | null
 ): Pick<AutomationUpdateInput, 'launchSetupPatch' | 'extraAgentArgs'> {
+  if (draft.launchSetupPatch) {
+    return { launchSetupPatch: { ...draft.launchSetupPatch, surface } }
+  }
   const argumentsChanged =
     hasExtraAgentArgs(draft.extraAgentArgs) || currentAutomation?.extraAgentArgs
   return surface === 'chat' || currentAutomation?.surface === 'chat'
@@ -105,4 +117,24 @@ export function automationDraftLaunchSetup(
     : argumentsChanged
       ? { extraAgentArgs: draft.extraAgentArgs }
       : {}
+}
+
+export function automationCopyLaunchSetup(
+  current: Automation | null,
+  updates: AutomationUpdateInput,
+  input: AutomationCreateInput
+): AutomationCreateInput {
+  if (!current) {
+    return input
+  }
+  const copied = applyAutomationLaunchSetupPatch(
+    { ...updates, agentId: updates.agentId ?? current.agentId },
+    current
+  )
+  const canonical = automationCanonicalLaunchSetup(copied)
+  if (!hasModernAutomationLaunchSetup(canonical)) {
+    return input
+  }
+  const { extraAgentArgs: _extras, ...rest } = input
+  return { ...rest, launchSetupPatch: { copy: canonical } }
 }

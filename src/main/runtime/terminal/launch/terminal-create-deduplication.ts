@@ -1,3 +1,5 @@
+import { agentPromptRidesLaunchCommand } from '../../../../shared/tui-agent-startup'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -179,6 +181,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       agent: TuiAgent
       prompt: string
       title?: string
+      agentArgs?: string | null
+      sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
@@ -197,30 +201,19 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
-      ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-      launchScope: await this.resolveTerminalWorkspaceLaunchScope(
-        `id:${worktree.id}`,
-        undefined,
-        { wslUserAct: opts.wslUserAct === true },
-        worktree,
-        resolvedTarget?.folderWorkspace
-      )
-    })
-    if (startup.launchRuntime instanceof Error) {
-      throw startup.launchRuntime
-    }
+    const prompt = opts.prompt.trim()
+    const commandPrompt = agentPromptRidesLaunchCommand(opts.agent)
     const terminal = await this.createTerminal(
       `id:${worktree.id}`,
       {
-        command: startup.startup.command,
-        env: startup.startup.env,
-        ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
-        launchAgent: startup.agent,
-        launchRuntime: startup.launchRuntime,
-        startupCommandDelivery: startup.startup.startupCommandDelivery,
-        telemetry: startup.startup.telemetry,
+        startupAgent: opts.agent,
+        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        ...(opts.sessionOptions !== undefined ? { sessionOptions: opts.sessionOptions } : {}),
+        ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+        ...(prompt && commandPrompt ? { startupPrompt: prompt } : {}),
+        startupPromptCarry: 'force-line',
+        startupPromptDelivery: 'auto-submit',
+        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         title: opts.title,
         ...(opts.wslUserAct ? { wslUserAct: true } : {})
       },
@@ -228,11 +221,14 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       worktree,
       resolvedTarget?.folderWorkspace
     )
-    // Why: agents that read the prompt after they start get it typed in, not on argv.
-    if (startup.followup) {
-      void this.deliverStartupFollowup(terminal.handle, startup.followup, {
-        terminalCreation: terminal
-      })
+    if (prompt && !commandPrompt) {
+      void this.deliverStartupFollowup(
+        terminal.handle,
+        { agent: opts.agent, prompt },
+        {
+          terminalCreation: terminal
+        }
+      )
     }
     return terminal
   }

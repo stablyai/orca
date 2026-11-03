@@ -16,7 +16,10 @@ import { combineLaunchWarnings } from '../../../agent-launch/agent-launch-warnin
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
+import {
+  toAgentLaunchPreferences,
+  toAgentSessionOptionValues
+} from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
 import { agentLaunchFolderWorkspaceCreator } from './agent-launch-folder-workspace-creation'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
@@ -105,6 +108,9 @@ export function agentLaunchWorkspaceFactory(
           ...(launchSource ? { startupLaunchSource: launchSource } : {}),
           ...(paneKey ? { startupPaneKey: paneKey } : {}),
           ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
+          ...(startupAgent && options
+            ? { startupSessionOptions: toAgentSessionOptionValues(options) }
+            : {}),
           ...(accountEnv ? { startupAccountEnv: { ...accountEnv } } : {}),
           // Record the launch's agent on the workspace even when it has no startup terminal.
           createdWithAgent: agent,

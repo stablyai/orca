@@ -1,5 +1,5 @@
-import { AutomationSurfaceField } from './AutomationSurfaceField'
-import AgentCombobox from '@/components/agent/AgentCombobox'
+import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
+import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { translate } from '@/i18n/i18n'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -17,12 +17,12 @@ import { AutomationSessionField } from './AutomationSessionField'
 import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
 import { AutomationDestinationField } from './AutomationDestinationField'
-import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationEditorSettingsSidebarProps = {
   /** The host picker: where a create lands, or the host an edit can move the record to. */
+  launchWorkspace?: ProspectiveWorkspace
   surface: 'chat' | 'terminal'
   chatSupported: boolean | null
   destination?: AutomationCreateDestinationControl
@@ -47,6 +47,7 @@ type AutomationEditorSettingsSidebarProps = {
 
 export function AutomationEditorSettingsSidebar({
   destination,
+  launchWorkspace,
   surface,
   chatSupported,
   repos,
@@ -78,24 +79,22 @@ export function AutomationEditorSettingsSidebar({
               'Agent'
             )}
           >
-            <AgentCombobox
-              agents={visibleAgents}
-              value={draft.agentId}
-              onValueChange={(agentId) => onDraftChange((current) => ({ ...current, agentId }))}
-              defaultAgent={settings?.defaultTuiAgent ?? null}
-              triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
-              allowNarrowTrigger
+            <AutomationAgentLaunchPicker
+              draft={draft}
+              workspace={
+                launchWorkspace ?? {
+                  kind: 'git-worktree',
+                  repoId: draft.projectId,
+                  worktreeId: draft.workspaceId || undefined
+                }
+              }
+              visibleAgents={visibleAgents}
+              settings={settings}
+              surface={surface}
+              chatSupported={chatSupported}
+              onDraftChange={onDraftChange}
             />
           </Field>
-          <AutomationSurfaceField
-            draft={draft}
-            settings={settings}
-            supported={chatSupported}
-            onDraftChange={onDraftChange}
-          />
-          {surface === 'terminal' ? (
-            <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
-          ) : null}
         </div>
         {destination ? (
           <div className="mb-4">

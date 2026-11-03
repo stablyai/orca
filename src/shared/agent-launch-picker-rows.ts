@@ -1,3 +1,4 @@
+import type { AgentPickerEntry } from './agent-launch-picker'
 import type { GlobalSettings } from './global-settings-types'
 import {
   nativeChatPreferenceFor,
@@ -125,4 +126,19 @@ export function buildNewTabAgentMenuRows(args: {
       ...(chatToo.has(agent) ? { chat: true as const } : {})
     }))
   ]
+}
+
+export function agentPickerHydrationQueue(
+  entries: readonly AgentPickerEntry[],
+  selected: () => TuiAgent | undefined
+): () => number | undefined {
+  const pending = new Set(entries.flatMap((entry, index) => (entry.surfaces.length ? [index] : [])))
+  return () => {
+    const preferred = entries.findIndex((entry) => entry.agent === selected())
+    const index = pending.has(preferred) ? preferred : pending.values().next().value
+    if (index !== undefined) {
+      pending.delete(index)
+    }
+    return index
+  }
 }

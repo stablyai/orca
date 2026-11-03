@@ -11,6 +11,8 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
+  AutomationLaunchPreferences,
+  AutomationLaunchSetupPatch,
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
@@ -49,6 +51,9 @@ export type AutomationDraft = {
   surface?: 'chat' | 'terminal'
   /** Saved as-is; empty means none. */
   extraAgentArgs: string
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
+  launchSetupPatch?: AutomationLaunchSetupPatch
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
@@ -191,6 +196,7 @@ export function AutomationEditorDialog({
             onDismiss={() => onOpenChange(false)}
           />
           <AutomationEditorSettingsSidebar
+            launchWorkspace={launchWorkspace}
             destination={destination}
             surface={surface}
             chatSupported={chatSupported}

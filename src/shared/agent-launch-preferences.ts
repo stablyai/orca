@@ -47,3 +47,14 @@ export function agentLaunchNeedsPreparedCommand(
 }
 
 export const agentPermissionNeedsPreparedCommand = agentLaunchNeedsPreparedCommand
+
+export function toAgentSessionOptionValues(values: Readonly<Record<string, unknown>> | undefined) {
+  return values === undefined
+    ? undefined
+    : Object.fromEntries(
+        Object.entries(values).filter(
+          (entry): entry is [string, string | boolean] =>
+            typeof entry[1] === 'string' || typeof entry[1] === 'boolean'
+        )
+      )
+}

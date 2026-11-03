@@ -65,6 +65,8 @@ export const DORMANT_AUTOMATION: Automation = {
   prompt: 'Run tests',
   precheck: null,
   agentId: 'codex',
+  launchPreferences: { model: null, options: { speed: 'fast' } },
+  agentArgs: '--search --add-dir docs',
   runContext: {
     kind: 'workspace-run',
     projectId: 'repo:repo-1',

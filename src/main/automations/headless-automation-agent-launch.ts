@@ -1,3 +1,4 @@
+import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
@@ -137,7 +138,7 @@ export async function launchHeadlessAutomationAgent(
             prompt: startupPrompt ?? '',
             title: run.title,
             suppressStartupUpdatePrompt: true,
-            ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
+            ...automationTerminalLaunchInputs(automation),
             // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
             ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
           },

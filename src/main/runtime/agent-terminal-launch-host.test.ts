@@ -16,13 +16,6 @@ const REMOTE_PATH = '/srv/app-feature'
 
 type RuntimeInternals = {
   resolveGitWorktreeSelector: (selector: string) => Promise<unknown>
-  buildStartupForAgent: (
-    repo: unknown,
-    agent: unknown,
-    prompt: string,
-    args?: unknown,
-    options?: unknown
-  ) => unknown
   createTerminal: (
     selector: string,
     opts: unknown,
@@ -49,12 +42,21 @@ function makeRuntime(
     path: REMOTE_PATH,
     ...(hostId ? { hostId } : {})
   })
-  const buildStartup = vi.spyOn(internals, 'buildStartupForAgent').mockReturnValue({
-    agent: 'codex',
-    startup: { command: 'codex', env: {}, startupCommandDelivery: 'none', telemetry: {} }
-  })
-  vi.spyOn(internals, 'createTerminal').mockResolvedValue({ id: 'pty-1' })
-  return { runtime, buildStartup }
+  const launchScope = vi.fn()
+  vi.spyOn(runtime, 'createTerminal').mockImplementation(
+    async (selector = '', opts = {}, created, resolved, folder) => {
+      const scope = await runtime.resolveTerminalWorkspaceLaunchScope(
+        selector,
+        created,
+        { wslUserAct: opts.wslUserAct === true },
+        resolved,
+        folder
+      )
+      launchScope(scope)
+      return { handle: 'terminal-1', worktreeId: scope.id, title: null }
+    }
+  )
+  return { runtime, launchScope }
 }
 
 describe('launchAgentTerminal execution host', () => {
@@ -67,7 +69,7 @@ describe('launchAgentTerminal execution host', () => {
       badgeColor: '#000'
     }
     const remote: Repo = { ...local, connectionId: 'builder' }
-    const { runtime, buildStartup } = makeRuntime([local, remote], 'ssh:builder')
+    const { runtime, launchScope } = makeRuntime([local, remote], 'ssh:builder')
     const git = { path: '/same', head: 'abc', branch: 'main', isMainWorktree: true, isBare: false }
     const worktree = {
       ...mergeWorktree(remote.id, git, undefined),
@@ -87,10 +89,9 @@ describe('launchAgentTerminal execution host', () => {
       { agent: 'codex', prompt: 'Review' },
       { worktree, repo: remote }
     )
-    expect(buildStartup.mock.calls[0]?.[0]).toEqual(remote)
-    expect(buildStartup.mock.calls[0]?.[4]).toMatchObject({
-      launchScope: { connectionId: 'builder', repo: remote, path: '/same' }
-    })
+    expect(launchScope).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'builder', repo: remote, path: '/same' })
+    )
     expect(internals.createTerminal).toHaveBeenCalledWith(
       `id:${worktree.id}`,
       expect.any(Object),
@@ -105,7 +106,7 @@ describe('launchAgentTerminal execution host', () => {
   })
 
   it('builds the launch for the host the worktree names, not a rival row', async () => {
-    const { runtime, buildStartup } = makeRuntime(
+    const { runtime, launchScope } = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },
         { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }
@@ -118,11 +119,11 @@ describe('launchAgentTerminal execution host', () => {
       prompt: 'go'
     })
 
-    expect(buildStartup.mock.calls[0]?.[0]).toMatchObject({ connectionId: 'm4air' })
+    expect(launchScope).toHaveBeenCalledWith(expect.objectContaining({ connectionId: 'm4air' }))
   })
 
   it('builds a local launch for a local worktree even when a remote row shares the id', async () => {
-    const { runtime, buildStartup } = makeRuntime(
+    const { runtime, launchScope } = makeRuntime(
       [
         { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
         { id: 'repo-shared', path: '/home/me/app' }
@@ -135,8 +136,12 @@ describe('launchAgentTerminal execution host', () => {
       prompt: 'go'
     })
 
-    expect(buildStartup.mock.calls[0]?.[0]).toMatchObject({ path: '/home/me/app' })
-    expect(buildStartup.mock.calls[0]?.[0]).not.toHaveProperty('connectionId')
+    expect(launchScope).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repo: expect.objectContaining({ path: '/home/me/app' }),
+        connectionId: null
+      })
+    )
   })
 
   it('refuses rather than guessing when rival rows disagree and the worktree names no host', async () => {

@@ -17731,6 +17731,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "儲存的執行主機與此專案設定不再相符。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "代理程式啟動設定要求每次執行都使用新工作階段。"
         }
       },
       "agent": {

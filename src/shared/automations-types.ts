@@ -1,6 +1,17 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type { AgentChoicePatch } from './agent-launch-choices'
+
+export type AutomationLaunchPreferences = Omit<AgentChoicePatch, 'permissionMode'> & {
+  permissionMode?: Exclude<AgentChoicePatch['permissionMode'], 'default'>
+}
+export type AutomationLaunchSetup = {
+  surface?: 'chat' | 'terminal'
+  extraAgentArgs?: string
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
+}
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -90,7 +101,10 @@ export type AutomationPrecheckResult = {
 
 export type AutomationLaunchSetupPatch = {
   surface?: 'chat' | 'terminal'
-  arguments?: { kind: 'legacy-extras'; value: string }
+  choices?: AgentChoicePatch
+  arguments?: { kind: 'legacy-extras' | 'value'; value: string } | { kind: 'empty' | 'inherit' }
+  /** Canonical copies travel inside the strict envelope old hosts reject. */
+  copy?: AutomationLaunchSetup
 }
 
 export type Automation = {
@@ -102,7 +116,9 @@ export type Automation = {
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
   surface?: 'chat' | 'terminal'
-  launchSetup?: { surface?: 'chat' | 'terminal'; extraAgentArgs?: string }
+  launchSetup?: AutomationLaunchSetup
+  launchPreferences?: AutomationLaunchPreferences
+  agentArgs?: string | null
   /** Saved text appended to the host's default agent Arguments on each fresh run; absent means none. */
   extraAgentArgs?: string
   /** Why: runContext carries the logical project + host setup identity for

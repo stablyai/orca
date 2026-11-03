@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { ChoicePatch } from './agent-launch-settings-params'
+import { AGENT_PERMISSION_CHOICES } from '../tui-agent-permission-choice'
 import { isTuiAgent } from '../tui-agent-config'
 import {
   OptionalBoolean,
@@ -184,12 +186,37 @@ export const AutomationRuns = z.object({
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
 const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
 
+export const AutomationCanonicalLaunchSetup = z.strictObject({
+  surface: z.enum(['chat', 'terminal']).optional(),
+  extraAgentArgs: z.string().optional(),
+  launchPreferences: ChoicePatch.extend({
+    permissionMode: z.enum(AGENT_PERMISSION_CHOICES).optional()
+  }).optional(),
+  agentArgs: z
+    .string()
+    .refine((value) => !value.includes('\0'))
+    .nullable()
+    .optional()
+})
+
 export const AutomationLaunchSetupPatch = z
   .strictObject({
     surface: z.enum(['chat', 'terminal']).optional(),
-    arguments: z.strictObject({ kind: z.literal('legacy-extras'), value: z.string() }).optional()
+    choices: ChoicePatch.optional(),
+    arguments: z
+      .discriminatedUnion('kind', [
+        z.strictObject({ kind: z.literal('legacy-extras'), value: z.string() }),
+        z.strictObject({
+          kind: z.literal('value'),
+          value: z.string().refine((value) => !value.includes('\0'))
+        }),
+        z.strictObject({ kind: z.literal('empty') }),
+        z.strictObject({ kind: z.literal('inherit') })
+      ])
+      .optional(),
+    copy: AutomationCanonicalLaunchSetup.optional()
   })
-  .refine((patch) => patch.surface !== undefined || patch.arguments !== undefined, {
+  .refine((patch) => Object.values(patch).some((value) => value !== undefined), {
     message: 'Choose an automation launch change.'
   })
 

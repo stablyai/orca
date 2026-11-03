@@ -136,6 +136,14 @@ export function useAutomationDraftEffects({
         dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
         customSchedule: '',
         agentId: template.agentId ?? current.agentId,
+        ...(template.agentId && template.agentId !== current.agentId
+          ? {
+              launchPreferences: undefined,
+              agentArgs: undefined,
+              launchSetupPatch: undefined,
+              extraAgentArgs: ''
+            }
+          : {}),
         missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
         scheduleWarning: null
       }))

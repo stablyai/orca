@@ -6,6 +6,7 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { AutomationCreateInput } from '../../../../shared/automations-types'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
@@ -50,6 +51,38 @@ beforeEach(async () => {
 })
 
 describe('extra agent args capability gate', () => {
+  it.each([
+    { arguments: { kind: 'empty' as const } },
+    { choices: { options: { fastMode: 'true' } } },
+    { copy: { agentArgs: null, launchPreferences: { model: null } } }
+  ])(
+    'preserves a complete strict setup and refuses older destinations: %j',
+    async (launchSetupPatch) => {
+      const { createAutomationForDestination, updateAutomationForOwner } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue({
+        capabilities: [...CURRENT_HOST.capabilities, AUTOMATION_SURFACE_RUNTIME_CAPABILITY]
+      })
+      await expect(
+        createAutomationForDestination(
+          RUNTIME,
+          { ...INPUT, launchSetupPatch },
+          { selector: { kind: 'self' } }
+        )
+      ).rejects.toThrow('Update Orca')
+      expect(callRuntimeRpc).not.toHaveBeenCalled()
+      getRuntimeEnvironmentStatus.mockResolvedValue({
+        capabilities: [
+          ...CURRENT_HOST.capabilities,
+          AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
+          AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
+        ]
+      })
+      callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+      await updateAutomationForOwner(OWNER, 'a1', { launchSetupPatch })
+      expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({ updates: { launchSetupPatch } })
+    }
+  )
+
   it('refuses a create on a host without the capability before writing', async () => {
     const { createAutomationForDestination } = await client()
     getRuntimeEnvironmentStatus.mockResolvedValue(LEGACY_HOST)
