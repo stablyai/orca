@@ -3952,7 +3952,9 @@ export class RelayAssignmentStore {
        WHERE user_id = ? AND relay_host_id = ?`,
       [input.userId, input.relayHostId]
     )
-    if (!rows[0]) return input.allowUnassignedBootstrap === true && input.assignmentEpoch === 1
+    if (!rows[0]) {
+      return input.allowUnassignedBootstrap === true && input.assignmentEpoch === 1
+    }
     return (
       text(rows[0], 'cell_id') === input.cellId &&
       integer(rows[0], 'assignment_epoch') === input.assignmentEpoch

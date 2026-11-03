@@ -776,7 +776,9 @@ describe('served relay URL', () => {
     { storedEpoch: 1, helloEpoch: 2, wrongCell: true }
   ])('refuses invalid combined admission: %j', async ({ storedEpoch, helloEpoch, wrongCell }) => {
     const keyPair = nacl.box.keyPair()
-    if (storedEpoch !== undefined) await seedDurableAssignment(keyPair, storedEpoch, wrongCell)
+    if (storedEpoch !== undefined) {
+      await seedDurableAssignment(keyPair, storedEpoch, wrongCell)
+    }
     const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
     const socket = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/host/control`, {
       headers: { authorization: `Bearer ${await relayToken('orca-relay', hostId)}` }
