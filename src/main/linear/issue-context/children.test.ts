@@ -47,6 +47,7 @@ function children(count: number, prefix = 'child'): RawChildIssue[] {
 
 // The provider fixture honors every selected first argument, including nested pages.
 function provider(tree: Record<string, RawChildIssue[]>) {
+  let fetched = 0
   rawRequest.mockImplementation(
     async (query: string, page: { id: string; first: number; after?: string }) => {
       const sizes = [...query.matchAll(/children\(first: (\$first|\d+)/g)].map((match) =>
@@ -55,6 +56,7 @@ function provider(tree: Record<string, RawChildIssue[]>) {
       function connection(id: string, level: number, after = 0): object {
         const all = tree[id] ?? []
         const end = Math.min(all.length, after + sizes[level])
+        fetched += end - after
         return {
           nodes: all.slice(after, end).map((node) => ({
             ...node,
@@ -66,6 +68,7 @@ function provider(tree: Record<string, RawChildIssue[]>) {
       return { data: { issue: { children: connection(page.id, 0, Number(page.after ?? 0)) } } }
     }
   )
+  return () => fetched
 }
 
 describe('nested Linear children', () => {
@@ -95,6 +98,33 @@ describe('nested Linear children', () => {
       expect(
         rawRequest.mock.calls.every(([, page]) => page.id === 'parent' && page.first === 50)
       ).toBe(true)
+    }
+  )
+
+  it.each([
+    { count: 15, depth: 5 },
+    { count: 150, depth: 5 },
+    { count: 200, depth: 5 },
+    { count: 200, depth: 2 }
+  ])(
+    'bounds fetched records before cap allocation: $count roots, depth $depth',
+    async ({ count, depth }) => {
+      const tree: Record<string, RawChildIssue[]> = { parent: children(count) }
+      for (const root of tree.parent) {
+        let id = root.id
+        for (let level = 1; level < depth; level += 1) {
+          const next = child(`${root.id}-level-${level}`)
+          tree[id] = [next]
+          id = next.id
+        }
+      }
+      const fetched = provider(tree)
+      const output = await readChildren(resolved, depth)
+      expect(output.items.map((node) => node.id)).toEqual(tree.parent.map((node) => node.id))
+      expect(output.meta.returned).toBe(Math.min(200, count * depth))
+      expect(rawRequest).toHaveBeenCalledTimes(Math.ceil(count / childrenPageSize(depth)))
+      expect(fetched()).toBe(count * depth)
+      expect(fetched()).toBeLessThanOrEqual(200 * depth)
     }
   )
 
