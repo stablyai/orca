@@ -8,7 +8,7 @@ import type { RpcResponse } from '../transport/types'
 
 it('sends validated TUI scroll batches through the same bounded ordered owner while earlier replies are held', async () => {
   const sent: unknown[] = []
-  const replies: Array<(value: RpcResponse) => void> = []
+  const replies: ((value: RpcResponse) => void)[] = []
   const client = stubRpcClient({
     sendRequest: (method, params, options) => {
       options?.beforeSend?.()

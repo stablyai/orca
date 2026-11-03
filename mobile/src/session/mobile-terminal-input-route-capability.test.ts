@@ -19,7 +19,7 @@ it.each([
   { server: true, desktop: false, relayed: false, ordered: true }
 ])('delivers with route capabilities %j', async ({ server, desktop, relayed, ordered }) => {
   const methods: string[] = []
-  const releases: Array<(reply: RpcResponse) => void> = []
+  const releases: ((reply: RpcResponse) => void)[] = []
   const client = stubRpcClient({
     sendRequest: (method) => {
       methods.push(method)

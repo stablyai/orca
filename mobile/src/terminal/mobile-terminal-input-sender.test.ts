@@ -19,7 +19,7 @@ const params = (text: string, terminal = 'term') =>
 
 function transport(holdOpen = false) {
   const sent: unknown[] = []
-  const releases: Array<(reply: RpcResponse) => void> = []
+  const releases: ((reply: RpcResponse) => void)[] = []
   let open = (_reply: RpcResponse): void => {}
   let generation = 1
   const client = stubRpcClient({

@@ -66,6 +66,7 @@ function setup() {
   }
   return {
     options,
+    client,
     sendRequest,
     onError,
     showToast,
@@ -127,7 +128,7 @@ describe('mobile terminal paste that sends nothing', () => {
   it.each(['open', 'send'])(
     'reports a real ordered sender %s failure instead of paste success',
     async (failure) => {
-      const { options, sendRequest, onError, showToast } = setup()
+      const { options, client, sendRequest, onError, showToast } = setup()
       const sender = new MobileTerminalInputSender()
       sendRequest.mockImplementation(async (method: string) => {
         if (failure === 'send' && method === 'terminal.openInputSession') {
@@ -138,7 +139,7 @@ describe('mobile terminal paste that sends nothing', () => {
       await useMobileTerminalPaste({
         ...options,
         deviceTokenRef: { current: 'phone' },
-        sendTerminalUserInput: (client, params, sendOptions) =>
+        sendTerminalUserInput: (_client, params, sendOptions) =>
           sender.request(client, params, sendOptions, true)
       })()
       expect(onError).toHaveBeenCalledOnce()

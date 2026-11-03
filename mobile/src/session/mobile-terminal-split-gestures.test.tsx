@@ -52,7 +52,7 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
     }))
     const client = {
       sendRequest: request,
-      getState: () => 'connected',
+      getState: () => 'connected' as const,
       getLastConnectedAt: () => null,
       onStateChange: () => () => {}
     }
