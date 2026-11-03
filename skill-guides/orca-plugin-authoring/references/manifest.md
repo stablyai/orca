@@ -49,6 +49,7 @@
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
 - `sidebarCards` (SidebarCardContribution[], since 1.4.248): Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16.
+- `workspaceLists` (WorkspaceListContribution[], since 1.4.248): Arrangements of the left sidebar's workspace list into sections, each rules Orca evaluates; people pick one in the Card Studio. At most 8.
 
 Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`.
 
@@ -188,6 +189,15 @@ A workspace card for the left sidebar, drawn by Orca from a template; it runs no
 - `description` (string, since 1.4.248): One line on what the card emphasizes.
 - `template` (string, required, since 1.4.248): JSON card template, at most 64 KiB. See the workspace card reference.
 - `options` (SettingContribution[], since 1.4.248): Options people set for this card in the Card Studio, in the settings format; the template reads them as `cardOptions.<key>`. At most 24.
+
+## WorkspaceListContribution
+
+An arrangement of the left sidebar's workspace list into sections, drawn by Orca from rules; it runs no code.
+
+- `id` (string, required, since 1.4.248): Arrangement id, unique among this plugin's lists.
+- `title` (string, required, since 1.4.248): Name shown where people pick how the list is arranged.
+- `description` (string, since 1.4.248): One line on how it arranges workspaces.
+- `arrangement` (string, required, since 1.4.248): JSON list arrangement (sections, rules and sort), at most 32 KiB.
 
 ## Capability
 

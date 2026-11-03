@@ -1,3 +1,4 @@
+import { usePluginWorkspaceLists } from '@/store/plugin-workspace-lists'
 import { usePluginSidebarCards } from '@/store/plugin-sidebar-cards'
 import { useEffect, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
@@ -28,6 +29,7 @@ function useInstalledPluginContributionSource(
   const terminalThemes = usePluginTerminalThemes()
   const iconThemes = usePluginIconThemes()
   const sidebarCards = usePluginSidebarCards()
+  const workspaceLists = usePluginWorkspaceLists()
   const syntaxes = usePluginSyntaxes()
   // Why the raw store: usable-only filtering would hide the incomplete packs this page explains.
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
@@ -45,6 +47,7 @@ function useInstalledPluginContributionSource(
       terminalThemes: ours(terminalThemes),
       iconThemes: ours(iconThemes),
       sidebarCards: ours(sidebarCards),
+      workspaceLists: ours(workspaceLists),
       syntaxes: ours(syntaxes).map((syntax) => ({
         ...syntax,
         failed: Boolean(failures[pluginSyntaxRevisionKey(syntax)])
@@ -62,6 +65,7 @@ function useInstalledPluginContributionSource(
     terminalThemes,
     iconThemes,
     sidebarCards,
+    workspaceLists,
     syntaxes,
     languagePacks,
     failures
@@ -111,6 +115,7 @@ function hasLiveContent(source: PluginContributionSource): boolean {
       source.terminalThemes.length +
       source.iconThemes.length +
       source.sidebarCards.length +
+      source.workspaceLists.length +
       source.syntaxes.length +
       source.languagePacks.length >
     0

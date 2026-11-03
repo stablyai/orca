@@ -84,6 +84,7 @@ export function pluginContributionSummary(
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.title),
     ...named('iconThemes', c.iconThemes, (theme) => theme.title),
     ...named('sidebarCards', c.sidebarCards, (card) => card.title),
+    ...named('workspaceLists', c.workspaceLists, (list) => list.title),
     ...named('syntaxes', c.syntaxes, (syntax) => syntax.title, fileMatchDetail),
     ...named('customEditors', c.customEditors, (editor) => editor.title, fileMatchDetail),
     ...named(

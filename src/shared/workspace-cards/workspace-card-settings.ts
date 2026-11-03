@@ -4,4 +4,6 @@ export type WorkspaceCardSettings = {
   workspaceCardId?: string
   /** Option values by card id, then option key; unset keys use the card's declared defaults. */
   workspaceCardOptions?: Record<string, Record<string, string | number | boolean>>
+  /** A plugin list arrangement, `plugin:<pluginKey>/<listId>`; unset keeps Orca's grouping. */
+  workspaceListId?: string
 }

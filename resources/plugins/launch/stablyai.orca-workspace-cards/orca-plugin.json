@@ -5,7 +5,7 @@
   "name": "Workspace Cards",
   "version": "1.0.0",
   "execution": "data",
-  "description": "Three workspace cards from Orca: Minimal, Agent first and Review first.",
+  "description": "Three workspace cards from Orca (Minimal, Agent first, Review first) and an Attention flow list.",
   "license": "MIT",
   "engines": { "orca": ">=1.4.248" },
   "contributes": {
@@ -35,6 +35,14 @@
         "title": "Review first",
         "description": "The pull request leads, with its checks and conflicts.",
         "template": "cards/review-first.json"
+      }
+    ],
+    "workspaceLists": [
+      {
+        "id": "attention-flow",
+        "title": "Attention flow",
+        "description": "Workspaces that need you on top, busy ones under Working, finished ones folded away.",
+        "arrangement": "lists/attention-flow.json"
       }
     ]
   }

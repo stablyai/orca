@@ -1,3 +1,4 @@
+import type { PluginWorkspaceListRegistration } from '../../shared/plugins/artifacts/plugin-workspace-list-artifact'
 import type { PluginSidebarCardRegistration } from '../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
 import type { EditorSaveHookDecision } from '../../shared/plugins/events/plugin-editor-save-hook'
@@ -154,6 +155,7 @@ export type PluginsApi = {
   listThemes: () => Promise<PluginThemeRegistration[]>
   listTerminalThemes: () => Promise<PluginTerminalThemeRegistration[]>
   listSidebarCards: () => Promise<PluginSidebarCardRegistration[]>
+  listWorkspaceLists: () => Promise<PluginWorkspaceListRegistration[]>
   listIconThemes: () => Promise<PluginIconThemeMetadata[]>
   /** One icon theme's images, read only once it is selected. */
   loadIconTheme: (id: string) => Promise<PluginIconThemeRegistration | null>

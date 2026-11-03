@@ -1,3 +1,4 @@
+import { parsePluginWorkspaceListArtifact } from '../artifacts/plugin-workspace-list-artifact'
 import { z } from 'zod'
 import {
   isPlausiblePluginIconSvg,
@@ -145,7 +146,12 @@ export function strictPluginArtifactErrors(
     const error = check(read, card.template, parsePluginSidebarCardArtifact)
     return error ? [`contributes.sidebarCards "${card.id}" (${card.template}): ${error}`] : []
   })
+  const listErrors = c.workspaceLists.flatMap((list) => {
+    const error = check(read, list.arrangement, parsePluginWorkspaceListArtifact)
+    return error ? [`contributes.workspaceLists "${list.id}" (${list.arrangement}): ${error}`] : []
+  })
   return [
+    ...listErrors,
     ...themeErrors,
     ...svgErrors,
     ...backgroundErrors,

@@ -22,6 +22,7 @@ export function summaryContributionSource(
     })),
     iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
     sidebarCards: of('sidebarCards').map((item) => ({ id: item.name, label: item.name })),
+    workspaceLists: of('workspaceLists').map((item) => ({ id: item.name, label: item.name })),
     syntaxes: of('syntaxes').map((item) => ({
       id: item.name,
       label: item.name,
