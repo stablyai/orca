@@ -46,13 +46,24 @@ function spawnCard(
   ]
 }
 
+function spawnMessage(host: NativeChatMessage, blocks: NativeChatBlock[]): NativeChatMessage {
+  return {
+    id: `spawn:${host.id}`,
+    role: host.role,
+    blocks,
+    timestamp: host.timestamp,
+    source: host.source
+  }
+}
+
 /** A spawn card for each roster child no Agent, Task, or spawn call already names. */
 export function linkUnrecordedSubagentSpawns(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
   const linked = linkedSpawnIds(messages)
+  const next: NativeChatMessage[] = []
   let changed = false
-  const next = messages.map((message) => {
+  for (const message of messages) {
     const cards: NativeChatBlock[] = []
     for (const block of message.blocks) {
       if (!isSubagentGroupBlock(block)) {
@@ -64,10 +75,32 @@ export function linkUnrecordedSubagentSpawns(
         }
         linked.add(agent.id)
         cards.push(...spawnCard(agent.id, agent.label || agent.id, agent.state))
-        changed = true
       }
     }
-    return cards.length === 0 ? message : { ...message, blocks: [...cards, ...message.blocks] }
-  })
+    // The roster row moves when an earlier sibling folds in, so the card stays its own row.
+    if (cards.length > 0) {
+      next.push(spawnMessage(message, cards))
+      changed = true
+    }
+    next.push(message)
+  }
   return changed ? next : (messages as NativeChatMessage[])
+}
+
+/** Desktop sections draw the card on the roster. A spawn: row would be a second slot. */
+export function attachUnrecordedSpawnCards(
+  messages: readonly NativeChatMessage[]
+): NativeChatMessage[] {
+  const attached: NativeChatMessage[] = []
+  for (let i = 0; i < messages.length; i += 1) {
+    const message = messages[i]!
+    const host = messages[i + 1]
+    if (host && message.id === `spawn:${host.id}`) {
+      attached.push({ ...host, blocks: [...message.blocks, ...host.blocks] })
+      i += 1
+      continue
+    }
+    attached.push(message)
+  }
+  return attached
 }
