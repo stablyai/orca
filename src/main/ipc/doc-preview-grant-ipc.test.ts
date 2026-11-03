@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('./browser-renderer-trust', () => ({
+vi.mock('./browser/browser-renderer-trust', () => ({
   isTrustedBrowserRenderer: mocks.isTrustedBrowserRenderer
 }))
 vi.mock('../browser/doc-preview-guest-policy', () => ({

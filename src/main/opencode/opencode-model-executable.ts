@@ -1,5 +1,5 @@
 import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
-import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 
 export async function resolveOpenCodeDirectModelExecutable(options: {
   command: string | undefined
