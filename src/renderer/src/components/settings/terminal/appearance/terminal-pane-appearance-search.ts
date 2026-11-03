@@ -41,7 +41,7 @@ export const getTerminalScrollOnUserInputSearchEntry = createLocalizedCatalog(()
     ),
     description: translate(
       'components.settings.TerminalInteraction.scrollOnUserInputDescription',
-      'When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback.'
+      'Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.39ea7c0d28', 'terminal'),

@@ -9425,7 +9425,7 @@
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
           "8eefeaa3da": "Focus Follows Mouse",
-          "96fe15def8": "Mouse and clipboard behavior for terminal panes.",
+          "96fe15def8": "Scrolling, mouse, and clipboard behavior for terminal panes.",
           "45721f3e67": "Terminal Interaction",
           "9c0b1c1792": "On",
           "c1fc9e9444": "GPU Acceleration",
@@ -20786,7 +20786,7 @@
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
         "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
         "scrollOnUserInput": "Scroll to Bottom on Input",
-        "scrollOnUserInputDescription": "When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback."
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
       },
       "terminal": {
         "clipboard": {

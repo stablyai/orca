@@ -63,7 +63,7 @@ export function TerminalInteractionSection({
         )}
         description={translate(
           'auto.components.settings.TerminalPane.96fe15def8',
-          'Mouse and clipboard behavior for terminal panes.'
+          'Scrolling, mouse, and clipboard behavior for terminal panes.'
         )}
       />
 
@@ -193,7 +193,7 @@ export function TerminalInteractionSection({
             )}
             description={translate(
               'components.settings.TerminalInteraction.scrollOnUserInputDescription',
-              'When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback.'
+              'Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.'
             )}
             checked={resolveTerminalScrollOnUserInput(settings.terminalScrollOnUserInput)}
             onChange={() =>
