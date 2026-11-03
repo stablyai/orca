@@ -4,7 +4,8 @@ import {
   requireLocalRuntimeFileRoute,
   requireRuntimeFileProvider,
   resolveFileExplorerPath,
-  resolveFileExplorerPaths
+  resolveFileExplorerPaths,
+  runtimeFileRouteForTarget
 } from './file-target'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
@@ -40,8 +41,11 @@ export class RuntimeFileMutations {
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    requireLocalRuntimeFileRoute(target)
-    return formatEditorText(this.host.requireStore(), target, text)
+    return formatEditorText(this.host.requireStore(), target, text, () => {
+      if (runtimeFileRouteForTarget(target).kind !== 'local') {
+        throw new Error('Format on Save does not support SSH-hosted files yet.')
+      }
+    })
   }
 
   async writeFileExplorerFile(

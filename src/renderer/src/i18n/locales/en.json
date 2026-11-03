@@ -1106,7 +1106,7 @@
       "command": "Command",
       "commandHelp": "Runs on the file’s host in the workspace root. Reads the buffer from stdin and must print only formatted text to stdout. Use ${file} or ${relativeFile} for the path. Arguments are passed directly, without a shell. Do not use --write. Leave empty to disable for this project.",
       "include": "Include globs (one per line)",
-      "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. Enable Format on Save in General > Editor to use this command.",
+      "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. * and ** skip dot-prefixed names; list them explicitly, e.g. .github/**/*.yml. Enable Format on Save in General > Editor to use this command.",
       "saving": "Saving…",
       "save": "Save formatter",
       "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""

@@ -130,7 +130,7 @@ export function RepositoryFormatterSection({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'settings.repositoryFormatter.includeHelp',
-                'Match paths relative to the workspace root. No matching glob means no formatting. Enable Format on Save in General > Editor to use this command.'
+                'Match paths relative to the workspace root. No matching glob means no formatting. * and ** skip dot-prefixed names; list them explicitly, e.g. .github/**/*.yml. Enable Format on Save in General > Editor to use this command.'
               )}
             </p>
           </div>

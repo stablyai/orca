@@ -37,7 +37,10 @@ export async function formatEditorText(
   target: Pick<RuntimeFileExplorerPath, 'path' | 'executionHostId'> & {
     worktree: Pick<RuntimeFileExplorerPath['worktree'], 'path' | 'repoId'>
   },
-  text: string
+  text: string,
+  // Why: runs only once a formatter applies, so unconfigured or excluded
+  // files on hosts that cannot run formatters still save silently.
+  assertCanRunFormatter: () => void = () => {}
 ): Promise<EditorFormatResult> {
   const repo = store
     .getRepos()
@@ -56,6 +59,7 @@ export async function formatEditorText(
   ) {
     return { kind: 'skipped' }
   }
+  assertCanRunFormatter()
   const [root, filePath] = await Promise.all([
     realpath(target.worktree.path),
     formatterFilePath(target.path)

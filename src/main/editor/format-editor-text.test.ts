@@ -71,6 +71,20 @@ describe('project formatter execution', () => {
     expect(runProcess).not.toHaveBeenCalled()
   })
 
+  it('checks host support only after a configured formatter applies', async () => {
+    const unsupported = vi.fn(() => {
+      throw new Error('unsupported host')
+    })
+    expect(
+      await formatEditorText(store, { ...target(), path: join(root, 'a.png') }, 'text', unsupported)
+    ).toEqual({ kind: 'skipped' })
+    expect(unsupported).not.toHaveBeenCalled()
+    await expect(formatEditorText(store, target(), 'text', unsupported)).rejects.toThrow(
+      'unsupported host'
+    )
+    expect(runProcess).not.toHaveBeenCalled()
+  })
+
   it('reports the formatter failure and never changes the saved file', async () => {
     repo.editorFormatter!.command = command('process.stderr.write("syntax error");process.exit(2)')
     await expect(formatEditorText(store, target(), 'input')).rejects.toThrow('syntax error')
