@@ -60,7 +60,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   let armed = false
   let settled = !session.ownsStartupDraftPaste
   let handedOff = false
-  const recover = (certainty: 'not-sent' | 'unconfirmed'): void => {
+  const recover = (certainty: 'not-sent' | 'unconfirmed', retained = false): void => {
     if (settled) {
       return
     }
@@ -75,7 +75,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
         agent: session.startupDraftAgent,
         submitted: false,
         content
-      }).onTimeout(certainty)
+      }).onTimeout(certainty, retained)
     }
   }
   // Once handed to the host the draft outlives this pane: parking or closing it does not cancel.
@@ -104,6 +104,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       return
     }
     session.startupDraftPasteAttempted = true
+    let retained = false
     void deliverGeneratedPaste({
       ptyId,
       content,
@@ -111,7 +112,8 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       agent: session.startupDraftAgent ?? undefined,
       inputKind: 'launch',
       intent: 'startup',
-      deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS
+      deadline: Date.now() + GENERATED_AGENT_INPUT_TIMEOUT_MS,
+      onNoticeRetained: () => (retained = true)
     }).then((outcome) => {
       if (outcome === 'staged' || outcome === 'delivered') {
         settled = true
@@ -120,7 +122,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
         session.recordTerminalInputForHibernation()
         return
       }
-      recover(outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent')
+      recover(outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent', retained)
     })
   }
   session.armStartupDraftReadinessObservation = (): void => {

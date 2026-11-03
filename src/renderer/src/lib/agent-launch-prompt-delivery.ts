@@ -1,5 +1,5 @@
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-native-draft-prefill'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { pasteDraftWhenAgentReady, type GeneratedPasteRefusal } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store'
@@ -29,7 +29,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   submit: boolean
   forcePaste: boolean
   timeoutMs?: number
-  onTimeout?: (certainty?: 'not-sent' | 'unconfirmed') => void
+  onTimeout?: GeneratedPasteRefusal
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its agent started; the chat copy is seeded only then. */

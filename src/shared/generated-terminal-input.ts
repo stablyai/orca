@@ -24,6 +24,10 @@ export type GeneratedInputRequest = {
   /** Every frame needs the expected agent (or a wrapper with a child) in front: a follow-up whose
    *  consumer exited or changed is not written. Older hosts ignore it. */
   requireConsumer?: boolean
+  /** The host keeps the recovery notice if this ends not-sent or unconfirmed (its runtime session
+   *  owns it until explicit dismissal, across client reloads), and says so in its answer. Older
+   *  hosts ignore it and the caller shows its own notice. */
+  retainNotice?: boolean
 }
 
 /** Text over one remote request's budget travels as ordered parts the host joins before admitting. */

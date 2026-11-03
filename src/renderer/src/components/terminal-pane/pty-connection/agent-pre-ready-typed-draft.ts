@@ -124,7 +124,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
   const showHeldKeysNotice = (
     draftAgent: TuiAgent,
     content: string,
-    certainty: 'not-sent' | 'unconfirmed'
+    certainty: 'not-sent' | 'unconfirmed',
+    retained = false
   ): void => {
     createPasteReadinessTimeoutNotice({
       worktreeId: session.deps.worktreeId,
@@ -132,7 +133,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       agent: draftAgent,
       submitted: false,
       content
-    }).onTimeout(certainty)
+    }).onTimeout(certainty, retained)
   }
 
   /** The one ownership handoff: the operation now owns the keys, and its outcome alone decides
@@ -144,6 +145,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
     observation = null
     const cancel = new AbortController()
     takeover = cancel
+    let retained = false
     void deliverGeneratedPaste({
       ptyId,
       content,
@@ -153,7 +155,8 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       intent: 'startup',
       // The same deadline the pane's observation spent: no second, fresh budget.
       deadline,
-      signal: cancel.signal
+      signal: cancel.signal,
+      onNoticeRetained: () => (retained = true)
     }).then((outcome) => {
       if (takeover === cancel) {
         takeover = null
@@ -165,9 +168,9 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
           return
         case 'not-sent':
         case 'target-gone':
-          return showHeldKeysNotice(draftAgent, content, 'not-sent')
+          return showHeldKeysNotice(draftAgent, content, 'not-sent', retained)
         case 'unconfirmed':
-          return showHeldKeysNotice(draftAgent, content, 'unconfirmed')
+          return showHeldKeysNotice(draftAgent, content, 'unconfirmed', retained)
       }
     })
   }

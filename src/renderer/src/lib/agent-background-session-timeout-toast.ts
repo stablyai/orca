@@ -5,9 +5,13 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 export function showAutomationPromptNotSentToast(
   agent: TuiAgent,
   text: string,
-  certainty?: 'not-sent' | 'unconfirmed'
+  certainty?: 'not-sent' | 'unconfirmed',
+  /** The host keeps this notice in its runtime session. */
+  retained = false
 ): void {
-  showGeneratedInputNotice({ agent, text, certainty })
+  if (!retained) {
+    showGeneratedInputNotice({ agent, text, certainty })
+  }
   track('agent_error', {
     error_class: 'paste_readiness_timeout',
     agent_kind: tuiAgentToAgentKind(agent)

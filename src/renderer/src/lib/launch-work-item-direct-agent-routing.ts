@@ -202,7 +202,12 @@ export function finishDirectWorkItemPrompt(args: {
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      // The host's retained notice (with Copy) already says this failure.
+      onTimeout: (_certainty, retained) => {
+        if (!retained) {
+          notifyDirectWorkItemAgentStartTimeout(agent, submit)
+        }
+      }
     })
   }
   return true

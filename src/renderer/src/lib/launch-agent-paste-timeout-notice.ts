@@ -67,11 +67,15 @@ export function createPasteReadinessTimeoutNotice(args: {
   agent: TuiAgent
   submitted: boolean
   content: string
-}): { onTimeout: (certainty?: 'not-sent' | 'unconfirmed') => void; wasNotified: () => boolean } {
+}): {
+  onTimeout: (certainty?: 'not-sent' | 'unconfirmed', retained?: boolean) => void
+  wasNotified: () => boolean
+} {
   let notified = false
   return {
     wasNotified: () => notified,
-    onTimeout: (certainty = 'not-sent') => {
+    // `retained`: the host keeps this notice in its runtime session, so it is not shown twice.
+    onTimeout: (certainty = 'not-sent', retained = false) => {
       if (notified) {
         return
       }
@@ -83,12 +87,14 @@ export function createPasteReadinessTimeoutNotice(args: {
         return
       }
       notified = true
-      showGeneratedInputNotice({
-        agent: args.agent,
-        text: args.content,
-        certainty,
-        submitted: args.submitted
-      })
+      if (!retained) {
+        showGeneratedInputNotice({
+          agent: args.agent,
+          text: args.content,
+          certainty,
+          submitted: args.submitted
+        })
+      }
       track('agent_error', {
         error_class: 'paste_readiness_timeout',
         agent_kind: tuiAgentToAgentKind(args.agent)

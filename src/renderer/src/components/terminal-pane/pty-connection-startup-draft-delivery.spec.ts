@@ -135,8 +135,9 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
           inputKind: 'launch',
           intent: 'startup'
         }),
-        // No takeover cancellation: a startup draft is not held keys.
-        undefined
+        // No takeover cancellation: a startup draft is not held keys. The host keeps a failure notice.
+        undefined,
+        expect.any(Function)
       )
       expect(transport.sendInputAccepted).not.toHaveBeenCalled()
       expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual(['\x1b[I', 'USER_DRAFT'])
@@ -228,7 +229,8 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
       expect(hosted).toHaveBeenCalledWith(
         'pty-codex',
         expect.objectContaining({ text: 'Linked Linear issue: STA-905', submit: false }),
-        undefined
+        undefined,
+        expect.any(Function)
       )
       expect(transport.sendInputAccepted).not.toHaveBeenCalled()
     })

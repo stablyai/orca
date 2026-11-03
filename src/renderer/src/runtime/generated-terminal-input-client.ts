@@ -12,7 +12,14 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { getRemoteRuntimePtyOwner } from './runtime-terminal-stream'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
-type SendResult = { delivery?: { outcome: GeneratedInputOutcome }; part?: 'accepted' }
+type SendResult = {
+  delivery?: { outcome: GeneratedInputOutcome; noticeRetained?: true }
+  part?: 'accepted'
+}
+
+/** Told when the host kept this request's failure notice in its runtime session (the request set
+ *  `retainNotice`), so the caller does not show a second one. */
+export type HostNoticeRetained = () => void
 
 // The host may wait up to the whole budget at a dialog; transport gets room beyond it.
 const TRANSPORT_MARGIN_MS = 15_000
@@ -25,12 +32,19 @@ export async function sendGeneratedTerminalInput(
   request: GeneratedInputRequest,
   /** Cancels the host's operation (a person took the terminal over); a cancelled request's
    *  answer is lost, so it reads as unconfirmed. */
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onNoticeRetained?: HostNoticeRetained
 ): Promise<GeneratedInputOutcome | null> {
   const owner = getRemoteRuntimePtyOwner(ptyId)
   return owner
-    ? sendGeneratedTerminalInputToHandle(owner.target, owner.terminal, request, signal)
-    : sendToHost({ kind: 'local' }, { ptyId }, request, signal)
+    ? sendGeneratedTerminalInputToHandle(
+        owner.target,
+        owner.terminal,
+        request,
+        signal,
+        onNoticeRetained
+      )
+    : sendToHost({ kind: 'local' }, { ptyId }, request, signal, onNoticeRetained)
 }
 
 /** The same operation for a caller that names a runtime terminal handle (notes). */
@@ -38,7 +52,8 @@ export async function sendGeneratedTerminalInputToHandle(
   target: RuntimeClientTarget,
   terminal: string,
   request: GeneratedInputRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onNoticeRetained?: HostNoticeRetained
 ): Promise<GeneratedInputOutcome | null> {
   if (
     target.kind === 'environment' &&
@@ -49,14 +64,15 @@ export async function sendGeneratedTerminalInputToHandle(
   ) {
     return null
   }
-  return sendToHost(target, { terminal }, request, signal)
+  return sendToHost(target, { terminal }, request, signal, onNoticeRetained)
 }
 
 async function sendToHost(
   target: RuntimeClientTarget,
   address: { ptyId: string } | { terminal: string },
   request: GeneratedInputRequest,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onNoticeRetained?: HostNoticeRetained
 ): Promise<GeneratedInputOutcome> {
   const timeoutMs = (request.timeoutMs ?? 0) + TRANSPORT_MARGIN_MS
   // The local runtime is this renderer's own version and takes the text in one request.
@@ -78,6 +94,9 @@ async function sendToHost(
               timeoutMs,
               ...(signal ? { signal } : {})
             })
+    }
+    if (result.delivery?.noticeRetained) {
+      onNoticeRetained?.()
     }
     return result.delivery?.outcome ?? 'unconfirmed'
   } catch {

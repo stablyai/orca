@@ -170,8 +170,8 @@ async function deliverAgentStartupToTerminal(
       // draftPrompt exists only without native-prefill delivery, so this paste is the first attempt.
       forcePaste: true,
       // Why: surface a dropped draft instead of silently losing it.
-      onTimeout: (certainty) =>
-        showAutomationPromptNotSentToast(startup.agent, draftPrompt, certainty)
+      onTimeout: (certainty, retained) =>
+        showAutomationPromptNotSentToast(startup.agent, draftPrompt, certainty, retained)
     })
   }
 }

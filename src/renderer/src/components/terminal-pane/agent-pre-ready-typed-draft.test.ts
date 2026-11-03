@@ -426,7 +426,7 @@ describe('agent pane keys typed before its PTY binds', () => {
         expect(recoveryNotice).toHaveBeenCalledWith(
           expect.objectContaining({ content: 'held keys', submitted: false })
         )
-        expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(certainty)
+        expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith(certainty, false)
       }
       expect(deliverGeneratedPaste).toHaveBeenCalledOnce()
     }
@@ -460,7 +460,7 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(recoveryNotice).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ content: 'held keys', submitted: false })
     )
-    expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith('unconfirmed')
+    expect(onPasteTimeout).toHaveBeenCalledExactlyOnceWith('unconfirmed', false)
     pane.type('2')
     await flushAsyncTicks(20)
     expect(recoveryNotice).toHaveBeenCalledOnce()

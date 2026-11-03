@@ -31,7 +31,11 @@ export const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_M
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
 
-type GeneratedPasteRefusal = (certainty?: 'not-sent' | 'unconfirmed') => void
+/** A refused or uncertain paste. `retained`: the host keeps its notice, so none is shown here. */
+export type GeneratedPasteRefusal = (
+  certainty?: 'not-sent' | 'unconfirmed',
+  retained?: boolean
+) => void
 
 /** Resolve the tab's PTY, then hand the text to that PTY's host; only submit appends Enter. Refusals
  *  retain the text, including uncertain partial writes. */
@@ -61,6 +65,7 @@ export async function pasteDraftWhenAgentReady(args: {
   if (!ptyId) {
     return reportGeneratedPaste('not-sent', { agent, content, onTimeout })
   }
+  let retained = false
   const outcome = await deliverGeneratedPaste({
     ptyId,
     content,
@@ -68,9 +73,10 @@ export async function pasteDraftWhenAgentReady(args: {
     agent,
     inputKind: 'launch',
     intent: 'startup',
-    deadline
+    deadline,
+    onNoticeRetained: () => (retained = true)
   })
-  return reportGeneratedPaste(outcome, { agent, content, onTimeout })
+  return reportGeneratedPaste(outcome, { agent, content, onTimeout, retained })
 }
 
 export async function pasteDraftToAgentPtyWhenReady(args: {
@@ -91,6 +97,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false
   }
+  let retained = false
   const outcome = await deliverGeneratedPaste({
     ptyId,
     content,
@@ -99,9 +106,10 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     inputKind: 'launch',
     intent: args.intent ?? 'startup',
     deadline: Date.now() + (timeoutMs ?? GENERATED_AGENT_INPUT_TIMEOUT_MS),
-    ...(args.requireConsumer ? { requireConsumer: true } : {})
+    ...(args.requireConsumer ? { requireConsumer: true } : {}),
+    onNoticeRetained: () => (retained = true)
   })
-  return reportGeneratedPaste(outcome, { agent, content, onTimeout })
+  return reportGeneratedPaste(outcome, { agent, content, onTimeout, retained })
 }
 
 /** A reused automation session: the typed outcome decides whether a fresh session may start. */
@@ -136,15 +144,20 @@ export async function sendBracketedPasteToRunningAgent(args: {
 
 function reportGeneratedPaste(
   outcome: GeneratedInputOutcome,
-  args: { agent?: TuiAgent; content: string; onTimeout?: GeneratedPasteRefusal }
+  args: {
+    agent?: TuiAgent
+    content: string
+    onTimeout?: GeneratedPasteRefusal
+    retained?: boolean
+  }
 ): boolean {
   if (outcome === 'delivered' || outcome === 'staged') {
     return true
   }
   const certainty = outcome === 'unconfirmed' ? 'unconfirmed' : 'not-sent'
   if (args.onTimeout) {
-    args.onTimeout(certainty)
-  } else {
+    args.onTimeout(certainty, args.retained === true)
+  } else if (!args.retained) {
     showGeneratedInputNotice({ agent: args.agent, text: args.content, certainty })
   }
   return false
@@ -163,6 +176,8 @@ export type GeneratedPaste = {
   signal?: AbortSignal
   /** Every frame needs the expected agent (or a wrapper with a child) in front. */
   requireConsumer?: boolean
+  /** The caller reports failures: a capable host keeps the notice instead and this is called. */
+  onNoticeRetained?: () => void
 }
 
 /** A capable host admits and writes in one transaction; only an older host gets the client adapter. */
@@ -176,9 +191,11 @@ export async function deliverGeneratedPaste(paste: GeneratedPaste): Promise<Gene
       inputKind: paste.inputKind,
       intent: paste.intent,
       timeoutMs: Math.max(0, paste.deadline - Date.now()),
-      ...(paste.requireConsumer ? { requireConsumer: true } : {})
+      ...(paste.requireConsumer ? { requireConsumer: true } : {}),
+      ...(paste.onNoticeRetained ? { retainNotice: true } : {})
     },
-    paste.signal
+    paste.signal,
+    paste.onNoticeRetained
   )
   return hosted ?? (await pasteThroughLegacyHost(paste))
 }

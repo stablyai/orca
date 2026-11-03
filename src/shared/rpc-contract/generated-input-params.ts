@@ -14,6 +14,7 @@ export const TerminalSendGeneratedInputParams = z
     timeoutMs: z.number().int().min(0).max(GENERATED_AGENT_INPUT_TIMEOUT_MS).optional(),
     inputKind: z.enum(['launch', 'driving']).optional(),
     requireConsumer: z.boolean().optional(),
+    retainNotice: z.boolean().optional(),
     part: z
       .object({
         id: z.string().min(1).max(128),

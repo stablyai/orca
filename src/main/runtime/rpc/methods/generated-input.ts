@@ -9,6 +9,7 @@ import { generatedInputNoticeFrames } from '../../../../shared/generated-agent-i
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { deliverGeneratedTerminalInput } from '../../terminal/input/generated-terminal-input-delivery'
 import { GeneratedInputParts } from './generated-input-parts'
+import { captureGeneratedInputRecovery } from '../../generated-agent-input-notices'
 
 let noticeSubscriptionSeq = 0
 const parts = new GeneratedInputParts()
@@ -26,7 +27,8 @@ export const GENERATED_INPUT_METHODS = [
         params.agent,
         params.intent,
         params.inputKind,
-        params.requireConsumer
+        params.requireConsumer,
+        params.retainNotice
       ])
       const staged = parts.accept(connectionId ?? 'inproc', params, binding)
       if (staged.kind === 'pending') {
@@ -36,10 +38,11 @@ export const GENERATED_INPUT_METHODS = [
       if (!handle) {
         return { delivery: { outcome: 'target-gone' as const } }
       }
+      const agent = params.agent && isTuiAgent(params.agent) ? params.agent : null
       const outcome = await deliverGeneratedTerminalInput(runtime, handle, {
         text: staged.text,
         submit: params.submit,
-        agent: params.agent && isTuiAgent(params.agent) ? params.agent : null,
+        agent,
         timeoutMs: Math.max(0, staged.deadline - Date.now()),
         ...(params.inputKind ? { inputKind: params.inputKind } : {}),
         ...(params.intent ? { intent: params.intent } : {}),
@@ -47,7 +50,16 @@ export const GENERATED_INPUT_METHODS = [
         // A caller that went away no longer holds the text, so its queued write must not land later.
         ...(signal ? { signal } : {})
       })
-      return { delivery: { outcome } }
+      // The failed text's notice belongs to this runtime session, not to the client that asked,
+      // so a reloaded client re-reads it until it is dismissed.
+      const noticeRetained =
+        params.retainNotice === true &&
+        agent !== null &&
+        (outcome === 'not-sent' || outcome === 'unconfirmed')
+      if (noticeRetained) {
+        captureGeneratedInputRecovery(runtime, handle, agent, staged.text, params.submit)(outcome)
+      }
+      return { delivery: { outcome, ...(noticeRetained ? { noticeRetained: true as const } : {}) } }
     }
   }),
   defineMethod({

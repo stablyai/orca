@@ -159,6 +159,7 @@ const { deliverGeneratedPaste, pasteDraftToAgentPtyWhenReady, submitPromptToAgen
 const { sendPromptWithGuardedPasteAndEnter } = await import('./active-agent-note-send-delivery')
 const { sendFollowupPromptWhenAgentReady } = await import('./agent-followup-delivery')
 const { prepareTypedText } = await import('../../../shared/agent-input-dialog')
+const { showGeneratedInputNotice } = await import('./launch-agent-paste-timeout-notice')
 
 const DIALOG = [
   'Bypass Permissions',
@@ -555,6 +556,32 @@ describe.each([
     await expect(result).resolves.toBe(true)
     expect(f.writes.filter((data) => data.includes('go'))).toHaveLength(1)
     expect(f.writes.at(-1)).toBe('\r')
+  })
+
+  // Q3: a capable host keeps the failed text's notice in its runtime session (it survives a
+  // renderer reload); this client then shows none of its own. An older host keeps none, so the
+  // client shows it, exactly once either way.
+  it('says a failed send once: the host keeps its notice, else this client shows it', async () => {
+    const ptyId = await setUp('claude', capable)
+    f.process = 'claude'
+    f.grid = { lines: DIALOG, alternateScreen: false }
+    f.hostReadsScreen = true
+    vi.mocked(showGeneratedInputNotice).mockClear()
+    const result = pasteDraftToAgentPtyWhenReady({
+      ptyId,
+      content: 'kept text',
+      agent: 'claude',
+      submit: true,
+      forcePaste: true,
+      intent: 'running',
+      timeoutMs: 1000
+    })
+    await vi.advanceTimersByTimeAsync(1100)
+    await expect(result).resolves.toBe(false)
+    expect(f.writes).toEqual([])
+    const hostNotices = f.runtime!.generatedInputNotices.page().frames
+    expect(hostNotices).toHaveLength(capable ? 1 : 0)
+    expect(showGeneratedInputNotice).toHaveBeenCalledTimes(capable ? 0 : 1)
   })
 
   // Controls kept: inline ZCode delivers from its grid; a plain shell never receives the text.
