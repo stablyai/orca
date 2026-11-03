@@ -49,6 +49,11 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
+  await mkdir(path.join(root, 'src', 'shared'), { recursive: true })
+  await copyFile(
+    path.join(REPO_ROOT, 'src', 'shared', 'bundled-skill-renames.json'),
+    path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
+  )
   for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
     await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
   }

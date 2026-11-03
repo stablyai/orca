@@ -208,14 +208,16 @@ describe('bundled skill guide generator', () => {
     await writeArtifacts(artifacts)
     await expect(verifyArtifacts(artifacts, root)).resolves.toBeUndefined()
 
-    await writeFile(path.join(root, 'skills', 'computer-use', 'SKILL.md'), 'stale\n')
-    await expect(verifyArtifacts(artifacts, root)).rejects.toThrow('skills/computer-use/SKILL.md')
+    await writeFile(path.join(root, 'skills', 'orca-computer-use', 'SKILL.md'), 'stale\n')
+    await expect(verifyArtifacts(artifacts, root)).rejects.toThrow(
+      'skills/orca-computer-use/SKILL.md'
+    )
   })
 
   it('rejects mismatched source names and ambiguous aliases', async () => {
     const root = await createFixture()
     await writeFile(
-      path.join(root, 'skill-guides', 'computer-use.md'),
+      path.join(root, 'skill-guides', 'orca-computer-use.md'),
       '---\nname: wrong\ndescription: present\n---\n'
     )
     await expect(buildArtifacts(root)).rejects.toThrow('declares mismatched name wrong')

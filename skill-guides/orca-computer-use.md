@@ -1,5 +1,5 @@
 ---
-name: computer-use
+name: orca-computer-use
 description: >-
   Drives the GUI of a visible local app window through `orca computer`: accessibility
   tree, clicks, typing, menus, dialogs, and screenshots in native apps and external
@@ -9,7 +9,7 @@ description: >-
   for Orca's embedded browser (`orca-cli`).
 ---
 
-# Computer Use
+# Orca Computer Use
 
 Use this skill to drive a visible app window through `orca computer`. Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task; use this skill only when a visible window needs GUI control those cannot reach. Do not use it for Orca's embedded browser (`orca-cli`).
 
