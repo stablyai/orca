@@ -160,15 +160,15 @@ describe('MobileNativeChatMessage status notices', () => {
     await activateMobileUiLocale('fr')
     const older =
       "Claude couldn't find this chat's saved conversation. Start a new chat to continue."
-    const text = renderNotice(
-      {
-        kind: 'status',
-        tone: 'error',
-        text: older,
-        failure: agentSessionFailureFact('savedConversationMissing')
-      },
-      { hostName: null, agentName: 'Claude' }
-    )
+    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    const body: unknown = { kind: 'status', tone: 'error', ...host, text: older }
+    if (!isAdmissibleAgentJournalItemBody(body) || body.kind !== 'status') {
+      throw new Error('Status fixture was not admitted')
+    }
+    const text = renderNotice(body, { hostName: null, agentName: 'Claude' })
     expect(text.props.children).toBe(older)
   })
 
