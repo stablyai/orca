@@ -17,6 +17,7 @@ export type OllamaUsageTotals = {
   inputTokens: number | null
   cachedInputTokens: number | null
   outputTokens: number | null
+  purchasedBalanceUsd: number | null
 }
 
 type ExtraUsageBalanceBase = {

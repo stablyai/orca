@@ -319,6 +319,28 @@ export function OllamaCloudAccountsSection({
                 )}
               </p>
             ) : null}
+            {totals?.purchasedBalanceUsd != null ? (
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.settings.OllamaCloudAccountsSection.purchasedCredits',
+                  'Purchased credits: ${{value0}}',
+                  { value0: totals.purchasedBalanceUsd.toFixed(2) }
+                )}
+              </p>
+            ) : null}
+            {totals?.inputTokens != null ? (
+              <p className="text-muted-foreground">
+                {translate(
+                  'auto.components.settings.OllamaCloudAccountsSection.monthTokens',
+                  '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out',
+                  {
+                    value0: totals.inputTokens.toLocaleString(),
+                    value1: (totals.cachedInputTokens ?? 0).toLocaleString(),
+                    value2: (totals.outputTokens ?? 0).toLocaleString()
+                  }
+                )}
+              </p>
+            ) : null}
             {usage?.planType ? (
               <p className="text-muted-foreground">
                 {translate(
