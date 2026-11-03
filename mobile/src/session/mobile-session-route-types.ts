@@ -35,6 +35,12 @@ export type MobileBrowserTab = Pick<
 
 export type MobileSessionTabType = NonNullable<RuntimeMobileSessionTabsResult['activeTabType']>
 
+/** What the phone adds to a host terminal tab; a type test keeps these names off the host's tab. */
+export type MobileTerminalTabPhoneFields = {
+  // Carried across publications so chat stays open before live agent status arrives.
+  nativeChatIdentity?: MobileNativeChatIdentity
+}
+
 // The phone reads a subset of each host tab; fields older hosts omit are optional here.
 export type MobileSessionTab =
   | (Pick<RuntimeMobileSessionTerminalTab, 'type' | 'id' | 'title' | 'isActive'> &
@@ -52,9 +58,7 @@ export type MobileSessionTab =
       > & {
         status?: RuntimeMobileSessionTerminalClientTab['status']
         terminal: string | null
-        // Phone-only: carried across publications so chat stays open before live agent status arrives.
-        nativeChatIdentity?: MobileNativeChatIdentity
-      })
+      } & MobileTerminalTabPhoneFields)
   | (Pick<
       RuntimeMobileSessionAgentTab,
       'type' | 'id' | 'title' | 'sessionId' | 'agent' | 'isActive'

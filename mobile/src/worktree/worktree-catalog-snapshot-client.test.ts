@@ -17,7 +17,7 @@ function admitFetched(
 describe('admitWorktreeCatalogResponse', () => {
   it('accepts new-host full and unchanged responses', () => {
     const full = admitWorktreeCatalogResponse(
-      { worktrees: [{ id: 'worktree-1' }], snapshotId: 'snapshot-1' },
+      { worktrees: [{ worktreeId: 'worktree-1' }], snapshotId: 'snapshot-1' },
       null
     )
     const unchanged = admitWorktreeCatalogResponse(
@@ -28,31 +28,31 @@ describe('admitWorktreeCatalogResponse', () => {
     expect(full).toEqual({
       kind: 'full',
       snapshotId: 'snapshot-1',
-      worktrees: [{ id: 'worktree-1' }]
+      worktrees: [{ worktreeId: 'worktree-1' }]
     })
     expect(unchanged).toEqual({ kind: 'unchanged', snapshotId: 'snapshot-1' })
   })
 
   it('treats an old-host full response as authoritative and clears the token', () => {
     expect(
-      admitWorktreeCatalogResponse({ worktrees: [{ id: 'worktree-1' }] }, 'stale-token')
+      admitWorktreeCatalogResponse({ worktrees: [{ worktreeId: 'worktree-1' }] }, 'stale-token')
     ).toEqual({
       kind: 'full',
       snapshotId: null,
-      worktrees: [{ id: 'worktree-1' }]
+      worktrees: [{ worktreeId: 'worktree-1' }]
     })
   })
 
   it('classifies by rows, so a future `unchanged` catalog field cannot hide a full response', () => {
     expect(
       admitWorktreeCatalogResponse(
-        { worktrees: [{ id: 'worktree-1' }], unchanged: false, snapshotId: 'snapshot-1' },
+        { worktrees: [{ worktreeId: 'worktree-1' }], unchanged: false, snapshotId: 'snapshot-1' },
         'snapshot-1'
       )
     ).toEqual({
       kind: 'full',
       snapshotId: 'snapshot-1',
-      worktrees: [{ id: 'worktree-1' }]
+      worktrees: [{ worktreeId: 'worktree-1' }]
     })
   })
 
@@ -70,6 +70,20 @@ describe('admitWorktreeCatalogResponse', () => {
     expect(admitWorktreeCatalogResponse({ unchanged: false }, 'snapshot-1')).toEqual({
       kind: 'invalid'
     })
+  })
+
+  it('rejects a reply whose rows lack the id every reader keys by', () => {
+    for (const row of [null, 'worktree-1', { id: 'worktree-1' }, { worktreeId: 7 }]) {
+      expect(admitWorktreeCatalogResponse({ worktrees: [row], snapshotId: 's1' }, null)).toEqual({
+        kind: 'invalid'
+      })
+      expect(
+        admitWorktreeCatalogResponse(
+          { snapshotId: 's2', baseSnapshotId: 's1', rowsFromBase: [0, row] },
+          's1'
+        )
+      ).toEqual({ kind: 'invalid' })
+    }
   })
 
   it('accepts a full response but ignores an out-of-bounds snapshot id', () => {

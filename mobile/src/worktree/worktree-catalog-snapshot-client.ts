@@ -27,15 +27,13 @@ export type WorktreeCatalogFetchResult =
 
 const snapshotIdSchema = z.string().min(1).max(128)
 
-/** The identity every reader keys a catalog row by; consumers validate their own projections of the rest. */
+/** The id every reader keys a catalog row by; consumers validate their own projections of the rest. */
 export function isWorktreeCatalogRow(row: unknown): row is Worktree {
   return (
     typeof row === 'object' &&
     row !== null &&
     'worktreeId' in row &&
-    typeof row.worktreeId === 'string' &&
-    'repoId' in row &&
-    typeof row.repoId === 'string'
+    typeof row.worktreeId === 'string'
   )
 }
 
