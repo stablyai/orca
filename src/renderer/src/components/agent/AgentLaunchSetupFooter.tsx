@@ -1,4 +1,5 @@
 import { useImperativeHandle, useRef, type Ref } from 'react'
+import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
@@ -78,6 +79,7 @@ export function AgentLaunchSurfaceButtons({
             <span aria-hidden="true">
               <ShortcutKeyCombo
                 keys={formatKeybinding(isPrimary ? 'Enter' : 'Mod+Enter', platform)}
+                renderKey={(key) => (key === 'Enter' ? <CornerDownLeft className="size-3" /> : key)}
                 className="gap-0.5 opacity-60"
                 keyCapClassName="min-w-0 border-0 bg-transparent p-0 text-2xs text-current shadow-none"
                 separatorClassName="text-2xs text-current"

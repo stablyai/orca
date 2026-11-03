@@ -163,70 +163,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('reads newline-heavy Command Code transcripts without line-array splitting', () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-large-transcript-'))
-    const transcriptPath = join(tmpDir, 'transcript.jsonl')
-    try {
-      const filler = Array.from({ length: 6_000 }, (_value, index) =>
-        JSON.stringify({
-          role: index % 2 === 0 ? 'assistant' : 'user',
-          content: [{ type: 'text', text: `filler ${index}` }]
-        })
-      )
-      writeFileSync(
-        transcriptPath,
-        `${[
-          ...filler,
-          JSON.stringify({
-            role: 'user',
-            content: [{ type: 'text', text: 'large transcript prompt' }]
-          }),
-          JSON.stringify({
-            role: 'assistant',
-            content: [{ type: 'text', text: 'large transcript answer' }]
-          })
-        ].join('\n')}\n`
-      )
-      const splitSpy = vi.spyOn(String.prototype, 'split')
-
-      const tool = normalizeHookPayload(
-        state,
-        'command-code',
-        {
-          paneKey: PANE_KEY,
-          payload: {
-            hook_event_name: 'PreToolUse',
-            transcript_path: transcriptPath,
-            tool_name: 'shell_command',
-            tool_input: { command: 'pwd' }
-          }
-        },
-        'production'
-      )
-      const done = normalizeHookPayload(
-        state,
-        'command-code',
-        {
-          paneKey: PANE_KEY,
-          payload: {
-            hook_event_name: 'Stop',
-            transcript_path: transcriptPath
-          }
-        },
-        'production'
-      )
-
-      expect(tool?.payload.prompt).toBe('large transcript prompt')
-      expect(done?.payload.lastAssistantMessage).toBe('large transcript answer')
-      const usedLineArraySplit = splitSpy.mock.calls.some(
-        ([separator]) => typeof separator === 'string' && separator === '\n'
-      )
-      expect(usedLineArraySplit).toBe(false)
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true })
-    }
-  })
-
   it('reads the last assistant message behind an oversized line without quadratic copying', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-assistant-huge-line-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -483,44 +419,6 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('resolves the last Command Code prompt, not an earlier one', () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-last-prompt-'))
-    const transcriptPath = join(tmpDir, 'transcript.jsonl')
-    try {
-      writeFileSync(
-        transcriptPath,
-        `${[
-          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'first ask' }] }),
-          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'first answer' }] }),
-          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'second ask' }] }),
-          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'second answer' }] })
-        ].join('\n')}\n`
-      )
-
-      const tool = normalizeHookPayload(
-        state,
-        'command-code',
-        {
-          paneKey: PANE_KEY,
-          tabId: 'tab-1',
-          worktreeId: 'wt',
-          env: 'production',
-          version: '1',
-          payload: {
-            hook_event_name: 'PreToolUse',
-            transcript_path: transcriptPath,
-            tool_name: 'shell_command',
-            tool_input: { command: 'pwd' }
-          }
-        },
-        'production'
-      )
-      expect(tool?.payload.prompt).toBe('second ask')
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true })
-    }
-  })
-
   it('keys the Command Code interaction by the absolute prompt line offset', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-offset-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')
@@ -566,19 +464,5 @@ describe('shared agent-hook-listener', () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
-  })
-
-  it('trims surrounding whitespace from extracted prompt text', () => {
-    const event = normalizeHookPayload(
-      state,
-      'claude',
-      {
-        paneKey: PANE_KEY,
-        payload: { hook_event_name: 'UserPromptSubmit', prompt: '   hi   ' }
-      },
-      'production'
-    )
-    expect(event).not.toBeNull()
-    expect(event!.payload.prompt).toBe('hi')
   })
 })

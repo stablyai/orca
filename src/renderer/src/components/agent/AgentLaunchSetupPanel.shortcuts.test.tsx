@@ -95,6 +95,8 @@ it.each(cases)(
     const button = getByRole(host, 'button', { name: `Launch ${alternate}` })
     expect(button.getAttribute('aria-keyshortcuts')).toBe(mac ? 'Meta+Enter' : 'Control+Enter')
     expect(button.textContent).toContain(mac ? '⌘' : 'Ctrl')
+    expect(button.textContent).not.toContain('Enter')
+    expect(button.querySelector('svg.lucide-corner-down-left')).not.toBeNull()
     expect(
       getByRole(host, 'button', { name: `Launch ${defaultSurface}` }).getAttribute(
         'aria-keyshortcuts'
