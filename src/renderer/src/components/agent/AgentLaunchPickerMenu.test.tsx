@@ -35,6 +35,8 @@ vi.mock('@floating-ui/dom', async (importOriginal) => {
 })
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 
+const { autoUpdate } = await vi.importActual<typeof floating>('@floating-ui/dom')
+
 let root: Root
 let host: HTMLDivElement
 let owner = 0
@@ -151,7 +153,6 @@ it.each(['chat', 'terminal'] as const)(
 )
 
 it('bounds open geometry work at 10/100 catalog options and retires measurements with the native owner', async () => {
-  const { autoUpdate } = await vi.importActual<typeof floating>('@floating-ui/dom')
   let updates = 0
   const active = new Set<Element>()
   vi.spyOn(floating, 'autoUpdate').mockImplementation((reference, element, update, options) => {

@@ -61,6 +61,7 @@ export const pickerMovementObservers = new Set<IntersectionObserverFixture>()
 export class IntersectionObserverFixture implements IntersectionObserver {
   readonly root = null
   readonly rootMargin = ''
+  readonly scrollMargin = '0px'
   readonly thresholds = [1]
   targets = new Set<Element>()
   constructor(readonly callback: IntersectionObserverCallback) {
