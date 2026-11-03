@@ -15,6 +15,10 @@ import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import {
+  isRelayBackgroundExtended,
+  loadRelayBackgroundExtended
+} from '../storage/relay-background-preference'
 
 type EndpointLifecycle = {
   setForeground(foreground: boolean): void
@@ -31,6 +35,7 @@ export function startMobileEndpointLifecycle(
   initialHost: HostProfile,
   onLog: ConnectionLogSink
 ): EndpointLifecycle {
+  void loadRelayBackgroundExtended().catch(() => {})
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
@@ -110,6 +115,7 @@ function createSupervisor(
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: defaultScheduleTimer,
-    clearTimer: defaultCancelTimer
+    clearTimer: defaultCancelTimer,
+    extendBackgroundGrace: isRelayBackgroundExtended
   })
 }

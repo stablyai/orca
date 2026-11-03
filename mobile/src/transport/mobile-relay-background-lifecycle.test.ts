@@ -21,6 +21,79 @@ describe('mobile Relay background lifecycle', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('keeps an opted-in relay across a two minute app switch without redialing', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = { ...dependencies(), extendBackgroundGrace: () => true }
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(logical.getState()).toBe('connected')
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+
+    supervisor.setForeground(true)
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('releases an opted-in relay at five minutes without reconnecting in the background', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = { ...dependencies(), extendBackgroundGrace: () => true }
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(299_999)
+    expect(logical.suspendActiveSession).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(logical.getState()).toBe('disconnected')
+    expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
+    expect(deps.openRelay).not.toHaveBeenCalled()
+
+    supervisor.setForeground(true)
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledOnce())
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
+  it('uses the latest opt-in on each background transition', async () => {
+    let extended = false
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = { ...dependencies(), extendBackgroundGrace: () => extended }
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+
+    extended = true
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(60_000)
+    supervisor.setForeground(true)
+    expect(logical.getState()).toBe('connected')
+
+    extended = false
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    supervisor.stop()
+  })
+
+  it('expires an opted-in relay on resume after a frozen background timer', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = { ...dependencies(), extendBackgroundGrace: () => true }
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+
+    supervisor.setForeground(false)
+    vi.setSystemTime(Date.now() + 300_000)
+    supervisor.setForeground(true)
+    expect(logical.suspendActiveSession).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(deps.openRelay).toHaveBeenCalledOnce())
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
   it('retains a relay session across a quick background and foreground', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()

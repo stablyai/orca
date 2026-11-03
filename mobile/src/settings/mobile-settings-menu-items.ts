@@ -4,6 +4,7 @@ import {
   Info,
   MessageSquare,
   Mic,
+  Network,
   SunMoon,
   Terminal,
   Wrench
@@ -36,6 +37,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       label: translate('settings.menuItems.browser', 'Browser'),
       icon: Globe,
       onPress: () => push('/browser-settings')
+    },
+    {
+      id: 'connections',
+      label: translate('settings.menuItems.connections', 'Connections'),
+      icon: Network,
+      onPress: () => push('/connection-settings')
     },
     {
       id: 'voice',
