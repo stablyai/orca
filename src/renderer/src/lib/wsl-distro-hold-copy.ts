@@ -26,3 +26,8 @@ export function localizeWslDistroHoldText(text: string): string {
   const found = findWslDistroHoldInText(text)
   return found ? text.split(found.matched).join(localizedWslDistroHoldMessage(found.hold)) : text
 }
+
+/** Whether text names a held terminal, in either form. */
+export function isWslDistroHoldText(text: string): boolean {
+  return findWslDistroHoldInText(text) !== null
+}

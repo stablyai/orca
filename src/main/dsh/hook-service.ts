@@ -31,10 +31,12 @@ import {
   readManagedDshHooksConfigPath,
   removeManagedDshPatch
 } from './dsh-home-patch'
+import { describeDshProfilesMissingHookPackages } from './dsh-hook-packages'
 import {
   buildDshManagedHooksFile,
   DSH_HOOK_EVENTS,
   getDshConfigPath,
+  getDshHome,
   getDshManagedCommand,
   getDshManagedCommandMatcher,
   getDshManagedHooksPath,
@@ -146,7 +148,14 @@ function buildStatus(
   )
   const missing = DSH_HOOK_EVENTS.filter((event) => !present.has(event))
   if (missing.length === 0) {
-    return status(configPath, 'installed', null, true)
+    // Orca's files alone do not activate the row: DSH must also load the package it names.
+    const packagesDetail = describeDshProfilesMissingHookPackages(getDshHome())
+    return status(
+      configPath,
+      packagesDetail === null ? 'installed' : 'partial',
+      packagesDetail,
+      true
+    )
   }
   return present.size === 0
     ? status(configPath, 'not_installed', null)

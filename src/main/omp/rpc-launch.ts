@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { checkAgentCliVersion } from '../agent-cli-version-probe'
+import { checkAgentCliVersion } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import { SESSION_FILE_ID_LAYOUTS } from '../native-chat/session-file-id-layouts'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'

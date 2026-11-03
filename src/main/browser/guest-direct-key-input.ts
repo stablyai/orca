@@ -1,3 +1,4 @@
+import { assertExpectedPageUrlForStep } from './browser-expected-page-url'
 import type { WebContents } from 'electron'
 import { enablePageFocusEmulation, type AgentInputFocusGuard } from './agent-input-focus-guard'
 import { withAgentInputInjection } from './agent-input-injection'
@@ -116,6 +117,7 @@ export async function dispatchPageKeyEvents(
 ): Promise<unknown> {
   let result: unknown = {}
   if (!isEmbeddedGuest(webContents)) {
+    assertExpectedPageUrlForStep()
     for (const params of events) {
       result = await send('Input.dispatchKeyEvent', params)
     }
@@ -123,6 +125,8 @@ export async function dispatchPageKeyEvents(
   }
   let start = 0
   let route = await resolveFocusedFrameRoute(webContents, send)
+  // Once per run, after finding the route: a page that rewrites its URL per key still types its run.
+  assertExpectedPageUrlForStep()
   // A frame's key handler can move focus to another frame, so each key finds its route again.
   while (route.kind === 'session') {
     const keyUp = events.findIndex((params, index) => index >= start && params.type === 'keyUp')

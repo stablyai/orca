@@ -160,6 +160,16 @@ capability kinds the user approved (such as `['storage:own']`), fixed when the w
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
 
+A worker command can take over one of Orca's own actions with `"replaces": "<action>"` in
+`contributes.commands` (the same actions a declarative `action` may name; `engines.orca`
+`>=1.4.248`). When that action fires from its shortcut, the palette or a menu, Orca runs the
+command instead; if the worker fails or has not answered within 2 seconds, Orca runs its own. To
+wrap Orca's own, the command calls `orca.host.call('commands.run', { action })`, which always
+runs the built-in, never a replacement. The
+person sees each replacement before approving the plugin and can switch it back on the plugin's
+page. When two plugins replace the same action, the one installed first does, and the other's log
+says so.
+
 To test a handler without reproducing the real trigger, fire the event at a development plugin:
 
 ```sh
@@ -330,7 +340,12 @@ accepts an edit, and never hands your own accepted edits back through `onReplace
 keeps your draft and rejects `flush()`. On `conflict` it calls `merge(base, outside, mine)` once,
 where `base` is the last accepted value, and sends the result. Without `merge` the outside
 document wins, since an agent may have written the file: the draft is dropped, `onReplace` gets
-the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. It answers Orca's `editor.flush`
+the outside value, and `flush()` rejects with `conflict`. Pass `merge` to keep both sides. With
+`merge`, a write to the file on disk while the tab has unsaved edits also reaches the editor:
+Orca calls `merge(base, outside, mine)` with `base` the disk content those edits started from,
+the tab keeps the merged result unsaved, and its Reload/Overwrite banner is not shown. This
+applies to a local file open in one editor view; elsewhere, without `merge`, or when the editor
+does not answer within a second, that banner decides. It answers Orca's `editor.flush`
 itself before a save. Bytes editors pass both `decode` and `encode`. Check `'session' in
 orca.document` to support older Orca.
 

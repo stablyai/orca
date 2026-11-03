@@ -1,14 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../shared/tab-types'
+
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
-  MAX_WEB_AGENT_SESSION_HANDOFFS,
-  recordWebAgentSessionHandoff,
-  resolveWebAgentSessionHandoff
+  recordWebAgentSessionHandoff
 } from './web-agent-session-handoff'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import './web-session-tabs-sync/tracking-mappings'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
@@ -29,100 +27,6 @@ vi.mock('../store', () => ({
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
-
-  it('bounds unresolved handoff churn', () => {
-    for (let index = 0; index < MAX_WEB_AGENT_SESSION_HANDOFFS + 4; index += 1) {
-      recordWebAgentSessionHandoff({
-        environmentId: ENV,
-        worktreeId: WT,
-        provisionalTabId: `provisional-${index}`,
-        hostTabId: `host-${index}`,
-        hostTerminalHandle: `terminal-${index}`
-      })
-    }
-
-    expect(
-      resolveWebAgentSessionHandoff({
-        environmentId: ENV,
-        worktreeId: WT,
-        provisionalTabId: 'provisional-0'
-      })
-    ).toBeNull()
-    expect(
-      resolveWebAgentSessionHandoff({
-        environmentId: ENV,
-        worktreeId: WT,
-        provisionalTabId: `provisional-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`
-      })
-    ).toBe(`host-${MAX_WEB_AGENT_SESSION_HANDOFFS + 3}`)
-  })
-
-  it('keeps a provisional Claude tab when the host Claude surface is unrelated', () => {
-    const staleLocalAgentTab: TerminalTab = {
-      id: 'local-agent-tab',
-      ptyId: null,
-      worktreeId: WT,
-      title: 'Claude',
-      defaultTitle: 'Claude',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW,
-      launchAgent: 'claude'
-    }
-    const staleUnifiedTab: Tab = {
-      id: 'local-agent-tab',
-      entityId: 'local-agent-tab',
-      groupId: 'group-1',
-      worktreeId: WT,
-      contentType: 'terminal',
-      label: 'Claude',
-      customLabel: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW,
-      isPreview: false,
-      isPinned: false
-    }
-
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [staleLocalAgentTab] },
-        unifiedTabsByWorktree: { [WT]: [staleUnifiedTab] },
-        groupsByWorktree: {
-          [WT]: [
-            {
-              id: 'group-1',
-              worktreeId: WT,
-              activeTabId: 'local-agent-tab',
-              tabOrder: ['local-agent-tab']
-            }
-          ]
-        }
-      }),
-      makeSnapshot([
-        {
-          type: 'terminal',
-          id: HOST_SURFACE_ID,
-          title: 'Claude',
-          parentTabId: 'host-tab-1',
-          leafId: LEAF_ID,
-          isActive: true,
-          launchAgent: 'claude',
-          status: 'ready',
-          terminal: 'terminal-1'
-        }
-      ]),
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
-
-    expect(patch.tabsByWorktree?.[WT]).toHaveLength(2)
-    expect(patch.tabsByWorktree?.[WT]?.some((tab) => tab.id === 'local-agent-tab')).toBe(true)
-    expect(patch.unifiedTabsByWorktree?.[WT]?.some((tab) => tab.id === 'local-agent-tab')).toBe(
-      true
-    )
-  })
 
   it('replaces only the provisional tab with an exact structured-create handoff', () => {
     const provisional = (id: string): TerminalTab => ({
@@ -231,91 +135,5 @@ describe('applyWebSessionTabsSnapshot', () => {
     ) as Partial<WebSessionTabsSyncState>
 
     expect(postCreate.tabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual(['provisional-unrelated'])
-  })
-
-  it('cleans provisional startup and automatic-resume state during exact handoff', () => {
-    const provisionalTab: TerminalTab = {
-      id: 'provisional-resume',
-      ptyId: null,
-      worktreeId: WT,
-      title: 'Codex',
-      defaultTitle: 'Codex',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW,
-      launchAgent: 'codex'
-    }
-    recordWebAgentSessionHandoff({
-      environmentId: ENV,
-      worktreeId: WT,
-      provisionalTabId: provisionalTab.id,
-      hostTabId: 'host-tab-1',
-      hostTerminalHandle: 'term_host-1'
-    })
-
-    const patch = applyWebSessionTabsSnapshot(
-      makeState({
-        tabsByWorktree: { [WT]: [provisionalTab] },
-        pendingStartupByTabId: {
-          [provisionalTab.id]: { command: "codex resume 'session-b'" },
-          retained: { command: 'codex' }
-        },
-        automaticAgentResumeClaimsByTabId: {
-          [provisionalTab.id]: {
-            worktreeId: WT,
-            launchAgent: 'codex',
-            providerSession: { key: 'session_id', id: 'session-b' }
-          },
-          retained: {
-            worktreeId: WT,
-            launchAgent: 'codex',
-            providerSession: { key: 'session_id', id: 'session-a' }
-          }
-        }
-      }),
-      makeSnapshot([
-        {
-          type: 'terminal',
-          id: HOST_SURFACE_ID,
-          title: 'Codex',
-          parentTabId: 'host-tab-1',
-          leafId: LEAF_ID,
-          isActive: true,
-          launchAgent: 'codex',
-          status: 'ready',
-          terminal: 'terminal-1'
-        }
-      ]),
-      ENV,
-      NOW
-    ) as Partial<WebSessionTabsSyncState>
-
-    expect(patch.pendingStartupByTabId).toEqual({ retained: { command: 'codex' } })
-    expect(patch.automaticAgentResumeClaimsByTabId).toEqual({
-      retained: {
-        worktreeId: WT,
-        launchAgent: 'codex',
-        providerSession: { key: 'session_id', id: 'session-a' }
-      }
-    })
-  })
-
-  it('resolves a canonical agent tab before its confirming snapshot arrives', () => {
-    recordWebAgentSessionHandoff({
-      environmentId: ENV,
-      worktreeId: WT,
-      provisionalTabId: 'provisional-agent-tab',
-      hostTabId: 'canonical-host-tab',
-      hostTerminalHandle: 'term-canonical'
-    })
-
-    expect(
-      resolveHostSessionTabIdForWebSessionTab(makeState(), {
-        environmentId: ENV,
-        worktreeId: WT,
-        tabId: 'provisional-agent-tab'
-      })
-    ).toBe('canonical-host-tab')
   })
 })

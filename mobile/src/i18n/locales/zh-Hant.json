@@ -1834,6 +1834,7 @@
       "attachmentAtMost": "{{agent}} 每則訊息最多接受 {{limit}} 張圖片，因此此訊息未傳送。",
       "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
       "attachmentInvalid": "此訊息中的附件無法傳送給代理程式。",
+      "attachmentsExpired": "{{names}} 已過期。",
       "attachmentLargerThan": "此訊息中的一張圖片超過 {{size}} MB，因此訊息未傳送。",
       "attachmentNoSource": "此訊息中的一張圖片沒有可傳送的檔案，因此訊息未傳送。",
       "attachmentNotAFile": "此訊息中的一張圖片不是檔案，因此訊息未傳送。",
@@ -1907,6 +1908,7 @@
       "providerRetrying": "{{agent}} 遇到暫時性問題，正在重試。",
       "providerRetryingQuoted": "{{agent}} 正在重試：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成啟動前已停止。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已儲存的對話。",
       "queueFull": "等待代理程式處理的訊息過多，因此此訊息未傳送。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "runCommandAgain": "請重新執行 /{{command}}。",
@@ -2036,8 +2038,7 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。",
-      "refreshFailed": "重新整理 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",
@@ -2418,6 +2419,7 @@
       "queueTooLarge": "佇列中等待的文字過多。",
       "quitTerminalAgent": "請結束該代理程式，以便在此處繼續聊天。",
       "reattachFile": "請將其移除後重新附加。",
+      "reattachFiles": "請將它們移除後重新附加。",
       "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
       "recordUnreadable": "Orca 無法讀取此聊天的已儲存狀態。",
       "reopenChat": "請重新開啟聊天以再次檢查。",
@@ -2644,6 +2646,9 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各代理程式自身的設定"
     }
   },
   "sourceControl": {

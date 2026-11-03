@@ -21,7 +21,10 @@ import {
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
+import {
+  agentSessionCompactCommandText,
+  type AgentSessionConversationCommand
+} from '../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -46,12 +49,15 @@ import {
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
-export function structuredAgentSessionCompactBody(): AgentJournalMessageItem {
+export function structuredAgentSessionCompactBody(instructions?: string): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: '/compact' }],
-    command: { name: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND }
+    blocks: [{ type: 'text', text: agentSessionCompactCommandText(instructions) }],
+    command: {
+      name: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+      ...(instructions ? { instructions } : {})
+    }
   }
 }
 
@@ -170,12 +176,13 @@ export async function handOverStructuredAgentSessionCommand(
     return
   }
   const { turn, running } = await openCommandTurn(ctx, submission)
+  const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
     admission = await ctx.adapter.compact!({
       sessionId: ctx.sessionId,
       fence: ctx.fence,
-      command: { clientMessageId, ...turn, running }
+      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
     })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
@@ -302,8 +309,9 @@ function commandBlocked(
   if (!record) {
     return agentSessionFailureFact('hostFault')
   }
-  // Validate capability even if a client sends an unadvertised command.
-  if (!ctx.agents.capabilities(record.provider)?.compact) {
+  // Validate capability even if a client sends an unadvertised command or instructions.
+  const capabilities = ctx.agents.capabilities(record.provider)
+  if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
     return agentSessionFailureFact('commandRefused')
   }
   const refusal = conversationCommandBlocked(

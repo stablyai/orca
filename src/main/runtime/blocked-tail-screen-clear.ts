@@ -13,3 +13,22 @@ export function screenClearsBlockedTail(
   }
   return evaluateAgentStateRules(agent, { readScreenLines: () => screenLines })?.state === 'idle'
 }
+
+/** Wait for quiet output before trusting a painted composer, then retire the stale stamp. */
+export function readScreenClearingBlockedTail(args: {
+  lastOutputAt: number | null
+  quiescenceMs: number
+  agent: () => TuiAgent | null
+  readScreen: () => { lines: readonly string[] } | null
+  clearStamp: () => void
+}): string | null {
+  if (args.lastOutputAt !== null && Date.now() - args.lastOutputAt < args.quiescenceMs) {
+    return null
+  }
+  const screen = args.readScreen()
+  if (!screen || !screenClearsBlockedTail(args.agent(), screen.lines)) {
+    return null
+  }
+  args.clearStamp()
+  return screen.lines.join('\n')
+}

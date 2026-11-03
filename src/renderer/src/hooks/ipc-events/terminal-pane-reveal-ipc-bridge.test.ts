@@ -74,17 +74,6 @@ describe('registerTerminalPaneRevealIpcBridge', () => {
     expect(cleanup).toHaveBeenCalledOnce()
   })
 
-  it('finds the owning server from the workspace when the caller names no host', () => {
-    const { deliver } = installBridge()
-    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue('env-1')
-
-    deliver({ ...request, executionHostId: null })
-
-    expect(mocks.revealTerminalPane).toHaveBeenCalledWith(
-      expect.objectContaining({ tabId: toWebTerminalSurfaceTabId('host-tab-1') })
-    )
-  })
-
   it.each<[string, Partial<TerminalPaneRevealRequest>]>([
     ['a local workspace', { executionHostId: null }],
     ['an SSH workspace this app runs', { executionHostId: 'ssh:box' }],

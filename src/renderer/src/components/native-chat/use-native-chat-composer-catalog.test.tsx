@@ -28,13 +28,26 @@ function transport(sessionCommands?: NativeChatStructuredComposerTransport['sess
 
 describe('composer catalog authority', () => {
   it('offers /goal when the host can set goals even if the provider omits it', () => {
-    const { result } = renderHook(() =>
-      useNativeChatComposerCatalog('omp', {
-        ...transport([]),
-        threadGoal: { setObjective: async () => true }
-      })
+    const { result, rerender } = renderHook(
+      ({ compactInstructions }) =>
+        useNativeChatComposerCatalog('omp', {
+          ...transport([]),
+          conversationCommands: ['compact'],
+          compactInstructions,
+          threadGoal: { setObjective: async () => true }
+        }),
+      { initialProps: { compactInstructions: true } }
     )
     expect(result.current.agentCommands.map(({ name }) => name)).toContain('goal')
+    expect(result.current.agentCommands.find(({ name }) => name === 'compact')).toHaveProperty(
+      'argumentHint',
+      '[instructions]'
+    )
+    rerender({ compactInstructions: false })
+    expect(result.current.agentCommands.map(({ name }) => name)).toContain('goal')
+    expect(result.current.agentCommands.find(({ name }) => name === 'compact')).not.toHaveProperty(
+      'argumentHint'
+    )
   })
   it('keeps PTY and unsupported structured providers on their original catalogs', () => {
     const pty = renderHook(() => useNativeChatComposerCatalog('claude'))

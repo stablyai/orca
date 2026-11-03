@@ -28,6 +28,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
       return
     }
     // Repeated hydration must not merge state from an earlier runtime.
+    this.providerRowsByTab = null
     clearLegacyAgentStatuses(this.state)
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()

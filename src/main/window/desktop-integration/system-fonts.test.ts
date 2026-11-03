@@ -1,0 +1,124 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+
+const { runProcessMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
+}))
+
+// Verify discovery's process options; spawning and console hiding belong to runProcess.
+vi.mock('@orca/process-host', () => ({
+  runProcess: runProcessMock
+}))
+
+const ok = (stdout: string): ProcessResult => ({
+  code: 0,
+  signal: null,
+  stdout,
+  stderr: '',
+  timedOut: false
+})
+
+const timedOut: ProcessResult = {
+  code: null,
+  signal: 'SIGTERM',
+  stdout: '',
+  stderr: '',
+  timedOut: true
+}
+
+async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const originalPlatform = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+  }
+}
+
+describe('listSystemFontFamilies', () => {
+  afterEach(() => {
+    vi.resetModules()
+    runProcessMock.mockReset()
+  })
+
+  it('sets UTF-8 stdout encoding as the first statement of the Windows font script', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      const script = args[args.indexOf('-Command') + 1] ?? ''
+      // Output before this statement would still use the OEM encoding.
+      expect(script.trim().split(/\r?\n/)[0]).toBe(
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+      )
+    })
+  })
+
+  it('spawns the Windows font script without an -ExecutionPolicy switch', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = runProcessMock.mock.calls[0]?.[0].args ?? []
+      expect(args).toContain('-Command')
+      expect(args).not.toContain('-ExecutionPolicy')
+      expect(args).not.toContain('Bypass')
+    })
+  })
+
+  it('runs PowerShell by absolute path on Windows', async () => {
+    await withPlatform('win32', async () => {
+      runProcessMock.mockResolvedValue(ok('Consolas\n'))
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const program = runProcessMock.mock.calls[0]?.[0].program ?? ''
+      expect(program).toMatch(/^[A-Za-z]:[\\/]/)
+      expect(program.toLowerCase()).toContain('system32')
+      expect(program.toLowerCase()).toContain('powershell.exe')
+    })
+  })
+
+  it('returns no fonts when the platform font command never exits', async () => {
+    runProcessMock.mockResolvedValue(timedOut)
+
+    const { listSystemFontFamilies } = await import('./system-fonts')
+    await expect(listSystemFontFamilies()).resolves.toEqual([])
+  })
+
+  it('returns no fonts when the platform font command reports failure', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: 'nope',
+      timedOut: false
+    })
+
+    const { listSystemFontFamilies } = await import('./system-fonts')
+    await expect(listSystemFontFamilies()).resolves.toEqual([])
+  })
+
+  const platformTimeouts: [NodeJS.Platform, number][] = [
+    ['darwin', 45_000],
+    ['linux', 15_000],
+    ['win32', 15_000]
+  ]
+  it.each(platformTimeouts)(
+    'asks for the %s font command timeout of %dms',
+    async (platform, timeoutMs) => {
+      await withPlatform(platform, async () => {
+        runProcessMock.mockResolvedValue(ok('Consolas\n'))
+        const { listSystemFontFamilies } = await import('./system-fonts')
+        await listSystemFontFamilies()
+
+        expect(runProcessMock.mock.calls[0]?.[0].timeoutMs).toBe(timeoutMs)
+      })
+    }
+  )
+})

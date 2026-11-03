@@ -16,7 +16,11 @@ export async function compactPiRpcSession(
 ): Promise<AgentSessionCommandAdmission> {
   session.turns.beginCommand(command)
   try {
-    await session.connection.request('compact', {}, { timeoutMs: null })
+    await session.connection.request(
+      'compact',
+      command.instructions ? { customInstructions: command.instructions } : {},
+      { timeoutMs: null }
+    )
     session.turns.commandCompleted()
     return { state: 'accepted', providerIdentity: null }
   } catch (error) {

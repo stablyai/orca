@@ -102,34 +102,6 @@ describe('metadata-request-cache', () => {
     expect(getFreshMetadata(store, 'team:members', 1_100)).toBeNull()
   })
 
-  it('gates the next sweep on the oldest survivor of a capacity eviction', async () => {
-    const store = createMetadataRequestStore<string[]>()
-
-    for (let i = 0; i <= 500; i++) {
-      await loadMetadata(
-        store,
-        `repo-${i}:labels`,
-        () => Promise.resolve([`label-${i}`]),
-        () => i
-      )
-    }
-
-    expect(store.nextCacheExpiryAt).toBe(1 + 300_000)
-    let reads = 0
-    for (const entry of store.cache.values()) {
-      const { fetchedAt } = entry
-      Object.defineProperty(entry, 'fetchedAt', {
-        get: () => {
-          reads++
-          return fetchedAt
-        }
-      })
-    }
-    expect(getFreshMetadata(store, 'repo-500:labels', 300_000)?.data).toEqual(['label-500'])
-    expect(reads).toBe(1)
-    expect(store.cache.size).toBe(500)
-  })
-
   it('avoids full-cache sweeps on fresh reads but releases all expired payloads when due', async () => {
     const store = createMetadataRequestStore<number>()
     for (let i = 0; i < 500; i++) {

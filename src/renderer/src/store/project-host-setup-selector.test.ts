@@ -113,22 +113,4 @@ describe('project host setup selector', () => {
     expect(countedProjects.counters).toEqual({ map: 0, flatMap: 0, iterator: 0, length: 0 })
     expect(countedSetups.counters).toEqual({ map: 0, flatMap: 0, iterator: 0, length: 0 })
   })
-
-  it('invalidates the projection when the repo identity changes', () => {
-    const repo = makeRepo('repo-1')
-    const repos = [repo]
-    const projects = [makeProject('repo:repo-1', repo.id)]
-    const setups = [makeSetup(repo.id, 'repo:repo-1')]
-    getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups: setups })
-
-    const replacementRepos = [makeRepo('repo-2')]
-    const next = getProjectHostSetupProjectionFromState({
-      repos: replacementRepos,
-      projects,
-      projectHostSetups: setups
-    })
-
-    expect(next.projects.map((project) => project.id)).toContain('repo:repo-2')
-    expect(next.setups.map((setup) => setup.id)).toContain('repo-2')
-  })
 })

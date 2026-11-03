@@ -3,7 +3,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 import {
   clearNativeChatModelEnrichmentForTests,
   ensureNativeChatModelEnrichment

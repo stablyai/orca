@@ -16,10 +16,10 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import {
   declinedTerminalCanOpen,
-  notifyHostDeclined,
   openDeclinedStructuredLaunchTerminal,
   type StructuredLaunchTerminal
 } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
+import { notifyHostDeclined } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'

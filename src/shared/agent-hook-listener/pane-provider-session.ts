@@ -117,7 +117,10 @@ function continuedProviderSession(
     (source === 'claude' &&
       hookPayload.hook_event_name === 'SessionStart' &&
       (hookPayload.source === 'clear' || hookPayload.source === 'compact'))
-  return previous?.source === source && continues ? previous.providerSession : undefined
+  // Launch seeds and terminal status rows carry Claude's session without a hook `source`.
+  const sameAgent =
+    previous?.source === source || (source === 'claude' && previous?.source === undefined)
+  return sameAgent && continues ? previous?.providerSession : undefined
 }
 
 /** The folder the pane's agent started in. Only Claude/Codex hooks are known to report it (Cursor's cwd is a shell command's). */
@@ -129,8 +132,18 @@ function readAgentCwd(
   if (source !== 'claude' && source !== 'codex') {
     return undefined
   }
-  // Claude's hook cwd follows its Bash tool's `cd`.
-  return continued?.cwd ?? readPathFromKeys(hookPayload, ['cwd'])
+  const reported = readPathFromKeys(hookPayload, ['cwd'])
+  if (source === 'codex') {
+    return continued?.cwd ?? reported
+  }
+  // Only SessionStart names Claude's launch folder; later hooks follow its Bash tool's `cd`.
+  if (hookPayload.hook_event_name !== 'SessionStart') {
+    return continued?.cwd
+  }
+  // A new process runs where it reports, even when its launch seed recorded another folder.
+  return hookPayload.source === 'startup' || hookPayload.source === 'resume'
+    ? (reported ?? continued?.cwd)
+    : (continued?.cwd ?? reported)
 }
 
 /** Claude 2.1.133+ reports `effort.level` on tool and Stop hooks only, so other events keep the last one. */

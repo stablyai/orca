@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalTurnBody,
@@ -40,7 +41,7 @@ async function commandRun(rig: AcpAdapterRig): Promise<StructuredAgentSessionCom
   return { clientMessageId: 'compact-1', ...turn, running }
 }
 
-async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
+async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[], instructions?: string) {
   const rig = await openAcpAdapterRig({ spec })
   new StructuredAgentRegistry([
     { definition: acpStructuredAgentDefinition(spec), adapter: rig.adapter }
@@ -49,7 +50,7 @@ async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
   if (frames) {
     new GrokFixtureReplay(frames).attach(rig.child().agent)
   }
-  const command = await commandRun(rig)
+  const command = { ...(await commandRun(rig)), ...(instructions ? { instructions } : {}) }
   expect(await rig.adapter.compact({ sessionId: SESSION, fence: 1, command })).toEqual({
     state: 'accepted',
     providerIdentity: null
@@ -100,6 +101,13 @@ describe('ACP compaction request', () => {
     expect(prompt.params).toEqual({
       sessionId: PROVIDER_SESSION,
       prompt: [{ type: 'text', text: '/compact' }]
+    })
+  })
+
+  it('sends OMP instructions after the command', async () => {
+    const { prompt } = await compact(OMP, undefined, 'keep the plan')
+    expect(prompt.params).toMatchObject({
+      prompt: [{ type: 'text', text: '/compact keep the plan' }]
     })
   })
 })
@@ -158,6 +166,17 @@ describe('ACP compaction settlement', () => {
     ])
   })
 
+  it('reads an OMP mode refusing instructions as failed, not compacted', async () => {
+    const { rig, command, prompt } = await compact(OMP, undefined, 'snapcompact keep the plan')
+    const refusal =
+      '/compact snapcompact does not take focus instructions (it archives history without an LLM summary).'
+    rig.child().agent.notify('session/update', replyText(refusal))
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(inside).toEqual([expect.objectContaining({ tone: 'error' })])
+  })
+
   it('reads any other OMP compaction failure as failed, in its own words', async () => {
     const { rig, command, prompt } = await compact(OMP)
     const { agent } = rig.child()
@@ -195,21 +214,222 @@ describe('ACP compaction settlement', () => {
     ])
   })
 
-  it("fails a compaction the agent answered with an error, in the agent's words", async () => {
-    const { rig, command, prompt } = await compact(OPENCODE)
-    // -32000 means signed out to ACP; any other error code is the compaction's own failure.
-    rig.child().agent.fail(prompt, -32603, 'Summarization failed: 500')
+  it.each([
+    { cause: 'recorded provider APIError', errorName: 'APIError', item: 'turn-failure' },
+    {
+      cause: 'local unsupported-operation',
+      errorName: 'provider.unsupported-operation',
+      item: 'compaction'
+    }
+  ])(
+    "fails a compaction OpenCode answered with its $cause, in the agent's words",
+    async ({ errorName, item }) => {
+      const { rig, command, prompt } = await compact(OPENCODE)
+      const recorded = (await readAcpFixture('opencode-v1-provider-error')).find(
+        (frame) => frame.message.error !== undefined
+      )
+      const error = z
+        .object({ code: z.number(), message: z.string(), data: z.looseObject({}) })
+        .parse(recorded?.message.error)
+      // The recorded error carries APIError; the local case swaps in OpenCode's local error name.
+      rig.child().agent.fail(prompt, error.code, error.message, { ...error.data, errorName })
+      const { turn } = await ended(rig, command)
+      expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+      const text = 'Internal error: CAPTURE_PROVIDER_400'
+      expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toEqual([
+        expect.objectContaining({
+          // The saved provider item id encodes its `item:turn` key twice.
+          itemId: expect.stringContaining(
+            encodeURIComponent(encodeURIComponent(`${item}:${command.turnId}`))
+          ),
+          turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(command.identity) },
+          body:
+            errorName === 'APIError'
+              ? { kind: 'status', tone: 'error', text }
+              : expect.objectContaining({
+                  tone: 'error',
+                  failure: { kind: 'compactionFailed', detail: { text, audience: 'person' } }
+                })
+        })
+      ])
+    }
+  )
+
+  it("keeps Grok's own no-work compaction error the command's failure, not the agent's", async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    // Grok's documented compact error data; a supported producer shape, not a live capture.
+    rig.child().agent.fail(prompt, -32603, 'Internal error', {
+      kind: 'compact_failed',
+      message: 'nothing to compact'
+    })
     const { turn, inside } = await ended(rig, command)
     expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
     expect(inside).toEqual([
       expect.objectContaining({
         tone: 'error',
-        failure: expect.objectContaining({
+        failure: {
           kind: 'compactionFailed',
-          detail: { text: 'Summarization failed: 500', audience: 'person' }
-        })
+          detail: { text: 'nothing to compact', audience: 'person' }
+        }
       })
     ])
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+  })
+
+  it("reads Grok's rate-limit RPC code as one usage failure, ignoring its late notification", async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    const { agent } = rig.child()
+    // Grok keeps its 429 code inside the compact error wrapper; a producer shape, not a live capture.
+    agent.fail(prompt, -32003, 'Internal error', {
+      kind: 'compact_failed',
+      message: 'Rate limited'
+    })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    agent.notify('_x.ai/session/prompt_complete', {
+      sessionId: PROVIDER_SESSION,
+      promptId: command.turnId,
+      stopReason: 'rate_limit',
+      agentResult: 'Late cause'
+    })
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'next',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
+      fence: 1
+    })
+    agent.reply(await rig.frame('session/prompt', 1), { stopReason: 'end_turn' })
+    await waitFor(async () => expect(await rig.rig.turns()).toHaveLength(2))
+    const usage = expect.objectContaining({
+      tone: 'warning',
+      failure: {
+        kind: 'usageLimitReached',
+        detail: { text: 'Rate limited', audience: 'person' }
+      }
+    })
+    expect(inside).toEqual([usage])
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toEqual([
+      expect.objectContaining({ body: usage })
+    ])
+  })
+
+  it.each(['turn_completed', 'prompt_complete'])(
+    'retains Grok quota classification from %s before its generic RPC error',
+    async (source) => {
+      const { rig, command, prompt } = await compact(GROK)
+      const { agent } = rig.child()
+      // Existing captured failure ordering; the reduced prompt-complete case has no diagnostic.
+      if (source === 'turn_completed') {
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'retry_state',
+            type: 'failed',
+            error_type: 'api',
+            message: 'API failure'
+          },
+          _meta: { agentTimestampMs: 1 }
+        })
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'turn_completed',
+            prompt_id: command.turnId,
+            stop_reason: 'rate_limit',
+            elapsed_ms: 729
+          }
+        })
+      }
+      agent.notify('_x.ai/session/prompt_complete', {
+        sessionId: PROVIDER_SESSION,
+        promptId: command.turnId,
+        stopReason: 'rate_limit',
+        agentResult: null
+      })
+      agent.fail(prompt, -32603, 'Internal error')
+      const { turn, inside } = await ended(rig, command)
+      expect(turn).toMatchObject({ outcome: 'failure' })
+      expect(inside).toEqual([
+        expect.objectContaining({
+          kind: 'status',
+          tone: 'warning',
+          failure: {
+            kind: 'usageLimitReached',
+            detail: {
+              text: source === 'turn_completed' ? 'API failure' : 'Internal error',
+              audience: 'person'
+            }
+          }
+        })
+      ])
+      expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+    }
+  )
+
+  it('preserves OpenCode quota reset metadata in one ordinary failure row in the command turn', async () => {
+    const { rig, command, prompt } = await compact(OPENCODE)
+    const resetsAt = 65_000
+    rig.child().agent.fail(prompt, -32603, 'Rate limit exceeded. Please try again later.', {
+      service: 'session',
+      errorName: 'provider.rate-limit',
+      retryAfterMs: 60_000
+    })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ outcome: 'failure' })
+    expect(inside).toEqual([
+      expect.objectContaining({
+        tone: 'warning',
+        failure: expect.objectContaining({ kind: 'usageLimitReached', usageLimit: { resetsAt } })
+      })
+    ])
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
+  })
+
+  it('keeps a no-detail rate-limit result distinct from a command refusal', async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    rig.child().agent.reply(prompt, { stopReason: 'rate_limit' })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ outcome: 'failure' })
+    expect(inside).toEqual([expect.objectContaining({ failure: { kind: 'usageLimitReached' } })])
+  })
+
+  it('ignores named late compaction failures after another prompt settles, preserving its original scope', async () => {
+    const { rig, command, prompt } = await compact(GROK)
+    const { agent } = rig.child()
+    agent.fail(prompt, -32603, 'Provider failed')
+    const original = await ended(rig, command)
+    for (const [index, clientMessageId] of ['next', 'barrier'].entries()) {
+      if (index === 1) {
+        agent.notify('_x.ai/session/prompt_complete', {
+          sessionId: PROVIDER_SESSION,
+          promptId: command.turnId,
+          stopReason: 'rate_limit',
+          agentResult: 'Late cause'
+        })
+        agent.notify('_x.ai/session_notification', {
+          sessionId: PROVIDER_SESSION,
+          update: {
+            sessionUpdate: 'turn_completed',
+            prompt_id: command.turnId,
+            stop_reason: 'rate_limit'
+          }
+        })
+      }
+      await rig.adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
+        fence: 1
+      })
+      agent.reply(await rig.frame('session/prompt', index + 1), { stopReason: 'end_turn' })
+      await waitFor(async () => {
+        const turns = await rig.rig.turns()
+        expect(turns).toHaveLength(index + 2)
+        expect(turns.at(-1)).toMatchObject({ outcome: 'success' })
+      })
+    }
+    expect((await ended(rig, command)).inside).toEqual(original.inside)
+    expect((await rig.rig.rows()).filter((row) => row.body.kind === 'status')).toHaveLength(1)
   })
 
   it.each([
