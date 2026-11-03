@@ -49,12 +49,28 @@ test('fresh profile opens a live Home terminal @golden', async ({ electronApp, o
     })
     .toBeGreaterThanOrEqual(2)
 
+  const begin = `orca-cwd-begin-${Date.now()}`
+  const end = `orca-cwd-end-${Date.now()}`
+  const normalizePath = (value: string): string => {
+    const normalized = value.trim().replaceAll('\\', '/')
+    const withoutTrailingSeparator =
+      normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
+    return process.platform === 'win32'
+      ? withoutTrailingSeparator.toLowerCase()
+      : withoutTrailingSeparator
+  }
   await focusActiveTerminalInput(orcaPage)
-  await orcaPage.keyboard.type(process.platform === 'win32' ? 'cd' : 'pwd')
+  await orcaPage.keyboard.type(`echo "${begin}$(pwd)${end}"`)
   await orcaPage.keyboard.press('Enter')
   await expect
-    .poll(async () => (await getTerminalContent(orcaPage)).replaceAll('\\', '/'), {
-      message: 'fresh Home terminal should start in the home directory'
-    })
-    .toContain(homePath.replaceAll('\\', '/'))
+    .poll(
+      async () => {
+        const content = await getTerminalContent(orcaPage)
+        return [...content.matchAll(new RegExp(`${begin}(.*?)${end}`, 'gs'))].map((match) =>
+          normalizePath(match[1].replace(/[\r\n]/g, ''))
+        )
+      },
+      { message: 'fresh Home terminal should report exactly the home directory' }
+    )
+    .toContain(normalizePath(homePath))
 })
