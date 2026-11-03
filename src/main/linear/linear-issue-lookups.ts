@@ -8,6 +8,7 @@ import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
 import { getRequiredEntry } from './issue-context/client'
+import { ISSUE_QUERY } from './issue-context/raw'
 import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
@@ -18,10 +19,10 @@ import {
   type LinearCommentByUuidResponse,
   type LinearIssueByUuidResponse,
   type LinearIssueConnectionResponse,
+  type LinearIssueNode,
   type LinearRawVariables
 } from './linear-issue-query-documents'
 import {
-  mapIssueForWorkspace,
   mapRawIssueForWorkspace,
   shouldThrowAuthError,
   sortAndLimitIssues
@@ -37,6 +38,11 @@ import {
 } from './linear-issue-write-support'
 
 const ISSUE_DETAIL_TIMEOUT_MS = 30_000
+
+type LinearIssueDetailNode = LinearIssueNode & {
+  project?: { id: string; name: string; url?: string | null; color?: string | null } | null
+  children?: { nodes?: NonNullable<LinearIssue['subIssues']> } | null
+}
 
 export async function getIssue(
   id: string,
@@ -67,11 +73,27 @@ async function readIssueWithSignal(
   for (const entry of entries) {
     await acquire(signal)
     try {
-      const issue = await entry.client.issue(id)
-      const mapped = await mapIssueForWorkspace(entry, issue, {
-        includeChildren: true,
-        includeProject: true
-      })
+      const result = await entry.client.client.rawRequest<
+        { issue?: LinearIssueDetailNode | null },
+        LinearRawVariables
+      >(ISSUE_QUERY, { id, includeDrawerFields: true })
+      const issue = result.data?.issue
+      if (!issue) {
+        continue
+      }
+      const mapped: LinearIssue = {
+        ...mapRawIssueForWorkspace(entry, issue),
+        updatedAt: new Date(issue.updatedAt).toISOString(),
+        project: issue.project
+          ? {
+              id: issue.project.id,
+              name: issue.project.name,
+              url: issue.project.url ?? undefined,
+              color: issue.project.color ?? undefined
+            }
+          : undefined,
+        subIssues: issue.children?.nodes
+      }
       const descriptionImageUrls = await getDescriptionImageUrls(
         entry,
         mapped.id,

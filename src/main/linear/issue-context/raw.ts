@@ -130,9 +130,13 @@ export const ISSUE_FIELDS = `
 `
 
 export const ISSUE_QUERY = `
-  query OrcaAgentLinearIssue($id: String!) {
+  query OrcaAgentLinearIssue($id: String!, $includeDrawerFields: Boolean = false) {
     issue(id: $id) {
       ${ISSUE_FIELDS}
+      project @include(if: $includeDrawerFields) { url }
+      children(first: 25) @include(if: $includeDrawerFields) {
+        nodes { id identifier title url }
+      }
     }
   }
 `
