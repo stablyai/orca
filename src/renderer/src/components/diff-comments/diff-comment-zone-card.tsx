@@ -5,6 +5,7 @@ import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
+import { DiffCommentCopyButton } from './DiffCommentCopyButton'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
@@ -104,24 +105,33 @@ export function renderDiffCommentZoneCard(
         onContentResize={() => resizeZone(comment.id)}
         observeRenderedSize
         headerActions={
-          worktreeId && comment.author === undefined ? (
-            <NotesSendMenu
-              owner={owner}
-              worktreeId={worktreeId}
-              groupId={activeGroupId}
-              modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
-              scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
-              targetModeLabel={translate(
-                'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
-                'This note'
-              )}
-              triggerClassName="orca-diff-comment-edit"
-              disabledTooltip={translate(
-                'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
-                'Note already sent'
-              )}
-              onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
-            />
+          comment.author === undefined ? (
+            <>
+              <DiffCommentCopyButton
+                getText={() =>
+                  formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
+                }
+              />
+              {worktreeId ? (
+                <NotesSendMenu
+                  owner={owner}
+                  worktreeId={worktreeId}
+                  groupId={activeGroupId}
+                  modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
+                  scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
+                  targetModeLabel={translate(
+                    'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+                    'This note'
+                  )}
+                  triggerClassName="orca-diff-comment-edit"
+                  disabledTooltip={translate(
+                    'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
+                    'Note already sent'
+                  )}
+                  onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
+                />
+              ) : null}
+            </>
           ) : null
         }
       />
