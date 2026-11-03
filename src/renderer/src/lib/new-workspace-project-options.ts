@@ -4,7 +4,12 @@ import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getExecutionHostLabel,
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup
@@ -157,7 +162,7 @@ export function buildNewWorkspaceProjectOptions(
             projectId: project.id,
             displayName: eligibleRepoById.get(setup.repoId)?.displayName || setup.displayName,
             badgeColor: project.badgeColor,
-            detail: setup.path,
+            detail: getCheckoutDetail(setup, hostLabelById),
             checkout: { projectHostSetupId: setup.id, hostId: setup.hostId, repoId: setup.repoId }
           }
         ]
@@ -171,6 +176,18 @@ export function buildNewWorkspaceProjectOptions(
     }),
     ...checkoutOptions
   ].sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
+}
+
+// Why: a remote host's checkouts can share a name and path with this Mac's, so name the host.
+function getCheckoutDetail(
+  setup: Pick<ProjectHostSetup, 'hostId' | 'path'>,
+  hostLabelById: ReadonlyMap<ExecutionHostId, string>
+): string {
+  if (setup.hostId === LOCAL_EXECUTION_HOST_ID) {
+    return setup.path
+  }
+  const hostLabel = hostLabelById.get(setup.hostId)?.trim() || getExecutionHostLabel(setup.hostId)
+  return `${hostLabel} · ${setup.path}`
 }
 
 // Setup ids can repeat across hosts, so a checkout is keyed by both.
