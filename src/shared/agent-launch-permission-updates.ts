@@ -87,7 +87,6 @@ export function legacyArgumentsUpdates(
   value: string,
   platform: NodeJS.Platform | undefined = agentPermissionHostPlatform()
 ): AgentLaunchSettingsSource {
-  const userArgs = migrateLegacyAgentPermissionRecipe(agent, value)
   const shell = resolveStartupShell(
     platform,
     resolveLocalWindowsAgentStartupShell({
@@ -96,11 +95,12 @@ export function legacyArgumentsUpdates(
       terminalWindowsShell: settings.terminalWindowsShell
     })
   )
+  if (value.trim() === resolveTuiAgentLaunchArgs(agent, settings, undefined, shell).trim()) {
+    return {}
+  }
+  const userArgs = migrateLegacyAgentPermissionRecipe(agent, value)
   if (settings.agentLaunchChoices !== undefined) {
     return agentLaunchChoiceUpdates(settings, agent, { userArgs }, { target: 'terminal', shell })
-  }
-  if (userArgs.trim() === resolveTuiAgentLaunchArgs(agent, settings, undefined, shell).trim()) {
-    return {}
   }
   const lifted = liftAgentPermissionArgs(agent, userArgs)
   return {

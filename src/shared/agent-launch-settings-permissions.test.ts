@@ -52,3 +52,37 @@ it.each(['record', 'arguments'] as const)(
     expect(resolveTuiAgentLaunchArgs('kimi', after)).toBe('--auto')
   }
 )
+
+it.each(['record', 'arguments'] as const)(
+  'keeps unchanged explicit Kimi Arguments on an older-client %s write',
+  (route) => {
+    const before = {
+      agentPermissionDefault: 'full-access' as const,
+      agentPermissionOverrides: { kimi: 'own' as const },
+      agentLaunchChoices: {},
+      agentDefaultArgs: { kimi: '--yolo' }
+    }
+    const updates =
+      route === 'record'
+        ? legacyLaunchTextUpdates(
+            before,
+            {
+              agentDefaultArgs: { kimi: '--yolo', claude: '--permission-mode default' }
+            },
+            'linux'
+          )
+        : agentLaunchSettingsMutationUpdates(
+            before,
+            {
+              type: 'arguments',
+              agent: 'kimi',
+              value: '--yolo'
+            },
+            'linux'
+          )
+    const after = { ...before, ...updates }
+    expect(resolveAgentPermission('kimi', after).choice).toBe('own')
+    expect(after.agentDefaultArgs.kimi).toBe('--yolo')
+    expect(resolveTuiAgentLaunchArgs('kimi', after)).toBe('--yolo')
+  }
+)
