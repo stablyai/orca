@@ -49,11 +49,13 @@ export async function addDataAccount(
   if (typeof label !== 'string' || !label.trim() || label.trim().length > 120) {
     throw new RuntimeClientError('invalid_argument', '--label must contain 1–120 characters.')
   }
-  await assertDataAccountsSupported(ctx)
   const integration = ctx.flags.get('integration')
   if (
     integration !== undefined &&
-    (provider !== 'opencode' || typeof integration !== 'string' || !integration.trim())
+    (provider !== 'opencode' ||
+      typeof integration !== 'string' ||
+      !integration.trim() ||
+      integration.startsWith('-'))
   ) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -61,6 +63,7 @@ export async function addDataAccount(
     )
   }
   const loginOptions = readOpenCodeLoginOptions(ctx, provider)
+  await assertDataAccountsSupported(ctx)
   const directory = mkdtempSync(join(tmpdir(), `orca-account-add-${provider}-`))
   const session: InteractiveLoginSession = {
     child: null,
@@ -134,7 +137,11 @@ function readOpenCodeLoginOptions(
 ): string[] {
   rejectOpenCodeLoginFlagsForAgent(ctx, provider)
   const method = ctx.flags.get('method')
-  if (method !== undefined && (typeof method !== 'string' || !method.trim())) {
+  // A leading dash would let OpenCode parse the value as its own flag, such as --server.
+  if (
+    method !== undefined &&
+    (typeof method !== 'string' || !method.trim() || method.trim().startsWith('-'))
+  ) {
     throw new RuntimeClientError(
       'invalid_argument',
       '--method requires an OpenCode login method ID.'
@@ -143,7 +150,10 @@ function readOpenCodeLoginOptions(
   const answer = ctx.flags.get('answer')
   // Split without dropping empty entries so `--answer=` is rejected instead of skipped.
   const answers = typeof answer === 'string' ? answer.split(REPEATED_FLAG_SEPARATOR) : []
-  if (answer !== undefined && (answers.length === 0 || answers.some((a) => !/^[^=\s]+=/.test(a)))) {
+  if (
+    answer !== undefined &&
+    (answers.length === 0 || answers.some((a) => !/^[^-=\s][^=\s]*=/.test(a)))
+  ) {
     throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
   }
   return [

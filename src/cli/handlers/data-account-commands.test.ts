@@ -124,6 +124,13 @@ describe('managed data account enrollment', () => {
     ['opencode', new Map([['method', ' ']]), '--method requires'],
     ['opencode', new Map([['answer', 'deployment']]), 'key=value'],
     ['opencode', new Map([['answer', '=github.com']]), 'key=value'],
+    ['opencode', new Map([['answer', '--server=http://example.test']]), 'key=value'],
+    ['opencode', new Map([['method', '--server']]), '--method requires'],
+    [
+      'opencode',
+      new Map([['integration', '--server=http://example.test']]),
+      '--integration requires'
+    ],
     [
       'opencode',
       parseArgs(
@@ -133,15 +140,14 @@ describe('managed data account enrollment', () => {
       ).flags,
       'key=value'
     ]
-  ] as const)('refuses invalid %s login options before login', async (provider, flags, message) => {
-    vi.spyOn(client, 'call').mockResolvedValue({
-      id: 'test',
-      ok: true,
-      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
-      _meta: { runtimeId: 'test' }
-    })
-    const login = vi.fn()
-    await expect(addDataAccount({ ...context, flags }, provider, login)).rejects.toThrow(message)
-    expect(login).not.toHaveBeenCalled()
-  })
+  ] as const)(
+    'refuses invalid %s login options before any runtime call',
+    async (provider, flags, message) => {
+      const call = vi.spyOn(client, 'call')
+      const login = vi.fn()
+      await expect(addDataAccount({ ...context, flags }, provider, login)).rejects.toThrow(message)
+      expect(call).not.toHaveBeenCalled()
+      expect(login).not.toHaveBeenCalled()
+    }
+  )
 })
