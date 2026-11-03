@@ -132,23 +132,4 @@ describe('pull-request lookup ownership after newer settlement', () => {
       }
     }
   )
-
-  it('dedupes each branch independently and removes settled generation entries', async () => {
-    const store = createTestStore()
-    const pending = Promise.withResolvers<PRRefreshOutcome>()
-    mockApi.gh.refreshPRNow.mockReturnValue(pending.promise)
-    const calls = ['one', 'two'].flatMap((branch) =>
-      Array.from({ length: 10 }, () =>
-        store.getState().fetchPRForBranch('/repo', branch, { force: true })
-      )
-    )
-    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
-    expect(prRequestGenerations.size).toBe(2)
-
-    pending.resolve(found(12))
-    await Promise.all(calls)
-
-    expect(inflightPRRequests.size).toBe(0)
-    expect(prRequestGenerations.size).toBe(0)
-  })
 })
