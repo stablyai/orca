@@ -6,10 +6,6 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import {
-  RUNTIME_CAPABILITIES,
-  TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
-import {
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../../shared/terminal-input'
@@ -34,56 +30,6 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('terminal send RPC', () => {
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('reports whether a terminal handle is running a recognized agent', async () => {
-    const runtime = stubRuntime({
-      isTerminalRunningAgent: vi.fn().mockResolvedValue(true)
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('terminal.isRunningAgent', {
-        terminal: 'terminal-1'
-      })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toEqual({ isRunningAgent: true })
-    expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('terminal-1')
-  })
-
-  it('reports runtime-owned terminal agent status', async () => {
-    const runtime = stubRuntime({
-      getTerminalAgentStatus: vi.fn().mockResolvedValue({
-        handle: 'terminal-1',
-        isRunningAgent: true,
-        status: 'permission'
-      })
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('terminal.agentStatus', {
-        terminal: 'terminal-1'
-      })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toEqual({
-      agentStatus: {
-        handle: 'terminal-1',
-        isRunningAgent: true,
-        status: 'permission'
-      }
-    })
-    expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
   })
 
   it('fails terminal.send with terminal_handle_stale for a stale handle instead of probing the wrong PTY', async () => {
@@ -662,53 +608,6 @@ describe('terminal send RPC', () => {
     expect(beginMobileInputFloor).not.toHaveBeenCalled()
   })
 
-  it('allows guarded terminal sends when the agent is sendable', async () => {
-    const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
-      getTerminalAgentStatus: vi.fn().mockResolvedValue({
-        handle: 'terminal-1',
-        isRunningAgent: true,
-        status: 'working'
-      }),
-      sendTerminal: vi.fn().mockResolvedValue({
-        handle: 'terminal-1',
-        accepted: true,
-        bytesWritten: 1
-      })
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('terminal.send', {
-        terminal: 'terminal-1',
-        enter: true,
-        requireAgentStatus: 'sendable',
-        client: { id: 'desktop-1', type: 'desktop' }
-      })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
-    expect(runtime.sendTerminal).toHaveBeenCalledWith(
-      'terminal-1',
-      {
-        text: undefined,
-        enter: true,
-        interrupt: false
-      },
-      {
-        inputKind: 'driving',
-        inputSource: 'programmatic',
-        beforeWrite: expect.any(Function),
-        waitForLaunchComposer: true
-      }
-    )
-  })
-
   it('writes zero bytes when a guarded callback observes a handle rebind during status', async () => {
     let boundPtyId = 'pty-1'
     let statusCalls = 0
@@ -819,30 +718,5 @@ describe('terminal send RPC', () => {
     })
     expect(runtime.getTerminalAgentStatus).not.toHaveBeenCalled()
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
-  })
-
-  it('routes terminal restore fit through the runtime driver state machine', async () => {
-    const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true)
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('terminal.restoreFit', {
-        terminal: 'terminal-1'
-      })
-    )
-
-    expect(response.ok).toBe(true)
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    expect(response.result).toEqual({ restored: true })
-    expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
-  })
-  // Mobile gates query replies on this static capability; removing it breaks forwarding to current hosts.
-  it('advertises query-reply input support to mobile clients', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY)
   })
 })

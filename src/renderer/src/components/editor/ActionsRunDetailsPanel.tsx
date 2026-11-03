@@ -1,7 +1,7 @@
 import { ActionsRunAttemptPicker } from './ActionsRunAttemptPicker'
 import type { ReactNode } from 'react'
 import { actionsDurationSeconds } from '../../../../shared/github/actions-duration'
-import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { ActionsStatus } from '../right-sidebar/ActionsStatus'
 import { useDelayedStatus } from '@/hooks/use-delayed-status'
 import { useAppStore } from '@/store'

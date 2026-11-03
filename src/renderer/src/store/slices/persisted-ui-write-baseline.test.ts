@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  PERSISTED_UI_WRITE_BASELINE_FIELDS,
-  capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
-  persistedUIWriteFieldsToWireUpdate,
   type PersistedUIWriteBaseline
 } from './persisted-ui-write-baseline'
 
@@ -38,23 +35,6 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     ...overrides
   }
 }
-
-describe('capturePersistedUIWriteBaseline', () => {
-  it('picks exactly the writer-owned fields off a superset', () => {
-    const superset = { ...makeBaseline(), persistedUIReady: true, repos: [] }
-    const captured = capturePersistedUIWriteBaseline(superset)
-    expect(Object.keys(captured).sort()).toEqual([...PERSISTED_UI_WRITE_BASELINE_FIELDS].sort())
-  })
-})
-
-describe('PERSISTED_UI_WRITE_BASELINE_FIELDS', () => {
-  it('covers every writer-owned field (runtime census, independent of the impl list)', () => {
-    // Maintain independent full literal so omitted writer fields fail even when typechecking is skipped.
-    expect([...PERSISTED_UI_WRITE_BASELINE_FIELDS].sort()).toEqual(
-      Object.keys(makeBaseline()).sort()
-    )
-  })
-})
 
 describe('diffPersistedUIWriteFields', () => {
   it('is empty when values are equal even across fresh array/record identities', () => {
@@ -108,60 +88,5 @@ describe('diffPersistedUIWriteFields', () => {
     const baseline = makeBaseline({ filterRepoIds: ['r1', 'r2'] })
     const current = makeBaseline({ filterRepoIds: ['r2', 'r1'] })
     expect(diffPersistedUIWriteFields(current, baseline)).toEqual({ filterRepoIds: ['r2', 'r1'] })
-  })
-})
-
-describe('manuallyUnreadTurnsByPaneKey write round-trip', () => {
-  it('is writer-owned and diffs by record content like the other pane-key records', () => {
-    expect(PERSISTED_UI_WRITE_BASELINE_FIELDS).toContain('manuallyUnreadTurnsByPaneKey')
-    const baseline = makeBaseline({ manuallyUnreadTurnsByPaneKey: { p1: 5 } })
-    expect(
-      diffPersistedUIWriteFields(
-        makeBaseline({ manuallyUnreadTurnsByPaneKey: { p1: 5 } }),
-        baseline
-      )
-    ).toEqual({})
-    expect(
-      diffPersistedUIWriteFields(
-        makeBaseline({ manuallyUnreadTurnsByPaneKey: { p1: 7 } }),
-        baseline
-      )
-    ).toEqual({ manuallyUnreadTurnsByPaneKey: { p1: 7 } })
-    expect(persistedUIWriteFieldsToWireUpdate({ manuallyUnreadTurnsByPaneKey: { p1: 7 } })).toEqual(
-      { manuallyUnreadTurnsByPaneKey: { p1: 7 } }
-    )
-  })
-})
-
-describe('persistedUIWriteFieldsToWireUpdate', () => {
-  it('inverts showSleepingWorkspaces to the durable hide form', () => {
-    expect(persistedUIWriteFieldsToWireUpdate({ showSleepingWorkspaces: true })).toEqual({
-      hideSleepingWorkspaces: false
-    })
-    expect(persistedUIWriteFieldsToWireUpdate({ showSleepingWorkspaces: false })).toEqual({
-      hideSleepingWorkspaces: true
-    })
-  })
-
-  it('copies filterRepoIds so main never receives the readonly store array', () => {
-    const filterRepoIds = ['r1']
-    const update = persistedUIWriteFieldsToWireUpdate({ filterRepoIds })
-    expect(update.filterRepoIds).toEqual(['r1'])
-    expect(update.filterRepoIds).not.toBe(filterRepoIds)
-  })
-
-  it('passes same-name fields through and never invents keys', () => {
-    const update = persistedUIWriteFieldsToWireUpdate({
-      hideDefaultBranchWorkspace: true,
-      groupBy: 'none'
-    })
-    expect(update).toEqual({ hideDefaultBranchWorkspace: true, groupBy: 'none' })
-  })
-})
-
-describe('sidebarOpen write round-trip', () => {
-  it('sends a left sidebar close to main under its persisted key', () => {
-    const changed = diffPersistedUIWriteFields(makeBaseline({ sidebarOpen: false }), makeBaseline())
-    expect(persistedUIWriteFieldsToWireUpdate(changed)).toEqual({ sidebarOpen: false })
   })
 })

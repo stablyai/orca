@@ -169,7 +169,7 @@ export class RuntimeGitHubReviewQueryCommands {
     prNumber: number,
     headSha?: string,
     prRepo?: GitHubOwnerRepo | null,
-    options?: { noCache?: boolean }
+    options?: { noCache?: boolean; userRefresh?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getPRChecks(

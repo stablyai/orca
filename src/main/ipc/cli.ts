@@ -16,7 +16,7 @@ import {
   WslCliUnreachableError
 } from '../cli/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl-cli-registration-operation'
-import { getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl'
 import { blockedWslDistroForExec, runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'

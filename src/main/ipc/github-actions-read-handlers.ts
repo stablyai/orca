@@ -14,7 +14,7 @@ import type {
   ActionsDetailsQuery
 } from '../../shared/github/actions-types'
 import { listActionsRuns, listActionsWorkflows, getWorkflowRunDetails } from '../github/client'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getGitHubLocalGitOptionArgs } from './github-repo-routing'
 
 /** Validate desktop Actions requests against registered Git repositories before dispatching reads. */

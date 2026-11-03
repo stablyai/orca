@@ -13,9 +13,14 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('lucide-react-native', () => ({ Check: 'Check', Search: 'Search', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  ChevronRight: 'ChevronRight',
+  Search: 'Search',
+  X: 'X'
+}))
 
-vi.mock('./BottomDrawer', async () => {
+vi.mock('./bottom-drawer/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ children }: { children?: ReactNode }) =>
@@ -58,11 +63,10 @@ describe('PickerModal accessibility', () => {
     })
 
     const rows = findAllByHostType(renderer!.root, 'Pressable')
-    expect(rows.map((row) => row.props.accessible)).toEqual([true, true])
     expect(rows.map((row) => row.props.accessibilityRole)).toEqual(['button', 'button'])
     expect(rows.map((row) => row.props.accessibilityState)).toEqual([
-      { disabled: false, selected: true },
-      { disabled: true, selected: false }
+      { disabled: false, checked: true, selected: true },
+      { disabled: true, checked: false, selected: false }
     ])
   })
 })

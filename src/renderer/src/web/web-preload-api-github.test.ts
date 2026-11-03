@@ -475,7 +475,8 @@ describe('web GitHub preload API', () => {
         linkedPRNumber: null,
         fallbackPRNumber: 9,
         fallbackPRSource: 'pr-cache'
-      }
+      },
+      userRefresh: true
     })
 
     expect(runtimeCalls).toEqual([
@@ -493,6 +494,7 @@ describe('web GitHub preload API', () => {
           linkedPRNumber: null,
           fallbackPRNumber: 9,
           currentHeadOid: 'head-oid',
+          userRefresh: true,
           acceptMergedFallbackPR: true
         }
       }

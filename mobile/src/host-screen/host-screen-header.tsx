@@ -16,7 +16,7 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { StatusDot } from '../components/StatusDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
@@ -56,6 +56,7 @@ export function HostConnectionStatus({ controller }: { controller: HostScreenCon
       {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
       {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => void forceReconnectHost(hostId)}
           accessibilityRole="button"
           accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}

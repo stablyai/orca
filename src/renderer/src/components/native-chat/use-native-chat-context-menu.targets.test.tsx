@@ -55,6 +55,7 @@ function Chat({
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle | null>({
     focus: () => true,
+    insertAgentReferences: () => false,
     insertTypedText: () => true,
     acceptsText: () => acceptsText,
     appendText: mocks.appendText,

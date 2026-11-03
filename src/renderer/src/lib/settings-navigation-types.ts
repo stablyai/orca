@@ -57,6 +57,7 @@ const SETTINGS_NAV_INTENTS = [
   'add-quick-command',
   'add-remote-orca-server',
   'add-ssh-host',
+  'native-accounts',
   // Closes Settings when the target pane is already showing.
   'toggle'
 ] as const

@@ -21,6 +21,7 @@ import type { OrcadUpdateIntent } from '../managed-server/lifecycle/orcad-manage
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { errorMessage } from '../../shared/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
+import { pruneSupersededOrcadCandidates } from '../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../ssh/orcad-already-active-wake'
 import { OrcadActiveReadinessError } from '../ssh/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
@@ -34,6 +35,7 @@ import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
 import { deployWslOrcadWithOneFence } from './wsl-orcad-one-fence-deploy'
+import { removeFailedFreshWslOrcadInstall } from './wsl-orcad-failed-install-removal'
 import { probeWslActiveOrcad, readWslOrcadPid } from './wsl-orcad-active-probe'
 import { wslOrcadConnectStateHints } from './wsl-orcad-connect-state-snapshot'
 import { readWslOrcadIncumbent, type WslOrcadIncumbent } from './wsl-orcad-incumbent'
@@ -227,6 +229,7 @@ async function launchOverTransport(
     hints.deployPreRead(context.activationRecord)
   )
   if (deployed.outcome === 'installed-not-activated') {
+    await removeFailedFreshWslOrcadInstall(slot, deployed)
     const failure = wslOrcadDeferralFailure(deployed)
     recordWslOrcadUpdateFailure(failureHost, incumbentVersion, failure)
     const restored =
@@ -258,6 +261,7 @@ async function launchOverTransport(
         fullVersion: incumbentVersion,
         readiness: incumbent.readiness
       }
+      await pruneSupersededOrcadCandidates(slot, context.serverTarget, deployed.fullVersion)
       return { ...(await readyLaunch(serving)), deferredUpdate }
     }
     return { outcome: 'deferred', distro: name, ...deferredUpdate }

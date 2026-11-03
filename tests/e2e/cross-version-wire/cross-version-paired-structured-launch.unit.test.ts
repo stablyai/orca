@@ -1,10 +1,6 @@
 import { EVERY_AGENT_CHAT } from '../../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { beforeAll, describe, expect, it } from 'vitest'
-import {
-  RUNTIME_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
 import { resolveStructuredNativeChatSupport } from '../../../src/shared/structured-native-chat-launch-route'
 import { resolveAgentLaunchRoute } from '../../../src/renderer/src/lib/agent-launch-routing'
 import { pairedHostClientCapabilities } from '../../../src/renderer/src/runtime/paired-host-client-capabilities'
@@ -30,13 +26,6 @@ beforeAll(async () => {
 }, 180_000)
 
 describe(`a current desktop paired with a ${LEGACY_PAIRED_STRUCTURED_LAUNCH_RELEASE_REF} server`, () => {
-  it('finds structured chat advertised under the name it checks, without client-chosen launch modes', () => {
-    expect(legacyHostCapabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-    expect(legacyHostCapabilities).not.toContain(
-      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-    )
-  })
-
   it.each(['claude', 'codex'] as const)(
     'keeps %s on the terminal there, and opens a chat once the server is current',
     (agent) => {

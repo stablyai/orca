@@ -4,7 +4,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
 
 // Host contact loss never proves worker exit; relay only confirmed stops as settled.
@@ -93,7 +93,7 @@ describe('federation host liveness verdicts', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method.handler(method.params!.parse(params), {
@@ -150,7 +150,7 @@ describe('federation host liveness verdicts', () => {
       const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
         (candidate) => candidate.name === name
       )
-      if (!method) {
+      if (!method || isStreamingMethod(method)) {
         throw new Error(`Method not found: ${name}`)
       }
       return method.handler(method.params!.parse(params), {

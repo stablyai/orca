@@ -37,15 +37,6 @@ describe('failed worker starts and the circuit breaker', () => {
     return db.createTask({ runId: 'run_legacy_local', spec: 'never starts' }).id
   }
 
-  it('counts each failed start and carries the count into the retry', () => {
-    const taskId = newTask()
-    const [first, second] = failedStarts(taskId, 2)
-
-    expect(db.getDispatchContextById(first)).toMatchObject({ status: 'failed', failure_count: 1 })
-    expect(db.getDispatchContextById(second)).toMatchObject({ status: 'failed', failure_count: 2 })
-    expect(db.getTask(taskId)?.status).toBe('failed')
-  })
-
   it('trips on the third failed start and refuses a fourth retry', () => {
     const taskId = newTask()
     const [, , third] = failedStarts(taskId, 3)

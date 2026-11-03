@@ -1,5 +1,5 @@
 import { requireStructuredCreateSupportAdmission } from '../runtime/rpc/methods/structured-agent-session-gate'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'

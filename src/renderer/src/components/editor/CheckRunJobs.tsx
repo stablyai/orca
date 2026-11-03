@@ -1,5 +1,5 @@
 import { completedDurationSeconds } from '../../../../shared/github/actions-duration'
-import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
+import { formatNativeChatDuration } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { actionsUrl } from '../../../../shared/github/actions-web-url'
 import { ActionsStatus } from '../right-sidebar/ActionsStatus'
 import React from 'react'

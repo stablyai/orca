@@ -8,14 +8,12 @@ import {
 export function createBrowserNetworkTunnelStream(options: {
   id: number
   socket: BrowserNetworkTunnelSocket
-  releasePendingOpen: () => void
   onConnectTimeout: (stream: BrowserNetworkTunnelStream) => void
 }): BrowserNetworkTunnelStream {
   const stream: BrowserNetworkTunnelStream = {
     id: options.id,
     socket: options.socket,
     connected: false,
-    releasePendingOpen: options.releasePendingOpen,
     closed: false,
     receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     sendCredit: 0,
@@ -43,7 +41,6 @@ export function retireBrowserNetworkTunnelStream(
   }
   stream.closed = true
   clearTimeout(stream.connectTimeout)
-  stream.releasePendingOpen()
   for (const release of stream.pendingDestinationWriteReleases) {
     release()
   }

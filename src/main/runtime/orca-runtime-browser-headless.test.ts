@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from './browser/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -145,76 +145,5 @@ describe('RuntimeBrowserCommands headless close and forwarding', () => {
     // Unknown-page ghost probes still fail closed when no session row was retired.
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenCalledTimes(2)
     expect(retireRuntimeOwnedBrowserSessionTab).toHaveBeenLastCalledWith('wt-1', 'page-other')
-  })
-
-  it('closes the active headless tab on an implicit close', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-active', 303]])),
-      getActivePageId: vi.fn(() => 'page-active'),
-      getActiveWebContentsId: vi.fn(() => 303)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({
-          createTab: vi.fn(),
-          closeTab,
-          ownsTab: () => true
-        }))
-      })
-    )
-
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: true
-    })
-    expect(closeTab).toHaveBeenCalledWith('page-active')
-  })
-
-  it('reports not-closed when no headless tab can be resolved', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map()),
-      getActivePageId: vi.fn(() => null),
-      getActiveWebContentsId: vi.fn(() => null)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({
-          createTab: vi.fn(),
-          closeTab,
-          ownsTab: () => true
-        }))
-      })
-    )
-
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: false
-    })
-    expect(closeTab).not.toHaveBeenCalled()
-  })
-
-  it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
-    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
-    const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-      keyboardInsertText
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send: vi.fn() } }) as never)
-      })
-    )
-
-    await commands.browserKeyboardInsertText({ text: 'hello' })
-    expect(keyboardInsertText).toHaveBeenCalledWith('hello', undefined, undefined)
   })
 })

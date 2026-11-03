@@ -6,6 +6,7 @@ import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
+import { useMenuPointerHighlight } from './menu-pointer-highlight'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" modal={false} {...props} />
@@ -70,6 +71,7 @@ function ContextMenuSubContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent> &
   VariantProps<typeof contentAnimationVariants>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.SubContent
@@ -77,13 +79,14 @@ function ContextMenuSubContent({
         // Level the first submenu row with its trigger (border + padding).
         alignOffset={alignOffset}
         className={cn(
-          'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
+          'z-[70] min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover reduce-effects:bg-popover dark:reduce-effects:bg-popover dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
           contentAnimationVariants({ animation }),
           className
         )}
         // Portal submenus outside the scrollable parent to prevent overflow clipping.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>
@@ -97,18 +100,20 @@ function ContextMenuContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> &
   VariantProps<typeof contentAnimationVariants>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(
-          'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover [@media(prefers-reduced-transparency:reduce)]:bg-popover dark:[@media(prefers-reduced-transparency:reduce)]:bg-popover [@media(prefers-reduced-transparency:reduce)]:backdrop-filter-none dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
+          'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-[11px] border border-black/10 bg-[rgba(255,255,255,0.78)] p-[4px] text-black dark:text-white shadow-[0_6px_16px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl backdrop-saturate-150 supports-[not_(backdrop-filter:blur(1px))]:bg-popover dark:supports-[not_(backdrop-filter:blur(1px))]:bg-popover reduce-effects:bg-popover dark:reduce-effects:bg-popover dark:border-black/60 dark:bg-popover/75 dark:shadow-[0_16px_34px_rgba(0,0,0,0.40),inset_0_0_0_1px_rgba(255,255,255,0.12)]',
           contentAnimationVariants({ animation }),
           className
         )}
         // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>

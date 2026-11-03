@@ -13,6 +13,7 @@ import type { InstalledRowHandlers } from './PluginManagerRows'
 import { PluginMarketplaceSourceDialog } from '../dialogs/PluginMarketplaceSourceDialog'
 import { PluginCatalogLinkDialog } from '../dialogs/PluginCatalogLinkDialog'
 import { usePluginInstallLink } from '../state/use-plugin-install-link'
+import { usePluginBrowseRequest } from '../state/use-plugin-browse-request'
 import { usePluginCatalog } from '../state/use-plugin-catalog'
 import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import { usePluginInstallAction } from '../state/use-plugin-install-action'
@@ -105,10 +106,8 @@ export function PluginManager({
   const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const { openKey, open, back } = page
-  const catalog = usePluginCatalog({
-    onRefreshInstalled,
-    onOpenRequested: open
-  })
+  usePluginBrowseRequest({ page, setTab, setSearch, setListFilter })
+  const catalog = usePluginCatalog({ onRefreshInstalled, onOpenRequested: open })
   // Why: an install counts as from a link only while the page that link opened is showing.
   const [linkedKey, setLinkedKey] = useState<string | null>(null)
   const installLink = usePluginInstallLink({

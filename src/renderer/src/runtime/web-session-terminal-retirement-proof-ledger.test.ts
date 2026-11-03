@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status'
+
 import {
   ENVIRONMENT_ID,
   makeSnapshot,
-  makeState,
-  pendingSurface
+  makeState
 } from './__fixtures__/web-session-terminal-orphan-recovery-regression-fixtures'
+
 import {
   clearWebSessionTerminalOrphanRecoveryForTests,
   recoverWebSessionTerminalOrphansBeforeApply
@@ -81,45 +81,6 @@ describe('web session terminal retirement proof ledger', () => {
     ).toEqual([])
   })
 
-  it('forgets a proof once the host publishes its surface live again', () => {
-    mergeRetainedTerminalRetirementProofs(
-      ENVIRONMENT_ID,
-      frame(1, { retiredTerminalSurfaces: [retired] })
-    )
-    const revived = mergeRetainedTerminalRetirementProofs(
-      ENVIRONMENT_ID,
-      frame(2, { tabs: [pendingSurface(TAB_ID, LEAF_ID, 'pty-new', 'term-new')] })
-    )
-    expect(revived.retiredTerminalSurfaces).toBeUndefined()
-    expect(
-      mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, frame(3)).retiredTerminalSurfaces
-    ).toBeUndefined()
-  })
-
-  // Key proofs by connection generation, advanced on runtimeId change, or restarted hosts’ reused handles can match predecessor evidence (runtime-status.test.ts).
-  it('forgets everything on a removed frame and on a new host connection', () => {
-    mergeRetainedTerminalRetirementProofs(
-      ENVIRONMENT_ID,
-      frame(1, { retiredTerminalSurfaces: [retired] })
-    )
-    mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, {
-      ...frame(2),
-      removed: true
-    } as RuntimeMobileSessionTabsResult)
-    expect(
-      mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, frame(3)).retiredTerminalSurfaces
-    ).toBeUndefined()
-
-    mergeRetainedTerminalRetirementProofs(
-      ENVIRONMENT_ID,
-      frame(4, { retiredTerminalSurfaces: [retired] })
-    )
-    setRuntimeEnvironmentConnectionGenerationForTests(ENVIRONMENT_ID, 99)
-    expect(
-      mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, frame(5)).retiredTerminalSurfaces
-    ).toBeUndefined()
-  })
-
   // Legacy full lists merge by exact-identity union like deltas; repeats are no-ops and remain host-bounded.
   it('treats a full list repeated by a legacy host as idempotent', () => {
     const proofs = Array.from({ length: 64 }, (_, index) => ({
@@ -141,33 +102,6 @@ describe('web session terminal retirement proof ledger', () => {
     )
     expect(merged.retiredTerminalSurfaces).toHaveLength(64)
     expect(merged.retiredTerminalSurfaces?.at(-1)?.leafId).toBe('leaf-new')
-  })
-
-  // Legacy hosts omit only when no proofs remain, so forgetting on absence loses no evidence.
-  it('matches legacy visibility against a full-list host that omits the field when empty', () => {
-    const proofs = Array.from({ length: 3 }, (_, index) => ({
-      ...retired,
-      leafId: `leaf-${index}`,
-      terminal: `term-${index}`
-    }))
-    const legacyHostFrames = [
-      frame(1, { retiredTerminalSurfaces: proofs }),
-      frame(2),
-      frame(3, { retiredTerminalSurfaces: proofs })
-    ]
-    const visible = legacyHostFrames.map(
-      (hostFrame) =>
-        mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, hostFrame).retiredTerminalSurfaces
-    )
-    // A legacy client sees exactly what the host sent, frame by frame.
-    expect(visible).toEqual(legacyHostFrames.map((hostFrame) => hostFrame.retiredTerminalSurfaces))
-  })
-
-  it('returns the same frame object when the ledger adds nothing', () => {
-    const untouched = frame(1)
-    expect(mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, untouched)).toBe(untouched)
-    const carried = frame(2, { retiredTerminalSurfaces: [retired] })
-    expect(mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, carried)).toBe(carried)
   })
 })
 

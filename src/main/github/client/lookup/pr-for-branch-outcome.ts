@@ -76,7 +76,8 @@ export async function getPRForBranchOutcome(
             release()
           }
         },
-        2 * 60_000
+        2 * 60_000,
+        options
       )
     }
   )

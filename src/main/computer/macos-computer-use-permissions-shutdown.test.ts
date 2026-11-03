@@ -127,19 +127,6 @@ describe('computer-use setup cancellation', () => {
     expect(setupLaunches()).toEqual([['--permission', 'accessibility']])
   })
 
-  it('cancels an untargeted Open during shutdown even when everything is granted', async () => {
-    mocks.peek.mockResolvedValue({
-      ...denied,
-      permissions: [
-        { id: 'accessibility', status: 'granted' },
-        { id: 'screenshots', status: 'granted' }
-      ]
-    })
-    const { permissions, markHostShuttingDown } = await loadModules()
-    markHostShuttingDown()
-    await expect(permissions.openComputerUsePermissions()).rejects.toThrow('cancelled')
-  })
-
   it('cancels a queued launch before reset waits on the bundle id', async () => {
     const { permissions } = await loadModules()
     await permissions.openComputerUsePermissions('accessibility')

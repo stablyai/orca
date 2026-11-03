@@ -36,3 +36,20 @@ export function cliConversationRowsShareAgent(
   const rightAgents: readonly string[] = CLI_CONVERSATION_ADOPTING_AGENTS[right]
   return CLI_CONVERSATION_ADOPTING_AGENTS[left].some((agent) => rightAgents.includes(agent))
 }
+
+/** A local status row naming the conversation a chat of `agent` would take over: the host's
+ * writer admission and the renderer's open-chat lookup read rows the same way. */
+export function namesCliConversation(
+  row: { connectionId?: string | null; agentType?: string; providerSession?: { id: string } },
+  agent: string,
+  providerSessionId: string
+): boolean {
+  return (
+    !row.connectionId &&
+    adoptsCliConversations(row.agentType) &&
+    row.providerSession?.id === providerSessionId &&
+    CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>
+      chatAgentsShareConversations(chat, agent)
+    )
+  )
+}

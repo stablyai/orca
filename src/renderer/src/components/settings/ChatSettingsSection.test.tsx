@@ -10,13 +10,15 @@ import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatNamingSearchEntry } from './chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from './chat-inline-visuals-search'
 import { getChatBehaviorSearchEntries } from './chat-behavior-search'
-import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { i18n } from '@/i18n/i18n'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { buildCmdJSettingsResults } from '../cmd-j/palette-results'
 import { isSettingsNavigationTarget } from '@/lib/settings-navigation-types'
 import { getSettingsSectionId, getSettingsScrollTarget } from './settings-navigation-foundations'
+import ja from '@/i18n/locales/ja.json'
+import { getSettingsSectionSearchEntries, matchesSettingsSearch } from './settings-search'
 
 const state = vi.hoisted((): { settingsSearchQuery: string; settings: GlobalSettings | null } => ({
   settingsSearchQuery: '',
@@ -74,6 +76,27 @@ function renderChat(
 }
 
 describe('Chat settings page', () => {
+  it('shows the whole page when searching for its localized chat title', async () => {
+    i18n.addResourceBundle('ja', 'translation', ja, true, true)
+    await i18n.changeLanguage('ja')
+    state.settingsSearchQuery = 'チャット'
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      repos: []
+    })
+    const chat = sections.find((section) => section.id === 'chat')
+    expect(chat?.title).toBe('チャット UI')
+    expect(chat && matchesSettingsSearch('チャット', getSettingsSectionSearchEntries(chat))).toBe(
+      true
+    )
+    const { container } = renderChat()
+    expect(container.querySelector('#chat-appearance')).toBeTruthy()
+    expect(container.querySelector('#chat-text-size')).toBeTruthy()
+    expect(container.querySelector('#chat-names')).toBeTruthy()
+  })
+
   it('moves the chat-or-CLI choice from the Chat page to the Agents list and its search', () => {
     renderChat(true)
     expect(screen.queryByText('Providers')).toBeNull()

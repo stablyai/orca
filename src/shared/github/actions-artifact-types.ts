@@ -6,6 +6,12 @@ export const ACTIONS_ARTIFACT_CLIENT_TIMEOUT_MS = ACTIONS_ARTIFACT_HOST_TIMEOUT_
 export const ACTIONS_ARTIFACT_TIMEOUT_MESSAGE =
   'Timed out downloading the artifact. Retry or download it on GitHub.'
 export const ACTIONS_ARTIFACT_CHUNK_BYTES = 256 * 1024
+/** RPCs that address one retained archive and therefore must stay on its start connection. */
+export const ACTIONS_ARTIFACT_TRANSFER_METHODS: ReadonlySet<string> = new Set([
+  'github.startActionsArtifactDownload',
+  'github.readActionsArtifactChunk',
+  'github.releaseActionsArtifactDownload'
+])
 export type ActionsArtifact = {
   id: number
   name: string

@@ -71,7 +71,7 @@ describe('host worktree creation while its renderer is unavailable', () => {
       ])
       vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'echo setup' } })
       vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-      vi.mocked(createSetupRunnerScript).mockReturnValue({
+      vi.mocked(createSetupRunnerScript).mockResolvedValue({
         runnerScriptPath: '/tmp/setup-runner.sh',
         envVars: {}
       })

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Store } from '../../src/main/persistence'
+import type { Store } from '../../src/main/persistence/loading-store/store'
 import * as requests from '@/store/github/actions-artifact-requests'
 
 const mocks = vi.hoisted(() => ({

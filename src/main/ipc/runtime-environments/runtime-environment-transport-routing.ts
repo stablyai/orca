@@ -1,3 +1,10 @@
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import {
+  type RuntimeEnvironmentSetupFailure,
+  runtimeEnvironmentSetupFailure
+} from '../../../shared/runtime-environment-subscription-setup'
+import { assertCrewSourceCurrent } from './runtime-environment-subscription-setup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -19,6 +26,7 @@ import {
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeSessionTabsDeltaEvents } from './runtime-environment-session-tabs-delta-decoding'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import { ACTIONS_ARTIFACT_TRANSFER_METHODS } from '../../../shared/github/actions-artifact-types'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
@@ -178,13 +186,24 @@ export async function subscribeRuntimeEnvironment(
   },
   isCurrent: () => boolean = () => true,
   signal?: AbortSignal,
-  preparation?: ManagedRuntimeCallPreparation
+  preparation?: ManagedRuntimeCallPreparation,
+  crewAttempt?: {
+    assertCurrent: () => void
+    observeFailure: (failure: RuntimeEnvironmentSetupFailure) => void
+  }
 ): Promise<RemoteRuntimeSubscription> {
   const callbacks = {
     ...rawCallbacks,
     onEvent: decodeSessionTabsDeltaEvents(method, rawCallbacks.onEvent)
   }
-  const environment = await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+  crewAttempt?.assertCurrent()
+  const environment = crewAttempt
+    ? resolveEnvironment(userDataPath, selector)
+    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation)
+  crewAttempt?.assertCurrent()
+  if (crewAttempt) {
+    assertCrewSourceCurrent(environment)
+  }
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
@@ -197,6 +216,16 @@ export async function subscribeRuntimeEnvironment(
   }
   const callbacksWithMarkUsed = {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
+      if (
+        crewAttempt &&
+        response._meta?.runtimeId != null &&
+        response._meta.runtimeId !== environment.runtimeId
+      ) {
+        throw new RemoteRuntimeClientError(
+          'runtime_environment_changed',
+          'Runtime environment identity changed; refresh and try again'
+        )
+      }
       if (response.ok === true) {
         markUsedOnce(response._meta.runtimeId)
       }
@@ -229,7 +258,7 @@ export async function subscribeRuntimeEnvironment(
         signal
       })
     }
-    return await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeRequest(
       pairedConnection,
       method,
       params,
@@ -237,14 +266,26 @@ export async function subscribeRuntimeEnvironment(
       callbacksWithMarkUsed,
       { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES, signal }
     )
+    if (crewAttempt) {
+      try {
+        throwIfSignalAborted(signal)
+        crewAttempt.assertCurrent()
+        assertCrewSourceCurrent(environment)
+      } catch (error) {
+        subscription.close()
+        throw error
+      }
+    }
+    return subscription
   } catch (error) {
-    if (error instanceof Error) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(
         environment,
         error.message,
         pairedConnection.endpoint
       )
     }
+    crewAttempt?.observeFailure(runtimeEnvironmentSetupFailure(error, 'subscription'))
     throw error
   }
 }
@@ -264,8 +305,6 @@ function shouldUseCachedRequestConnection(method: string): boolean {
     method === 'terminal.send' ||
     method === 'terminal.updateViewport' ||
     // Artifact sessions retain disconnect cleanup, so every chunk must share the start socket.
-    method === 'github.startActionsArtifactDownload' ||
-    method === 'github.readActionsArtifactChunk' ||
-    method === 'github.releaseActionsArtifactDownload'
+    ACTIONS_ARTIFACT_TRANSFER_METHODS.has(method)
   )
 }

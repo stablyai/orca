@@ -254,6 +254,43 @@ describe('releasing moved projects here', () => {
     }
   })
 
+  // A bring-back reads the host first: a live terminal or a stopped distro refuses with nothing
+  // turned off, so the host's automations never blink and no terminal is slept.
+  it('refuses a bring-back on its preflight before touching automations or terminals', async () => {
+    for (const [preflight, reason] of [
+      ['still-running', 'host-still-running'],
+      ['unreachable', 'host-unreachable']
+    ] as const) {
+      journal.chain = [move('m1', 'r1'), move('m2', 'r2')]
+      journal.released = []
+      window.reloads = 0
+      const stopHostAutomations = vi.fn(async () => automationsOff())
+      const stopHostCopies = vi.fn(async () => 'stopped' as const)
+      const result = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+        preflightHostCopies: vi.fn(async () => preflight),
+        stopHostAutomations,
+        stopHostCopies
+      }))
+      expect(result).toEqual({ released: false, reason })
+      expect(result).not.toHaveProperty('hostTerminalsAsleep')
+      expect(stopHostAutomations).not.toHaveBeenCalled()
+      expect(stopHostCopies).not.toHaveBeenCalled()
+      expect(journal.released).toEqual([])
+      expect(window.reloads).toBe(0)
+    }
+  })
+
+  it('brings moves back as an undo would once the preflight finds the host idle', async () => {
+    const result = await releaseWslMoveChainHere('/user-data', 'Ubuntu', [], () => ({
+      preflightHostCopies: vi.fn(async () => 'stopped' as const),
+      stopHostAutomations: vi.fn(async () => automationsOff()),
+      stopHostCopies: vi.fn(async () => 'stopped' as const)
+    }))
+    expect(result).toMatchObject({ released: true, repoIds: ['r2', 'r1'] })
+    expect(journal.released).toEqual(['m2', 'm1'])
+    expect(window.reloads).toBe(1)
+  })
+
   it('turns the automations back on when the terminals then fail to stop', async () => {
     const restore = vi.fn(async () => {})
     const result = await releaseWslMovedProjectHere('/user-data', { repoId: 'r2' }, [], () => ({

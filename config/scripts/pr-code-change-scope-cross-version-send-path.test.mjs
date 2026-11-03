@@ -4,9 +4,9 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 // Route code the suite executes; dispatcher registration alone is not coverage (#24901 missed send-path changes).
 describe('cross-version wire routing for the send path', () => {
   it.each([
-    'src/shared/agent-session-wire-refusals.ts',
-    'src/shared/structured-agent-session-mutation.ts',
-    'src/shared/structured-agent-session-send-mutation.ts',
+    'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
+    'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts',
+    'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
     'src/main/runtime/rpc/core.ts',
     'src/main/runtime/rpc/errors.ts',
     'src/main/runtime/rpc/orchestration-contract-fence.ts',
@@ -22,9 +22,9 @@ describe('cross-version wire routing for the send path', () => {
   })
 
   it.each([
-    'src/shared/structured-agent-session-send-evidence.ts',
-    'src/shared/structured-agent-session-composer.ts',
-    'src/shared/structured-agent-session-reducer.ts',
+    'src/shared/agent-session/requests/structured-agent-session-send-evidence.ts',
+    'src/shared/agent-session/view/structured-agent-session-composer.ts',
+    'src/shared/agent-session/structured-agent-session-reducer.ts',
     'src/main/runtime/orchestration/send-agent-turn.ts',
     'src/main/runtime/orchestration/orchestration-caller-identity.ts',
     'src/main/runtime/rpc/orchestration-legacy-mail.ts',

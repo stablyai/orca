@@ -77,15 +77,55 @@ describe('PanZoomImageDialog', () => {
     load(320, 160)
     await user.click(screen.getByRole('button', { name: 'Zoom in' }))
     canvas.setPointerCapture = vi.fn()
-    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
-    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 120 })
-    fireEvent.pointerUp(canvas, { pointerId: 1 })
+    fireEvent.pointerDown(canvas, {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+      altKey: true
+    })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 140, clientY: 120, altKey: true })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 140, clientY: 120, altKey: true })
 
     rerender(<PanZoomImageDialog open onOpenChange={() => {}} src="blob:file" title="shot.png" />)
     const image = load(4000, 2000)
     expect(image.style.width).toBe('968px')
     expect(image.style.transform).toBe('translate(16px, 58px)')
     expect(screen.getByRole('button', { name: 'Fit to screen' })).toBeDisabled()
+  })
+
+  it('clicks between fit and actual size, and pans only while Alt is held', () => {
+    render(<PanZoomImageDialog open onOpenChange={() => {}} src="blob:shot" title="shot.png" />)
+    const canvas = sizeCanvas()
+    canvas.setPointerCapture = vi.fn()
+    const image = screen.getByRole('img', { name: 'shot.png' })
+    Object.defineProperty(image, 'naturalWidth', { value: 2000 })
+    Object.defineProperty(image, 'naturalHeight', { value: 1000 })
+    fireEvent.load(image)
+    const press = (from: [number, number], to: [number, number], altKey = false): void => {
+      const [x, y] = from
+      fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: x, clientY: y, altKey })
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: to[0], clientY: to[1], altKey })
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: to[0], clientY: to[1], altKey })
+    }
+    expect(canvas).toHaveClass('cursor-zoom-in')
+
+    press([500, 300], [500, 300])
+    expect(image.style.width).toBe('2000px')
+    expect(image.style.transform).toBe('translate(-500px, -200px)')
+    expect(canvas).toHaveClass('cursor-zoom-out')
+
+    press([500, 300], [540, 320])
+    expect(image.style.transform).toBe('translate(-500px, -200px)')
+
+    fireEvent.keyDown(window, { key: 'Alt', altKey: true })
+    expect(canvas).toHaveClass('cursor-grab')
+    press([500, 300], [540, 320], true)
+    expect(image.style.transform).toBe('translate(-460px, -180px)')
+    fireEvent.keyUp(window, { key: 'Alt', altKey: false })
+
+    press([500, 300], [500, 300])
+    expect(image.style.width).toBe('968px')
   })
 
   it('shows the fallback when the image fails to load', () => {
