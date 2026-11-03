@@ -21049,7 +21049,9 @@
       "active": "Link active. Busy agents receive messages after their current turn.",
       "retryFirst": "The previous action is unconfirmed. Retry that action before starting another.",
       "link": "Link",
-      "stopUnrelated": "The current turn was started outside this link and was left running."
+      "stopUnrelated": "The current turn was started outside this link and was left running.",
+      "reasonResume": "Continued by the owner",
+      "stopIdle": "No active turn to stop"
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

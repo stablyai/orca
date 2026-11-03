@@ -223,6 +223,29 @@ describe('session link delivery through the real structured host', () => {
     expect(cancelTurn).toHaveBeenCalledOnce()
   })
 
+  it('records an already idle participant without a false unconfirmed-stop warning', async () => {
+    const { cancelTurn } = hostTestState()
+    message()
+    await redriveSessionLinks(db, SESSION)
+    await providerTurn('completed', store.event('report')?.operationId)
+    await stopSessionLinkTurns(store, 'link-test', 'stop-idle')
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(
+      store.events('link-test').find((e) => e.kind === 'control' && e.recipient === SESSION)?.detail
+    ).toBe('stop-idle')
+  })
+
+  it('keeps a stop unconfirmed while an accepted send has no provable provider turn', async () => {
+    const { cancelTurn } = hostTestState()
+    message()
+    await redriveSessionLinks(db, SESSION)
+    await stopSessionLinkTurns(store, 'link-test', 'stop-before-turn')
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(store.events('link-test').find((e) => e.kind === 'control')?.detail).toBe(
+      'stop-unconfirmed'
+    )
+  })
+
   it('leaves an unrelated human-triggered turn running on urgent link stop', async () => {
     const { host, cancelTurn } = hostTestState()
     await host.send({ callerKey: 'human' }, hostTestSendParams('Work on the owner task'))

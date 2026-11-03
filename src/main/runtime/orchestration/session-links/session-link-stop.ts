@@ -24,21 +24,39 @@ export async function stopSessionLinkTurns(
         return
       }
       const snapshot = await host.journalSnapshot(sessionId)
-      const turn = host.currentWork(sessionId)?.activeTurn()
+      const work = host.currentWork(sessionId)
+      const turn = work?.activeTurn()
       const userItemId = readAgentJournalTurn(turn?.item.body)?.userItemId
-      const ownTurn = store
-        .events(id)
-        .some(
-          (event) =>
-            event.recipient === sessionId &&
-            snapshot.submissions.some(
-              (s) =>
-                s.clientMessageId === event.operationId &&
-                s.dispatchState === 'accepted' &&
-                (userItemId === agentJournalSubmissionKey(event.operationId) ||
-                  (userItemId !== undefined && userItemId === s.providerItemId))
-            )
-        )
+      const events = store.events(id)
+      const completedInputs = new Set(
+        snapshot.items.flatMap(({ body }) => {
+          const completed = readAgentJournalTurn(body)
+          return completed?.state === 'completed' && completed.userItemId
+            ? [completed.userItemId]
+            : []
+        })
+      )
+      const unsettledLinkSend = snapshot.submissions.some(
+        (submission) =>
+          events.some(
+            (event) =>
+              event.recipient === sessionId && event.operationId === submission.clientMessageId
+          ) &&
+          submission.dispatchState !== 'rejected' &&
+          !completedInputs.has(agentJournalSubmissionKey(submission.clientMessageId)) &&
+          !(submission.providerItemId && completedInputs.has(submission.providerItemId))
+      )
+      const ownTurn = events.some(
+        (event) =>
+          event.recipient === sessionId &&
+          snapshot.submissions.some(
+            (s) =>
+              s.clientMessageId === event.operationId &&
+              s.dispatchState === 'accepted' &&
+              (userItemId === agentJournalSubmissionKey(event.operationId) ||
+                (userItemId !== undefined && userItemId === s.providerItemId))
+          )
+      )
       const eventId = createHash('sha256')
         .update(JSON.stringify([id, operationId, sessionId, 'stop']))
         .digest('hex')
@@ -57,7 +75,11 @@ export async function stopSessionLinkTurns(
             operationId: '',
             createdAt: Date.now(),
             body: '',
-            detail: turn ? 'stop-unrelated-turn' : 'stop-unconfirmed'
+            detail: turn
+              ? 'stop-unrelated-turn'
+              : work && !work.working() && !unsettledLinkSend
+                ? 'stop-idle'
+                : 'stop-unconfirmed'
           })
         }
         return

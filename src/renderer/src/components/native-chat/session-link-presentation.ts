@@ -5,6 +5,7 @@ import { translate as t } from '@/i18n/i18n'
 export function sessionLinkReason(reason: string): string {
   const labels: Record<string, string> = {
     pause: t('components.sessionLink.reasonPause', 'Paused by the owner'),
+    resume: t('components.sessionLink.reasonResume', 'Continued by the owner'),
     stop: t('components.sessionLink.reasonStop', 'Urgent stop requested'),
     end: t('components.sessionLink.reasonEnd', 'Link ended'),
     'turn-limit': t('components.sessionLink.reasonTurns', 'Automatic turn limit reached'),
@@ -33,6 +34,7 @@ export function sessionLinkReason(reason: string): string {
       'components.sessionLink.reasonUnknown',
       'Delivery is unconfirmed. Check the chat; this message will not be sent again.'
     ),
+    'stop-idle': t('components.sessionLink.stopIdle', 'No active turn to stop'),
     'stop-pending': t('components.sessionLink.stopPending', 'Stop requested'),
     'stop-acknowledged': t('components.sessionLink.stopAcknowledged', 'Link turn stopped'),
     'stop-unrelated-turn': t(
