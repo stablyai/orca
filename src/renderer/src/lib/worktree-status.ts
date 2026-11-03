@@ -7,8 +7,8 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafIdFromRoot
 } from '../../../shared/runtime-pane-title-leaf-id'
-import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
-import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
+import { containsAgentSpinnerGlyph } from '../../../shared/agent-status/title/agent-title-glyphs'
+import { isSyntheticAgentPermissionTitle } from '../../../shared/agent-status/title/synthetic-agent-title'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,

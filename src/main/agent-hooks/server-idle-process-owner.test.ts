@@ -6,12 +6,14 @@ import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { buildRuntimeMobileAgentStatus } from '../runtime/runtime-mobile-agent-status-builder'
 import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const servers: AgentHookServer[] = []
 const owner = {
   agent: 'claude',

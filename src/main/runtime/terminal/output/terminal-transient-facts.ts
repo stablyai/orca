@@ -6,9 +6,9 @@ import type {
 } from '../../../../shared/terminal-side-effect-facts'
 import {
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { isCursorNativeAgentTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,

@@ -1,9 +1,9 @@
 // Push hook-agent finish/input alerts from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
 import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
-import { agentMainAgentVerdict } from '../../shared/agent-main-agent-verdict'
+import { agentMainAgentVerdict } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { buildAgentNotificationId } from '../../shared/agent-notification-id'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
 import { isCoordinatorOnlyNews, withApprovalTitle } from '../../shared/dispatched-worker-attention'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'

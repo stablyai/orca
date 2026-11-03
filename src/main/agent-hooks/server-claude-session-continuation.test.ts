@@ -3,13 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import type { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
+import type { probeAgentProcessPresence } from '../../shared/agent-status/process/agent-process-presence-probe'
 import { buildBody, GOOD_PANE, PANE, postHookEvent } from './server.test-fixtures'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 
 const OLD = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const FORK = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

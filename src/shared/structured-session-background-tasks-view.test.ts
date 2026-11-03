@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import {
   structuredSessionBackgroundTasksView,
   structuredSessionConfirmedStopsStillListed,

@@ -1,5 +1,5 @@
-import type { AgentStatus } from '../../shared/agent-detection'
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import type { AgentStatus } from '../../shared/agent-status/title/agent-title-core'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalLaunchResult,
   SleepingAgentLaunchConfig

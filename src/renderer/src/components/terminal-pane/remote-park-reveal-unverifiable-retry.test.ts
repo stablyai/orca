@@ -10,7 +10,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -161,15 +165,20 @@ async function revealParkedRemotePane(
   }
   const pane = createPane(1)
   const { writes } = captureCallbackTerminalWrites(pane)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
   // Why the active pane: an inactive split defers its restore to the frame scheduler.
   const binding = await connectMockPanePty(
     pane,
     createManager(1, 1),
-    createDeps({
-      mountFollowsTerminalPark: true,
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: REMOTE_PTY_ID }
-    })
+    bindPaneAgentTitleMocks(
+      createDeps({
+        mountFollowsTerminalPark: true,
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: REMOTE_PTY_ID }
+      }),
+      agentTitleMocks
+    )
   )
   await flushAsyncTicks(30)
   expect(transport.connect).toHaveBeenCalledWith(

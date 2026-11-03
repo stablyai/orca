@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as AgentNameTokenMatchModule from './agent-name-token-match'
-import { getAgentLabel } from './agent-title-identity'
-import { detectAgentStatusFromTitle } from './agent-title-status'
+import * as AgentNameTokenMatchModule from './agent-status/title/agent-name-token-match'
+import { getAgentLabel } from './agent-status/title/agent-title-identity'
+import { detectAgentStatusFromTitle } from './agent-status/title/agent-title-status'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
 // Count the leaf titleHasAgentName regex to measure unchanged-title work across store writes.
-vi.mock('./agent-name-token-match', async (importOriginal) => {
+vi.mock('./agent-status/title/agent-name-token-match', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentNameTokenMatchModule>()
   return { ...actual, titleHasAgentName: vi.fn(actual.titleHasAgentName) }
 })

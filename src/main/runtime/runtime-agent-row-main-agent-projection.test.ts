@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
