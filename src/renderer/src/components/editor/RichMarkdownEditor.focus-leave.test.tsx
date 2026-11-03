@@ -5,7 +5,11 @@ import type { Editor } from '@tiptap/react'
 import type * as EditorInstance from './useRichMarkdownEditorInstance'
 import RichMarkdownEditor from './RichMarkdownEditor'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { installHappyDomSelectionNotificationTasks } from '../../../../../config/scripts/vitest-dom-setup'
+
+const initialStoreState = useAppStore.getState()
 
 const live = vi.hoisted((): { editor: Editor | null } => ({ editor: null }))
 vi.mock('./useRichMarkdownEditorInstance', async (importOriginal) => {
@@ -35,6 +39,7 @@ afterEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     live.editor = null
+    useAppStore.setState(initialStoreState, true)
   }
 })
 
@@ -265,6 +270,19 @@ it('publishes a held native range on outside release and exposes its review-note
     configurable: true,
     value: {
       ui: { setMarkdownEditorFocused: vi.fn(), onRichMarkdownContextCommand: () => () => {} }
+    }
+  })
+  // A review note can be added only once the editor can name the copy it belongs to.
+  useAppStore.setState({
+    worktreesByRepo: {
+      'release-workspace': [
+        makeWorktree({
+          id: 'release-workspace',
+          repoId: 'release-workspace',
+          path: '/repo',
+          diffComments: []
+        })
+      ]
     }
   })
   const view = render(
