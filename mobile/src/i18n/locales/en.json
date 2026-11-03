@@ -4524,6 +4524,7 @@
     "tooMany": "At most {{limit}} headers are supported.",
     "pairingHint": "Optional headers for this secure tunnel. Orca verifies the desktop before saving them in this phone's keychain. Never include them in a pairing link.",
     "saving": "Saving credentials…",
-    "configure": "Configure edge authentication"
+    "configure": "Configure edge authentication",
+    "saveFailed": "Could not save edge authentication."
   }
 }
