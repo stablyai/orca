@@ -214,5 +214,5 @@ it('renders only the new newest banner for a live notice, and says notes while e
   expect(bannerRenders.count).toBe(1)
   // The new prompt is the newest; every hidden notice is still a draft.
   expect(view.rows()[0].props.label).toBe('100 more notes not sent')
-  view.mounted.unmount()
+  act(() => view.mounted.unmount())
 })
