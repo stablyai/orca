@@ -4,7 +4,7 @@ import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-s
 import { nativeWindowsPathToPosixShellPath } from '../../shared/setup-runner-command'
 import { scriptDeclaresPosixShell } from '../../shared/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
-import { resolveWindowsGitBashShellPath } from '../git-bash'
+import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileSync } from '../git/command-runner/git-exec-file-sync'
 import { isLocalGitRuntimeRouterInstalled } from '../git/command-runner/local-git-runtime-route'
 import { readWorktreeGitPath } from '../git/worktree-git-path'

@@ -24,7 +24,9 @@ vi.mock('../agent-hooks/server', () =>
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )

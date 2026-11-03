@@ -106,7 +106,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',
   // These drive live zsh through node-pty and rely on Node's native PTY stream delivery.
-  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/pty/shell-startup/shell-startup-feature-channel.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/**/*real-pty*.test.ts',
@@ -163,7 +163,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/computer/desktop-script-serve-channel.test.ts',
   'src/main/providers/local-pty/local-pty-child-process-verdict.test.ts',
   'src/main/providers/working-directory-validation.test.ts',
-  'src/main/pty/posix-pty-process-groups.integration.test.ts',
+  'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
   'src/shared/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',

@@ -25,12 +25,16 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
-vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
+vi.mock('../main/pty/shell-startup/pwsh', () => ({
+  isPwshAvailableAsync: isPwshAvailableAsyncMock
+}))
 vi.mock('../main/wsl', () => ({
   isWslAvailableAsync: isWslAvailableAsyncMock,
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
-vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+vi.mock('../main/pty/shell-startup/git-bash', () => ({
+  isGitBashAvailable: isGitBashAvailableMock
+}))
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import {

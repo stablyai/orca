@@ -336,7 +336,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-history-deletion', () => ({
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 

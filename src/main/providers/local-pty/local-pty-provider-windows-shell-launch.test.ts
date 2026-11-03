@@ -1,6 +1,11 @@
+import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
+
+const { toLinuxPathMock } = vi.hoisted(() => ({
+  toLinuxPathMock: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/')
+}))
 
 const {
   existsSyncMock,
@@ -34,6 +39,11 @@ const {
   readWslDistroRunningStateMock: vi.fn()
 }))
 
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPathOwner>()),
+  toLinuxPath: toLinuxPathMock
+}))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
@@ -61,7 +71,7 @@ vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
-vi.mock('../../pty-descendant-termination', () => ({
+vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -93,7 +103,7 @@ vi.mock('../windows-pty-job-membership', () => ({
 vi.mock('../../wsl', async () => ({
   // The real parser, so both UNC spellings (\\wsl.localhost and \\wsl$) reach the launch plan.
   parseWslPath: (await import('../../../shared/wsl-paths')).parseWslUncPath,
-  toLinuxPath: (path: string) => path.replace(/^C:\\/i, '/mnt/c/').replace(/\\/g, '/'),
+  toLinuxPath: toLinuxPathMock,
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
@@ -111,7 +121,7 @@ vi.mock('../../wsl-background-distro-gate', () => ({
   readWslDistroRunningState: (...args: unknown[]) => readWslDistroRunningStateMock(...args)
 }))
 
-vi.mock('../../shell-prompt-readiness-probe', () => ({
+vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 
@@ -122,7 +132,7 @@ import {
   installLocalPtyProviderEnvSandbox,
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
-import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../../pty/powerlevel10k-wizard-env'
+import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 
 describe('LocalPtyProvider', () => {

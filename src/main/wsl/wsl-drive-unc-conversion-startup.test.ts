@@ -18,7 +18,7 @@ import { importProfileStateJson } from '../persistence/profile-state/profile-sta
 import Database from '../sqlite/sync-database'
 import { loadAgentSessionStoreRows } from '../runtime/agent-session/records/agent-session-record-rows'
 import { getAgentSessionConversation } from '../runtime/agent-session/records/agent-session-store-state'
-import { hashWorktreeId } from '../terminal-history-id'
+import { hashWorktreeId } from '../pty/history/terminal-history-id'
 import type * as Journal from './wsl-drive-unc-conversion-journal'
 import {
   listWslDriveUncConversions,
