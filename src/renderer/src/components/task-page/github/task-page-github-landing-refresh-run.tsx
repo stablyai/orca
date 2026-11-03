@@ -1,4 +1,4 @@
-import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
+import type { TaskPageGitHubLandingRefreshModel } from './task-page-github-landing-refresh-model'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
 import { useAppStore } from '@/store/index'
 import {
@@ -6,7 +6,7 @@ import {
   TASK_PAGE_GITHUB_RESUME_FRESH_MS
 } from '@/components/task-page/github/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 import { sortWorkItemsByNumber, taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 import {
   materializeTaskPageItemList,
@@ -23,7 +23,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
 import { translate } from '@/i18n/i18n'
-export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
+export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefreshModel) {
   const {
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,

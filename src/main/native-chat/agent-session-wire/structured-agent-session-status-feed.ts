@@ -3,7 +3,7 @@
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { createSavedStructuredStatusGroup } from './structured-agent-session-saved-status'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkRecord } from '../../../shared/agent-status-child-work'
@@ -199,6 +199,7 @@ export class StructuredAgentSessionStatusFeed {
       record,
       state: projection.state,
       stopping: projection.stopping,
+      usageLimitContinue: this.deps.readUsageLimitContinue?.(sessionId),
       childWork: this.childWorkFields(sessionId, session.params.provider),
       namingFailure: this.deps.namingFailure?.(sessionId),
       now: this.deps.now

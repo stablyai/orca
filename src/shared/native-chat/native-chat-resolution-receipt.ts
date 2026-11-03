@@ -1,0 +1,155 @@
+import type { AgentSessionSettledBodyDescriptor } from '../agent-session-settled-body-wire'
+import type {
+  AgentJournalApprovalItem,
+  AgentJournalQuestionItem,
+  AgentJournalResolution
+} from '../agent-session/journal/agent-session-journal-types'
+import {
+  agentSessionPromptQuestions,
+  legacyAgentSessionQuestionAnswers
+} from '../agent-session/agent-session-question-answer'
+import type { NativeChatAskRowSubject } from './input/native-chat-ask-row'
+import { agentSessionFormChoices } from '../agent-session-form'
+
+/** Desktop's fallbacks for its translations; the phone's words. */
+export const NATIVE_CHAT_RECEIPT_COPY = {
+  emptyAnswer: 'Empty answer',
+  unavailable: 'Selected answer unavailable',
+  resolved: 'Resolved',
+  cancelled: 'Cancelled',
+  resolver: 'Answered on {{device}}',
+  cancelledBy: 'Cancelled on {{device}}'
+} as const
+
+export function isNativeChatLocalResolver(resolvedBy: string): boolean {
+  return resolvedBy === 'desktop-renderer' || resolvedBy.startsWith('trusted-local:')
+}
+
+export function nativeChatReceiptDevice(
+  resolution: AgentJournalResolution,
+  labels: { current: string; computer: string; unknown: string }
+): string {
+  const device = resolution.resolvedByDevice
+  if (device?.kind === 'current') {
+    return labels.current
+  }
+  if (device?.kind === 'named' && typeof device.name === 'string' && device.name.trim()) {
+    return device.name
+  }
+  return resolution.resolvedBy && isNativeChatLocalResolver(resolution.resolvedBy)
+    ? labels.computer
+    : labels.unknown
+}
+
+export type NativeChatResolvedPrompt = (AgentJournalApprovalItem | AgentJournalQuestionItem) & {
+  deferredBody?: { itemId: string; revision: number; descriptor: AgentSessionSettledBodyDescriptor }
+}
+/** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
+export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
+
+export function nativeChatReceiptAnswers(
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
+): NativeChatReceiptAnswer[] {
+  if (body.resolution.state !== 'resolved') {
+    return []
+  }
+  if (body.kind === 'approval' && body.form && body.resolution.formContent !== undefined) {
+    const content = body.resolution.formContent
+    return body.form.fields.flatMap((field) => {
+      if (!Object.hasOwn(content, field.name)) {
+        return []
+      }
+      const value = content[field.name]
+      return [
+        {
+          question: field.schema.title ?? field.name,
+          answer:
+            agentSessionFormChoices(field, booleanLabels).find((choice) => choice.value === value)
+              ?.label ?? String(value)
+        }
+      ]
+    })
+  }
+  const selected = body.resolution.selectedOptionId
+  if (body.kind === 'question') {
+    // Rows written before hosts recorded structured answers carry only the packed form.
+    const answers =
+      body.resolution.answers ??
+      (selected ? legacyAgentSessionQuestionAnswers(body, selected) : null)
+    return agentSessionPromptQuestions(body).map((question) => {
+      const answer = answers?.find((entry) => entry.questionId === question.id)
+      const labels = answer?.optionIds.map(
+        (id) => question.options.find((option) => option.id === id)?.label
+      )
+      const valid = labels?.every((label) => label !== undefined)
+      const parts = [...(labels ?? []), ...(answer?.other?.trim() ? [answer.other] : [])]
+      return {
+        question: body.questions ? question.question : null,
+        answer: !valid
+          ? null
+          : parts.length > 0
+            ? parts.join(' · ')
+            : answer?.other !== undefined
+              ? ''
+              : null
+      }
+    })
+  }
+  const option = body.options.find((option) => option.id === selected)
+  return [{ question: null, answer: option?.label ?? null }]
+}
+
+export function nativeChatReceiptAnswerEntries(
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
+): { key: string | undefined; answer: NativeChatReceiptAnswer }[] {
+  let keys: string[]
+  if (body.kind === 'question') {
+    keys = agentSessionPromptQuestions(body).map((question) => question.id)
+  } else {
+    const content = body.resolution.state === 'resolved' ? body.resolution.formContent : undefined
+    keys =
+      body.form && content !== undefined
+        ? body.form.fields
+            .filter((field) => Object.hasOwn(content, field.name))
+            .map((field) => field.name)
+        : ['answer']
+  }
+  return nativeChatReceiptAnswers(body, booleanLabels).map((answer, index) => ({
+    key: keys[index],
+    answer
+  }))
+}
+
+/** Null for an approval, which shows its title instead. */
+export function nativeChatReceiptSubject(
+  body: NativeChatResolvedPrompt
+): NativeChatAskRowSubject | null {
+  if (body.kind !== 'question') {
+    return null
+  }
+  if (body.questions && body.questions.length > 1) {
+    return { kind: 'questions', questions: body.questions.map((entry) => entry.question) }
+  }
+  // After resolution keep Claude’s grouped heading for a lone multi-select to avoid repeating the question above its answer.
+  return {
+    kind: 'question',
+    text:
+      body.resolution.state !== 'pending' &&
+      body.questions?.length === 1 &&
+      body.questions[0]?.question !== body.question
+        ? body.question
+        : (body.questions?.[0]?.question ?? body.question)
+  }
+}
+
+/** The question line above an answer, or null where the ask row already says it. */
+export function nativeChatReceiptAnswerHeading(
+  subject: NativeChatAskRowSubject | null,
+  answer: NativeChatReceiptAnswer
+): string | null {
+  return answer.question && !(subject?.kind === 'question' && answer.question === subject.text)
+    ? answer.question
+    : null
+}

@@ -136,8 +136,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   }
 
   /** Includes resume-identity-only provider rows. */
-  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
-    return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  getAgentProviderSessionRows(tabId?: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.(tabId) ?? []
   }
 
   getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
@@ -272,7 +272,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
-  protected readonly accounts = new RuntimeAccountController()
+  protected readonly accounts = new RuntimeAccountController(() => this.notifier)
 
   protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)
 

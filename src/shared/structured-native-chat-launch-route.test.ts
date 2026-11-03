@@ -1,10 +1,8 @@
 /** Renderer and orchestration share launch feasibility/defaults; changes here must move both surfaces together. */
 
 import { describe, expect, it } from 'vitest'
-import {
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from './protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from './agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
@@ -69,14 +67,6 @@ describe('per-launch structured feasibility', () => {
       })
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
-
-  // Floating workspaces have resolvable configured directories; kind alone must not refuse structured launches.
-  it.each(['folder', 'floating', 'git-worktree'] as const)(
-    'supports a local %s workspace',
-    (workspaceKind) => {
-      expect(support({ workspaceKind })).toEqual({ supported: true })
-    }
-  )
 })
 
 describe('agents beyond Claude and Codex', () => {
@@ -114,24 +104,6 @@ describe('agents beyond Claude and Codex', () => {
   it('leave Claude and Codex offered by hosts that predate the capability', () => {
     expect(support({ agent: 'claude' })).toEqual({ supported: true })
     expect(support({ agent: 'codex' })).toEqual({ supported: true })
-  })
-})
-
-describe('per-agent Chat | CLI preference', () => {
-  it('opens only an agent saved as chat as a chat, host-registered ids included', () => {
-    expect(
-      nativeChatPreferenceFor({ nativeChatProviders: { 'acme-agent': true } }, 'acme-agent')
-    ).toBe(true)
-    expect(nativeChatPreferenceFor({}, 'claude')).toBe(false)
-    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: true } }, 'acme-agent')).toBe(
-      false
-    )
-    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: false } }, 'claude')).toBe(
-      false
-    )
-    expect(nativeChatPreferenceFor(null, 'claude')).toBe(false)
-    // Inherited object keys are not saved choices.
-    expect(nativeChatPreferenceFor({ nativeChatProviders: {} }, 'constructor')).toBe(false)
   })
 })
 

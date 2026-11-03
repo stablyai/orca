@@ -1,4 +1,4 @@
-import { structuredAgentSessionSendOpeningTurn } from '../../../shared/structured-agent-session-opening-send'
+import { structuredAgentSessionSendOpeningTurn } from '../../../shared/agent-session/requests/structured-agent-session-opening-send'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'

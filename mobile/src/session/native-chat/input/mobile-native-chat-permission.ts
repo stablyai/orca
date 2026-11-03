@@ -1,5 +1,5 @@
 import type { AgentSessionFormContent } from '../../../../../src/shared/agent-session-form'
-import type { ChatApproval } from '../../../../../src/shared/native-chat-interactive-prompt'
+import type { ChatApproval } from '../../../../../src/shared/native-chat/input/native-chat-interactive-prompt'
 
 export type MobileChatPermission = ChatApproval & {
   formSubmitEnabled?: boolean

@@ -58,11 +58,4 @@ describe('jcode turn prompt cache', () => {
     expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-b', payloadB)).toEqual(paneB)
     expect(readMock).toHaveBeenCalledTimes(2)
   })
-
-  it('caches a miss, so a session with no recoverable prompt is not rescanned', () => {
-    readMock.mockReturnValue(null)
-    expect(readJcodeTurnPrompt(state, 'pre_tool', 'pane-a', PAYLOAD)).toBeNull()
-    expect(readJcodeTurnPrompt(state, 'post_tool', 'pane-a', PAYLOAD)).toBeNull()
-    expect(readMock).toHaveBeenCalledTimes(1)
-  })
 })

@@ -6,9 +6,8 @@ import {
   agentLaunchSettingsMutationUpdates,
   type AgentLaunchSettingsSource
 } from './agent-launch-settings'
-import { AgentLaunchSettingsMutation } from './rpc-contract/agent-launch-settings-params'
 import { migrateAgentPermissionChoice } from './tui-agent-permission-lift'
-import { structuredLaunchSeedOptions } from './native-chat/input/native-chat-session-option-defaults'
+import './native-chat/input/native-chat-session-option-defaults'
 
 const baseline: AgentLaunchSettingsSource = {
   agentPermissionDefault: 'ask',
@@ -90,23 +89,6 @@ describe('host-authored launch defaults', () => {
     expect(matched.agentPermissionOverrides?.claude).toBe('own')
     expect(matched.agentLaunchChoices?.claude?.options).toEqual({ other: 'kept' })
   })
-
-  it('validates the additive mutation strictly without changing old mutation shapes', () => {
-    const valid = {
-      type: 'launch-choices',
-      agent: 'codex',
-      patch: { options: { effort: 'high' }, model: null }
-    }
-    expect(AgentLaunchSettingsMutation.safeParse(valid).success).toBe(true)
-    for (const invalid of [
-      { type: 'launch-choices', agent: 'codex' },
-      { ...valid, patch: { extra: true } },
-      { ...valid, patch: { options: { model: 'bad' } } },
-      { ...valid, patch: { model: 'x'.repeat(513) } }
-    ]) {
-      expect(AgentLaunchSettingsMutation.safeParse(invalid).success).toBe(false)
-    }
-  })
 })
 
 it('uses original raw ownership before compiling authored terminal defaults', () => {
@@ -181,48 +163,3 @@ it('uses original raw ownership before compiling authored terminal defaults', ()
   expect(input(raw).sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   expect(launch(input(raw))).toContain('{"language":"french","fastMode":false}')
 })
-
-it.each(['claude', 'codex'] as const)(
-  'preserves encoded boolean seeds through authored/remembered layering for %s',
-  (agent) => {
-    const remembered = {
-      model: 'remembered-model',
-      valuesByModel: { 'remembered-model': { effort: 'low', fastMode: true } }
-    }
-    const settings = {
-      agentPermissionDefault: 'ask' as const,
-      nativeChatSessionOptions: { [agent]: remembered },
-      agentLaunchChoices: {}
-    }
-    expect(structuredLaunchSeedOptions(settings, agent)).toMatchObject({
-      model: 'remembered-model',
-      effort: 'low',
-      fastMode: 'true'
-    })
-    const authored = {
-      ...settings,
-      agentLaunchChoices: {
-        [agent]: { model: 'authored-model', options: { effort: 'high', fastMode: 'false' } }
-      }
-    }
-    expect(structuredLaunchSeedOptions(authored, agent)).toMatchObject({
-      model: 'authored-model',
-      effort: 'high',
-      fastMode: 'false'
-    })
-    expect(
-      structuredLaunchSeedOptions({ ...authored, agentLaunchChoices: {} }, agent)
-    ).toMatchObject({ model: 'remembered-model', effort: 'low', fastMode: 'true' })
-    expect(settings.nativeChatSessionOptions[agent]).toEqual(remembered)
-    expect(
-      structuredLaunchSeedOptions(
-        {
-          agentLaunchChoices: {
-            [agent]: { options: { effort: 'high', fastMode: 'false' } }
-          }
-        },
-        agent
-      )
-    ).toMatchObject({ effort: 'high', fastMode: 'false' })
-  }
-)

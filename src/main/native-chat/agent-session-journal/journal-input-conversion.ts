@@ -1,5 +1,5 @@
 import { readJournalLegacyCards } from './journal-queue-import'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import { initializeJournalInputOrder, journalInputOrder } from './journal-input-order'
 import type { JournalOutcomeFold } from './journal-outcome-codec'

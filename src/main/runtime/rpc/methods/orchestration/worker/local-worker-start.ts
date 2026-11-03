@@ -250,7 +250,7 @@ export async function startLocalWorker(args: {
       terminalOwnership: external ? 'external' : 'created'
     })
     if (workerChat) {
-      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+      rebindReusedStructuredWorker(terminalHandle, db)
     }
 
     result = await deliverAndSettleWorkerStartReadiness({
@@ -302,7 +302,8 @@ export async function startLocalWorker(args: {
     recordStart({
       dispatchId: started.dispatch.id,
       workerAddress: terminalHandle,
-      task: task.spec
+      task: task.spec,
+      agent: agent ?? null
     })
   }
   return result

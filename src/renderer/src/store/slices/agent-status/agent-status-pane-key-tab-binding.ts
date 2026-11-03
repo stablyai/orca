@@ -1,4 +1,4 @@
-import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session-start-time'
+import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,

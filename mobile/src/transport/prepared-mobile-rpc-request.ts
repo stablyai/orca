@@ -8,6 +8,10 @@ import {
   type RemoteRuntimePreparedRequest
 } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../src/shared/abort-signal-reason'
 
 type Request = { method: string; params?: unknown; envelope?: RpcEnvelopeFields }
 export type PreparedMobileRpcRequests = Map<
@@ -48,7 +52,8 @@ export function preparedMobileRequestSender(args: {
     method: string,
     params: unknown,
     timeoutMs: number,
-    envelope?: RpcEnvelopeFields
+    envelope?: RpcEnvelopeFields,
+    signal?: AbortSignal
   ) => Promise<RpcResponse>
   observe: (
     method: string,
@@ -60,6 +65,7 @@ export function preparedMobileRequestSender(args: {
 }): RpcClient['sendRequest'] {
   const pending: PreparedMobileRpcRequests = new Map()
   return async (method, params, options) => {
+    throwIfSignalAborted(options?.signal)
     const budget = openRpcRequestBudget(options)
     if (options?.failWhenDisconnected && args.getState() !== 'connected') {
       throw new Error(`Not connected: ${method}`)
@@ -68,12 +74,15 @@ export function preparedMobileRequestSender(args: {
       pending,
       { method, params, envelope: options?.envelope },
       async (snapshot) => {
-        await args.waitForConnected(budget.timeoutMs)
+        await waitForPromiseWithSignal(args.waitForConnected(budget.timeoutMs), options?.signal)
+        throwIfSignalAborted(options?.signal)
+        options?.beforeSend?.()
         const response = await args.send(
           snapshot.method,
           snapshot.params,
           resolvePostConnectRequestTimeout(budget, args.requestTimeoutMs),
-          snapshot.envelope
+          snapshot.envelope,
+          options?.signal
         )
         return args.observe(snapshot.method, response, true, snapshot.envelope)
       }

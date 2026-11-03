@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { Identifier } from './structured-agent-session-identifiers'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
-import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../agent-session-question-answer'
+import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH as MAX_RESPONSE_OPTION_ID_LENGTH } from '../agent-session/agent-session-question-answer'
 import { AgentSessionFormContentSchema } from '../agent-session-form'
 
 export const RespondParams = z

@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { withGitHubRepoExecution } from './github-repository-identity'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
@@ -5,7 +6,7 @@ import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
 } from '../../shared/github/repository-identity-key'
-import { shouldProbeGitRemote } from '../git/remote-name-listing'
+import { shouldProbeGitRemote } from '../git/remotes/remote-name-listing'
 import { ghRepoExecOptions, githubRepoContext, type LocalGitExecOptions } from './gh-utils'
 import { isGitHubHostAuthenticated } from './github-enterprise-repository'
 import { githubHostExecOptions } from './github-repository-host'
@@ -230,27 +231,34 @@ export async function resolveGitHubRepoExecution(
   repoPath: string,
   repository?: GitHubApiRepositoryResolution,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  expectedGhAccount?: GhAccountBinding | null
 ): Promise<GitHubRepoExecution> {
-  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    // Retain upstream-first issue resolution with the same host-pinned execution options.
-    const requestedRepository = typeof repository === 'function' ? await repository() : repository
-    // Preserve authoritative nulls instead of replacing them with origin.
-    const ownerRepo =
-      typeof repository === 'function' && !requestedRepository
-        ? null
-        : await resolveGitHubApiRepository(
-            repoPath,
-            requestedRepository,
-            connectionId,
-            localGitOptions
-          )
-    return {
-      ownerRepo,
-      ghOptions: {
-        ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
-        ...githubHostExecOptions(ownerRepo)
+  return withGitHubRepoExecution(
+    repoPath,
+    connectionId,
+    localGitOptions,
+    async () => {
+      // Retain upstream-first issue resolution with the same host-pinned execution options.
+      const requestedRepository = typeof repository === 'function' ? await repository() : repository
+      // Preserve authoritative nulls instead of replacing them with origin.
+      const ownerRepo =
+        typeof repository === 'function' && !requestedRepository
+          ? null
+          : await resolveGitHubApiRepository(
+              repoPath,
+              requestedRepository,
+              connectionId,
+              localGitOptions
+            )
+      return {
+        ownerRepo,
+        ghOptions: {
+          ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+          ...githubHostExecOptions(ownerRepo)
+        }
       }
-    }
-  })
+    },
+    expectedGhAccount
+  )
 }

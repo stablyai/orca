@@ -1,12 +1,13 @@
 import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client-contract'
 import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
 import {
-  BRIDGE_MAX_PENDING_REQUESTS,
   BRIDGE_MAX_SUBSCRIPTIONS,
+  bridgePendingRequestCap,
   isBridgeFrameWithinCap,
   utf8ByteLength
 } from './bridge-caps'
-import { BridgeConnectionCache } from './bridge-client-connection-cache'
+import { BridgeConnectionCache, type BridgeSnapshotOutcome } from './bridge-client-connection-cache'
+import type { BridgeConnectionPathSource } from './bridge-connection-snapshot'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import * as shell from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
@@ -18,7 +19,8 @@ import {
   BridgeClientNotReadyError,
   BridgeRequestOversizedError,
   BridgeSendFailedError,
-  BridgeShellReplacedError
+  BridgeShellReplacedError,
+  throwIfBridgeSignalAborted
 } from './bridge-client-errors'
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
@@ -33,8 +35,7 @@ import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './brid
 import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
-  type BridgeClientMessage,
-  type BridgeConnectionSnapshot
+  type BridgeClientMessage
 } from './bridge-envelope'
 
 export type { BridgeShellSession } from './bridge-client-session'
@@ -62,6 +63,8 @@ export type BridgeRpcClientOptions = {
 }
 
 export type BridgeRpcClient = RpcClient &
+  BridgeConnectionPathSource &
+  Required<Pick<RpcClient, 'getShellHostStatus'>> &
   shell.BridgeShellSessionListeners & {
     /**
      * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
@@ -99,9 +102,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   let closed = false
   let idCounter = 0
 
-  function report(diagnostic: BridgeRpcClientDiagnostic): void {
-    options.onDiagnostic?.(diagnostic)
-  }
+  const report = (diagnostic: BridgeRpcClientDiagnostic) => options.onDiagnostic?.(diagnostic)
 
   // Never throw: serialization/transport failure must return control to request-id cleanup. Keep JSON.stringify inside try for cycles, BigInt and throwing toJSON.
   // Refuse oversize using the shell’s exact predicate before posting, or the receiver drops it and leaves the caller waiting forever.
@@ -132,7 +133,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   }
 
   const subscriptions = new BridgeClientSubscriptions({
-    send: (frame) => posted(frame),
+    send: posted,
     onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
@@ -147,13 +148,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
-  function snapshot(): BridgeConnectionSnapshot {
-    const held = cache.read()
-    if (held === null) {
-      throw new BridgeClientNotReadyError()
-    }
-    return held
-  }
+  const snapshot = () => cache.require()
 
   // Repeated init for the same session updates route/insets/cache while preserving exchanges and the original storage snapshot. A different session id invalidates prior work.
   const shellSession = shell.createBridgeClientShellSession({
@@ -162,17 +157,14 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       requests.closeAll(replaced)
       subscriptions.failAll(replaced.message)
     },
-    prime: (connection) => {
-      cache.prime(connection)
-    }
+    prime: (connection) => cache.prime(connection)
   })
 
-  function acceptState(snapshotFromShell: BridgeConnectionSnapshot): void {
-    if (cache.apply(snapshotFromShell) !== 'stale') {
-      return
+  function acceptState(outcome: BridgeSnapshotOutcome): void {
+    if (outcome === 'stale') {
+      report({ kind: 'state-out-of-order' })
+      handshake.restart()
     }
-    report({ kind: 'state-out-of-order' })
-    handshake.restart()
   }
 
   const back = createPageBackConsumers({
@@ -194,7 +186,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       back.reassert()
       terminalKeys.reassert()
     },
-    acceptState,
+    acceptState: (connection) => acceptState(cache.apply(connection)),
+    acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
@@ -218,15 +211,16 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       // Return a rejected promise: deferred operations hand it back directly, so synchronous throws would bypass callers’ promise catches.
       return Promise.reject(new BridgeClientClosedError())
     }
-    if (requests.size >= BRIDGE_MAX_PENDING_REQUESTS) {
-      return Promise.reject(
-        new BridgeClientCapExceededError(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests in flight`)
-      )
-    }
     const [method, params, requestOptions] = args
-    return new Promise<RpcResponse>((resolve, reject) => {
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(method))
+    if (requests.size >= cap) {
+      return Promise.reject(new BridgeClientCapExceededError(`over ${cap} requests in flight`))
+    }
+    throwIfBridgeSignalAborted(requestOptions?.signal)
+    requestOptions?.beforeSend?.()
+    const id = nextId()
+    const response = new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
-      const id = nextId()
       requests.open(id, { resolve, reject }, requestOptions?.timeoutMs ?? 30_000, method)
       const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
@@ -244,6 +238,9 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
           outcome === 'oversized' ? new BridgeRequestOversizedError() : new BridgeSendFailedError()
         )
       }
+    })
+    return requests.wait(id, response, requestOptions, () => {
+      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
     })
   }
 
@@ -315,6 +312,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
     getRequestByteCapacity: () => shellSession.current()?.inboundMessageBytes ?? 655360,
+    ...cache.pathSource(),
+    getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),

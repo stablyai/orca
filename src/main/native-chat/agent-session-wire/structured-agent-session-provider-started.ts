@@ -1,14 +1,11 @@
 import type { StructuredAgentSessionOptionsReportedEvent } from './structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from './structured-agent-session-provider-open-contract'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChildIdentity
+  StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import {
   markProviderChildStarted,
-  sameProviderChild,
-  structuredAgentSessionConversationFence
+  sameProviderChild
 } from './structured-agent-session-provider-child'
 import {
   saveStructuredAgentSessionListing,
@@ -20,14 +17,16 @@ import {
   noteStructuredAgentSessionReportedOptions
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
-import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
+import { AgentSessionStartFailure } from './structured-agent-session-start-failure'
 import {
-  applyStructuredRewindRecovery,
-  readStructuredRewindRecovery,
-  type StructuredRewindRecoveryEvidence
-} from './structured-rewind-recovery'
+  applyRewindAtStart,
+  readRewindAtStart,
+  recordStartedHandle,
+  refusedStart,
+  type OpenedProvider
+} from './structured-agent-session-start-provider-answer'
+import type { StructuredRewindRecoveryEvidence } from './structured-rewind-recovery'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -36,214 +35,152 @@ export type StructuredAgentSessionProviderStartedContext = {
   now: () => number
   publishStatus?: (sessionId: string) => void
   runtimeState: {
-    startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'ready' | 'onClock' | 'readiness'>
+    startupAttempts: Pick<
+      StructuredAgentSessionStartupAttempts,
+      'ready' | 'onClock' | 'readiness' | 'own' | 'disown' | 'failed' | 'released' | 'rootExit'
+    >
     acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   }
   /** Commits the child's buffered lifecycle events. */
   flushLifecycle?: (sessionId: string) => Promise<unknown>
   /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
-  stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
 }
 
-type OpenedProvider = StructuredAgentSessionProviderOpenResult & {
-  sessionId: string
-  fence: number
-  acquisitionGeneration: string
-}
+/** A failure is the adapter's verdict on required provider work or on this child ending before it
+ *  was ready, or Orca refusing what the open answered; `stale` retires only this owner. */
+export type StructuredAgentSessionProviderStartedOutcome =
+  | 'ready'
+  | 'stale'
+  | AgentSessionStartFailure
 
 export async function settleStructuredAgentSessionProviderStarted(
   context: StructuredAgentSessionProviderStartedContext,
   event: OpenedProvider,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<StructuredAgentSessionProviderStartedOutcome> {
   // Read provider state outside serialization so sends can still be accepted.
   const rewind = await readRewindAtStart(context, event, signal)
+  // Required provider work's own verdict outranks this child's later death.
+  if (rewind instanceof AgentSessionStartFailure) {
+    return rewind
+  }
+  const child = { generation: event.acquisitionGeneration, fence: event.fence }
+  // Only the adapter's word on this exact acquisition says it died; absence alone says nothing.
+  const ended = () =>
+    context.deps.adapter.startupEnding?.(event.sessionId, event.acquisitionGeneration)
+  const local: LocalSettlement = { started: false, fenced: false }
+  // A death the adapter reports ends the start without waiting on its bookkeeping below, but
+  // never once Orca's own handle or rewind write began: only that write's answer says whether
+  // the start may run again, and the contract guard bounds the wait for it.
+  const died = context.runtimeState.startupAttempts.rootExit(event.sessionId, child).then(() => {
+    const ending = local.started ? undefined : ended()
+    if (!ending) {
+      return new Promise<never>(() => {})
+    }
+    local.fenced = true
+    return ending
+  })
+  return Promise.race([died, settleReady(context, event, rewind, ended, local, signal)])
+}
+
+/** `fenced`: the death decided the start, so its local writes never begin. */
+type LocalSettlement = { started: boolean; fenced: boolean }
+
+function settleReady(
+  context: StructuredAgentSessionProviderStartedContext,
+  event: OpenedProvider,
+  rewind: StructuredRewindRecoveryEvidence,
+  ended: () => AgentSessionStartFailure | undefined,
+  local: LocalSettlement,
+  signal?: AbortSignal
+): Promise<StructuredAgentSessionProviderStartedOutcome> {
+  const child = { generation: event.acquisitionGeneration, fence: event.fence }
   // Restored history is committed and the child's own events drained before its turns are judged.
-  await context.flushLifecycle?.(event.sessionId)
-  // Follow attach publication so its proven lease has committed.
-  await context.serialize(event.sessionId, async () => {
-    signal?.throwIfAborted()
-    const session = context.sessions.get(event.sessionId)
-    const child = { generation: event.acquisitionGeneration, fence: event.fence }
-    // Stale or expired startup cannot lift the current child’s barrier.
-    if (
-      !session?.child ||
-      session.child.phase !== 'starting' ||
-      !sameProviderChild(session.child, child) ||
-      !context.runtimeState.startupAttempts.onClock(event.sessionId, child)
-    ) {
-      return null
-    }
-    if (!(await recordStartedHandle(context, event))) {
-      context.stopStartingChild(event.sessionId, child)
-      return null
-    }
-    if (!(await applyRewindAtStart(context, event.sessionId, session, rewind))) {
-      context.stopStartingChild(event.sessionId, child)
-      return null
-    }
-    if (
-      !context.runtimeState.startupAttempts.onClock(event.sessionId, child) ||
-      !markProviderChildStarted(session, child)
-    ) {
-      return null
-    }
-    await settleUnheldStructuredAgentSessionTurns(
-      session.journal,
-      event.sessionId,
-      child.fence,
-      event.acquisitionGeneration,
-      context.deps.adapter.liveTurnId?.(event.sessionId)
-    ).catch((error: unknown) =>
-      context.deps.logger.warn('settling turns the agent is not running failed', {
-        scope: 'unheld-turns',
-        sessionId: event.sessionId,
-        error
-      })
-    )
-    const sourceChild = session.child
-    context.runtimeState.startupAttempts.ready(event.sessionId, child)
-    noteStructuredAgentSessionRuntimePermission(session.child, event.reportedOptions, true)
-    context.publishStatus?.(event.sessionId)
-    await noteStructuredAgentSessionReportedOptions(
-      context,
-      event.sessionId,
-      child.fence,
-      event.reportedOptions
-    )
-    void context.wakeDelivery(event.sessionId)
-    noteStructuredAgentSessionProviderStarted(
-      context.deps,
-      event.sessionId,
-      () =>
-        context.sessions.get(event.sessionId)?.child === sourceChild &&
-        sourceChild?.catalogSource?.() !== false
-    )
-    if (event.catalogListing) {
-      saveStructuredAgentSessionListing(
+  return Promise.resolve(context.flushLifecycle?.(event.sessionId)).then(() =>
+    // Follow attach publication so its proven lease has committed.
+    context.serialize(event.sessionId, async () => {
+      signal?.throwIfAborted()
+      const session = context.sessions.get(event.sessionId)
+      const ending = ended()
+      const current = session?.child && sameProviderChild(session.child, child) ? session : null
+      if (!current?.child) {
+        return ending ?? 'stale'
+      }
+      // Stale or expired startup cannot lift the current child’s barrier.
+      if (
+        current.child.phase !== 'starting' ||
+        !context.runtimeState.startupAttempts.onClock(event.sessionId, child)
+      ) {
+        return 'stale'
+      }
+      if (ending || local.fenced) {
+        return ending ?? 'stale'
+      }
+      local.started = true
+      if (
+        !(await recordStartedHandle(context, event)) ||
+        !(await applyRewindAtStart(context, event.sessionId, current, rewind))
+      ) {
+        return refusedStart()
+      }
+      signal?.throwIfAborted()
+      // The writes succeeded; a death meanwhile is still this start's outcome.
+      const endedWhileWriting = ended()
+      if (endedWhileWriting) {
+        return endedWhileWriting
+      }
+      if (
+        !context.runtimeState.startupAttempts.onClock(event.sessionId, child) ||
+        !markProviderChildStarted(current, child)
+      ) {
+        return 'stale'
+      }
+      await settleUnheldStructuredAgentSessionTurns(
+        current.journal,
+        event.sessionId,
+        child.fence,
+        event.acquisitionGeneration,
+        context.deps.adapter.liveTurnId?.(event.sessionId)
+      ).catch((error: unknown) =>
+        context.deps.logger.warn('settling turns the agent is not running failed', {
+          scope: 'unheld-turns',
+          sessionId: event.sessionId,
+          error
+        })
+      )
+      const sourceChild = current.child
+      context.runtimeState.startupAttempts.ready(event.sessionId, child)
+      noteStructuredAgentSessionRuntimePermission(current.child, event.reportedOptions, true)
+      context.publishStatus?.(event.sessionId)
+      await noteStructuredAgentSessionReportedOptions(
         context,
         event.sessionId,
-        event.catalogListing,
+        child.fence,
+        event.reportedOptions
+      )
+      void context.wakeDelivery(event.sessionId)
+      noteStructuredAgentSessionProviderStarted(
+        context.deps,
+        event.sessionId,
         () =>
           context.sessions.get(event.sessionId)?.child === sourceChild &&
           sourceChild?.catalogSource?.() !== false
       )
-    }
-    context.publishStatus?.(event.sessionId)
-    return undefined
-  })
-}
-
-/** Reconcile uncertain rewind before delivery; persistent uncertainty fails startup. */
-async function readRewindAtStart(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: OpenedProvider,
-  signal?: AbortSignal
-): Promise<StructuredRewindRecoveryEvidence | 'failed'> {
-  const { sessionId } = event
-  const journal = context.sessions.get(sessionId)?.journal
-  if (!journal) {
-    return null
-  }
-  try {
-    return await readStructuredRewindRecovery(
-      context.deps,
-      sessionId,
-      journal,
-      structuredAgentSessionConversationFence(context.deps.store, sessionId),
-      context.deps.adapter,
-      signal,
-      recordWithStartedHandle(context, event)
-    )
-  } catch (error) {
-    return rewindRecoveryFailed(context, sessionId, error, signal)
-  }
-}
-
-/** Predict the committed handle for rewind cuts; if recording is refused, retain the existing record. */
-function recordWithStartedHandle(
-  context: StructuredAgentSessionProviderStartedContext,
-  { sessionId, fence, link }: OpenedProvider
-): AgentSessionRecord | null {
-  const record = context.deps.store.getRecord(sessionId)
-  try {
-    return record && link
-      ? recordAgentSessionProviderHandle({ record, fence, link, now: context.now() })
-      : record
-  } catch {
-    return record
-  }
-}
-
-async function applyRewindAtStart(
-  context: StructuredAgentSessionProviderStartedContext,
-  sessionId: string,
-  session: StructuredAgentSessionHostSession,
-  evidence: StructuredRewindRecoveryEvidence | 'failed'
-): Promise<boolean> {
-  if (evidence === 'failed') {
-    return false
-  }
-  try {
-    await applyStructuredRewindRecovery(
-      context.deps,
-      sessionId,
-      session.journal,
-      structuredAgentSessionConversationFence(context.deps.store, sessionId),
-      evidence
-    )
-    return true
-  } catch (error) {
-    rewindRecoveryFailed(context, sessionId, error)
-    return false
-  }
-}
-
-function rewindRecoveryFailed(
-  context: StructuredAgentSessionProviderStartedContext,
-  sessionId: string,
-  error: unknown,
-  signal?: AbortSignal
-): 'failed' {
-  if (!signal?.aborted) {
-    context.deps.logger.warn('settling a rewind in doubt at the start failed', {
-      scope: 'rewind-recovery',
-      sessionId,
-      error
+      if (event.catalogListing) {
+        saveStructuredAgentSessionListing(
+          context,
+          event.sessionId,
+          event.catalogListing,
+          () =>
+            context.sessions.get(event.sessionId)?.child === sourceChild &&
+            sourceChild?.catalogSource?.() !== false
+        )
+      }
+      context.publishStatus?.(event.sessionId)
+      return 'ready' as const
     })
-  }
-  return 'failed'
-}
-
-/** Persist the opened handle before delivery so future starts can resume; false if no handle is proven. */
-async function recordStartedHandle(
-  context: StructuredAgentSessionProviderStartedContext,
-  event: OpenedProvider
-): Promise<boolean> {
-  const { store, logger } = context.deps
-  const { link } = event
-  if (!link) {
-    // Only an already-proven handle permits open without a new link.
-    return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
-  }
-  try {
-    const committed = await store.transitionHandoff(event.sessionId, (record) =>
-      recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
-    )
-    // Inherit only a committed new context; a resumed CLI keeps its own later title.
-    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
-      context.deps.nameProviderConversation?.(committed)
-    }
-    return true
-  } catch (error) {
-    logger.warn('recording the handle a started provider answered with failed', {
-      scope: 'provider-started-handle',
-      sessionId: event.sessionId,
-      error
-    })
-    return false
-  }
+  )
 }
 
 /** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */

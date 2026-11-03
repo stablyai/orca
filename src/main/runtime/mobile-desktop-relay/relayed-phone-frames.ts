@@ -1,4 +1,7 @@
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_SCREENCAST_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../../shared/runtime-ordinary-message-capability'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
 import {
@@ -109,7 +112,14 @@ export class RelayedPhoneReplies {
   // Relay-owned requests have no phone awaiting their replies.
   private readonly openRequests = new Map<
     string,
-    { hostStreamIds: number[]; swallow: boolean; method?: string }
+    {
+      hostStreamIds: number[]
+      swallow: boolean
+      method?: string
+      browserScreencast?: () => boolean
+      settle?: (reply: unknown) => void
+      cancel?: () => void
+    }
   >()
   private ordinaryMessages = false
   private readonly desktopStreamIds = new Map<number, number>()
@@ -118,17 +128,52 @@ export class RelayedPhoneReplies {
 
   noteForwarded(
     requestId: string,
-    options: { swallowReplies?: boolean; method?: string } = {}
+    options: { swallowReplies?: boolean; method?: string; browserScreencast?: () => boolean } = {}
   ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
       method: options.method,
-      swallow: options.swallowReplies === true
+      swallow: options.swallowReplies === true,
+      browserScreencast: options.browserScreencast
+    })
+  }
+
+  request(id: string, send: () => boolean, timeoutMs: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.openRequests.delete(id)
+        reject(new Error('Timed out confirming the executing Orca server.'))
+      }, timeoutMs)
+      this.openRequests.set(id, {
+        hostStreamIds: [],
+        swallow: true,
+        settle: (reply) => {
+          clearTimeout(timer)
+          resolve(reply)
+        },
+        cancel: () => {
+          clearTimeout(timer)
+          reject(new Error('The executing Orca server connection changed.'))
+        }
+      })
+      try {
+        if (!send()) {
+          this.openRequests.get(id)?.cancel?.()
+          this.openRequests.delete(id)
+        }
+      } catch (error) {
+        clearTimeout(timer)
+        this.openRequests.delete(id)
+        reject(error)
+      }
     })
   }
 
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
+    for (const open of this.openRequests.values()) {
+      open.cancel?.()
+    }
     this.openRequests.clear()
     this.desktopStreamIds.clear()
     this.ordinaryMessages = false
@@ -151,6 +196,7 @@ export class RelayedPhoneReplies {
       return plaintext
     }
     const open = this.openRequests.get(parsed.id)
+    open?.settle?.(parsed)
     const result = parsed.result
     if (
       open?.method === 'status.get' &&
@@ -160,10 +206,20 @@ export class RelayedPhoneReplies {
     ) {
       this.ordinaryMessages = result.capabilities.includes(RUNTIME_ORDINARY_MESSAGE_CAPABILITY)
     }
-    let renumbered = false
+    let rewritten = false
+    if (
+      open?.browserScreencast?.() &&
+      parsed.ok === true &&
+      isRecord(result) &&
+      Array.isArray(result.capabilities) &&
+      !result.capabilities.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)
+    ) {
+      result.capabilities = [...result.capabilities, BROWSER_SCREENCAST_RUNTIME_CAPABILITY]
+      rewritten = true
+    }
     if (open && isRecord(result) && typeof result.streamId === 'number') {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
-      renumbered = true
+      rewritten = true
     }
     // Unsubscribe sends no end; cap retained streams until link closure.
     if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
@@ -172,7 +228,7 @@ export class RelayedPhoneReplies {
     if (open?.swallow) {
       return null
     }
-    return renumbered ? JSON.stringify(parsed) : plaintext
+    return rewritten ? JSON.stringify(parsed) : plaintext
   }
 
   /** Drop terminal frames for streams never announced to the phone. */

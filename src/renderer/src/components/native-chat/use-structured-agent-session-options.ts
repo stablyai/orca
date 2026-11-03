@@ -2,21 +2,21 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
-} from '../../../../shared/structured-agent-session-options'
-import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/structured-agent-session-options-write-owner'
-import { structuredAgentSessionShownSnapshot } from '../../../../shared/structured-agent-session-option-view'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import { structuredAgentSessionShownSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import {
   flushStructuredSessionSelectionOptions,
   holdStructuredAgentSessionLaunchOption
-} from '@/lib/structured-agent-session-launch-options'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 
 export type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 
@@ -62,9 +62,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  const awaitingOptions = support?.sessionId === sessionId && support.fence !== fence
-  const acceptsPicks =
-    (!transportEnabled || fence !== null) && launch?.seedPending !== true && !awaitingOptions
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
   const hostCatalog = useHostModelCatalogUpgrade({
     agent,
@@ -164,6 +162,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   return {
     conversationCommands: support?.commands ?? [],
+    compactInstructions: support?.compactInstructions === true,
     /** Absent unless this host and session can change the goal. */
     threadGoal: support?.threadGoal,
     /** A goal only the agent's own `/goal` changes; absent from a host that predates it. */

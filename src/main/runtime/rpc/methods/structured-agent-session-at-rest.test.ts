@@ -1,16 +1,16 @@
 import '../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
-import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionPicks
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   hostTestAttachParams,
   hostTestMessage,
@@ -24,7 +24,7 @@ import {
   REST_TEST_THREAD,
   restTestSend
 } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
-import { editPersistedTestAgentSessionStore } from '../../agent-session-record-store-test-harness'
+import { editPersistedTestAgentSessionStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcResponse } from '../core'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
@@ -432,4 +432,100 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
       )
       .get(SESSION)?.value_json
   ).toBe('}{')
+})
+
+function outcomeEpoch(): { epoch: unknown; sequence: unknown } {
+  const row = openTestJournalHostDatabase(fixture.rig.root)
+    .db.prepare('SELECT epoch, through_seq FROM journal_outcome_epochs WHERE session_id = ?')
+    .get(SESSION)
+  return { epoch: row?.epoch, sequence: row?.through_seq }
+}
+
+function damageSupersededItemKey(key: string | Buffer): void {
+  openTestJournalHostDatabase(fixture.rig.root)
+    .db.prepare(
+      "UPDATE journal_outcomes SET entry_key = ? WHERE field = 'items' AND seq = (SELECT MIN(seq) FROM journal_outcomes WHERE field = 'items')"
+    )
+    .run(key)
+}
+
+it('resets a client catching up over a superseded record with a damaged key, which open never reads', async () => {
+  await foundRestTestChat(fixture.rig)
+  await fixture.rig.host.flushAllStreamedEvents()
+  damageSupersededItemKey('123')
+  // A deletion is the one newest record admission lets keep such a key.
+  openTestJournalHostDatabase(fixture.rig.root)
+    .db.prepare(
+      "INSERT INTO journal_outcomes (generation, seq, field, entry_key, format, ordinal, value_json, deleted) SELECT generation, through_seq, 'items', '123', 2, 'b', 'null', 1 FROM journal_outcome_epochs WHERE session_id = ?"
+    )
+    .run(SESSION)
+  await fixture.rig.restart()
+  setStructuredAgentSessionHost(fixture.rig.host)
+  const hello = { items: [{ body: { kind: 'message' } }] }
+
+  expect((await call('agentSession.subscribe', { sessionId: SESSION }))[0]).toMatchObject({
+    ok: true,
+    result: { type: 'snapshot', page: hello }
+  })
+  const live = outcomeEpoch()
+  const stale = { epoch: live.epoch, sequence: 1 }
+  expect(
+    (
+      await call('agentSession.history', { sessionId: SESSION, direction: 'after', cursor: stale })
+    )[0]
+  ).toMatchObject({
+    ok: true,
+    result: { ok: false, reset: 'schema_unreadable', page: hello }
+  })
+  expect(
+    (await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale }))[0]
+  ).toMatchObject({
+    ok: true,
+    result: { type: 'reset', reset: 'schema_unreadable', page: hello }
+  })
+  // The reset moved the client to the live cursor, past the record it could not read.
+  expect(await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })).toMatchObject([
+    { ok: true, result: { type: 'batch' } }
+  ])
+})
+
+it.each([
+  ['unparseable', '{damaged'],
+  ['non-text', Buffer.from([0])]
+])('resets a client when a key is damaged under an open chat: %s', async (_name, key) => {
+  await restingChat()
+  await call('agentSession.subscribe', { sessionId: SESSION })
+  damageSupersededItemKey(key)
+
+  expect(
+    (
+      await call('agentSession.history', {
+        sessionId: SESSION,
+        direction: 'after',
+        cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
+      })
+    )[0]
+  ).toMatchObject({ ok: true, result: { ok: false, reset: 'schema_unreadable' } })
+})
+
+it('keeps a storage failure during catch-up retryable instead of resetting the client', async () => {
+  await restingChat()
+  await call('agentSession.subscribe', { sessionId: SESSION })
+  const { db } = openTestJournalHostDatabase(fixture.rig.root)
+  const catchUp = {
+    sessionId: SESSION,
+    direction: 'after',
+    cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
+  }
+
+  db.exec('ALTER TABLE journal_outcomes RENAME TO journal_outcomes_unavailable')
+  expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
+    ok: false,
+    error: { code: 'runtime_error' }
+  })
+  db.exec('ALTER TABLE journal_outcomes_unavailable RENAME TO journal_outcomes')
+  expect((await call('agentSession.history', catchUp))[0]).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
 })

@@ -47,8 +47,9 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
-  in any state: a working worker reads it now; a finished or closed one gets it
-  as a follow-up Task and reports with `worker_done`. The receipt says which.
+  in any state: a working worker gets it when its current turn ends; a finished
+  or closed one gets it as a follow-up Task and reports with `worker_done`. The
+  receipt says which.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
@@ -62,7 +63,9 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer a `question` with
+- In a chat, each message arrives whole as its own message: act on it. A wake
+  that names a `check` command (a terminal, or one message too large for a chat
+  message) means run that command. Answer a `question` with
   `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
@@ -73,13 +76,13 @@ Never:
 - Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
-Finished workers close on their own; `send` reopens one when you need it again.
+Finished workers close on their own unless `worker-list` gives one a `next`; follow
+it. Kept-open workers, including new-workspace ones, stay open for the user.
+`send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already
 started, run
 `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
-If a finished worker you did not keep open shows no `autoReleaseAt` in `worker-list`,
-release it yourself.
 
 ## Task spec
 
@@ -106,7 +109,7 @@ assignment does not prove its agent stopped.
 | ---------------------------------------------- | ----------------------------------------- |
 | Task DAGs, several Runs                        | `references/coordinator-loop.md`          |
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |
-| Group messages, inbox scripts                  | `references/messaging-and-gates.md`       |
+| Group messages                                 | `references/messaging-and-gates.md`       |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`        |
 | Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |

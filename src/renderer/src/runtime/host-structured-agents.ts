@@ -4,9 +4,11 @@ import {
   type AgentSessionRegisteredAgent
 } from '../../../shared/agent-session/agent-session-registered-agents'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../shared/runtime-host-status'
 import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
 import { callRuntimeRpc } from './runtime-rpc-client'
 

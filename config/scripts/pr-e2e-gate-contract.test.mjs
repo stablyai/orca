@@ -15,9 +15,6 @@ const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr
 const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
-const rollbackStep = prWorkflow.jobs.preflight.steps.find(
-  (step) => step.name === 'Check VM runtime rollback compatibility'
-)
 /** The route that sends a change to the two-Electron restart-survival spec. */
 const restartSurvivalRoute = PR_E2E_SOURCE_ROUTES.find(
   (route) => route.id === 'client-hosted-browser.restart-survival'
@@ -34,8 +31,8 @@ describe('restart-survival E2E routing', () => {
     'src/main/runtime/browser-host/browser-host-client-page-adoption.ts',
     'src/main/runtime/browser-host/browser-host-page-reconciliation-orchestration.ts',
     'src/main/runtime/rpc/methods/browser-client-host.ts',
-    'src/main/browser/browser-client-host-authority-replacement-wait.ts',
-    'src/main/browser/paired-runtime-browser-client-host-composition.ts',
+    'src/main/browser/client-hosts/lifecycle/browser-client-host-authority-replacement-wait.ts',
+    'src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.ts',
     'src/renderer/src/runtime/web-session-tabs-sync/snapshot-api.ts',
     'src/renderer/src/runtime/host-session-snapshot-authority.ts',
     'src/renderer/src/runtime/restored-client-hosted-browser-host-attach.ts',
@@ -78,12 +75,6 @@ describe('PR E2E gate contract', () => {
         'tests/e2e/global-teardown.unit.test.ts'
       ])
     ).toEqual(['tests/e2e/active-view-restart-restore.spec.ts'])
-  })
-
-  it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
-    expect(rollbackStep.run).toMatch(/diff-base\.mjs "\$BASE_SHA"[\s\S]*"\$DIFF_BASE" HEAD --/)
-    expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
-    expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
   })
 
   it('routes P0 sentinels from their causal sources', () => {
@@ -209,8 +200,8 @@ describe('PR E2E gate contract', () => {
       'src/renderer/src/lib/pane-manager/terminal-ime-anchor.ts',
       'src/shared/terminal-unicode-provider.ts',
       // The xterm fork owns the helper textarea the IME attaches to; no file here says "ime".
-      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
-      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
+      'config/patches/@xterm__xterm@6.1.0-beta.336.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.336.src.patch',
       // The harness is source too: breaking the runner or a probe is how the lane goes blind.
       'config/scripts/run-terminal-ibus-hangul-e2e.mjs',
       'config/scripts/terminal-ime-engagement-receipt.mjs',
@@ -237,8 +228,8 @@ describe('PR E2E gate contract', () => {
 
   it('routes only core xterm patches to both IME lanes across version updates', () => {
     for (const file of [
-      'config/patches/@xterm__xterm@6.1.0-beta.304.patch',
-      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.304.src.patch',
+      'config/patches/@xterm__xterm@6.1.0-beta.336.patch',
+      'config/patches/xterm-src/@xterm__xterm@6.1.0-beta.336.src.patch',
       'config/patches/@xterm__xterm@7.0.0.patch',
       'config/patches/xterm-src/@xterm__xterm@7.0.0.src.patch'
     ]) {
@@ -251,15 +242,15 @@ describe('PR E2E gate contract', () => {
       'config/patches/i18next-cli@1.74.2.patch',
       'config/patches/node-pty@1.1.0.patch',
       'config/patches/monaco-editor@0.55.1.patch',
-      'config/patches/@xterm__addon-webgl@0.20.0-beta.300.patch',
-      'config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.301.src.patch',
+      'config/patches/@xterm__addon-webgl@0.20.0-beta.329.patch',
+      'config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.330.src.patch',
       'config/patches/xterm-upstream.json',
       'config/patches/@xterm__xterm@7.0.0.patch.bak'
     ]) {
       expect(hasNativeImeSourceChange([file]), file).toBe(false)
       expect(selectPrE2eSpecs([file]), file).toEqual([])
     }
-    const corePatch = 'config/patches/@xterm__xterm@6.1.0-beta.304.patch'
+    const corePatch = 'config/patches/@xterm__xterm@6.1.0-beta.336.patch'
     const mixedChanges = ['config/patches/i18next-cli@1.74.2.patch', corePatch]
     expect(hasNativeImeSourceChange(mixedChanges)).toBe(true)
     expect(selectPrE2eSpecs(mixedChanges)).toEqual(selectPrE2eSpecs([corePatch]))

@@ -1,7 +1,7 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
 import { CodexPromptRegistry, type CodexPendingPrompt } from './codex-prompt-registry'
 
 function registerPrompt(

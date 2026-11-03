@@ -231,10 +231,11 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
+        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
         tab.id,
         options.caller.navigation,
-        options.caller.clientNavigationId
+        options.caller.clientNavigationId,
+        options.caller.follows
       )
     }
   }

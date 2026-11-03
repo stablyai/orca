@@ -1,5 +1,5 @@
-import type { AgentJournalApprovalItem } from './agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from './agent-session-journal-schemas'
+import type { AgentJournalApprovalItem } from './agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from './agent-session/journal/agent-session-journal-schemas'
 import { validateAgentSessionFormContent } from './agent-session-form'
 export * from './agent-session-settled-body-wire'
 export function isExactSettledApprovalBody(

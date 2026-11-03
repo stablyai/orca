@@ -6,7 +6,7 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
   useMobileStructuredAgentMutate,
   type MobileStructuredAgentMutate

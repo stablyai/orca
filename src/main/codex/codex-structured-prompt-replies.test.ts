@@ -1,8 +1,8 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
   applyCodexPromptAnswer,
   CodexPromptRegistry,

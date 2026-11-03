@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react'
 import { createAgentSessionFormSubmissions } from '../../../src/shared/agent-session-form-submission'
-import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
+import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
 import { structuredSessionOperationId } from './structured-session-operation-id'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,

@@ -3,13 +3,13 @@ import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalPendingSubmissionResolutions } from '../agent-session-journal/journal-pending-submission-recovery'
 import {
   journalLifecycleMutationItemId,
@@ -25,7 +25,7 @@ import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subage
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import {
   hasStructuredAgentSessionStartFailureRow,
@@ -59,8 +59,9 @@ export type StructuredAgentSessionDeadGenerationInput = {
   showUnexpectedExitOutcome?: boolean
   exitFailure?: SubmissionRejectionFact
   failureTextContext?: AgentSessionFailureWordsContext
-  /** Share generation-keyed startup failure rows with delivery-loop settlement. */
-  exitedDuringStartup?: { generation: string | null; flightOwned?: boolean }
+  /** Share generation-keyed startup failure rows with delivery-loop settlement. `owned`: a start
+   *  flight or the child's open still owns its outcome and row. */
+  exitedDuringStartup?: { generation: string | null; owned?: boolean }
   /** Refine translator-unverifiable rows after observed exit proof. */
   exit?: StructuredAgentSessionWatchedExit
   unrunRejection?: SubmissionRejectionFact
@@ -104,7 +105,7 @@ export function planStructuredAgentSessionDeadGeneration(
     // Delivery owns failure rows for sends; other startup effects need their own row.
     // Existing rejection wording is terminal and must remain unchanged.
     const recordedByDeliveryLoop =
-      input.exitedDuringStartup.flightOwned ||
+      input.exitedDuringStartup.owned ||
       input.journal.submissions?.().some(isQueuedAgentJournalSubmission) ||
       hasStructuredAgentSessionStartFailureRow(allItems, startKey)
     if (!recordedByDeliveryLoop) {

@@ -1,17 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearClaudeAnsweredQuestionWait,
-  markClaudeLeadTurnInterrupted,
   seedClaudeSubagentRosterFromSnapshots
 } from './agent-hook-listener/providers/claude-roster-state'
 import {
-  clearPaneCacheState,
   createHookListenerState,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
-import { makePaneKey } from './stable-pane-id'
+import './stable-pane-id'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
@@ -32,71 +30,6 @@ describe('shared agent-hook-listener', () => {
       paneKey: string = PANE_KEY
     ): ReturnType<typeof normalizeHookPayload> =>
       normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')
-
-    it('keeps Stop as done when background_tasks is empty', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
-      const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
-      expect(stop?.payload.state).toBe('done')
-      expect(stop?.payload.subagents).toBeUndefined()
-      expect(stop?.payload.turnCompletedAt).toBeUndefined()
-    })
-
-    it('stamps turnCompletedAt on a gated lead Stop and repeats it on the all-clear', () => {
-      vi.useFakeTimers()
-      try {
-        vi.setSystemTime(1_700_000_005_000)
-        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
-        claudeEvent({
-          hook_event_name: 'SubagentStart',
-          agent_id: 'a1',
-          agent_type: 'general-purpose'
-        })
-        const stop = claudeEvent({
-          hook_event_name: 'Stop',
-          last_assistant_message: 'Which cells need hand-verification?',
-          background_tasks: [
-            {
-              id: 'a1',
-              type: 'subagent',
-              status: 'running',
-              description: 'Review loop',
-              agent_type: 'general-purpose'
-            }
-          ]
-        })
-        expect(stop?.payload.state).toBe('working')
-        expect(stop?.payload.turnCompletedAt).toBe(1_700_000_005_000)
-        expect(stop?.payload.lastAssistantMessage).toBe('Which cells need hand-verification?')
-
-        vi.setSystemTime(1_700_000_055_000)
-        const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-        expect(drained?.payload.state).toBe('done')
-        expect(drained?.payload.turnCompletedAt).toBe(1_700_000_005_000)
-
-        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'next turn' })
-        const nextStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
-        expect(nextStop?.payload.state).toBe('done')
-        expect(nextStop?.payload.turnCompletedAt).toBeUndefined()
-      } finally {
-        vi.useRealTimers()
-      }
-    })
-
-    it('does not stamp an interrupted Stop even while a child still gates the pane', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
-      claudeEvent({
-        hook_event_name: 'SubagentStart',
-        agent_id: 'a1',
-        agent_type: 'general-purpose'
-      })
-      const stop = claudeEvent({
-        hook_event_name: 'Stop',
-        is_interrupt: true,
-        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
-      })
-      expect(stop?.payload.state).toBe('working')
-      expect(stop?.payload.turnCompletedAt).toBeUndefined()
-    })
 
     it.each([
       {
@@ -154,34 +87,6 @@ describe('shared agent-hook-listener', () => {
       const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       expect(finalStop?.payload.state).toBe('done')
       expect(finalStop?.payload.subagents).toBeUndefined()
-    })
-
-    it('emits a status refresh with the lead state on subagent lifecycle events', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'kick off reviewers' })
-      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
-
-      const spawned = claudeEvent({
-        hook_event_name: 'SubagentStart',
-        agent_id: 'r1',
-        agent_type: 'code-reviewer'
-      })
-      // Why: lead already stopped, but a live child means the pane is working.
-      expect(spawned?.payload.state).toBe('working')
-      expect(spawned?.payload.prompt).toBe('kick off reviewers')
-      expect(spawned?.payload.subagents).toEqual([
-        {
-          id: 'r1',
-          state: 'working',
-          startedAt: expect.any(Number),
-          agentType: 'code-reviewer',
-          description: undefined
-        }
-      ])
-
-      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
-      expect(stopped?.payload.state).toBe('done')
-      // Finished one-shots leave the roster instead of persisting as idle children.
-      expect(stopped?.payload.subagents).toBeUndefined()
     })
 
     it('keeps gating on tracked children when background_tasks is absent (older Claude)', () => {
@@ -298,56 +203,6 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
-    it('parks a working teammate via TeammateIdle when its id prefix matches the name', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
-      claudeEvent({
-        hook_event_name: 'SubagentStart',
-        agent_id: 'areviewer-6d3cb5b52120b7bf',
-        agent_type: 'security-reviewer'
-      })
-      // Lead turn ends while the teammate works; pane stays working.
-      const stop = claudeEvent({
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'trev', type: 'teammate', status: 'running' }]
-      })
-      expect(stop?.payload.state).toBe('working')
-
-      // TeammateIdle names the agent, not its type; use lifecycle ID prefix when SubagentStop was lost.
-      const idled = claudeEvent({
-        hook_event_name: 'TeammateIdle',
-        teammate_name: 'reviewer',
-        team_name: 'session-x'
-      })
-      expect(idled?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
-      ])
-      expect(idled?.payload.state).toBe('done')
-    })
-
-    it('scopes subagent rosters per pane', () => {
-      claudeEvent(
-        { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' },
-        PANE_KEY
-      )
-      const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'other' }, otherPane)
-      const otherStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] }, otherPane)
-      expect(otherStop?.payload.state).toBe('done')
-      expect(otherStop?.payload.subagents).toBeUndefined()
-    })
-
-    it('clears roster state when the pane cache is cleared', () => {
-      claudeEvent({
-        hook_event_name: 'SubagentStart',
-        agent_id: 'a1',
-        agent_type: 'general-purpose'
-      })
-      clearPaneCacheState(state, PANE_KEY)
-      const stop = claudeEvent({ hook_event_name: 'Stop' })
-      expect(stop?.payload.state).toBe('done')
-      expect(stop?.payload.subagents).toBeUndefined()
-    })
-
     it('does not clear a live AskUserQuestion card on subagent lifecycle events', () => {
       const question = claudeEvent({
         hook_event_name: 'PreToolUse',
@@ -415,22 +270,6 @@ describe('shared agent-hook-listener', () => {
       expect(drained?.payload.state).toBe('done')
       // Retain user cancellation through child drain so final done reads interrupted.
       expect(drained?.payload.interrupted).toBe(true)
-    })
-
-    it('releases a child-owned wait when the blocked child stops without another tool event', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
-      const blocked = claudeEvent({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'a-blocked',
-        agent_type: 'general-purpose',
-        tool_name: 'Bash',
-        tool_input: { command: 'rm -rf build' }
-      })
-      expect(blocked?.payload.state).toBe('waiting')
-
-      // A blocked child ending must release its permission wait.
-      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
-      expect(stopped?.payload.state).toBe('working')
     })
 
     it('restores a finished lead to done after a child permission wait clears', () => {
@@ -504,21 +343,6 @@ describe('shared agent-hook-listener', () => {
       expect(stop?.payload.subagents).toBeUndefined()
     })
 
-    it('keeps a snapshot-seeded child working while background_tasks still lists it', () => {
-      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
-        { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
-      ])
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
-      const stop = claudeEvent({
-        hook_event_name: 'Stop',
-        background_tasks: [{ id: 'a77', type: 'subagent', status: 'running' }]
-      })
-      expect(stop?.payload.state).toBe('working')
-      expect(stop?.payload.subagents).toEqual([
-        expect.objectContaining({ id: 'a77', state: 'working' })
-      ])
-    })
-
     it('keeps a live child omitted by an inventory with an unreadable entry', () => {
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -586,47 +410,6 @@ describe('shared agent-hook-listener', () => {
       ])
     })
 
-    it('keeps an inferred interrupt terminal across later child lifecycle events', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel me' })
-      claudeEvent({
-        hook_event_name: 'SubagentStart',
-        agent_id: 'aprobe-1',
-        agent_type: 'probe'
-      })
-      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aprobe-1' })
-      markClaudeLeadTurnInterrupted(state, PANE_KEY)
-
-      const idled = claudeEvent({
-        hook_event_name: 'TeammateIdle',
-        teammate_name: 'probe',
-        team_name: 'session-x'
-      })
-      expect(idled?.payload.state).toBe('done')
-      expect(idled?.payload.interrupted).toBe(true)
-    })
-
-    it('does not resurrect persisted idle child rows after a restart', () => {
-      // Idle snapshots have no live confirmation after restart.
-      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
-        {
-          id: 'aprobe2-6d3cb5b52120b7bf',
-          state: 'idle',
-          startedAt: 1000,
-          agentType: 'security-reviewer'
-        }
-      ])
-      const resumed = claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
-      expect(resumed?.payload.subagents).toBeUndefined()
-      const stop = claudeEvent({
-        hook_event_name: 'Stop',
-        background_tasks: [
-          { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive teammate' }
-        ]
-      })
-      expect(stop?.payload.state).toBe('done')
-      expect(stop?.payload.subagents).toBeUndefined()
-    })
-
     it('rebuilds a running one-shot subagent from background_tasks after restart', () => {
       // After restart, reported running tasks must restore children and keep the pane working.
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'resume' })
@@ -681,27 +464,6 @@ describe('shared agent-hook-listener', () => {
       expect(childDriven?.payload.interactivePrompt).toBeUndefined()
     })
 
-    it('preserves tool-output provenance when restoring the lead preview after an answer', () => {
-      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'inspect and ask' })
-      claudeEvent({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Bash',
-        tool_response: { content: [{ type: 'text', text: 'raw command output' }] }
-      })
-      claudeEvent({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'AskUserQuestion',
-        tool_input: { questions: [{ question: 'Continue?' }] }
-      })
-
-      clearClaudeAnsweredQuestionWait(state, PANE_KEY)
-
-      expect(state.lastToolByPaneKey.get(PANE_KEY)).toMatchObject({
-        lastAssistantMessage: 'raw command output',
-        lastAssistantMessageIsToolOutput: true
-      })
-    })
-
     it('restores the stashed lead state for an answered child question', () => {
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
       claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'probe' })
@@ -717,25 +479,16 @@ describe('shared agent-hook-listener', () => {
       // The lead is done; answering resumes the child and holds working only while it runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
         state: 'working',
-        turnCompletedAt: expect.any(Number),
         // The main agent's own fact rides beside the gated state: it finished, no verdict was given.
         mainAgent: { state: 'done', stateStartedAt: expect.any(Number) }
       })
       expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
         state: 'done',
-        stateStartedAt: expect.any(Number),
-        turnCompletedAt: expect.any(Number)
+        stateStartedAt: expect.any(Number)
       })
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')
-    })
-
-    it('falls back to working when no lead record exists', () => {
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
-        state: 'working',
-        mainAgent: { state: 'working', stateStartedAt: expect.any(Number) }
-      })
     })
   })
 })

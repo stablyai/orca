@@ -5,7 +5,7 @@ import type {
   ClaimedAgentPtyOwnerRegistry,
   PtyCreationDisposition
 } from '../../shared/claimed-agent-pty-owner'
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 

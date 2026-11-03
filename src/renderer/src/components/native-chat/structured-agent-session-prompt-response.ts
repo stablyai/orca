@@ -5,9 +5,9 @@ import {
 import {
   legacyAgentSessionSelectedOptionId,
   type AgentSessionPromptResponse
-} from '../../../../shared/agent-session-question-answer'
-import type { AgentSessionPromptResult } from '../../../../shared/agent-session-wire'
-import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResult } from '../../../../shared/agent-session/agent-session-wire'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { StructuredAgentSessionAction } from './use-structured-agent-session-mutate'
 
 export async function respondToStructuredAgentSessionPrompt({

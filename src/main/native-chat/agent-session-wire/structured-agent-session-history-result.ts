@@ -1,11 +1,11 @@
 import { SETTLED_BODY_HISTORY_READER } from './agent-session-item-wire-form'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readAgentSessionHistory,

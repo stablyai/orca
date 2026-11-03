@@ -1,8 +1,8 @@
 import type { AgentModelCatalogReadParams } from '../agent-model-catalog/agent-model-catalog-service-contract'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
-import { finishedListingIds } from '../../../shared/structured-agent-session-options'
-import { savedEffectiveServiceTier } from '../../../shared/structured-agent-session-effective-tier'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
+import { decodeStructuredAgentSessionOptionValue } from '../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { finishedListingIds } from '../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
+import { savedEffectiveServiceTier } from '../../../shared/agent-session/options/structured-agent-session-effective-tier'
 import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -109,12 +109,6 @@ export async function readStructuredAgentSessionOptionsAtRest(
         .catch(() => null)
     : catalog
   const listedModelIds = proof ? finishedListingIds(proof) : undefined
-  const defaultModels =
-    independentAgentModelCatalog(record.provider) && reader.readsWithoutModel
-      ? proof && proof.origin !== 'unknown'
-        ? proof.models
-        : []
-      : models
   const fastMode =
     saved.fastMode === undefined
       ? rules?.acceptsKey('fastMode')
@@ -126,13 +120,8 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const model =
     saved.model ??
     (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
-  // The pick, else the model's default where a live child reports that, or where the chat's folder
-  // names that model as what it runs, as its first frame showed.
-  const effort =
-    saved.effort ??
-    (rules?.effortDefaultsToModel || (saved.model === undefined && folderDefault)
-      ? defaultModels.find((entry) => entry.id === model)?.defaultEffort
-      : undefined)
+  // Only saved effort is input; model recommendations remain catalog context.
+  const effort = saved.effort
   const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && Boolean(key === 'model' ? model : effort)
   )

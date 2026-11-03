@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexPromptIdentity, codexQuestionItems } from './codex-structured-prompt-items'
 import { digestPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { MAX_CODEX_PENDING_PROMPTS } from './codex-structured-journal-limits'

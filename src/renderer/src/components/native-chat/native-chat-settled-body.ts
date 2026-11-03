@@ -3,7 +3,7 @@ import {
   receiptSettledBodySource,
   type AgentSessionSettledBodyOwner
 } from '../../../../shared/agent-session-settled-body-reader'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export const NativeChatSettledBodyContext = createContext<AgentSessionSettledBodyOwner | null>(null)
 const unavailable = { status: 'error' } as const

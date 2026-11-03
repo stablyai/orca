@@ -4,8 +4,8 @@ import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
-import { openBrowserExtensionTab } from '../browser-extension-tab-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { openBrowserExtensionTab } from '../tabs-and-windows/browser-extension-tab-model'
 
 function optionsPagePath(extension: Electron.Extension): string | null {
   const manifest: { options_ui?: { page?: unknown }; options_page?: unknown } =

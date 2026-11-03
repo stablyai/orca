@@ -8,7 +8,7 @@ import {
   getAgentSessionSettledBodySchedulingEvidence
 } from './agent-session-settled-body-reader'
 import { agentSessionJsonPiece } from './agent-session-json-pieces'
-import { agentJournalItemKey } from './agent-session-journal-item-key'
+import { agentJournalItemKey } from './agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
   AGENT_SESSION_SETTLED_BODY_MAX_UNITS,

@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientSupportsSnapshotCatchUp } from './structured-agent-session-history-capability'
 import { STRUCTURED_AGENT_SESSION_HISTORY_METHODS } from './structured-agent-session-history'
@@ -65,6 +66,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
+import { projectReceiptDeviceEvent } from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -99,6 +101,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         params.worktree,
         params.agent
       )
+      if (support.supported && params.resumeFrom) {
+        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+          params.agent,
+          params.resumeFrom.providerSessionId,
+          params.resumeFrom.closingPaneKeys
+        )
+      }
       // Optional: older clients ignore it, and a client seeds its picker with what create will use.
       const seedOptions = support.supported
         ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
@@ -210,10 +220,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
+            projectReceiptDeviceEvent(
+              projectTurnItemEvent(
+                projectBackgroundTaskEvent(event, ctx),
+                ctx,
+                host.sessionAgent(params.sessionId)
+              ),
+              ctx
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
@@ -247,6 +260,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,

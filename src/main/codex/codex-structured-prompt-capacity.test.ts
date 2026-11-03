@@ -9,7 +9,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { CodexPromptRegistry } from './codex-prompt-registry'
 import * as bounds from './codex-prompt-registry-bounds'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
   attach,
   CALLER,

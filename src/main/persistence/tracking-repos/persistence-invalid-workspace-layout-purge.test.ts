@@ -21,7 +21,7 @@ import { collectLayoutEvents } from '../../runtime/workspace-layout-stream-event
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeCatalogVersion
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from '../restoring-sessions/invalid-workspace-layout-purge'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
 import { windowViewSaveForMain } from '../window-save-view'

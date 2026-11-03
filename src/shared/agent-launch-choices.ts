@@ -1,5 +1,5 @@
 import { isTuiAgent } from './tui-agent-config'
-import { isAgentSessionOptions } from './agent-session-record'
+import { isAgentSessionOptions } from './agent-session/lifecycle/agent-session-record'
 import type { TuiAgent } from './tui-agent'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
 
@@ -65,4 +65,10 @@ export function normalizeAgentLaunchChoices(value: unknown): AgentLaunchChoices 
     }
   }
   return choices
+}
+
+export type AgentLaunchInputViews = {
+  agentArgs?: string | null
+  sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
 }

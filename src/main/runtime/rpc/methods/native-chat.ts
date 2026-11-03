@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
@@ -16,7 +16,8 @@ import {
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
   NativeChatSession,
-  NativeChatUnsubscribe
+  NativeChatUnsubscribe,
+  type NativeChatResumePoint
 } from '../../../../shared/rpc-contract/native-chat-params'
 
 // Default to a small transcript tail for fast paired-client paint; clients page older history, while local IPC stays virtualized.
@@ -63,6 +64,24 @@ function pageForClient(
   return isOpenCode
     ? boundNativeChatRpcPageByBytes(sanitized, hasMore, beforeOffset)
     : { messages: sanitized, hasMore, beforeOffset }
+}
+
+/** Where the first page starts for a client holding `resumeAfter`; its offset and timestamp catch a rewritten file. */
+function resumeIndex(
+  messages: readonly NativeChatMessage[],
+  resumeAfter: NativeChatResumePoint | undefined,
+  agent: string
+): number {
+  // OpenCode rows can change after they are written, so holding the newest says nothing about the rest.
+  if (!resumeAfter || resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return -1
+  }
+  return messages.findLastIndex(
+    (message) =>
+      message.id === resumeAfter.id &&
+      message.transcriptOrder === resumeAfter.transcriptOrder &&
+      (message.timestamp ?? null) === resumeAfter.timestamp
+  )
 }
 
 export const NATIVE_CHAT_METHODS = [
@@ -153,10 +172,20 @@ export const NATIVE_CHAT_METHODS = [
           if (closed) {
             return
           }
+          const resumeAt = resumeIndex(messages, params.resumeAfter, params.agent)
+          const resumed = resumeAt !== -1
           // Emit initial-read errors so a watching view cannot remain loading forever.
           emit({
             type: 'snapshot',
-            ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
+            ...pageForClient(
+              resumed ? messages.slice(resumeAt) : messages,
+              resumeAt > 0 || hasMore,
+              resumed ? messages[resumeAt].transcriptOrder! : beforeOffset,
+              clientKind,
+              limit,
+              params.agent
+            ),
+            ...(resumed ? { resumed } : {}),
             ...(error ? { error } : {}),
             ...(lifecycle ? { lifecycle } : {})
           })

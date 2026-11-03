@@ -1,5 +1,5 @@
-import type { AgentSessionMutationEnvelope } from './agent-session-wire'
-import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
+import type { AgentSessionMutationEnvelope } from './agent-session/agent-session-wire'
+import { structuredAgentSessionPayloadFingerprint } from './agent-session/lifecycle/structured-agent-session-mutation'
 
 type Submission = {
   envelope: AgentSessionMutationEnvelope & { expectedRuntimeFence: number }

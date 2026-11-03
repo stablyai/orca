@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { respondToStructuredAgentSessionPrompt } from './structured-agent-session-prompt-response'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat-interactive-prompt'
+import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { RespondParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 import {
   acquireReadyCodexForTest,
@@ -27,8 +27,8 @@ import {
   HOST_TEST_THREAD as THREAD
 } from '../../../../main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { projectStructuredPermission } from '../../../../../mobile/src/session/mobile-structured-agent-prompts'
-import { createAgentSessionCurrentRequestsReader } from '../../../../shared/agent-session-current-requests-reader'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { createAgentSessionCurrentRequestsReader } from '../../../../shared/agent-session/requests/agent-session-current-requests-reader'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const frames = z
   .array(

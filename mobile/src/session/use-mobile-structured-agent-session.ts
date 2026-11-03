@@ -1,17 +1,18 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import * as questions from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { createStructuredQuestionProjection } from '../../../src/shared/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
+import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext
-} from '../../../src/shared/structured-agent-session-live-turn'
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -30,6 +31,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import * as promptCancel from './mobile-structured-agent-session-cancel'
@@ -38,9 +40,13 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
-import { useMobileNativeChatQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
+import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
+
+const mobileStructuredTranscript = createStructuredQuestionProjection(
+  projectStructuredAgentStartItem
+)
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -48,6 +54,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    pairedHostClient: paired,
     connected,
     sessionId,
     sourceIdentity = '',
@@ -59,7 +66,7 @@ export function useMobileStructuredAgentSession(
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
   const commandsWait = queueCapable && hostSupport?.queuedCommands === true
-  const queueFollowUps = useMobileNativeChatQueueFollowUps(client, connected && enabled, sessionId)
+  const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const promptCancelSupported = hostSupport?.promptCancel ?? null
   const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
   const hostStopsConversation = hostSupport?.conversationStop ?? null
@@ -102,17 +109,7 @@ export function useMobileStructuredAgentSession(
     turnId,
     hostSupport
   })
-  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
-    options
-  const sendController = useMemo(
-    () => ({
-      snapshot: optionSnapshot,
-      setOption: setStructuredOption,
-      invokeAction: invokeStructuredOption,
-      conversationCommands
-    }),
-    [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
-  )
+  const sendController = useMobileStructuredCommandController(options)
 
   const promptSourceKey = encodeNativeChatTranscriptIdentity([sessionKey, state.epoch])
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
@@ -144,7 +141,7 @@ export function useMobileStructuredAgentSession(
         transcriptItems,
         sends.optimistic,
         state.submissions,
-        questions.projectStructuredQuestionMessages
+        mobileStructuredTranscript.messages
       ),
     [transcriptItems, sends.optimistic, state.submissions]
   )
@@ -297,7 +294,7 @@ export function useMobileStructuredAgentSession(
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? promptCancel.pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: questions.structuredQuestionTranscript(transcriptItems).receipts,
+    receipts: mobileStructuredTranscript.transcript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt, formSubmitEnabled, promptSourceKey),
     question: projectStructuredQuestion(questionPrompt),

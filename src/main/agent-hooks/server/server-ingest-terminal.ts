@@ -1,4 +1,4 @@
-import { track } from '../../telemetry/client'
+import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
@@ -6,7 +6,7 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status-subagent-snapshot'
@@ -110,7 +110,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const parsedPaneKey = parsePaneKey(paneKey)
     const legacyPaneKey = parseLegacyNumericPaneKey(paneKey)
     if (paneKey.length === 0) {
-      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      trackEmptyPaneKeyHook(event, this.attributionDiagnostics)
       return
     }
     const reportedTabId =

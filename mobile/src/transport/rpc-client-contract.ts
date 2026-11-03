@@ -1,5 +1,7 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { RelayHostReachability } from './relay-host-reachability'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
@@ -31,6 +33,13 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getLastInboundAt?: () => number | null
   // Optional logical authority epoch for scoping cached work across migrateTo; physical clients need no counter.
   getGeneration?: () => number
+  // Logical clients name the path they use and the one they are dialing; physical clients have one path.
+  getActivePath?: () => MobileConnectionPath
+  getPendingPath?: () => MobileConnectionPath | null
+  getRelayHostReachability?: () => RelayHostReachability
+  onConnectionPathChange?: (listener: () => void) => () => void
+  // A page's client: the status its shell's gate already proved, so the page need not ask again.
+  getShellHostStatus?: () => unknown
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
   getRequestByteCapacity?: () => number
   carriesRpcEnvelope?: () => boolean

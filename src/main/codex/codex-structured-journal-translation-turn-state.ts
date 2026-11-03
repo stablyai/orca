@@ -1,4 +1,4 @@
-import type { AgentJournalTurnLifecycle } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnLifecycle } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
 
 export const MAX_CODEX_RECENT_TURNS = 256

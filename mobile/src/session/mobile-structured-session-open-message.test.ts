@@ -62,3 +62,42 @@ it.each(defaults)(
     )
   }
 )
+
+it('translates proven terminal loss without changing ordinary gone-chat feedback', async () => {
+  expect(mobileStructuredSessionOpenMessage('gone', 'codex', 'terminal')).toBe(
+    "Agent's pane is no longer available."
+  )
+  mobileI18n.addResourceBundle('fr', 'translation', {
+    'session.structuredOpen.paneUnavailable': 'Le panneau de l’agent n’est plus disponible.'
+  })
+  await activateMobileUiLocale('fr')
+  expect(mobileStructuredSessionOpenMessage('gone', 'Worker custom', 'terminal')).toBe(
+    'Le panneau de l’agent n’est plus disponible.'
+  )
+  expect(mobileStructuredSessionOpenMessage('gone', 'codex')).toBe(
+    "Codex's chat is no longer on this host, so it cannot be reopened here."
+  )
+  setMobilePseudoLocalization(true)
+  expect(mobileStructuredSessionOpenMessage('gone', undefined, 'terminal')).toBe(
+    pseudoLocalizeString('Le panneau de l’agent n’est plus disponible.', { expand: true })
+  )
+})
+
+it('explains a removed History workspace with one short toast sentence', () => {
+  expect(mobileStructuredSessionOpenMessage('workspace-missing', 'codex')).toBe(
+    'The worktree was deleted.'
+  )
+  expect(
+    mobileStructuredSessionOpenMessage('workspace-missing', 'claude', undefined, 'folder')
+  ).toBe('The folder workspace was removed.')
+})
+
+it('uses the translated deleted-workspace sentences from the phone catalog', async () => {
+  await activateMobileUiLocale('fr')
+  expect(mobileStructuredSessionOpenMessage('workspace-missing', 'codex')).toBe(
+    'Le worktree a été supprimé.'
+  )
+  expect(
+    mobileStructuredSessionOpenMessage('workspace-missing', 'claude', undefined, 'folder')
+  ).toBe('L’espace de travail de type dossier a été retiré.')
+})

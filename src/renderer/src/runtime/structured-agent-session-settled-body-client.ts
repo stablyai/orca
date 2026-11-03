@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
   type AgentSessionSettledBodyRead
 } from '../../../shared/agent-session-settled-body-wire'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { structuredAgentSessionHostSupports } from './structured-agent-session-client'
 import { callRuntimeRpc } from './runtime-rpc-client'

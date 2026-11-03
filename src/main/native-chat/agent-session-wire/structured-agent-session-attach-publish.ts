@@ -3,7 +3,7 @@ import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model
 // the session's events go through, and its open begins.
 
 import type { AttachedJournal } from './structured-agent-session-attach'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AttachedOwner } from './structured-agent-session-attach-flow'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
@@ -134,23 +134,24 @@ export async function publishAttachedChild(
       candidate.child
     )
   }
-  // Apply exits observed during background startup after indexing the matching child.
+  // Apply exits observed during background startup after indexing the matching child; the open
+  // claims a starting child's outcome first, so the adapter answers for its own early exit.
   const exited = context.runtimeState.startFlights.takeExit(sessionId, candidate.child)
   const indexed = conversation.child
+  const opens = !!attempt.startup && candidate.child.phase !== 'ready'
+  if (opens) {
+    context.openProviderChild?.(sessionId, candidate.child)
+  }
   if (exited && indexed) {
     await context.endExitedChild(sessionId, indexed, structuredAgentSessionEndedEventExit(exited))
-  } else if (attempt.startup) {
-    if (candidate.child.phase === 'ready') {
-      noteStructuredAgentSessionProviderStarted(
-        context.deps,
-        sessionId,
-        () =>
-          context.sessions.get(sessionId)?.child === candidate.child &&
-          candidate.child.catalogSource?.() !== false
-      )
-    } else {
-      context.openProviderChild?.(sessionId, candidate.child)
-    }
+  } else if (attempt.startup && !opens) {
+    noteStructuredAgentSessionProviderStarted(
+      context.deps,
+      sessionId,
+      () =>
+        context.sessions.get(sessionId)?.child === candidate.child &&
+        candidate.child.catalogSource?.() !== false
+    )
   }
   context.publishStatus?.(sessionId)
   return true

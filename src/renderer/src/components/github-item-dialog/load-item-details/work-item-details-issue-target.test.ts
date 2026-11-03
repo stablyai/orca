@@ -49,7 +49,7 @@ describe('issue detail cache repository identity', () => {
     }
   )
 
-  it('keeps RPC detail caches scoped to the preference used by their existing lookup', () => {
+  it('keeps RPC detail caches bound to the addressed repository', () => {
     const sourceContext: TaskSourceContext = {
       kind: 'task-source',
       provider: 'github',
@@ -59,10 +59,10 @@ describe('issue detail cache repository identity', () => {
     }
     const args = { ...keyArgs, ownerRepo: ORIGIN, sourceContext }
 
-    expect(getWorkItemDetailsCacheKey(args)).not.toBe(
+    expect(getWorkItemDetailsCacheKey(args)).toBe(
       getWorkItemDetailsCacheKey({ ...args, issueSourcePreference: 'upstream' })
     )
-    expect(getWorkItemDetailsCacheKey(args)).toBe(
+    expect(getWorkItemDetailsCacheKey(args)).not.toBe(
       getWorkItemDetailsCacheKey({ ...args, ownerRepo: null })
     )
   })

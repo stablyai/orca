@@ -5,7 +5,7 @@
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent
-} from '../../../../../../shared/agent-session-resume'
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -188,7 +188,7 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 }
 
 /** The user resumed the conversation in a tab of their own: the follow-up goes there and the tab stays theirs. */
-async function userTabHoldingSession(
+export async function userTabHoldingSession(
   runtime: OrcaRuntimeService,
   session: WorkerResumeSession
 ): Promise<string | undefined> {

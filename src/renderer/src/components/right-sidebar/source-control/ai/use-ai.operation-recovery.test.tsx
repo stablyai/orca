@@ -4,7 +4,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,
   getDefaultSourceControlRecoveryLaunchCopy
@@ -198,7 +198,7 @@ describe('AI operation recovery composer', () => {
   )
   it('opens while an unrelated workspace fetch is pending', async () => {
     const { result } = renderHook(() => useSourceControlAi(controllerParams()))
-    useAppStore.getState().beginRemoteOperation('fetch')
+    useAppStore.getState().beginRemoteOperation('fetch', 'wt-2')
     await act(() => result.current.handleResolveConflictsWithAI())
     expect(result.current.resolveConflictsComposerOpen).toBe(true)
     expect(mutationInFlight).toHaveBeenCalledWith({

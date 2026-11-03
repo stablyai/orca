@@ -1,5 +1,5 @@
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
   AGENT_SESSION_SETTLED_BODY_MAX_UNITS,

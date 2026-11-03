@@ -3,7 +3,7 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionQuestionAnswers,
   type AgentSessionPromptResponse
-} from '../../../shared/agent-session-question-answer'
+} from '../../../shared/agent-session/agent-session-question-answer'
 import { AcpRpcError } from '../acp-errors'
 import { pendingAcpResolution } from '../acp-timeline-requests'
 import type { AcpRequestPresentation, AcpRequestSettlement } from './acp-dialect'

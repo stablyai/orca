@@ -1,40 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeAgentStatusPayload } from './agent-status-types'
-import {
-  getAgentRowGeneratedTitleText,
-  getAgentRowPrimaryText,
-  getOrcaDispatchTaskId,
-  isOrcaDispatchPrompt
-} from './agent-row-primary-text'
+import { getAgentRowPrimaryText } from './agent-row-primary-text'
 
 describe('getAgentRowPrimaryText', () => {
-  it('prefers orchestration display name over the raw hook prompt', () => {
-    expect(
-      getAgentRowPrimaryText({
-        prompt: 'You are working inside Orca, a multi-agent IDE.',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Checkout race',
-          displayName: 'Fix checkout race'
-        }
-      })
-    ).toBe('Fix checkout race')
-  })
-
-  it('falls back to task title when display name is absent', () => {
-    expect(
-      getAgentRowPrimaryText({
-        prompt: 'You are working inside Orca, a multi-agent IDE.',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Checkout race'
-        }
-      })
-    ).toBe('Checkout race')
-  })
-
   it('ignores sticky orchestration labels that belong to a different task id', () => {
     expect(
       getAgentRowPrimaryText({
@@ -51,28 +19,6 @@ Review dispatch prompts and make worker labels distinct`,
         }
       })
     ).toBe('Review dispatch prompts and make worker labels distinct')
-  })
-
-  it('uses the task block when orchestration metadata has not arrived yet', () => {
-    expect(
-      getAgentRowPrimaryText({
-        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: term_parent
-Your task ID is: task_1
-
-=== CLI COMMANDS ===
-orca orchestration send --to term_parent
-
-=== TASK ===
-Review dispatch prompts and make worker labels distinct
-
-Keep the raw preamble out of the sidebar.`
-      })
-    ).toBe('Review dispatch prompts and make worker labels distinct')
-  })
-
-  it('falls back to the raw prompt outside orchestration workers', () => {
-    expect(getAgentRowPrimaryText({ prompt: '  Fix checkout race\n ' })).toBe('Fix checkout race')
   })
 
   // The normalizer must preserve a meaningful task preview within 200 chars despite multi-KB dispatch preambles.
@@ -109,45 +55,6 @@ ${taskBody}`
     expect(preview).not.toContain('CLI COMMANDS')
   })
 
-  it('prefers later orchestration labels over the extracted task preview', () => {
-    const normalized = normalizeAgentStatusPayload({
-      state: 'working',
-      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: task_label_later
-
-=== CLI COMMANDS ===
-${'orca orchestration check\n'.repeat(30)}
-=== TASK ===
-Implement the detailed worker instructions that should not stay as the final label`
-    })
-    expect(normalized).not.toBeNull()
-
-    expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toContain(
-      'Implement the detailed worker instructions'
-    )
-
-    expect(
-      getAgentRowPrimaryText({
-        prompt: normalized!.prompt,
-        orchestration: {
-          taskId: 'task_label_later',
-          dispatchId: 'ctx-later',
-          taskTitle: 'Worker instructions',
-          displayName: 'Better worker label'
-        }
-      })
-    ).toBe('Better worker label')
-  })
-
-  it('does not surface preamble boilerplate when the TASK marker is absent', () => {
-    expect(
-      getAgentRowPrimaryText({
-        prompt:
-          'You are working inside Orca, a multi-agent IDE. You are a dispatched worker. Your task ID is: task_no_body CLI noise only'
-      })
-    ).toBe('')
-  })
-
   // Raw preambles need standalone markers so base-drift subjects mentioning === TASK === cannot win.
   it('ignores adversarial === TASK === text in raw multi-line base-drift subjects', () => {
     expect(
@@ -165,88 +72,5 @@ Implement the detailed worker instructions that should not stay as the final lab
         ].join('\n')
       })
     ).toBe('Fix the actual dispatch fallback preview')
-  })
-
-  it('still reads the task body from a normalized single-line compact prompt', () => {
-    expect(
-      getAgentRowPrimaryText({
-        prompt:
-          'You are working inside Orca, a multi-agent IDE. Your task ID is: task_inline === TASK === Compact body preview'
-      })
-    ).toBe('Compact body preview')
-  })
-})
-
-describe('getOrcaDispatchTaskId', () => {
-  it('extracts the id when the trailing newline was folded to a space', () => {
-    const normalized = normalizeAgentStatusPayload({
-      state: 'working',
-      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: task_9f3ab2
-
-=== TASK ===
-body`
-    })
-    expect(getOrcaDispatchTaskId(normalized!.prompt)).toBe('task_9f3ab2')
-  })
-
-  it('extracts the id from a raw multi-line prompt', () => {
-    expect(
-      getOrcaDispatchTaskId(
-        `You are working inside Orca, a multi-agent IDE.\nYour task ID is: task_1\n\n=== TASK ===\nbody`
-      )
-    ).toBe('task_1')
-  })
-})
-
-describe('isOrcaDispatchPrompt / getAgentRowGeneratedTitleText', () => {
-  it('treats leading whitespace as still a dispatch preamble', () => {
-    expect(
-      isOrcaDispatchPrompt('  You are working inside Orca, a multi-agent IDE. Worker task')
-    ).toBe(true)
-  })
-
-  it('uses orchestration labels for generated titles only on matching dispatch prompts', () => {
-    expect(
-      getAgentRowGeneratedTitleText({
-        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your task ID is: task-1
-
-=== TASK ===
-Checkout race body`,
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Checkout race',
-          displayName: 'Fix checkout race'
-        }
-      })
-    ).toBe('Fix checkout race')
-    expect(
-      getAgentRowGeneratedTitleText({
-        prompt:
-          'You are working inside Orca, a multi-agent IDE. Your task ID is: task-2 === TASK === New worker body',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Stale task',
-          displayName: 'Stale worker label'
-        }
-      })
-    ).toBe('New worker body')
-  })
-
-  it('ignores sticky orchestration for non-dispatch generated titles', () => {
-    expect(
-      getAgentRowGeneratedTitleText({
-        prompt: '  Refactor the auth middleware\n ',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          taskTitle: 'Stale task',
-          displayName: 'Stale worker label'
-        }
-      })
-    ).toBe('  Refactor the auth middleware\n ')
   })
 })

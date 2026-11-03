@@ -30,7 +30,7 @@ import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../shared/runtime-ordina
 import type {
   AgentSessionMutationResult,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   acquireReadyCodexForTest,
@@ -62,7 +62,7 @@ import {
 } from '../../shared/agent-session-settled-body'
 import { readCodexMcpElicitation } from './codex-mcp-elicitation'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   call,
   STRUCTURED_MOBILE_CLIENT

@@ -1,4 +1,4 @@
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 
 type Emit = (event: AgentSessionSubscribeEvent) => void
 const readers = new WeakSet<Emit>()

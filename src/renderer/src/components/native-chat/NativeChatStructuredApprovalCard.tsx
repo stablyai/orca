@@ -1,5 +1,5 @@
 import { NativeChatApprovalCard, type NativeChatApprovalCardProps } from './NativeChatApprovalCard'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat-interactive-prompt'
+import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import type { useStructuredPromptResponseHold } from './use-structured-prompt-response-hold'
 
 type Response = ReturnType<typeof useStructuredPromptResponseHold>

@@ -1,15 +1,15 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalQuestionItem
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
 import { parseAskFromToolInput } from './native-chat/input/native-chat-ask'
-import { agentJournalItemRowOrigin } from './agent-session-journal-position'
-import { agentJournalLinkageFields } from './agent-session-journal-producer'
-import type { NativeChatMessage } from './native-chat-types'
-import { projectStructuredItemToNativeChat } from './structured-agent-session-projection'
-import { readAgentJournalTurn } from './agent-session-turn-record'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import { agentJournalItemRowOrigin } from './agent-session/journal/agent-session-journal-position'
+import { agentJournalLinkageFields } from './agent-session/journal/agent-session-journal-producer'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from './agent-session/view/structured-agent-session-projection'
+import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
+import type { NativeChatResolvedPrompt } from './native-chat/native-chat-resolution-receipt'
 
 type Projection = { message: NativeChatMessage | null; questionKey: string | null }
 type ItemProjector = (item: AgentJournalRenderItem) => NativeChatMessage | null

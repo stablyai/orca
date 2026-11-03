@@ -3,7 +3,7 @@ import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync
-} from '../../terminal-scrollback-snapshots'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 
 /** Retain files still referenced by sessions or pending exports. */

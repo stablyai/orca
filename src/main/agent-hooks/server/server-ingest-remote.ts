@@ -1,6 +1,6 @@
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
-import { track } from '../../telemetry/client'
+import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import {
   isTurnEndDisposition,
   normalizeAgentStatusPayload
@@ -20,7 +20,6 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
-import { RelaySessionGenerations } from './server-relay-sessions'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
@@ -34,8 +33,6 @@ import {
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
-  private readonly relaySessions = new RelaySessionGenerations()
-
   /** Call as each relay link starts, before its first envelope. */
   beginRemoteRelaySession(connectionId: string): void {
     this.relaySessions.begin(connectionId)
@@ -69,7 +66,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
-      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      trackEmptyPaneKeyHook(envelope, this.attributionDiagnostics)
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
@@ -258,6 +255,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     const event: IncomingAgentHookEvent = {
       paneKey,
       agentPresence: readAgentProcessPresence(envelope.agentPresence),
+      ...this.relaySessions.rootProof(trimmedConnectionId, physicalPaneKey, envelope.agentPresence),
       source: effectiveSource,
       ...(restartedAuthority?.authorityRestartId
         ? { authorityRestartId: restartedAuthority.authorityRestartId }

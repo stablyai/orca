@@ -9,14 +9,14 @@ import {
   type AgentSessionSettledBodyRead,
   type AgentSessionSettledBodySource
 } from './agent-session-settled-body'
-import type { AgentJournalApprovalItem } from './agent-session-journal-types'
+import type { AgentJournalApprovalItem } from './agent-session/journal/agent-session-journal-types'
 import {
   getRemoteRuntimeRequestAdmissionEvidence,
   reserveRemoteRuntimeRetainedBytes,
   subscribeRemoteRuntimeAdmissionRelease
 } from './remote-runtime/requests/remote-runtime-prepared-request-admission'
 import { createReconnectScheduler } from './agent-session/structured-agent-session-reconnect'
-import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
+import { readAgentSessionErrorRefusal } from './agent-session/failures/agent-session-write-failure'
 
 export type SettledBodyReadState =
   | { status: 'loading' }

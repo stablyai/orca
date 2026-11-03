@@ -1,9 +1,7 @@
-import { discoveredModel } from './structured-agent-session-discovered-model'
-import {
-  createClaudeCatalogOptions,
-  type CatalogOption,
-  getAgentSessionOptionLaunchCatalog
-} from './agent-session-option-catalog'
+import { discoveredModel } from './agent-session/options/structured-agent-session-discovered-model'
+import { createClaudeCatalogOptions } from './agent-session/options/agent-session-option-catalog-claude-codex'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from './source-control-action-launch-preferences'
 import {
   agentPermissionChoices,
@@ -27,6 +25,20 @@ export function agentPickerEntryOptions(
   model: string | undefined,
   surface: AgentPickerSurface
 ): CatalogOption[] {
+  if (entry.textGeneration) {
+    const live = agentPickerModels(entry).find((row) => row.id === (model ?? entry.terminal.model))
+    return live?.efforts.length
+      ? [
+          {
+            id: 'effort',
+            label: 'Reasoning effort',
+            category: 'thought_level',
+            kind: { type: 'select', choices: live.efforts, defaultValue: live.defaultEffort ?? '' },
+            apply: {}
+          }
+        ]
+      : []
+  }
   let options = agentPickerOptions(entry.agent, model, surface)
   const live = agentPickerModels(entry).find(
     (row) => row.id === model || (model === undefined && row.isDefault)

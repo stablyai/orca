@@ -9,7 +9,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import { readCodexMcpElicitation } from './codex-mcp-elicitation'
 
 const recordedElicitations = z

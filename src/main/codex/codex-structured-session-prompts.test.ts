@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
 import {
   acquireReadyCodexForTest,

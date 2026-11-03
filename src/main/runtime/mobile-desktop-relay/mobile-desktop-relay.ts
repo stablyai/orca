@@ -1,54 +1,25 @@
 import { reserveRemoteRuntimeRetainedBytes } from '../../../shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { sendRelayedRequest } from './relayed-request-send'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import {
-  openRemoteRuntimePassthroughSocket,
-  type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { openRemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { RelayLink, type OpenedRelayLink, type RelayedPhone } from './mobile-desktop-relay-link'
+export type { RelayedPhone } from './mobile-desktop-relay-link'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
-import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
 import {
   declareRelayedPhoneCapabilities,
-  RelayedPhoneReplies,
   relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
   withRelayedLaunchChatDefault
 } from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
-
-export type RelayedPhone = {
-  connectionId: string
-  deviceId: string
-  deviceToken: string
-  clientCapabilities: () => readonly RuntimeCapability[]
-  reply: (frame: string) => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-}
-
-type OpenedRelayLink = { socket: RemoteRuntimePassthroughSocket; hostToken: string }
-
-class RelayLink {
-  readonly replies: RelayedPhoneReplies
-  readonly opened: Promise<OpenedRelayLink>
-
-  constructor(
-    readonly environmentId: string,
-    readonly phone: RelayedPhone,
-    allocateStreamId: () => number,
-    open: (link: RelayLink) => Promise<OpenedRelayLink>
-  ) {
-    this.replies = new RelayedPhoneReplies(allocateStreamId)
-    this.opened = open(this)
-  }
-}
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
@@ -65,6 +36,7 @@ export class MobileDesktopRelay {
       allocateStreamId: () => number
       /** Whether this desktop's settings open `agent` as a chat. */
       nativeChatDefault: (agent: string) => boolean
+      prepareBrowserHost?: (host: MobileDesktopRelayHost) => Promise<string | null>
     }
   ) {
     this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
@@ -82,11 +54,8 @@ export class MobileDesktopRelay {
   }
 
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
-    return localHostedBrowserPageRequest(
-      request,
-      environmentId,
-      this.options.hosts.hostsBrowserPage
-    )
+    const { hostsBrowserPage } = this.options.hosts
+    return localHostedBrowserPageRequest(request, environmentId, hostsBrowserPage)
   }
 
   forward(
@@ -118,37 +87,42 @@ export class MobileDesktopRelay {
       return
     }
     const link = this.linkFor(phone, environmentId)
-    link.replies.noteForwarded(id, { method })
+    link.replies.noteForwarded(id, {
+      method,
+      browserScreencast:
+        method === 'status.get'
+          ? () => Boolean(this.options.hosts.browserHostClientId?.(environmentId))
+          : undefined
+    })
     link.opened
       .then(
-        ({ socket, hostToken }) => {
+        async (opened) => {
           // An opening link may already have ended and answered; never send its request late.
           if (!this.isCurrent(link)) {
             return
           }
           const outgoing = withRelayedLaunchChatDefault(
-            rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
+            rewriteRelayedPhoneRequest(frame, phone.deviceToken, opened.hostToken),
             method,
             this.options.nativeChatDefault
           )
-          if (
-            Buffer.byteLength(outgoing) > REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES &&
-            !link.replies.supportsOrdinaryMessages()
-          ) {
-            // Answer through the same correlation map without sending an oversized frame to an old peer.
-            const refused = link.replies.text(
-              failure(
-                id,
-                'invalid_argument',
-                'This server connection cannot carry a request this large.'
-              )
-            )
-            if (refused !== null) {
-              phone.reply(refused)
+          const sent = await sendRelayedRequest({
+            link,
+            opened,
+            method,
+            outgoing,
+            hosts: this.options.hosts,
+            prepareBrowserHost: this.options.prepareBrowserHost,
+            timeoutMs: RELAY_CONNECT_TIMEOUT_MS,
+            isCurrent: () => this.isCurrent(link),
+            refuse: (code, message) => {
+              const reply = link.replies.text(failure(id, code, message))
+              if (reply !== null) {
+                phone.reply(reply)
+              }
             }
-            return
-          }
-          if (!socket.send(outgoing)) {
+          })
+          if (sent === 'unsent') {
             this.endLink(link, unavailable('The server connection could not take the request.'))
           }
         },
@@ -219,8 +193,7 @@ export class MobileDesktopRelay {
   }
 
   private linkFor(phone: RelayedPhone, environmentId: string): RelayLink {
-    const key = linkKey(phone.connectionId, environmentId)
-    const existing = this.links.get(key)
+    const existing = this.links.get(linkKey(phone.connectionId, environmentId))
     if (existing) {
       return existing
     }
@@ -233,7 +206,7 @@ export class MobileDesktopRelay {
         error instanceof RemoteRuntimeClientError ? error : unavailable(String(error))
       )
     })
-    this.links.set(key, link)
+    this.links.set(linkKey(phone.connectionId, environmentId), link)
     return link
   }
 
@@ -280,7 +253,11 @@ export class MobileDesktopRelay {
         },
         { timeoutMs: RELAY_CONNECT_TIMEOUT_MS }
       )
-      return { socket, hostToken: grant.token }
+      if (!this.isCurrent(link)) {
+        socket.close()
+        throw unavailable('The relayed request was cancelled.')
+      }
+      return { socket, hostToken: grant.token, host }
     } catch (error) {
       if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {
         // Retrying revoked tokens would repeatedly raise the host unpaired-device prompt.
@@ -300,6 +277,7 @@ export class MobileDesktopRelay {
       return
     }
     this.links.delete(linkKey(link.phone.connectionId, link.environmentId))
+    link.abortController.abort()
     link.opened.then(
       ({ socket }) => socket.close(),
       () => {}

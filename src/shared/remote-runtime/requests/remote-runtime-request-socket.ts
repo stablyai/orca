@@ -34,7 +34,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../runtime-types'
+import type { RuntimeStatus } from '../../runtime-session-contracts'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(

@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import type { JournalOperationReceipt } from './journal-row-writer'

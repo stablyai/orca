@@ -24,6 +24,7 @@ import {
 } from '../agent-hooks/managed-agent-hook-controls'
 import { agentHookServer } from '../agent-hooks/server'
 import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
+import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
 import {
   indexPersistedPaneKeyPtyIds,
   resolveAgentWorkspaceExecutionHostId,
@@ -35,11 +36,16 @@ import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
+import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   const identity = { workspaceId: event.worktreeId, kind: 'worktree', path: event.path }
+  const folder = parseWorkspaceKey(event.worktreeId)?.type === 'folder'
+  if (event.kind === 'created') {
+    notifyWorkspaceCreatedPluginHook({ ...event, folder })
+  }
   // Public worktree events retain their Git-only scope.
-  if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
+  if (folder) {
     return
   }
   state.pluginService?.emitEvent(
@@ -120,11 +126,9 @@ async function sweepRestoredStatusesAgainstLocalPtys(): Promise<void> {
 }
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
+  // One inventory read serves hook acquisition and tmux status.
   agentHookServer.setTmuxManagedPtyResolver(
-    createLocalTmuxManagedPtyResolver({
-      getPtyId: getPtyIdForPaneKey,
-      listProcesses: async () => (await getDaemonProvider()?.listProcesses()) ?? []
-    })
+    createLocalTmuxManagedPtyResolver(installLocalHookRootEvidence(agentHookServer))
   )
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({

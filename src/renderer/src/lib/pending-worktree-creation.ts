@@ -1,3 +1,4 @@
+import type { agentPickerLaunchInputs } from '../../../shared/agent-launch-picker'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
@@ -82,6 +83,7 @@ export type WorktreeCreationRequest = {
   agent: TuiAgent | null
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
+  launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -137,6 +139,8 @@ export type PendingWorktreeCreation = {
   phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
   /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
   heldChatMessage?: string
+  /** The launch owns the captured input until its replacement surface is published. */
+  chatInputHandedOff?: boolean
   request: WorktreeCreationRequest
 }
 

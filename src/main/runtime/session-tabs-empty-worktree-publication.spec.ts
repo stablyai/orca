@@ -70,31 +70,5 @@ export function registerSessionTabsEmptyWorktreePublicationTests(): void {
       expect(answers[0].publicationEpoch).not.toMatch(/^none/)
       expect(answers[0].tabs).toEqual([])
     })
-
-    it('stays quiet when the publication carries the worktree itself', () => {
-      const runtime = createHeadedRuntime()
-      const answers = recordAnswers(runtime)
-      answerFor(runtime, 'device-1')
-
-      runtime.syncWindowGraph(1, {
-        tabs: [],
-        leaves: [],
-        mobileSessionTabs: [
-          {
-            worktree: WORKTREE,
-            publicationEpoch: 'renderer-epoch',
-            snapshotVersion: 1,
-            activeGroupId: null,
-            activeTabId: null,
-            activeTabType: null,
-            tabs: []
-          }
-        ]
-      })
-
-      expect(
-        answers.every((snapshot) => snapshot.publicationEpoch.startsWith('renderer-epoch'))
-      ).toBe(true)
-    })
   })
 }

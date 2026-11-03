@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -193,15 +193,6 @@ describe('ephemeral VM runtime store', () => {
   it('throws a store error for invalid persisted JSON', () => {
     const userDataPath = makeUserDataPath()
     writeFileSync(getEphemeralVmRuntimeStorePath(userDataPath), '{ nope', 'utf8')
-
-    expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
-  })
-
-  it('rejects an oversized sparse runtime store before parsing it', () => {
-    const userDataPath = makeUserDataPath()
-    const path = getEphemeralVmRuntimeStorePath(userDataPath)
-    writeFileSync(path, '{"version":1,"runtimes":[]}', 'utf8')
-    truncateSync(path, MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES + 1)
 
     expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
   })

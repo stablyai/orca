@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { codexPromptIdentity } from './codex-structured-prompt-items'
 import {
   acquireReadyCodexForTest,
@@ -10,8 +10,8 @@ import {
   lifecycleRecorder
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'

@@ -1,13 +1,16 @@
 import { mkdir, realpath, writeFile, rm, symlink, readFile } from 'node:fs/promises'
-vi.mock('../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async (original) => {
-  const query = await import('../transcript-opencode-sqlite-query')
-  return {
-    ...(await original<object>()),
-    readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
-    readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
-      query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+vi.mock(
+  '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (original) => {
+    const query = await import('../transcript-opencode-sqlite-query')
+    return {
+      ...(await original<object>()),
+      readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
+      readOpenCodeTranscriptSignalViaWorker: async (args: { dbPath: string; sessionId: string }) =>
+        query.readOpenCodeTranscriptSignal(args.dbPath, args.sessionId)
+    }
   }
-})
+)
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
@@ -19,12 +22,12 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
-import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
+import { writeOpenCodeSqliteDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'
 import { structuredAgentsDeclaringNothing } from './structured-agent-session-adapter-router-test-support'
-import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session-launch-directory'
+import { resolveAgentSessionLaunchDirectory } from '../../runtime/agent-session/agent-session-launch-directory'
 import { createClaudeStructuredLaunchResolver } from '../../runtime/structured-agent-launch-composition.test-support'
 
 import { fixture } from './structured-agent-session-create-adoption-contract-test-fixture'

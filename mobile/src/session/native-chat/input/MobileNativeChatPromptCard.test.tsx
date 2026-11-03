@@ -6,7 +6,7 @@ import {
   AGENT_SESSION_SETTLED_BODY_CAPABILITY,
   type AgentSessionSettledBodyRead
 } from '../../../../../src/shared/agent-session-settled-body'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { createElement, useLayoutEffect, useRef } from 'react'
@@ -14,24 +14,25 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { Pressable, Text, TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat/input/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 import { useMobileStructuredPromptResponses } from '../../use-mobile-structured-prompt-responses'
-import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
+import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
 import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input-font-size'
 import {
   projectStructuredPermission,
   type StructuredApprovalItem
 } from '../../mobile-structured-agent-prompts'
-import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../src/shared/structured-agent-session-reducer'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSessionMutate } from '../../mobile-structured-agent-session-rpc'
 vi.mock('../../../platform/external-link', () => ({
   openExternalLink: vi.fn(),
   useExternalLinkAvailable: vi.fn(() => true)
 }))
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

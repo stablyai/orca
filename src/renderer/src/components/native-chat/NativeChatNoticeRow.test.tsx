@@ -2,17 +2,19 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session-journal-schemas'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { useAppStore } from '@/store'
 import { i18n } from '@/i18n/i18n'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  type AgentSessionFailureFact,
+  agentSessionFailureFact
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
@@ -465,6 +467,15 @@ describe('notice rows', () => {
         'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'
       )
     ).toBeInTheDocument()
+  })
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await i18n.changeLanguage('fr')
+    const failure = { kind: 'savedConversationMissing' } as const
+    const words = agentSessionFailureWords(failure, { agentName: 'Claude', surface: 'row' })
+    renderStatus({ kind: 'status', tone: 'error', ...words }, null, false, false, 'Claude')
+    const french =
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
+    expect(screen.getByText(french)).toBeInTheDocument()
   })
   it.each([
     ['fr', 'Grok', 'Connectez-vous à Grok avec `grok login` sur l’ordinateur qui exécute ce chat.'],

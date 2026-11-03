@@ -4,8 +4,8 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
-} from '../agent-session-journal-types'
-import { readAgentJournalTurn } from '../agent-session-turn-record'
+} from './journal/agent-session-journal-types'
+import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
 
 export function isStructuredAgentSessionCommandEntry(
   body: AgentJournalItemBody | null | undefined
@@ -39,7 +39,7 @@ export function structuredAgentSessionCommandTurnItemIds(
 
 export function isStructuredAgentSessionCommandRow(
   item: Pick<AgentJournalRenderItem, 'body' | 'turnScope'>,
-  commandTurnItemIds: ReadonlySet<string>
+  commandTurnItemIds: Pick<ReadonlySet<string>, 'has'>
 ): boolean {
   const scope = item.turnScope
   return (

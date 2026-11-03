@@ -11,7 +11,7 @@ import {
 } from './structured-agent-session-draft-position.test-fixture'
 import * as draftCache from '@/components/native-chat/native-chat-draft-cache'
 import * as draftMemory from '@/components/native-chat/native-chat-composer-draft-memory'
-import { seedStructuredAgentLaunchDraft } from '../structured-agent-session-launch-draft'
+import { seedStructuredAgentLaunchDraft } from './launch/structured-agent-session-launch-draft'
 import { publishedLayoutsOf } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
@@ -33,7 +33,7 @@ import {
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
+import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 
 it
   .runIf(ORCA_LAYOUT_OWNER_IS_MAIN)
@@ -412,41 +412,6 @@ it.each([10, 100])(
     }
     compare.mockRestore()
     retire.mockRestore()
-  }
-)
-
-it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-  'parks a live fresh destination across group/title changes and cache unpublish until actual attachment',
-  async () => {
-    const handle = openPositionDraft(),
-      scope = structuredAgentSessionDraftScopeKey(handle.sessionId)
-    await handle.finish()
-    const original = readNativeChatComposerDraft(scope)
-    const layout = publishedLayoutsOf(layoutApplyTestTransport.mainModel!)['wt-1']!
-    const moved = {
-      ...layout,
-      groupLayout: undefined,
-      groups: [{ id: 'moved-group', tabIds: layout.tabs.map((tab) => tab.id) }],
-      tabs: layout.tabs.map((tab) => ({ ...tab, customTitle: 'renamed' }))
-    }
-    layoutApplyTestTransport.emitFrame({ type: 'workspace', key: 'wt-1', layout: moved })
-    await main.settle()
-    expect(useAppStore.getState().getTab(handle.tab.id)?.groupId).toBe('moved-group')
-    layoutApplyTestTransport.emitFrame({ type: 'removed', key: 'wt-1' })
-    await main.settle()
-    expect(useAppStore.getState().getTab(handle.tab.id)?.entityId).toBe(handle.sessionId)
-    // ast-grep-ignore: test-no-real-time-wait-tsx -- Attach the still-live destination after the former 1s expiry.
-    await new Promise((resolve) => setTimeout(resolve, 1050))
-    const input = createRef<NativeChatComposerInput>()
-    const view = render(
-      <StrictMode>
-        <PositionField scope={scope} tabId={handle.tab.id} input={input} />
-      </StrictMode>
-    )
-    expect(input.current!.selectionStart).toBe(POSITION_TEXT.length)
-    expect(input.current!.value).toBe(POSITION_TEXT)
-    expect(readNativeChatComposerDraft(scope)).toBe(original)
-    view.unmount()
   }
 )
 

@@ -1,5 +1,5 @@
 import type { AgentSessionFormContent } from './agent-session-form'
-import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
+import type { AgentSessionQuestionAnswer } from './agent-session/agent-session-question-answer'
 
 export const AGENT_JOURNAL_RESOLUTION_STATES = ['pending', 'resolved', 'cancelled'] as const
 export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATES)[number]
@@ -15,5 +15,7 @@ export type AgentJournalResolution = {
   answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
+  /** Read-time device description; never written back into the journal. */
+  resolvedByDevice?: { kind: 'current' } | { kind: 'named'; name: string }
   resolvedAt: number | null
 }

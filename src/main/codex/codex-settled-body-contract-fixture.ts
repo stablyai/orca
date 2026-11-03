@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES as M } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -23,7 +23,7 @@ import {
   AgentSessionSettledBodyPieceSchema
 } from '../../shared/agent-session-settled-body'
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from '../runtime/rpc/methods/structured-agent-session-item'
-import { nativeChatReceiptAnswers } from '../../shared/native-chat-resolution-receipt'
+import { nativeChatReceiptAnswers } from '../../shared/native-chat/native-chat-resolution-receipt'
 
 export async function certifyBody(
   item: AgentJournalRenderItem,

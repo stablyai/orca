@@ -1,4 +1,4 @@
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from './native-chat/native-chat-resolution-receipt'
 import type { AgentSessionSettledBodySource } from './agent-session-settled-body'
 import type { AgentSessionSettledBodyReader } from './agent-session-settled-body-reader'
 

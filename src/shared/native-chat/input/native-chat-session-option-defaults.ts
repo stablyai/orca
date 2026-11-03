@@ -12,7 +12,7 @@ import {
   findCatalogModel,
   getAgentSessionOptionCatalog,
   sessionOptionValueIsValid
-} from '../../agent-session-option-catalog'
+} from '../../agent-session/options/agent-session-option-catalog'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
@@ -21,7 +21,7 @@ import type {
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from '../../structured-agent-session-option-codec'
+} from '../../agent-session/options/structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,

@@ -9,9 +9,10 @@ import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswerEntries,
+  nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body: presentation,
@@ -41,6 +42,11 @@ export function NativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
+  const device = nativeChatReceiptDevice(resolution, {
+    current: translate('components.native-chat.receipt.thisComputer', 'this computer'),
+    computer: translate('components.native-chat.receipt.computer', 'the computer'),
+    unknown: translate('components.native-chat.receipt.otherDevice', 'another device')
+  })
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
   const answers = incomplete
@@ -120,12 +126,12 @@ export function NativeChatResolutionReceipt({
               ? translate(
                   'components.native-chat.receipt.cancelledBy',
                   NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
-                  { device: resolution.resolvedBy }
+                  { device }
                 )
               : translate(
                   'components.native-chat.receipt.resolver',
                   NATIVE_CHAT_RECEIPT_COPY.resolver,
-                  { device: resolution.resolvedBy }
+                  { device }
                 )}
           </span>
         ) : null}

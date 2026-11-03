@@ -1,4 +1,5 @@
 import { journalInputOrder } from './journal-input-order'
+import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -6,13 +7,13 @@ import {
 } from './journal-submission-hook'
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import { retainedQueueFacts } from './journal-queue-retention'
@@ -90,17 +91,20 @@ export class JournalQueuedMessages {
     return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
   }
 
+  /** Mail the orchestration owner cannot confirm now; the host installs it once, so every reader of
+   *  the next card (drain, consume, publication, scheduling) applies one rule. */
+  mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
+
   /** Selection reads identity summaries; current values are resolved after edits. */
   nextInputCard(automatic = true): QueuedMessageRow | null {
-    const state = this.inputState()
-    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
-    const card = identity ? this.get(identity.messageId) : null
-    return !card ||
-      card.state === 'returned' ||
-      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
-      (automatic && this.editLeases.isHeld(card.messageId))
-      ? null
-      : card
+    return nextEligibleQueuedCard({
+      state: this.inputState(),
+      floor: this.deps.reopenFloor(),
+      get: (messageId) => this.get(messageId),
+      editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
+      revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
+      unavailable: this.mailUnavailable
+    })
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -294,6 +298,7 @@ export class JournalQueuedMessages {
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      failedAt: journalInputOrder(state).newestTurn.failure(),
       cards,
       reopenFloor: this.deps.reopenFloor()
     })

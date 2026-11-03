@@ -5,7 +5,7 @@ import {
   PLACEMENT_INTAKE_WINDOW_MS,
   PlacementLoadBand
 } from './placement-load-band.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 
 function seededRandom(seed: number): () => number {

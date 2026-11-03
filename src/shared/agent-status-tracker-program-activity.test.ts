@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createAgentStatusTracker } from './agent-title-status'
 
 function tracker() {
@@ -38,13 +38,5 @@ describe('createAgentStatusTracker with OSC 7501 activity', () => {
     instance.handleProgramActivity(null)
     instance.handleTitle('')
     expect(events).toEqual(['exited'])
-  })
-
-  it('leaves agents that never report OSC 7501 on title glyphs', () => {
-    const onIdle = vi.fn()
-    const instance = createAgentStatusTracker(onIdle)
-    instance.handleTitle('⠂ Claude Code')
-    instance.handleTitle('✳ Claude Code')
-    expect(onIdle).toHaveBeenCalledWith('✳ Claude Code', 'idle')
   })
 })

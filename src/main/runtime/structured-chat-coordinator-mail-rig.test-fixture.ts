@@ -4,11 +4,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   createStore,
@@ -17,15 +17,13 @@ import {
   testState
 } from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from './orchestration/db'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,
@@ -264,7 +262,8 @@ beforeEach(async () => {
     onSessionStatusChanged: (summary) => {
       runtime.onStructuredSessionStatusForMail(summary)
     },
-    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
+    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
+    queuedAgentMessageOwed: (sessionId, from) => runtime.structuredChatMailOwed(sessionId, from)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })
@@ -300,12 +299,9 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** Exact PTY mailbox pointer, including CLI spelling. */
-export function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[Reply: orca(-dev)? orchestration reply --id /.test(text)
 }
 
 export function turnText(turn: { text: string }): string {

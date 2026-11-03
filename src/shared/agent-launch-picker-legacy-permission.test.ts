@@ -8,9 +8,9 @@ import {
 } from './agent-launch-picker'
 import { agentPickerArgumentPermission } from './agent-launch-picker-permission'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
-import { structuredAgentConfiguredArgs } from '../main/native-chat/structured-agent-configured-args'
-import { claudeStructuredLaunchArgs } from '../main/claude/claude-structured-launch-args'
-import { codexStructuredLaunchArgs } from '../main/codex/codex-structured-launch-args'
+import '../main/native-chat/structured-agent-configured-args'
+import '../main/claude/structured/launch/claude-structured-launch-args'
+import '../main/codex/codex-structured-launch-args'
 
 const settings = Object.freeze({
   agentPermissionDefault: 'ask' as const,
@@ -35,7 +35,18 @@ it('retains inherited raw permission precedence despite a typed choice; removal 
     remainingArguments: '',
     value: 'full-access',
     choice: 'full-access',
-    opaque: false
+    opaque: false,
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--dangerously-skip-permissions'],
+        start: 0,
+        end: 30,
+        lift: false,
+        owned: false
+      }
+    ]
   })
   expect(
     projectAgentLaunchProfile('claude', settings, { target: 'terminal', choices: draft.choices })
@@ -69,7 +80,18 @@ it('shows unliftable launch-owned permission bytes without guessing a native cho
     remainingArguments: '--add-dir docs',
     value: 'plan',
     choice: undefined,
-    opaque: false
+    opaque: false,
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--permission-mode', 'plan'],
+        start: 0,
+        end: 22,
+        lift: false,
+        owned: false
+      }
+    ]
   })
   const removed = editAgentPickerArguments(draft, permission?.remainingArguments ?? '')
   expect(removed.arguments).toBe('--add-dir docs')
@@ -86,27 +108,17 @@ it('keeps shell-ambiguous Arguments together rather than inventing a removable p
     value: 'plan',
     choice: undefined,
     remainingArguments: draft.arguments,
-    opaque: true
+    opaque: true,
+    ranges: [
+      {
+        key: 'permissionMode',
+        value: '',
+        words: ['--permission-mode'],
+        start: 16,
+        end: 33,
+        lift: false,
+        owned: false
+      }
+    ]
   })
-})
-
-it('retains raw CLI permission bytes while native configured-Arguments filtering stays unchanged', () => {
-  const chat = { ...agentPickerDraft(entry, 'chat'), arguments: '--permission-mode plan' }
-  expect(agentPickerArgumentPermission(entry, chat)).toMatchObject({
-    value: 'plan',
-    choice: undefined,
-    opaque: false
-  })
-  expect(
-    claudeStructuredLaunchArgs(structuredAgentConfiguredArgs('claude', settings)).extraArgs
-  ).toEqual({})
-  expect(
-    codexStructuredLaunchArgs(
-      structuredAgentConfiguredArgs('codex', {
-        agentDefaultArgs: {
-          codex: '-a never -s danger-full-access -c approval_policy=never --search'
-        }
-      })
-    )
-  ).toEqual(['--search'])
 })

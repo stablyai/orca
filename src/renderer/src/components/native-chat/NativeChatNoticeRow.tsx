@@ -1,3 +1,4 @@
+import { NativeChatUsageLimitAutoContinue } from './NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
@@ -12,8 +13,8 @@ import { cn } from '@/lib/utils'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
-} from '../../../../shared/agent-session-host-status-rows'
-import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/view/agent-session-host-status-rows'
+import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
@@ -32,11 +33,11 @@ import {
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
-import { formatUsageLimitResetClock } from '../../../../shared/agent-session-usage-limit'
+import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -185,9 +186,9 @@ export function NativeChatNoticeRow({
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
-  // Only reword auth text fully described by its fact; host text may also carry command advice.
-  const authSurface =
-    failure?.kind === 'notSignedIn'
+  // Only reword auth and missing-conversation text fully described by its fact; host text may also carry command advice.
+  const factSurface =
+    failure?.kind === 'notSignedIn' || failure?.kind === 'savedConversationMissing'
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -216,10 +217,10 @@ export function NativeChatNoticeRow({
           },
           sayAgentSessionFailureTranslated
         )
-      : failure && authSurface
+      : failure && factSurface
         ? agentSessionFailureSentence(
             failure,
-            authSurface,
+            factSurface,
             { agentName },
             sayAgentSessionFailureTranslated
           )
@@ -268,6 +269,9 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
+      {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
+        <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
+      ) : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"

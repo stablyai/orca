@@ -1,16 +1,14 @@
 import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import type {
-  AgentSessionAccountHome,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type {
   AgentModelCatalogWorkspaceDeps,
   AgentModelCatalogRecord
@@ -57,7 +55,7 @@ export type AgentModelCatalogService = {
    *  whose catalog for the account a new chat would pin is missing or old, so a picker never meets
    *  a cold catalog. Resolves once those listings settle. */
   prewarm: () => Promise<void>
-  stop: () => void
+  stop: () => void | Promise<void>
   /** A chat under this record's account proved its start: a held reason is re-checked sooner. */
   providerStarted: (record: AgentSessionRecord, source?: () => boolean) => void
 }

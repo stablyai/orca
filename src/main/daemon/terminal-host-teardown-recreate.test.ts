@@ -4,7 +4,7 @@ import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 
 // Keep fake PIDs away from real process probes and taskkill.
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 

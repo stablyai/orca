@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppState, View, Text, Pressable, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { ChevronRight, X } from 'lucide-react-native'
+import { X } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { CustomKeyModal } from './CustomKeyModal'
+import { ListRow } from './list/ListGroup'
+import { SettingsEmptyRow, SettingsSection } from '../settings/settings-screen-frame'
 import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
@@ -181,23 +183,17 @@ export function TerminalShortcutSettings({
   return (
     <>
       {hasPad ? (
-        <>
-          <Text style={[styles.groupHeading, styles.groupTopGap]}>
-            {t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
-          </Text>
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <View style={styles.row}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>
-                  {t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
-                </Text>
-                <Text style={styles.rowSublabel}>
-                  {t(
-                    'components.terminalShortcutSettings.showDirectionPadDescription',
-                    'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
-                  )}
-                </Text>
-              </View>
+        <SettingsSection
+          title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
+        >
+          <ListRow
+            key="directionPad"
+            title={t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
+            subtitle={t(
+              'components.terminalShortcutSettings.showDirectionPadDescription',
+              'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
+            )}
+            accessory={
               <MobileSwitch
                 accessibilityLabel={t(
                   'components.terminalShortcutSettings.showDirectionPad',
@@ -212,21 +208,19 @@ export function TerminalShortcutSettings({
                   })
                 }
               />
-            </View>
-          </View>
-        </>
+            }
+          />
+        </SettingsSection>
       ) : null}
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>
-        {t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
-      </Text>
-      <Text style={styles.groupDescription}>
-        {t(
+      <SettingsSection
+        title={t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
+        footer={t(
           'components.terminalShortcutSettings.moreKeysDescription',
           'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
         )}
-      </Text>
-      <View style={[styles.section, styles.sectionTopGap]}>
+      >
         <DragReorderList
+          key="builtIn"
           items={orderedAccessoryKeys}
           itemKey={(shortcutKey) => shortcutKey.id}
           rowHeight={REORDER_ROW_HEIGHT}
@@ -243,39 +237,27 @@ export function TerminalShortcutSettings({
             />
           )}
         />
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        <ListRow
+          key="reset"
+          title={t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
+          subtitle={t(
+            'components.terminalShortcutSettings.resetDescription',
+            'Show every built-in shortcut key in the original order'
+          )}
           onPress={resetBuiltInKeys}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>
-              {t('components.terminalShortcutSettings.resetDefaults', 'Reset Defaults')}
-            </Text>
-            <Text style={styles.rowSublabel}>
-              {t(
-                'components.terminalShortcutSettings.resetDescription',
-                'Show every built-in shortcut key in the original order'
-              )}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
+        />
+      </SettingsSection>
 
-      <Text style={[styles.groupHeading, styles.groupTopGap]}>
-        {t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
-      </Text>
-      <View style={[styles.section, styles.sectionTopGap]}>
+      <SettingsSection
+        title={t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+      >
         {customKeys.length === 0 ? (
-          <>
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
-              </Text>
-            </View>
-            <View style={styles.separator} />
-          </>
+          <SettingsEmptyRow key="empty">
+            {t('components.terminalShortcutSettings.empty', 'No custom shortcuts defined yet.')}
+          </SettingsEmptyRow>
         ) : (
           <DragReorderList
+            key="custom"
             items={customKeys}
             itemKey={(key) => key.id}
             rowHeight={REORDER_ROW_HEIGHT}
@@ -334,24 +316,17 @@ export function TerminalShortcutSettings({
             )}
           />
         )}
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        <ListRow
+          key="add"
+          title={t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
+          subtitle={t(
+            'components.terminalShortcutSettings.addDescription',
+            'Create key combo or text macro'
+          )}
+          navigates
           onPress={() => setShowCustomKeyModal(true)}
-        >
-          <View style={styles.rowContent}>
-            <Text style={styles.rowLabel}>
-              {t('components.terminalShortcutSettings.addShortcut', 'Add Custom Shortcut…')}
-            </Text>
-            <Text style={styles.rowSublabel}>
-              {t(
-                'components.terminalShortcutSettings.addDescription',
-                'Create key combo or text macro'
-              )}
-            </Text>
-          </View>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
+        />
+      </SettingsSection>
 
       <CustomKeyModal
         visible={showCustomKeyModal}

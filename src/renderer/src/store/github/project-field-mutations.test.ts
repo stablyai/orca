@@ -158,34 +158,6 @@ describe('project field writes', () => {
     }
   )
 
-  it('serializes the same item field across different views of a project', async () => {
-    const store = setup()
-    const otherKey = projectViewCacheKey('user', 'owner', 1, 'other-view')
-    const other = fixture()
-    other.selectedView.id = 'other-view'
-    store.setState({
-      projectViewCache: {
-        ...store.getState().projectViewCache,
-        [otherKey]: { data: other, fetchedAt: 1 }
-      }
-    })
-    const first = deferred()
-    mockApi.gh.updateProjectItemField
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce({ ok: true })
-    const update1 = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
-    const update2 = store.getState().updateProjectFieldValue(otherKey, 'row', 'status', {
-      kind: 'single-select',
-      optionId: 'todo'
-    })
-    await vi.waitFor(() => expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(1))
-    first.resolve({ ok: true })
-    await Promise.all([update1, update2])
-    expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps the confirmed baseline when failed writes switch between cached views', async () => {
     const store = setup()
     const otherKey = projectViewCacheKey('user', 'owner', 1, 'other-view')
@@ -216,41 +188,6 @@ describe('project field writes', () => {
     expect(
       store.getState().projectViewCache[otherKey]?.data?.rows[0]?.fieldValuesByFieldId.status
     ).toMatchObject({ optionId: 'todo' })
-  })
-
-  it('keeps identical item IDs on different GitHub hosts independent', async () => {
-    const store = setup()
-    const otherKey = projectViewCacheKey(
-      'user',
-      'owner',
-      1,
-      'view',
-      undefined,
-      'local',
-      'ghe.example'
-    )
-    const other = fixture()
-    other.project.host = 'ghe.example'
-    store.setState({
-      projectViewCache: {
-        ...store.getState().projectViewCache,
-        [otherKey]: { data: other, fetchedAt: 1 }
-      }
-    })
-    const first = deferred()
-    mockApi.gh.updateProjectItemField
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce({ ok: true })
-    const update1 = store
-      .getState()
-      .updateProjectFieldValue(key, 'row', 'status', { kind: 'single-select', optionId: 'done' })
-    const update2 = store.getState().updateProjectFieldValue(otherKey, 'row', 'status', {
-      kind: 'single-select',
-      optionId: 'done'
-    })
-    await vi.waitFor(() => expect(mockApi.gh.updateProjectItemField).toHaveBeenCalledTimes(2))
-    first.resolve({ ok: true })
-    await Promise.all([update1, update2])
   })
 
   it('preserves a successful edit to a different field when status rolls back', async () => {

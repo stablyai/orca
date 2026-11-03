@@ -7,6 +7,7 @@ import { clientReadsCurrentRequests } from './structured-agent-session-current-r
 import { projectTurnItemHistory } from './structured-agent-session-turn-item-capability'
 import { projectQueuedImageCardHistory } from './structured-agent-session-queued-image-capability'
 import { projectBackgroundTaskHistory } from './structured-agent-session-background-task-capability'
+import { projectReceiptDeviceHistory } from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_HISTORY_METHODS = [
   defineMethod({
@@ -15,21 +16,24 @@ export const STRUCTURED_AGENT_SESSION_HISTORY_METHODS = [
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx),
-              clientReadsSettledBodies(ctx)
+      return projectReceiptDeviceHistory(
+        projectTurnItemHistory(
+          projectQueuedImageCardHistory(
+            projectBackgroundTaskHistory(
+              await host.history(
+                params,
+                undefined,
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx),
+                clientReadsSettledBodies(ctx)
+              ),
+              ctx
             ),
             ctx
           ),
-          ctx
+          ctx,
+          host.sessionAgent(params.sessionId)
         ),
-        ctx,
-        host.sessionAgent(params.sessionId)
+        ctx
       )
     }
   })
