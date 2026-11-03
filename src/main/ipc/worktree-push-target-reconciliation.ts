@@ -1,7 +1,7 @@
 // Sweep all fork remotes with cleanup's shared predicates to reclaim leaks from legacy metadata or external worktree removal.
 
 import { gitExecFileAsync } from '../git/runner'
-import { listWorktrees } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { WORKTREE_ID_SEPARATOR, worktreeIdentityKey } from '../../shared/worktree/id'
 import { parseGitRemoteFetchUrls } from '../../shared/git-remote-url-index'

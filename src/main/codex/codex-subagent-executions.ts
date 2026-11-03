@@ -1,8 +1,8 @@
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import {
   MAX_SUBAGENT_FIELD_CHARS,
   canReplaceSubagentState
-} from '../../shared/native-chat-subagent-summary'
+} from '../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 const MAX_SETTLED_TURNS = 256
 /** Evicted turn ordinals fall back to first-run attribution. */

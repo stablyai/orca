@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { isAbsolute, normalize, win32 } from 'node:path'
 import { parseRoutableExecutionHostId } from '../../shared/execution-host'
 import type { ShellOpenLocalPathFailureReason } from '../../shared/shell-open-types'
-import { resolveWindowsPathAccess } from '../windows-path-access-host'
+import { resolveWindowsPathAccess } from '../windows/windows-path-access-host'
 
 export async function pathExists(pathValue: string): Promise<boolean> {
   try {

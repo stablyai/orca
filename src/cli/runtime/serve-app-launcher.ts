@@ -2,6 +2,7 @@ import { accessSync, constants } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
 import { RuntimeClientError } from './types'
 import { resolveLaunchUserDataPath } from './launch-user-data-path'
+import { appImageEphemeralRootOf } from '../../shared/appimage-ephemeral-root'
 
 /** A remote server’s Node-based CLI cannot start a local app server. */
 export function canStartOrcaServer(env: NodeJS.ProcessEnv): boolean {
@@ -34,8 +35,17 @@ function isVersionScopedDir(dir: string, userData: string): boolean {
     inside === '' ||
     (!inside.startsWith('..') && !isAbsolute(inside)) ||
     dir.includes('orcad-artifacts') ||
-    dir.includes('/.mount_')
+    appImageEphemeralRootOf(dir) !== null
   )
+}
+
+/** PATH for a persisted service: entries tied to one Orca version or AppImage launch are gone by its next start. */
+export function resolveServicePath(env: NodeJS.ProcessEnv): string {
+  const userData = resolveLaunchUserDataPath(env)
+  const durable = (env.PATH ?? '')
+    .split(delimiter)
+    .filter((dir) => isAbsolute(dir) && !isVersionScopedDir(dir, userData))
+  return durable.length > 0 ? durable.join(delimiter) : '/usr/bin:/bin'
 }
 
 /** The stable launcher on PATH: a version-specific executable would vanish with the next update. */

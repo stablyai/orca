@@ -21,7 +21,7 @@ export type DictationCapture = {
   readonly onChunk: (
     handler: (chunk: DictationCaptureChunk) => void
   ) => DictationCaptureSubscription
-  // Notify loss without a reason argument because all callers cancel alike: native began/blocked, page equivalents, or refused reads.
+  // Notify loss without a reason argument because callers treat every source alike: native began/blocked, page equivalents, or refused reads.
   readonly onInterruption: (handler: () => void) => DictationCaptureSubscription
 }
 

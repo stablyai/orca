@@ -36,3 +36,6 @@ export const mediaPlaybackPositionCache = new Map<string, number>()
 
 // Monaco diff view state includes both cursors/selections and model state; preserve that context beyond numeric scrolling, as VS Code does.
 export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()
+
+// Full Monaco view state carries folds and horizontal scroll that scrollTop/selection caches miss.
+export const editorViewStateCache = new Map<string, editor.ICodeEditorViewState>()

@@ -29,7 +29,6 @@ const restores: Pick<PtySpawnResult, 'snapshot' | 'coldRestore' | 'replay'>[] = 
   {
     coldRestore: {
       scrollback: 'restored history\r\n',
-      lastTitle: 'Restored',
       cwd: '/fixture/local'
     }
   },

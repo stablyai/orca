@@ -19,6 +19,8 @@ import {
 } from '../../shared/wsl-orcad-account-notice'
 import {
   subscribeRuntimeEnvironmentFromPreload,
+  subscribeCrewAttemptFromPreload,
+  cancelRuntimeEnvironmentSubscriptionFromPreload,
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
@@ -121,7 +123,9 @@ export const runtimeEnvironmentsApi = {
     expectedEnvironmentRuntimeId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
-    ipcRenderer.invoke('runtimeEnvironments:unsubscribe', args).then(() => undefined),
+    cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),
+  subscribeCrewAttempt: (args, callbacks) =>
+    subscribeCrewAttemptFromPreload(ipcRenderer, args, callbacks),
   subscribe: async (
     args: {
       subscriptionId?: string

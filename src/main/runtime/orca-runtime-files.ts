@@ -4,6 +4,7 @@ import { RuntimeFileAccess } from './files/file-access'
 import { RuntimeFileReads } from './files/file-reads'
 import { RuntimeFileMutations } from './files/file-mutations'
 import { RuntimeFileWatches } from './files/watch/file-watches'
+import { RuntimeStagedFileSaves } from './files/staged-file-save-commands'
 import { RuntimeTerminalPathResolver } from './terminal/terminal-path-resolver'
 import type { RuntimeFileCommandHost } from './files/file-command-host'
 
@@ -23,15 +24,19 @@ export class RuntimeFileCommands {
   readonly statRuntimeFile: RuntimeFileAccess['statRuntimeFile']
   readonly readMobileFile: RuntimeFileReads['readMobileFile']
   readonly readFileExplorerPreview: RuntimeFileReads['readFileExplorerPreview']
+  readonly readChatImagePreview: RuntimeFileReads['readChatImagePreview']
   readonly readDocPreviewFile: RuntimeFileReads['readDocPreviewFile']
+  readonly readDocPreviewChunk: RuntimeFileReads['readDocPreviewChunk']
   readonly readFileExplorerChunk: RuntimeFileReads['readFileExplorerChunk']
   readonly writeFileExplorerFile: RuntimeFileMutations['writeFileExplorerFile']
+  readonly formatFileExplorerText: RuntimeFileMutations['formatFileExplorerText']
   readonly writeFileExplorerFileBase64: RuntimeFileMutations['writeFileExplorerFileBase64']
   readonly writeFileExplorerFileBase64Chunk: RuntimeFileMutations['writeFileExplorerFileBase64Chunk']
   readonly createFileExplorerFile: RuntimeFileMutations['createFileExplorerFile']
   readonly createFileExplorerDir: RuntimeFileMutations['createFileExplorerDir']
   readonly createFileExplorerDirNoClobber: RuntimeFileMutations['createFileExplorerDirNoClobber']
   readonly commitFileExplorerUpload: RuntimeFileMutations['commitFileExplorerUpload']
+  readonly replaceFileExplorerFileWithUpload: RuntimeFileMutations['replaceFileExplorerFileWithUpload']
   readonly renameFileExplorerPath: RuntimeFileMutations['renameFileExplorerPath']
   readonly copyFileExplorerPath: RuntimeFileMutations['copyFileExplorerPath']
   readonly deleteFileExplorerPath: RuntimeFileMutations['deleteFileExplorerPath']
@@ -41,6 +46,7 @@ export class RuntimeFileCommands {
   readonly restoreFileExplorerWatchersAfterFailedRemoval: RuntimeFileWatches['restoreFileExplorerWatchersAfterFailedRemoval']
   readonly forgetFileExplorerWatchersAfterRemoval: RuntimeFileWatches['forgetFileExplorerWatchersAfterRemoval']
   readonly resolveTerminalPath: RuntimeTerminalPathResolver['resolveTerminalPath']
+  readonly stagedFileSaves: RuntimeStagedFileSaves
 
   constructor(host: RuntimeFileCommandHost) {
     this.search = new RuntimeFileSearch(host)
@@ -48,6 +54,7 @@ export class RuntimeFileCommands {
     this.access = new RuntimeFileAccess(host)
     this.reads = new RuntimeFileReads(host)
     this.mutations = new RuntimeFileMutations(host)
+    this.stagedFileSaves = new RuntimeStagedFileSaves(host)
     this.watches = new RuntimeFileWatches(host)
     this.terminalPaths = new RuntimeTerminalPathResolver(host, this.artifacts)
     this.openMobileFile = this.access.openMobileFile.bind(this.access)
@@ -57,9 +64,12 @@ export class RuntimeFileCommands {
     this.statRuntimeFile = this.access.statRuntimeFile.bind(this.access)
     this.readMobileFile = this.reads.readMobileFile.bind(this.reads)
     this.readFileExplorerPreview = this.reads.readFileExplorerPreview.bind(this.reads)
+    this.readChatImagePreview = this.reads.readChatImagePreview.bind(this.reads)
     this.readDocPreviewFile = this.reads.readDocPreviewFile.bind(this.reads)
+    this.readDocPreviewChunk = this.reads.readDocPreviewChunk.bind(this.reads)
     this.readFileExplorerChunk = this.reads.readFileExplorerChunk.bind(this.reads)
     this.writeFileExplorerFile = this.mutations.writeFileExplorerFile.bind(this.mutations)
+    this.formatFileExplorerText = this.mutations.formatFileExplorerText.bind(this.mutations)
     this.writeFileExplorerFileBase64 = this.mutations.writeFileExplorerFileBase64.bind(
       this.mutations
     )
@@ -72,6 +82,9 @@ export class RuntimeFileCommands {
       this.mutations
     )
     this.commitFileExplorerUpload = this.mutations.commitFileExplorerUpload.bind(this.mutations)
+    this.replaceFileExplorerFileWithUpload = this.mutations.replaceFileExplorerFileWithUpload.bind(
+      this.mutations
+    )
     this.renameFileExplorerPath = this.mutations.renameFileExplorerPath.bind(this.mutations)
     this.copyFileExplorerPath = this.mutations.copyFileExplorerPath.bind(this.mutations)
     this.deleteFileExplorerPath = this.mutations.deleteFileExplorerPath.bind(this.mutations)

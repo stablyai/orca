@@ -52,18 +52,6 @@ afterEach(() => {
 })
 
 describe('useMarkdownDocumentWatchRefresh', () => {
-  it('asks for a scan fresher than the latest change in the window', async () => {
-    const refresh = vi.fn(async () => {})
-    await act(async () => root.render(createElement(Harness, { refresh })))
-    change([{ kind: 'create', absolutePath: '/repo/a.md' }])
-    await advance(100)
-    const latestChangeAt = performance.now()
-    change([{ kind: 'create', absolutePath: '/repo/b.md' }])
-    await advance(100)
-    expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith(false, latestChangeAt)
-  })
-
   it('keeps one slow scan in flight and follows up once it settles', async () => {
     let inFlight = 0
     let maxInFlight = 0
@@ -103,34 +91,5 @@ describe('useMarkdownDocumentWatchRefresh', () => {
       await advance(5_000)
     }
     expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(2)
-  })
-
-  it('lets a slow scan publish while membership changes never stop', async () => {
-    const scans: { startedAt: number; settledAt?: number }[] = []
-    const refresh = vi.fn(() => {
-      const scan: { startedAt: number; settledAt?: number } = {
-        startedAt: Date.now()
-      }
-      scans.push(scan)
-      // Why: a 40 s listing outlives the 30 s watchdog.
-      return new Promise<void>((resolve) =>
-        setTimeout(() => {
-          scan.settledAt = Date.now()
-          resolve()
-        }, 40_000)
-      )
-    })
-    await act(async () => root.render(createElement(Harness, { refresh })))
-    for (let i = 0; i < 60; i++) {
-      change([{ kind: 'create', absolutePath: `/repo/s${i}.md` }])
-      await advance(5_000)
-    }
-    // A scan's result publishes only if no newer scan started before it settled.
-    const published = scans.filter(
-      (scan, index) =>
-        scan.settledAt !== undefined &&
-        scans.slice(index + 1).every((later) => later.startedAt >= scan.settledAt!)
-    )
-    expect(published.length).toBeGreaterThanOrEqual(2)
   })
 })

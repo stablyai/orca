@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
+import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 
 const FAILURE = { status: 'error', error: 'Unable to read the Cursor desktop login' }
@@ -90,6 +90,25 @@ describe('ForeignSqliteReaderClient worker lifecycle', () => {
         client.readOpenCodeBinderSessions('/synthetic/opencode.db', { ms: 0, id: '' }),
       failure: [],
       answer: [{ id: 'ses_a', directory: '/w', createdAtMs: 1, parentId: null }]
+    },
+    {
+      reader: 'openCodePromptFailure',
+      read: (client: ForeignSqliteReaderClient) =>
+        client.readOpenCodePromptFailure({
+          dbPath: '/synthetic/opencode.db',
+          sessionId: 'ses-a',
+          startedAt: 100,
+          failedAt: 200
+        }),
+      failure: { failure: null },
+      answer: {
+        failure: {
+          inputId: 'input',
+          type: 'provider.quota',
+          message: 'Quota exhausted',
+          status: 429
+        }
+      }
     }
   ])(
     '$reader refuses new native workers until the retired worker positively terminates',

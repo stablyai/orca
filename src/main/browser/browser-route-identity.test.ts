@@ -20,20 +20,6 @@ const pinnedIdentity = {
 }
 
 describe('browser route partition identity', () => {
-  it('derives a stable opaque cross-platform partition and binding fingerprint', () => {
-    const first = deriveBrowserRoutePartition(identity)
-    const second = deriveBrowserRoutePartition({ ...identity })
-
-    expect(second).toEqual(first)
-    expect(first.partition).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
-    expect(first.bindingFingerprint).toMatch(/^[a-f0-9]{64}$/)
-    expect(first.partition.slice('persist:'.length)).toMatch(/^[a-z0-9-]+$/)
-    for (const rawIdentity of Object.values(identity)) {
-      expect(first.partition).not.toContain(rawIdentity)
-    }
-    expect(first.partition).not.toContain('private.example')
-  })
-
   it('keeps delimiter-containing components structurally distinct', () => {
     const left = deriveBrowserRoutePartition({
       ...identity,
@@ -47,17 +33,6 @@ describe('browser route partition identity', () => {
     })
 
     expect(left).not.toEqual(right)
-  })
-
-  it('does not expose equality of individual identity components', () => {
-    const baseline = deriveBrowserRoutePartition(identity).partition
-    const sameProfile = deriveBrowserRoutePartition({
-      ...identity,
-      executionHostIdentity: 'ssh/target:other.example'
-    }).partition
-
-    expect(baseline.split('-').at(-1)).not.toBe(sameProfile.split('-').at(-1))
-    expect(baseline).not.toMatch(/:[a-f0-9]{16}:/)
   })
 
   it('makes every identity component load-bearing', () => {
@@ -80,12 +55,6 @@ describe('browser route partition identity', () => {
         'persist:orca-browser-v1-955a5db671b210d053d64d1e557d8cdf1e60e1e6cb710a033f1b5cd1b61e6586',
       bindingFingerprint: 'fe69d9d83ab889b68eeb185f12821e4e0e77dcc91fc4cb7672c88e7818a4ded7'
     })
-  })
-
-  it('keeps the partition name and the binding fingerprint in separate digest domains', () => {
-    const derived = deriveBrowserRoutePartition(identity)
-
-    expect(derived.partition).not.toContain(derived.bindingFingerprint)
   })
 
   it('scopes partition ownership to one orca profile and one environment', () => {

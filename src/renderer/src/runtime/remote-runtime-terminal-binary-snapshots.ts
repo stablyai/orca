@@ -92,6 +92,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           kittyKeyboardFlags: info?.kittyKeyboardFlags,
           alternateScreen: info?.alternateScreen,
           terminalOwner: info?.terminalOwner,
+          lastTitle: info?.lastTitle,
           // Replay at host grid dimensions because wraps/cursor moves depend on it; pushes must carry the same dimensions as requests.
           cols: info?.cols,
           rows: info?.rows,
@@ -123,6 +124,7 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
               alternateScreen: info?.alternateScreen,
               terminalOwner: info?.terminalOwner,
+              lastTitle: info?.lastTitle,
               pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
               // The host folds the normal buffer into `data` (see terminal-snapshot-publication.ts).
               carriesNormalBuffer: true

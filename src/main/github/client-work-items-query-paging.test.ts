@@ -70,7 +70,8 @@ vi.mock('./gh-utils', () => ({
   classifyListPrsError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -201,7 +202,7 @@ describe('listWorkItems query paging', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--search', 'is:pr is:open review-requested:@me sort:created-desc']),
+      expect.arrayContaining(['--search', 'is:open review-requested:@me sort:created-desc']),
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
@@ -254,7 +255,7 @@ describe('listWorkItems query paging', () => {
     const { items } = await listWorkItems('/repo-root', 2, 'is:pr is:open', 2)
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--limit', '4', '--search', 'is:pr is:open sort:created-desc']),
+      expect.arrayContaining(['--limit', '4', '--search', 'is:open sort:created-desc']),
       { cwd: '/repo-root' }
     )
     expect(items.map((item) => item.number)).toEqual([4, 3])

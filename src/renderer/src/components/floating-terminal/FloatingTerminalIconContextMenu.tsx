@@ -10,6 +10,7 @@ import {
 import { useAppStore } from '@/store'
 import type { FloatingTerminalTriggerLocation } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
@@ -24,6 +25,7 @@ export function FloatingTerminalIconContextMenu({
   className,
   style
 }: FloatingTerminalIconContextMenuProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [open, setOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -57,7 +59,8 @@ export function FloatingTerminalIconContextMenu({
       ),
       location: 'floating-button' as const
     }
-  }, [currentLocation])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [currentLocation, languageRevision])
 
   return (
     <>

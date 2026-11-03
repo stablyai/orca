@@ -11,13 +11,16 @@ import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { resetRemoteServerNoticeClaimsForTests } from './remote-server-notice-claims'
 
 const outage = vi.hoisted((): { environmentId: string | null } => ({ environmentId: 'env-1' }))
+const wslHostStatuses = vi.hoisted((): Record<string, { state: string; distro: string }> => ({}))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, options?: Record<string, string>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => options?.[name] ?? ''),
   getIntlLocale: () => 'en-US'
 }))
-vi.mock('@/store', () => ({ useAppStore: (selector: (state: unknown) => unknown) => selector({}) }))
+vi.mock('@/store', () => ({
+  useAppStore: (selector: (state: unknown) => unknown) => selector({ wslHostStatuses })
+}))
 vi.mock('./use-wsl-host-unavailable-reason', () => ({ useWslHostUnavailableReason: () => null }))
 vi.mock('./use-managed-pairing-refused', () => ({
   useManagedPairingRefusedEnvironmentId: () => null
@@ -32,14 +35,19 @@ vi.mock('./remote-server-outage', () => ({
 
 afterEach(() => {
   outage.environmentId = 'env-1'
+  delete wslHostStatuses['env-1']
   cleanup()
   resetRemoteServerNoticeClaimsForTests()
   document.body.innerHTML = ''
   vi.useRealTimers()
 })
 
-function controllerFor(panes: HTMLElement[]): TerminalPaneController {
-  const transport = { getRuntimeEnvironmentId: () => 'env-1' }
+function controllerFor(
+  panes: HTMLElement[],
+  transport: { getRuntimeEnvironmentId: () => string | null } = {
+    getRuntimeEnvironmentId: () => 'env-1'
+  }
+): TerminalPaneController {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recovery portals read only these fields of the pane controller.
   return {
     managedPanes: panes.map((container, index) => ({ id: index + 1, container })),
@@ -55,6 +63,41 @@ function controllerFor(panes: HTMLElement[]): TerminalPaneController {
 }
 
 describe('TerminalPaneRecoveryPortals', () => {
+  it('offers Start on every pane of a stopped WSL distro instead of "retrying automatically"', async () => {
+    vi.useFakeTimers()
+    wslHostStatuses['env-1'] = { state: 'distro-stopped', distro: 'Ubuntu' }
+    const { TerminalPaneRecoveryPortals } = await import('./TerminalPaneRecoveryPortals')
+    const panes = [document.createElement('div'), document.createElement('div')]
+    panes.forEach((pane) => document.body.appendChild(pane))
+    const view = render(<TerminalPaneRecoveryPortals controller={controllerFor(panes)} />)
+
+    act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS))
+
+    expect(view.container.querySelectorAll('[data-remote-server-outage-notice]')).toHaveLength(0)
+    expect(
+      document.querySelectorAll('[data-terminal-remote-runtime-reconnect-banner]')
+    ).toHaveLength(0)
+    const cards = document.querySelectorAll('[data-terminal-wsl-host-stopped="env-1"]')
+    expect(cards).toHaveLength(2)
+    expect(cards[0]).toHaveTextContent('Ubuntu is stopped')
+    expect(cards[0].querySelector('button')).toHaveTextContent('Start')
+  })
+
+  it('offers Start on a pane whose create failed before it reached the stopped host', async () => {
+    vi.useFakeTimers()
+    wslHostStatuses['env-1'] = { state: 'distro-stopped', distro: 'Ubuntu' }
+    const { TerminalPaneRecoveryPortals } = await import('./TerminalPaneRecoveryPortals')
+    const pane = document.createElement('div')
+    document.body.appendChild(pane)
+    render(
+      <TerminalPaneRecoveryPortals
+        controller={controllerFor([pane], { getRuntimeEnvironmentId: () => null })}
+      />
+    )
+
+    expect(document.querySelectorAll('[data-terminal-wsl-host-stopped="env-1"]')).toHaveLength(1)
+  })
+
   it('says a server-wide drop once for the tab and keeps every split pane quiet', async () => {
     vi.useFakeTimers()
     const { TerminalPaneRecoveryPortals } = await import('./TerminalPaneRecoveryPortals')

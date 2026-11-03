@@ -12,8 +12,8 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch } from './settings-search'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { matchesSettingsSearch } from './search/settings-search'
 import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -23,13 +23,12 @@ import { translate } from '@/i18n/i18n'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { NumberField } from './SettingsFormControls'
+import { NumberField } from './form-controls/SettingsFormControls'
 import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
-import { OrchestrationChatErrorSetting } from './OrchestrationChatErrorSetting'
-import { OrchestrationHeartbeatSetting } from './OrchestrationHeartbeatSetting'
+import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -163,10 +162,10 @@ export function OrchestrationPane({
         />
       ) : null}
       {showLocalRuntimeSettings ? (
-        <OrchestrationHeartbeatSetting settings={settings} updateSettings={updateSettings} />
-      ) : null}
-      {showLocalRuntimeSettings ? (
-        <OrchestrationChatErrorSetting settings={settings} updateSettings={updateSettings} />
+        <OrchestrationWorkerAutoReleaseSetting
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}

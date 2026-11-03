@@ -498,3 +498,45 @@ describe('the phone list before the first feed read', () => {
     expect(preFeed('', [])).toEqual([])
   })
 })
+
+describe('a header repeated in two host sections', () => {
+  it('gets a distinct list key in each section and one shared collapse key', () => {
+    const projectHeader = {
+      type: 'header' as const,
+      key: 'project:p',
+      label: 'P',
+      count: 0,
+      icon: { kind: 'project' as const }
+    }
+    const hostHeader = (hostId: 'local' | 'ssh:gpu') => ({
+      type: 'host-header' as const,
+      key: `host:${hostId}`,
+      hostId,
+      kind: hostId === 'local' ? ('local' as const) : ('ssh' as const),
+      label: hostId,
+      detail: '',
+      health: 'available' as const,
+      collapsed: false,
+      count: 0
+    })
+    const sections = buildHostFeedSections({
+      rows: [
+        hostHeader('local'),
+        { ...projectHeader, hostId: 'local' },
+        hostHeader('ssh:gpu'),
+        { ...projectHeader, hostId: 'ssh:gpu' }
+      ],
+      lastVisited: null,
+      liveRows: [],
+      repoHostIdByRepoId: new Map(),
+      search: ''
+    })
+
+    expect(sections.map(({ key, collapseKey }) => [key, collapseKey ?? key])).toEqual([
+      ['host:local', 'host:local'],
+      ['project:p@local', 'project:p'],
+      ['host:ssh:gpu', 'host:ssh:gpu'],
+      ['project:p@ssh:gpu', 'project:p']
+    ])
+  })
+})

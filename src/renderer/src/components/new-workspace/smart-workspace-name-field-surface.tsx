@@ -12,6 +12,7 @@ import { renderSmartWorkspaceSourceResults } from './smart-workspace-source-resu
 import { getJiraSourceStatusMessage } from './jira-source-status-message'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 import { JiraProjectPicker } from '../jira-project-picker'
+import { LinearWorkspacePicker } from '../linear-workspace-picker'
 
 export function renderSmartWorkspaceNameField(
   controller: SmartWorkspaceNameFieldController
@@ -57,6 +58,14 @@ export function renderSmartWorkspaceNameField(
           label={translate('components.jiraProjectPicker.label', 'Jira project')}
           emptyLabel={translate('components.jiraProjectPicker.all', 'All Jira projects')}
           disabled={disabled || controller.jiraProjectInventory.loading}
+        />
+      ) : null}
+      {mode === 'linear' && selectedSource === null ? (
+        <LinearWorkspacePicker
+          workspaces={controller.linearStatus.workspaces ?? []}
+          value={controller.linearWorkspaceIdOverride}
+          onChange={controller.setLinearWorkspaceId}
+          disabled={disabled || !controller.linearStatusChecked}
         />
       ) : null}
       <Popover

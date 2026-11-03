@@ -16,9 +16,9 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import {
   resolveLocalLaunchScopeRuntime,
   resolveLocalProjectRuntimeForWorktreeId,
-  resolveLocalPtyOptions,
   type LaunchScopeRuntimeStore
-} from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalPtyOptions } from '../workspaces/execution-host/local-project-runtime-pty-options'
 import type { RuntimeStore } from './runtime-store-contract'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {

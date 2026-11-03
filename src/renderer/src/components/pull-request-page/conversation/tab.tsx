@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
-import { useRepoAssignees } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
@@ -94,7 +94,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -257,6 +258,7 @@ export function ConversationTab({
           sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
+          onMutated={onMutated}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
           <ChecksTab
@@ -347,6 +349,7 @@ export function ConversationTab({
             itemType={item.type}
             prRepo={prRepo}
             mentionOptions={mentionOptions}
+            mentionError={repoAssignees.error}
             onCommentAdded={onCommentAdded}
           />
         )}

@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: mocks.ipcHandle, on: vi.fn() },
   BrowserWindow: { getAllWindows: () => [] }
 }))
-vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService: mocks.scanAiVaultSessionsInService,
   resolveAiVaultSessionTitlesInService: mocks.resolveAiVaultSessionTitlesInService
@@ -33,14 +33,15 @@ vi.mock('../../shared/runtime-environment-store', () => ({
 }))
 import { createAiVaultAssociationObserver } from './ai-vault-projection-dependency'
 import { invalidateAiVaultHostLegCache } from './ai-vault-host-leg-cache'
+import { invalidateAiVaultSessionListCache } from '../ai-vault/cached-session-list'
 import { registerRuntimeEnvironmentSubscriptionHandlers } from './runtime-environments/runtime-environment-subscription-handlers'
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environments/runtime-environment-transport-generation'
 import type { subscribeRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)
 }))
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
@@ -119,6 +120,34 @@ describe('Agent Session History scan coalescing', () => {
     resolveScan?.(EMPTY_RESULT)
     await expect(second).resolves.toMatchObject(EMPTY_RESULT)
   })
+
+  it.each([
+    ['local', 'desktop', mocks.scanAiVaultSessionsInService],
+    ['local', 'remote-client', mocks.scanAiVaultSessionsInService],
+    ['runtime:remote-server', 'desktop', mocks.scanRuntimeAiVaultSessions]
+  ] as const)(
+    'does not let a %s read after a %s delete join a scan that began before it',
+    async (scope, deleter, scan) => {
+      registerRuntimeHost()
+      let finishBeforeDelete = (_result: AiVaultListResult): void => {}
+      scan
+        .mockReturnValueOnce(new Promise((resolve) => (finishBeforeDelete = resolve)))
+        .mockResolvedValueOnce({ ...EMPTY_RESULT, scannedAt: '2026-07-28T00:00:00.000Z' })
+      const beforeDelete = _internals.listAiVaultSessions({ executionHostScope: scope })
+      await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
+
+      // Remote-client deletes skip the desktop host-leg cache.
+      if (deleter === 'desktop') {
+        invalidateAiVaultHostLegCache()
+      }
+      invalidateAiVaultSessionListCache()
+      const afterDelete = _internals.listAiVaultSessions({ executionHostScope: scope })
+      finishBeforeDelete(EMPTY_RESULT)
+
+      await expect(afterDelete).resolves.toMatchObject({ scannedAt: '2026-07-28T00:00:00.000Z' })
+      await expect(beforeDelete).resolves.toMatchObject({ scannedAt: EMPTY_RESULT.scannedAt })
+    }
+  )
 
   it('reports a failed local scan as a host issue rather than rejecting', async () => {
     mocks.scanAiVaultSessionsInService.mockRejectedValue(new Error('transcript root is unreadable'))

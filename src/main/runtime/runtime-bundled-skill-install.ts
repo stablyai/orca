@@ -1,4 +1,5 @@
 import type {
+  BundledSkillAutoUpdateRequest,
   BundledSkillInstallResult,
   BundledSkillExecuteRequest,
   BundledSkillPlan,
@@ -9,6 +10,7 @@ import {
   type BundledSkillSelection
 } from '../skills/bundled-skill-install/local-host'
 import {
+  autoUpdateInstalledBundledSkills,
   installBundledSkills,
   previewBundledSkillInstall,
   type BundledSkillServiceInput
@@ -58,6 +60,16 @@ export async function executeLocalBundledSkills(
 ): Promise<BundledSkillInstallResult> {
   const result = await installBundledSkills(await appInput(host, request), planDigest)
   // Discovery would otherwise serve its pre-install answer from cache.
+  clearSkillDiscoveryCaches()
+  return result
+}
+
+export async function autoUpdateLocalBundledSkills(
+  host: RuntimeSkillCommandHost,
+  { names }: BundledSkillAutoUpdateRequest
+): Promise<BundledSkillInstallResult> {
+  const input = await appInput(host, {})
+  const result = await autoUpdateInstalledBundledSkills({ ...input, names })
   clearSkillDiscoveryCaches()
   return result
 }

@@ -601,11 +601,11 @@
 }
 
 .markdown-light .markdown-body a {
-  color: #0969da;
+  color: var(--text-link, #0969da);
 }
 
 .markdown-dark .markdown-body a {
-  color: #58a6ff;
+  color: var(--text-link, #58a6ff);
 }
 
 .markdown-light .markdown-body .markdown-doc-link-broken,
@@ -617,7 +617,7 @@
   padding: 0.2em 0.4em;
   border-radius: 5px;
   font-size: 0.88em;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--markdown-code-font-family, var(--font-mono, monospace));
 }
 
 .markdown-dark .markdown-body code {
@@ -672,6 +672,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+/* Sit left of the diagram's own expand button instead of over it. */
+.code-block-wrapper-diagram > .code-block-copy-btn {
+  top: 0;
+  right: 28px;
 }
 .code-block-wrapper:hover .code-block-copy-btn {
   opacity: 1;

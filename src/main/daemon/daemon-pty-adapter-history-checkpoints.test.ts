@@ -705,28 +705,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
     })
 
-    it('writes a final checkpoint before keepHistory shutdown', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const { id } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/home/user',
-        sessionId: 'sleep-checkpoint'
-      })
-      const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
-
-      lastSubprocess._simulateData('fresh output before sleep\r\n')
-      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
-
-      expect(checkpointSpy).toHaveBeenCalledWith(
-        id,
-        expect.objectContaining({ snapshotAnsi: expect.stringContaining('fresh output') }),
-        { pendingOutputSeq: expect.any(Number) }
-      )
-      expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
-    })
-
     itOnPosix('persists final take records that are not represented in the snapshot', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 

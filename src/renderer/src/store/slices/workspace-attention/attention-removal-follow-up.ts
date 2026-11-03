@@ -1,5 +1,5 @@
 import { isTerminalLeafId, makePaneKey } from '../../../../../shared/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { collectLeafIds } from '../../../../../shared/terminal-pane-layout-tree'
 import type { AppState } from '../../types'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'

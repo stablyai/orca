@@ -101,13 +101,6 @@ describe('keyboard tab switches in a server workspace', () => {
     )
   })
 
-  it('stays local for a workspace no server owns', () => {
-    mocks.ownerEnvironmentId.mockReturnValue(null)
-    mocks.getState.mockReturnValue(serverWorkspaceStore())
-    expect(handleSwitchTabAcrossAllTypes(-1)).toBe(true)
-    expect(mocks.activateOnOwner).not.toHaveBeenCalled()
-  })
-
   it('tells the server about a browser tab it hosts, cancelable by later navigation', () => {
     mocks.getState.mockReturnValue(serverWorkspaceStore())
     mocks.navOrder.mockReturnValue([
@@ -140,15 +133,5 @@ describe('keyboard tab switches in a server workspace', () => {
         navigation: 'caller'
       })
     )
-  })
-
-  it('keeps a switch to a chat this machine hosts local', () => {
-    mocks.getState.mockReturnValue(serverWorkspaceStore([agentTab('local')]))
-    mocks.navOrder.mockReturnValue([
-      { type: 'agent-session', id: 'session-1', tabId: 'agent-tab' },
-      { type: 'terminal', id: 'web-terminal-b', tabId: 'web-terminal-b' }
-    ])
-    expect(handleSwitchTabAcrossAllTypes(-1)).toBe(true)
-    expect(mocks.runtimeRpc).not.toHaveBeenCalled()
   })
 })

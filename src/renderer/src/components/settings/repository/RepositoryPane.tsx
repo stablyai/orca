@@ -13,10 +13,10 @@ import { McpConfigSection } from '../McpConfigSection'
 import { WorktreeSymlinksSection } from '../WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from '../SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
-import { matchesSettingsSearch } from '../settings-search'
+import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
@@ -32,6 +32,10 @@ import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktre
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
+import {
+  RepositoryFormatterSection,
+  getRepositoryFormatterSearchEntry
+} from './RepositoryFormatterSection'
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
@@ -317,6 +321,7 @@ export function RepositoryPane({
             />
 
             <RepositoryWindowsRuntimeSection
+              repo={repo}
               repoDisplayName={repo.displayName}
               project={project}
               settings={settings}
@@ -360,6 +365,15 @@ export function RepositoryPane({
       </section>
     ) : null,
     hooksSection,
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry()]) ? (
+      <RepositoryFormatterSection
+        key={`formatter-${repo.id}-${selectedHostId}`}
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
+    ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection

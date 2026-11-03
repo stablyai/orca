@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { extractTerminalFileLinks, resolveTerminalFileLink } from './terminal-links'
+import {
+  extractTerminalFileLinkReadings,
+  extractTerminalFileLinks,
+  resolveTerminalFileLink
+} from './terminal-links'
 
 describe('CJK terminal path names', () => {
   for (const character of ['・', '･', '〜', '～']) {
@@ -13,9 +17,11 @@ describe('CJK terminal path names', () => {
       '/tmp/前CHAR後/space name/a.txt'
     ])(`keeps ${character} in %s`, (template) => {
       const filePath = template.replace('CHAR', character)
-      const links = extractTerminalFileLinks(filePath)
-      expect(links.map((link) => link.pathText)).toEqual([filePath])
-      expect(links[0]).toMatchObject({ startIndex: 0, endIndex: filePath.length })
+      const { links, guesses } = extractTerminalFileLinkReadings(filePath)
+      expect([...links, ...guesses].find((link) => link.pathText === filePath)).toMatchObject({
+        startIndex: 0,
+        endIndex: filePath.length
+      })
     })
 
     it(`preserves location and normalized Windows target for ${character}`, () => {

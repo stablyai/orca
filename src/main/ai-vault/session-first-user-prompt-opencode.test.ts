@@ -2,10 +2,13 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 
 const reader = vi.hoisted(() => ({ v1: vi.fn(), v2: vi.fn() }))
-vi.mock('./session-scanner-opencode-sqlite-worker-spawn', () => ({
-  parseOpenCodeSqliteSessionViaWorker: reader.v1,
-  parseOpenCode2SqliteSessionViaWorker: reader.v2
-}))
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  () => ({
+    parseOpenCodeSqliteSessionViaWorker: reader.v1,
+    parseOpenCode2SqliteSessionViaWorker: reader.v2
+  })
+)
 
 beforeEach(() => {
   reader.v1.mockReset().mockResolvedValue({ firstUserPrompt: 'full first prompt' })

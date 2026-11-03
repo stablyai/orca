@@ -127,6 +127,8 @@ describe('what a started child reports', () => {
     await proveOpen()
     await reported
 
-    await eventually(() => expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing))
+    await eventually(() =>
+      expect(recordLiveListing).toHaveBeenCalledWith(SESSION, listing, expect.any(Function))
+    )
   })
 })

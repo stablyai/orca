@@ -7,14 +7,14 @@ import { removeStructuredLaunchSlot } from './structured-agent-session-launch-sl
 import {
   materializeStructuredLaunchSurface,
   findStructuredLaunchTab
-} from '../../structured-agent-session-launch-surface'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from './structured-agent-session-launch-surface'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
   settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork
-} from '@/lib/structured-agent-session-launch-callers'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
-import { structuredLaunchFailure } from '../../structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
@@ -22,6 +22,7 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import { recordUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {
@@ -30,11 +31,7 @@ function cleanupLaunchState(state: StructuredLaunchState): void {
 }
 
 export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
-  if (
-    state.callers.outcome === 'failed' ||
-    structuredLaunchCallersHavePendingWork(state.callers) ||
-    Object.keys(state.selection.held).length > 0
-  ) {
+  if (state.callers.outcome === 'failed' || structuredLaunchCallersHavePendingWork(state.callers)) {
     return
   }
   cleanupLaunchState(state)
@@ -47,7 +44,10 @@ function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
       state.intent.worktreeId,
       state.intent.sessionId
     )
-    return deleteStructuredLaunchStateIfCurrent(state)
+    if (deleteStructuredLaunchStateIfCurrent(state)) {
+      forgetStructuredSessionSelection(state.intent.sessionId, state.intent.target)
+      return true
+    }
   }
   return false
 }
@@ -79,6 +79,7 @@ export function trackLaunchSettlement(
       if (state.cancelled) {
         return
       }
+      state.visibilityUnknown = false
       materializeStructuredLaunchSurface(state.intent)
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent

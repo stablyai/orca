@@ -107,8 +107,9 @@ describe('the web sibling', () => {
   })
 })
 
-describe('live terminal keyboard chords', () => {
-  function setup(accept = true) {
+describe.each(['android', 'ios'] as const)('live terminal keyboard chords on %s', (os) => {
+  function setup(accept = true, platform: ReturnType<typeof hostOs> = os) {
+    vi.mocked(hostOs).mockReturnValueOnce(platform)
     const field = mountField()
     const onChord = vi.fn(() => accept)
     const unbind = bindOnWeb(asField(field), vi.fn(), onChord)
@@ -134,7 +135,8 @@ describe('live terminal keyboard chords', () => {
     ['Tab', { shiftKey: true }, '\x1b[Z'],
     ['ArrowUp', {}, '\x1b[A'],
     ['ArrowLeft', { ctrlKey: true }, '\x1b[1;5D'],
-    ['b', { altKey: true }, '\x1bb']
+    ['Enter', { shiftKey: true }, '\x1b[13;2u'],
+    ['ArrowLeft', { altKey: true }, '\x1b[1;3D']
   ])('claims %s once before RNWeb can resend it', (name, options, bytes) => {
     const { field, onChord, key } = setup()
     const parentKey = vi.fn()
@@ -144,11 +146,28 @@ describe('live terminal keyboard chords', () => {
     expect(parentKey).not.toHaveBeenCalled()
   })
 
+  it.each(['b', '@', '[', ']', '{', ' '])(
+    'keeps Option-generated %j native on iOS and Alt chords on Android',
+    (name) => {
+      const { onChord, key } = setup()
+      expect(key(name, { altKey: true }).defaultPrevented).toBe(os === 'android')
+      expect(onChord.mock.calls).toEqual(os === 'android' ? [[{ bytes: `\x1b${name}` }]] : [])
+    }
+  )
+
   it.each([
     ['a', {}],
     ['Enter', {}],
+    ['Enter', { ctrlKey: true, shiftKey: true }],
+    ['Enter', { altKey: true, shiftKey: true }],
+    ['Enter', { shiftKey: true, isComposing: true }],
+    ['Enter', { shiftKey: true, keyCode: 229 }],
     ['Backspace', {}],
     ['Delete', {}],
+    ['ArrowLeft', {}],
+    ['ArrowRight', {}],
+    ['Home', {}],
+    ['End', {}],
     ['c', { ctrlKey: true, isComposing: true }],
     ['c', { ctrlKey: true, keyCode: 229 }],
     ['c', { ctrlKey: true, altKey: true }],
@@ -179,9 +198,8 @@ describe('live terminal keyboard chords', () => {
     expect(onChord).not.toHaveBeenCalled()
   })
 
-  it.each(['ios', 'web'] as const)('leaves %s keyboard handling unchanged', (os) => {
-    vi.mocked(hostOs).mockReturnValueOnce(os)
-    const { key, onChord } = setup()
+  it('leaves standalone web keyboard handling unchanged', () => {
+    const { key, onChord } = setup(true, 'web')
     expect(key('Tab').defaultPrevented).toBe(false)
     expect(key('c', { ctrlKey: true }).defaultPrevented).toBe(false)
     expect(onChord).not.toHaveBeenCalled()

@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { browserManager } from '../../browser-manager'
+import { consumeBrowserExtensionCaptureQuota } from '../browser-extension-capture-quota'
 import { parseChromeExtensionUrl } from '../../../../shared/browser-extension-url'
 import { isChromeWebStoreUrl } from '../../../../shared/browser-extension-webstore'
 import { hasBrowserExtensionActiveTab } from '../browser-extension-active-tab'
@@ -74,7 +76,14 @@ async function captureVisibleTab(
   if (denial) {
     throw new BrowserExtensionApiError(denial)
   }
-  const image = await tab.contents.capturePage()
+  consumeBrowserExtensionCaptureQuota(caller)
+  const releasePaint = browserManager.holdPaintForCapture(tab.contents.id)
+  let image: Electron.NativeImage
+  try {
+    image = await tab.contents.capturePage()
+  } finally {
+    releasePaint()
+  }
   if (image.isEmpty()) {
     throw new BrowserExtensionApiError(
       'Internal error while trying to capture visible region of the current tab'

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { readRouteSnapshot } from './mobile-web-app/mobile-web-app-route-snapshot.mjs'
-import { realpathSync } from 'node:fs'
+import { MOBILE_WEB_APP_DEPENDENCY_PATH } from './mobile-web-app/mobile-web-app-bundle-dependencies.mjs'
+import { existsSync, realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
@@ -101,8 +102,10 @@ export const MOBILE_WEB_APP_ROOT_RESET =
 
 // Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
 // Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
+// Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
+  ':where(html){overscroll-behavior:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
   ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
   '-webkit-touch-callout:default}</style>'
@@ -380,6 +383,20 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
   }
 }
 
+// One lazily imported chunk per UI language; the page fetches only the active one after init.
+const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
+
+function localeCatalogOutputs(metafile) {
+  return new Set(
+    Object.entries(metafile.outputs)
+      .filter(([, output]) => {
+        const inputs = Object.keys(output.inputs ?? {})
+        return inputs.length > 0 && inputs.every((input) => LOCALE_CATALOG_INPUT.test(input))
+      })
+      .map(([output]) => basename(output))
+  )
+}
+
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
@@ -401,10 +418,12 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const chunks = others.filter(({ emittedName }) => isScriptOutput(emittedName)).sort(byName)
   const images = others.filter(({ emittedName }) => !isScriptOutput(emittedName)).sort(byName)
   const closure = entryStaticClosure(result.metafile, entryOutputPath)
+  const catalogOutputs = localeCatalogOutputs(result.metafile)
   return {
     script: entry.bytes,
     chunks,
     images,
+    catalogChunks: chunks.filter(({ emittedName }) => catalogOutputs.has(emittedName)),
     // Count final renamed bytes; metafile sizes predate longer hashes but still identify static imports.
     entryStaticBytes: [...closure].reduce(
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
@@ -433,7 +452,8 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
     ...(route.optionalGrants === undefined || route.optionalGrants.length === 0
       ? {}
       : { optionalGrants: [...route.optionalGrants] }),
-    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {})
+    ...(route.canOwnHostArea === true ? { canOwnHostArea: true } : {}),
+    ...(route.canOwnHostAreaAcrossLayouts === true ? { canOwnHostAreaAcrossLayouts: true } : {})
   }))
 }
 
@@ -446,7 +466,7 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, entryStaticBytes, routeChunks, routeKeys },
+    { script, chunks, images, catalogChunks, entryStaticBytes, routeChunks, routeKeys },
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
@@ -496,13 +516,22 @@ export async function buildMobileWebAppBundle({
     routeKeys,
     entryStaticBytes,
     // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    chunkCount: chunks.length + 1,
+    // Locale catalogs are counted separately against their own allowance.
+    chunkCount: chunks.length - catalogChunks.length + 1,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
-    imageCount: images.length
+    imageCount: images.length,
+    catalogChunkCount: catalogChunks.length,
+    catalogBytes: catalogChunks.reduce((total, { bytes }) => total + bytes.byteLength, 0)
   }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
+  if (!existsSync(MOBILE_WEB_APP_DEPENDENCY_PATH)) {
+    console.error(
+      '[build-mobile-web-app-bundle] mobile/ dependencies are not installed; run `pnpm -C mobile install --frozen-lockfile`'
+    )
+    process.exit(1)
+  }
   try {
     const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
       await buildMobileWebAppBundle()

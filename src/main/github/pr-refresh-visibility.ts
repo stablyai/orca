@@ -84,14 +84,9 @@ export class PRRefreshVisibility {
   }
 
   private pruneDestroyedWindows(): void {
-    const liveWindowIds = new Set(
-      webContents
-        .getAllWebContents()
-        .filter((contents) => !contents.isDestroyed())
-        .map((contents) => contents.id)
-    )
     for (const windowId of this.visibleByWindow.keys()) {
-      if (!liveWindowIds.has(windowId)) {
+      const contents = webContents.fromId(windowId)
+      if (!contents || contents.isDestroyed()) {
         this.visibleByWindow.delete(windowId)
       }
     }

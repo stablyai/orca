@@ -270,3 +270,19 @@ describe('getAutomationRerunPendingRemainingMs', () => {
     ).toBe(0)
   })
 })
+
+it('opens a Chat by its recorded identity without pretending it has a terminal', () => {
+  expect(
+    getAutomationRunViewState({
+      run: makeRun({
+        sessionKind: 'chat',
+        chatSessionId: 'claude_chat',
+        terminalSessionId: null,
+        terminalPaneKey: null,
+        terminalPtyId: null
+      }),
+      workspaceExists: true,
+      terminalTargetExists: false
+    })
+  ).toMatchObject({ availability: 'chat', canOpen: true, actionLabel: 'View run' })
+})

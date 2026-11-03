@@ -1,17 +1,17 @@
 import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
-import { selectNativeChatTurnStatuses } from '../../../../shared/native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { selectNativeChatTurnStatuses } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { z } from 'zod'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
-import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session-journal-submission-schema'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 
 type CapturedJournal = { items: AgentJournalRenderItem[]; submissions: AgentJournalSubmission[] }
 

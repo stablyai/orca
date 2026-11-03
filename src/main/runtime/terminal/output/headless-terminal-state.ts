@@ -41,6 +41,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     const emulator = new HeadlessEmulator({
       cols: dims.cols,
       rows: dims.rows,
+      scrollback: this.headlessTerminalScrollbackRows,
       pathFlavor,
       remotePosixFileUriAuthority:
         !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
@@ -112,19 +113,47 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     return state
   }
 
-  protected replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void {
+  protected replaceHeadlessTerminalAfterExecutionContextChange(
+    ptyId: string,
+    retryLateSeed = true
+  ): void {
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
     this.headlessTerminals.set(ptyId, state)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    let seedTimedOut = false
+    let seeded = false
     state.writeChain = state.writeChain
       .then(async () => {
         if (this.headlessTerminals.get(ptyId) !== state) {
           return
         }
-        const snapshot = await this.serializeProviderTerminalBuffer(ptyId)
-        if (this.headlessTerminals.get(ptyId) !== state || !snapshot) {
+        const { snapshot, late } = await this.awaitProviderTerminalBuffer(ptyId)
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
+        if (!snapshot) {
+          seedTimedOut = late !== null
+          void late?.then((landed) => {
+            if (
+              this.headlessTerminals.get(ptyId) !== state ||
+              this.getPtyLifecycleGeneration(ptyId) !== generation
+            ) {
+              return
+            }
+            if (!retryLateSeed) {
+              return
+            }
+            if (!landed) {
+              // The provider gave nothing, so trust the live model.
+              this.providerSnapshotPreferredPtys.delete(ptyId)
+            } else {
+              // Live bytes moved this model on, so the late image is stale; capture once more.
+              this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, false)
+            }
+          })
           return
         }
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
@@ -150,12 +179,17 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
           alternateScreen: state.emulator.isAlternateScreen
         })
         state.outputSequence = snapshot.seq
+        seeded = true
       })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
-        if (this.headlessTerminals.get(ptyId) === state) {
+        // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
+        if (
+          this.headlessTerminals.get(ptyId) === state &&
+          (seeded || (retryLateSeed && !seedTimedOut))
+        ) {
           this.providerSnapshotPreferredPtys.delete(ptyId)
         }
       })

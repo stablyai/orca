@@ -25,7 +25,7 @@ export type RelayReconnectDependencies = {
 }
 
 type RecoveryGate = 'external-signal' | 'fresh-credential'
-type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'probeAfterBackground'>
+type RetainableRelaySession = Pick<MobileRelayRpcSession, 'getFailure' | 'notifyForeground'>
 
 export class RelayReconnectController {
   private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
@@ -61,8 +61,8 @@ export class RelayReconnectController {
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
-      // Only a relay the background grace retained is still set here.
-      this.activeSession?.probeAfterBackground()
+      // Availability also returns after iOS inactive interruptions; only app-resume proves background.
+      this.activeSession?.notifyForeground('focus')
       // Resume resets gated cadence even without clearing the credential gate; reopening must not wait a whole escalated tick.
       this.gateReprobeStreak = 0
       if (this.recoveryGate !== 'fresh-credential') {
@@ -75,11 +75,8 @@ export class RelayReconnectController {
     this.onRetry()
   }
 
-  // Probe healthy relays on focus/resume and replace on handoff without first suspending the active session.
-  handleActiveNudge(
-    logical: StableLogicalRpcClient,
-    reason: ForegroundNudgeReason
-  ): 'probe' | 'replace' | 'recover' {
+  // A network callback may describe a healthy unchanged path; the session watchdog owns probing it.
+  handleActiveNudge(logical: StableLogicalRpcClient, reason: ForegroundNudgeReason): void {
     if (this.recoveryGate === 'external-signal') {
       this.liftGate()
     }
@@ -93,10 +90,9 @@ export class RelayReconnectController {
       logical.getActivePath() === 'relay' &&
       logical.getState() === 'connected'
     ) {
-      return reason === 'network-change' ? 'replace' : 'probe'
+      return
     }
     this.onRetry()
-    return 'recover'
   }
 
   handleStateFailure(logical: StableLogicalRpcClient, state: ConnectionState): Error | null {

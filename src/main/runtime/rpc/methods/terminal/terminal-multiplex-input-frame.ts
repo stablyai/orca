@@ -39,10 +39,10 @@ export function handleMultiplexInputFrame(
       // Ack only after provider handoff because clients delete their replay copy.
       requireWriteSettlement: sequenced
     })
-    if (!sequenced) {
+    if (!sequenced && outcome !== 'paused') {
       state.notifyStreamWriteUnavailable(stream, outcome)
     }
-    return outcome === 'delivered'
+    return outcome === 'delivered' || outcome === 'paused'
       ? 'applied'
       : outcome === 'rejected'
         ? 'refused'

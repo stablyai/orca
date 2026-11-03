@@ -3,7 +3,10 @@ import type { GitPushTarget } from '../../shared/worktree/types'
 import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from './worktree-remote'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
@@ -55,7 +58,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('no such section')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -73,7 +76,7 @@ describe('materializeWorktreePushTargetRemote', () => {
       `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
     ])
     expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'])
-    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
+    expect(calls).toContainEqual(['symbolic-ref', '--quiet', 'HEAD'])
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
@@ -93,7 +96,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('no such section')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -111,7 +114,7 @@ describe('materializeWorktreePushTargetRemote', () => {
       ],
       ['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'],
       ['rev-parse', '--verify', '--quiet', `refs/remotes/${FORK_REMOTE}/contributor/fix`],
-      ['symbolic-ref', '--short', 'HEAD'],
+      ['symbolic-ref', '--quiet', 'HEAD'],
       ['branch', '--set-upstream-to', `${FORK_REMOTE}/contributor/fix`, 'contributor/fix']
     ])
   })
@@ -125,7 +128,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('no such section')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -181,7 +184,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('unknown revision')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -227,7 +230,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('no such section')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -264,7 +267,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         throw new Error('no such section')
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'joiner/branch\n', stderr: '' }
+        return { stdout: 'refs/heads/joiner/branch\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -398,7 +401,7 @@ describe('materializeWorktreePushTargetRemote', () => {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })

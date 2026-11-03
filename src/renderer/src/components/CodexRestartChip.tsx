@@ -102,6 +102,7 @@ function LoudRestartOverlay({
     <div
       ref={rootRef}
       role="dialog"
+      data-overlay-focus-scope="parent"
       // Allow programmatic focus while keeping Tab navigation on Restart/Keep.
       tabIndex={-1}
       aria-live="assertive"

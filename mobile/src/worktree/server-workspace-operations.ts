@@ -9,6 +9,7 @@ import {
 } from '../../../src/shared/mobile-relay-hosts-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { worktreeCatalogSchema } from './worktree-catalog-reply-schema'
 
 const HEALTH = [
   'local',
@@ -33,7 +34,9 @@ const relayHostSchema = z.looseObject({
   hostId: runtimeHostIdSchema,
   label: z.string(),
   health: z.enum(HEALTH).catch('error'),
-  relay: z.enum(RELAY).catch('unavailable')
+  relay: z.enum(RELAY).catch('unavailable'),
+  stoppedOnDesktop: z.literal(true).optional().catch(undefined),
+  unavailableOnDesktop: z.literal(true).optional().catch(undefined)
 }) satisfies z.ZodType<MobileRelayHost>
 
 export const relayHostsListRead = bindDeferredRpcOperation(
@@ -65,5 +68,16 @@ export const relayHostWorktreesRead = bindDeferredRpcOperation(
       'relay-host-worktrees',
       z.looseObject({ worktrees: z.array(z.unknown()).nullable() })
     )
+  })
+)
+
+// Snapshot replies may be unchanged or a row delta, so no field is required here.
+export const relayHostWorktreeSnapshotRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'mobileRelay.host-worktree-snapshot-or-skip',
+    method: MOBILE_RELAY_HOST_WORKTREES_METHOD,
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('relay-host-worktree-snapshot', worktreeCatalogSchema)
   })
 )

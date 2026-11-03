@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createTerminalTitleTracker } from '../../../src/shared/terminal-output-side-effects'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -47,6 +48,60 @@ function terminalTab(
 }
 
 describe('resolveMobileTerminalTabAgentId', () => {
+  it.each([
+    ['. | Droid', 'claude'],
+    ['tmux | Droid', 'droid'],
+    ['OC | . | Droid', 'claude'],
+    ['⠋ fix the gemini launcher', 'claude'],
+    ['⠋ add ✦ icon to header', 'claude'],
+    ['⠋ Codex: fix Gemini terminal behavior', 'codex'],
+    ['Fix Codex terminal behavior… - grok', 'grok'],
+    [`${'x | '.repeat(200)}OC | a | b | c | d | e | f | g | h | Codex`, 'opencode'],
+    ['tmux | 🐋 a | b | c | d | e | f | g | h | Codex', 'dsh'],
+    ['✦ session | Thinking - grok', 'claude'],
+    ['✦ session | Thinking', 'qoder'],
+    ['⠋ - Codex: fix parser - grok', 'grok'],
+    ['✦ Analyze Codex', 'gemini']
+  ])('uses the production OSC normalization for %s', (raw, agent) => {
+    let title = ''
+    let observedRaw = ''
+    const tracker = createTerminalTitleTracker({
+      onTitle: (emitted, rawTitle) => {
+        observedRaw = rawTitle
+        title = emitted
+      }
+    })
+    try {
+      tracker.handleChunk(`\x1b]0;${raw}\x07`)
+      expect(raw.length).toBeLessThanOrEqual(1024)
+      expect(observedRaw).toBe(raw)
+      expect(
+        resolveMobileTerminalTabAgentId(
+          terminalTab(title, { agentType: 'claude', state: 'done', launchAgent: 'claude' })
+        )
+      ).toBe(agent)
+      if (raw.includes('OC | ')) {
+        expect(resolveMobileTerminalTabAgentId(terminalTab(title))).toBe('opencode')
+        expect(resolveMobileTerminalTabAgentId(terminalTab(title, { launchAgent: 'claude' }))).toBe(
+          raw.startsWith('x | ') ? 'claude' : 'opencode'
+        )
+      }
+    } finally {
+      tracker.dispose()
+    }
+  })
+  it('keeps completed Claude ownership when task text names another agent', () => {
+    expect(
+      resolveMobileTerminalTabAgentId(
+        terminalTab('⠋ fix the grok launcher', {
+          agentType: 'claude',
+          state: 'done',
+          launchAgent: 'claude'
+        })
+      )
+    ).toBe('claude')
+  })
+
   it('uses hook-reported agent identity before title fallback', () => {
     expect(resolveMobileTerminalTabAgentId(terminalTab('Terminal', { agentType: 'codex' }))).toBe(
       'codex'

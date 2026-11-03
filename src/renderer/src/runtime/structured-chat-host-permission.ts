@@ -9,7 +9,7 @@ import {
   legacyHostChatPermissionMode,
   type ChatPermissionHostVerdict
 } from '../../../shared/agent-chat-permission-host-support'
-import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../shared/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'

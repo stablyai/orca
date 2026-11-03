@@ -7,7 +7,10 @@ import { zstdCompressSync } from 'node:zlib'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import SyncDatabase from '../sqlite/sync-database'
-import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
+import {
+  runCodexAppServerSession,
+  type CodexAppServerRpc
+} from './app-server/codex-app-server-session'
 import { findNewestCodexStateDbPath, readCodexStateDbBackfillStatus } from './codex-state-db'
 
 // A real binary must prove thread/read inserts unindexed rollouts; mocked RPC success cannot.

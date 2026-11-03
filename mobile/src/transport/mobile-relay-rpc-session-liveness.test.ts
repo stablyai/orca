@@ -21,6 +21,8 @@ vi.mock('./mobile-relay-e2ee-link', () => ({
 }))
 
 import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink } from './types'
 
 const relay = {
@@ -135,16 +137,21 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('disconnects after two fair foreground misses', async () => {
+  it('disconnects after two fair foreground misses despite ongoing stream traffic', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)
 
     session.notifyForeground('focus')
     expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
-    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_999)
+    fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+    fakes.linkOptions!.onText('{"id":"browser-stream","ok":true,"result":{"frame":"data"}}')
+    await vi.advanceTimersByTimeAsync(1)
     expect(session.getState()).toBe('connected')
     expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_999)
+    fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+    await vi.advanceTimersByTimeAsync(1)
 
     expect(session.getState()).toBe('disconnected')
     expect(fakes.close).toHaveBeenCalledOnce()
@@ -192,7 +199,7 @@ describe('mobile relay RPC session liveness', () => {
 
     session.notifyForeground('focus')
     await vi.advanceTimersByTimeAsync(9_999)
-    session.notifyForeground('app-resume')
+    session.notifyForeground('focus')
     expect(fakes.sendText).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(1)
     session.notifyForeground('focus')
@@ -201,12 +208,16 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('does not probe the old relay on a network change', async () => {
+  it('checks a relay on network hints and ends a silent session after one 4s miss', async () => {
     const session = await authenticateSession()
 
     session.notifyForeground('network-change')
 
-    expect(fakes.sendText).not.toHaveBeenCalled()
+    expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
+    await vi.advanceTimersByTimeAsync(3_000)
+    session.notifyForeground('network-change')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(session.getState()).toBe('disconnected')
     session.close()
   })
 
@@ -237,11 +248,30 @@ describe('mobile relay RPC session liveness', () => {
     expect(fakes.close).toHaveBeenCalledOnce()
   })
 
+  it('probes for a caller that stopped hearing back, even inside the foreground cooldown', async () => {
+    const session = await authenticateSession()
+    session.notifyForeground('focus')
+    const firstProbe = sentRequests()[0]!
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: firstProbe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+
+    // Just heard from, so not suspect yet.
+    session.probeLivenessNow?.()
+    expect(fakes.sendText).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(4_000)
+    session.probeLivenessNow?.()
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(session.getState()).toBe('disconnected')
+  })
+
   it('redials after one 4s miss when a retained relay returns from the background', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)
 
-    session.probeAfterBackground()
+    session.notifyForeground('app-resume')
     expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
     await vi.advanceTimersByTimeAsync(3_999)
     expect(session.getState()).toBe('connected')
@@ -257,28 +287,82 @@ describe('mobile relay RPC session liveness', () => {
     )
   })
 
-  it('keeps two 4s misses for an app-resume nudge without a background stay', async () => {
+  it('checks a distinct background return after a recently answered network probe', async () => {
     const session = await authenticateSession()
+    session.notifyForeground('network-change')
+    const probe = sentRequests()[0]
+    if (!probe || !fakes.linkOptions) {
+      throw new Error('Expected an active relay probe')
+    }
+    fakes.linkOptions.onText(
+      JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
 
     session.notifyForeground('app-resume')
-    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_999)
     expect(session.getState()).toBe('connected')
-    await vi.advanceTimersByTimeAsync(4_000)
-
+    await vi.advanceTimersByTimeAsync(1)
     expect(session.getState()).toBe('disconnected')
   })
 
-  it('keeps a relay that answers the background-return probe', async () => {
+  it('keeps availability returns tolerant while a proven resume bypasses recent probes', async () => {
     const session = await authenticateSession()
-
-    session.probeAfterBackground()
-    const probe = sentRequests()[0]!
-    fakes.linkOptions!.onText(
-      JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    const logical = createStableLogicalRpcClient(session, 'relay')
+    const controller = new RelayReconnectController(
+      {
+        now: Date.now,
+        randomBytes: (length) => new Uint8Array(length),
+        setTimer: (callback, delay) => setTimeout(callback, delay),
+        clearTimer: clearTimeout
+      },
+      vi.fn()
     )
-    await vi.advanceTimersByTimeAsync(60_000)
+    controller.setActiveSession(session)
+    session.notifyForeground('focus')
+    const probe = sentRequests()[0]
+    if (!probe || !fakes.linkOptions) {
+      throw new Error('Expected the focus probe')
+    }
+    fakes.linkOptions.onText(JSON.stringify({ id: probe.id, ok: true, result: {} }))
+    await vi.advanceTimersByTimeAsync(1_000)
 
+    // The lifecycle boolean also becomes false during an inactive-only iOS interruption.
+    controller.handleForeground(logical, false)
+    await vi.advanceTimersByTimeAsync(4_000)
     expect(session.getState()).toBe('connected')
-    session.close()
+    expect(fakes.sendText).toHaveBeenCalledOnce()
+
+    logical.notifyForeground('app-resume')
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(session.getState()).toBe('disconnected')
+    controller.clear()
+    logical.close()
+  })
+
+  it.each([{ runtimeId: 'host' }, { runtimeId: 'old-host', worktrees: [], sessions: [] }])(
+    'keeps a relay that answers the background-return probe with %j',
+    async (result) => {
+      const session = await authenticateSession()
+
+      session.notifyForeground('app-resume')
+      const probe = sentRequests()[0]!
+      fakes.linkOptions!.onText(JSON.stringify({ id: probe.id, ok: true, result }))
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(session.getState()).toBe('connected')
+      session.close()
+    }
+  )
+
+  it('does not let a superseded probe reply settle its replacement', async () => {
+    const session = await authenticateSession()
+    session.notifyForeground('focus')
+    const first = sentRequests()[0]!
+    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(3_000)
+    fakes.linkOptions!.onText(JSON.stringify({ id: first.id, ok: true, result: {} }))
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(session.getState()).toBe('disconnected')
   })
 })

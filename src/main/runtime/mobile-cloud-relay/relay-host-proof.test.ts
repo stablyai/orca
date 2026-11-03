@@ -201,16 +201,28 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
     expect(answerRelayHostChallenge(ahead.challenge, ahead.context)).toBeNull()
   })
 
-  it('still rejects an oversized server challenge window', () => {
-    const issuedAt = 1_700_000_000_000
-    const expiresAt = issuedAt + 10_001
-    const { challenge, context } = buildChallengeFixture({
-      issuedAt,
-      expiresAt,
-      localNow: issuedAt
-    })
-    expect(answerRelayHostChallenge(challenge, context)).toBeNull()
-  })
+  it.each([0, -38_000])(
+    'rejects an oversized window without diagnosing drift of %i ms',
+    (offsetMs) => {
+      const issuedAt = 1_700_000_000_000
+      const expiresAt = issuedAt + 10_001
+      const { challenge, context } = buildChallengeFixture({
+        issuedAt,
+        expiresAt,
+        localNow: issuedAt + offsetMs
+      })
+      let clockFailure: Error | undefined
+      expect(
+        answerRelayHostChallenge(challenge, {
+          ...context,
+          onInvalid: (_reason, error) => {
+            clockFailure = error
+          }
+        })
+      ).toBeNull()
+      expect(clockFailure).toBeUndefined()
+    }
+  )
 
   it('rejects a challenge that expires before it is issued', () => {
     const issuedAt = 1_700_000_000_000

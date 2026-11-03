@@ -17,10 +17,15 @@ import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
-import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { resolveUnixShellPath } from '../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
-import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
-import { addWslEnvKeys } from '../wsl-env'
+import {
+  injectHistoryEnv,
+  injectWslFishHistoryEnv,
+  logHistoryInjection
+} from '../pty/history/terminal-history'
+import { addWslEnvKeys } from '../../shared/wsl-env'
+import { holdPassiveRestoreOfStoppedWslDistro } from './daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   // Checked again in doSpawn: retirement can close admission while spawn awaits.
@@ -178,6 +183,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
       return {
         ...restoreInfo,
+        // Why one probe for WSL too: a stat over \\wsl.localhost waits for a stopped distro and
+        // fails for reasons other than absence, which woke panes blank and at the root.
         cwd:
           recoveredCwd && (await probeRecoveredStartupCwdDirectory(recoveredCwd)) !== false
             ? recoveredCwd
@@ -188,6 +195,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     if (this.killedSessionTombstones.has(sessionId)) {
       throw new TerminalKilledError(sessionId)
     }
+    await holdPassiveRestoreOfStoppedWslDistro(opts, wslDistro)
 
     if (opts.isNewSession) {
       await this.replaceUnhealthyMacResolverDaemonBeforeNewPty()
@@ -290,6 +298,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,
+      ...(matchingExit.cause ? { exitCause: matchingExit.cause } : {}),
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
       ...(!result.isNew ? { isReattach: true } : {})

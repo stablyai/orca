@@ -3,7 +3,7 @@ import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
-} from '../ai-vault/session-scanner-parse-cache'
+} from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'

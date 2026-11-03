@@ -24,6 +24,7 @@ export type AgentSessionContinuationRequest = {
   workspacePath: string
   initialCwd?: string | null
   launchSource: LaunchSource
+  avoidSourceAgent?: boolean
 }
 
 function markdownFenceFor(value: string): string {

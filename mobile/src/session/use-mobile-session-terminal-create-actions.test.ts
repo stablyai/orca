@@ -1,7 +1,7 @@
 import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
 import { createElement } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
+import { useMobileNativeChatActiveResolution } from './native-chat/use-mobile-native-chat-active-resolution'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -318,31 +318,40 @@ describe('mobile + Codex tab creation routing', () => {
       renderer = create(createElement(Harness))
     })
     await act(async () => {
-      await actions?.handleCreateTerminal()
+      await actions?.handleCreateTerminal(undefined, { errorToast: "Couldn't run quick command" })
     })
 
     expect(scope.setCreateError).toHaveBeenCalledWith(
       'Your system cannot allocate any more pty devices.'
     )
+    expect(scope.showToast).toHaveBeenCalledWith(
+      'Your system cannot allocate any more pty devices.',
+      1800
+    )
   })
 
-  it('falls back to the generic message when the host gives no reason', async () => {
-    const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
-    const scope = createScope(client)
-    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
-    function Harness() {
-      actions = useMobileSessionTerminalCreateActions(scope as never)
-      return null
+  it.each([undefined, "Couldn't run quick command"])(
+    'falls back when the host gives no reason and errorToast is %s',
+    async (errorToast) => {
+      const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
+      const scope = createScope(client)
+      let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+      function Harness() {
+        actions = useMobileSessionTerminalCreateActions(scope as never)
+        return null
+      }
+      await act(async () => {
+        renderer = create(createElement(Harness))
+      })
+      await act(async () => {
+        await actions?.handleCreateTerminal(undefined, { errorToast })
+      })
+
+      const expectedReason = errorToast ?? 'Failed to create terminal'
+      expect(scope.setCreateError).toHaveBeenCalledWith(expectedReason)
+      expect(scope.showToast).toHaveBeenCalledWith(expectedReason, 1800)
     }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    await act(async () => {
-      await actions?.handleCreateTerminal()
-    })
-
-    expect(scope.setCreateError).toHaveBeenCalledWith('Failed to create terminal')
-  })
+  )
 })
 
 describe('phone chat CLI fork creation owner', () => {

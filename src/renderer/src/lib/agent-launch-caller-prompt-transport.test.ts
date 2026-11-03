@@ -19,7 +19,7 @@ const mockPasteDraftWhenAgentReady = vi.fn<(request: Record<string, unknown>) =>
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -36,7 +36,7 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
+vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
 vi.mock('@/lib/agent-paste-draft', () => ({

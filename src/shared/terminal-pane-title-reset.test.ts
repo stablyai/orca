@@ -14,6 +14,8 @@ describe('pane title resets', () => {
 
   it('resets only an agent-named title on a confirmed return to a shell', () => {
     expect(titleAfterConfirmedShell('✳ Claude Code', 'Terminal 1')).toBe('Terminal 1')
+    expect(titleAfterConfirmedShell('⠋ fix the grok launcher', 'Terminal 1')).toBe('Terminal 1')
+    expect(titleAfterConfirmedShell('⠋ fix the parser', 'Terminal 1')).toBeNull()
     expect(titleAfterConfirmedShell('vim notes.md', 'Terminal 1')).toBeNull()
     expect(titleAfterConfirmedShell(null, 'Terminal 1')).toBeNull()
   })

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { translateSearchKeyword } from './settings-search-keywords'
+import { translateSearchKeyword } from './search/settings-search-keywords'
 
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
@@ -25,11 +25,11 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
       'accounts.claude.switchSessions.settingTitle',
-      'When you switch accounts while Claude is running'
+      'When you switch accounts while Claude is running in terminals'
     ),
     description: translate(
       'accounts.claude.switchSessions.settingDescription',
-      'Restarting continues each running conversation on the new account.'
+      'Restarting continues each terminal conversation on the new account.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),

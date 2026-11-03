@@ -1,3 +1,8 @@
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  REMOTE_VIEWER_CLIPBOARD_ENV
+} from './remote-viewer-clipboard-env'
+
 // Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
 export const CODEX_NO_DAEMON_SKIP_ARGS = [...CODEX_SHARED_SERVER_ARGS, '--no-daemon'] as const
@@ -31,6 +36,9 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
+      local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+    fi
     if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" ]]; then
       "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     fi
@@ -70,7 +78,12 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
-    command codex $argv
+    if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
+      set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
+      command codex $argv
+    else
+      command codex $argv
+    end
   end
 end
 set -e __orca_codex_type`
@@ -109,11 +122,17 @@ if ($orcaCodexCommand -and
             foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
+        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
+        if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
-        if ($MyInvocation.ExpectingInput) {
-            $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
-        } else {
-            & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+        try {
+            if ($MyInvocation.ExpectingInput) {
+                $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            } else {
+                & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+            }
+        } finally {
+            if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
     }

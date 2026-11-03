@@ -130,32 +130,6 @@ export function profileListByHostUpdate(
   }
 }
 
-/** A host's full listing; it also drops a default pick the host no longer lists, so new tabs don't open on a deleted profile. */
-export function listedProfilesByHostUpdate(
-  state: AppState,
-  profiles: BrowserSessionProfile[],
-  hostId: ExecutionHostId
-): Partial<BrowserSlice> {
-  const isUnlisted = (profileId: string | null | undefined): boolean =>
-    !!profileId && !profiles.some((profile) => profile.id === profileId)
-  const update = profileListByHostUpdate(state, profiles, hostId)
-  return {
-    ...update,
-    // Why: the unkeyed default belongs to the Settings host, the one whose list the mirror follows.
-    ...(update.browserSessionProfiles && isUnlisted(state.defaultBrowserSessionProfileId)
-      ? { defaultBrowserSessionProfileId: null }
-      : {}),
-    ...(isUnlisted(state.defaultBrowserSessionProfileIdByHostId[hostId])
-      ? {
-          defaultBrowserSessionProfileIdByHostId: {
-            ...state.defaultBrowserSessionProfileIdByHostId,
-            [hostId]: null
-          }
-        }
-      : {})
-  }
-}
-
 export function getBrowserProfilesForHost(
   state: AppState,
   hostId: ExecutionHostId
@@ -166,14 +140,42 @@ export function getBrowserProfilesForHost(
   )
 }
 
+/** The host's chosen default profile for new tabs, or null for Default. */
 export function getDefaultBrowserProfileForHost(
-  state: AppState,
+  state: Pick<AppState, 'settings'>,
   hostId: ExecutionHostId
 ): string | null {
-  return (
-    state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-    (getBrowserSettingsHostId(state) === hostId ? state.defaultBrowserSessionProfileId : null)
-  )
+  // Why: only paired runtimes keep their own profiles; every other host renders on this desktop's.
+  const profileHostId =
+    parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
+  const profileId = state.settings?.browserDefaultProfileIdByHostId?.[profileHostId]
+  return typeof profileId === 'string' ? profileId : null
+}
+
+let defaultProfileWrites: Promise<void> = Promise.resolve()
+
+/** Rewrites one host's default pick (null = Default) from the latest saved map. */
+export function updateDefaultBrowserProfileForHost(
+  getState: () => Pick<AppState, 'settings' | 'updateSettings'>,
+  hostId: ExecutionHostId,
+  next: (current: string | null) => string | null
+): Promise<void> {
+  // Why: each write replaces the whole map, so it reads the map only after the previous write lands.
+  defaultProfileWrites = defaultProfileWrites.then(() => {
+    const state = getState()
+    const { [hostId]: current = null, ...otherHosts } =
+      state.settings?.browserDefaultProfileIdByHostId ?? {}
+    const profileId = next(current)
+    if (profileId === current) {
+      return
+    }
+    return state.updateSettings({
+      browserDefaultProfileIdByHostId: profileId
+        ? { ...otherHosts, [hostId]: profileId }
+        : otherHosts
+    })
+  })
+  return defaultProfileWrites
 }
 
 export function browserImportStateForHostUpdate(

@@ -1,165 +1,165 @@
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
-import { RefreshCw } from 'lucide-react-native'
-import type { RefObject } from 'react'
+import { FileText, ListChecks } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
+import { MobileLoadErrorState, MobileOfflineState, MobileStateView } from './MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileDiffReviewLine } from './MobileDiffReviewLine'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
+import type { ReviewDiffState, ReviewScreenState } from '../session/mobile-diff-review-screen-model'
 import type {
-  ReviewDiffLine,
-  ReviewDiffState,
-  ReviewScreenState
-} from '../session/mobile-diff-review-screen-model'
-import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+  MobileDiffReviewQueueFilter,
+  MobileDiffReviewQueueItem
+} from '../session/mobile-diff-review-queue'
+import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 
 type Props = {
-  activeHunkIndex: number | null
   commentsByLine: ReadonlyMap<number, DiffComment[]>
   currentItem: MobileDiffReviewQueueItem | null
   diffState: ReviewDiffState
   filteredCount: number
-  listRef: RefObject<FlatList<ReviewDiffLine> | null>
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
-  onAddNote: (lineNumber: number) => void
+  threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
+  threadActions: PRCommentCardActions | undefined
+  selectedRange: LineRange | null
+  onPickLines: (range: LineRange) => void
+  /** Scroll to this line once, then report it done. */
+  scrollToLine: number | null
+  onScrolledToLine: () => void
   onEditNote: (comment: DiffComment) => void
   onRetry: (() => void) | undefined
+  /** The host is unreachable, so a failed load is a wait rather than an error. */
+  offline: boolean
+  /** The section this screen walks; an empty one means the reader finished it. */
+  filter: MobileDiffReviewQueueFilter
+  onBack: () => void
 }
 
 export function MobileDiffReviewBody({
-  activeHunkIndex,
   commentsByLine,
   currentItem,
   diffState,
   filteredCount,
-  listRef,
   screenState,
   staleCommentIds,
-  onAddNote,
+  threadsByLine,
+  threadActions,
+  selectedRange,
+  onPickLines,
+  scrollToLine,
+  onScrolledToLine,
   onEditNote,
-  onRetry
+  onRetry,
+  offline,
+  filter,
+  onBack
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   if (screenState.kind === 'loading') {
-    return <CenteredState text="Loading review..." busy />
-  }
-  if (screenState.kind === 'error' || screenState.kind === 'unavailable') {
     return (
-      <CenteredState
-        title={screenState.kind === 'unavailable' ? 'Review Unavailable' : 'Unable to Load Review'}
-        text={screenState.message}
+      <MobileStateView
+        loading
+        title={t('components.diffReviewBody.loadingReview', 'Loading review...')}
+      />
+    )
+  }
+  if (screenState.kind === 'unavailable') {
+    return (
+      <MobileStateView
+        icon={ListChecks}
+        title={t('components.diffReviewBody.reviewUnavailable', 'Review Unavailable')}
+        message={screenState.message}
+      />
+    )
+  }
+  if (screenState.kind === 'error') {
+    return offline ? (
+      <MobileOfflineState onReconnect={onRetry} />
+    ) : (
+      <MobileLoadErrorState
+        title={t('components.diffReviewBody.loadFailed', 'Unable to Load Review')}
+        error={screenState.message}
         onRetry={onRetry}
       />
     )
   }
   if (filteredCount === 0) {
-    return <CenteredState title="No Reviewable Changes" text="Try a different review filter." />
+    return (
+      <MobileStateView
+        icon={ListChecks}
+        title={
+          filter === 'unstaged'
+            ? t('components.diffReviewBody.allStaged', 'Everything is staged')
+            : t('components.diffReviewBody.noReviewableChanges', 'No Reviewable Changes')
+        }
+        action={{ label: t('common.back', 'Back'), onPress: onBack }}
+      />
+    )
   }
   if (diffState.kind === 'loading') {
-    return <CenteredState text="Loading diff..." busy muted />
+    return (
+      <MobileStateView
+        loading
+        title={t('components.diffReviewBody.loadingDiff', 'Loading diff...')}
+      />
+    )
+  }
+  if (diffState.kind === 'error') {
+    return offline ? (
+      <MobileOfflineState onReconnect={onRetry} />
+    ) : (
+      <MobileLoadErrorState error={diffState.message} onRetry={onRetry} />
+    )
   }
   if (diffState.kind !== 'ready') {
-    return <DiffUnavailableState diffState={diffState} onRetry={onRetry} />
+    return <DiffUnavailableState diffState={diffState} />
   }
   return (
-    <FlatList
-      ref={listRef}
-      data={diffState.lines}
-      keyExtractor={(_, index) => `${currentItem?.key ?? 'diff'}:${index}`}
-      renderItem={({ item, index }) => {
-        const lineNumber = item.newLineNumber ?? -1
-        const active =
-          activeHunkIndex !== null &&
-          index >= (diffState.hunks[activeHunkIndex]?.startIndex ?? -1) &&
-          index <= (diffState.hunks[activeHunkIndex]?.endIndex ?? -1)
-        return (
-          <MobileDiffReviewLine
-            line={item}
-            comments={commentsByLine.get(lineNumber) ?? []}
-            staleCommentIds={staleCommentIds}
-            active={active}
-            onAddNote={onAddNote}
-            onEditNote={onEditNote}
-          />
-        )
-      }}
-      contentContainerStyle={styles.diffList}
-      onScrollToIndexFailed={(info) => {
-        listRef.current?.scrollToOffset({
-          offset: Math.max(0, info.averageItemLength * info.index),
-          animated: true
-        })
-      }}
-      ListFooterComponent={
-        diffState.truncated ? (
-          <Text style={styles.truncatedText}>Diff truncated for mobile preview.</Text>
-        ) : null
-      }
+    <MobileDiffReviewLines
+      key={diffState.itemKey}
+      lines={diffState.lines}
+      truncated={diffState.truncated}
+      commentsByLine={commentsByLine}
+      staleCommentIds={staleCommentIds}
+      threadsByLine={threadsByLine}
+      threadActions={threadActions}
+      selectedRange={selectedRange}
+      scrollToLine={scrollToLine}
+      onScrolledToLine={onScrolledToLine}
+      {...(currentItem?.scope === 'commit' ? {} : { onPickLines })}
+      onEditNote={onEditNote}
     />
   )
 }
 
-function DiffUnavailableState({
-  diffState,
-  onRetry
-}: {
-  diffState: ReviewDiffState
-  onRetry: (() => void) | undefined
-}) {
+/** Binary, oversize and deleted diffs: nothing to retry, so no action. */
+function DiffUnavailableState({ diffState }: { diffState: ReviewDiffState }) {
+  const t = useMobileTranslation()
   const title =
     diffState.kind === 'binary'
-      ? 'Binary Diff'
+      ? t('components.diffReviewBody.binaryDiff', 'Binary Diff')
       : diffState.kind === 'too-large'
-        ? 'Diff Too Large'
+        ? t('components.diffReviewBody.diffTooLarge', 'Diff Too Large')
         : diffState.kind === 'deleted'
-          ? 'Deleted File'
-          : 'Diff Unavailable'
+          ? t('components.diffReviewBody.deletedFile', 'Deleted File')
+          : t('components.diffReviewBody.diffUnavailable', 'Diff Unavailable')
   const text =
     diffState.kind === 'binary'
-      ? 'This file cannot be rendered as text on mobile.'
+      ? t(
+          'components.diffReviewBody.binaryMessage',
+          'This file cannot be rendered as text on mobile.'
+        )
       : diffState.kind === 'too-large'
-        ? 'This diff is too large for the mobile preview.'
+        ? t(
+            'components.diffReviewBody.tooLargeMessage',
+            'This diff is too large for the mobile preview.'
+          )
         : diffState.kind === 'deleted'
-          ? 'This file was deleted. Add a file note or mark it reviewed.'
-          : diffState.kind === 'error'
-            ? diffState.message
-            : 'Select a file to review.'
-  return <CenteredState title={title} text={text} onRetry={onRetry} />
-}
-
-function CenteredState({
-  busy,
-  muted,
-  title,
-  text,
-  onRetry
-}: {
-  busy?: boolean
-  muted?: boolean
-  title?: string
-  text: string
-  onRetry?: () => void
-}) {
-  useMobileColorScheme()
-  return (
-    <View style={styles.state}>
-      {busy ? (
-        <ActivityIndicator color={muted ? colors.textSecondary : colors.textPrimary} />
-      ) : null}
-      {title ? <Text style={styles.stateTitle}>{title}</Text> : null}
-      <Text style={styles.stateText}>{text}</Text>
-      {onRetry ? (
-        <Pressable
-          style={({ pressed }) => [styles.retryButton, pressed && styles.buttonPressed]}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading review"
-        >
-          <RefreshCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      ) : null}
-    </View>
-  )
+          ? t(
+              'components.diffReviewBody.deletedMessage',
+              'This file was deleted. Add a file note or mark it reviewed.'
+            )
+          : t('components.diffReviewBody.selectFile', 'Select a file to review.')
+  return <MobileStateView icon={FileText} title={title} message={text} />
 }

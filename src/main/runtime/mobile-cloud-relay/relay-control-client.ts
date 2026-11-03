@@ -28,7 +28,6 @@ type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' 
 const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
 export class RelayControlClient {
-  private readonly options: RelayControlClientOptions
   private readonly relayOrigin: string
   private readonly controlUrl: string
   private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
@@ -41,8 +40,7 @@ export class RelayControlClient {
   private connectTimer: ReturnType<typeof setTimeout> | null = null
   private controlErrorCode: string | null = null
 
-  constructor(options: RelayControlClientOptions) {
-    this.options = options
+  constructor(private readonly options: RelayControlClientOptions) {
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
@@ -236,7 +234,7 @@ export class RelayControlClient {
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
     if (challenge.success) {
-      let invalidReason = 'unknown'
+      const invalid: { reason: string | Error } = { reason: 'unknown' }
       const proofB64 = answerRelayHostChallenge(challenge.data, {
         relayOrigin: this.relayOrigin,
         ...this.options.identity,
@@ -246,13 +244,17 @@ export class RelayControlClient {
         assignmentEpoch: this.options.assignmentEpoch,
         previousGeneration: this.options.previousGeneration,
         resumeRequested: Boolean(this.options.controlResumeSecret),
-        onInvalid: (reason) => {
-          invalidReason = reason
+        onInvalid: (reason, error) => {
+          invalid.reason = error ?? reason
         }
       })
       if (!proofB64) {
         // Report failing check names, never challenge field values.
-        this.failProtocol(`invalid host challenge: ${invalidReason} origin=${this.relayOrigin}`)
+        this.failProtocol(
+          invalid.reason instanceof Error
+            ? invalid.reason
+            : `invalid host challenge: ${invalid.reason} origin=${this.relayOrigin}`
+        )
         return
       }
       this.socket?.send(
@@ -282,10 +284,10 @@ export class RelayControlClient {
     this.socket.send(JSON.stringify(payload))
   }
 
-  private failProtocol(reason: string): void {
-    this.connectReject?.(new Error(reason))
+  private failProtocol(reason: string | Error): void {
+    this.connectReject?.(reason instanceof Error ? reason : new Error(reason))
     this.clearConnectPromise()
-    this.socket?.close(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, reason)
+    this.socket?.close(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, String(reason))
   }
 
   private handleClose(code: number): void {

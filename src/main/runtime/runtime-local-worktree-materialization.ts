@@ -6,7 +6,7 @@ import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../shared/work
 import type { Repo } from '../../shared/repo-types'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
 import { formatWorktreeIncludeCopyWarning } from '../ipc/worktree-include-copy-budget'
 import { getWorktreeCreationLayout } from '../ipc/worktree-logic'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
@@ -16,12 +16,12 @@ import {
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from '../ipc/worktree-symlinks'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
 import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { WorktreeCreateTimingRecorder } from '../workspaces/creation/worktree-create-timing'
 import { hostWorktreeTargetForRepo } from '../persistence/host-qualified-worktree-meta'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
@@ -85,7 +85,9 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,
-      ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
+      ...(checkoutExistingBranch || request.branchIntent === 'open-existing-v2'
+        ? { preserveBranchOnDelete: true }
+        : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {

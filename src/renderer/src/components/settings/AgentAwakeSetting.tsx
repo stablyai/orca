@@ -6,8 +6,8 @@ import {
   getAgentAwakeSearchKeywords,
   getAgentAwakeTitle
 } from './agent-awake-copy'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,

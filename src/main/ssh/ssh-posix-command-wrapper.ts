@@ -1,34 +1,8 @@
+import { encodePosixPrintfRecords } from '../../shared/posix-printf-encoding'
 import { gzipSync } from 'node:zlib'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 
-const REMOTE_COMMAND_CHUNK_MAX_BYTES = 1_024
 const REMOTE_COMMAND_COMPRESSION_THRESHOLD_BYTES = 8_000
-const REMOTE_COMMAND_PRINTF_ESCAPED_BYTES = new Set([0x21, 0x27, 0x5c])
-
-function encodeRemoteCommandForPrintf(command: string): string[] {
-  const chunks: string[] = []
-  let chunk = ''
-  let chunkBytes = 0
-  for (const character of command) {
-    const codePoint = character.codePointAt(0)!
-    const isSafePrintableAscii =
-      codePoint >= 0x20 && codePoint <= 0x7e && !REMOTE_COMMAND_PRINTF_ESCAPED_BYTES.has(codePoint)
-    const encodedCharacter =
-      codePoint > 0x7f || isSafePrintableAscii
-        ? character
-        : `\\0${codePoint.toString(8).padStart(3, '0')}`
-    const encodedBytes = codePoint > 0x7f ? Buffer.byteLength(character) : encodedCharacter.length
-    if (chunkBytes + encodedBytes > REMOTE_COMMAND_CHUNK_MAX_BYTES) {
-      chunks.push(chunk)
-      chunk = ''
-      chunkBytes = 0
-    }
-    chunk += encodedCharacter
-    chunkBytes += encodedBytes
-  }
-  chunks.push(chunk)
-  return chunks
-}
 
 /** The compressed wrapper's exit when the host has no base64 or gzip; nothing ran. */
 export const REMOTE_COMMAND_DECODER_UNAVAILABLE_EXIT = 125
@@ -39,7 +13,7 @@ export function wrapRemoteCommandForPosixShell(
   options: { compress?: boolean } = {}
 ): string {
   // csh/tcsh split multiline exec strings; rebuild bounded printf chunks without consuming relay stdin.
-  const encodedChunks = encodeRemoteCommandForPrintf(command)
+  const encodedChunks = [...encodePosixPrintfRecords(command)]
   const runDecoded = 'decoded=${decoded%_}; exec /bin/sh -c "$decoded"'
   const decodeAndRun = `decoded=$(printf %b "$@" && printf _) || exit $?; ${runDecoded}`
   const chunkArguments = encodedChunks.map(quotePosixShell).join(' ')
@@ -53,7 +27,7 @@ export function wrapRemoteCommandForPosixShell(
 
   // Compress long scripts before gateways can truncate the exec request.
   const compressed = gzipSync(Buffer.from(command), { level: 9 }).toString('base64')
-  const compressedArguments = encodeRemoteCommandForPrintf(compressed)
+  const compressedArguments = [...encodePosixPrintfRecords(compressed)]
     .map(quotePosixShell)
     .join(' ')
   // Preserve payload stdin and execute only after gzip validation. Missing decoders consume nothing, permitting plain retry; macOS before 13 needs base64 -D.

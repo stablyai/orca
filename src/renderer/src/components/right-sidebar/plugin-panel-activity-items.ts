@@ -1,78 +1,12 @@
-import {
-  Activity,
-  BarChart3,
-  Bell,
-  Blocks,
-  Book,
-  Bot,
-  Bug,
-  Calendar,
-  Cloud,
-  Code,
-  Database,
-  FileText,
-  Flag,
-  Folder,
-  Gauge,
-  Globe,
-  Hammer,
-  Layers,
-  Lightbulb,
-  Package,
-  Plug,
-  Puzzle,
-  Rocket,
-  Star,
-  Terminal,
-  Wrench,
-  Zap
-} from 'lucide-react'
+import { Plug } from 'lucide-react'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
 import type { ActivityBarItem } from './activity-bar-buttons'
+import { resolvePluginIconGlyph } from '../plugins/plugin-icon-glyphs'
 
 type PluginPanelIcon = ActivityBarItem['icon']
 
-// Curate manifest icons; importing lucide's full icons map defeats tree shaking.
-const PLUGIN_PANEL_ICONS: Record<string, PluginPanelIcon> = {
-  activity: Activity,
-  barchart3: BarChart3,
-  bell: Bell,
-  blocks: Blocks,
-  book: Book,
-  bot: Bot,
-  bug: Bug,
-  calendar: Calendar,
-  cloud: Cloud,
-  code: Code,
-  database: Database,
-  filetext: FileText,
-  flag: Flag,
-  folder: Folder,
-  gauge: Gauge,
-  globe: Globe,
-  hammer: Hammer,
-  layers: Layers,
-  lightbulb: Lightbulb,
-  package: Package,
-  plug: Plug,
-  puzzle: Puzzle,
-  rocket: Rocket,
-  star: Star,
-  terminal: Terminal,
-  wrench: Wrench,
-  zap: Zap
-}
-
 export function resolvePluginPanelIcon(iconName: string | undefined): PluginPanelIcon {
-  if (!iconName) {
-    return Plug
-  }
-  // Accept both lucide naming styles ('file-text' and 'FileText').
-  const normalized = iconName.replaceAll('-', '').toLowerCase()
-  // Reject inherited keys such as constructor, which would resolve to non-components and crash the sidebar.
-  return Object.hasOwn(PLUGIN_PANEL_ICONS, normalized)
-    ? (PLUGIN_PANEL_ICONS[normalized] ?? Plug)
-    : Plug
+  return resolvePluginIconGlyph(iconName, Plug)
 }
 
 export function getPluginPanelActivityItems(

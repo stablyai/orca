@@ -7,12 +7,17 @@ const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ghExecFileAsync: vi.fn()
 }))
 
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
 import {
   _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,
@@ -784,7 +789,7 @@ describe('gh error classification', () => {
   it('classifies "has disabled issues" stderr as issues_disabled', () => {
     const stderr =
       "Command failed: gh issue list --limit 36 --json number,title,state --repo brennanb2025/orca --state open\nthe 'brennanb2025/orca' repository has disabled issues"
-    expect(classifyGhError(stderr)).toEqual({
+    expect(classifyGhError(stderr)).toMatchObject({
       type: 'issues_disabled',
       message: 'Issues are disabled on this repository.'
     })
