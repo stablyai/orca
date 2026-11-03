@@ -29,6 +29,7 @@ import {
 } from './web-runtime-session'
 import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceSleepOutcome } from '../../../../shared/workspace-sleep'
@@ -115,6 +116,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
       }
     },
+    runApprovedSetup: runApprovedSetupOnWebHost,
     // Why: adoption verifies a desktop-owned hidden SSH target and is intentionally not a remote-server operation.
     adoptProvisionedRoot: () =>
       Promise.reject(

