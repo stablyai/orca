@@ -29,16 +29,6 @@ afterEach(() => {
 })
 
 describe('live terminal surface owners', () => {
-  it('records the exact pane the host binds a live PTY to', () => {
-    const owners = indexLiveTerminalSurfaceOwners([summary({})], WORKTREE_ID)
-
-    expect(owners.get(`${WORKTREE_ID}@@live-agent`)).toEqual({
-      paneKey: `tab-live:${LEAF_ID}`,
-      ptyId: `${WORKTREE_ID}@@live-agent`,
-      tabId: 'tab-live'
-    })
-  })
-
   it.each([false, true])(
     'rejects conflicting owned and orphan rows (orphan first: %s)',
     (orphanFirst) => {

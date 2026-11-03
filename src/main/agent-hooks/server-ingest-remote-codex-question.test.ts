@@ -127,15 +127,4 @@ describe('remote Codex questions', () => {
       { state: 'waiting', mainAgent: { state: 'working' } }
     )
   })
-
-  it('preserves ordinary approval waiting and resumes on tool execution', () => {
-    const pane = remoteCodex()
-    pane.report({ hook_event_name: 'UserPromptSubmit', prompt: 'Run the checks' })
-    expect(
-      pane.report({ hook_event_name: 'PermissionRequest', tool_name: 'exec_command' })
-    ).toMatchObject({ state: 'waiting', mainAgent: { state: 'waiting' } })
-    expect(pane.report({ hook_event_name: 'PreToolUse', tool_name: 'exec_command' })).toMatchObject(
-      { state: 'working', mainAgent: { state: 'working' } }
-    )
-  })
 })

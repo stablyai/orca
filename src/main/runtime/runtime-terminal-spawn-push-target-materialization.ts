@@ -8,7 +8,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import type { WorktreePushTargetStore } from '../ipc/worktree-push-target-cleanup'
+import type { WorktreePushTargetStore } from '../git/remotes/worktree-push-target-cleanup'
 import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 
 type TerminalPushTargetStore = WorktreePushTargetStore & ProjectRuntimeResolutionStore

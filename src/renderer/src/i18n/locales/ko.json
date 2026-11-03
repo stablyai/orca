@@ -7033,7 +7033,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "컴퓨터 사용 열기",
-          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
+          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Orca Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
           "333984cf90": "기존 브라우저 세션 사용"
         },
         "BrowserUseEnableSwitch": {
@@ -7153,7 +7153,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "agents가 로컬 데스크톱 앱을 검사하고 작동할 수 있습니다.",
-          "93255aaf18": "Computer Use 스킬",
+          "93255aaf18": "Orca Computer Use 스킬",
           "45f8e22c2e": "열기",
           "d95d1cfab8": "새로고침",
           "0c29da5805": "준비됨",
@@ -7995,8 +7995,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "명령 템플릿",
-          "2b2f38652b": "사용자 지정 명령",
-          "0ffb081b3a": "기본 에이전트 사용",
           "f4310cf63f": "에이전트",
           "1cd88d470a": "사용자 정의",
           "403876bb48": "글로벌 사용",
@@ -19313,7 +19311,8 @@
         "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
         "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
         "cancel": "계속하지 않기"
-      }
+      },
+      "settings": "채팅 설정"
     },
     "tab": {
       "bar": {
@@ -22306,6 +22305,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
+    "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogInstall": "이 호스트에 {{agent}}를 설치하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
+    "catalogUnresolved": "{{agent}} 모델이 로드되지 않았습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
+    "catalogEmpty": "{{agent}}에 사용 가능한 모델이 없습니다.",
     "search": "에이전트 및 설정 검색…",
     "configure": "{{agent}} 설정",
     "arguments": "인수",
@@ -22320,6 +22325,8 @@
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
     "legacyModelCount": "모델 {{total}}개",
+    "use": "사용",
+    "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
     "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @"
   },

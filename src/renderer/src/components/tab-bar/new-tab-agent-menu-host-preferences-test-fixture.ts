@@ -18,7 +18,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '../settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 const rpc: { call: Mock; supports: Mock } = vi.hoisted(() => ({
   call: vi.fn(),

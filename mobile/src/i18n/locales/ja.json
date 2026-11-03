@@ -1640,7 +1640,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "現在のブランチを取得できません。",
-      "providerUnavailable": "このプロバイダーではホスト型レビューパネルを利用できません。"
+      "githubRemoteRequired": "このタブでプルリクエストの詳細を表示するには、GitHub のリモートが必要です。対応する他のサービスでは、「変更点」からレビューを作成してブラウザーで開けます。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "ユーザーの読み込みに失敗しました",

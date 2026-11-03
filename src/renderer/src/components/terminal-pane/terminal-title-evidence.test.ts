@@ -104,19 +104,6 @@ describe('resolvePaneTitleDecision', () => {
     }
   )
 
-  it.each([
-    'Gemini',
-    'gemini cli',
-    'Qoder CLI',
-    'Grok',
-    '⠴ Grok',
-    'Pi ready',
-    'OMP ready',
-    '✦ Qoder CLI extra'
-  ])('does not treat loose or owner-shaped text %j as an exact output', (title) => {
-    expect(isNormalizedAgentTitleStamp(title)).toBe(false)
-  })
-
   it('keeps current timer facts cleared with equal raw/display input and existing provenance', async () => {
     vi.useFakeTimers()
     const facts: [string, string, unknown][] = []

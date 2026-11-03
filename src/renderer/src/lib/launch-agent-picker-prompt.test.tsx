@@ -369,8 +369,9 @@ it('holds an actual clipboard-image paste until its save settles before launchin
   }
 })
 
-import * as hostPreferences from '@/components/settings/use-host-agent-launch-preferences'
-import * as launchSettings from '@/components/settings/agent-launch-settings-transport'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/worktree-runtime-owner'
 import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
@@ -402,7 +403,7 @@ it.each([
         ...(failure === 'paste' ? { promptDelivery: 'submit-after-ready' } : {})
       })
     )
-    const preferences = Promise.withResolvers<hostPreferences.AgentLaunchPreferences>()
+    const preferences = Promise.withResolvers<AgentLaunchPreferences>()
     vi.spyOn(hostPreferences, 'ensureAgentLaunchPreferences').mockImplementation(
       () => preferences.promise
     )

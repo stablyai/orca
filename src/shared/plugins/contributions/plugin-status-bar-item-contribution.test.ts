@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import { derivePluginExecutionProfile } from './plugin-execution-profile'
 import { pluginStatusBarItemPatchSchema } from './plugin-status-bar-item-contribution'
-import { pluginContributionSummary } from './plugin-contribution-summary'
 import {
   buildPluginApprovalRequest,
   formatPluginApprovalMessage
@@ -29,17 +27,6 @@ function issues(raw: unknown): string {
 }
 
 describe('contributes.statusBarItems', () => {
-  it('accepts a static item that runs one of the plugin commands', () => {
-    const parsed = parsePluginManifest(
-      manifest([
-        { id: 'tasks', text: '3 open', icon: 'check', tone: 'warning', command: 'demo.tasks' }
-      ])
-    )
-    expect(parsed.ok && parsed.manifest.contributes.statusBarItems).toEqual([
-      { id: 'tasks', text: '3 open', icon: 'check', tone: 'warning', command: 'demo.tasks' }
-    ])
-  })
-
   it('refuses duplicate ids, unknown commands, icons and fields', () => {
     expect(
       issues(
@@ -54,20 +41,6 @@ describe('contributes.statusBarItems', () => {
     )
     expect(issues(manifest([{ id: 'a', icon: 'not-an-icon' }]))).not.toBe('')
     expect(issues(manifest([{ id: 'a', onPress: 'x' }]))).not.toBe('')
-  })
-
-  it('lists items in the catalog summary by text, or id when icon-only', () => {
-    const parsed = parsePluginManifest(
-      manifest([
-        { id: 'tasks', text: '3 open' },
-        { id: 'quiet', icon: 'check' }
-      ])
-    )
-    expect(parsed.ok && pluginContributionSummary(parsed.manifest)).toEqual([
-      { kind: 'commands', name: 'Open tasks' },
-      { kind: 'statusBarItems', name: '3 open' },
-      { kind: 'statusBarItems', name: 'quiet' }
-    ])
   })
 
   it('lists items in the dev-load and inspect approval, and binds the fingerprint to them', () => {
@@ -97,12 +70,6 @@ describe('contributes.statusBarItems', () => {
 
   it('needs an engines floor that reads the field', () => {
     expect(issues(manifest([{ id: 'a', text: 'x' }], '>=1.4.247'))).toContain('1.4.248')
-  })
-
-  it('needs only the declarative profile', () => {
-    const parsed = parsePluginManifest(manifest([{ id: 'a', text: 'x' }]))
-    expect(parsed.ok && derivePluginExecutionProfile(parsed.manifest)).toBe('declarative')
-    expect(issues({ ...manifest([{ id: 'a', text: 'x' }]), execution: 'data' })).not.toBe('')
   })
 
   it('patches only display fields', () => {

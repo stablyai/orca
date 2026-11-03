@@ -358,6 +358,8 @@ export async function cancelClaudeAcquisitionAttempt(
 }
 
 export type ClaudeAcquireCallbacks = {
+  /** Publishes the session, its start ending admitted first so its exit is never missed. */
+  publish: (session: ClaudeSession) => void
   deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
   emit: (
     session: ClaudeSession | null,

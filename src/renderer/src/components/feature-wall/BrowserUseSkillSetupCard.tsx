@@ -3,7 +3,7 @@ import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 

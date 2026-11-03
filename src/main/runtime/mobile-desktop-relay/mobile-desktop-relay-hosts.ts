@@ -4,11 +4,13 @@ import type { RuntimeEnvironmentSource } from '../../../shared/runtime-environme
 import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { BrowserPageCreationPlacement } from '../../../shared/browser-client-host-placement'
 
 export type MobileDesktopRelayHost = {
   environmentId: string
   // Pairing revision and runtime identity; delegated grants from another fence are never reused.
   fence: string
+  pairingRevision?: number
   // The desktop's own runtime-scope pairing; the relay swaps in a phone's delegated token.
   pairing: PairingOffer
 }
@@ -31,6 +33,7 @@ export type MobileDesktopRelayHostListing = {
 
 /** Bound calls and reject stale pairing/runtime identity via expected. */
 export type MobileDesktopRelayCallOptions = {
+  signal?: AbortSignal
   timeoutMs?: number
   expected?: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
 }
@@ -53,6 +56,12 @@ export type MobileDesktopRelayHosts = {
   ) => Promise<RuntimeRpcResponse<unknown>>
   /** Whether this desktop renders the page itself as a client-placed page of that server. */
   hostsBrowserPage: (environmentId: string, browserPageId: string) => boolean
+  /** Active desktop browser host, used only after the delegated phone is admitted on the server. */
+  browserHostClientId?: (environmentId: string) => string | null
+  prepareBrowserHost?: (
+    host: MobileDesktopRelayHost,
+    enabled: boolean
+  ) => Promise<BrowserPageCreationPlacement>
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
   onStatusChanged: (listener: () => void) => () => void
   /** Windowless server events: onChange fires on ready, catalog changes and reconnect replay.

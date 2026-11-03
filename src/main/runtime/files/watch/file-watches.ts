@@ -12,10 +12,10 @@ import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { resolveAuthorizedPath } from '../../../ipc/filesystem/filesystem-auth'
+import { resolveAuthorizedPath } from '../../../ipc/filesystem/access/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
-import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
+import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
 import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess

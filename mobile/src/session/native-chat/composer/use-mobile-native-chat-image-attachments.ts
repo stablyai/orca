@@ -7,7 +7,6 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import { useCallback, useMemo } from 'react'
-import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-tui-input-clear'
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { ConnectionState } from '../../../transport/types'
 import type { MobileImageSource } from '../../../platform/media-picker-contract'
@@ -240,6 +239,7 @@ export function useMobileNativeChatImageAttachments({
           onSendError('Message not sent (disconnected)')
           return false
         }
+        let inputWriteStarted = false
         try {
           const seededLaunchDraft = readSeededLaunchDraft()
           const pasted = await pasteMobileNativeChatImagePaths({
@@ -250,12 +250,15 @@ export function useMobileNativeChatImageAttachments({
             imagePaths: pendingImages.map((attachment) => attachment.path),
             followedByText: text.trim().length > 0,
             deadline,
-            ...(seededLaunchDraft
-              ? { clearInput: buildAgentTuiClearInputForText(seededLaunchDraft) }
-              : {})
+            onWriteStarted: () => {
+              inputWriteStarted = true
+            },
+            ...(seededLaunchDraft ? { seededText: seededLaunchDraft } : {})
           })
           if (!pasted) {
-            markMobileNativeChatInputStale(handle)
+            if (inputWriteStarted) {
+              markMobileNativeChatInputStale(handle)
+            }
             onError?.()
             onSendError('Message not sent')
             return false
@@ -293,8 +296,10 @@ export function useMobileNativeChatImageAttachments({
           }
           return outcome !== 'rejected'
         } catch {
-          // Contain transport rejection and keep chips; the next attempt’s leading clear removes any partial paste.
-          markMobileNativeChatInputStale(handle)
+          // Only attempted writes can leave partial input for the next action to heal.
+          if (inputWriteStarted) {
+            markMobileNativeChatInputStale(handle)
+          }
           onError?.()
           onSendError('Message not sent')
           return false

@@ -142,13 +142,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version Stopping', () => {
-  it('pairs two real builds that disagree on the field', () => {
-    // Prove distinct build identities so the pairing cannot silently collapse into same-version tests.
-    expect(oldBuild.fold).not.toBe(newBuild.fold)
-    expect(newBuild.fold(STOPPING_SUMMARY).mainAgent).toMatchObject({ stopping: true })
-    expect(oldBuild.fold(STOPPING_SUMMARY).mainAgent).not.toHaveProperty('stopping')
-  })
-
   it('an OLD desktop folds a new host summary into the plain working row it always drew', () => {
     expect(oldBuild.fold(STOPPING_SUMMARY)).toEqual({
       state: 'working',

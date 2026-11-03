@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WslDriveUncConversionResult } from '../../../../shared/wsl-drive-unc-conversion-types'
 import { parseWslUncPath, wslUncDrivePathToWindows } from '../../../../shared/wsl-paths'
-import { SettingsRow } from '../settings/SettingsFormControls'
+import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
 import { wslDriveUncConversionMessages } from './wsl-drive-unc-conversion-copy'
 
 type Step =

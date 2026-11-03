@@ -7033,7 +7033,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
-          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装计算机使用技能； macOS 还需要隐私权限。",
+          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
           "333984cf90": "使用现有的浏览器会话"
         },
         "BrowserUseEnableSwitch": {
@@ -7153,7 +7153,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
-          "93255aaf18": "计算机控制技能",
+          "93255aaf18": "Orca Computer Use 技能",
           "45f8e22c2e": "打开",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
@@ -7995,8 +7995,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "提示词模板",
-          "2b2f38652b": "自定义命令",
-          "0ffb081b3a": "使用默认智能体",
           "f4310cf63f": "智能体",
           "1cd88d470a": "定制",
           "403876bb48": "使用全局",
@@ -18964,7 +18962,7 @@
           "stoppedCount_other": "{{count}} 个已停止",
           "unverifiableCount_other": "{{count}} 个状态不可用"
         },
-        "tokens": "{{value0}} 代币",
+        "tokens": "{{value0}} token",
         "unnamed": "子智能体",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体"
@@ -19279,7 +19277,8 @@
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
         "cancel": "不要继续"
-      }
+      },
+      "settings": "聊天设置"
     },
     "tab": {
       "bar": {
@@ -22307,6 +22306,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
+    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索智能体和配置…",
     "configure": "配置 {{agent}}",
     "arguments": "参数",
@@ -22321,6 +22326,8 @@
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
+    "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件"
   },

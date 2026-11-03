@@ -1099,6 +1099,12 @@
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt"
     },
+    "editorInsertFinalNewline": {
+      "title": "Insert Final Newline",
+      "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
+      "keywordNewline": "newline",
+      "keywordEndOfFile": "end of file"
+    },
     "repositoryFormatter": {
       "title": "Formatter Command",
       "description": "Use this project’s formatter for Format on Save.",
@@ -7863,7 +7869,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
-          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Computer Use skill; macOS also requires privacy permissions.",
+          "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
           "333984cf90": "Use an existing browser session"
         },
         "BrowserUseEnableSwitch": {
@@ -7983,7 +7989,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Enables agents to inspect and operate local desktop apps.",
-          "93255aaf18": "Computer Use skill",
+          "93255aaf18": "Orca Computer Use skill",
           "45f8e22c2e": "Open",
           "d95d1cfab8": "Refresh",
           "0c29da5805": "Ready",
@@ -8876,8 +8882,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
-          "2b2f38652b": "Custom command",
-          "0ffb081b3a": "Use default agent",
           "f4310cf63f": "Agent",
           "1cd88d470a": "Customize",
           "403876bb48": "Use global",
@@ -11466,6 +11470,7 @@
               "recipe": {
                 "options": {
                   "commitMessage": "Generate the commit message from staged changes.",
+                  "commitMessageSharedModel": "Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use.",
                   "pullRequest": "Generate the hosted review title and description.",
                   "branchName": "Rename Orca-created branches from the initial agent task.",
                   "fixCommitFailure": "Start an agent when a commit hook or git commit fails.",
@@ -19651,7 +19656,10 @@
         "cancelled": "Cancelled",
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
-        "cancelledBy": "Cancelled on {{device}}"
+        "cancelledBy": "Cancelled on {{device}}",
+        "thisComputer": "this computer",
+        "computer": "the computer",
+        "otherDevice": "another device"
       },
       "notices": {
         "contextCleared": "Context cleared",
@@ -20417,7 +20425,8 @@
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
         "cancel": "Don't continue"
-      }
+      },
+      "settings": "Chat settings"
     },
     "tab": {
       "bar": {
@@ -23266,20 +23275,32 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
+    "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
+    "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
+    "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",
+    "catalogUnresolved": "{{agent}} models have not loaded. Close and reopen the agent picker to try again.",
+    "catalogEmpty": "{{agent}} has no available models.",
+    "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
     "search": "Search agents and setups…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",
     "argumentsHint": "Applies only to CLI launches.",
     "launchChat": "Launch chat",
     "launchTerminal": "Launch terminal",
+    "sameAsTextDefault": "Same as default · {{value0}}",
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
     "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
+    "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
+    "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
     "legacyModelCount": "{{total}} models",
+    "use": "Use",
+    "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
     "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },

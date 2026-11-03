@@ -1640,7 +1640,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "無法取得目前分支。",
-      "providerUnavailable": "此提供者無法使用託管審查面板。"
+      "githubRemoteRequired": "此分頁需要 GitHub 遠端儲存庫才能顯示提取要求詳情。對於其他支援的平台，請在「變更」中建立審查，然後在瀏覽器中開啟。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "載入人員失敗",

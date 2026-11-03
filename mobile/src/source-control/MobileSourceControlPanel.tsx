@@ -346,6 +346,7 @@ export function MobileSourceControlPanel({
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
           <MobileSourceControlContent
             state={state}
+            stageAllInBar={nextStep.view.kind === 'composer' && primaryAction.kind === 'stage'}
             bottomInset={barInset}
             onOpenCommits={openCommitsScreen}
           />
