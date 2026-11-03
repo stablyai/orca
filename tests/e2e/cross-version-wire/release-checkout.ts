@@ -12,7 +12,7 @@ import {
   type MaterializeReleaseCheckoutTestHooks
 } from './release-checkout-publication.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
-import { prepareReleaseSnapshotSource } from './release-snapshot-source.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 export type {
   CheckoutLockOptions,
   CheckoutLifecycleContext,

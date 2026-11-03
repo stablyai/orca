@@ -3909,7 +3909,7 @@
             "copyLinkFailed": "複製連結失敗",
             "downloadOpenWithDefaultApp": "下載並使用預設應用程式打開",
             "downloadOpenFailed": "無法下載「{{value0}}」。",
-            "openInThisGroup": "在此群組中開啟",
+            "openInNewTab": "在新分頁中開啟",
             "openInThisGroupRefused": "無法在此群組中開啟 {{value0}}"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -9051,7 +9051,7 @@
           "902f5dee1f": "選取時複製",
           "9129b7e805": "將滑鼠游標移到終端機窗格上即可讓該窗格取得焦點，無需按一下。",
           "8eefeaa3da": "焦點跟隨滑鼠",
-          "96fe15def8": "終端機窗格的滑鼠和剪貼簿行為。",
+          "96fe15def8": "終端機窗格的捲動、滑鼠和剪貼簿行為。",
           "45721f3e67": "終端機互動",
           "9c0b1c1792": "開",
           "c1fc9e9444": "GPU 加速",
@@ -20065,7 +20065,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "複製時移除左側留白",
         "copyTrimsGutterDescription": "移除代理程式輸出左側的共用縮排，讓複製的文字不會多出空格。只會移除所有選取行共同擁有的縮排。",
-        "copyOnSelectDescription": "自動將在終端機或聊天中選取的文字複製到剪貼簿。"
+        "copyOnSelectDescription": "自動將在終端機或聊天中選取的文字複製到剪貼簿。",
+        "scrollOnUserInput": "輸入時捲動到底部",
+        "scrollOnUserInputDescription": "向上捲動時鍵入或貼上會跳至最新輸出。關閉此項可保留目前位置。"
       },
       "terminal": {
         "clipboard": {
@@ -20080,6 +20082,15 @@
             "whitespace": "空白字元",
             "spaces": "空格"
           }
+        },
+        "search": {
+          "typing": "鍵入",
+          "input": "輸入",
+          "jump": "跳轉",
+          "bottom": "底部",
+          "scrollback": "回捲",
+          "snap": "貼齊",
+          "position": "位置"
         }
       },
       "nativeChat": {

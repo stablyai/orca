@@ -2,16 +2,14 @@ import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
 import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
-import { LOCAL_RELEASE_GIT_ENV, prepareReleaseSnapshotSource } from './release-snapshot-source.ts'
-import { checkoutFetchTrace } from './release-checkout-diagnostic.ts'
 import {
   collectPackageImports,
   installMissingPackageStandIns,
   type PackageImports
 } from './release-missing-packages.ts'
 
-const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
-const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
+import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.
@@ -162,33 +160,6 @@ function checkoutTarProgram(): string {
   return join(systemRoot, 'System32', 'tar.exe')
 }
 
-async function runCheckoutProcess(
-  repoRoot: string,
-  program: string,
-  args: string[],
-  deadline: number
-): Promise<string> {
-  // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
-  const { runProcess } = await import('@orca/process-host')
-  const trace = program === 'git' ? await checkoutFetchTrace() : undefined
-  const result = await runProcess({
-    program,
-    args,
-    cwd: repoRoot,
-    env: { ...process.env, ...trace?.env, ...LOCAL_RELEASE_GIT_ENV },
-    timeoutMs: Math.max(1, deadline - Date.now()),
-    maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
-    terminationBarrier: true
-  }).finally(() => trace?.finish('', `consumer-${args[0]}`))
-  if (result.code === 0 && !result.timedOut) {
-    return result.stdout
-  }
-  const detail = result.timedOut
-    ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
-    : result.stderr.trim() || `exited with ${result.code}`
-  throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
-}
-
 function workspacePatternRoot(pattern: string): string {
   const segments: string[] = []
   for (const segment of pattern.replace(/\/$/, '').split('/')) {
@@ -262,20 +233,12 @@ export async function extractReleaseCheckoutTree(
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
+  const paths = [...ARCHIVE_PATHS, ...optionalPaths, ...workspacePaths]
   try {
     await runCheckoutProcess(
       repoRoot,
       'git',
-      [
-        'archive',
-        '--format=tar',
-        `--output=${archive}`,
-        commit,
-        '--',
-        ...ARCHIVE_PATHS,
-        ...optionalPaths,
-        ...workspacePaths
-      ],
+      ['archive', '--format=tar', `--output=${archive}`, commit, '--', ...paths],
       deadline
     )
     await runCheckoutProcess(

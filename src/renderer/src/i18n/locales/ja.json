@@ -3619,7 +3619,7 @@
             "copyLinkFailed": "リンクのコピーに失敗しました",
             "downloadOpenWithDefaultApp": "ダウンロードしてデフォルトのアプリで開く",
             "downloadOpenFailed": "「{{value0}}」のダウンロードに失敗しました。",
-            "openInThisGroup": "このグループで開く",
+            "openInNewTab": "新しいタブで開く",
             "openInThisGroupRefused": "{{value0}} をこのグループで開けませんでした"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -8583,7 +8583,7 @@
           "902f5dee1f": "選択時にコピー",
           "9129b7e805": "ターミナルペインにマウスを移動すると、クリックしなくてもターミナルペインがアクティブになります。",
           "8eefeaa3da": "フォーカスはマウスに追従します",
-          "96fe15def8": "ターミナルペインのマウスとクリップボードの動作。",
+          "96fe15def8": "ターミナルペインのスクロール、マウス、クリップボードの動作。",
           "45721f3e67": "ターミナルの相互作用",
           "9c0b1c1792": "オン",
           "c1fc9e9444": "GPU アクセラレーション",
@@ -19686,7 +19686,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "コピー時に余白をトリミングする",
         "copyTrimsGutterDescription": "左側のガターをドロップすると、Agent の出力が後ろに描画されるため、コピーされたテキストはインデントされません。選択した行ごとに共有されるインデントのみが削除されます。",
-        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。"
+        "copyOnSelectDescription": "ターミナルやチャットで選択したテキストをクリップボードに自動的にコピーします。",
+        "scrollOnUserInput": "入力時に一番下へスクロール",
+        "scrollOnUserInputDescription": "上にスクロール中に入力または貼り付けを行うと、最新の出力に移動します。オフにすると現在の位置を維持します。"
       },
       "terminal": {
         "clipboard": {
@@ -19701,6 +19703,15 @@
             "highlight": "ハイライト",
             "chat": "チャット"
           }
+        },
+        "search": {
+          "typing": "タイピング",
+          "input": "入力",
+          "jump": "ジャンプ",
+          "bottom": "一番下",
+          "scrollback": "スクロールバック",
+          "snap": "スナップ",
+          "position": "位置"
         }
       },
       "nativeChat": {

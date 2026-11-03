@@ -3960,7 +3960,7 @@
             "copyLinkFailed": "Bağlantı kopyalanamadı",
             "downloadOpenWithDefaultApp": "İndir ve varsayılan uygulamayla aç",
             "downloadOpenFailed": "'{{value0}}' indirilemedi.",
-            "openInThisGroup": "Bu grupta aç",
+            "openInNewTab": "Yeni sekmede aç",
             "openInThisGroupRefused": "{{value0}} bu grupta açılamadı"
           },
           "TerminalSessionStateSaveFailureDialog": {
@@ -9214,7 +9214,7 @@
           "902f5dee1f": "Seçince Kopyala",
           "9129b7e805": "Bir terminal bölmesinin üzerine gelmek, tıklamaya gerek kalmadan onu etkinleştirir.",
           "8eefeaa3da": "Odak Fareyi Takip Eder",
-          "96fe15def8": "Terminal bölmeleri için fare ve pano davranışı.",
+          "96fe15def8": "Terminal bölmeleri için kaydırma, fare ve pano davranışı.",
           "45721f3e67": "Terminal Etkileşimi",
           "9c0b1c1792": "Açık",
           "c1fc9e9444": "GPU Hızlandırma",
@@ -20363,7 +20363,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Kopyalarken Kenar Boşluğunu Kırp",
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
-        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın."
+        "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
+        "scrollOnUserInput": "Girişte en alta kaydır",
+        "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın."
       },
       "terminal": {
         "clipboard": {
@@ -20378,6 +20380,15 @@
             "whitespace": "boşluk",
             "spaces": "boşluklar"
           }
+        },
+        "search": {
+          "typing": "yazma",
+          "input": "giriş",
+          "jump": "atla",
+          "bottom": "alt",
+          "scrollback": "kaydırma geçmişi",
+          "snap": "hizala",
+          "position": "konum"
         }
       },
       "nativeChat": {

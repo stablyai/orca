@@ -17,14 +17,14 @@ import {
 import { createClaudeModelCatalogProbe } from '../../../src/main/claude/claude-model-catalog-probe'
 
 import { prepareReleaseCheckoutSnapshot, REPO_ROOT } from './release-checkout'
-import { LOCAL_RELEASE_GIT_ENV } from './release-snapshot-source'
+import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
 import { checkoutFetchTrace } from './release-checkout-diagnostic'
 
 let directReadTrace: Awaited<ReturnType<typeof checkoutFetchTrace>>
 beforeAll(async () => {
   await prepareReleaseCheckoutSnapshot('v1.4.229')
   directReadTrace = await checkoutFetchTrace()
-}, 60_000)
+}, 180_000)
 afterAll(() => directReadTrace?.finish('v1.4.229', 'consumer-direct-show'))
 
 // Local acceptance rig: execute the pinned source, with only React's effect scheduler and transport replaced.

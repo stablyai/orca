@@ -71,7 +71,7 @@ type TerminalFileOpenDeps = {
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
-  /** "Open in this group": pins the source tab's group at activation, or refuses. */
+  /** "Open in new tab": pins the source tab's group at activation, or refuses. */
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
   openInSourceGroupSurface?: 'internal' | 'browser'

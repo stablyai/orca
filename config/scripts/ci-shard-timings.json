@@ -12448,7 +12448,6 @@
       "src/shared/terminal-synchronized-output-scan.test.ts": 45,
       "src/shared/terminal-theme-selection.test.ts": 64,
       "src/shared/terminal-title-agent-type.test.ts": 197,
-      "src/shared/terminal-title-classification-corpus.test.ts": 148,
       "src/shared/terminal-title-classification-memo.test.ts": 97,
       "src/shared/terminal-view-attributes.test.ts": 54,
       "src/shared/terminal-viewport.test.ts": 104,

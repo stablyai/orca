@@ -15,7 +15,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
 import { extractReleaseCheckoutTree } from './release-checkout-tree'
-import { LOCAL_RELEASE_GIT_ENV, prepareReleaseSnapshotSource } from './release-snapshot-source'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch'
+import { LOCAL_RELEASE_GIT_ENV } from './release-checkout-process'
 
 const temporaryRoots: string[] = []
 
@@ -74,6 +75,26 @@ function commitRelease(files: Record<string, string>): { repo: string; commit: s
 }
 
 function partialClone(repo: string): string {
+  for (const message of ['second', 'third']) {
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=release',
+        '-c',
+        'user.email=release@example.invalid',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '--allow-empty',
+        '--quiet',
+        '-m',
+        message
+      ],
+      { cwd: repo }
+    )
+  }
+  execFileSync('git', ['repack', '-a', '-d', '-b'], { cwd: repo })
   execFileSync('git', ['config', 'uploadpack.allowFilter', 'true'], { cwd: repo })
   execFileSync('git', ['config', 'uploadpack.allowAnySHA1InWant', 'true'], { cwd: repo })
   const clone = join(temporaryDirectory('orca-cross-version-partial-'), 'clone')
@@ -128,7 +149,7 @@ describe('historical snapshot acquisition', () => {
     execFileSync('git', ['remote', 'set-url', 'origin', join(repo, 'unavailable')], { cwd: clone })
     const staging = temporaryDirectory('orca-cross-version-unavailable-')
     await expect(extractReleaseCheckoutTree(clone, staging, commit)).rejects.toThrow(
-      'Historical source preparation failed'
+      'Historical source preparation'
     )
     expect(existsSync(join(staging, '.release-checkout.tar'))).toBe(false)
     expect(missingSnapshotObjects(clone, commit).length).toBeGreaterThan(0)
@@ -153,7 +174,7 @@ describe('historical snapshot acquisition', () => {
       { cwd: clone }
     )
     await expect(prepareReleaseSnapshotSource(clone, commit, { timeoutMs: 2_000 })).rejects.toThrow(
-      'Historical source preparation timed out after 2000ms'
+      /Historical source preparation: .*timed out after 2000ms/
     )
     const pid = Number(readFileSync(pidFile, 'utf8'))
     expect(pid).toBeGreaterThan(0)
