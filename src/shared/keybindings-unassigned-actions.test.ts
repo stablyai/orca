@@ -7,6 +7,27 @@ import {
 import type { KeybindingActionId, KeybindingPlatform } from './keybindings'
 
 describe('keybindings', () => {
+  it('registers unbound Toggle Diff Viewer under Editors', () => {
+    const definition = getKeybindingDefinition('editor.toggleDiffViewer')
+    expect(definition).toMatchObject({
+      id: 'editor.toggleDiffViewer',
+      title: 'Toggle Diff Viewer',
+      group: 'Editors',
+      scope: 'editor'
+    })
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['diff', 'viewer', 'changes', 'edit', 'toggle'])
+    )
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'darwin')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'win32')).toEqual([])
+    expect(
+      getEffectiveKeybindingsForAction('editor.toggleDiffViewer', 'darwin', {
+        'editor.toggleDiffViewer': ['Mod+Shift+D']
+      })
+    ).toEqual(['Mod+Shift+D'])
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(
