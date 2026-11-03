@@ -19,12 +19,17 @@ import {
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { assertEnvironmentPairing, callEnvironmentEnvelope } from './web-runtime-calls'
+import {
+  assertEnvironmentPairing,
+  callEnvironmentEnvelope,
+  callWebRuntimeEnvironment,
+  getWebRuntimeStatus,
+  pinnedWebSubscriptionOptions
+} from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
   subscribeWebRuntimeStatus,
   readWebRuntimeStatusSnapshots,
-  observeWebRuntimeStatus,
   disconnectActiveRuntimeEnvironment,
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
@@ -36,10 +41,7 @@ import {
   updateEnvironmentFromResponse,
   manuallyDisconnectedResponse
 } from './web-runtime-session'
-
-export function createRuntimeEnvironmentsApi(): NonNullable<
-  Partial<PreloadApi>['runtimeEnvironments']
-> {
+export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'] {
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
@@ -210,30 +212,20 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         timeoutMs
       )
     },
-    getStatus: ({ selector, timeoutMs, observeOnly }) =>
-      observeOnly
-        ? observeWebRuntimeStatus(selector, timeoutMs)
-        : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+    getStatus: getWebRuntimeStatus,
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
-    call: ({
-      selector,
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentPairingRevision,
-      expectedEnvironmentRuntimeId
-    }) =>
-      callEnvironmentEnvelope(
+    call: callWebRuntimeEnvironment,
+    ...createWebRuntimeSubscriptionApiControl(pendingSubscriptions),
+    subscribe: async (
+      {
         selector,
         method,
         params,
         timeoutMs,
+        subscriptionId,
         expectedEnvironmentPairingRevision,
         expectedEnvironmentRuntimeId
-      ),
-    ...createWebRuntimeSubscriptionApiControl(pendingSubscriptions),
-    subscribe: async (
-      { selector, method, params, timeoutMs, subscriptionId, expectedEnvironmentPairingRevision },
+      },
       callbacks
     ) => {
       const environment = resolveEnvironment(selector)
@@ -280,7 +272,15 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
                   callbacks.onResponse(result)
                 }
               },
-              { timeoutMs, signal: controller.signal }
+              {
+                timeoutMs,
+                signal: controller.signal,
+                ...pinnedWebSubscriptionOptions(
+                  selector,
+                  expectedEnvironmentPairingRevision,
+                  expectedEnvironmentRuntimeId
+                )
+              }
             )
           },
           0,

@@ -7,7 +7,7 @@ import {
   projectWorktreeListRemovals,
   projectWorktreePsRemovals
 } from '../worktree-removal-marker-projection'
-import { snapshotPendingWorktreeRemovals } from '../../../worktree-removal-listing'
+import { snapshotPendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-listing'
 import {
   WorktreeDetectedListParams,
   WorktreeListParams,

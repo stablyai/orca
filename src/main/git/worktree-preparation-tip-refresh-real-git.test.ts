@@ -13,10 +13,10 @@ import { refreshPreparedWorktreeTip } from './worktree-preparation-tip-refresh'
 import {
   _resetPreparationPoolForTests,
   listPreparations,
-  releasePreparationClaim,
   startPreparation,
   takePreparation
-} from '../worktree-create-preparation-pool'
+} from '../workspaces/creation/preparation/worktree-create-preparation-pool'
+import { releasePreparationClaim } from '../workspaces/creation/preparation/worktree-create-preparation-claim-registry'
 
 const roots: string[] = []
 afterEach(async () => {

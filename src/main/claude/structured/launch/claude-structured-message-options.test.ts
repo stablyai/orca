@@ -1,3 +1,4 @@
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
 import { describe, expect, it, vi } from 'vitest'
 import {
   acquired,
@@ -34,6 +35,44 @@ const MODELS = [
     supportedEffortLevels: ['low', 'high']
   }
 ]
+
+it('checks the latest permission after model preparation without admitting a stale frame', async () => {
+  const claude = fakeClaude()
+  const adapter = adapterFor(claude)
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'permission-race',
+    events: recordingJournalSink()
+  })
+  const connection = claude.connections[0]!
+  claudeFrame(connection, { type: 'system', subtype: 'init', model: 'claude-sonnet-5' })
+  const preparing = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  connection.setModel = async () => {
+    preparing.resolve()
+    await resume.promise
+  }
+  let changed = false
+  const admitted = vi.fn()
+  const sending = adapter.dispatch({
+    sessionId: 'session-1',
+    clientMessageId: 'permission-race',
+    body: USER_MESSAGE,
+    executionOptions: { model: 'custom[1m]' },
+    fence: 7,
+    admitFreshInput: async (enqueue) =>
+      changed ? { kind: 'acquire', reason: 'permission' } : enqueue('ask', false)
+  })
+  const result = sending.then(admitted, (error) => error)
+  await preparing.promise
+  changed = true
+  resume.resolve()
+  expect(await result).toBeInstanceOf(StructuredAgentSessionInputNotAdmitted)
+  expect(admitted).not.toHaveBeenCalled()
+  expect(connection.sent).toHaveLength(0)
+  await adapter.closeAll()
+})
 
 describe('Claude accepted message choices', () => {
   it.each([false, true])(

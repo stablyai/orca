@@ -11,7 +11,7 @@ import {
   rebuildAuthorizedRootsCache,
   registerCreatedWorktreeRoot,
   resolveRegisteredWorktreePath
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 
 const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
 

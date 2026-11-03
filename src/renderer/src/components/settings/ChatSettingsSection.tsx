@@ -13,6 +13,10 @@ import { useAppStore } from '../../store'
 import { Card, CardContent } from '../ui/card'
 import { getChatAppearanceSearchEntries } from './chat-appearance-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
+import { AgentDefaultSurfaceSection } from './AgentDefaultSurfaceSection'
+import { ChatAgentLaunchSettings } from './ChatAgentLaunchSettings'
+import { getChatLaunchEntriesByKey } from './chat-launch-search'
+import { SearchableSetting } from './SearchableSetting'
 
 export function ChatSettingsSection({
   settings,
@@ -42,6 +46,7 @@ export function ChatSettingsSection({
   const query = useAppStore((state) => state.settingsSearchQuery)
   const title = translate('settings.appearance.chat.title', 'Chat UI')
   const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
+  const launchEntries = getChatLaunchEntriesByKey()
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },
     { title: getChatBehaviorTitle() }
@@ -57,6 +62,26 @@ export function ChatSettingsSection({
     >
       {isMounted ? (
         <div className="space-y-5">
+          {showDesktopOnlySettings ? (
+            <>
+              <SearchableSetting
+                {...launchEntries.default}
+                id={launchEntries.default.targetSectionId}
+                className="max-w-none"
+                forceVisible={matchesSettingsSearch(query, [{ title }])}
+              >
+                <AgentDefaultSurfaceSection settings={settings} presentation="switch" />
+              </SearchableSetting>
+              <SearchableSetting
+                {...launchEntries.agents}
+                id={launchEntries.agents.targetSectionId}
+                className="max-w-none"
+                forceVisible={matchesSettingsSearch(query, [{ title }])}
+              >
+                <ChatAgentLaunchSettings settings={settings} updateSettings={updateSettings} />
+              </SearchableSetting>
+            </>
+          ) : null}
           {matchesSettingsSearch(query, [{ title }, ...getChatAppearanceSearchEntries()]) ? (
             <section id="chat-appearance" className="space-y-3">
               <SettingsSubsectionHeader title={appearanceTitle} />

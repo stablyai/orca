@@ -85,7 +85,8 @@ function makeTab(n: number): TerminalTab {
 }
 
 function providerSession(pane: SeededPane): AgentStatusEntry['providerSession'] {
-  const id = pane.sessionId ?? SESSION_ID
+  // Why per pane: panes naming one session are a distinct case, seeded explicitly.
+  const id = pane.sessionId ?? `${SESSION_ID.slice(0, -1)}${pane.n}`
   const configDir = pane.configDir === undefined ? FOLDER_A : pane.configDir
   return configDir
     ? { key: 'session_id', id, transcriptPath: `${configDir}/projects/-repo/${id}.jsonl` }
@@ -130,6 +131,7 @@ function seedPanes(panes: SeededPane[]): void {
       ])
     ),
     agentStatusByPaneKey: statuses,
+    paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     pendingPaneAccountRestarts: {}
@@ -173,6 +175,75 @@ describe('findMovableClaudeSessions', () => {
 
     expect(await movable('acct-a')).toEqual([ptyId(1)])
     expect(await movable(null)).toEqual([ptyId(3)])
+  })
+
+  it('keeps every live pane of a shared session running, even one already on the new account', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 2, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 3, agentType: 'claude', configDir: FOLDER_A, sessionId: `${SESSION_ID.slice(0, -1)}9` },
+      { n: 4, agentType: 'claude', configDir: FOLDER_B, sessionId: `${SESSION_ID.slice(0, -1)}9` },
+      { n: 5, agentType: 'claude', configDir: FOLDER_A }
+    ])
+    const onShared = vi.fn()
+
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: HOST,
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onShared
+    })
+
+    expect(found.onAccount.map((pane) => pane.ptyId)).toEqual([ptyId(5)])
+    expect(found.cantMove).toEqual(
+      [1, 2, 3].map((n) => expect.objectContaining({ ptyId: ptyId(n), reason: 'shared-session' }))
+    )
+    expect(onShared.mock.calls[0]?.[0]).toHaveLength(3)
+  })
+
+  it("keeps a shared session running after the other pane's sidebar row was dismissed", async () => {
+    seedPanes([{ n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID }, { n: 2 }])
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: {
+          paneKey: makePaneKey(tabId(2), leafId(2)),
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    const found = await scan()
+
+    expect(found.onAccount).toEqual([])
+    expect(found.cantMove).toEqual([
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' })
+    ])
+  })
+
+  it('moves a session once the other pane is back at its shell', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID },
+      { n: 2, agentType: 'claude', configDir: FOLDER_A, sessionId: SESSION_ID }
+    ])
+    vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+      foregroundProcess: id === ptyId(2) ? 'zsh' : 'claude',
+      hasChildProcesses: id !== ptyId(2)
+    }))
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('zsh')
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: { agent: null, shellForeground: true }
+      }
+    })
+
+    expect(await movable()).toEqual([ptyId(1)])
   })
 
   it('keeps a host switch off WSL panes and a WSL switch on its own distro', async () => {

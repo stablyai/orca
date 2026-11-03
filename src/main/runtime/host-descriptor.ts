@@ -6,7 +6,7 @@ import {
   type RuntimeHostDescriptor
 } from '../../shared/runtime-host-descriptor'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
-import { withFileTransactionLock } from '../file-transaction-lock'
+import { withFileTransactionLock } from '../filesystem/file-transaction-lock'
 import type { RuntimeSourceStamp } from '../../shared/runtime-source-env'
 
 export const HOST_INSTALLATION_FILENAME = 'host-installation.json'

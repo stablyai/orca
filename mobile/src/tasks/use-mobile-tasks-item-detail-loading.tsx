@@ -40,10 +40,10 @@ function gitLabHydrationUnchanged(
 
 export type ItemDetailLoadingInput = Pick<
   ItemDetailMetadataEffectsModel,
-  | 'actionItem'
+  | 'detailRequestItem'
   | 'client'
   | 'detailRefreshSeq'
-  | 'setActionItem'
+  | 'hydrateActionItem'
   | 'setDetailError'
   | 'setDetailLoading'
   | 'setDetailPayload'
@@ -55,10 +55,10 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
   model: Model
 ) {
   const {
-    actionItem,
+    detailRequestItem: actionItem,
     client,
     detailRefreshSeq,
-    setActionItem,
+    hydrateActionItem,
     setDetailError,
     setDetailLoading,
     setDetailPayload,
@@ -152,7 +152,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             ...(reviewDecision !== undefined ? { reviewDecision } : {}),
             ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
           }
-          setActionItem((current) =>
+          hydrateActionItem((current) =>
             current?.provider === 'gitlab' &&
             current.source.id === actionItem.source.id &&
             !gitLabHydrationUnchanged(current.source, checksSummary, hydratedStatus)
@@ -204,7 +204,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             issueTypeName: issue.issueType.name,
             priorityName: issue.priority?.name
           })
-          setActionItem((current) => {
+          hydrateActionItem((current) => {
             if (
               current?.provider !== 'jira' ||
               current.source.key !== issue.key ||
@@ -212,7 +212,6 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             ) {
               return current
             }
-            // Keep identity stable so detail hydration cannot fetch itself again.
             const alreadyHydrated =
               current.title === issue.title &&
               current.status === issue.status.name &&
@@ -260,7 +259,7 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
           project: issue.project,
           children: issue.subIssues ?? []
         })
-        setActionItem((current) => {
+        hydrateActionItem((current) => {
           if (current?.provider !== 'linear' || current.source.id !== issue.id) {
             return current
           }

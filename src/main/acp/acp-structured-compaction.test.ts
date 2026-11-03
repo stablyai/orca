@@ -41,7 +41,7 @@ async function commandRun(rig: AcpAdapterRig): Promise<StructuredAgentSessionCom
   return { clientMessageId: 'compact-1', ...turn, running }
 }
 
-async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
+async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[], instructions?: string) {
   const rig = await openAcpAdapterRig({ spec })
   new StructuredAgentRegistry([
     { definition: acpStructuredAgentDefinition(spec), adapter: rig.adapter }
@@ -50,7 +50,7 @@ async function compact(spec: AcpLaunchSpec, frames?: AcpFixtureFrame[]) {
   if (frames) {
     new GrokFixtureReplay(frames).attach(rig.child().agent)
   }
-  const command = await commandRun(rig)
+  const command = { ...(await commandRun(rig)), ...(instructions ? { instructions } : {}) }
   expect(await rig.adapter.compact({ sessionId: SESSION, fence: 1, command })).toEqual({
     state: 'accepted',
     providerIdentity: null
@@ -101,6 +101,13 @@ describe('ACP compaction request', () => {
     expect(prompt.params).toEqual({
       sessionId: PROVIDER_SESSION,
       prompt: [{ type: 'text', text: '/compact' }]
+    })
+  })
+
+  it('sends OMP instructions after the command', async () => {
+    const { prompt } = await compact(OMP, undefined, 'keep the plan')
+    expect(prompt.params).toMatchObject({
+      prompt: [{ type: 'text', text: '/compact keep the plan' }]
     })
   })
 })
@@ -157,6 +164,17 @@ describe('ACP compaction settlement', () => {
         presentation: 'compaction-skipped'
       }
     ])
+  })
+
+  it('reads an OMP mode refusing instructions as failed, not compacted', async () => {
+    const { rig, command, prompt } = await compact(OMP, undefined, 'snapcompact keep the plan')
+    const refusal =
+      '/compact snapcompact does not take focus instructions (it archives history without an LLM summary).'
+    rig.child().agent.notify('session/update', replyText(refusal))
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    const { turn, inside } = await ended(rig, command)
+    expect(turn).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(inside).toEqual([expect.objectContaining({ tone: 'error' })])
   })
 
   it('reads any other OMP compaction failure as failed, in its own words', async () => {

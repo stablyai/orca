@@ -349,6 +349,11 @@ it('drives pending questions from metadata on real N/10N mailbox wakes', async (
       })
       await Promise.resolve()
       await Promise.resolve()
+      expect(operations).toEqual({ executions: 0, rows: 0, bytes: 0 })
+      expect(plans).toHaveLength(0)
+      db.crewChanges.notify(new Set(['traffic']))
+      await Promise.resolve()
+      await Promise.resolve()
       expect(operations).toEqual({ executions: 1, rows: 0, bytes: 2 })
       expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(publications)
       // This is actual executed query planning plus returned work, not native VM/visit accounting.

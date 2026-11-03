@@ -67,6 +67,15 @@ describe('restart-survival E2E routing', () => {
 })
 
 describe('PR E2E gate contract', () => {
+  it('keeps every source-routed E2E target present', () => {
+    const missing = PR_E2E_SOURCE_ROUTES.flatMap(({ id, specs }) =>
+      specs
+        .filter((spec) => !existsSync(join(projectDir, spec)))
+        .map((spec) => ({ route: id, spec }))
+    )
+    expect(missing).toEqual([])
+  })
+
   it('selects modified Playwright specs without running deleted tests', () => {
     expect(filterStep.run).toContain('--diff-filter=AMCR')
     expect(filterStep.run).toContain('config/scripts/pr-e2e-source-routing.mjs')
