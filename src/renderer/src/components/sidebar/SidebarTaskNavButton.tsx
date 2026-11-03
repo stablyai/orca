@@ -74,6 +74,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const settings = useAppStore((s) => s.settings)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
@@ -124,6 +125,8 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     checkLinearConnection,
     preflightStatusChecked,
     preflightStatusCurrent,
+    // Why: a runtime switch drops pending checks, leaving both statuses undefined.
+    settings,
     taskProviderConnections.jira,
     taskProviderConnections.linear,
     refreshPreflightStatus

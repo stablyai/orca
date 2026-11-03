@@ -94,6 +94,7 @@ import SidebarNav, {
   shouldShowArtifactsButton,
   shouldShowMobileButton
 } from './SidebarNav'
+import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 
 function gitRepo(): Repo {
   return {
@@ -286,6 +287,31 @@ describe('SidebarNav', () => {
 
     expect(mocks.checkLinearConnection).toHaveBeenCalled()
     expect(mocks.checkJiraConnection).toHaveBeenCalled()
+  })
+
+  it('rechecks Linear and Jira when the runtime switches while their checks are pending', async () => {
+    mocks.state = { ...mocks.state, linearStatusChecked: false, jiraStatusChecked: false }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const renderButton = (): void =>
+      root.render(
+        <TooltipProvider>
+          <SidebarTaskNavButton />
+        </TooltipProvider>
+      )
+    await act(async () => renderButton())
+    vi.clearAllMocks()
+
+    mocks.state = {
+      ...mocks.state,
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'env-1' }
+    }
+    await act(async () => renderButton())
+
+    expect(mocks.checkLinearConnection).toHaveBeenCalledOnce()
+    expect(mocks.checkJiraConnection).toHaveBeenCalledOnce()
   })
 
   it('shows the Mobile entry by default for older settings', () => {
