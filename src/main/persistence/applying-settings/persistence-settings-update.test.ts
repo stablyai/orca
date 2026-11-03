@@ -510,7 +510,7 @@ describe('Store', () => {
       writeDataFile({ settings: { agentDefaultArgs: { kimi: '--yolo' } } })
       const store = await createStore()
       expect(composeAgentLaunchProfile(store.getSettings()).agentDefaultArgs.kimi).toBe('--auto')
-      expect(store.getSettings().agentDefaultArgs.kimi).toBe('')
+      expect(store.getSettings().agentDefaultArgs?.kimi).toBe('')
       store.flush()
       await closeTestStores()
 
@@ -524,7 +524,7 @@ describe('Store', () => {
       await closeTestStores()
 
       const explicit = await createStore()
-      expect(explicit.getSettings().agentDefaultArgs.kimi).toBe(flag)
+      expect(explicit.getSettings().agentDefaultArgs?.kimi).toBe(flag)
       expect(composeAgentLaunchProfile(explicit.getSettings()).agentDefaultArgs.kimi).toBe(flag)
     }
   )
