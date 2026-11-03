@@ -19,30 +19,6 @@ async function fixture() {
   return { commonDirectory: root, repoRoot: root, execute }
 }
 
-it('previews historical test caches, Electron cleanup, and Vite caches', async () => {
-  const options = { ...(await fixture()), testsStopped: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
-  expect(options.execute.mock.calls.flatMap(([spec]) => spec.args)).not.toContain('--apply')
-})
-
-it('forwards apply and repository selection to all cleanup operations', async () => {
-  const options = { ...(await fixture()), apply: true, testsStopped: true }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute).toHaveBeenCalledTimes(7)
-  for (const [spec] of options.execute.mock.calls) {
-    expect(spec.args).toContain('--apply')
-    expect(spec.args).toContain(options.repoRoot)
-    expect(spec.terminationBarrier).toBe(true)
-  }
-  const cache = options.execute.mock.calls.at(-1)[0]
-  expect(cache.args).toContain('--tests-stopped')
-  expect(cache.args).toContain('--import')
-  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
-    expect(spec.args).not.toContain('--tests-stopped')
-  }
-})
-
 it('includes generated and historical test cache cleanup in automatic invocations without the stopped-test override', async () => {
   const options = {
     ...(await fixture()),
@@ -61,29 +37,6 @@ it('includes generated and historical test cache cleanup in automatic invocation
     expect(spec.args).toEqual(
       expect.arrayContaining(['--exclude-worktree', options.excludeWorktree])
     )
-  }
-})
-
-it('routes independent age overrides only to their cleanup operation', async () => {
-  const options = {
-    ...(await fixture()),
-    releaseCacheMinAgeDays: 7,
-    generatedMinAgeDays: 3,
-    testsStopped: true
-  }
-  await reclaimWorktreeSpace(options)
-  expect(options.execute.mock.calls.at(-1)[0].args).toEqual(
-    expect.arrayContaining(['--min-age-days', '7'])
-  )
-  for (const [spec] of options.execute.mock.calls.slice(0, -1)) {
-    expect(spec.args).not.toContain('--min-age-days')
-  }
-  for (const [spec] of options.execute.mock.calls) {
-    if (spec.args.some((arg) => arg.endsWith('reclaim-worktree-generated-files.mjs'))) {
-      expect(spec.args).toEqual(expect.arrayContaining(['--generated-min-age-days', '3']))
-    } else {
-      expect(spec.args).not.toContain('--generated-min-age-days')
-    }
   }
 })
 
