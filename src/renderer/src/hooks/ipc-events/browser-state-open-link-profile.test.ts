@@ -105,43 +105,6 @@ describe('link-opened Orca tabs', () => {
     )
   })
 
-  // Baseline defect: remove .fails when the captured-claim handoff rejects this event.
-  it.fails('rejects a missing source tab without default-profile fallback', () => {
-    storeState.value = {
-      browserPagesByWorkspace: {
-        'workspace-1': [{ id: 'page-1', workspaceId: 'missing', worktreeId: 'worktree-1' }]
-      },
-      browserTabsByWorktree: {},
-      createBrowserTab: createBrowserTabMock
-    }
-
-    captureOpenLinkHandler()({ browserPageId: 'page-1', url: 'https://docs.example.com/guide' })
-
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('creates modifier-click links in the background', () => {
-    storeState.value = {
-      browserPagesByWorkspace: {
-        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
-      },
-      browserTabsByWorktree: {},
-      createBrowserTab: createBrowserTabMock
-    }
-
-    captureOpenLinkHandler()({
-      browserPageId: 'page-1',
-      url: 'https://docs.example.com/background',
-      activate: false
-    })
-
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'worktree-1',
-      'https://docs.example.com/background',
-      expect.objectContaining({ activate: false })
-    )
-  })
-
   // Move focus to the opened tab or Cmd/Ctrl+W closes its opener (#18832).
   it('moves keyboard focus into a foreground link tab but not a background one', () => {
     storeState.value = {

@@ -12,6 +12,9 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session/jou
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { prepareCodexStructuredAccountHome } from './codex-structured-account-home'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { structuredAgentSessionNeverSent } from '../native-chat/agent-session-wire/structured-agent-session-never-sent'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 const THREAD = '01a18767-8a57-7002-92e4-ead2476d8da6'
 const relativeRollout = join(
@@ -34,6 +37,7 @@ describe('native Codex account transitions', () => {
   let root: string
   let source: string
   let target: string
+  const journals = createTrackedJournalOpener()
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-native-codex-account-'))
@@ -45,6 +49,7 @@ describe('native Codex account transitions', () => {
 
   afterEach(async () => {
     vi.unstubAllEnvs()
+    await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -111,6 +116,51 @@ describe('native Codex account transitions', () => {
       })
       await expect(resolve({ identity })).rejects.toThrow('conversation history is unavailable')
       expect(resolveCommand).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    { origin: 'created', priorTurn: false, allowed: true },
+    { origin: 'created', priorTurn: true, allowed: false },
+    { origin: 'resumed', priorTurn: false, allowed: false },
+    { origin: 'adopted', priorTurn: false, allowed: false }
+  ] as const)(
+    'requires persisted never-sent creation proof for missing $origin rollout, prior turn=$priorTurn',
+    async ({ origin, priorTurn, allowed }) => {
+      const value = record()
+      value.providerHandleChain = value.providerHandleChain.map((link) => ({ ...link, origin }))
+      const journal = await journals.open({ stateDirectory: join(root, 'journal'), identity })
+      if (priorTurn) {
+        await journal.appendItem(
+          { provider: 'codex', threadId: THREAD, turnId: 'prior-turn', ordinal: 0 },
+          { kind: 'turn', turnId: 'prior-turn', state: 'completed', outcome: 'completed' },
+          { fence: 1 }
+        )
+      }
+      await journal.close()
+      const reopened = await journals.open({ stateDirectory: join(root, 'journal'), identity })
+      const resolveCommand = vi.fn(() => ({ command: 'codex', prefixArgs: [] }))
+      const resolve = createCodexStructuredLaunchResolver({
+        store: { getRecord: () => value, pinLaunchDirectory: vi.fn() },
+        resolveAccountHome: async () => account(target),
+        isNeverSent: (candidate: AgentSessionRecord) =>
+          structuredAgentSessionNeverSent(candidate, reopened),
+        resolveCommand,
+        resolveLaunchArgs: () => []
+      })
+      if (allowed) {
+        const launch = await resolve({ identity })
+        expect(launch).toMatchObject({
+          codexHome: target,
+          env: { CODEX_HOME: target },
+          resumeThreadId: THREAD,
+          supersedeIfUnsaved: true
+        })
+        expect(resolveCommand).toHaveBeenCalledOnce()
+      } else {
+        await expect(resolve({ identity })).rejects.toThrow('conversation history is unavailable')
+        expect(resolveCommand).not.toHaveBeenCalled()
+      }
     }
   )
 

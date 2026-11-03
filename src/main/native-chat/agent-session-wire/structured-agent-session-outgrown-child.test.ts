@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
@@ -8,6 +8,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { claudeProfileMarkerPath } from '../../claude-accounts/claude-profile-paths'
 import {
   ClaudeProfileRouter,
   type ClaudeProfileRouterSettings
@@ -155,7 +156,11 @@ describe('a send while the selected account folder is not set up yet', () => {
       dataRoot: root,
       userHome: join(root, 'personal'),
       env: {},
-      runSetup: () => setup.promise
+      // A prepared account's refresh answers; otherwise each launch waits out its 5 s refresh bound.
+      runSetup: ({ profile }) =>
+        existsSync(claudeProfileMarkerPath(profile))
+          ? Promise.resolve({ outcome: 'prepared', surfaces: {}, warnings: [] })
+          : setup.promise
     })
     installClaudeProfileRouter(router)
     ready('a')

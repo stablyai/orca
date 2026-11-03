@@ -17,12 +17,12 @@ import {
   commitProvenRepoKindChange,
   proveRepoKindChange,
   updateProjectHostSetupWithProvenKind
-} from '../../folder-repo-git-conversion'
+} from '../../workspaces/catalog/folder-repo-git-conversion'
 
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../../local-worktree-scan-generation'
+} from '../../workspaces/catalog/local-worktree-scan-generation'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 

@@ -9,7 +9,7 @@ import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
 } from '../../codex-async-question-input'
-import { askAnswerQuote } from '../../native-chat-ask-answer'
+import { askAnswerQuote } from './native-chat-ask-answer'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 

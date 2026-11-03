@@ -17,7 +17,7 @@ import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
-} from '../../project-runtime-git-options'
+} from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   agentLaunchPlatformForScope,
   newWorktreeLaunchScope,

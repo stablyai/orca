@@ -30,6 +30,7 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 
 export type CodexStructuredLaunchPartDeps = {
+  isNeverSent?: (record: AgentSessionRecord) => boolean
   resolveAccountHome?: (record: AgentSessionRecord) => Promise<AgentSessionAccountHome | null>
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveCommand?: (options?: {
@@ -109,7 +110,8 @@ export function codexStructuredLaunchPart(
     const { record } = basis
     const accountHome = await prepareCodexStructuredAccountHome(
       record,
-      await deps.resolveAccountHome?.(record)
+      await deps.resolveAccountHome?.(record),
+      deps.isNeverSent?.(record) === true
     )
     const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),

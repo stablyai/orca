@@ -1,4 +1,4 @@
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'

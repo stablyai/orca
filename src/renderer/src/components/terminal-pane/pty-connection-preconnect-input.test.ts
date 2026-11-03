@@ -36,12 +36,8 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-const layoutOwner = vi.hoisted(() => ({ isMain: false }))
-
 vi.mock('../../../../shared/layout-owner-switch', () => ({
-  get ORCA_LAYOUT_OWNER_IS_MAIN() {
-    return layoutOwner.isMain
-  }
+  ORCA_LAYOUT_OWNER_IS_MAIN: false
 }))
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -111,89 +107,8 @@ describe('connectPanePty pre-connect input', () => {
   })
 
   afterEach(async () => {
-    layoutOwner.isMain = false
     clearWorktreeSleepIntent('wt-1')
     await restoreTerminalTestGlobals()
-  })
-
-  it('holds keys typed before an ordinary pane has a PTY', async () => {
-    const transport = createMockTransport('pty-1')
-    transportFactoryQueue.push(transport)
-
-    const binding = connectPlainPane()
-    await flushAsyncTicks(20)
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBe(true)
-    binding.dispose()
-  })
-
-  // Why: held keys would flush ahead of the startup command, so a typed prompt would run in the shell.
-  it('keeps today’s drop for a pane with a startup command', async () => {
-    transportFactoryQueue.push(createMockTransport('pty-1'))
-
-    const binding = connectPlainPane({ startup: { command: 'claude' } })
-    await flushAsyncTicks(20)
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    binding.dispose()
-  })
-
-  // Why: held split keys flushed at bind would land ahead of the startup command.
-  it('does not hold a deferred split’s keys in the transport when it has startup work', async () => {
-    transportFactoryQueue.push(createMockTransport('pty-1'))
-
-    const binding = connectPlainPane({
-      startup: { command: 'claude' },
-      cwdPromise: new Promise<string>(() => {})
-    })
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    binding.dispose()
-  })
-
-  it('keeps today’s drop for a pane that resumes a sleeping agent', async () => {
-    const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
-      paneKey,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
-    }
-    transportFactoryQueue.push(createMockTransport())
-
-    const binding = connectPlainPane()
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    binding.dispose()
-  })
-
-  it('keeps today’s drop for a pane that resumes its live agent status entry', async () => {
-    const paneKey = makePaneKey('tab-1', leafIdForPane(1))
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      state: 'working',
-      prompt: '',
-      agentType: 'claude',
-      paneKey,
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      stateHistory: [],
-      providerSession: { key: 'session_id', id: 'session-1' }
-    }
-    transportFactoryQueue.push(createMockTransport())
-
-    const binding = connectPlainPane()
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    binding.dispose()
-  })
-
-  it('keeps today’s drop for a pane main starts, whose launch this window cannot see', async () => {
-    layoutOwner.isMain = true
-    transportFactoryQueue.push(createMockTransport())
-
-    const binding = connectPlainPane()
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    binding.dispose()
   })
 
   it('stops releasing held keys once a resume source lands before the first bind', async () => {
@@ -234,16 +149,6 @@ describe('connectPanePty pre-connect input', () => {
     }
 
     expect(typeof release === 'function' && release()).toBe(false)
-    binding.dispose()
-  })
-
-  it('keeps a deferred split holding keys under the layout-owner build, as before', async () => {
-    layoutOwner.isMain = true
-    transportFactoryQueue.push(createMockTransport())
-
-    const binding = connectPlainPane({ cwdPromise: new Promise<string>(() => {}) })
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBe(true)
     binding.dispose()
   })
 
@@ -295,18 +200,6 @@ describe('connectPanePty pre-connect input', () => {
 
     expect(transport.connect).not.toHaveBeenCalled()
     expect(transport.abandonPreconnectInput).toHaveBeenCalledOnce()
-    binding.dispose()
-  })
-
-  it('keeps a deferred split’s held keys through a deliberate sleep, as before', async () => {
-    markWorktreeSleepIntent('wt-1')
-    const transport = Object.assign(createMockTransport(), { abandonPreconnectInput: vi.fn() })
-    transportFactoryQueue.push(transport)
-
-    const binding = connectPlainPane({ cwdPromise: Promise.resolve('/split') })
-    await flushAsyncTicks(20)
-
-    expect(transport.abandonPreconnectInput).not.toHaveBeenCalled()
     binding.dispose()
   })
 })

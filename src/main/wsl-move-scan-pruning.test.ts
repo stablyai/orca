@@ -15,12 +15,12 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from './persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { pruneLineageForMissingRepoWorktrees } from './worktree-lineage-pruning'
+import { pruneLineageForMissingRepoWorktrees } from './workspaces/catalog/worktree-lineage-pruning'
 import { hostWorktreeTargetForRepo } from './persistence/host-qualified-worktree-meta'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import { listFolderWorkspaces } from './ipc/worktrees/listing/folder-workspace-catalog'
 import { getFolderWorkspaceRootId } from './ipc/worktrees/folder-workspace-model'
-import { getLocalWorktreeScanGeneration } from './local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from './workspaces/catalog/local-worktree-scan-generation'
 import { listRuntimeFolderWorkspaces } from './runtime/runtime-worktree-filesystem'
 import { getRuntimeFolderWorkspaceRootId } from './runtime/runtime-folder-workspace'
 import { RuntimeWorktreeLineageController } from './runtime/runtime-worktree-lineage-controller'

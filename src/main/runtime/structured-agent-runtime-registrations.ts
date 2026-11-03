@@ -73,6 +73,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         CODEX_STRUCTURED_AGENT,
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
+          isNeverSent: (record) => host()?.sessionNeverSent(record.sessionId) ?? false,
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
           ...(resolveAccountHome
             ? { resolveAccountHome: (record) => resolveAccountHome(record, 'launch') }

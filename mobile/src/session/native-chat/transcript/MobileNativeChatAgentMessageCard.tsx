@@ -213,7 +213,7 @@ function SenderName({
     sender,
     t('session.agentMessageAttribution.unnamedSender', 'an agent')
   )
-  const canOpen = agentMessageSenderCanOpen(sender, open !== undefined)
+  const canOpen = open !== undefined && agentMessageSenderCanOpen(sender)
   return (
     <Pressable
       disabled={!canOpen}

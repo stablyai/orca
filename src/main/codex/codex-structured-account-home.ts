@@ -14,7 +14,8 @@ import { getSystemCodexHomePath } from './codex-home-paths'
 /** Move only the current conversation before launching with the selected account's credentials. */
 export async function prepareCodexStructuredAccountHome(
   record: AgentSessionRecord,
-  selected: AgentSessionAccountHome | null | undefined
+  selected: AgentSessionAccountHome | null | undefined,
+  neverSent = false
 ) {
   if (selected === null) {
     throw new Error('The selected Codex account is unavailable. No request was sent.')
@@ -35,6 +36,9 @@ export async function prepareCodexStructuredAccountHome(
       strictErrors: true
     })
     if (!transcriptPath) {
+      if (head.origin === 'created' && neverSent) {
+        return home
+      }
       throw new Error(
         'Codex conversation history is unavailable. The account switch was stopped before sending a request.'
       )
