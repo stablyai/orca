@@ -17,10 +17,7 @@ import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
-    selector({ settingsSearchQuery: '' })
-}))
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
