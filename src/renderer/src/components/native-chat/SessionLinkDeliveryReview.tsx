@@ -29,7 +29,7 @@ export function SessionLinkDeliveryReview({
           checked={checked}
           onCheckedChange={(value) => setChecked(value === true)}
         />
-        <Label htmlFor={id} className="text-xs">
+        <Label htmlFor={id} variant="settings">
           {t('components.sessionLink.checkedRecipient', 'I checked the recipient chat')}
         </Label>
       </div>
