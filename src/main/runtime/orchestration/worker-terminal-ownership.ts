@@ -58,6 +58,7 @@ export type WorkerTerminalResourceRow = {
   updated_at: string
   /** JSON WorkerResumeSession: the conversation a closed terminal worker reopens in. */
   resume_session: string | null
+  launch_recipe: string | null
 }
 
 // Terminal state exposed by worker-list; process accounting, never Task/Dispatch outcome.

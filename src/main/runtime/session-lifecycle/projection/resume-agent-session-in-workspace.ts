@@ -3,7 +3,8 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -44,6 +45,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
       providerSession: AgentProviderSessionMetadata
       /** The execution host whose hook row reported the session. */
       captureHostId: ExecutionHostId
+      /** The launch recipe recorded from what Orca itself launched; a resume replays it when the pane kept none. */
+      launchRecipe?: SleepingAgentLaunchConfig
       /** Names the new pane, so a retry of one request reconciles the pane it may have started. */
       mutationId: string
       signal?: AbortSignal
@@ -91,7 +94,12 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
   private async resumeClaimedAgentSession(
     worktreeId: string,
     session: ResumedAgentSession,
-    request: { captureHostId: ExecutionHostId; mutationId: string; signal?: AbortSignal },
+    request: {
+      captureHostId: ExecutionHostId
+      launchRecipe?: SleepingAgentLaunchConfig
+      mutationId: string
+      signal?: AbortSignal
+    },
     create: {
       identity: { tabId: string; leafId: string }
       onPtySpawnDispatched: () => void
@@ -145,7 +153,9 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     try {
       resume = this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
-        launchConfig: record?.launchConfig
+        // The pane's own record wins; a worker reopen falls back to the recipe
+        // recorded from what Orca itself launched (#37693).
+        launchConfig: record?.launchConfig ?? request.launchRecipe
       })
     } catch (error) {
       if (error instanceof WslHostWindowsOnlyAgentError) {

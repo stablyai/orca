@@ -196,7 +196,9 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   created_at               TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at               TEXT NOT NULL DEFAULT (datetime('now')),
   -- JSON: the agent conversation a closed worker reopens in (WorkerResumeSession).
-  resume_session           TEXT
+  resume_session           TEXT,
+  -- JSON: the recorded launch recipe the reopen replays, from what Orca itself launched.
+  launch_recipe            TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_worker_terminal_resources_owner

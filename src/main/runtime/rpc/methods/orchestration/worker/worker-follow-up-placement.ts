@@ -48,7 +48,12 @@ export async function reopenWorkerTerminal(
   dispatchId: string
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
-    ...session,
+    agent: session.agent,
+    providerSession: session.providerSession,
+    // The launch recipe recorded from what Orca itself launched; a reopen keeps
+    // its launch-time flags instead of falling back to the agent's default (#37693).
+    launchRecipe: session.launchRecipe,
+    captureHostId: session.captureHostId,
     // A retry of this follow-up reconciles the pane it may have started.
     mutationId: dispatchId
   })

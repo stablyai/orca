@@ -6,7 +6,8 @@ import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../.
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import {
   getFollowUpDispatch,
-  readWorkerResumeSession
+  readWorkerResumeSession,
+  recordWorkerLaunchRecipe
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
 import {
@@ -497,6 +498,32 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(
       readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
     ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
+  })
+
+  it('a reopen reads the launch recipe recorded from what Orca itself launched (#37693)', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+
+    recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {}
+    })
+
+    expect(
+      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
+    ).toMatchObject({
+      agent: 'claude',
+      launchRecipe: { agentArgs: '--dangerously-skip-permissions' }
+    })
+
+    // A repeat of the same recipe writes nothing new.
+    recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentArgs: '--dangerously-skip-permissions',
+      agentEnv: {}
+    })
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(
+      JSON.stringify({ agentArgs: '--dangerously-skip-permissions', agentEnv: {} })
+    )
   })
 
   it('saves nothing again when a status change repeats the same conversations', async () => {
