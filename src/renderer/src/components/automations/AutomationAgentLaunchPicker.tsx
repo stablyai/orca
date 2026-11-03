@@ -7,16 +7,25 @@ import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-
 import {
   buildAgentLaunchRouteInput,
   selectAgentLaunchRouteView,
+  resolveHostCapabilities,
   type ProspectiveWorkspace
 } from '@/lib/agent-launch-route-input'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
-import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import {
+  applyAutomationLaunchSetupPatch,
+  automationCanonicalLaunchSetup
+} from '../../../../shared/automation-launch-setup'
 import {
   automationLaunchChoices,
+  automationLegacyArguments,
   automationArgumentChoices
 } from '../../../../shared/automation-launch-setup-source'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
+import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
 import { mergeExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
@@ -27,9 +36,20 @@ import { AutomationSurfaceField } from './AutomationSurfaceField'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
+function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
+  return {
+    ...draft,
+    extraAgentArgs:
+      draft.launchSetupPatch?.arguments?.kind === 'legacy-extras'
+        ? draft.launchSetupPatch.arguments.value
+        : (automationLegacyArguments(draft.agentId, draft) ?? '')
+  }
+}
+
 export function AutomationAgentLaunchPicker({
   draft,
   workspace,
+  authority,
   visibleAgents,
   settings,
   surface,
@@ -38,6 +58,7 @@ export function AutomationAgentLaunchPicker({
 }: {
   draft: AutomationDraft
   workspace: ProspectiveWorkspace
+  authority?: AutomationAuthorityRef
   visibleAgents: AgentCatalogEntry[]
   settings: GlobalSettings | null
   surface: 'chat' | 'terminal'
@@ -58,8 +79,15 @@ export function AutomationAgentLaunchPicker({
           ? { kind: 'local', worktreeId: workspace.worktreeId }
           : undefined
   const observation = useAgentMenuObservation({ workspace }, menuOpen, detectionTarget)
-  const modern =
-    route.hostCapabilities?.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY) === true
+  const capabilities =
+    authority?.kind === 'desktop'
+      ? [AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY]
+      : authority?.kind === 'runtime'
+        ? resolveHostCapabilities(state, `runtime:${authority.environmentId}`)
+        : null
+  const modern = capabilities?.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY) === true
+  const legacyDraft = modern ? draft : legacyArgumentsDraft(draft)
+  const showLegacyArguments = surface === 'terminal' && (!modern || Boolean(draft.extraAgentArgs))
   const model: NewTabAgentMenuModel = useMemo(
     () => ({
       ...(observation.model.state === 'settled'
@@ -149,6 +177,7 @@ export function AutomationAgentLaunchPicker({
         triggerLabel={
           visibleAgents.find((agent) => agent.id === draft.agentId)?.label ?? draft.agentId
         }
+        disabled={capabilities === null}
         setupDisabled={!modern}
         draftForEntry={draftForEntry}
         onOpenChange={setMenuOpen}
@@ -156,19 +185,30 @@ export function AutomationAgentLaunchPicker({
         onPick={(agentId, accepted, _entry, pickedSurface) =>
           onDraftChange((current) => {
             const rebound = current.agentId !== agentId
+            if (!modern) {
+              return {
+                ...current,
+                agentId,
+                ...(pickedSurface ? { surface: pickedSurface } : {}),
+                ...(rebound
+                  ? {
+                      extraAgentArgs: automationLegacyArguments(current.agentId, current) ?? '',
+                      launchPreferences: undefined,
+                      agentArgs: undefined,
+                      launchSetupPatch: undefined
+                    }
+                  : {})
+              }
+            }
             const edits = accepted?.acceptedEdits
             const patch = {
               ...(rebound
-                ? modern
-                  ? {
-                      copy: {
-                        surface: pickedSurface ?? surface,
-                        ...(current.extraAgentArgs
-                          ? { extraAgentArgs: current.extraAgentArgs }
-                          : {})
-                      }
+                ? {
+                    copy: {
+                      surface: pickedSurface ?? surface,
+                      ...(current.extraAgentArgs ? { extraAgentArgs: current.extraAgentArgs } : {})
                     }
-                  : {}
+                  }
                 : current.launchSetupPatch),
               ...(pickedSurface ? { surface: pickedSurface } : {}),
               ...(edits
@@ -208,7 +248,15 @@ export function AutomationAgentLaunchPicker({
               })
             }
             const setup = applyAutomationLaunchSetupPatch(
-              { agentId, launchSetupPatch: Object.keys(patch).length ? patch : undefined },
+              {
+                agentId,
+                launchSetupPatch:
+                  patch.arguments?.kind === 'legacy-extras'
+                    ? { ...patch, arguments: undefined }
+                    : Object.keys(patch).length
+                      ? patch
+                      : undefined
+              },
               current
             )
             return {
@@ -224,17 +272,67 @@ export function AutomationAgentLaunchPicker({
         }
       />
       {!modern ? (
-        <>
-          <AutomationSurfaceField
-            draft={draft}
-            settings={settings}
-            supported={chatSupported}
-            onDraftChange={onDraftChange}
-          />
-          {surface === 'terminal' ? (
-            <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
-          ) : null}
-        </>
+        <AutomationSurfaceField
+          draft={draft}
+          settings={settings}
+          supported={capabilities === null ? null : chatSupported}
+          onDraftChange={onDraftChange}
+        />
+      ) : null}
+      {showLegacyArguments ? (
+        <AutomationExtraAgentArgsField
+          draft={legacyDraft}
+          disabled={capabilities === null}
+          onDraftChange={(update) =>
+            onDraftChange((current) => {
+              const visible = modern ? current : legacyArgumentsDraft(current)
+              const next = update(visible)
+              if (next.extraAgentArgs === visible.extraAgentArgs) {
+                return { ...current, reuseSession: next.reuseSession }
+              }
+              return {
+                ...next,
+                launchSetupPatch: modern
+                  ? {
+                      ...current.launchSetupPatch,
+                      arguments: {
+                        kind: 'legacy-extras' as const,
+                        value:
+                          automationLegacyArguments(current.agentId, {
+                            ...automationCanonicalLaunchSetup(current),
+                            extraAgentArgs: next.extraAgentArgs || undefined
+                          }) ?? ''
+                      }
+                    }
+                  : {
+                      ...current.launchSetupPatch,
+                      arguments: { kind: 'legacy-extras' as const, value: next.extraAgentArgs }
+                    }
+              }
+            })
+          }
+        />
+      ) : modern && draftExtraAgentArgsNeedFreshSession({ ...draft, surface }) ? (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-destructive">
+            {translate(
+              'auto.components.automations.launchSettings.needsFreshSession',
+              'Agent launch settings require a fresh session for every run.'
+            )}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="shrink-0"
+            onClick={() => onDraftChange((current) => ({ ...current, reuseSession: false }))}
+          >
+            {translate(
+              'auto.components.automations.extraAgentArgs.useFreshSessions',
+              'Use fresh sessions'
+            )}
+          </Button>
+        </div>
       ) : null}
     </>
   )

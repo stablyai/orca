@@ -16,11 +16,13 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationExtraAgentArgsFieldProps = {
   draft: AutomationDraft
+  disabled?: boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
 export function AutomationExtraAgentArgsField({
   draft,
+  disabled,
   onDraftChange
 }: AutomationExtraAgentArgsFieldProps): React.JSX.Element {
   const supported = supportsExtraAgentArgs(draft.agentId)
@@ -42,7 +44,7 @@ export function AutomationExtraAgentArgsField({
           variant="code"
           value={draft.extraAgentArgs}
           spellCheck={false}
-          disabled={!supported}
+          disabled={disabled || !supported}
           aria-invalid={Boolean(error) || needsFreshSession}
           aria-describedby={messageId}
           placeholder={getExtraAgentArgsPlaceholder(draft.agentId)}

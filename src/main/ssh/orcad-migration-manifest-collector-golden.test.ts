@@ -101,9 +101,14 @@ function richState(): PersistedState {
       updatedAt: 2
     }
   ]
+  const {
+    launchPreferences: _launchPreferences,
+    agentArgs: _agentArgs,
+    ...legacyAutomation
+  } = DORMANT_AUTOMATION
   state.automations = [
     {
-      ...DORMANT_AUTOMATION,
+      ...legacyAutomation,
       runContext: { ...DORMANT_AUTOMATION.runContext!, hostId: HOST },
       executionTargetType: 'ssh',
       executionTargetId: TARGET.id,

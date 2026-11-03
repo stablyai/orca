@@ -4,12 +4,17 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import * as launchRoute from '@/lib/agent-launch-route-input'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automation-runtime-capabilities'
 import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { automationDraftLaunchSetup } from './automation-launch-surface'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 
 // Why: only the Agent field is under test; the sibling fields own their own coverage.
@@ -21,7 +26,6 @@ vi.mock('./AutomationMissedRunGraceField', () => ({ AutomationMissedRunGraceFiel
 vi.mock('./AutomationPrecheckFields', () => ({ AutomationPrecheckFields: () => null }))
 vi.mock('./AutomationSetupDecisionField', () => ({ AutomationSetupDecisionField: () => null }))
 vi.mock('./AutomationDestinationField', () => ({ AutomationDestinationField: () => null }))
-vi.mock('./AutomationExtraAgentArgsField', () => ({ AutomationExtraAgentArgsField: () => null }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 vi.mock('../tab-bar/use-new-tab-agent-menu-rows', () => ({
   useAgentMenuObservation: () => ({
@@ -81,13 +85,49 @@ const DRAFT: AutomationDraft = {
   scheduleWarning: null
 }
 
-function renderSidebar(onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void) {
+function destinationControl(
+  authority: AutomationAuthorityRef | null
+): AutomationCreateDestinationControl {
+  if (!authority) {
+    return {
+      entries: [],
+      projects: [],
+      onSelect: vi.fn(),
+      resolution: { status: 'choice-required', reason: 'unselected' }
+    }
+  }
+  const entry: AutomationHostCatalogEntry = {
+    stableRef: { authority, selector: { kind: 'self' } },
+    owner: { authority, selector: { kind: 'self' } },
+    stableKey: 'test-host',
+    label: 'Test host',
+    authorityLabel: 'Test host',
+    kind: 'self',
+    catalogState: 'authoritative',
+    authorityHealth: 'fresh',
+    executionHealth: 'connected',
+    querySupport: 'scoped'
+  }
+  return {
+    entries: [entry],
+    projects: [],
+    onSelect: vi.fn(),
+    resolution: { status: 'ready', authority, destination: { selector: { kind: 'self' } }, entry }
+  }
+}
+
+function renderSidebar(
+  onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void,
+  initial = DRAFT,
+  authority: AutomationAuthorityRef | null = { kind: 'desktop' }
+) {
   function Form() {
-    const [draft, setDraft] = useState(DRAFT)
+    const [draft, setDraft] = useState(initial)
     return (
       <TooltipProvider>
         <AutomationEditorSettingsSidebar
-          surface="terminal"
+          destination={destinationControl(authority)}
+          surface={draft.surface ?? 'terminal'}
           chatSupported={false}
           repos={[]}
           projectHostSetups={[]}
@@ -120,6 +160,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   setLocalRuntimeCapabilitiesForTests(null)
 })
 
@@ -174,7 +215,12 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
   it('keeps agent selection usable on an older host without exposing unsupported setup', () => {
     setLocalRuntimeCapabilitiesForTests([])
     const onDraftChange = vi.fn()
-    renderSidebar(onDraftChange)
+    vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    renderSidebar(onDraftChange, DRAFT, {
+      kind: 'runtime',
+      environmentId: 'old',
+      pairingRevision: 1
+    })
     openPicker()
     expect(screen.queryByRole('button', { name: /^Configure / })).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
@@ -212,6 +258,110 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     })
     expect(saved.launchPreferences?.model).toBe('gpt-5.4')
     expect(saved.agentArgs).toBe('--search')
+  })
+
+  it.each(['desktop', 'legacy'] as const)(
+    'keeps incompatible old extras visible after rebind on %s',
+    (kind) => {
+      const authority =
+        kind === 'desktop'
+          ? { kind: 'desktop' as const }
+          : { kind: 'runtime' as const, environmentId: 'old', pairingRevision: 1 }
+      vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+      const changed = vi.fn()
+      renderSidebar(
+        changed,
+        { ...DRAFT, agentId: 'claude', extraAgentArgs: '--effort high' },
+        authority
+      )
+      openPicker()
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Gemini' }))
+      expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty(
+        'value',
+        '--effort high'
+      )
+      expect(screen.getByRole('button', { name: 'Clear arguments' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Clear arguments' }))
+      expect(screen.queryByRole('button', { name: 'Clear arguments' })).toBeNull()
+      const next = changed.mock.calls.reduce((draft, [update]) => update(draft), {
+        ...DRAFT,
+        agentId: 'claude',
+        extraAgentArgs: '--effort high'
+      })
+      expect(next.agentId).toBe('gemini')
+      expect(next.extraAgentArgs).toBe('')
+    }
+  )
+
+  it('preserves a saved model while editing supplementary legacy arguments', () => {
+    const changed = vi.fn()
+    const initial = {
+      ...DRAFT,
+      agentId: 'claude' as const,
+      extraAgentArgs: '--add-dir docs',
+      launchPreferences: { model: 'sonnet' }
+    }
+    renderSidebar(changed, initial)
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--add-dir docs --verbose' }
+    })
+    const next = changed.mock.calls.at(-1)![0](initial)
+    const saved = applyAutomationLaunchSetupPatch(
+      { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+      initial
+    )
+    expect(saved.launchPreferences?.model).toBe('sonnet')
+    expect(saved.extraAgentArgs).toBe('--add-dir docs --verbose')
+  })
+
+  it('sends a legacy argument edit after an earlier surface pick', () => {
+    vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    const changed = vi.fn()
+    const initial = {
+      ...DRAFT,
+      surface: 'terminal' as const,
+      launchSetupPatch: { surface: 'chat' as const }
+    }
+    renderSidebar(changed, initial, { kind: 'runtime', environmentId: 'old', pairingRevision: 1 })
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '-m gpt-5' }
+    })
+    const next = changed.mock.calls.at(-1)![0](initial)
+    expect(
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'codex', ...automationDraftLaunchSetup(next, 'terminal', null) },
+        initial
+      )
+    ).toMatchObject({ surface: 'terminal', extraAgentArgs: '-m gpt-5' })
+  })
+
+  it('offers fresh sessions for a full launch setup and preserves its choices', () => {
+    const changed = vi.fn()
+    renderSidebar(changed, {
+      ...DRAFT,
+      reuseSession: true,
+      launchPreferences: { model: 'gpt-5.5' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Use fresh sessions' }))
+    const next = changed.mock.calls[0][0]({
+      ...DRAFT,
+      reuseSession: true,
+      launchPreferences: { model: 'gpt-5.5' }
+    })
+    expect(next.reuseSession).toBe(false)
+    expect(next.launchPreferences).toEqual({ model: 'gpt-5.5' })
+  })
+
+  it('uses desktop automation capability even when the chat route has no capabilities', () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    renderSidebar(vi.fn())
+    openPicker()
+    expect(screen.getByRole('button', { name: 'Configure Codex' })).toBeTruthy()
+  })
+
+  it('disables the picker while its automation authority is unresolved', () => {
+    renderSidebar(vi.fn(), DRAFT, null)
+    expect(screen.getByRole('button', { name: 'Select agent' })).toHaveProperty('disabled', true)
   })
 
   it('discards an unaccepted setup when the editor owner closes', () => {

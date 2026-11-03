@@ -103,6 +103,7 @@ it.each(['direct Use', 'blur then Use'] as const)(
     expect(onUse).toHaveBeenCalledOnce()
     const accepted = onUse.mock.calls[0][0]
     expect(accepted.pendingArguments).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe('--debug')
     expect(accepted.arguments).toBe('--debug')
     expect(accepted.choices.model).toBeUndefined()
     expect(accepted.choices.options?.effort).toBeUndefined()
@@ -326,6 +327,9 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     const acceptance = counts()
     const accepted = onUse.mock.calls.at(-1)![0]
     expect(accepted.pendingArguments).toBeUndefined()
+    expect(accepted.acceptedEdits?.arguments).toBe(
+      `${'--search '.repeat(textCopies)}--add-dir folder${(events - 1) % 10}`
+    )
     expect(accepted.choices.model).toBe('gpt-5.6-sol')
     expect(JSON.stringify(accepted)).not.toContain('folder0folder1')
     clear()
@@ -339,7 +343,8 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
     const tenN = measure(30, false)
     const many = measure(30, true)
     const optionsOnly = measure(30, true, 1, 1, false)
-    const populated = measure(30, true, available.length, 10)
+    const populated = measure(30, true, available.length)
+    const longText = measure(30, true, available.length, 10)
     expect(many.chipCount).toBeGreaterThan(n.chipCount)
     for (let index = 0; index < spies.length; index++) {
       expect(tenN.typing[index]).toBeLessThanOrEqual(n.typing[index] * 10 + 4)
@@ -359,7 +364,9 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
       expect(new Set(lookups).size).toBe(1)
     }
     expect(optionsOnly.chipCount).toBeGreaterThan(n.chipCount)
-    expect(populated.retained).toBeLessThan(many.retained + 100)
+    expect(populated.retained).toBe(many.retained)
+    // The folded receipt retains authored source and its execution projection, never edit history.
+    expect(longText.retained - populated.retained).toBe(2 * 9 * 9)
     for (let index = 0; index < spies.length; index++) {
       expect(populated.acceptance[index]).toBeLessThanOrEqual(many.acceptance[index] + 4)
       expect(populated.removal[index]).toBeLessThanOrEqual(many.removal[index] + 4)

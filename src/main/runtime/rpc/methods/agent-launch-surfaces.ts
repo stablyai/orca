@@ -21,10 +21,7 @@ import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
-import {
-  toAgentLaunchPreferences,
-  toAgentSessionOptionValues
-} from '../../../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
 import {
   trackTerminalSpawnDispatch,
@@ -161,7 +158,6 @@ export function agentLaunchSurfaceFactory(
         ...(cwd ? { cwd } : {}),
         // The model the user picked outranks configured args here too, as it does on a chat.
         ...(launchPreferences ? { launchPreferences } : {}),
-        ...(options ? { sessionOptions: toAgentSessionOptionValues(options) } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
         ...(launchSource ? { launchSource } : {}),

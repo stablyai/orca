@@ -139,11 +139,10 @@ export function applyAutomationLaunchSetupPatch<
 
 export function automationWithLaunchSetup(automation: Automation): Automation {
   const launchSetup = automationCanonicalLaunchSetup(automation)
+  const extraAgentArgs = automationLegacyArguments(automation.agentId, launchSetup)
   return {
     ...automationCanonicalDefinition(automation),
-    ...(automationLegacyArguments(automation.agentId, launchSetup) !== undefined
-      ? { extraAgentArgs: automationLegacyArguments(automation.agentId, launchSetup) }
-      : {}),
+    ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     launchSetup
   }
 }

@@ -81,6 +81,11 @@ export function AutomationEditorSettingsSidebar({
           >
             <AutomationAgentLaunchPicker
               draft={draft}
+              authority={
+                destination?.resolution.status === 'ready'
+                  ? destination.resolution.authority
+                  : undefined
+              }
               workspace={
                 launchWorkspace ?? {
                   kind: 'git-worktree',

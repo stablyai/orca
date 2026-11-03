@@ -8,7 +8,6 @@ import type {
   AutomationUpdateInput,
   AutomationCreateInput
 } from '../../../../shared/automations-types'
-import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
@@ -104,7 +103,10 @@ export function automationDraftLaunchSetup(
     return { launchSetupPatch: { ...draft.launchSetupPatch, surface } }
   }
   const argumentsChanged =
-    hasExtraAgentArgs(draft.extraAgentArgs) || currentAutomation?.extraAgentArgs
+    draft.extraAgentArgs !==
+    (currentAutomation
+      ? (automationCanonicalLaunchSetup(currentAutomation).extraAgentArgs ?? '')
+      : '')
   return surface === 'chat' || currentAutomation?.surface === 'chat'
     ? {
         launchSetupPatch: {
