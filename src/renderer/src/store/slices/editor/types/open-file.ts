@@ -56,6 +56,8 @@ export type OpenFile = {
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
+  /** Workspace whose Git reads this diff when it differs from the tab's own (a linked repo). */
+  gitWorktreeId?: string
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string
   branchEntriesSnapshot?: GitBranchChangeEntry[]

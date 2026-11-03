@@ -162,7 +162,11 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
+    options?: EditorOpenTargetOptions & {
+      selection?: EditorTabSelection
+      oldPath?: string
+      gitWorktreeId?: string
+    }
   ) => void
   openBranchDiff: (
     worktreeId: string,

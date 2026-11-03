@@ -4,13 +4,14 @@ import { shouldRenderCommitArea } from '../commit/component-gates'
 import { SourceControlBranchSection } from '../listing/branch-section'
 import { SourceControlContentStatus } from '../listing/content-status'
 import { SourceControlUncommittedSections } from '../listing/uncommitted-sections'
+import { SourceControlLinkedRepoSections } from '../linked/linked-repo-sections'
 import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
-  const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  const { activeRepo, activeWorktree, currentWorktreeId, model, worktreePath } = props
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -46,6 +47,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     isAbortingOperation,
     isCheckingRecoveryAdmission,
     isCommitting,
+    isBranchVisible,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
@@ -221,6 +223,13 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           diffCommentCountByPath={diffCommentCountByPath}
         />
       )}
+
+      <SourceControlLinkedRepoSections
+        activeWorktreeId={currentWorktreeId}
+        activeRepoId={activeRepo.id}
+        isVisible={isBranchVisible}
+        revealInExplorer={revealInExplorer}
+      />
 
       {isGitHistoryVisible && (
         // Dock history as reference context while the rest of the pane scrolls.

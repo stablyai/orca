@@ -41,6 +41,7 @@ import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWin
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
+import { useLinkedWorktreeDetection } from './components/right-sidebar/source-control/linked/use-linked-worktree-detection'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -61,6 +62,7 @@ function App(): React.JSX.Element {
   usePersistedUIWriter()
   useDocumentAppearance()
   useWindowVisibilityEffects()
+  useLinkedWorktreeDetection()
   useGlobalKeybindings({ layout, floatingWorkspace })
   // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
