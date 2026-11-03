@@ -7,7 +7,7 @@
   "execution": "data",
   "description": "Three workspace cards from Orca: Minimal, Agent first and Review first.",
   "license": "MIT",
-  "engines": { "orca": ">=1.4.249" },
+  "engines": { "orca": ">=1.4.248" },
   "contributes": {
     "sidebarCards": [
       {

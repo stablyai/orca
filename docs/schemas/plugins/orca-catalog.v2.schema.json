@@ -335,7 +335,7 @@
         },
         "cardPreview": {
           "description": "Up to 4 workspace cards to preview before install. Orca draws them from made-up workspaces; the installed files decide the real cards.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "maxItems": 4,
           "type": "array",
           "items": {
@@ -566,7 +566,7 @@
           "minLength": 1,
           "maxLength": 128,
           "description": "Card name.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "examples": [
             "Review first"
           ]
@@ -655,7 +655,7 @@
           ],
           "additionalProperties": false,
           "description": "The card's template, the same file the plugin ships, so Orca can preview it before install.",
-          "x-orca-since": "1.4.249"
+          "x-orca-since": "1.4.248"
         }
       },
       "required": [

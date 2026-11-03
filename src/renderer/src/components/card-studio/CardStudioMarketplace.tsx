@@ -57,7 +57,7 @@ export function CardStudioMarketplace({
                 >
                   {previewing
                     ? translate('auto.components.cardStudio.stopPreview', 'Stop preview')
-                    : translate('auto.components.cardStudio.preview', 'Preview')}
+                    : translate('auto.components.cardStudio.previewCard', 'Preview')}
                 </Button>
                 <Button
                   variant="outline"

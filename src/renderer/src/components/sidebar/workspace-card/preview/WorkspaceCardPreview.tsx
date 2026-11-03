@@ -1,6 +1,10 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import type { CardTemplate } from '../../../../../../shared/workspace-cards/card-template-schema'
+import { withCardEvaluationBudget } from '../../../../../../shared/workspace-cards/card-expression'
+import {
+  PLUGIN_CARD_TEMPLATE_LIMITS,
+  type CardTemplate
+} from '../../../../../../shared/workspace-cards/card-template-schema'
 import type { WorkspaceCardFacts } from '../../../../../../shared/workspace-cards/workspace-card-facts'
 import { compileCardTemplate, type CompiledCardTemplate } from '../card-template-compiler'
 import { CARD_PREVIEW_ELEMENTS } from './card-preview-elements'
@@ -11,7 +15,10 @@ const compiled = new WeakMap<CardTemplate, CompiledCardTemplate<CardPreviewScena
 function compiledPreview(template: CardTemplate): CompiledCardTemplate<CardPreviewScenario> | null {
   if (!compiled.has(template)) {
     try {
-      compiled.set(template, compileCardTemplate(template, CARD_PREVIEW_ELEMENTS))
+      compiled.set(
+        template,
+        compileCardTemplate(template, CARD_PREVIEW_ELEMENTS, PLUGIN_CARD_TEMPLATE_LIMITS)
+      )
     } catch {
       compiled.set(template, null)
     }
@@ -44,7 +51,16 @@ export function WorkspaceCardPreview({
     options: pinnedStyle ? { ...options, style: pinnedStyle } : options,
     cardOptions
   }
-  const { content, frame } = preview.render(facts, { ...scenario, facts })
+  let drawn: ReturnType<typeof preview.render>
+  try {
+    // Previews draw cards that may not be installed: same caps and step budget as the sidebar.
+    drawn = withCardEvaluationBudget(PLUGIN_CARD_TEMPLATE_LIMITS.maxEvaluationSteps, () =>
+      preview.render(facts, { ...scenario, facts })
+    )
+  } catch {
+    return null
+  }
+  const { content, frame } = drawn
   return (
     <div
       className={cn(

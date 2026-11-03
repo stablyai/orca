@@ -62,7 +62,7 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `changelog` | string | no | 1.4.245 | What changed in this release, as plain text. At most 2000 characters. Example: `"Adds highlighting for use expressions."` |
 | `images` | [CatalogImages](#catalogimages) | no | 1.4.245 | Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges. |
 | `themePreview` | [CatalogThemePreview](#catalogthemepreview)[] | no | 1.4.245 | Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors. |
-| `cardPreview` | [CatalogCardPreview](#catalogcardpreview)[] | no | 1.4.249 | Up to 4 workspace cards to preview before install. Orca draws them from made-up workspaces; the installed files decide the real cards. |
+| `cardPreview` | [CatalogCardPreview](#catalogcardpreview)[] | no | 1.4.248 | Up to 4 workspace cards to preview before install. Orca draws them from made-up workspaces; the installed files decide the real cards. |
 | `contributes` | [CatalogContribution](#catalogcontribution)[] | no | 1.4.245 | What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise. |
 | `capabilities` | (`"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
 | `fileTypes` | string[] | no | 1.4.245 | Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer. |
@@ -109,8 +109,8 @@ A workspace card to draw before install.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `label` | string | yes | 1.4.249 | Card name. Example: `"Review first"` |
-| `template` | object | yes | 1.4.249 | The card's template, the same file the plugin ships, so Orca can preview it before install. |
+| `label` | string | yes | 1.4.248 | Card name. Example: `"Review first"` |
+| `template` | object | yes | 1.4.248 | The card's template, the same file the plugin ships, so Orca can preview it before install. |
 | `template.version` | `1` | yes |  |  |
 | `template.facts` | `1` | yes |  |  |
 | `template.vars` | object | no |  |  |

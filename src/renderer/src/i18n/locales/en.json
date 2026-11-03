@@ -13329,7 +13329,8 @@
           "remoteVms": "Remote/VMs",
           "games": "Games",
           "agents": "Agents",
-          "integrations": "Integrations"
+          "integrations": "Integrations",
+          "cards": "Workspace cards"
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
@@ -19218,7 +19219,6 @@
         "subtitle": "Choose what each card in the sidebar shows. Changes apply right away.",
         "close": "Close",
         "card": "Card",
-        "preview": "Your workspaces",
         "cardOptions": "Card options",
         "state": {
           "working": "Agent working",
@@ -19230,7 +19230,17 @@
           "main": "Primary checkout",
           "comment": "With notes",
           "focused": "This workspace"
-        }
+        },
+        "moreCards": "More cards",
+        "loadingCatalog": "Reading the plugin catalog…",
+        "noCatalogCards": "No other cards in the catalog.",
+        "stopPreview": "Stop preview",
+        "installing": "Installing…",
+        "install": "Install",
+        "states": "States",
+        "yourWorkspaces": "Your workspaces",
+        "previewing": "Previewing {{card}} from {{plugin}}. Nothing is installed yet.",
+        "previewCard": "Preview"
       }
     },
     "i18n": {
@@ -23636,5 +23646,17 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
-  }
+  },
+  "working": "Agent working",
+  "blocked": "Needs input",
+  "done": "Agent done",
+  "prOpen": "Pull request open",
+  "prFailing": "Checks failing",
+  "prMerged": "Merged",
+  "conflicts": "Merge conflicts",
+  "folder": "Folder workspace",
+  "sshDisconnected": "SSH disconnected",
+  "compact": "Compact",
+  "longNames": "Long names",
+  "detached": "Detached HEAD"
 }

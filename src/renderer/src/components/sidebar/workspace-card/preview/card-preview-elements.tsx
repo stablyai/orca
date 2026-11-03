@@ -102,28 +102,36 @@ export const CARD_PREVIEW_ELEMENTS: Readonly<Record<CardElementName, CardElement
       onPointerDown={noop}
     />
   )),
-  RuntimeHostMark: part(CARD_ELEMENT_PROPS.RuntimeHostMark, (_props, _children, { facts }) => (
-    <WorktreeCardRuntimeHostMark
-      disconnected={facts.host.runtimeDisconnected}
-      hostLabel={facts.host.contextLabel}
-    />
-  )),
-  RenameError: part(CARD_ELEMENT_PROPS.RenameError, () => (
-    <WorktreeCardRenameErrorButton onPointerDown={noop} onOpen={noop} />
-  )),
-  PrimaryBadge: part(CARD_ELEMENT_PROPS.PrimaryBadge, () => <WorktreeCardPrimaryBadge />),
-  PrimaryStar: part(CARD_ELEMENT_PROPS.PrimaryStar, () => <WorktreeCardPrimaryStar />),
-  SparseBadge: part(CARD_ELEMENT_PROPS.SparseBadge, () => (
-    <WorktreeCardSparseBadge directories={undefined} />
-  )),
+  RuntimeHostMark: part(CARD_ELEMENT_PROPS.RuntimeHostMark, (_props, _children, { facts }) =>
+    facts.host.kind === 'runtime' ? (
+      <WorktreeCardRuntimeHostMark
+        disconnected={facts.host.runtimeDisconnected}
+        hostLabel={facts.host.contextLabel}
+      />
+    ) : null
+  ),
+  RenameError: part(CARD_ELEMENT_PROPS.RenameError, (_props, _children, { facts }) =>
+    facts.ws.hasRenameError ? (
+      <WorktreeCardRenameErrorButton onPointerDown={noop} onOpen={noop} />
+    ) : null
+  ),
+  PrimaryBadge: part(CARD_ELEMENT_PROPS.PrimaryBadge, (_props, _children, { facts }) =>
+    facts.ws.isMain && facts.ws.kind === 'git' ? <WorktreeCardPrimaryBadge /> : null
+  ),
+  PrimaryStar: part(CARD_ELEMENT_PROPS.PrimaryStar, (_props, _children, { facts }) =>
+    facts.ws.isMain && facts.ws.kind === 'git' ? <WorktreeCardPrimaryStar /> : null
+  ),
+  SparseBadge: part(CARD_ELEMENT_PROPS.SparseBadge, (_props, _children, { facts }) =>
+    facts.ws.isSparse ? <WorktreeCardSparseBadge directories={undefined} /> : null
+  ),
   DeleteQuickAction: part(CARD_ELEMENT_PROPS.DeleteQuickAction, () => null),
   MetaRepoBadge: part(CARD_ELEMENT_PROPS.MetaRepoBadge, (_props, _children, scenario) => {
     const repo = repoOf(scenario)
     return repo ? <WorktreeCardMetaRepoBadge repo={repo} /> : null
   }),
-  HostBadge: part(CARD_ELEMENT_PROPS.HostBadge, (props) => (
-    <WorktreeHostContextBadge label={typeof props.label === 'string' ? props.label : ''} />
-  )),
+  HostBadge: part(CARD_ELEMENT_PROPS.HostBadge, (_props, _children, { facts }) =>
+    facts.host.contextLabel ? <WorktreeHostContextBadge label={facts.host.contextLabel} /> : null
+  ),
   Branch: part(CARD_ELEMENT_PROPS.Branch, (props, _children, { facts }) =>
     sidebarLabel(facts.ws.branch, props.tooltip)
   ),
@@ -190,12 +198,14 @@ export const CARD_PREVIEW_ELEMENTS: Readonly<Record<CardElementName, CardElement
     facts.ws.removalError ? <WorktreeCardDeleteFailed error={facts.ws.removalError} /> : null
   ),
   LinearSetupPrompt: part(CARD_ELEMENT_PROPS.LinearSetupPrompt, () => null),
-  ChildToggle: part(CARD_ELEMENT_PROPS.ChildToggle, (_props, _children, { facts }) => (
-    <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
-      <GitFork className="size-3" />
-      {facts.lineage.childCount}
-    </span>
-  )),
+  ChildToggle: part(CARD_ELEMENT_PROPS.ChildToggle, (_props, _children, { facts }) =>
+    facts.lineage.toggleable ? (
+      <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
+        <GitFork className="size-3" />
+        {facts.lineage.childCount}
+      </span>
+    ) : null
+  ),
   Indicators: part(CARD_ELEMENT_PROPS.Indicators, (_props, _children, scenario) => {
     const { facts } = scenario
     const review = facts.options.style === 'new' ? null : scenario.review
