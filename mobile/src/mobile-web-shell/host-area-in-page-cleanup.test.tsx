@@ -28,13 +28,12 @@ vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(undefined)
 }))
 vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
-vi.mock('../session/MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
 vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
 vi.mock('../session/use-session-title-card', () => ({
-  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
+  useSessionTitleCard: () => ({ visual: null })
 }))
 vi.mock('../session/MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('../session/MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))

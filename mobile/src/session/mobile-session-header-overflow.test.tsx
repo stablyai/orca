@@ -77,12 +77,7 @@ vi.mock('../layout/responsive-layout', () => ({
 }))
 vi.mock('../layout/use-top-chrome-space', () => ({ useTopChromeSpace: () => ({}) }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => true }))
-vi.mock('../platform/keyboard-persisting-taps', () => ({
-  useKeyboardPersistingTaps: () => () => {}
-}))
-vi.mock('../layout/side-safe-area', () => ({
-  useWindowSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
-}))
+vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTaps: () => null }))
 
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionTerminalLayoutSheet } from './MobileSessionTerminalLayoutSheet'
@@ -142,20 +137,9 @@ function mountHeader(overrides: Partial<MobileSessionController> = {}) {
       showChecksAction: true,
       activePanel: null
     })
-    const tabDetails: SessionTitleCard['tabDetails'] = {
-      barRef: useRef(null),
-      boundaryRefs: useRef([]),
-      dismiss: () => {},
-      refreshSource: () => {},
-      registerSource: () => () => {},
-      toggleSource: () => {},
-      activeKey: undefined,
-      requestedKey: null
-    }
     const details = mountFixture<SessionTitleCard>({
-      tabDetails,
       besideTabs: true,
-      barRef: tabDetails.barRef,
+      barRef: useRef(null),
       backRef: useRef(null),
       openerRef: useRef(null),
       titleRef: useRef(null),
