@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
-import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import {
+  AgentSessionAcquisitionRefusal,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat/native-chat-stopped-before-start'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

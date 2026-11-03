@@ -1,6 +1,6 @@
 import { agentImagePasteWrites } from '../../../../../src/shared/agent-image-paste'
 import { agentImagePastePath } from '../../../../../src/shared/agent-image-paste-path'
-import { buildNativeChatImagePasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
+import { buildNativeChatImagePasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget

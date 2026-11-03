@@ -2,7 +2,7 @@
 
 import { ONBOARDING_FINAL_STEP } from '../../shared/onboarding-defaults'
 import type { OnboardingCohort } from '../../shared/telemetry-events'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 let storeRef: Store | null = null
 

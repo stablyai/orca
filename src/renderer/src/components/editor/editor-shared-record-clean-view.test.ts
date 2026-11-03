@@ -87,6 +87,8 @@ function openSharedMarkdown() {
     getValue: () => model.getValue(),
     onDidChangeModelContent: (listener: (event: editor.IModelContentChangedEvent) => void) =>
       model.onDidChangeContent(listener),
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => true
   } as unknown as editor.IStandaloneCodeEditor
   const contentRef = { current: viewText(a.id) }

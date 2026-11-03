@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { __resetShellStartupEnvCache } from '../main/pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../main/pty/shell-startup/shell-startup-env'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 
 describe('plugin overlay env source resolution', () => {

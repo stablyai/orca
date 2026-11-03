@@ -367,7 +367,15 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  #endif
  
  /* NSIG - macro for highest signal + 1, should be defined */
-@@ -228,6 +267,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+@@ -169,6 +208,7 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+         }
+       }
+     }
++    close(kq);
+ #else
+     while (true) {
+       errno = 0;
+@@ -228,6 +268,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
  static int
  pty_nonblock(int);
  
@@ -377,7 +385,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  #if defined(__APPLE__)
  static char *
  pty_getproc(int);
-@@ -237,13 +279,23 @@ pty_getproc(int, char *);
+@@ -237,13 +280,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -402,7 +410,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  #endif
  
  struct DelBuf {
-@@ -345,8 +397,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -345,8 +398,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
    term->c_cc[VSTATUS] = 20;
    #endif
  
@@ -413,7 +421,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  
    // helperPath
    std::string helper_path = info[9].As<Napi::String>();
-@@ -367,14 +419,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +420,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -436,7 +444,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  #else
    int argc = argv_.Length();
    int argl = argc + 2;
-@@ -445,6 +501,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -445,6 +502,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
        if (pty_nonblock(master) == -1) {
          throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
        }
@@ -446,7 +454,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
    }
  #endif
  
-@@ -586,6 +645,23 @@ pty_nonblock(int fd) {
+@@ -586,6 +646,23 @@ pty_nonblock(int fd) {
    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
  }
  
@@ -470,7 +478,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  /**
   * pty_getproc
   * Taken from tmux.
-@@ -684,15 +760,73 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +761,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -546,7 +554,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,84 +840,499 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,84 +841,499 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -1070,7 +1078,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc
  /**
   * Init
   */
-@@ -793,6 +1342,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -793,6 +1343,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("open",    Napi::Function::New(env, PtyOpen));
    exports.Set("resize",  Napi::Function::New(env, PtyResize));
    exports.Set("process", Napi::Function::New(env, PtyGetProc));
@@ -2127,3 +2135,83 @@ diff --git a/src/worker/conoutSocketWorker.ts b/src/worker/conoutSocketWorker.ts
    server.listen(getWorkerPipeName(conoutPipeName));
    if (!parentPort) {
      throw new Error('worker_threads parentPort is null');
+diff --git a/src/unix/pty.cc b/src/unix/pty.cc
+--- a/src/unix/pty.cc
++++ b/src/unix/pty.cc
+@@ -1337,7 +1337,19 @@
+  * Init
+  */
+-
++
++Napi::Value PtyForegroundGroup(const Napi::CallbackInfo& info) {
++  Napi::Env env = info.Env();
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, "Expected a PTY master descriptor");
++  }
++  const int fd = info[0].As<Napi::Number>().Int32Value();
++  const pid_t group = fd < 0 ? -1 : tcgetpgrp(fd);
++  if (group > 0) return Napi::Number::New(env, group);
++  return env.Null();
++}
++
+ Napi::Object init(Napi::Env env, Napi::Object exports) {
++  exports.Set("foregroundProcessGroup", Napi::Function::New(env, PtyForegroundGroup));
+   exports.Set("fork",    Napi::Function::New(env, PtyFork));
+   exports.Set("open",    Napi::Function::New(env, PtyOpen));
+   exports.Set("resize",  Napi::Function::New(env, PtyResize));
+diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
+--- a/src/unixTerminal.ts
++++ b/src/unixTerminal.ts
+@@ -252,6 +252,15 @@
+     } catch (e) { /* swallow */ }
+   }
+ 
++  /**
++   * Gets the foreground process group from the master: null once the master is closed,
++   * undefined when the native addon predates this export.
++   */
++  public getForegroundProcessGroup(): number | null | undefined {
++    if (this._fd < 0) return null;
++    return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++  }
++
+   /**
+    * Gets the name of the process.
+    */
+diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
+--- a/lib/unixTerminal.js
++++ b/lib/unixTerminal.js
+@@ -233,6 +233,10 @@
+         }
+         catch (e) { /* swallow */ }
+     };
++    UnixTerminal.prototype.getForegroundProcessGroup = function () {
++        if (this._fd < 0) return null;
++        return typeof pty.foregroundProcessGroup === 'function' ? pty.foregroundProcessGroup(this._fd) : undefined;
++    };
+     Object.defineProperty(UnixTerminal.prototype, "process", {
+         /**
+          * Gets the name of the process.
+diff --git a/typings/node-pty.d.ts b/typings/node-pty.d.ts
+--- a/typings/node-pty.d.ts
++++ b/typings/node-pty.d.ts
+@@ -114,6 +114,7 @@
+    * An interface representing a pseudoterminal, on Windows this is emulated via the winpty library.
+    */
+   export interface IPty {
++    getForegroundProcessGroup?(): number | null | undefined;
+     /**
+      * The process ID of the outer process.
+      */
+diff --git a/src/native.d.ts b/src/native.d.ts
+--- a/src/native.d.ts
++++ b/src/native.d.ts
+@@ -19,6 +19,7 @@
+ }
+-
++
+ interface IUnixNative {
++  foregroundProcessGroup?(fd: number): number | null;
+   fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
+   open(cols: number, rows: number): IUnixOpenProcess;
+   process(fd: number, pty?: string): string;

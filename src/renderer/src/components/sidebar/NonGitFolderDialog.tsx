@@ -111,7 +111,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           )
           if (folderWorktree) {
             // SSH adds can bypass addNonGitFolder after onboarding dismissal; resolve the default agent here too.
-            const launch = resolveDismissedOnboardingFolderAgentLaunch({
+            const launch = await resolveDismissedOnboardingFolderAgentLaunch({
               worktreeId: folderWorktree.id,
               store: useAppStore.getState(),
               onboarding: onboardingBeforeAdd,

@@ -1,3 +1,5 @@
+import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
+import type { AgentSenderPublications } from '@/runtime/agent-sender-associations'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
@@ -28,12 +30,14 @@ import type {
   ResumableTuiAgent,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentPaneConversationIdentity } from '../agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
+  agentSenderPublicationsByHost: AgentSenderPublications
+  setAgentSenderPublication: (host: string, publication: AgentSenderPublication | undefined) => void
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   /** Host-reported conversation identity only; transient and independent of agent occupancy. */

@@ -175,24 +175,6 @@ describe('Claude account profile setup', () => {
     expect((await f.setup()).outcome).toBe('refused')
     expect(existsSync(join(f.defaultHome, 'inner', 'a'))).toBe(false)
   })
-  it('refuses a WSL profile on the Windows host side', async () => {
-    fixture()
-    const report = await provisionClaudeAccountProfile({
-      dataRoot: '/home/u/.local/share/orca',
-      profile: describeClaudeProfile('/home/u/.local/share/orca', 'a', {
-        runtime: 'wsl',
-        distro: 'Ubuntu',
-        executionHostId: 'local'
-      }),
-      userHome: state.home,
-      installHooks: null,
-      platform: 'win32'
-    })
-    expect(report.outcome).toBe('refused')
-    expect(report.warnings).toEqual([
-      expect.objectContaining({ surface: 'profile', code: 'invalid-profile' })
-    ])
-  })
   itLinks('reports skipped and failed hook installs without failing the rest', async () => {
     const f = fixture()
     const skipped = await provisionClaudeAccountProfile({

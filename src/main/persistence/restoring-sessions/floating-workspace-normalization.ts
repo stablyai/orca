@@ -1,6 +1,6 @@
 import { realpathSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
-import { expandLeadingHomePath } from '../../home-path-expansion'
+import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
 
 export function resolveFloatingWorkspacePath(input: string, home: string): string {
   const expanded = expandLeadingHomePath(input, home)

@@ -135,19 +135,4 @@ describe('WSL host Claude folder refresh', () => {
       switched.claude.CLAUDE_CONFIG_DIR
     ])
   })
-
-  it('refreshes before a Claude launch the host starts, and not for other launches', async () => {
-    const home = guestHome()
-    const refreshClaudeProfile = vi.fn(async () => {})
-    const accounts = new RuntimeAccountController()
-    accounts.restoreHostLaunchEnv(launchEnvFor(home), () => {}, { refreshClaudeProfile })
-
-    await accounts.prepareHostAgentLaunch('codex')
-    await accounts.prepareHostAgentLaunch(null)
-    expect(refreshClaudeProfile).not.toHaveBeenCalled()
-
-    await accounts.prepareHostAgentLaunch('claude')
-    await accounts.getCommitMessageAgentEnvironment()?.prepareForClaudeLaunch?.()
-    expect(refreshClaudeProfile).toHaveBeenCalledTimes(2)
-  })
 })

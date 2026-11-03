@@ -61,6 +61,30 @@
       "sessionTabs": [],
       "terminals": []
     },
+    "3ac1092997d5": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "The host sent a reply this app could not read (session.tabs.createTerminal)"
+      }
+    },
+    "3ad31e99d9a0": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "Unknown method"
+      }
+    },
+    "3c6e5a949be0": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "outer refused"
+      }
+    },
     "4694ea73188a": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
@@ -425,6 +449,14 @@
         "startedAt": 0
       }
     },
+    "b67f7950d99d": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "transport failure"
+      }
+    },
     "c13357779299": {
       "name": "subscribe-terminal",
       "ordinal": 5,
@@ -782,7 +814,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -795,7 +827,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -808,7 +840,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -821,7 +853,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -834,7 +866,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -847,7 +879,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -860,7 +892,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -873,7 +905,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -886,7 +918,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -899,7 +931,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -912,7 +944,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -925,7 +957,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -938,7 +970,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -951,7 +983,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -964,7 +996,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "76f2a4b2872b",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ac1092997d5"]
         }
       },
       {
@@ -977,7 +1009,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["3c6e5a949be0"]
         }
       },
       {
@@ -990,7 +1022,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["3c6e5a949be0"]
         }
       },
       {
@@ -1003,7 +1035,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "2ae1c681a443",
-          "effects": ["b1152db10a02"]
+          "effects": ["3c6e5a949be0"]
         }
       },
       {
@@ -1055,7 +1087,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ad31e99d9a0"]
         }
       },
       {
@@ -1068,7 +1100,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ad31e99d9a0"]
         }
       },
       {
@@ -1081,7 +1113,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "d6dddfd9c6a4",
-          "effects": ["b1152db10a02"]
+          "effects": ["3ad31e99d9a0"]
         }
       },
       {
@@ -1094,7 +1126,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["b67f7950d99d"]
         }
       },
       {
@@ -1107,7 +1139,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["b67f7950d99d"]
         }
       },
       {
@@ -1120,7 +1152,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "96cb96f54156",
-          "effects": ["b1152db10a02"]
+          "effects": ["b67f7950d99d"]
         }
       },
       {

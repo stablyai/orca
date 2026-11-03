@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 export const { fetchCodexModelCatalogListing } = await vi.importActual<{
   fetchCodexModelCatalogListing(input: {

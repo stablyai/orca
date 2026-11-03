@@ -351,6 +351,11 @@ describe('pane-bound Run lookup', () => {
       coordinatorHandle: 'term_d',
       coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
     })
+    db.bindRun({
+      runId: rebound.id,
+      coordinatorHandle: 'term_d',
+      coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
+    })
 
     expect(db.getRun(shared.id)).toMatchObject({
       coordinator_pane_key: null,

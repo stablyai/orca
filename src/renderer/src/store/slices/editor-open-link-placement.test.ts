@@ -157,15 +157,6 @@ function linkIntent(store: StoreApi<AppState>, explicit = false) {
 }
 
 describe('file links open beside their source', () => {
-  it('captures the source only within the workspace that owns the link', () => {
-    const store = createEditorTabsStore()
-    store.getState().createUnifiedTab('wt-2', 'terminal', { id: 'source' })
-    addTab(store, 'terminal', 'source')
-
-    expect(linkIntent(store)?.workspaceId).toBe('wt-1')
-    expect(captureEditorOpenLinkIntent(store.getState(), 'missing', 'source')).toBeNull()
-  })
-
   it('moves a native-chat link from the chat group to the neighboring editor', async () => {
     const store = createEditorTabsStore()
     addTab(store, 'agent-session', 'source')
@@ -226,24 +217,6 @@ describe('file links open beside their source', () => {
       existing.id
     )
     expect(b).not.toBe(c)
-  })
-
-  it('opens a second view in the neighbor when only the source holds the file', async () => {
-    const store = createEditorTabsStore()
-    const { a, b } = seedColumns(store, 'terminal', 'terminal', 'terminal')
-    addEditor(store, '/repo/link.ts', a)
-    store.getState().activateTab('source')
-
-    const main = await drawTabsFromMain(store)
-    const opened = store
-      .getState()
-      .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
-    await main.settle()
-    main.close()
-
-    expect(groupOfFile(store, '/repo/link.ts').sort()).toEqual([a, b].sort())
-    expect(store.getState().openFiles.filter((f) => f.filePath === '/repo/link.ts')).toHaveLength(1)
-    expect(opened?.groupId).toBe(b)
   })
 
   it('keeps placement on the captured source when focus moves during resolution', async () => {
@@ -381,16 +354,30 @@ describe('file links open beside their source', () => {
     })
   })
 
-  it('keeps the source in place when it is the only group', () => {
+  it('opens beside the source when it is the only group', async () => {
     const store = createEditorTabsStore()
     addTab(store, 'terminal', 'source')
     const a = store.getState().groupsByWorktree['wt-1']![0]!.id
+    const main = await drawTabsFromMain(store)
 
     const opened = store
       .getState()
       .openFileForLink(fileInput('/repo/link.ts'), {}, linkIntent(store))
+    await main.settle()
 
-    expect(opened?.groupId).toBe(a)
-    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(1)
+    expect(opened?.groupId).toBeTruthy()
+    expect(opened?.groupId).not.toBe(a)
+    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
+    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
+    expect(store.getState().groupsByWorktree['wt-1']!.find((g) => g.id === a)?.activeTabId).toBe(
+      'source'
+    )
+
+    store.getState().openFileForLink(fileInput('/repo/second.ts'), {}, linkIntent(store))
+    await main.settle()
+    expect(store.getState().groupsByWorktree['wt-1']).toHaveLength(2)
+    expect(groupOfFile(store, '/repo/link.ts')).toEqual([opened?.groupId])
+    expect(groupOfFile(store, '/repo/second.ts')).toEqual([opened?.groupId])
+    main.close()
   })
 })

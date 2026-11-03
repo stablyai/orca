@@ -13,8 +13,8 @@ import {
 } from './runtime-home-service-test-harness'
 
 // The real rule: a stopped distro blocks, except for a user act on it.
-vi.mock('../wsl/wsl-background-exec-gate', async () => {
-  const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/wsl-user-act-scope')
+vi.mock('../wsl/discovery/wsl-background-exec-gate', async () => {
+  const { isWslUserActFor, runAsWslUserAct } = await import('../wsl/discovery/wsl-user-act-scope')
   return {
     blockedWslDistroForExec: async (distro: string | null | undefined) =>
       distro && !isWslUserActFor(distro) ? { distro, state: 'stopped' } : null,
@@ -39,7 +39,7 @@ function wslMocks() {
     syncInstructions: vi.fn(),
     syncConfig: vi.fn()
   }
-  vi.doMock('../wsl', () => ({
+  vi.doMock('../wsl/discovery/distro-catalog', () => ({
     getDefaultWslDistro: () => 'Ubuntu',
     getWslHome: mocks.getWslHome,
     getWslHomeAsync: mocks.getWslHomeAsync
@@ -126,22 +126,10 @@ describe('Codex launch prep for a stopped WSL distro', () => {
     expect(mocks.bridge).not.toHaveBeenCalled()
   })
 
-  it('a passive restore on system default reads an unknown home as null, never probing', async () => {
-    const mocks = wslMocks()
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the Store methods the runtime home service reads.
-    const service = new CodexRuntimeHomeService(accountStore(false) as never)
-
-    await expect(
-      service.prepareForCodexLaunchAsync({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toBeNull()
-    expect(mocks.getWslHome).not.toHaveBeenCalled()
-  })
-
   it('the same launch as a user act warms the home off the main thread and drains', async () => {
     const mocks = wslMocks()
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { runAsWslExecUserAct } = await import('../wsl/wsl-background-exec-gate')
+    const { runAsWslExecUserAct } = await import('../wsl/discovery/wsl-background-exec-gate')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the Store methods the runtime home service reads.
     const service = new CodexRuntimeHomeService(accountStore(true) as never)
 

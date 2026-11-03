@@ -8,7 +8,7 @@ import { trackRunningAgentLaunchPane } from '../../../agent-launch/agent-launch-
 import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
 import { resolveUnlaunchedIntent } from '../../../runtime/rpc/methods/agent-launch-intent-resolution'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import { resolveEarlyPaneKey } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
@@ -116,14 +116,18 @@ export async function planPaneAgentLaunch(ctx: PtyIpcSpawnState): Promise<void> 
     throw new Error('agent_launch_request_invalid')
   }
   const launchPreferences = toAgentLaunchPreferences(intent.sessionOptions, intent.agent)
-  const planned = await runtime.planAgentPaneLaunch(intent.target.worktree, {
-    startupAgent: intent.agent,
-    ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
-    ...(launchPreferences ? { launchPreferences } : {}),
-    ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
-    ...(intent.cwd ? { cwd: intent.cwd } : {}),
-    ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt } : {})
-  })
+  const planned = await runtime.planAgentPaneLaunch(
+    intent.target.worktree,
+    {
+      startupAgent: intent.agent,
+      ...(intent.agentArgs !== undefined ? { agentArgs: intent.agentArgs } : {}),
+      ...(launchPreferences ? { launchPreferences } : {}),
+      ...(intent.launchSource ? { launchSource: intent.launchSource } : {}),
+      ...(intent.cwd ? { cwd: intent.cwd } : {}),
+      ...(suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt } : {})
+    },
+    intent.sessionOptions
+  )
   ctx.paneAgentLaunch.launchRuntime = planned.launchRuntime
   ctx.args = withPlannedLaunch(args, planned)
 }

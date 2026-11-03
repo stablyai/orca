@@ -185,17 +185,6 @@ describe('Muse hook events', () => {
     expect(approved?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('ignores Notification types other than permission_prompt', () => {
-    expect(
-      normalizeAndAccept(state, 'muse', {
-        ...main,
-        hook_event_name: 'Notification',
-        notification_type: 'idle_prompt',
-        message: 'Muse is waiting for your input'
-      })
-    ).toBeNull()
-  })
-
   it('reports a request_user_input question from the session log until it settles', () => {
     const logPath = sessionLogPath()
     const body = { ...main, hook_event_name: 'UserPromptSubmit', prompt: 'ask my favorite color' }

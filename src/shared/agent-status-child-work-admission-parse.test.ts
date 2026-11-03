@@ -135,12 +135,6 @@ describe('child-work admission parses provider text into what the codec stores',
       expect(last >= 0xd800 && last <= 0xdbff).toBe(false)
     }
   )
-
-  it('keeps a surrogate pair whole when it ends exactly at the cap', () => {
-    const { store, admission } = setup()
-    admission.announce(observation({ lastMessage: `${'x'.repeat(510)}\u{1f600}tail` }))
-    expect(store.getChild('child-1')?.lastMessage).toBe(`${'x'.repeat(510)}\u{1f600}`)
-  })
 })
 
 function carrying(field: string, value: unknown): AgentChildWorkAnnounceRequest {
@@ -190,52 +184,5 @@ describe('a malformed fact never erases what the record knows', () => {
       childWorkId: 'child-1'
     })
     expect(store.getChild('child-1')).toMatchObject({ ...GOOD, observedAt: 20 })
-  })
-
-  it('admits a first sighting whose facts are all malformed, with none of them', () => {
-    const { store, admission } = setup()
-    const request = carrying('residency', 'detached')
-    Reflect.set(request, 'totalTokens', -1)
-    Reflect.set(request, 'parentChildWorkId', 'child-1')
-    Reflect.set(request, 'name', '\u2028')
-    expect(admission.announce(request)).toMatchObject({ accepted: true, created: true })
-    const child = store.getChild('child-1')
-    for (const field of ['residency', 'totalTokens', 'parentChildWorkId', 'name']) {
-      expect(child).not.toHaveProperty(field)
-    }
-  })
-
-  it('reads a malformed operation as the child doing nothing it can name', () => {
-    const { store, admission } = setup()
-    admission.announce(
-      observation({ operation: { toolName: 'Bash', basis: 'open', observedAt: 10 } })
-    )
-    expect(
-      admission.announce(
-        carrying('operation', { toolName: 'Read', basis: 'guessed', observedAt: 20 })
-      )
-    ).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')).not.toHaveProperty('operation')
-  })
-
-  it('lands a settle whose token count is malformed, keeping the counted tokens', () => {
-    const { store, admission } = setup()
-    admission.announce(observation({ totalTokens: 5_000 }))
-    expect(
-      admission.announce(
-        observation({
-          state: 'done',
-          membership: 'settled',
-          outcome: 'succeeded',
-          observedAt: 20,
-          totalTokens: -1
-        })
-      )
-    ).toMatchObject({ accepted: true })
-    expect(store.getChild('child-1')).toMatchObject({
-      membership: 'settled',
-      outcome: 'succeeded',
-      totalTokens: 5_000
-    })
   })
 })

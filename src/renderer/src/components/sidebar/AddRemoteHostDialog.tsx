@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
+import { EMPTY_FORM, type EditingTarget } from '../settings/ssh/targets/ssh-target-draft'
 import type { SshConfigHostSummary } from '../../../../shared/ssh-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import {

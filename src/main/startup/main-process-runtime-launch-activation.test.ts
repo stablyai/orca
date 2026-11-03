@@ -18,7 +18,7 @@ vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({ getProfileUserDataPath: vi.fn() }))
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => '/tmp/orca-user-data',
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
@@ -48,7 +48,7 @@ vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', ()
 }))
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({ registerHeadlessPtyRuntime: vi.fn() }))
-vi.mock('../providers/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
+vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
 vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
@@ -87,7 +87,9 @@ vi.mock('../runtime/runtime-rpc-startup-failure', () => ({
 }))
 vi.mock('../cli/cli-installer', () => ({ CliInstaller: class {} }))
 vi.mock('../cli/linux-bare-orca-dispatcher', () => ({ installLinuxBareOrcaDispatcher: vi.fn() }))
-vi.mock('../terminal-history-deletion', () => ({ scheduleAllPendingHistoryTreeRemovals: vi.fn() }))
+vi.mock('../pty/history/terminal-history-deletion', () => ({
+  scheduleAllPendingHistoryTreeRemovals: vi.fn()
+}))
 vi.mock('../ipc/startup-notification-registration', () => ({
   triggerStartupNotificationRegistration: vi.fn()
 }))
@@ -205,9 +207,10 @@ describe('desktop startup activation', () => {
     launchHooks.failBeforeWindow = false
     state.mainWindow = null
     state.isServeMode = false
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and marks its launch-record warm-up before the mocked RPC server takes it.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and marks its launch-record warm-up, and gives it the sender peer-key reader, before the mocked RPC server takes it.
     state.runtime = {
-      noteAgentLaunchStartupSettled: startupSettled
+      noteAgentLaunchStartupSettled: startupSettled,
+      setAgentSenderPeerKey: () => {}
     } as unknown as NonNullable<typeof state.runtime>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {

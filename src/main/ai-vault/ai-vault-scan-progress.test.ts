@@ -12,7 +12,7 @@ import {
   trackAiVaultScanProgress
 } from './ai-vault-scan-progress'
 import { scanAiVaultSessions } from './session-scanner'
-import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from './parse-cache/session-parse-cache-store'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []

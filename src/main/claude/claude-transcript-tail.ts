@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises'
-import { claudeRecord } from './claude-structured-item-translation'
+import { claudeRecord } from './structured/journal/claude-structured-item-translation'
 
 // Read backward to the saved leaf so catch-up costs only the appended stretch, not the whole conversation.
 

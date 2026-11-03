@@ -1,4 +1,4 @@
-import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'

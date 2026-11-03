@@ -5,7 +5,7 @@ import {
   readAuthorizedDocPreviewFile,
   readAuthorizedDocPreviewFileChunk
 } from '../../shared/doc-preview-file-access'
-import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
+import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
 import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import {
@@ -24,7 +24,7 @@ import type {
   FileWriteResult
 } from '../../shared/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
-import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export type LocalFilesystemProviderOptions = {
   /** Read lazily so a call that fails earlier never touches the store. */

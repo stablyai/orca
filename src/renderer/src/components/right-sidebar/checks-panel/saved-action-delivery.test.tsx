@@ -1,6 +1,6 @@
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useChecksPanelCommentResolution } from './use-checks-panel-comment-resolution'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 // @vitest-environment happy-dom
@@ -14,8 +14,12 @@ import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { toast } from 'sonner'
-import type { PendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { clearPendingPRCommentAiAck, takePendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
+import {
+  type PendingPRCommentAiAck,
+  clearPendingPRCommentAiAck,
+  takePendingPRCommentAiAck
+} from '../pr-comments-ai-launch-ack'
+
 import type { ChecksAgentComposerState } from './panel-state-types'
 import { useChecksPanelAiQueue } from './use-checks-panel-ai-queue'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
@@ -47,7 +51,7 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
-function fixture(saved = true, paired = false) {
+function fixture(saved = true, paired = false, conflictingOwner = false) {
   setLocalRuntimeCapabilitiesForTests([])
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -60,7 +64,14 @@ function fixture(saved = true, paired = false) {
         resolveConflicts: { agentId: 'codex' }
       }
     : {}
-  const repo = { id: 'repo-1', path: '/repo', displayName: 'Repo', badgeColor: 'blue', addedAt: 1 }
+  const repo = {
+    id: 'repo-1',
+    path: '/repo',
+    displayName: 'Repo',
+    badgeColor: 'blue',
+    addedAt: 1,
+    ...(paired && !conflictingOwner ? { executionHostId: 'runtime:alpha' as const } : {})
+  }
   const worktree = makeWorktree({ id: 'repo-1::wt-1', repoId: repo.id })
   if (paired) {
     Object.assign(worktree, { hostId: 'runtime:alpha' })
@@ -282,6 +293,15 @@ function fixture(saved = true, paired = false) {
     comments: () => comments
   }
 }
+
+it('rejects conflicting review ownership before queuing an AI acknowledgement', async () => {
+  const f = fixture(true, true, true)
+  await act(async () => {})
+  act(() => f.result.current.handleResolveCommentsWithAI(f.groups))
+  expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('owning host'))
+  expect(launch).not.toHaveBeenCalled()
+  expect(f.pending.current).toBeNull()
+})
 
 it('owns detection single-flight, returns failed delivery to the editor, then consumes its exact review once', async () => {
   const delivery = deferred<{ delivered: boolean; failureNotified: boolean }>()

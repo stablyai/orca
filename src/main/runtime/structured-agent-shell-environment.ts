@@ -5,8 +5,11 @@ import {
   cachedPersistedWindowsPathSegments,
   mergePersistedWindowsPathAsync,
   readPersistedWindowsPathSegmentsAsync
-} from '../pty/windows-environment-path'
-import { mergeWindowsPathSegments, resolvePathEnvKey } from '../pty/windows-path-segment-merge'
+} from '../pty/environment/windows-environment-path'
+import {
+  mergeWindowsPathSegments,
+  resolvePathEnvKey
+} from '../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   nativeChatShellEnvironmentPolicy,

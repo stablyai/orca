@@ -12,7 +12,7 @@ import {
   type NativeHostConnection
 } from './browser-extension-native-host-process'
 
-vi.mock('../../forked-child-entry-path', () => ({
+vi.mock('../../worker-threads/forked-child-entry-path', () => ({
   getForkedChildEntryPath: (fileName: string) => join(root, fileName)
 }))
 

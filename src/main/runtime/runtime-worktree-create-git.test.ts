@@ -4,8 +4,13 @@ import type * as GitHubClient from '../github/client'
 const getPRForBranchMock = vi.hoisted(() => vi.fn())
 const git = vi.hoisted(() => vi.fn())
 const worktrees = vi.hoisted(() => vi.fn())
-vi.mock('../git/runner', () => ({ gitExecFileAsync: git }))
-vi.mock('../git/worktree', () => ({ listWorktrees: worktrees }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: git
+}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', () => ({
+  listWorktrees: worktrees
+}))
 
 vi.mock('../github/client', async (importOriginal) => ({
   ...(await importOriginal<typeof GitHubClient>()),
@@ -45,7 +50,7 @@ describe('explicit local branch reuse on the execution host', () => {
       ],
       [
         ['for-each-ref', '--format=%(refname)', 'refs/heads/feature/test'],
-        { cwd: '/repo', wslDistro: 'Ubuntu', captureWslLoginShellOutput: true }
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
       ]
     ])
     expect(worktrees).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
@@ -82,7 +87,7 @@ describe('explicit local branch reuse on the execution host', () => {
     ).rejects.toThrow('already checked out at "/busy"')
     expect(git).toHaveBeenLastCalledWith(
       ['for-each-ref', '--format=%(refname)', 'refs/heads/feature/TEST'],
-      { cwd: '/repo', wslDistro: 'Ubuntu', captureWslLoginShellOutput: true }
+      { cwd: '/repo', wslDistro: 'Ubuntu' }
     )
   })
 

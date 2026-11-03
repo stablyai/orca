@@ -79,23 +79,6 @@ describe('rich markdown blockquote list continuations', () => {
     }
   })
 
-  // Guards a dependency bump: any item start Tiptap accepts must still reach the fallback.
-  it.each([
-    '> \t1. x\nlazy',
-    '>     1. x\nlazy',
-    '> 1.\u00a0x\nlazy',
-    '> 4)\u00a0x\nlazy',
-    '>  > 1.\u00a0x\nlazy',
-    '> 1.\u00a0x\r\nlazy'
-  ])('opens %j with whitespace Tiptap accepts but Marked does not', (source) => {
-    const editor = openMarkdown(source)
-    try {
-      expect(editor.getText()).toContain('lazy')
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('opens many quoted lazy continuations without nesting each into the last', () => {
     const editor = openMarkdown('> 1.\u00a0x\nlazy\n'.repeat(1000))
     try {

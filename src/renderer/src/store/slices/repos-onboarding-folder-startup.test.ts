@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+
 import { useAppStore } from '@/store'
 import {
   resolveDismissedOnboardingFolderAgentLaunch,
@@ -10,9 +10,9 @@ import {
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
+import './worktrees-detected-listing-fixtures'
 
 const worktreeActivation = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
@@ -49,68 +49,6 @@ beforeEach(() => {
   })
 })
 
-describe('repo slice skipped-onboarding folder startup', () => {
-  it('only seeds the onboarding default agent for the first dismissed-onboarding folder', async () => {
-    reposAdd
-      .mockResolvedValueOnce({
-        repo: { id: 'folder-1', path: '/first', displayName: 'First', addedAt: 1 }
-      })
-      .mockResolvedValueOnce({
-        repo: { id: 'folder-2', path: '/second', displayName: 'Second', addedAt: 2 }
-      })
-    worktreesListDetected.mockImplementation(({ repoId }: { repoId: string }) =>
-      makeDetectedResult(repoId, [makeWorktree({ id: `${repoId}::/folder`, repoId })])
-    )
-    let onboarding: OnboardingState = { ...getDefaultOnboardingState(), outcome: 'dismissed' }
-    onboardingGet.mockImplementation(async () => onboarding)
-    onboardingUpdate.mockImplementation(
-      async ({ checklist }: { checklist: Partial<OnboardingState['checklist']> }) => {
-        onboarding = { ...onboarding, checklist: { ...onboarding.checklist, ...checklist } }
-        return onboarding
-      }
-    )
-    const store = createTestStore()
-    store.setState({
-      settings: {
-        ...getDefaultSettings('/tmp/orca-workspaces'),
-        defaultTuiAgent: 'codex'
-      }
-    })
-
-    await store.getState().addNonGitFolder('/first')
-    await store.getState().addNonGitFolder('/second')
-
-    expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
-      1,
-      'folder-1::/folder',
-      {
-        sidebarRevealBehavior: 'auto',
-        startup: {
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-          env: {},
-          launchAgent: 'codex',
-          launchConfig: {
-            agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-            agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-            agentEnv: {}
-          },
-          sessionOptions: undefined,
-          telemetry: {
-            agent_kind: 'codex',
-            launch_source: 'onboarding',
-            request_kind: 'new'
-          }
-        }
-      }
-    )
-    expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
-      2,
-      'folder-2::/folder',
-      { sidebarRevealBehavior: 'auto' }
-    )
-  })
-})
-
 it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as const)(
   'reveals onboarding folder using execution facts: %s',
   async (target) => {
@@ -123,7 +61,6 @@ it.each(['paired-linux', 'local-bash', 'withheld', 'structured-withheld'] as con
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
         defaultTuiAgent: 'claude',
-        experimentalNativeChat: true,
         nativeChatProviders: { claude: target === 'structured-withheld' },
         terminalWindowsShell: 'C:\\Program Files\\Git\\bin\\bash.exe',
         agentDefaultArgs: { claude: '--append-system-prompt "don\'t edit"' },

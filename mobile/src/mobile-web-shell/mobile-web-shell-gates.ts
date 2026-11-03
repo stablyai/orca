@@ -1,7 +1,7 @@
 import {
   evaluateMobileWebBundleCompat,
   type MobileWebBundleCompatManifest
-} from '../transport/mobile-web-bundle-compat'
+} from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
   MobileWebShellBlockedVerdict,
   MobileWebShellGates,
@@ -10,6 +10,7 @@ import type {
 
 // Reuse state identities so equivalent transitions do not cause extra renders.
 export const CHECKING: MobileWebShellSessionState = { kind: 'checking' }
+export const OFFLINE: MobileWebShellSessionState = { kind: 'offline' }
 export const ROUTE_UNAVAILABLE: MobileWebShellSessionState = { kind: 'route-unavailable' }
 
 // Keep displayed generations stable through reconnects; only checking/offline and unreadable-status failures wait for new gates.
@@ -89,6 +90,8 @@ export function cachedGenerationWall(
 }
 
 // Compare verdicts instead of rebuilt gate objects so unchanged reconnect/status events cannot resweep cache and flicker the spinner.
+// An early retry ending is a change: a first open waiting on it must go on to say offline.
 export function gateKey(gates: MobileWebShellGates): string {
-  return gateVerdict(gates).kind
+  const kind = gateVerdict(gates).kind
+  return kind === 'offline' && gates.retrying === true ? 'offline-retrying' : kind
 }

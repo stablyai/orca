@@ -19,12 +19,12 @@ import {
   readCodexSessionIndexTitle,
   resetCodexSessionIndexTitleCacheForTests,
   _hasCodexSessionIndexTitleCacheEntryForTest
-} from './session-scanner-codex-title-index'
+} from './scanners/codex/session-scanner-codex-title-index'
 import {
   clearKimiSessionIndexCache,
   hasKimiSessionIndexCacheEntryForTests,
   readKimiWorkDirBySessionId
-} from './session-scanner-kimi-paths'
+} from './scanners/kimi/session-scanner-kimi-paths'
 import { readJsonObjectIfExists } from './session-scanner-values'
 import {
   resetWslTranscriptFsGateForTests,

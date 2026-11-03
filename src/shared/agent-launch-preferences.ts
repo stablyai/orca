@@ -1,12 +1,15 @@
 import { YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
-import type { AgentLaunchPreferences } from './agent-session-host-authority'
+import type { AgentLaunchPreferences } from './agent-session/agent-session-host-authority'
 import type { AgentType } from './agent-status-types'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
 } from './tui-agent-permission-choice'
 import { isTuiAgent } from './tui-agent-config'
-import { composeAgentLaunchModel } from './agent-session-option-launch'
+import {
+  composeAgentLaunchModel,
+  hasIndependentAgentLaunchOptions
+} from './agent-session/options/agent-session-option-launch'
 
 /** Compose model/effort for this terminal; send permission mode only where the agent has a flag. */
 export function toAgentLaunchPreferences(
@@ -38,7 +41,8 @@ export function agentLaunchNeedsPreparedCommand(
   return (
     (Object.hasOwn(YOLO_TUI_AGENT_ENV, agent) &&
       readLaunchPermissionChoice(applied) !== undefined) ||
-    (typeof applied?.effort === 'string' && !!applied.effort.trim() && !applied.model)
+    (typeof applied?.effort === 'string' && !!applied.effort.trim() && !applied.model) ||
+    (!!applied && hasIndependentAgentLaunchOptions(agent, applied))
   )
 }
 
