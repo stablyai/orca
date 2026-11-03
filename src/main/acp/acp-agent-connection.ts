@@ -49,6 +49,10 @@ export function createAcpAgentConnection(
 type AcpConnectionLifecycle = {
   closing: boolean
   error?: Error
+  /** The process's own failure, such as its spawn; it is no refusal by Orca. */
+  processError?: Error
+  /** Why the connection closed before the process exited, unless the process itself failed. */
+  lost?: Error
   finishExit?: () => void
   outputEndTimer?: ReturnType<typeof setTimeout>
 }
@@ -149,7 +153,10 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       child.once('spawn', done)
       child.once('error', done)
     })
-    child.on('error', (error) => super.close(error))
+    child.on('error', (error) => {
+      lifecycle.processError ??= error
+      super.close(error)
+    })
     signedOut = () => {
       signIn?.answered?.(false)
       super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
@@ -159,6 +166,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       super.close(new AcpConnectionClosedError('The agent printed a sign-in link Orca cannot read'))
     child.stderr.on('error', (error) => super.close(error))
     managed.onExit((exit) => {
+      lifecycle.lost = lifecycle.error === lifecycle.processError ? undefined : lifecycle.error
       const expected = lifecycle.closing
       const finish = (): void => {
         clearTimeout(lifecycle.outputEndTimer)
@@ -225,11 +233,12 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.managed.exitStatus
   }
 
-  /** `requested`: Orca was closing the agent when it exited. */
-  onExit(listener: (exit: ProviderProcessExit, requested?: boolean) => void): void {
+  /** `requested`: Orca was closing the agent when it exited. `lost`: why the connection had
+   *  already closed before the exit, such as Orca refusing what the agent wrote. */
+  onExit(listener: (exit: ProviderProcessExit, requested?: boolean, lost?: Error) => void): void {
     this.managed.onExit((exit) => {
       try {
-        listener(exit, this.lifecycle.closing)
+        listener(exit, this.lifecycle.closing, this.lifecycle.lost)
       } catch (failure) {
         this.diagnoseLifecycle(`ACP exit listener failed: ${String(failure)}`)
       }

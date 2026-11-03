@@ -272,7 +272,6 @@ export class CodexAcquisitionRegistry {
       throw new Error('codex structured session adapter is closing')
     }
     const previousAttempt = this.attempts.get(sessionId)
-    this.endings.forget(sessionId)
     const attempt = createCodexAcquisitionAttempt()
     this.attempts.set(sessionId, attempt)
     return { previousAttempt, attempt }

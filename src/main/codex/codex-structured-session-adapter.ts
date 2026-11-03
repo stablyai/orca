@@ -287,6 +287,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   startupEnding = (sessionId: string, generation: string) =>
     this.acquisitions.endings.get(sessionId, generation)
+  retireStartup = (sessionId: string, generation: string) =>
+    this.acquisitions.endings.retire(sessionId, generation)
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactCodexStructuredSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)

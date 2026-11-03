@@ -77,6 +77,9 @@ export async function acquireCodexStructuredSession(input: {
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.
   const acquisitionGeneration = mintCodexAcquisitionGeneration(deps)
+  acquisitions.endings.admit(sessionId, acquisitionGeneration)
+  // Codex ending on its own before acquire returns; acquire fails with it, not a generic error.
+  let exitedOnItsOwn: Error | undefined
   const translator = createCodexSessionJournalTranslator({
     sink: acquireInput.events,
     account: () => account,
@@ -164,12 +167,14 @@ export async function acquireCodexStructuredSession(input: {
         onExit: (error, exit) => {
           acquisition.appliedSettings.end()
           try {
-            // Orca's own close or cancel ends no start; Codex ending on its own does.
-            if (attempt.acquisitionGeneration && !exit?.expected && !attempt.cancelled) {
+            // Orca's own close or cancel ends no start; Codex ending on its own does, from the
+            // moment its process is seen, before spawn bookkeeping finishes.
+            if (!exit?.expected && !attempt.cancelled) {
+              exitedOnItsOwn ??= error
               acquireInput.events?.observeRootExit?.()
               acquisitions.endings.record(
                 sessionId,
-                attempt.acquisitionGeneration,
+                acquisitionGeneration,
                 codexStartFailure(error)
               )
             }
@@ -232,6 +237,9 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
+    if (connection.closed && exitedOnItsOwn) {
+      throw exitedOnItsOwn
+    }
     assertCodexConnectionOpen(connection, sessionId)
     attempt.acquisitionGeneration = acquisitionGeneration
     let disposed = false
@@ -269,6 +277,7 @@ export async function acquireCodexStructuredSession(input: {
       )
     return { process, acquisitionGeneration }
   } catch (error) {
+    acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
       return closeFailedCodexAcquisition({
         sessionId,

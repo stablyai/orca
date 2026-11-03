@@ -69,18 +69,30 @@ export async function settleStructuredAgentSessionProviderStarted(
   // Only the adapter's word on this exact acquisition says it died; absence alone says nothing.
   const ended = () =>
     context.deps.adapter.startupEnding?.(event.sessionId, event.acquisitionGeneration)
-  // A death the adapter reports ends the start without waiting on its bookkeeping below.
-  const died = context.runtimeState.startupAttempts
-    .rootExit(event.sessionId, child)
-    .then(() => ended() ?? new Promise<never>(() => {}))
-  return Promise.race([died, settleReady(context, event, rewind, ended, signal)])
+  const local: LocalSettlement = { started: false, fenced: false }
+  // A death the adapter reports ends the start without waiting on its bookkeeping below, but
+  // never once Orca's own handle or rewind write began: only that write's answer says whether
+  // the start may run again, and the contract guard bounds the wait for it.
+  const died = context.runtimeState.startupAttempts.rootExit(event.sessionId, child).then(() => {
+    const ending = local.started ? undefined : ended()
+    if (!ending) {
+      return new Promise<never>(() => {})
+    }
+    local.fenced = true
+    return ending
+  })
+  return Promise.race([died, settleReady(context, event, rewind, ended, local, signal)])
 }
+
+/** `fenced`: the death decided the start, so its local writes never begin. */
+type LocalSettlement = { started: boolean; fenced: boolean }
 
 function settleReady(
   context: StructuredAgentSessionProviderStartedContext,
   event: OpenedProvider,
   rewind: StructuredRewindRecoveryEvidence,
   ended: () => AgentSessionStartFailure | undefined,
+  local: LocalSettlement,
   signal?: AbortSignal
 ): Promise<StructuredAgentSessionProviderStartedOutcome> {
   const child = { generation: event.acquisitionGeneration, fence: event.fence }
@@ -102,14 +114,21 @@ function settleReady(
       ) {
         return 'stale'
       }
-      if (ending) {
-        return ending
+      if (ending || local.fenced) {
+        return ending ?? 'stale'
       }
+      local.started = true
       if (
         !(await recordStartedHandle(context, event)) ||
         !(await applyRewindAtStart(context, event.sessionId, current, rewind))
       ) {
         return refusedStart()
+      }
+      signal?.throwIfAborted()
+      // The writes succeeded; a death meanwhile is still this start's outcome.
+      const endedWhileWriting = ended()
+      if (endedWhileWriting) {
+        return endedWhileWriting
       }
       if (
         !context.runtimeState.startupAttempts.onClock(event.sessionId, child) ||

@@ -15,6 +15,7 @@ import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-h
 import canonicalRefusal from '../../codex/app-server/fixtures/start-resume-canonical-filename-refusal.json'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { codexStartFailure } from '../../codex/app-server/codex-startup-outcome'
+import { acpStartFailure } from '../../acp/acp-startup-outcome'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 
@@ -109,5 +110,43 @@ it("records one standalone row in the start's words when a direct attach fails w
     })
   ])
   expect(snapshot.submissions).toEqual([])
+  expect(dispatch).not.toHaveBeenCalled()
+})
+
+it("keeps the exit's words for a direct attach whose exit settled before its final answer", async () => {
+  const { host, open, dispatch, pending } = awaitOpen()
+  await attach()
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  const child = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.child!
+  await host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: HOST_TEST_SESSION,
+    fence: child.fence,
+    acquisitionGeneration: child.generation!,
+    cause: 'unexpected-exit',
+    reason: 'opencode exited',
+    failure: { kind: 'providerExited' }
+  })
+  // The agent's sign-in answer drained after its exit; it stays final but words nothing new.
+  pending.reject(
+    acpStartFailure(
+      new AgentSessionAcquisitionRefusal('OpenCode requires sign-in', 'notSignedIn'),
+      true
+    )
+  )
+  await vi.waitFor(async () => {
+    const rows = (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
+      (item) => item.body.kind === 'status'
+    )
+    expect(rows).toEqual([
+      expect.objectContaining({
+        itemId: agentJournalItemKey(structuredAgentSessionStartFailureRowIdentity('awaited-open')),
+        body: expect.objectContaining({
+          failure: expect.objectContaining({ kind: 'providerStartFailed' })
+        })
+      })
+    ])
+  })
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
   expect(dispatch).not.toHaveBeenCalled()
 })

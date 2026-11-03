@@ -65,7 +65,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
-    this.children.endings.forget(sessionId)
     const gate = this.deps.spec.launchGate?.enter(input.signal)
     const attempt = this.children.starts.begin(gate?.signal ?? input.signal)
     try {
@@ -91,6 +90,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   ): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
     const generation = this.deps.mintGeneration?.() ?? randomUUID()
+    this.children.endings.admit(sessionId, generation)
+    // Orca closing the connection first, such as on a sign-in line it cannot read, is the start's
+    // cause; the exit its cleanup then causes is not the agent ending unanswered.
+    let lostFirst: Error | undefined
     try {
       const { acquisition, session } = await acquireAcpStructuredSession({
         acquire: input,
@@ -98,10 +101,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         generation,
         abandoned: () => attempt.signal.aborted,
         track: (connection) => {
-          connection.onExit((_exit, requested) => {
+          connection.onExit((_exit, requested, lost) => {
+            lostFirst ??= lost
             if (!requested) {
               input.events?.observeRootExit?.()
-              this.children.recordExit(sessionId, generation, connection)
+              this.children.recordExit(sessionId, generation, connection, lost)
             }
           })
           this.children.starts.track(attempt, connection)
@@ -123,13 +127,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       this.children.sessions.set(sessionId, session)
       return acquisition
     } catch (error) {
+      this.children.endings.retire(sessionId, generation)
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
         // Wait briefly for process exit so startup failures include final diagnostics.
         await waitForAcpExit(connection, this.stopGraceMs(), attempt.signal)
       }
       // Capture spontaneous exit before close can classify it as requested.
-      const exitedOnItsOwn = connection?.exited === true && !attempt.signal.aborted
+      const exitedOnItsOwn = connection?.exited === true && !attempt.signal.aborted && !lostFirst
       if (connection && !(await connection.close().catch(() => false))) {
         // Retain failed cleanup for retry before another child can spawn.
         this.children.starts.retainFailed(sessionId, connection)
@@ -164,6 +169,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   startupEnding: NonNullable<SessionAdapter['startupEnding']> = (sessionId, generation) =>
     this.children.endings.get(sessionId, generation)
+
+  retireStartup: NonNullable<SessionAdapter['retireStartup']> = (sessionId, generation) =>
+    this.children.endings.retire(sessionId, generation)
 
   async dispatch(input: Parameters<SessionAdapter['dispatch']>[0]): Promise<DispatchOutcome> {
     const lost = this.children.sessions.get(input.sessionId)
@@ -298,9 +306,13 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   backgroundTaskStops = (sessionId: string) =>
     acpChildStopCapabilities(this.children.sessions.get(sessionId))
 
-  closeSession = (sessionId: string): Promise<boolean> => this.children.close(sessionId)
-  disposeSession = (sessionId: string): Promise<boolean> => this.children.close(sessionId)
-  releaseAcquisition = (input: { sessionId: string }) => this.children.close(input.sessionId)
+  // A released or closed session's start has no reader left for its ending.
+  closeSession = (sessionId: string): Promise<boolean> => {
+    this.children.endings.retire(sessionId)
+    return this.children.close(sessionId)
+  }
+  disposeSession = this.closeSession
+  releaseAcquisition = (input: { sessionId: string }) => this.closeSession(input.sessionId)
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.children.sessions.has(sessionId) ||
     this.children.starts.failedSessionIds().includes(sessionId)

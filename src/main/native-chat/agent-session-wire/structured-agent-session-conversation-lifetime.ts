@@ -241,11 +241,14 @@ export function createStructuredAgentSessionConversationLifetime(
         if (!host.context().runtimeState.startFlights.ownsChild(sessionId, failed)) {
           const record = deps().store.getRecord(sessionId)
           const wording = structuredAgentSessionFailureWordsContext(record)
+          // A start whose own exit settled first keeps that exit's wording; only a request
+          // deadline, the more specific explanation, outranks it. The verdict alone decides retry.
+          const cause = exited && !failure.requestTimeout ? { exit: ended?.failure } : { failure }
           await recordStructuredAgentSessionStartFailure(
             { journal: session.journal, fence: failed.fence },
             {
               startKey: failed.generation,
-              ...structuredAgentSessionStartFailure({ failure }, wording)
+              ...structuredAgentSessionStartFailure(cause, wording)
             },
             oldestQueuedSubmission(session)?.clientMessageId ?? null
           ).catch((writeError: unknown) =>

@@ -110,6 +110,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
           ? error
           : new AgentSessionPreSpawnError(error)
       }
+      this.endings.retire(id, session.generation)
       const result = await session.close(false).catch(() => null)
       const exited = piStartExitError(error, session.connection, result)
       if (exited) {
@@ -228,12 +229,15 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   holdsDispatch = (id: string): boolean => this.sessions.get(id)?.turns.holdsDispatch ?? false
   heldSends = (id: string): ReadonlySet<string> | undefined => this.sessions.get(id)?.heldSends
   startupEnding = (id: string, generation: string) => this.endings.get(id, generation)
+  retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)
   holdsLiveProviderProcess(id: string, generation: string): boolean {
     const session = this.sessions.get(id)
     return session?.generation === generation && !session.connection.closed
   }
 
   closeSession(id: string): Promise<boolean> {
+    // A released or closed session's start has no reader left for its ending.
+    this.endings.retire(id)
     return this.close(id, true)
   }
   private async close(id: string, requested: boolean): Promise<boolean> {

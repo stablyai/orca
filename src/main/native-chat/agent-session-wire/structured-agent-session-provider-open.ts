@@ -31,7 +31,14 @@ export async function openStructuredAgentSessionProviderChild(
   child: StructuredAgentSessionProviderChildIdentity
 ): Promise<void> {
   const { startupAttempts, acquireAborts } = context.runtimeState
+  // Once this owner is done, nothing reads how the acquisition ended before ready.
+  const retire = (): void => {
+    if (child.generation !== null) {
+      context.deps.adapter.retireStartup?.(sessionId, child.generation)
+    }
+  }
   if (!startupAttempts.own(sessionId, child)) {
+    retire()
     return
   }
   const attempt = acquireAborts.begin(sessionId)
@@ -71,6 +78,7 @@ export async function openStructuredAgentSessionProviderChild(
   } finally {
     startupAttempts.disown(sessionId, child)
     attempt.end()
+    retire()
   }
 }
 

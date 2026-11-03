@@ -51,107 +51,144 @@ export function registerStructuredAgentSessionStart(
       signal: acquire.signal,
       children
     })
-  const outcome = context.tasks.trackAttach(
-    Promise.resolve()
-      .then(async (): Promise<StructuredAgentSessionResumeOutcome> => {
-        let result: StructuredAgentSessionResumeOutcome = failedStructuredAgentSessionStart()
-        for (let number = 0; number < 5; number++) {
-          throwIfSignalAborted(acquire.signal)
-          if (attempts.pastCeiling(registeredAt)) {
-            result = { ...failedStructuredAgentSessionStart(), expired: true }
-            break
-          }
-          const lock = structuredAgentSessionStartFlightLock({
-            sessionId,
-            attemptId,
-            signal: acquire.signal,
-            flights,
-            serialize: context.serialize
-          })
-          const stillQueued = await lock.commit(async () =>
-            structuredAgentSessionStartStillQueued(context.sessions.get(sessionId), startedFor)
-          )
-          if (!stillQueued) {
-            return { ...failedStructuredAgentSessionStart(), aborted: true }
-          }
-          result = await run(lock, attemptId)
-          if (result.ok) {
-            // The child's open owns its outcome; readiness ends once that open gave it.
-            const ready = await lock.wait(handle.ended)
-            throwIfSignalAborted(acquire.signal)
-            if (ready === 'ready') {
-              return result
-            }
-            const owned = handle.result
-            result = await lock.commit(async () =>
-              structuredAgentSessionOpenFailure(context.sessions.get(sessionId), owned)
-            )
-          }
-          if (result.ok || result.aborted || result.expired || !result.retry || number === 4) {
-            break
-          }
-          attempts.abandon(sessionId, attemptId)
-          await waitForPromiseWithSignal(delay(100 * 2 ** number), acquire.signal)
-          throwIfSignalAborted(acquire.signal)
-          attemptId = randomUUID()
-          handle = attempts.begin(sessionId, attemptId, registeredAt)
-          register()
+  const attempting = Promise.resolve()
+    .then(async (): Promise<StructuredAgentSessionResumeOutcome> => {
+      let result: StructuredAgentSessionResumeOutcome = failedStructuredAgentSessionStart()
+      for (let number = 0; number < 5; number++) {
+        throwIfSignalAborted(acquire.signal)
+        if (attempts.pastCeiling(registeredAt)) {
+          result = { ...failedStructuredAgentSessionStart(), expired: true }
+          break
         }
-        return result
-      })
-      .catch((error: unknown): StructuredAgentSessionResumeOutcome => {
-        if (!acquire.signal.aborted) {
-          context.deps.logger.warn('starting the agent failed', {
-            scope: 'agent-start',
-            sessionId,
-            error
-          })
-          return {
-            ...failedStructuredAgentSessionStart(),
-            failure: agentSessionFailureFact('hostFault')
-          }
-        }
-        return failedStructuredAgentSessionStart()
-      })
-      .then(async (result): Promise<StructuredAgentSessionResumeOutcome> => {
-        if (result.ok) {
-          return result
-        }
-        return context.serialize(sessionId, async () => {
-          const settled = acquire.signal.aborted
-            ? stoppedStructuredAgentSessionStart(acquire.signal.reason)
-            : result
-          if (!settled.aborted && (startedFor !== undefined || children.length > 0)) {
-            const session = context.sessions.get(sessionId)
-            if (session) {
-              const record = context.deps.store.getRecord(sessionId)
-              const failure = failedStart(record, settled)
-              await recordStructuredAgentSessionStartFailure(
-                { journal: session.journal, fence: record?.lease.runtimeFence ?? 0 },
-                {
-                  startKey:
-                    children.at(-1)?.generation ?? failure.startKey ?? startedFor ?? attemptId,
-                  ...structuredAgentSessionStartFailure(
-                    failure.cause,
-                    structuredAgentSessionFailureWordsContext(record)
-                  )
-                },
-                startedFor ?? null
-              )
-            }
-          }
-          return settled
+        const lock = structuredAgentSessionStartFlightLock({
+          sessionId,
+          attemptId,
+          signal: acquire.signal,
+          flights,
+          serialize: context.serialize
         })
-      })
-      .finally(() => {
-        acquire.end()
-        flights.end(sessionId, attemptId)
+        const stillQueued = await lock.commit(async () =>
+          structuredAgentSessionStartStillQueued(context.sessions.get(sessionId), startedFor)
+        )
+        if (!stillQueued) {
+          return { ...failedStructuredAgentSessionStart(), aborted: true }
+        }
+        result = await run(lock, attemptId)
+        if (result.ok) {
+          // The child's open owns its outcome; readiness ends once that open gave it.
+          const ready = await lock.wait(handle.ended)
+          throwIfSignalAborted(acquire.signal)
+          if (ready === 'ready') {
+            return result
+          }
+          const owned = handle.result
+          result = await lock.commit(async () =>
+            structuredAgentSessionOpenFailure(context.sessions.get(sessionId), owned)
+          )
+        }
+        if (result.ok || result.aborted || result.expired || !result.retry || number === 4) {
+          break
+        }
         attempts.abandon(sessionId, attemptId)
-        context.publishStatus(sessionId)
-      })
-  )
+        await waitForPromiseWithSignal(delay(100 * 2 ** number), acquire.signal)
+        throwIfSignalAborted(acquire.signal)
+        attemptId = randomUUID()
+        handle = attempts.begin(sessionId, attemptId, registeredAt)
+        register()
+      }
+      return result
+    })
+    .catch((error: unknown): StructuredAgentSessionResumeOutcome => {
+      if (!acquire.signal.aborted) {
+        context.deps.logger.warn('starting the agent failed', {
+          scope: 'agent-start',
+          sessionId,
+          error
+        })
+        return {
+          ...failedStructuredAgentSessionStart(),
+          failure: agentSessionFailureFact('hostFault')
+        }
+      }
+      return failedStructuredAgentSessionStart()
+    })
+  let recorded: Promise<void> = Promise.resolve()
+  // Stop, close, quit, the deadline and the contract guard decide the start at once, even while
+  // its attempt or the session's serialized work is still held; late attempt work fails the
+  // flight's commit check. The failure row is queued before callers wake, so their work follows
+  // it, but they never wait for it to be written.
+  const outcome = Promise.race([
+    attempting,
+    stoppedStructuredAgentSessionStartSignal(acquire.signal)
+  ])
+    .then((result): StructuredAgentSessionResumeOutcome => {
+      const settled =
+        result.ok || !acquire.signal.aborted
+          ? result
+          : stoppedStructuredAgentSessionStart(acquire.signal.reason)
+      if (!settled.ok && !settled.aborted && (startedFor !== undefined || children.length > 0)) {
+        const key = { generation: children.at(-1)?.generation, startedFor, attemptId }
+        recorded = context
+          .serialize(sessionId, () =>
+            recordStructuredAgentSessionFlightFailure(context, sessionId, settled, key)
+          )
+          .catch((error: unknown) =>
+            context.deps.logger.warn('recording a failed start did not finish', {
+              scope: 'agent-start',
+              sessionId,
+              error
+            })
+          )
+      }
+      return settled
+    })
+    .finally(() => {
+      acquire.end()
+      flights.end(sessionId, attemptId)
+      attempts.abandon(sessionId, attemptId)
+      context.publishStatus(sessionId)
+    })
+  context.tasks.trackAttach(outcome.then(() => Promise.all([attempting, recorded])))
   register()
   return outcome
+}
+
+function stoppedStructuredAgentSessionStartSignal(
+  signal: AbortSignal
+): Promise<StructuredAgentSessionResumeOutcome> {
+  return new Promise((resolve) => {
+    const stopped = (): void => resolve(stoppedStructuredAgentSessionStart(signal.reason))
+    if (signal.aborted) {
+      stopped()
+    } else {
+      signal.addEventListener('abort', stopped, { once: true })
+    }
+  })
+}
+
+async function recordStructuredAgentSessionFlightFailure(
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string,
+  settled: Extract<StructuredAgentSessionResumeOutcome, { ok: false }>,
+  key: { generation: string | null | undefined; startedFor: string | undefined; attemptId: string }
+): Promise<void> {
+  const session = context.sessions.get(sessionId)
+  if (!session) {
+    return
+  }
+  const record = context.deps.store.getRecord(sessionId)
+  const failure = failedStart(record, settled)
+  await recordStructuredAgentSessionStartFailure(
+    { journal: session.journal, fence: record?.lease.runtimeFence ?? 0 },
+    {
+      startKey: key.generation ?? failure.startKey ?? key.startedFor ?? key.attemptId,
+      ...structuredAgentSessionStartFailure(
+        failure.cause,
+        structuredAgentSessionFailureWordsContext(record)
+      )
+    },
+    key.startedFor ?? null
+  )
 }
 
 export function failedStructuredAgentSessionStart(): Extract<

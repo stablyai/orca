@@ -679,12 +679,7 @@ describe('one logical start across physical attempts', () => {
         const expectedMessages = [later]
         expect(await submission(later)).toMatchObject({ dispatchState: 'pending' })
         if (failsWrite) {
-          await eventually(() =>
-            expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(
-              false
-            )
-          )
-          expect(await submission(later)).toMatchObject({ dispatchState: 'pending' })
+          // The failed start's row not being written holds up no later message.
           restoreWrite?.()
           expectedMessages.push(await accept('after the journal recovered'))
         }

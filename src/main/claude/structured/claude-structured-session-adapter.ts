@@ -74,7 +74,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   acquire = (input: StructuredAgentSessionAcquireInput) => {
     this.settledExitErrors.delete(input.identity.sessionId)
-    this.endings.forget(input.identity.sessionId)
+    this.endings.retire(input.identity.sessionId)
     const record = this.deps.namingRecord?.(input.identity.sessionId)
     const naming = this.naming?.acquire(input, record)
     return acquireClaudeSession({
@@ -100,10 +100,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         settleExit: (sessionId, exit) =>
           settleClaudeUnexpectedExit(this.exitLifecycle, sessionId, exit)
       }
-    }).catch((error: unknown) => {
-      naming?.failed()
-      throw claudeAcquireFailure(error)
     })
+      .then(this.endings.admitting(input.identity.sessionId))
+      .catch((error: unknown) => {
+        naming?.failed()
+        throw claudeAcquireFailure(error)
+      })
   }
 
   private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {
@@ -234,12 +236,15 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
-  releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
-    this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+  releaseAcquisition = (input: { sessionId: string }): Promise<boolean> => {
+    this.endings.retire(input.sessionId)
+    return this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+  }
   acknowledgeSessionRelease = (sessionId: string): void => {
     this.settledExitErrors.delete(sessionId)
   }
   startupEnding = (sessionId: string, generation: string) => this.endings.get(sessionId, generation)
+  retireStartup = (id: string, generation: string) => this.endings.retire(id, generation)
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined ||
     this.sessions.has(sessionId) ||

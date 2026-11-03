@@ -189,12 +189,18 @@ export class AcpStructuredChildren {
     }
   }
 
-  /** Taken when the process exit is first seen, so a start settling meanwhile cannot miss it. */
-  recordExit(sessionId: string, generation: string, connection: AcpStructuredConnection): void {
+  /** Taken when the process exit is first seen, so a start settling meanwhile cannot miss it. A
+   *  connection Orca closed first keeps that cause; only a bare exit is the agent's own. */
+  recordExit(
+    sessionId: string,
+    generation: string,
+    connection: AcpStructuredConnection,
+    lost?: Error
+  ): void {
     const detail =
       connection.stderrTail() || `${this.deps.spec.agent} ACP agent ended while starting`
     const exited = withProviderSpawnAbsence(
-      new AcpAgentExitedError(detail, connection.stderrTail()),
+      lost ?? new AcpAgentExitedError(detail, connection.stderrTail()),
       connection.spawnAbsence
     )
     this.endings.record(sessionId, generation, acpStartFailure(exited))

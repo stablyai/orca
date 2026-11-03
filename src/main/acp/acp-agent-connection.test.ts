@@ -352,7 +352,8 @@ describe('ACP process-owning connection', () => {
     expect(() => child.emit('exit', 0, null)).not.toThrow()
     expect(early).toHaveBeenCalledExactlyOnceWith(
       { code: 0, signal: null, processless: false },
-      false
+      false,
+      undefined
     )
     expect(() => connection.onExit(failing)).not.toThrow()
     const late = vi.fn()

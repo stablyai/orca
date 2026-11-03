@@ -16,7 +16,7 @@ export function watchPiStartExit(
   endings: AgentSessionStartEndings
 ): void {
   const sessionId = session.input.identity.sessionId
-  endings.forget(sessionId)
+  endings.admit(sessionId, session.generation)
   session.connection.onExit((requested) => {
     if (!requested) {
       input.events?.observeRootExit?.()

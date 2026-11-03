@@ -162,6 +162,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       .get(sessionId)
       ?.registration.adapter.startupEnding?.(sessionId, acquisitionGeneration)
 
+  retireStartup = (sessionId: string, acquisitionGeneration: string) =>
+    this.routes
+      .get(sessionId)
+      ?.registration.adapter.retireStartup?.(sessionId, acquisitionGeneration)
+
   awaitStoppedRequestEnd = async (sessionId: string, stoppedAt: number) =>
     this.liveOwnerOrNull(sessionId)?.awaitStoppedRequestEnd?.(sessionId, stoppedAt)
 

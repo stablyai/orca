@@ -274,6 +274,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     acquisitionGeneration: string
   ): AgentSessionStartFailure | undefined
+  /** The start's owner finished: nothing reads this acquisition's ending any more. */
+  retireStartup?(sessionId: string, acquisitionGeneration: string): void
   /** Undefined preserves the client catalog when the provider reports none. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands

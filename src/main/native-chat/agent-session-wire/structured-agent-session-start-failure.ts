@@ -107,18 +107,34 @@ export function agentSessionAcquireFailure(
   return agentSessionStartVerdict(error, answer) ?? error
 }
 
-/** Each session's latest acquisition that ended before the host committed it ready, with the
- *  adapter's verdict; the session's next acquisition or the adapter's close disposes it. */
+/** How each starting acquisition ended before the host committed it ready, with the adapter's
+ *  verdict. An acquisition is admitted when it starts and retired once nothing can read its ending:
+ *  its start's owner finished, it failed, or its session was released, disposed or closed. A
+ *  retired acquisition records nothing, so an exit after ready never leaves an entry behind. */
 export class AgentSessionStartEndings {
   private readonly endings = new Map<
     string,
-    { generation: string; failure: AgentSessionStartFailure }
+    { generation: string; failure?: AgentSessionStartFailure }
   >()
 
-  /** The first ending of an acquisition is its verdict; later reports of it change nothing. */
+  /** The session's new acquisition; an earlier one's ending can no longer be read. */
+  admit(sessionId: string, generation: string): void {
+    this.endings.set(sessionId, { generation })
+  }
+
+  /** Admits the acquisition an acquire returned, for adapters that record only published ones. */
+  admitting(sessionId: string) {
+    return <T extends { acquisitionGeneration: string }>(acquisition: T): T => {
+      this.admit(sessionId, acquisition.acquisitionGeneration)
+      return acquisition
+    }
+  }
+
+  /** The first ending of an admitted acquisition is its verdict; later reports change nothing. */
   record(sessionId: string, generation: string, failure: AgentSessionStartFailure): void {
-    if (this.endings.get(sessionId)?.generation !== generation) {
-      this.endings.set(sessionId, { generation, failure })
+    const admitted = this.endings.get(sessionId)
+    if (admitted?.generation === generation) {
+      admitted.failure ??= failure
     }
   }
 
@@ -127,8 +143,11 @@ export class AgentSessionStartEndings {
     return ended?.generation === generation ? ended.failure : undefined
   }
 
-  forget(sessionId: string): void {
-    this.endings.delete(sessionId)
+  /** Without a generation, retires whatever the session holds. */
+  retire(sessionId: string, generation?: string): void {
+    if (generation === undefined || this.endings.get(sessionId)?.generation === generation) {
+      this.endings.delete(sessionId)
+    }
   }
 
   clear(): void {
