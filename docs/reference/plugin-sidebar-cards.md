@@ -111,20 +111,20 @@ Orca parts draw Orca's own components and behave exactly as they do on Orca's ca
 only the state its facts say: a template chooses where a part goes, never what it claims (a
 `PrimaryBadge` on a workspace that is not the primary checkout draws nothing).
 
-| Part                                                                            | What it draws                                           |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `StatusLane` (`unreadAction`)                                                   | Activity, review status and the unread toggle           |
-| `Title` (`dimWhenRead`, `tooltip`)                                              | The name, with double-click rename                      |
-| `RepoChip`, `MetaRepoBadge`                                                     | The project as a chip or as a badge                     |
-| `SshControl` (`iconOnly`), `RuntimeHostMark`, `HostBadge` (`label`)             | The host and SSH reconnect                              |
-| `Branch` (`tooltip`), `IdentityLabel` (`tooltip`), `FolderPath`, `DetachedHead` | Identity                                                |
-| `ConflictBadge`, `CacheTimer`, `RemoteBranchConflict`                           | Git state                                               |
-| `PrimaryBadge`, `PrimaryStar`, `SparseBadge`                                    | Checkout kind                                           |
-| `RenameError`, `DeleteFailed`, `DeleteQuickAction`                              | Errors, and delete while Option/Alt is held             |
-| `Indicators` (`hover`: `meta`)                                                  | Linked items and ports                                  |
-| `DetailsHover` (`branchName`, `workspaceTitle`)                                 | The workspace hover card around its one layout child    |
-| `Agents` (`tight`)                                                              | Agent rows, with subagents                              |
-| `LinearSetupPrompt`, `ChildToggle`                                              | The Linear setup prompt, and the child workspace toggle |
+| Part                                                                            | What it draws                                                                       |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `StatusLane` (`unreadAction`)                                                   | Activity, review status and the unread toggle                                       |
+| `Title` (`dimWhenRead`, `tooltip`)                                              | The name, with double-click rename                                                  |
+| `RepoChip`, `MetaRepoBadge`                                                     | The project as a chip or as a badge                                                 |
+| `SshControl` (`iconOnly`), `RuntimeHostMark`, `HostBadge`                       | The host and SSH reconnect                                                          |
+| `Branch` (`tooltip`), `IdentityLabel` (`tooltip`), `FolderPath`, `DetachedHead` | Identity                                                                            |
+| `ConflictBadge`, `CacheTimer`, `RemoteBranchConflict`                           | Git state                                                                           |
+| `PrimaryBadge`, `PrimaryStar`, `SparseBadge`                                    | Checkout kind                                                                       |
+| `RenameError`, `DeleteFailed`, `DeleteQuickAction`                              | Errors, and delete while Option/Alt is held                                         |
+| `Indicators` (`hover`: `meta`)                                                  | Linked items and ports                                                              |
+| `DetailsHover`                                                                  | The workspace hover card around its one layout child; it names the workspace itself |
+| `Agents` (`tight`)                                                              | Agent rows, with subagents                                                          |
+| `LinearSetupPrompt`, `ChildToggle`                                              | The Linear setup prompt, and the child workspace toggle                             |
 
 Orca keeps what surrounds the content: selection, drag, click and double-click, the context menu,
 the delete overlay, sleeping dim, and where child workspaces nest.

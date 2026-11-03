@@ -2,6 +2,7 @@ import React from 'react'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
+import { getWorktreeCardHoverIdentity } from './worktree-card-hover-identity'
 import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import {
   renderWorktreeCardIndicators,
@@ -34,7 +35,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     isFolder,
     detachedHeadDisplay,
     branch,
-    identityDisplay,
     folderMetaRowContent,
     showIdentityInNewCard,
     conflictOperation,
@@ -47,7 +47,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showInlineAgentList,
     showLineageChildChip,
     remoteBranchConflict,
-    visibleCardTitle,
     workspacePorts,
     metaAutomationProvenance,
     metaCliProvenance,
@@ -104,21 +103,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     ? hasDetailedMetaRowContent
     : hasMetadataBadge || cacheStartedAt != null
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
-  const trimmedVisibleCardTitle = visibleCardTitle.trim()
-  const showBranchIdentityHover = newCardStyle
-    ? Boolean(identityDisplay) &&
-      !cardProps.includes('branch') &&
-      identityDisplay !== trimmedVisibleCardTitle
-    : compactCards && showBranch
-  const hoverBranchName = newCardStyle
-    ? identityDisplay
-    : showBranchIdentityHover
-      ? branch
-      : undefined
-  const hoverWorkspaceTitle =
-    trimmedVisibleCardTitle.length > 0 && trimmedVisibleCardTitle !== hoverBranchName
-      ? trimmedVisibleCardTitle
-      : undefined
+  const { branchName: hoverBranchName, workspaceTitle: hoverWorkspaceTitle } =
+    getWorktreeCardHoverIdentity(card)
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
   const hasHoverDetails =
     (newCardStyle || compactCards) &&

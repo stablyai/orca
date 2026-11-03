@@ -172,7 +172,6 @@
           {
             "el": "DetailsHover",
             "when": "vars.hoverDetails && !ws.isRenaming",
-            "props": { "branchName": "=vars.hoverBranch", "workspaceTitle": "=vars.hoverTitle" },
             "children": [{ "el": "IdentityBlock" }]
           },
           { "el": "IdentityBlock", "when": "!(vars.hoverDetails && !ws.isRenaming)" },

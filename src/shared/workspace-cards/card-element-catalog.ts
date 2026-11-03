@@ -45,7 +45,7 @@ export const CARD_ELEMENT_PROPS = {
   LinearSetupPrompt: [],
   ChildToggle: [],
   Indicators: ['hover'],
-  DetailsHover: ['branchName', 'workspaceTitle']
+  DetailsHover: []
 } as const satisfies Record<string, readonly string[]>
 
 export type CardElementName = keyof typeof CARD_ELEMENT_PROPS

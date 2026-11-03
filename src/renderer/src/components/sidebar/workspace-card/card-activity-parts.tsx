@@ -13,19 +13,16 @@ import {
 } from '../worktree-card-meta-items'
 import { WorktreeCardStatusLane } from '../worktree-card-status-lane'
 import { WorktreeLineageToggle } from '../WorktreeLineageToggle'
+import { getWorktreeCardHoverIdentity } from '../worktree-card-hover-identity'
 import { CARD_ELEMENT_PROPS } from '../../../../../shared/workspace-cards/card-element-catalog'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
 const part = cardElement<Card>
 
-function optionalText(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined
-}
-
 /** Wraps one layout element (its hover trigger) in the workspace details hover card. */
 function detailsHover(
-  props: Readonly<Record<string, unknown>>,
+  _props: Readonly<Record<string, unknown>>,
   children: React.ReactNode[],
   card: Card
 ): React.ReactNode {
@@ -33,12 +30,9 @@ function detailsHover(
   if (!child) {
     return null
   }
+  const { branchName, workspaceTitle } = getWorktreeCardHoverIdentity(card)
   return (
-    <WorktreeCardIdentityHover
-      card={card}
-      branchName={optionalText(props.branchName)}
-      workspaceTitle={optionalText(props.workspaceTitle)}
-    >
+    <WorktreeCardIdentityHover card={card} branchName={branchName} workspaceTitle={workspaceTitle}>
       {child}
     </WorktreeCardIdentityHover>
   )

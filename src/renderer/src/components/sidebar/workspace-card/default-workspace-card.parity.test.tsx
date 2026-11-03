@@ -385,3 +385,24 @@ describe('default workspace card template parity with the original card', () => 
     }
   }
 })
+
+describe('plugin templates cannot put words in Orca parts', () => {
+  it('refuses free text on the details hover and host badge', async () => {
+    const { cardTemplateIssues } =
+      await import('../../../../../shared/workspace-cards/card-template-validation')
+    const base = { version: 1 as const, facts: 1 as const }
+    expect(
+      cardTemplateIssues({
+        ...base,
+        root: {
+          el: 'DetailsHover',
+          props: { workspaceTitle: 'Rename me' },
+          children: [{ el: 'Row' }]
+        }
+      })
+    ).toEqual([expect.stringMatching(/DetailsHover has no prop workspaceTitle/)])
+    expect(
+      cardTemplateIssues({ ...base, root: { el: 'HostBadge', props: { label: 'prod-ssh' } } })
+    ).toEqual([expect.stringMatching(/HostBadge has no prop label/)])
+  })
+})
