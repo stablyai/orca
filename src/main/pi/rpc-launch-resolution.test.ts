@@ -158,7 +158,6 @@ describe('Pi host launch resolution', () => {
     expect(launch.previous).toBeNull()
     expect(launch.sessionFile).toBeUndefined()
     expect(launch.forkFile).toBeUndefined()
-    expect(launch.replacement).toBeUndefined()
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc'])
     expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
       'created'
@@ -235,22 +234,17 @@ describe('Pi host launch resolution', () => {
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--session', file])
   })
 
-  it('supersedes an unsaved creation and refuses a resumed session whose file is gone', async () => {
-    const h = await setup()
-    const missing = join(root, 'missing.jsonl')
-    h.withPrior(h.prior(missing))
-    const unsaved = await h.resolver(identity)
-    expect(unsaved.replacement).toBe('unsaved')
-    expect(piRpcProviderLink(unsaved, join(root, 'new.jsonl'), 2, 'new', 200)).toMatchObject({
-      origin: 'created',
-      supersedesKey: agentSessionProviderHandleKey(h.prior(missing).handle)
-    })
-    h.withPrior(h.prior(missing, 'resumed'))
-    await expect(h.resolver(identity)).rejects.toMatchObject({
-      name: 'AgentSessionAcquisitionRefusal',
-      reason: 'savedConversationMissing'
-    })
-  })
+  it.each(['created', 'resumed'] as const)(
+    'refuses a %s session whose file is gone, starting no other',
+    async (origin) => {
+      const h = await setup()
+      h.withPrior(h.prior(join(root, 'missing.jsonl'), origin))
+      await expect(h.resolver(identity)).rejects.toMatchObject({
+        name: 'AgentSessionAcquisitionRefusal',
+        reason: 'savedConversationMissing'
+      })
+    }
+  )
 
   it('keeps adopted, unreadable and malformed session files distinct from a missing one', async () => {
     const h = await setup()

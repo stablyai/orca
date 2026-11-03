@@ -233,7 +233,6 @@ describe('ACP child published before its handshake', () => {
         resume: {
           sessionId: 'saved-session',
           key: 'saved-key',
-          mayBeUnsaved: () => false,
           unannouncedLosses: () => []
         }
       }

@@ -90,7 +90,7 @@ function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | n
 }
 
 describe('ACP launch resolution', () => {
-  it('preserves resume and loss-warning decisions through a restore and an unreadable tail', async () => {
+  it('preserves loss-warning decisions through a restore and an unreadable tail', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-saved-read-'))
     const database = openTestJournalHostDatabase(root)
     try {
@@ -146,18 +146,15 @@ describe('ACP launch resolution', () => {
       })
       const readDecisions = async (readJournal: () => JournalLoad | null) => {
         const launch = await resolver(record, readJournal).resolve({ identity })
-        return {
-          unsaved: launch.resume?.mayBeUnsaved(),
-          losses: launch.resume?.unannouncedLosses()
-        }
+        return { losses: launch.resume?.unannouncedLosses() }
       }
       const full = () => replayJournal(database.db, identity.sessionId)
       const restored = () => restoreJournal(database.db, identity.sessionId)
       expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
-      expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [lostKey] })
+      expect(await readDecisions(restored)).toEqual({ losses: [lostKey] })
       insertTestJournalRowJson(database.db, identity.sessionId, 3, '{damaged')
       expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
-      expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [] })
+      expect(await readDecisions(restored)).toEqual({ losses: [] })
     } finally {
       await closeTestJournalHostDatabase(root)
       rmSync(root, { recursive: true, force: true })
@@ -219,14 +216,11 @@ describe('ACP launch resolution', () => {
         const launch = await resolver(record, () =>
           restoreJournal(database.db, identity.sessionId)
         ).resolve({ identity })
-        return {
-          unsaved: launch.resume?.mayBeUnsaved(),
-          losses: launch.resume?.unannouncedLosses()
-        }
+        return { losses: launch.resume?.unannouncedLosses() }
       }
       expect(restoreJournal(database.db, identity.sessionId)?.state.items.has('turn')).toBe(true)
       // The turn on acp-1 is found, so the exchange is saved; the loss has no warning yet.
-      expect(await readDecisions()).toEqual({ unsaved: false, losses: [lostKey] })
+      expect(await readDecisions()).toEqual({ losses: [lostKey] })
       // A newer build's records are unreadable here, never a missing chat.
       database.db
         .prepare('UPDATE journal_outcome_epochs SET format = ?')
@@ -235,7 +229,7 @@ describe('ACP launch resolution', () => {
       expect(newer).not.toBeNull()
       expect(newer?.newer).toStrictEqual({ sequence: 1 })
       expect(newer?.damage).toBeNull()
-      expect(await readDecisions()).toEqual({ unsaved: false, losses: [] })
+      expect(await readDecisions()).toEqual({ losses: [] })
     } finally {
       await closeTestJournalHostDatabase(root)
       rmSync(root, { recursive: true, force: true })
@@ -277,7 +271,7 @@ describe('ACP launch resolution', () => {
     expect((await start('ask')).args).not.toContain('--always-approve')
   })
 
-  it('resumes the chain head by its key, possibly unsaved only when this chat created it', async () => {
+  it('resumes the chain head by its key, whatever its origin', async () => {
     const link = (origin: 'created' | 'resumed') => ({
       linkId: `link-${origin}`,
       origin,
@@ -295,54 +289,11 @@ describe('ACP launch resolution', () => {
     }
     const key = agentSessionProviderHandleKey(handle)
     expect(created.resume).toMatchObject({ sessionId: 'acp-1', key })
-    expect(created.resume?.mayBeUnsaved()).toBe(true)
     const resumed = await resolver(
       grokRecord({ providerHandleChain: [link('created'), link('resumed')] }),
       () => journalWithTurns()
     ).resolve({ identity })
     expect(resumed.resume).toMatchObject({ sessionId: 'acp-1', key })
-    expect(resumed.resume?.mayBeUnsaved()).toBe(false)
-  })
-
-  it('counts a created session as possibly unsaved only while the journal proves no turn on it', async () => {
-    const created = grokRecord({
-      providerHandleChain: [
-        {
-          linkId: 'link-created',
-          origin: 'created',
-          mintedAtFence: 1,
-          observedAt: 1,
-          handle: { transport: 'acp', agent: 'grok', nativeId: 'acp-1' }
-        }
-      ]
-    })
-    const unsaved = async (readJournal: () => JournalLoad | null) =>
-      (await resolver(created, readJournal).resolve({ identity })).resume?.mayBeUnsaved()
-    const reads: string[] = []
-    const launch = await resolver(created, () => {
-      reads.push('read')
-      return null
-    }).resolve({ identity })
-    // Read only when asked: a reopen that works never replays the journal.
-    expect(reads).toEqual([])
-    expect(launch.resume?.mayBeUnsaved()).toBe(true)
-
-    expect(await unsaved(() => journalWithTurns())).toBe(true)
-    expect(await unsaved(() => journalWithTurns('acp-other'))).toBe(true)
-    expect(await unsaved(() => journalWithTurns('acp-other', 'acp-1'))).toBe(false)
-    // A journal that does not read whole, or at all, proves nothing.
-    expect(
-      await unsaved(() => ({
-        ...journalWithTurns(),
-        damage: { sequence: 3, cause: 'sequence-gap' }
-      }))
-    ).toBe(false)
-    expect(await unsaved(() => ({ ...journalWithTurns(), newer: { sequence: 3 } }))).toBe(false)
-    expect(
-      await unsaved(() => {
-        throw new Error('journal_closed')
-      })
-    ).toBe(false)
   })
 
   it('names the lost conversations whose warning row no session of the chat wrote', async () => {

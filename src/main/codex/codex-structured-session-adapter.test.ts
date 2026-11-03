@@ -208,7 +208,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codexStartedLink(adapter)?.handle).toEqual(codexProviderHandle('thread-proven'))
   })
 
-  it('starts a thread in place of a creation Codex never saved, and says which it replaced', async () => {
+  it('refuses a created thread Codex holds no rollout for, starting no other', async () => {
     const codex = fakeCodex({
       'thread/resume': () => {
         throw new CodexAppServerRequestError(
@@ -218,30 +218,21 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
         )
       }
     })
-    const adapter = adapterFor(codex, {
-      resumeThreadId: 'thread-unsaved',
-      supersedeIfUnsaved: true
-    })
-
-    await acquireReadyCodexForTest(adapter, {
+    const adapter = adapterFor(codex, { resumeThreadId: 'thread-unsaved' })
+    const acquired = await adapter.acquire({
       identity: identityFor('session-1'),
       fence: 9,
       spawnToken: 'spawn-9'
     })
-
-    expect(codex.connections[0].calls.slice(1, 3).map((call) => call.method)).toEqual([
-      'thread/resume',
-      'thread/start'
-    ])
-    expect(codexStartedLink(adapter)).toEqual({
-      linkId: `codex-9-${THREAD_ID}`,
-      handle: codexProviderHandle(THREAD_ID),
-      origin: 'created',
-      supersedesKey: 'codex:"thread-unsaved"',
-      mintedAtFence: 9,
-      observedAt: 1_700_000_000_500
-    })
-    expect(codex.connections[0].closeCount).toBe(0)
+    await expect(
+      adapter.open({
+        sessionId: 'session-1',
+        fence: 9,
+        acquisitionGeneration: acquired.acquisitionGeneration ?? null,
+        signal: new AbortController().signal
+      })
+    ).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+    expect(codex.connections[0].calls.map((call) => call.method)).not.toContain('thread/start')
   })
 
   it('rejects a resume that lands on a different thread; the host closes once', async () => {

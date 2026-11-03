@@ -46,8 +46,6 @@ export type CodexStructuredLaunch = {
   cwd: string
   codexHome: string | null
   resumeThreadId: string | null
-  /** Replace an unsaved thread created by this session; never supersede a proven resume. */
-  supersedeIfUnsaved?: boolean
   permissionPolicy?: CodexStructuredPermissionPolicy
   /** Open on the chosen model to avoid a first-turn switch. */
   model?: string

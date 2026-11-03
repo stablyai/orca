@@ -4,11 +4,9 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import { AcpAgentError, AcpAuthRequiredError, AcpRpcError } from './acp-errors'
-import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
+import { AcpAgentError, AcpAuthRequiredError } from './acp-errors'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 const ACP_INTERNAL_ERROR = -32603
@@ -39,23 +37,12 @@ function sessionNotFoundDetail(data: unknown): string | null {
     : null
 }
 
-export function acpReopenTakeover(
-  error: unknown,
-  resume: NonNullable<AcpStructuredLaunch['resume']>,
-  start: { over: boolean }
-): Pick<AgentSessionProviderHandleLink, 'supersedesKey'> {
-  // A replacement session cannot resolve sign-in failure or an abandoned start.
-  if (error instanceof AcpAuthRequiredError || start.over) {
+/** A saved session the agent could not reopen fails in place; nothing replaces it in this chat. */
+export function acpReopenFailure(error: unknown, sessionId: string, over: boolean): never {
+  if (error instanceof AcpAuthRequiredError || over) {
     throw error
   }
-  if (
-    error instanceof AcpRpcError &&
-    error.code === ACP_RESOURCE_NOT_FOUND &&
-    resume.mayBeUnsaved()
-  ) {
-    return { supersedesKey: resume.key }
-  }
-  if (isAcpSavedSessionMissing(error, resume.sessionId)) {
+  if (isAcpSavedSessionMissing(error, sessionId)) {
     throw withProviderDiagnostic(
       Object.assign(new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'), {
         cause: error

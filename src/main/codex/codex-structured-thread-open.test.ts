@@ -233,7 +233,6 @@ describe('openCodexThread', () => {
     ['success', '', 3],
     ['second-archive', 'is archived', 3],
     ['retry-no-rollout', 'no rollout found', 3],
-    ['unsaved-retry-no-rollout', 'no rollout found', 3],
     ['retry-active-writer', 'already has an active writer', 3],
     ['unarchive-refusal', 'is archived', 2],
     ['cancel-before-unarchive', 'cancelled opening', 1],
@@ -252,9 +251,6 @@ describe('openCodexThread', () => {
         if (method === 'initialize') return send({ id, result: {} })
         if (!id) return
         mode ??= params.cwd
-        if (method === 'thread/start' && mode === 'unsaved-retry-no-rollout') {
-          return send({ id, result: { thread: { id: 'replacement-2' } } })
-        }
         if (method === 'thread/unarchive' && mode !== 'unarchive-refusal') {
           return send({ id, result: {} })
         }
@@ -262,7 +258,7 @@ describe('openCodexThread', () => {
           if (mode === 'retry-active-writer') {
             return send({ id, error: { code: -32600, message: 'thread thread-1 already has an active writer' } })
           }
-          if (mode === 'retry-no-rollout' || mode === 'unsaved-retry-no-rollout') {
+          if (mode === 'retry-no-rollout') {
             return send({ id, error: { code: -32600, message: 'no rollout found for thread id thread-1' } })
           }
           return send({ id, result: { thread: { id: 'thread-1' }, model: 'gpt-saved' } })
@@ -295,7 +291,6 @@ describe('openCodexThread', () => {
           {
             cwd: mode,
             resumeThreadId: mode === 'start' ? null : 'thread-1',
-            ...(mode === 'unsaved-retry-no-rollout' ? { supersedeIfUnsaved: true } : {}),
             model: 'gpt-selected',
             permissionPolicy: codexStructuredPermissionPolicy('ask'),
             threadConfig: { service_tier: 'priority' },
@@ -309,7 +304,7 @@ describe('openCodexThread', () => {
           if (mode === 'retry-active-writer') {
             await expect(opened).rejects.toMatchObject({ reason: 'conversationOpenElsewhere' })
           }
-          if (mode === 'unsaved-retry-no-rollout') {
+          if (mode === 'retry-no-rollout') {
             await expect(opened).rejects.toMatchObject({ reason: 'savedConversationMissing' })
           }
         } else {
@@ -367,7 +362,7 @@ describe('openCodexThread', () => {
     expect(oversizedRequest).toHaveBeenCalledOnce()
   })
 
-  describe('a thread Codex never saved', () => {
+  describe('a saved thread Codex holds no rollout for', () => {
     const noRollout = (threadId: string, code = -32600) =>
       new CodexAppServerRequestError(
         'thread/resume',
@@ -382,55 +377,6 @@ describe('openCodexThread', () => {
         return { thread: { id: 'thread-new' }, model: 'gpt-live' }
       })
     }
-
-    it('starts a new thread in its place when Codex proves it holds no rollout', async () => {
-      const request = codexWithoutRollout()
-
-      await expect(
-        openCodexThread(
-          connectionFor(request),
-          { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
-          2_000
-        )
-      ).resolves.toMatchObject({
-        threadId: 'thread-new',
-        supersededThreadId: 'thread-unsaved',
-        model: 'gpt-live'
-      })
-      expect(request.mock.calls.map(([method]) => method)).toEqual([
-        'thread/resume',
-        'thread/start'
-      ])
-      expect(request).toHaveBeenLastCalledWith(
-        'thread/start',
-        { cwd: '/workspace' },
-        {
-          timeoutMs: 2_000
-        }
-      )
-    })
-
-    it('opens the replacement thread on the chosen model', async () => {
-      const request = codexWithoutRollout()
-
-      await openCodexThread(
-        connectionFor(request),
-        {
-          cwd: '/workspace',
-          resumeThreadId: 'thread-unsaved',
-          supersedeIfUnsaved: true,
-          model: 'gpt-chosen'
-        },
-        2_000
-      )
-
-      expect(request.mock.calls[0]?.[1]).not.toHaveProperty('model')
-      expect(request).toHaveBeenLastCalledWith(
-        'thread/start',
-        { cwd: '/workspace', model: 'gpt-chosen' },
-        { timeoutMs: 2_000 }
-      )
-    })
 
     it('explains a missing saved conversation without replacing it', async () => {
       const request = codexWithoutRollout()
@@ -466,7 +412,7 @@ describe('openCodexThread', () => {
         await expect(
           openCodexThread(
             connectionFor(request),
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
             2_000
           )
         ).rejects.toBe(failure)
@@ -474,7 +420,7 @@ describe('openCodexThread', () => {
       }
     })
 
-    it('recognizes the raw frame Codex sends, through the real connection', async () => {
+    it('refuses on the raw frame Codex sends, through the real connection, starting nothing', async () => {
       const fakeAppServer = String.raw`
         const readline = require('node:readline')
         const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
@@ -497,14 +443,21 @@ describe('openCodexThread', () => {
         command: process.execPath,
         args: ['-e', fakeAppServer]
       })
+      const methods: string[] = []
       try {
         await expect(
           openCodexThread(
-            connection,
-            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            {
+              request: (...args) => {
+                methods.push(args[0])
+                return connection.request(...args)
+              }
+            },
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
             5_000
           )
-        ).resolves.toMatchObject({ threadId: 'thread-new', supersededThreadId: 'thread-unsaved' })
+        ).rejects.toMatchObject({ reason: 'savedConversationMissing' })
+        expect(methods).toEqual(['thread/resume'])
       } finally {
         await connection.close()
       }

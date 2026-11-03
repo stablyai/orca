@@ -36,7 +36,6 @@ import {
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
-  replacement?: 'unsaved'
   /** Conversation files, newest first; empty for a new conversation. */
   lineage?: readonly string[]
 }
@@ -168,7 +167,6 @@ export function piRpcLaunchPart(
     const previous = agentSessionProviderHandleChainHead(record.providerHandleChain)
     let sessionFile: string | undefined
     let forkFile: string | undefined
-    let replacement: PiRpcResolvedLaunch['replacement']
     if (previous) {
       if (
         previous.handle.transport !== 'jsonl-rpc' ||
@@ -189,16 +187,14 @@ export function piRpcLaunchPart(
           reason: 'transcriptNotFound'
         })
       }
-      if (header === null && previous.origin !== 'created') {
+      if (header === null) {
         // The pinned file is gone; resuming it is impossible and nothing replaces it in this chat.
         throw new AgentSessionAcquisitionRefusal(
           `Pi session file ${source} was not found`,
           'savedConversationMissing'
         )
       }
-      if (header === null) {
-        replacement = 'unsaved'
-      } else if (await samePiDirectory(header.cwd, cwd)) {
+      if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source
       } else {
         forkFile = source
@@ -222,8 +218,7 @@ export function piRpcLaunchPart(
           ? { lineage: piConversationFiles(record.providerHandleChain) }
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
-        ...(forkFile ? { forkFile } : {}),
-        ...(replacement ? { replacement } : {})
+        ...(forkFile ? { forkFile } : {})
       },
       env: withoutPiCallerEnv(env),
       inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
@@ -270,9 +265,6 @@ export function piRpcProviderLink(
     origin: launch.forkFile ? 'forked' : launch.sessionFile ? 'resumed' : 'created',
     mintedAtFence: fence,
     observedAt: at,
-    ...(launch.forkFile && key ? { forkedFromKey: key } : {}),
-    ...(launch.replacement === 'unsaved' && key
-      ? { supersedesKey: key, ...(previous?.replaces ? { replaces: previous.replaces } : {}) }
-      : {})
+    ...(launch.forkFile && key ? { forkedFromKey: key } : {})
   }
 }

@@ -2,10 +2,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import {
-  agentSessionProviderHandleChainHead,
-  appendAgentSessionProviderHandleLink
-} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { appendAgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
@@ -188,27 +185,27 @@ describe('a saved Grok session Grok cannot reopen', () => {
 })
 
 describe('a created Grok session Grok reports missing on the first reopen', () => {
-  it('supersedes it silently when nothing was exchanged on it', async () => {
-    const { host, store, fence, loads, warnings, ready } = await openRestoreRig(
+  it('fails in place when nothing was exchanged on it, opening no other session', async () => {
+    const { host, store, fence, loads, warnings, ready, rig } = await openRestoreRig(
       -32002,
       'Resource not found'
     )
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await ready()
     await host.close(SESSION, 'user-close')
-    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
-    await ready()
+    const chain = structuredClone(store.getRecord(SESSION)?.providerHandleChain)
+    expect(chain).toMatchObject([{ origin: 'created', handle: { nativeId: PROVIDER_SESSION } }])
 
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    const q = await send(host, 'first message')
+    const settled = async () =>
+      (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === q)
+    await vi.waitFor(async () => expect((await settled())?.dispatchState).toBe('rejected'))
+    expect((await settled())?.rejection).toMatchObject({ kind: 'savedConversationMissing' })
     expect(loads).toEqual([PROVIDER_SESSION])
-    const chain = store.getRecord(SESSION)?.providerHandleChain ?? []
-    expect(chain).toHaveLength(1)
-    const head = agentSessionProviderHandleChainHead(chain)
-    expect(head).toMatchObject({
-      origin: 'created',
-      handle: { nativeId: FRESH },
-      supersedesKey: keyOf(PROVIDER_SESSION)
-    })
-    expect(head?.replaces).toBeUndefined()
+    expect(rig.sent('session/new')).toEqual([])
+    expect(rig.sent('session/prompt')).toEqual([])
+    expect(store.getRecord(SESSION)?.providerHandleChain).toEqual(chain)
     expect(await warnings()).toEqual([])
     await host.close(SESSION, 'user-close')
   })

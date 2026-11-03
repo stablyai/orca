@@ -16,7 +16,6 @@ import { readCodexSandboxPolicy, type CodexSandboxPolicy } from './codex-structu
 export type CodexOpenedThread = {
   threadId: string
   reportedPermissionMode?: string | null
-  supersededThreadId?: string
   thread?: Record<string, unknown>
   historyMode?: 'legacy' | 'paginated'
   model?: string
@@ -65,7 +64,6 @@ export async function openCodexThread(
   launch: {
     cwd: string
     resumeThreadId: string | null
-    supersedeIfUnsaved?: boolean
     permissionPolicy?: CodexStructuredPermissionPolicy
     /** Avoid a duplicate base prompt caused by switching models on the first turn. */
     model?: string
@@ -91,7 +89,6 @@ export async function openCodexThread(
       { timeoutMs }
     )
   }
-  let supersededThreadId: string | undefined
   let opened: unknown
   if (!resumeThreadId) {
     opened = await startThread()
@@ -109,7 +106,6 @@ export async function openCodexThread(
         { timeoutMs }
       )
     }
-    let unarchived = false
     try {
       try {
         opened = await resume()
@@ -120,7 +116,6 @@ export async function openCodexThread(
         // An archived thread is still saved; restore it and resume the same ID once.
         throwIfSignalAborted(signal)
         await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
-        unarchived = true
         opened = await resume()
       }
     } catch (error) {
@@ -143,25 +138,20 @@ export async function openCodexThread(
       if (!isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
-      // A thread that was archived was saved, so its retry never supersedes it.
-      if (!launch.supersedeIfUnsaved || unarchived) {
-        throw withProviderDiagnostic(
-          Object.assign(
-            new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),
-            { cause: error }
-          ),
-          providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
-        )
-      }
-      supersededThreadId = resumeThreadId
-      opened = await startThread()
+      throw withProviderDiagnostic(
+        Object.assign(
+          new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),
+          { cause: error }
+        ),
+        providerDiagnostic(error.providerDiagnostic?.text ?? error.message, 'log')
+      )
     }
   }
   const threadId = readCodexThreadId(opened)
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
   }
-  if (supersededThreadId === undefined && resumeThreadId && threadId !== resumeThreadId) {
+  if (resumeThreadId && threadId !== resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${resumeThreadId}`)
   }
   const result = opened as Record<string, unknown>
@@ -177,7 +167,6 @@ export async function openCodexThread(
   return {
     threadId,
     reportedPermissionMode: reportedCodexPermissionMode(result),
-    ...(supersededThreadId === undefined ? {} : { supersededThreadId }),
     thread,
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }

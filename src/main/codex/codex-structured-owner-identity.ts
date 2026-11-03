@@ -1,8 +1,5 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  agentSessionProviderHandleKey,
-  codexProviderHandle
-} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { readProcessStartTimeMs } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
@@ -64,11 +61,9 @@ type CodexProviderHandleLinkInput = {
   fence: number
   linkId?: string
   observedAt: number
-} & (
-  | { origin?: 'adopted'; resumed: boolean; supersedesThreadId?: never }
-  /** Only a newly created thread can supersede an unsaved predecessor. */
-  | { origin?: never; resumed: false; supersedesThreadId: string }
-)
+  origin?: 'adopted'
+  resumed: boolean
+}
 
 export function codexProviderHandleLink(
   input: CodexProviderHandleLinkInput
@@ -78,13 +73,6 @@ export function codexProviderHandleLink(
     handle: codexProviderHandle(input.threadId),
     origin: input.origin ?? (input.resumed ? 'resumed' : 'created'),
     mintedAtFence: input.fence,
-    observedAt: input.observedAt,
-    ...(input.supersedesThreadId
-      ? {
-          supersedesKey: agentSessionProviderHandleKey(
-            codexProviderHandle(input.supersedesThreadId)
-          )
-        }
-      : {})
+    observedAt: input.observedAt
   }
 }

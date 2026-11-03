@@ -123,7 +123,6 @@ export async function openCodexStructuredSession(
     translator &&
     input.events &&
     launch.resumeThreadId !== null &&
-    !opened.supersededThreadId &&
     !threadReturnedTurns(opened.thread)
   ) {
     await waitForPromiseWithSignal(
@@ -214,9 +213,7 @@ export async function openCodexStructuredSession(
   return {
     link: codexProviderHandleLink({
       threadId: opened.threadId,
-      ...(opened.supersededThreadId
-        ? { resumed: false, supersedesThreadId: opened.supersededThreadId }
-        : { resumed: launch.resumeThreadId !== null }),
+      resumed: launch.resumeThreadId !== null,
       fence: input.fence,
       linkId: deps.mintLinkId?.(),
       observedAt: deps.now?.() ?? Date.now()

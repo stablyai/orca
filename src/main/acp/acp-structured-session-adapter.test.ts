@@ -127,21 +127,15 @@ describe('ACP structured session adapter: acquire', () => {
     })
   })
 
-  it('replaces a created session the agent never saved with a new one', async () => {
+  it('fails a created session the agent reports missing, opening no other', async () => {
     const rig = await openAcpAdapterRig({
-      launch: {
-        resume: {
-          sessionId: 'lost',
-          key: 'old-key',
-          mayBeUnsaved: () => true,
-          unannouncedLosses: () => []
-        }
-      },
+      launch: { resume: { sessionId: 'lost', key: 'old-key', unannouncedLosses: () => [] } },
       script: (agent) =>
         agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Session not found'))
     })
     await rig.acquire({ fence: 2 })
-    expect(rig.started().link).toMatchObject({ origin: 'created', supersedesKey: 'old-key' })
+    expect(rig.openFailure()).toMatchObject({ reason: 'savedConversationMissing' })
+    expect(rig.sent('session/new')).toEqual([])
   })
 
   it('refuses a signed-out agent through the existing start-failure surface and stops its child', async () => {

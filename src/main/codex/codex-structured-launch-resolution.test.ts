@@ -221,7 +221,7 @@ describe('codex structured launch resolution', () => {
     expect(launch.resumeThreadId).toBe('thread-current')
   })
 
-  it('lets only a thread this session created be superseded when Codex never saved it', async () => {
+  it('resumes a saved thread the same way whatever its origin', async () => {
     const link = (
       origin: AgentSessionProviderHandleLink['origin'],
       mintedAtFence: number
@@ -235,11 +235,7 @@ describe('codex structured launch resolution', () => {
     const chainFor = (origin: 'created' | 'resumed' | 'adopted') =>
       origin === 'resumed' ? [link('created', 1), link('resumed', 2)] : [link(origin, 1)]
 
-    const created = await resolverFor(record({ providerHandleChain: chainFor('created') }))({
-      identity: IDENTITY
-    })
-    expect(created).toMatchObject({ resumeThreadId: 't', supersedeIfUnsaved: true })
-    for (const origin of ['resumed', 'adopted'] as const) {
+    for (const origin of ['created', 'resumed', 'adopted'] as const) {
       const launch = await resolverFor(record({ providerHandleChain: chainFor(origin) }))({
         identity: IDENTITY
       })
