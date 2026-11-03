@@ -84,7 +84,6 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     'does not revisit unchanged delivery history while editing after failure (%i rows)',
     async (count) => {
       const prompt: AskPrompt = {
-        source: 'transcript',
         questions: [indent],
         replyAsMessage: true
       }
@@ -203,7 +202,6 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
 
   it('owns the RPC-first echo and releases canonical uncertainty before an old reply can clear a retry', async () => {
     const prompt: AskPrompt = {
-      source: 'transcript',
       questions: [indent],
       replyAsMessage: true
     }
@@ -285,7 +283,6 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
 
   it('keeps the picked answer disabled after admission and retryable when delivery is unconfirmed', async () => {
     const prompt: AskPrompt = {
-      source: 'transcript',
       questions: [indent],
       replyAsMessage: true
     }
@@ -318,7 +315,6 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     'cancels a scheduled step when delivery becomes pending (multiple: %s)',
     async (multiple) => {
       const prompt: AskPrompt = {
-        source: 'transcript',
         questions: multiple ? [indent, fruit] : [indent],
         replyAsMessage: true
       }
