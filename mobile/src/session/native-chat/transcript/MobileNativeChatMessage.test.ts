@@ -14,7 +14,7 @@ import type { AgentMessageSource } from '../../../../../src/shared/agent-session
 import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
-import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
+import { NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT } from '../../../../../src/shared/native-chat/transcript/native-chat-message-time'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
@@ -53,7 +53,7 @@ describe('MobileNativeChatMessage', () => {
         (node) => node.props.accessibilityState?.expanded === false
       )!
       act(() => toggle.props.onPress())
-      expect(tree.root.findAllByType(MobileNativeChatMessageTime)).toHaveLength(1)
+      expect(timesIn(tree.root, message.timestamp)).toHaveLength(1)
       const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
       expect(markdown.map((node) => node.props.content)).toContain(
         'Review complete\n\nThe **result** is ready.'
@@ -115,6 +115,18 @@ describe('MobileNativeChatMessage', () => {
       .map((markdown) => markdown.props.content)
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
+
+  const timesIn = (
+    node: ReactTestInstance,
+    timestamp: NativeChatMessage['timestamp']
+  ): ReactTestInstance[] =>
+    findAllByHostType(node, 'Text').filter(
+      (text) =>
+        text.props.accessibilityLabel ===
+        new Intl.DateTimeFormat(undefined, NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT).format(
+          new Date(timestamp ?? Number.NaN)
+        )
+    )
 
   const words = (node: ReactTestInstance): string[] =>
     node.children.flatMap((child) => (typeof child === 'string' ? [child] : words(child)))
@@ -226,9 +238,7 @@ describe('MobileNativeChatMessage', () => {
           (node) => node.props.accessibilityLabel === title
         )
         expect(toggle !== undefined).toBe(task !== '')
-        expect(tree.root.findAllByType(MobileNativeChatMessageTime)).toHaveLength(
-          task === '' ? 1 : 0
-        )
+        expect(timesIn(tree.root, message.timestamp)).toHaveLength(task === '' ? 1 : 0)
       } finally {
         await activateMobileUiLocale('en')
       }
