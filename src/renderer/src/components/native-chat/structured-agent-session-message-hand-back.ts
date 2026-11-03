@@ -2,17 +2,18 @@ import { agentSessionAttachmentUploadIdOfPath } from '../../../../shared/agent-s
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from './native-chat-composer-draft-storage'
 import {
+  appendToNativeChatComposerDraft,
   structuredAgentSessionDraftScopeKey,
   unavailableNativeChatComposerDraftImage
 } from './native-chat-composer-draft-store'
-import { appendNativeChatDraftCache } from './native-chat-draft-cache'
 import { promptMarkersToImageReferences } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { promptTextContent, seedPromptSkillReferences } from './native-chat-prompt-document-text'
 
 export function structuredAgentSessionMessageText(body: AgentJournalMessageItem): string {
   return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
 }
 
-/** Append text and images without replacing existing input; return true once durable. */
+/** Append returned input without replacing later typing; return true once durable. */
 export function returnMessageToComposer(
   composerScopeKey: string,
   /** Unique to this message, so its images never collide with ones already attached. */
@@ -21,7 +22,8 @@ export function returnMessageToComposer(
   /** Each image's SSH connection, in block order. */
   imageConnectionIds?: readonly (string | null)[],
   /** Uploads the host no longer stores: their chips come back asking to be attached again. */
-  expiredUploadIds?: ReadonlySet<string>
+  expiredUploadIds?: ReadonlySet<string>,
+  skills?: AgentJournalMessageItem['skills']
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -43,19 +45,24 @@ export function returnMessageToComposer(
       ? [unavailableNativeChatComposerDraftImage({ id, path: block.path })]
       : [{ id, path: block.path, ...(connectionId ? { connectionId } : {}) }]
   })
-  // Atomically append text/images; stable image ids make repeated hand-back idempotent despite later typing.
-  return appendNativeChatDraftCache(
-    composerScopeKey,
-    promptMarkersToImageReferences(
-      structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
-      imageIds
-    ),
-    undefined,
-    images
+  const text = promptMarkersToImageReferences(
+    structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
+    imageIds
   )
+  if (text === '' && images.length === 0) {
+    return true
+  }
+  // Stable image ids make repeated hand-back idempotent despite later typing.
+  return appendToNativeChatComposerDraft(composerScopeKey, {
+    text,
+    images,
+    ...(skills?.length
+      ? { document: seedPromptSkillReferences(promptTextContent(text), skills) }
+      : {})
+  })
 }
 
-/** Return unaccepted text/images to the conversation-scoped draft even when unmounted; true means durable. */
+/** Return unaccepted input to its conversation draft even when unmounted; true means durable. */
 export function handBackStructuredAgentSessionMessage(
   sessionId: string,
   clientMessageId: string,
@@ -68,6 +75,7 @@ export function handBackStructuredAgentSessionMessage(
     `returned-${clientMessageId}`,
     body.blocks,
     imageConnectionIds,
-    expiredUploadIds
+    expiredUploadIds,
+    body.skills
   )
 }

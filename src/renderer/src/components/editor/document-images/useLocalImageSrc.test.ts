@@ -19,6 +19,11 @@ import {
 } from './local-image-src-cache'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile,
+  releaseBrowserAttachmentFiles
+} from '@/lib/browser-attachment-files'
 
 type PreviewResult = {
   content: string
@@ -126,6 +131,25 @@ describe('getLocalImageCacheKey', () => {
 })
 
 describe('loadLocalImageSrc', () => {
+  it('previews a staged browser image before a workspace exists without consuming its upload file', async () => {
+    const readFile = vi.fn()
+    const file = new File(['image bytes'], 'screenshot.png', { type: 'image/png' })
+    const [token] = holdBrowserAttachmentFiles([file])
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:staged-image')
+    setReadFile(readFile)
+
+    try {
+      expect(getLocalImageSrcCacheKey(token, '', undefined, null)).not.toBeNull()
+      await expect(loadLocalImageSrc(token, '', undefined, null)).resolves.toBe('blob:staged-image')
+      await expect(loadLocalImageSrc(token, '', undefined, null)).resolves.toBe('blob:staged-image')
+      expect(URL.createObjectURL).toHaveBeenCalledExactlyOnceWith(file)
+      expect(readFile).not.toHaveBeenCalled()
+      expect(readBrowserAttachmentFile(token)).toBe(file)
+    } finally {
+      releaseBrowserAttachmentFiles([token])
+    }
+  })
+
   it('shares one pending read and one blob URL for duplicate local image loads', async () => {
     const read = deferred<PreviewResult>()
     const readFile = vi.fn().mockReturnValue(read.promise)
