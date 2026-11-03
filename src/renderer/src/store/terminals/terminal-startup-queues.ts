@@ -1,4 +1,5 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { applyShellCommandWrapper } from '../../../../shared/shell-command-wrapper'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
@@ -30,7 +31,12 @@ export function createTerminalStartupQueueActions(
 > {
   return {
     queueTabStartupCommand: (tabId, startup) => {
-      const normalized = normalizeTabStartupCommand(startup)
+      // Why: wrap agent/bare launch commands through the opt-in shell template (e.g. devenv) at the shared queue choke point.
+      const command = applyShellCommandWrapper(
+        get().settings?.shellCommandWrapper,
+        startup.command
+      )
+      const normalized = normalizeTabStartupCommand({ ...startup, command })
       set((s) => ({
         pendingStartupByTabId: {
           ...s.pendingStartupByTabId,

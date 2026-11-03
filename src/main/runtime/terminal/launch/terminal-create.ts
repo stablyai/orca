@@ -16,6 +16,7 @@ import { agentLaunchTokenFor, withAgentLaunchToken } from '../../../agent-launch
 import { seedPtyLaunchTitle } from './pty-launch-title'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import { applyShellCommandWrapper } from '../../../../shared/shell-command-wrapper'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   protected abstract paneStartStatusArgs: dependencies.PaneStartArgsOf
@@ -42,7 +43,21 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
-      const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const resolvedLaunchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      const shellCommandWrapper = this.store?.getSettings?.().shellCommandWrapper
+      // Why: keep command unwrapped through Agent Teams planning/sequencing so a shell
+      // wrapper alone cannot look like setup sequencing (source !== command). Wrap only
+      // the final spawn command. claudeAgentTeamsSourceCommand stays on the bare agent
+      // line so teammate-mode inference still sees `claude`, not `devenv shell -- claude`.
+      const launchOpts = {
+        ...resolvedLaunchOpts,
+        ...(resolvedLaunchOpts.command
+          ? {
+              claudeAgentTeamsSourceCommand:
+                resolvedLaunchOpts.claudeAgentTeamsSourceCommand ?? resolvedLaunchOpts.command
+            }
+          : {})
+      }
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
       const session = this.getWorkspaceSessionForWorktree(workspace.id)
@@ -117,9 +132,14 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
             cwd,
-            command: sequencedStartupCommand
-              ? launchOpts.command
-              : (agentTeamsPlan?.command ?? launchOpts.command),
+            // Why: wrap after teams/sequencing so setup-vs-agent distinction stays real and
+            // teammate-enhanced commands still go through the opt-in shell template.
+            command: applyShellCommandWrapper(
+              shellCommandWrapper,
+              sequencedStartupCommand
+                ? launchOpts.command
+                : (agentTeamsPlan?.command ?? launchOpts.command)
+            ),
             launchAgent: launchOpts.launchAgent,
             launchConfig: effectiveLaunchConfig,
             ...(launchToken ? { launchToken } : {}),
