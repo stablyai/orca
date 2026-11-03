@@ -12,8 +12,10 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  Activity: 'Icon',
   CalendarClock: 'Icon',
   ChevronLeft: 'Icon',
+  Edit3: 'Icon',
   List: 'Icon',
   MoreHorizontal: 'Icon',
   PanelLeftClose: 'Icon',
@@ -52,7 +54,9 @@ import { resolveHostDisplay } from '../../../src/shared/host-display-resolution'
 import { HostScreenHeader } from './host-screen-header'
 
 // Use the unreachable verdict that offers native Reconnect to prove the page still withholds it.
-function controllerWith(forceReconnectHost: ForceReconnect) {
+type ControllerOverrides = Record<string, unknown>
+
+function controllerWith(forceReconnectHost: ForceReconnect, overrides: ControllerOverrides = {}) {
   const fields = {
     actions: {
       leaveHost: () => {},
@@ -71,7 +75,8 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     hostId: 'host-a',
     hostDisplay: resolveHostDisplay({ name: 'Desk' }),
     lastConnectedAt: null,
-    onHideSidebar: undefined
+    onHideSidebar: undefined,
+    ...overrides
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the header reads only these members on a narrow, non-embedded layout; the rest of the controller is unreachable from it.
   return fields as unknown as Parameters<typeof HostScreenHeader>[0]['controller']
@@ -122,6 +127,29 @@ describe("the host header's ⋯ menu", () => {
     expect(controls(tree, 'Workspace options')).toHaveLength(0)
     expect(controls(tree, 'Search workspaces')).toHaveLength(0)
     expect(controls(tree, 'New workspace')).toHaveLength(0)
+  })
+
+  it('keeps the saved-host actions offered while offline', () => {
+    const navigate = vi.fn()
+    const push = vi.fn()
+    const tree = render(
+      controllerWith(null, {
+        actions: { leaveHost: () => {}, navigateFromHostList: navigate },
+        router: { push }
+      })
+    )
+    act(() => {
+      controls(tree, 'More actions')[0]?.props.onPress()
+    })
+    for (const label of ['Edit host', 'Network diagnostics']) {
+      expect(controls(tree, label)[0]?.props.disabled).toBeFalsy()
+      act(() => controls(tree, label)[0]?.props.onPress())
+    }
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/h/host-a/edit')
+    expect(push).toHaveBeenCalledExactlyOnceWith({
+      pathname: '/connection-log',
+      params: { hostId: 'host-a' }
+    })
   })
 })
 

@@ -4,15 +4,14 @@ import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automation-owner-precondition'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { RpcClient } from '../transport/rpc-client'
-import { AutomationButton, AutomationChoice } from './AutomationControls'
+import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditor } from './AutomationEditor'
@@ -41,6 +40,8 @@ export function AutomationManager(props: {
   client: RpcClient | null
   hostId: string
   executionHost?: ExecutionHostId
+  /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
+  renderHeader?: (tabs: ReactNode) => ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -236,26 +237,24 @@ export function AutomationManager(props: {
       }
     )
   }
+  const tabs = (
+    <AutomationTabs
+      selected={tab}
+      onSelect={(next) => {
+        setTab(next)
+        setView({ kind: 'list' })
+      }}
+      disabled={catalog.busy}
+    />
+  )
   return (
     <>
+      {props.renderHeader ? props.renderHeader(tabs) : tabs}
       <ScrollView
         style={styles.screen}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <MobileSegmentedControl
-          fill
-          segments={[
-            { value: 'automations', label: t('automations.mobile.automations', 'Automations') },
-            { value: 'runs', label: t('automations.mobile.runs', 'Runs') }
-          ]}
-          selected={tab}
-          onSelect={(next) => {
-            setTab(next)
-            setView({ kind: 'list' })
-          }}
-          disabled={catalog.busy}
-        />
         {!catalog.connected ? (
           <Text style={styles.meta}>
             {t(
