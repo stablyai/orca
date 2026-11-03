@@ -269,18 +269,30 @@ describe('session link caller authority', () => {
     ).toHaveLength(2)
   })
 
-  it('lets a participant leave without cancelling its own closing turn', async () => {
+  it.each(['end', 'stop'] as const)(
+    'lets a participant %s without cancelling its own closing turn',
+    async (action) => {
+      await call(
+        'orchestration.linkControl',
+        { id: 'link-1', operationId: 'leave-safely', version: 1, action },
+        agent()
+      )
+      expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(
+        store,
+        'link-1',
+        'leave-safely',
+        'codex_implement'
+      )
+    }
+  )
+
+  it('lets the owner stop both link-owned turns', async () => {
     await call(
       'orchestration.linkControl',
-      { id: 'link-1', operationId: 'leave-safely', version: 1, action: 'end' },
-      agent()
+      { id: 'link-1', operationId: 'owner-stop', version: 1, action: 'stop' },
+      { runtime, caller: { kind: 'desktop' } }
     )
-    expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(
-      store,
-      'link-1',
-      'leave-safely',
-      'codex_implement'
-    )
+    expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(store, 'link-1', 'owner-stop', undefined)
   })
 
   it('requires the desktop owner to resolve an unknown delivery and refuses stale or already settled reviews', async () => {

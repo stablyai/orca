@@ -276,7 +276,7 @@ export const SESSION_LINK_METHODS = [
           store,
           link.id,
           params.operationId,
-          params.action === 'end' && from !== 'owner' ? from : undefined
+          from !== 'owner' ? from : undefined
         )
       }
       void redriveSessionLinks(store.orchestration).catch((error) =>
