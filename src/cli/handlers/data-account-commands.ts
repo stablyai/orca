@@ -55,7 +55,7 @@ export async function addDataAccount(
     (provider !== 'opencode' ||
       typeof integration !== 'string' ||
       !integration.trim() ||
-      integration.startsWith('-'))
+      integration.trim().startsWith('-'))
   ) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -157,7 +157,7 @@ function readOpenCodeLoginOptions(
     throw new RuntimeClientError('invalid_argument', '--answer must be written as key=value.')
   }
   return [
-    ...(typeof method === 'string' ? ['--method', method.trim()] : []),
+    ...(typeof method === 'string' ? ['--method', method] : []),
     ...answers.flatMap((value) => ['--answer', value])
   ]
 }

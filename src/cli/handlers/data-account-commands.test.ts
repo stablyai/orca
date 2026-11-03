@@ -100,7 +100,7 @@ describe('managed data account enrollment', () => {
         'login',
         'github-copilot',
         '--method',
-        'device',
+        ' device ',
         '--answer',
         'deployment=github.com',
         '--answer',
@@ -110,7 +110,7 @@ describe('managed data account enrollment', () => {
     })
     const flags = new Map<string, string | boolean>([
       ['integration', 'github-copilot'],
-      ['method', 'device'],
+      ['method', ' device '],
       ['answer', ['deployment=github.com', 'note=a=b'].join(REPEATED_FLAG_SEPARATOR)]
     ])
     await expect(addDataAccount({ ...context, flags }, 'opencode', login)).rejects.toThrow(
@@ -131,6 +131,7 @@ describe('managed data account enrollment', () => {
       new Map([['integration', '--server=http://example.test']]),
       '--integration requires'
     ],
+    ['opencode', new Map([['integration', ' -x']]), '--integration requires'],
     [
       'opencode',
       parseArgs(

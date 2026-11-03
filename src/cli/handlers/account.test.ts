@@ -60,6 +60,7 @@ vi.mock('../../shared/windows-console-input', () => ({
 }))
 
 import { ACCOUNT_HANDLERS } from './account'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { reportCliError } from '../cli-error'
@@ -834,12 +835,17 @@ describe('account CLI handlers', () => {
       ...context('opencode'),
       flags: new Map([
         ['agent', 'opencode'],
-        ['answer', 'token=secret-value']
+        ['answer', ['token=secret-value', 'note=second-secret'].join(REPEATED_FLAG_SEPARATOR)]
       ])
     })
-    await expect(failure).rejects.toThrow('--answer token=<redacted> --standalone')
+    await expect(failure).rejects.toThrow(
+      '--answer token=<redacted> --answer note=<redacted> --standalone'
+    )
     await expect(failure).rejects.not.toThrow('secret-value')
-    expect(spawnMock.mock.calls[0][1]).toContain('token=secret-value')
+    await expect(failure).rejects.not.toThrow('second-secret')
+    expect(spawnMock.mock.calls[0][1]).toEqual(
+      expect.arrayContaining(['token=secret-value', 'note=second-secret'])
+    )
   })
 
   it('rejects `--agent` with no value instead of defaulting to Claude', async () => {
