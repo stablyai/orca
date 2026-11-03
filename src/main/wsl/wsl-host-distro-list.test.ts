@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WslDistroRegistration } from './wsl-distro-registry-id'
+import type { WslDistroRegistration } from './discovery/wsl-distro-registry-id'
 import { admitWslHostDistro } from './wsl-host-add-admission'
 import { listWslHostDistros } from './wsl-host-distro-list'
 

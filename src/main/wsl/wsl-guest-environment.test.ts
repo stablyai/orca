@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
-vi.mock('./wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
+vi.mock('./execution/wsl-executable-path', () => ({ resolveWslExecutablePath: () => 'wsl.exe' }))
 
 import {
   getWslGuestEnvironment,

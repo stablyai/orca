@@ -28,9 +28,10 @@ import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
 import { deployOrcad, type OrcadDeployOptions } from '../ssh/orcad-remote-deploy'
 import { isWslMoveUnderwayOnHost } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { readLocalFullVersion } from '../managed-server/install/remote-versioned-install'
-import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
-import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
+import { createWslDistroHolder } from './discovery/wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
+import { readWslDistroRegistryIdShared } from './discovery/wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport, type WslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { holdWslDistroWithContext } from './wsl-orcad-held-context'
@@ -48,7 +49,7 @@ import {
   wslOrcadDeferralFailure
 } from './wsl-orcad-update-admission'
 import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
-import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from './wsl-node-runtime-download-budget'
+import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from './execution/wsl-node-runtime-download-budget'
 
 /** An update this app carries that the host may not take yet; the incumbent keeps serving. */
 export type WslOrcadDeferredUpdate = WslHostDeferredUpdate

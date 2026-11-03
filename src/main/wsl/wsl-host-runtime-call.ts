@@ -1,7 +1,7 @@
 /** E9 for runtime calls: a poll or fetch reaches a WSL host only without booting its distro. */
 import { assertWslHostRunAllowed, wslHostRuntimeCallGuard } from './wsl-host-gate'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
-import { deferUntilWslDistroRunning } from '../wsl-background-distro-gate'
+import { deferUntilWslDistroRunning } from './discovery/wsl-background-distro-gate'
 import { rethrowRetryable, settlingConnectFailure } from './wsl-host-connect-failure'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
 import { wslHostNotConnectedMessage, wslHostStoppedMessage } from './wsl-host-add-admission'

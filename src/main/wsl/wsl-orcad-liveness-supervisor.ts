@@ -3,7 +3,7 @@ import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { settleExitedDistroRunning } from './wsl-orcad-liveness-stopping-poll'
 import { isNoBootRefusal } from './wsl-orcad-connection-errors'
 import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
 import { confirmsRunning, gatherWslLivenessEvidence } from './wsl-orcad-liveness-evidence'
 import {

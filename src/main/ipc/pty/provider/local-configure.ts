@@ -7,7 +7,7 @@ import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-ho
 import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import type { LocalPtyProviderOptions } from '../../../providers/local-pty/local-pty-provider-types'
-import { runAsWslLaunchUserAct } from '../../../wsl/wsl-background-exec-gate'
+import { runAsWslLaunchUserAct } from '../../../wsl/discovery/wsl-background-exec-gate'
 import {
   addOrcaWslInteropEnv,
   stampWslOrchestrationCompatibilityHost

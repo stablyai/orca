@@ -1,3 +1,4 @@
+import type * as WslAvailability from '../wsl/discovery/wsl-availability'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AppRelaunch from '../startup/quit/app-relaunch'
@@ -142,8 +143,13 @@ const windowsProbes = vi.hoisted(() => ({
   isPwshAvailableAsync: vi.fn(async () => true)
 }))
 
-vi.mock('../wsl', () => ({
-  isWslAvailableAsync: windowsProbes.isWslAvailableAsync,
+vi.mock('../wsl/discovery/wsl-availability', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslAvailability>()),
+  ...(await (() => ({
+    isWslAvailableAsync: windowsProbes.isWslAvailableAsync
+  }))())
+}))
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listWslDistros: windowsProbes.listWslDistros,
   listWslDistrosAsync: windowsProbes.listWslDistrosAsync
 }))

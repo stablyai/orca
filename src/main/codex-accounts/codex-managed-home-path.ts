@@ -6,8 +6,8 @@ import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { toWindowsWslPath } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { toWindowsWslPath } from '../../shared/wsl-paths'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000

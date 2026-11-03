@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../wsl-env'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   buildGitSshPolicyEnv,
   GIT_SSH_CONFIG_ARGS,

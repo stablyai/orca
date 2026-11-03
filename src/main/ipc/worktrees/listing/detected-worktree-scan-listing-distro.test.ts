@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   registerRoots: vi.fn(),
   running: vi.fn(async () => true)
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => ((await mocks.running()) ? 'running' : 'stopped')
 }))
@@ -32,7 +32,7 @@ const {
   applyFreshDetectedWorktreeScanSideEffects,
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
-const { WslDistroStoppedError } = await import('../../../wsl/wsl-unc-access-gate')
+const { WslDistroStoppedError } = await import('../../../wsl/filesystem/wsl-unc-access-gate')
 
 const repo: Repo = {
   id: 'repo-1',

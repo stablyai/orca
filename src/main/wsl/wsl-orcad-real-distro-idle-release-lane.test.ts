@@ -20,18 +20,19 @@ import { parsePairingCode } from '../../shared/pairing'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { execCommand } from '../ssh/remote-exec/remote-exec-command'
-import { readConfirmedRunningWslDistros } from '../wsl-background-distro-gate'
+import { readConfirmedRunningWslDistros } from './discovery/wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { resolveWslInteropSpawnCwd } from './execution/wsl-interop-spawn-directory'
 import {
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand
 } from '../../shared/wsl-login-shell-command'
-import { resolveWslExecutablePath } from './wsl-executable-path'
-import { createWslDistroHolder, type WslDistroHolder } from './wsl-distro-holder'
-import { WSL_DISTRO_HOLDER_POLL_SECONDS } from './wsl-distro-holder-command'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { resolveWslExecutablePath } from './execution/wsl-executable-path'
+import { createWslDistroHolder } from './discovery/wsl-distro-holder'
+import type { WslDistroHolder } from './discovery/wsl-distro-holder-types'
+import { WSL_DISTRO_HOLDER_POLL_SECONDS } from './discovery/wsl-distro-holder-command'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import { WslOrcadConnectionManager, type WslOrcadConnection } from './wsl-orcad-connection'
 import { defaultWslOrcadEnvironmentId, deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
 import {

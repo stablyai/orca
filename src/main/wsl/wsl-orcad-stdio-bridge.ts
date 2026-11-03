@@ -10,7 +10,7 @@ import {
   type OrcadStdioBridgeDependencies
 } from '../managed-server/lifecycle/orcad-stdio-bridge-provider'
 import type { StartedPortForward } from '../ssh/port-forwarding/ssh-port-forward-provider'
-import { assertWslUncPathRunning } from './wsl-unc-access-gate'
+import { assertWslUncPathRunning } from './filesystem/wsl-unc-access-gate'
 
 export type WslOrcadStdioBridgeOptions = {
   environmentId: string

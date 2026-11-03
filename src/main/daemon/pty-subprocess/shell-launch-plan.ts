@@ -32,8 +32,8 @@ import {
 } from '../../providers/windows-shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
-import { parseWslPath } from '../../wsl'
-import { addWslEnvKeys } from '../../wsl-env'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess

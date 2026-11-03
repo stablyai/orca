@@ -33,7 +33,7 @@ vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
   }
 })
 
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => 'running'
 }))

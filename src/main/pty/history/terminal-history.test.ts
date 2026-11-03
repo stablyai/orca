@@ -76,12 +76,11 @@ const { parseWslPathMock, toLinuxPathMock } = vi.hoisted(() => ({
   toLinuxPathMock: vi.fn((p: string) => p)
 }))
 
-vi.mock('../../wsl', () => ({
-  parseWslPath: parseWslPathMock,
-  toLinuxPath: toLinuxPathMock
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
+  parseWslPath: parseWslPathMock
 }))
 
-vi.mock('../../wsl-fish-history-cleanup', () => ({
+vi.mock('../../wsl/history/wsl-fish-history-cleanup', () => ({
   deleteWslFishHistoryFile: deleteWslFishHistoryFileMock
 }))
 

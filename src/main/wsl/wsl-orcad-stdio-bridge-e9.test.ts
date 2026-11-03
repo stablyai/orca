@@ -30,11 +30,11 @@ vi.mock('@orca/process-host', async (importOriginal) => {
   }
 })
 
-import { _resetWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests } from './discovery/distro-catalog'
 import {
   _resetWslBackgroundDistroGateForTests,
   wasWslDistroLastSeenRunningSettled
-} from '../wsl-background-distro-gate'
+} from './discovery/wsl-background-distro-gate'
 import { WslOrcadBridgeActivity, wslHostBridgeEvents } from './wsl-orcad-bridge-activity'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'

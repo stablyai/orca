@@ -1,8 +1,8 @@
 /** C4 recovery uses bounded relaunch backoff, then census before publishing terminal verdicts. Recovery is never a user action, so it needs a confirmed-running distro and never boots one (E9). */
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 import { wslHostStatusDetailText } from '../../shared/wsl-host-failure-copy'
-import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import type { WslRunningDistrosRead } from './discovery/wsl-background-distro-gate'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import type { WslOrcadConnection, WslOrcadConnectOptions } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import type { WslLivenessVerdict } from './wsl-orcad-liveness-verdict'

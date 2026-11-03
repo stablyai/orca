@@ -14,7 +14,7 @@ vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => (
   scanAiVaultSessionsInService: mocks.scanLocalSessions
 }))
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)

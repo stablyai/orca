@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { runWslProcessMock } = vi.hoisted(() => ({ runWslProcessMock: vi.fn() }))
 
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { WslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 

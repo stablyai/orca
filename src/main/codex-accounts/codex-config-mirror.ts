@@ -8,9 +8,9 @@ import {
 } from '../codex/codex-config-mirror'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import type { Store } from '../persistence/loading-store/store'
-import { toWindowsWslPath } from '../wsl'
-import { wasWslDistroLastSeenRunningSettled } from '../wsl-background-distro-gate'
-import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/wsl-unc-access-gate'
+import { toWindowsWslPath } from '../../shared/wsl-paths'
+import { wasWslDistroLastSeenRunningSettled } from '../wsl/discovery/wsl-background-distro-gate'
+import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export type CanonicalCodexConfig = {
   contents: string

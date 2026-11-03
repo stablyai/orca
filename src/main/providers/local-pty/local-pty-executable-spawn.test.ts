@@ -38,7 +38,7 @@ function dirStats(isDirectory: boolean): Stats {
   return { isDirectory: () => isDirectory } as Stats
 }
 
-vi.mock('../../wsl', () => ({
+vi.mock('../../wsl/filesystem/unc-path-access', () => ({
   wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock
 }))
 

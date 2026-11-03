@@ -10,8 +10,8 @@ import {
   PENDING_DELETE_DIR_NAME
 } from './terminal-history-paths'
 import { hashWorktreeId } from './terminal-history-id'
-import { deleteWslFishHistoryFile } from '../../wsl-fish-history-cleanup'
-import { deferUntilWslDistroRunning } from '../../wsl-background-distro-gate'
+import { deleteWslFishHistoryFile } from '../../wsl/history/wsl-fish-history-cleanup'
+import { deferUntilWslDistroRunning } from '../../wsl/discovery/wsl-background-distro-gate'
 
 const pendingHistoryTreeRemovals = new Map<string, Promise<void>>()
 export const MAX_PENDING_HISTORY_TREE_REMOVALS = 64

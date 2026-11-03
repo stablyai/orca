@@ -18,23 +18,23 @@ import type { Store } from '../persistence/loading-store/store'
 import { pauseWslMoveScope } from '../persistence/moving-wsl-projects/wsl-move-driver-pause'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { quitProcess } from '../startup/process-quit-request'
-import { startWslDriveUncConversion } from '../wsl/wsl-drive-unc-conversion-run'
+import { startWslDriveUncConversion } from '../wsl/filesystem/wsl-drive-unc-conversion-run'
 import {
   lastWslDriveUncConversionOutcomes,
   type WslDriveUncConversionOutcome
-} from '../wsl/wsl-drive-unc-conversion-startup'
+} from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
 import { wslHostsGateOpen, wslHostsOptedIn } from '../wsl/wsl-host-gate'
 import { createWslMoveDriverDeps } from './wsl-move-driver-wiring'
 import { getTrustedUIRendererWebContents } from './ui'
 import {
   listPendingWslDriveUncRendererRewrites,
   recordWslDriveUncRendererStoreRewritten
-} from '../wsl/wsl-drive-unc-conversion-renderer'
-import { WSL_DRIVE_UNC_MAIN_STORE_IDS } from '../wsl/wsl-drive-unc-conversion-stores'
+} from '../wsl/filesystem/wsl-drive-unc-conversion-renderer'
+import { WSL_DRIVE_UNC_MAIN_STORE_IDS } from '../wsl/filesystem/wsl-drive-unc-conversion-stores'
 import type { WslDriveUncPendingRendererRewrite } from '../../shared/wsl-drive-unc-renderer-store-keys'
 import type { WslMoveRecordStoreRewrittenResult } from '../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import { readWorktreeLinks } from './wsl-drive-project-handlers'
-import { readWslDistroDriveMounts } from '../wsl/wsl-drive-unc-mounts'
+import { readWslDistroDriveMounts } from '../wsl/filesystem/wsl-drive-unc-mounts'
 
 export const WSL_DRIVE_UNC_CONVERSION_CHANNELS = [
   'wslDriveUnc:convert',

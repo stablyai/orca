@@ -10,7 +10,7 @@ import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
-import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
+import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'

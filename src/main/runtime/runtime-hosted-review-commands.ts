@@ -31,7 +31,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type HostedReviewTargetArgs = { repoSelector: string; worktreeSelector?: string }
 

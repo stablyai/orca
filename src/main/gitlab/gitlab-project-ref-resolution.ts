@@ -1,6 +1,6 @@
 import { glabExecFileAsync } from '../git/runner'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import { addWslEnvKeys } from '../wsl-env'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { readLocalGitConfigSignature } from '../github/local-git-config-signature'

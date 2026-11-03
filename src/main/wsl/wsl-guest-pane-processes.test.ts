@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult } from './wsl-runner'
+import type { WslResult } from './execution/wsl-runner'
 
 const isWslDistroRunning = vi.hoisted(() => vi.fn(async (_distro: string) => true))
 const runWslProcess = vi.hoisted(() =>
@@ -12,11 +12,11 @@ const runWslProcess = vi.hoisted(() =>
   }))
 )
 const wasWslDistroLastSeenRunningSettled = vi.hoisted(() => vi.fn((_distro: string) => false))
-vi.mock('../wsl-background-distro-gate', () => ({
+vi.mock('./discovery/wsl-background-distro-gate', () => ({
   isWslDistroRunning,
   wasWslDistroLastSeenRunningSettled
 }))
-vi.mock('./wsl-runner', () => ({ runWslProcess }))
+vi.mock('./execution/wsl-runner', () => ({ runWslProcess }))
 
 const {
   parseWslGuestPaneProcesses,

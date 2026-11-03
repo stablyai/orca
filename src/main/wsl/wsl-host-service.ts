@@ -15,7 +15,7 @@ import type {
   WslHostStatus
 } from '../../shared/wsl-host-types'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-connector-contract'
-import { wslDistroHolderKey } from './wsl-distro-holder-record'
+import { wslDistroHolderKey } from './discovery/wsl-distro-holder-record'
 import {
   saveWslHostConnection,
   readWslHostRecordsQuietly,

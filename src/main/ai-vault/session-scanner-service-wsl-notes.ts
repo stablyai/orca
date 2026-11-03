@@ -1,4 +1,4 @@
-import { onWslDistroGateNote } from '../wsl-background-distro-gate'
+import { onWslDistroGateNote } from '../wsl/discovery/wsl-background-distro-gate'
 
 type WslNoteChannel = {
   send(message: unknown, callback: (error: Error | null) => void): boolean
