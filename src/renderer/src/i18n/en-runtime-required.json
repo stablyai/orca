@@ -972,6 +972,8 @@
             }
           }
         },
+        "sectionAttentionCount_one": "{{count}} waiting on you",
+        "sectionAttentionCount_other": "{{count}} waiting on you",
         "sidebarHostOptions": {
           "visibleHosts_one": "{{count}} host",
           "visibleHosts_other": "{{count}} hosts"
