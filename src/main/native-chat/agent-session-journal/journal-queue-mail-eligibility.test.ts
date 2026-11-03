@@ -129,6 +129,29 @@ describe("the queue's one rule for the next card", () => {
   })
 
   it.each([20, 200])(
+    'does not walk %i person cards after the last mail is edited into a personal request',
+    async (count) => {
+      const journal = await queue(new Set())
+      await journal.queuedMessages.insert({ messageId: 'report', body: mail('run:r', 'm') })
+      const card = journal.queuedMessages.get('report')!
+      await journal.queuedMessages.update({
+        messageId: card.messageId,
+        expectedBodyFingerprint: card.fingerprint,
+        text: 'my request'
+      })
+      for (let i = 0; i < count; i++) {
+        await journal.queuedMessages.insert({ messageId: `person-${i}`, body: personal('next') })
+      }
+      const visits = countWalk()
+      for (let i = 0; i < 10; i++) {
+        await journal.queuedMessages.insert({ messageId: `extra-${i}`, body: personal('next') })
+        expect(journal.queuedMessages.nextInputCard(true, true)).toBeNull()
+      }
+      expect(visits()).toBe(0)
+    }
+  )
+
+  it.each([20, 200])(
     'walks %i ordinary follow-ups once across repeated busy-turn checks',
     async (count) => {
       const unavailable = new Set<string>()

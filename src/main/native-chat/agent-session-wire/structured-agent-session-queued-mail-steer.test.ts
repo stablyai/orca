@@ -9,6 +9,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
+import { admitStructuredAgentSessionInput } from './structured-agent-session-input-admission'
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(async () => rig?.dispose())
@@ -113,10 +114,10 @@ describe.each(['claude', 'codex'] as const)('%s automatic mail steering', (agent
     expect(await rig!.drafts()).toEqual([])
   })
 
-  it.each(['prompt', 'Stop'])(
+  it.each(['prompt', 'Stop', 'failure'])(
     'honors %s arriving after consume before the provider handoff',
     async (barrier) => {
-      await active(agent)
+      const working = await active(agent)
       const { runtimeState, conversationDelivery } = rig!.host.collaboratorsForTests()
       const place = runtimeState.deliveryOrder.reserve(SESSION)
       try {
@@ -132,6 +133,19 @@ describe.each(['claude', 'codex'] as const)('%s automatic mail steering', (agent
           expect(await rig!.queuePause()).toEqual({ reason: 'stopped' })
           return
         }
+        if (barrier === 'failure') {
+          await openRigTurnFor(rig!, working, 'completed', 'failure')
+          place.release()
+          await conversationDelivery.loop.wake(SESSION)
+          expect(rig!.dispatch).toHaveBeenCalledTimes(1)
+          expect(await rig!.drafts()).toMatchObject([{ messageId: report.id, state: 'waiting' }])
+          expect(await rig!.queuePause()).toEqual({ reason: 'failed' })
+          expect(await rig!.host.sendAnswer(SESSION, report.id)).toEqual({ kind: 'waiting' })
+          expect(await rig!.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+          await eventually(() => expect(rig!.dispatch).toHaveBeenCalledTimes(2))
+          expect(await rig!.drafts()).toEqual([])
+          return
+        }
         await prompt('pending')
         place.release()
         await conversationDelivery.loop.wake(SESSION)
@@ -140,6 +154,62 @@ describe.each(['claude', 'codex'] as const)('%s automatic mail steering', (agent
         await eventually(() => expect(rig!.dispatch).toHaveBeenCalledTimes(2))
       } finally {
         place.release()
+      }
+    }
+  )
+
+  it.each(
+    (['prompt', 'failure'] as const).flatMap((barrier) =>
+      (['preparation', 'continuation'] as const).map((phase) => ({ barrier, phase }))
+    )
+  )(
+    'restores mail when $barrier arrives during $phase, then delivers once released',
+    async ({ barrier, phase }) => {
+      const working = await active(agent)
+      const preparing = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const writes = vi.fn()
+      let transitioning = phase === 'continuation'
+      if (transitioning) {
+        rig!.host.deps.adapter.permissionModeRequiresAcquisition = () => transitioning
+        rig!.host.deps.adapter.settlePermissionTransition = async () => {
+          preparing.resolve()
+          await release.promise
+          transitioning = false
+          return true
+        }
+      }
+      rig!.dispatch.mockImplementation(async ({ admitFreshInput }) => {
+        if (phase === 'preparation') {
+          preparing.resolve()
+          await release.promise
+        }
+        await admitStructuredAgentSessionInput(admitFreshInput, writes)
+        return { state: 'admitted' }
+      })
+      const report = mail()
+      try {
+        await report.result
+        await preparing.promise
+        await (barrier === 'failure'
+          ? openRigTurnFor(rig!, working, 'completed', 'failure')
+          : prompt('pending'))
+        release.resolve()
+        await eventually(async () =>
+          expect(await rig!.drafts()).toMatchObject([{ messageId: report.id, state: 'waiting' }])
+        )
+        expect(writes).not.toHaveBeenCalled()
+        expect(await rig!.host.sendAnswer(SESSION, report.id)).toEqual({ kind: 'waiting' })
+        if (barrier === 'failure') {
+          expect(await rig!.queuePause()).toEqual({ reason: 'failed' })
+          expect(await rig!.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+        } else {
+          await prompt('resolved')
+        }
+        await eventually(() => expect(writes).toHaveBeenCalledTimes(1))
+        expect(await rig!.drafts()).toEqual([])
+      } finally {
+        release.resolve()
       }
     }
   )

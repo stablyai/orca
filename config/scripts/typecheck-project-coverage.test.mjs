@@ -62,6 +62,15 @@ describe('typecheck project coverage', () => {
         expect.arrayContaining(files.map((file) => `../${file}`))
       )
     }
+    expect(
+      projects
+        .filter((project) =>
+          project.files.has(
+            resolve(root, 'src/main/runtime/structured-chat-coordinator-mail.test.ts')
+          )
+        )
+        .map((project) => project.config)
+    ).toEqual(['config/tsconfig.test.pane-launch.json'])
     const combined = projects.find(
       (project) => project.config === 'config/tsconfig.test.pane-launch.json'
     )

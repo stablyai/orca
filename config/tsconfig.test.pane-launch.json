@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.web.json",
   "include": [
+    "../src/main/runtime/structured-chat-coordinator-mail.test.ts",
     "../src/renderer/src/components/task-page/linear/task-page-linear-detail-query.test.tsx",
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
     "../src/renderer/src/components/github-item-dialog/load-item-details/work-item-details-target-contract.test.tsx",
