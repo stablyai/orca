@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
+import { ORCA_JIRA_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
+import { useJiraAgentSkillSetup } from './use-jira-agent-skill-setup'
 import { translate } from '@/i18n/i18n'
 
 type ConnectStepProps = {
@@ -82,6 +85,14 @@ export function JiraSetupSteps(
   props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
 ): React.JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
+  const skillSetup = useJiraAgentSkillSetup()
+  const skillState = skillSetup.skillChecking
+    ? 'in-progress'
+    : skillSetup.skillInstalled
+      ? 'done'
+      : 'pending'
+  const skillInstallBlocked =
+    !props.connected && !skillSetup.skillInstalled && !skillSetup.skillChecking
 
   return (
     <>
@@ -107,8 +118,47 @@ export function JiraSetupSteps(
             </Button>
           }
         />
-        <TaskSourceShowInTasksStep
+        <TaskSourceStepRow
           index={2}
+          state={skillState}
+          title={translate(
+            'auto.components.settings.TasksPane.jiraSkillTitle',
+            'Install Jira agent skill'
+          )}
+          description={translate(
+            'auto.components.settings.TasksPane.jiraSkillDescription',
+            'Gives agents /orca-jira to read issues, post comments, move statuses, and create follow-up issues.'
+          )}
+          className={skillInstallBlocked ? 'opacity-60' : undefined}
+        >
+          {skillInstallBlocked ? (
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.TasksPane.jiraSkillBlocked',
+                'Connect Jira first, then install the skill for agents.'
+              )}
+            </p>
+          ) : (
+            <AgentSkillSetupPanel
+              variant="inline"
+              hideHeader
+              title={translate(
+                'auto.components.settings.TasksPane.jiraSkillPanelTitle',
+                'Jira skill'
+              )}
+              description={null}
+              skillNames={[ORCA_JIRA_SKILL_NAME]}
+              installed={skillSetup.skillInstalled}
+              loading={skillSetup.skillLoading}
+              error={skillSetup.error}
+              installDisabled={skillSetup.installDisabled}
+              onRecheck={skillSetup.refreshSkill}
+              freshnessSkillName={skillSetup.freshnessSkillName}
+            />
+          )}
+        </TaskSourceStepRow>
+        <TaskSourceShowInTasksStep
+          index={3}
           providerLabel={translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')}
           visible={props.visible}
           canHide={props.canHide}
