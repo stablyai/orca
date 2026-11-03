@@ -72,6 +72,9 @@ export function useFileExplorerDragDrop({
   const lastDragSourceMetaRef = useRef<{ path: string; isDirectory: boolean } | null>(null)
   // Why: multi-select must know isDirectory for every path, not only the primary (#10379).
   const dragSourceDirectoryByPathRef = useRef(new Map<string, boolean>())
+  // The capture listener replaces the live map before handleMoveDrop reads it.
+  // This copy survives that clear and is replaced on the next drag start.
+  const lastDragSourceDirectoryByPathRef = useRef(new Map<string, boolean>())
 
   const setDragSourcePath = useCallback(
     (
@@ -83,15 +86,16 @@ export function useFileExplorerDragDrop({
       if (path !== null) {
         dragSourceIsDirectoryRef.current = isDirectory
         lastDragSourceMetaRef.current = { path, isDirectory }
-        dragSourceDirectoryByPathRef.current = new Map(
-          selectionDirectoryFlags ?? [[path, isDirectory]]
-        )
-        if (!dragSourceDirectoryByPathRef.current.has(path)) {
-          dragSourceDirectoryByPathRef.current.set(path, isDirectory)
+        const nextFlags = new Map(selectionDirectoryFlags ?? [[path, isDirectory]])
+        if (!nextFlags.has(path)) {
+          nextFlags.set(path, isDirectory)
         }
+        dragSourceDirectoryByPathRef.current = nextFlags
+        lastDragSourceDirectoryByPathRef.current = new Map(nextFlags)
       } else {
         dragSourceIsDirectoryRef.current = false
-        dragSourceDirectoryByPathRef.current.clear()
+        // Replace the live map. Do not clear the snapshot the drop handler still reads.
+        dragSourceDirectoryByPathRef.current = new Map()
       }
     },
     []
@@ -145,7 +149,8 @@ export function useFileExplorerDragDrop({
     dragSourcePath,
     dragSourceIsDirectoryRef,
     lastDragSourceMetaRef,
-    dragSourceDirectoryByPathRef
+    dragSourceDirectoryByPathRef,
+    lastDragSourceDirectoryByPathRef
   })
 
   const clearNativeDragState = useCallback(() => {

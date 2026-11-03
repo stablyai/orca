@@ -32,6 +32,7 @@ type UseFileExplorerMoveDropParams = {
   dragSourceIsDirectoryRef: RefObject<boolean>
   lastDragSourceMetaRef: RefObject<{ path: string; isDirectory: boolean } | null>
   dragSourceDirectoryByPathRef: RefObject<Map<string, boolean>>
+  lastDragSourceDirectoryByPathRef: RefObject<Map<string, boolean>>
 }
 
 export function useFileExplorerMoveDrop({
@@ -43,7 +44,8 @@ export function useFileExplorerMoveDrop({
   dragSourcePath,
   dragSourceIsDirectoryRef,
   lastDragSourceMetaRef,
-  dragSourceDirectoryByPathRef
+  dragSourceDirectoryByPathRef,
+  lastDragSourceDirectoryByPathRef
 }: UseFileExplorerMoveDropParams): (sourcePath: string, destDir: string) => void {
   const confirm = useConfirmationDialog()
   return useCallback(
@@ -69,10 +71,12 @@ export function useFileExplorerMoveDrop({
 
       const newPath = joinPath(destDir, fileName)
       const operationOwner = getOperationOwnerForPath(sourcePath)
-      // Why: multi-select may drop several paths; prefer the selection directory map.
+      // Why: multi-select may drop several paths. The capture `drop` listener
+      // clears the live map first, so read the snapshot taken at drag start.
       const meta = lastDragSourceMetaRef.current
       const isDirectory =
         dragSourceDirectoryByPathRef.current.get(sourcePath) ??
+        lastDragSourceDirectoryByPathRef.current.get(sourcePath) ??
         (sourcePath === dragSourcePath
           ? dragSourceIsDirectoryRef.current
           : meta?.path === sourcePath
@@ -172,7 +176,8 @@ export function useFileExplorerMoveDrop({
       dragSourcePath,
       dragSourceIsDirectoryRef,
       lastDragSourceMetaRef,
-      dragSourceDirectoryByPathRef
+      dragSourceDirectoryByPathRef,
+      lastDragSourceDirectoryByPathRef
     ]
   )
 }
