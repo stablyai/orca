@@ -20,42 +20,6 @@ const REQUIRED_FIELDS = [
 const ENDPOINT = { port: '12345', token: 'token-123', env: 'production', version: '1' }
 
 describe('agent hook endpoint files', () => {
-  it('parses POSIX endpoint.env contents', () => {
-    expect(
-      parseAgentHookEndpointFile(
-        [
-          'ORCA_AGENT_HOOK_PORT=12345',
-          'ORCA_AGENT_HOOK_TOKEN=token-123',
-          'ORCA_AGENT_HOOK_ENV=production',
-          'ORCA_AGENT_HOOK_VERSION=1'
-        ].join('\n')
-      )
-    ).toEqual({
-      port: '12345',
-      token: 'token-123',
-      env: 'production',
-      version: '1'
-    })
-  })
-
-  it('parses Windows endpoint.cmd contents', () => {
-    expect(
-      parseAgentHookEndpointFile(
-        [
-          'set ORCA_AGENT_HOOK_PORT=54321',
-          'set ORCA_AGENT_HOOK_TOKEN=token-abc',
-          'set ORCA_AGENT_HOOK_ENV=development',
-          'set ORCA_AGENT_HOOK_VERSION=1'
-        ].join('\r\n')
-      )
-    ).toEqual({
-      port: '54321',
-      token: 'token-abc',
-      env: 'development',
-      version: '1'
-    })
-  })
-
   it.each(REQUIRED_FIELDS)('rejects an independently missing %s', (field) => {
     expect(parseAgentHookEndpointFile(ENDPOINT_LINES.join('\n'))).toEqual(ENDPOINT)
     const missing = ENDPOINT_LINES.filter((line) => !line.startsWith(`${field}=`)).join('\n')

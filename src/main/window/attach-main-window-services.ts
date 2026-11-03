@@ -23,8 +23,11 @@ import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
-import type { PreQuitCleanupFailureMode, UpdateInstallMode } from '../updater'
-import { scheduleHistoryGc } from '../terminal-history-gc'
+import type {
+  PreQuitCleanupFailureMode,
+  UpdateInstallMode
+} from '../updater/lifecycle/updater-state'
+import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
 import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'

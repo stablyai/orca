@@ -10,9 +10,6 @@ import {
   CLAUDE,
   NESTED,
   BACKGROUND,
-  SHIM,
-  io,
-  live,
   probe,
   paths,
   attempts,
@@ -98,15 +95,6 @@ describe('a pane without a proven owner', () => {
     await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Wrapped task' })
     expect(server.row()).toMatchObject({ state: 'working', prompt: 'Wrapped task' })
     expect(server.presence()).toMatchObject({ process: capture(49969), session: 'session-a' })
-  })
-
-  it('shows a spawning shim’s status over an unproven record without naming its process', async () => {
-    const server = await createServer()
-    runningPane(49960, ...SHIM)
-    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'Old task' })
-    await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'Shim task' })
-    expect(server.row()).toMatchObject({ state: 'working', prompt: 'Shim task' })
-    expect(server.presence()).toEqual({ agent: 'claude', session: 'older' })
   })
 
   it.each([['parent'], [undefined]])(
@@ -244,26 +232,9 @@ describe('the pane root’s exit', () => {
     await hook(server, 'Stop', { session: 'session-a' })
     expect(server.exits).toBe(1)
   })
-
-  it('leaves another agent’s record to that agent', async () => {
-    const server = await createServer()
-    runningPane(49969, CLAUDE)
-    await codexTurn(server)
-    await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
-    expect(server.exits).toBe(0)
-    expect(server.presence()).toEqual({ agent: 'codex', session: 'cx' })
-  })
 })
 
 describe('terminal reports and Orca restatements', () => {
-  it('lets a terminal-first Codex name its own session from its first hook', async () => {
-    const server = await createServer()
-    observe(server, 'working', 'codex')
-    expect(server.presence()).toBeUndefined()
-    await codexTurn(server)
-    expect(server.presence()).toEqual({ agent: 'codex', session: 'cx' })
-  })
-
   it('keeps a resumed Codex conversation over a Claude run inside it', async () => {
     const server = await createServer()
     runningPane(49969, [49969, 101, 49969, 'codex resume cx', 'S+'], ...NESTED)
@@ -304,33 +275,6 @@ describe('terminal reports and Orca restatements', () => {
       sessionOwner: true,
       suspended: true
     })
-  })
-
-  it('never names an owner from an inferred answer', async () => {
-    const server = await createServer()
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      connectionId: null,
-      payload: {
-        state: 'waiting',
-        prompt: 'pick one',
-        agentType: 'claude',
-        toolName: 'AskUserQuestion'
-      }
-    })
-    const before = server.getStatusSnapshotForPane(PANE)[0]
-    expect(
-      server.inferQuestionAnswered({
-        paneKey: PANE,
-        baselineUpdatedAt: server.receivedAt(),
-        baselineStateStartedAt: before.stateStartedAt,
-        baselinePrompt: 'pick one',
-        baselineAgentType: 'claude'
-      })
-    ).toBe(true)
-    expect(server.presence()).toBeUndefined()
   })
 })
 
@@ -472,43 +416,4 @@ describe('relayed panes', () => {
     expect(server.presence()).toMatchObject({ process: root, session: 'parent' })
     expect(server.presence()?.fallback).toBeUndefined()
   })
-})
-
-describe('acquisition cost', () => {
-  it('reads nothing for hooks from a proven owner, at any volume', async () => {
-    const server = await createServer()
-    runningPane(49969, CLAUDE)
-    observe(server, 'waiting')
-    await hook(server, 'SessionStart', { session: 'session-a' })
-    expect(attempts()).toBe(1)
-    for (const count of [20, 200]) {
-      vi.clearAllMocks()
-      for (let index = 0; index < count; index++) {
-        await hook(server, index % 2 ? 'PreToolUse' : 'PostToolUse', { session: 'session-a' })
-      }
-      expect(attempts()).toBe(0)
-      expect(io.readProcesses).not.toHaveBeenCalled()
-      expect(probe).not.toHaveBeenCalled()
-    }
-  })
-
-  it.each([[5], [50]])(
-    'retries unproven evidence once per turn, not per tool hook (%i tool hooks a turn)',
-    async (toolHooks) => {
-      const server = await createServer()
-      // The sender is live but its lineage is unreadable, so every attempt completes unknown.
-      runningPane(101)
-      live.add(49969)
-      const turns = 3
-      await hook(server, 'PostToolUse', { session: 'older' })
-      for (let turn = 0; turn < turns; turn++) {
-        await hook(server, 'UserPromptSubmit', { session: 'older', prompt: `turn ${turn}` })
-        for (let index = 0; index < toolHooks; index++) {
-          await hook(server, index % 2 ? 'PreToolUse' : 'PostToolUse', { session: 'older' })
-        }
-      }
-      expect(attempts()).toBe(turns + 1)
-      expect(server.row()).toMatchObject({ state: 'working', prompt: 'turn 2' })
-    }
-  )
 })

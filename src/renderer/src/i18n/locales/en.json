@@ -511,6 +511,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "Chat UI is on",
+        "off": "Chat UI is off",
+        "agents": "Default launch mode per agent",
+        "agentsDescription": "Choose whether each agent opens in Chat UI or its CLI.",
+        "chatDescription": "New agents will launch in chat mode by default.",
+        "cliDescription": "New agents will launch as CLI by default.",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "toggle": "Use Chat UI by default"
+      },
       "permissionsAgentsLink": "Settings → Agents",
       "permissionsTitle": "Permissions for new chats",
       "permissionsDescription": "New chats only. Agent-specific defaults are in Settings → Agents.",
@@ -1104,6 +1115,23 @@
       "save": "Save credentials",
       "menu": "Edge authentication…",
       "browserLogin": "Use your browser login for this protected tunnel. Service-token headers are available only in the native app."
+    },
+    "editorFormatOnSave": {
+      "title": "Format on Save",
+      "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
+      "keywords": "formatter format on save prettier biome gofmt"
+    },
+    "repositoryFormatter": {
+      "title": "Formatter Command",
+      "description": "Use this project’s formatter for Format on Save.",
+      "saveFailed": "Could not save formatter settings.",
+      "command": "Command",
+      "commandHelp": "Runs on the file’s host in the workspace root. Reads the buffer from stdin and must print only formatted text to stdout. Use ${file} or ${relativeFile} for the path. Arguments are passed directly, without a shell. Do not use --write. Leave empty to disable for this project.",
+      "include": "Include globs (one per line)",
+      "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. * and ** skip dot-prefixed names; list them explicitly, e.g. .github/**/*.yml. Enable Format on Save in General > Editor to use this command.",
+      "saving": "Saving…",
+      "save": "Save formatter",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
     }
   },
   "menu": {
@@ -8113,6 +8141,9 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Toggle orchestration panel"
           }
         },
         "FloatingWorkspacePane": {
@@ -10325,6 +10356,14 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
+            },
+            "orchestrationPanel": {
+              "title": "Orchestration panel",
+              "description": "Shows which agents each agent is working with, beside its chat or terminal.",
+              "orchestration": "orchestration",
+              "agents": "agents",
+              "workers": "workers",
+              "manager": "manager"
             }
           }
         },
@@ -13199,13 +13238,16 @@
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
           "moreThemesLoading": "Loading themes…",
-          "installingTheme": "Installing {{value0}}…"
+          "installingTheme": "Installing {{value0}}…",
+          "searchThemes": "Search themes…",
+          "noThemes": "No themes match your search."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Icon theme",
             "description": "File and folder icons from an enabled plugin.",
-            "builtIn": "Built-in"
+            "builtIn": "Built-in",
+            "search": "Search icon themes…"
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
@@ -13614,6 +13656,9 @@
           "kitty_title": "Import from Kitty",
           "kitty_description": "Review the settings that will be imported from your kitty.conf and the files it includes.",
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "No matches."
         }
       },
       "right": {
@@ -19628,7 +19673,10 @@
         "cancelled": "Cancelled",
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
-        "cancelledBy": "Cancelled on {{device}}"
+        "cancelledBy": "Cancelled on {{device}}",
+        "thisComputer": "this computer",
+        "computer": "the computer",
+        "otherDevice": "another device"
       },
       "notices": {
         "contextCleared": "Context cleared",
@@ -20098,7 +20146,11 @@
         "handedOffToAgent": "Handed off to agent",
         "startedAgent": "Started agent",
         "taskFromCoordinator": "Task from coordinator",
-        "updateFromWorker": "Update from worker"
+        "updateFromWorker": "Update from worker",
+        "senderReplaced": "{{name}} is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.",
+        "senderAmbiguous": "Orca can't tell which terminal {{name}} is running in. Open it from the sidebar.",
+        "senderNotRunning": "{{name}} is no longer running. Start a new agent from the sidebar to continue its work.",
+        "unnamedSenderSubject": "An agent"
       },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
@@ -20973,6 +21025,11 @@
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Could not format {{file}}. Saving without formatting: {{reason}}"
+      }
     }
   },
   "dashboardPopout": {
@@ -23234,6 +23291,13 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
+    "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
+    "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
+    "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",
+    "catalogUnresolved": "{{agent}} models have not loaded. Close and reopen the agent picker to try again.",
+    "catalogEmpty": "{{agent}} has no available models.",
+    "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
     "search": "Search agents and setups…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",
@@ -23246,8 +23310,11 @@
     "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
+    "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
+    "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
     "legacyModelCount": "{{total}} models",
+    "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
     "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
   },

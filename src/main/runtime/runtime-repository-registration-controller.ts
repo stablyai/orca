@@ -10,9 +10,9 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
-import { findProjectAtSameRealPath } from '../project-realpath-identity'
+import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -23,9 +23,9 @@ import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
 } from '../../shared/wsl-host-windows-drive-refusal'
-import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { describeWslUncAccessDenied } from '../wsl/filesystem/wsl-unc-access-denied'
 import { getResolvedFolderWorkspacePathStatus } from '../project-groups/folder-workspace-path-status'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {

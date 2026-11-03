@@ -5,7 +5,7 @@ import {
   resolveWorktreeScanCacheTtlMs
 } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {
   const BASE_TTL_MS = 30_000

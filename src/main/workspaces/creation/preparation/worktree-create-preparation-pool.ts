@@ -1,4 +1,4 @@
-import { worktreePreparationGit } from '../../../git/worktree-create-git-executor'
+import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -7,9 +7,9 @@ import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason
 } from '../../../../shared/worktree/create-preparation'
-import type { AddWorktreeOptions } from '../../../git/worktree-operation-options'
-import { prepareWorktreeCreateCheckout } from '../../../git/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import { prepareWorktreeCreateCheckout } from '../../../git/worktrees/creation/worktree-create-preparation'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import { queuePreparedWorktreeTipRefresh } from './worktree-preparation-refresh-queue'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { createPreparationActivity } from './worktree-create-preparation-activity'

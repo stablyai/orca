@@ -13,7 +13,7 @@ const { listRepoWorktreesMock, getLocalProjectWorktreeGitOptionsMock, workerStat
   })
 )
 
-vi.mock('../../repo-worktrees', () => ({
+vi.mock('../catalog/repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
     path: repo.path,
     head: '',
@@ -24,7 +24,7 @@ vi.mock('../../repo-worktrees', () => ({
   listRepoWorktrees: listRepoWorktreesMock
 }))
 
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 

@@ -3,16 +3,13 @@ import { pathToFileURL } from 'node:url'
 import { runProcessSync } from '@orca/process-host'
 import { collectUnitDependencyGraph } from './ci-unit-dependency-graph.mjs'
 import { discoverUnitFiles } from './ci-unit-files.mjs'
-import { FULL_SHARD_COUNT, planUnitSelection } from './ci-unit-selection.mjs'
+import { planUnitSelection } from './ci-unit-selection.mjs'
+import { fullUnitMatrix } from './ci-unit-matrix.mjs'
 import { readTimingBaseline, writeAssignment } from './ci-shard-assignment.mjs'
 
 export function prepareUnitPlan(env = process.env) {
-  const requestedCount = env.ORCA_UNIT_FULL_SHARD_COUNT ?? String(FULL_SHARD_COUNT)
-  // Every consumer reads the count from the plan; sixteen bounds runner-slot use.
-  if (!/^([2-9]|1[0-6])$/.test(requestedCount)) {
-    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 16')
-  }
-  const fullShardCount = Number(requestedCount)
+  const shards = fullUnitMatrix(env.ORCA_UNIT_FULL_SHARD_COUNT)
+  const fullShardCount = shards.length
   const files = discoverUnitFiles()
   let plan
   try {
@@ -47,10 +44,7 @@ export function prepareUnitPlan(env = process.env) {
       files,
       candidateFiles: files,
       executionFiles: files,
-      shards: Array.from({ length: fullShardCount }, (_, index) => ({
-        index: index + 1,
-        count: fullShardCount
-      }))
+      shards
     }
   }
   writeAssignment('ci-shards/unit-selection.json', plan)

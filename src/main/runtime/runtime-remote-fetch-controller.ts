@@ -6,7 +6,7 @@ import { getCanonicalRepoKey, type CanonicalRepoKeyOptions } from '../git/canoni
 import {
   armLocalRepoRefMaintenance,
   setRepoRefMaintenanceBusyProbe
-} from '../git/local-repo-ref-maintenance'
+} from '../git/refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../git/runner'
 import { setBoundedMapEntry } from './runtime-async-boundaries'
 

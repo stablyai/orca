@@ -44,8 +44,10 @@ vi.mock('./runtime-environment-request-connections', () => ({
 vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.call
 }))
-vi.mock('../../wsl/wsl-host-gate', () => ({ wslHostsGateOpen: () => mocks.wslGateOpen }))
-vi.mock('../../wsl/wsl-host-service-instance', () => ({
+vi.mock('../../wsl/host-lifecycle/wsl-host-gate', () => ({
+  wslHostsGateOpen: () => mocks.wslGateOpen
+}))
+vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostPhoneGate: () => ({
     // Every recorded host, as the gate lists them; one not set is unavailable.
     reachAll: () => new Map([['wsl:ubuntu', mocks.wslReach.get('wsl:ubuntu') ?? 'unavailable']])

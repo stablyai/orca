@@ -10,7 +10,7 @@ const failOnUpdateOf = vi.hoisted((): { id: string | null; thenAlso: string | nu
   thenAlso: null
 }))
 
-vi.mock('../wsl/wsl-host-service-instance', () => ({
+vi.mock('../wsl/host-lifecycle/wsl-host-service-instance', () => ({
   getWslHostService: () => ({
     recordForEnvironment: () => ({ distro: 'Ubuntu' }),
     ensureForRuntimeCall: async () => {}

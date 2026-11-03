@@ -32,6 +32,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "チャット UI はオンです",
+        "off": "チャット UI はオフです",
+        "agents": "Agent ごとのデフォルト起動モード",
+        "agentsDescription": "各 Agent をチャット UI と CLI のどちらで開くか選択します。",
+        "chatDescription": "新しい Agent はデフォルトでチャットモードで起動します。",
+        "cliDescription": "新しい Agent はデフォルトで CLI として起動します。",
+        "turnOn": "オンにする",
+        "turnOff": "オフにする",
+        "toggle": "デフォルトでチャット UI を使用"
+      },
       "permissionsAgentsLink": "設定 → Agent",
       "permissionsTitle": "新しいチャットの権限",
       "permissionsDescription": "新しいチャットにのみ適用されます。Agentごとのデフォルト設定は、設定 → Agent にあります。",
@@ -22306,6 +22317,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "このホストでは{{agent}}のモデルを利用できません。現在の選択を保持するか、引数を使用できます。",
+    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
+    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
+    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
+    "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "Agent と設定を検索…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
@@ -22320,6 +22337,7 @@
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
     "legacyModelCount": "{{total}} 個のモデル",
+    "select": "Agent を選択",
     "promptPlaceholder": "プロンプトを追加 (オプション): / でスキル、@ でファイル",
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル"
   },

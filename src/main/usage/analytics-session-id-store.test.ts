@@ -3,7 +3,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from './usage-cache-snapshot-writer'
 import { AnalyticsSessionIdStore } from './analytics-session-id-store'
 
 type WriteGate = { entered: (() => void) | null; wait: Promise<void> | null; fail: boolean }

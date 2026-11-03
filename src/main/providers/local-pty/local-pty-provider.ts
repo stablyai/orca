@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { observePtyForeground } from '../../pty/pty-master-foreground-observation'
+import { observePtyForeground } from '../../pty/process-retirement/pty-master-foreground-observation'
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtySpawnOptions } from '../pty-provider-contract'
 import type { PtyProcessInfo } from '../pty-process-info'

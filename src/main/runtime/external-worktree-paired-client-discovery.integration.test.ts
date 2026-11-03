@@ -1,8 +1,11 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { listWorktrees, listWorktreesStrict } from '../git/worktree'
+import { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 import { scheduleWorktreeBaseNotification } from '../ipc/worktrees/creation/worktree-base-directory-notifications'
 import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktrees/creation/worktree-head-identity-refresh'
 import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktrees/creation/worktree-head-identity-scope'
@@ -20,10 +23,30 @@ import {
 } from './paired-client-navigation-test-harness'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn(),
-  listWorktreesStrict: vi.fn()
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn(),
+    listWorktreesStrict: vi.fn()
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const initialWorktreePath = join(tmpdir(), 'repo')
 const externalWorktreePath = join(tmpdir(), 'external-worktree')

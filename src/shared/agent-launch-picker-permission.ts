@@ -20,7 +20,7 @@ export function agentPickerArgumentPermission(entry: AgentPickerEntry, draft: Ag
   }
   const parsed = tokenizeStartupCommand(text, 'posix')
   if (!parsed.ok) {
-    return { flag: text, value: text, remainingArguments: text, opaque: true }
+    return { flag: text, value: text, remainingArguments: text, opaque: true, ranges: [] }
   }
   if (!agentArgsSetPermission(entry.agent, text)) {
     return undefined
@@ -38,6 +38,7 @@ export function agentPickerArgumentPermission(entry: AgentPickerEntry, draft: Ag
     return {
       key: 'permissionMode',
       value: '',
+      words: parsed.tokens.slice(index, end + 1),
       start: parsed.spans[index].start,
       end: parsed.spans[end].end,
       lift: false,
@@ -62,7 +63,8 @@ export function agentPickerArgumentPermission(entry: AgentPickerEntry, draft: Ag
     value,
     choice,
     remainingArguments: remainingArguments ?? text,
-    opaque: remainingArguments === null
+    opaque: remainingArguments === null,
+    ranges
   }
 }
 

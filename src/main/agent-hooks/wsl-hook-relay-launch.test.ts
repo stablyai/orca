@@ -4,7 +4,7 @@ import type * as ProcessHost from '@orca/process-host'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetWslInteropSpawnDirectoryCache } from '../wsl-interop-spawn-directory'
+import { resetWslInteropSpawnDirectoryCache } from '../wsl/execution/wsl-interop-spawn-directory'
 
 const { spawnProcessMock } = vi.hoisted(() => ({
   spawnProcessMock: vi.fn((..._args: unknown[]) => ({ pid: 1 }))
@@ -14,7 +14,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<typeof ProcessHost>()),
   spawnProcess: spawnProcessMock
 }))
-vi.mock('../wsl/wsl-executable-path', () => ({
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
 

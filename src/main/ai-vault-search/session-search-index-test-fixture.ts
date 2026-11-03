@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { TranscriptMessageChannel } from '../ai-vault/session-transcript-channel'
+import { TranscriptMessageChannel } from '../ai-vault/transcripts/session-transcript-channel'
 import type {
   TranscriptMessage,
   TranscriptReadOutcome,
   TranscriptReadStart
-} from '../ai-vault/session-transcript-consumers'
+} from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
 import { openSessionSearchDatabase } from './session-search-schema'
 

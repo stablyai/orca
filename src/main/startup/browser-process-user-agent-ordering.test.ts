@@ -75,14 +75,16 @@ vi.mock('./configure-process', () => ({
   optOutOfHiddenPageWakeUpThrottling: vi.fn(),
   patchPackagedProcessPath: vi.fn()
 }))
-vi.mock('../serve-update-handoff', () => ({ installServeSupervisorDisconnectQuit: vi.fn() }))
+vi.mock('../updater/serve-update-handoff', () => ({
+  installServeSupervisorDisconnectQuit: vi.fn()
+}))
 vi.mock('./main-process-error-guards', () => ({
   installUncaughtPipeErrorGuard: vi.fn(),
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
 vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
   downloadRemoteServerUpdate: vi.fn(),
@@ -127,7 +129,7 @@ vi.mock('./single-instance-lock', () => ({
 }))
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
-vi.mock('../own-chromium-tree-kill-guard')
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard')
 vi.mock('../../shared/secret-store', () => ({
   setSecretStore: () => {
     mocks.events.push('continued-after-browser-identity')
@@ -164,7 +166,7 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
   }
 }))
 vi.mock('../window/desktop-integration/macos-press-and-hold-default')
-vi.mock('../ai-vault/session-parse-cache-persistence')
+vi.mock('../ai-vault/parse-cache/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/canonical-user-data'

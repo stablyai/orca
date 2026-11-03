@@ -26,6 +26,8 @@ function mountBridge(model: editor.ITextModel) {
     getValue: () => model.getValue(),
     onDidChangeModelContent: (listener: (event: editor.IModelContentChangedEvent) => void) =>
       model.onDidChangeContent(listener),
+    saveViewState: () => null,
+    restoreViewState: () => {},
     pushUndoStop: () => {
       model.pushStackElement()
       return true

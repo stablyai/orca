@@ -3,7 +3,7 @@ import {
   WINDOWS_REG_EXPAND_SZ,
   WINDOWS_REG_SZ,
   type WindowsNativeRegistryModule
-} from '../windows-native-registry'
+} from '../windows/windows-native-registry'
 
 export type WindowsUserPathReadResult =
   | { state: 'success'; value: string | null; expandable: boolean }
