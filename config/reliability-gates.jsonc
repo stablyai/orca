@@ -1423,18 +1423,18 @@
       "coveredProviders": ["local", "ssh"],
       "coverageNotes": "The actual renderer and runtime spawn-option builders with a mocked dispatcher, the spawn hook with a mocked dispatcher, the structured Codex create intent with a mocked dispatcher, the dispatcher with mocked preset writers and the real Claude config writer on a temp file, the execution-host writer and the relay spawn function with every real preset writer under a throwaway home, and the relay pty.spawn handler with a mocked trust function. Proves the builders await trust before returning, the fresh-launch and setting gates, the per-preset deadlines, that SSH launches hand every preset to the relay, and, for the agents that inherit trust from a home (Claude, Copilot, Qoder), the refusal of any stored path that is a root, a home or a folder above one, while Codex, Cursor and Antigravity still trust a home. No native PTY, agent CLI, live SSH host or WSL guest.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/main/agent-workspace-trust.ts"
+        "https://github.com/stablyai/orca/blob/main/src/main/agent-launch/trust/agent-workspace-trust.ts"
       ],
       "invariant": "A fresh PTY launch of an agent with a trust preset pre-trusts its workspace root (for Codex, whose lookup keys on its start folder, the folder it starts in, including a floating terminal's) before the provider spawn, in both spawn builders, on the host that runs the agent: main for local and WSL launches, the SSH relay on its own disk for SSH launches. It never waits past the preset's deadline: 20 s for local Codex, the short budget for every other write, local or on the relay. A failed or abandoned write lets the launch proceed untrusted, so the agent asks. Restored or reattached panes, spawns with no launch command and the setting turned off are never trusted; for an agent whose trust on a home covers the folders below it (Claude, Copilot, Qoder), no writer stores a path that is a root, a home or a folder above one, and an unknown home writes nothing; Codex, Cursor and Antigravity, whose trust on a home covers only the home, trust it as they did before; and a WSL launch never writes the Windows home. A structured Codex chat, which has no PTY, pre-trusts its folder the same way when it is created, under the same setting.",
       "oracle": "A trust write held pending keeps each builder from returning until it settles. A never-settling local Codex write resolves the dispatcher only after the long deadline; a never-settling local Claude write resolves after the short budget with a named warning. Rejected and throwing writes, and a throwing guard, resolve with a warning. Restored panes, spawns without a command and the setting off make no dispatcher call; Codex in a floating terminal or a workspace subfolder is trusted at that folder, and every other preset at the workspace root. Creating a structured Codex chat trusts its folder before launch preparation, and nothing with the setting off. An SSH launch returns the relay field for every preset and calls no writer, and the relay's pty.spawn starts no process until that launch's trust call settles. A home, a folder above one, a root, a symlink to a home and a missing path that climbs back to the home through `..` write no Claude, Copilot or Qoder trust file, on this machine and on the relay, and the home writes Codex, Cursor and Antigravity trust.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
-        "src/main/agent-workspace-trust-spawn.test.ts",
-        "src/main/agent-workspace-trust.test.ts",
-        "src/main/execution-host-workspace-trust.test.ts",
+        "src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts",
+        "src/main/agent-launch/trust/agent-workspace-trust.test.ts",
+        "src/main/agent-launch/trust/execution-host-workspace-trust.test.ts",
         "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "assertionRefs": [
@@ -1447,7 +1447,7 @@
           ]
         },
         {
-          "file": "src/main/agent-workspace-trust-spawn.test.ts",
+          "file": "src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts",
           "assertions": [
             "does nothing with the setting off",
             "does nothing for a restored or reattached pane",
@@ -1456,7 +1456,7 @@
           ]
         },
         {
-          "file": "src/main/agent-workspace-trust.test.ts",
+          "file": "src/main/agent-launch/trust/agent-workspace-trust.test.ts",
           "assertions": [
             "contains a rejected or throwing write so the launch proceeds",
             "gives only Codex the long deadline its shared config lane needs",
@@ -1467,7 +1467,7 @@
           ]
         },
         {
-          "file": "src/main/execution-host-workspace-trust.test.ts",
+          "file": "src/main/agent-launch/trust/execution-host-workspace-trust.test.ts",
           "assertions": [
             "writes no %s trust",
             "guards exactly the agents that inherit trust from a home",
@@ -1488,6 +1488,7 @@
           "date": "2026-09-29",
           "runner": "local",
           "platform": "macos",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "result": "passed",
           "durationSeconds": 4.16,
