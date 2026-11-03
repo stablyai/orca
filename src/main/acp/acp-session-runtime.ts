@@ -273,7 +273,18 @@ export class AcpSessionRuntime {
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
-    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
+    // Defer the decision so a preceding refusal in the same chunk takes effect.
+    return answerAcpPermission(
+      request,
+      context,
+      (request, context) =>
+        this.prompts.waitingToRetry
+          ? { outcome: { outcome: 'cancelled' } }
+          : (this.options.onPermission?.(request, context) ?? {
+              outcome: { outcome: 'cancelled' }
+            }),
+      diagnose
+    )
   }
 
   private diagnose(message: string): void {

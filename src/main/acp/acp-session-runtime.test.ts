@@ -98,6 +98,50 @@ describe('ACP session runtime', () => {
     }
   )
 
+  it('denies autonomous permissions between attempts and allows the admitted retry to ask', async () => {
+    const { runtime, agent } = fixture(
+      {},
+      {
+        retryBusyPrompts: true,
+        onPermission: () => ({ outcome: { outcome: 'selected', optionId: 'allow' } })
+      }
+    )
+    await runtime.start(startOptions)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    agent.on('session/prompt', (frame) => {
+      const refusal = {
+        jsonrpc: '2.0',
+        id: frame.id,
+        error: { code: -32003, message: 'busy', data: { reason: 'session_busy' } }
+      }
+      const autonomous = {
+        jsonrpc: '2.0',
+        id: 'same-chunk',
+        method: 'session/request_permission',
+        params: permission
+      }
+      agent.stdout.write(`${JSON.stringify(refusal)}\n${JSON.stringify(autonomous)}\n`)
+    })
+    const pending = runtime.prompt([...textPrompt])
+    await tick()
+    expect(agent.frames.find((frame) => frame.id === 'same-chunk')).toMatchObject({
+      result: { outcome: { outcome: 'cancelled' } }
+    })
+    expect(await agent.request('waiting', 'session/request_permission', permission)).toMatchObject({
+      result: { outcome: { outcome: 'cancelled' } }
+    })
+    agent.on('session/prompt', (frame) => {
+      void agent.request('admitted', 'session/request_permission', permission).then((response) => {
+        expect(response).toMatchObject({
+          result: { outcome: { outcome: 'selected', optionId: 'allow' } }
+        })
+        agent.reply(frame, { stopReason: 'end_turn' })
+      })
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(await pending).toEqual({ stopReason: 'end_turn' })
+  })
+
   it.each(['close', 'EOF'] as const)('ends delayed busy recovery on %s', async (action) => {
     const { runtime, agent } = fixture({}, { retryBusyPrompts: true })
     await runtime.start(startOptions)

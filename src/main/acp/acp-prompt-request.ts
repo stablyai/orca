@@ -17,8 +17,13 @@ function sessionBusy(error: unknown): boolean {
 export class AcpPromptRequest {
   private active?: AbortController
   private closedWith?: Error
+  private waiting = false
 
   constructor(private readonly retryBusy: boolean) {}
+
+  get waitingToRetry(): boolean {
+    return this.waiting
+  }
 
   async run(request: () => Promise<PromptResponse>): Promise<PromptResponse> {
     if (this.active) {
@@ -36,16 +41,19 @@ export class AcpPromptRequest {
           return { stopReason: 'cancelled' }
         }
         try {
+          this.waiting = false
           return await request()
         } catch (error) {
           if (!this.retryBusy || !sessionBusy(error)) {
             throw error
           }
         }
+        this.waiting = true
         await delayUnlessAborted(delayMs, active.signal)
         delayMs = Math.min(delayMs * 2, 5_000)
       }
     } finally {
+      this.waiting = false
       this.active = undefined
     }
   }
