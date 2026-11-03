@@ -3945,16 +3945,17 @@ export class RelayAssignmentStore {
   async verifyCellAssignment(input: AssignmentIdentity & {
     cellId: string
     assignmentEpoch: number
+    allowUnassignedBootstrap?: boolean
   }): Promise<boolean> {
     const rows = await this.database.query(
       `SELECT cell_id, assignment_epoch FROM relay_assignments
        WHERE user_id = ? AND relay_host_id = ?`,
       [input.userId, input.relayHostId]
     )
-    return Boolean(
-      rows[0] &&
-        text(rows[0], 'cell_id') === input.cellId &&
-        integer(rows[0], 'assignment_epoch') === input.assignmentEpoch
+    if (!rows[0]) return input.allowUnassignedBootstrap === true && input.assignmentEpoch === 1
+    return (
+      text(rows[0], 'cell_id') === input.cellId &&
+      integer(rows[0], 'assignment_epoch') === input.assignmentEpoch
     )
   }
 
