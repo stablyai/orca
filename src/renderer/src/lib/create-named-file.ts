@@ -3,7 +3,8 @@ import { createRuntimePath } from '../runtime/runtime-file-mutation-client'
 import { runtimePathExists } from '../runtime/runtime-file-metadata-client'
 import { runtimeTargetEnvironmentId } from '../runtime/runtime-client-target'
 import { detectLanguage } from './language-detect'
-import { getRelativePathInsideRoot, joinPath } from './path'
+import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { dirname, getRelativePathInsideRoot, joinPath } from './path'
 
 const MAX_UNTITLED_ATTEMPTS = 1000
 
@@ -72,6 +73,17 @@ export function getNamedFileRelativeDirectory(dir: string, root: string): string
   return relative.split('/').some((segment) => segment === '.' || segment === '..')
     ? null
     : relative
+}
+
+/** Parent folder of a file; only `/` separates POSIX paths, so a backslash in a POSIX name stays part of the name. */
+export function parentFolderOfFile(filePath: string): string {
+  if (isWindowsAbsolutePathLike(filePath)) {
+    const parent = dirname(filePath)
+    // Why: dirname drops the root separator for a drive-root file (`C:\a.txt` -> `C:`), which is drive-relative.
+    return /^[A-Za-z]:$/.test(parent) ? `${parent}${filePath[2] ?? '\\'}` : parent
+  }
+  const index = filePath.lastIndexOf('/')
+  return index <= 0 ? '/' : filePath.slice(0, index)
 }
 
 /** Why: an empty or separator-bearing name must never reach the filesystem as a nested path. */

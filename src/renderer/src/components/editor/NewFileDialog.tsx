@@ -37,7 +37,7 @@ export function NewFileDialog({
   const [folder, setFolder] = useState(defaultFolder)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [suggestedName, setSuggestedName] = useState('Untitled1')
+  const [suggestion, setSuggestion] = useState<{ folder: string; name: string } | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const nameInputId = useId()
   const folderInputId = useId()
@@ -47,10 +47,11 @@ export function NewFileDialog({
   useEffect(() => {
     let cancelled = false
     // Why: debounced so typing a path does not probe the filesystem per keystroke.
+    const suggestedFolder = folder.trim()
     const timer = setTimeout(() => {
-      void suggestName(folder.trim()).then((next) => {
+      void suggestName(suggestedFolder).then((next) => {
         if (!cancelled && next) {
-          setSuggestedName(next)
+          setSuggestion({ folder: suggestedFolder, name: next })
         }
       })
     }, 200)
@@ -59,6 +60,9 @@ export function NewFileDialog({
       clearTimeout(timer)
     }
   }, [folder, suggestName])
+
+  // Why: a suggestion belongs to the folder it was looked up for; show none for another folder.
+  const suggestedName = suggestion?.folder === folder.trim() ? suggestion.name : ''
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: folder || worktreePath })

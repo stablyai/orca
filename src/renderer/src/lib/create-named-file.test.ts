@@ -6,6 +6,7 @@ import {
   isSshOwnedFileContext,
   NamedFileExistsError,
   NamedFileOutsideWorkspaceError,
+  parentFolderOfFile,
   nextUntitledName,
   suggestUntitledName
 } from './create-named-file'
@@ -206,5 +207,20 @@ describe('createNamedFile folder and name validation', () => {
       suggestUntitledName(context, '/repo/../x', () => undefined)
     ).rejects.toBeInstanceOf(NamedFileOutsideWorkspaceError)
     expect(pathExists).not.toHaveBeenCalled()
+  })
+})
+
+describe('parentFolderOfFile', () => {
+  it.each([
+    ['/repo/src/app.py', '/repo/src'],
+    ['/repo/a\\b.txt', '/repo'],
+    ['/repo/a\\b/c.txt', '/repo/a\\b'],
+    ['/a.txt', '/'],
+    ['C:\\repo\\a.txt', 'C:\\repo'],
+    ['C:/repo/a.txt', 'C:/repo'],
+    ['C:\\a.txt', 'C:\\'],
+    ['C:/a.txt', 'C:/']
+  ])('returns the parent of %s as %s', (filePath, expected) => {
+    expect(parentFolderOfFile(filePath)).toBe(expected)
   })
 })

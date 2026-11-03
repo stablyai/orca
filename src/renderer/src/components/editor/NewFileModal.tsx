@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { dirname } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
   assertEditorFileOperationCurrent,
@@ -15,6 +14,7 @@ import {
   isSshOwnedFileContext,
   NamedFileExistsError,
   NamedFileOutsideWorkspaceError,
+  parentFolderOfFile,
   suggestUntitledName
 } from '@/lib/create-named-file'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -211,7 +211,7 @@ export default function NewFileModal(): React.JSX.Element | null {
   return (
     <NewFileDialog
       worktreePath={session.worktreePath}
-      defaultFolder={activeFilePath ? dirname(activeFilePath) : session.worktreePath}
+      defaultFolder={activeFilePath ? parentFolderOfFile(activeFilePath) : session.worktreePath}
       disableBrowse={session.disableBrowse}
       suggestName={suggestName}
       onCreate={handleCreate}
