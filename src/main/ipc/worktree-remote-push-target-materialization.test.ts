@@ -3,7 +3,10 @@ import type { GitPushTarget } from '../../shared/worktree/types'
 import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 
 import { ipcGitWorktreeTarget, materializeWorktreePushTargetRemote } from './worktree-remote'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'

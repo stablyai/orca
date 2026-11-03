@@ -20,7 +20,7 @@ import type { PreparationRearmHolder } from '../../workspaces/creation/preparati
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-terminal-startup'
-import { baseDriftWarningResult } from '../../git/worktree-base-drift-warning'
+import { baseDriftWarningResult } from '../../git/worktrees/creation/worktree-base-drift-warning'
 import { trackRuntimeWorkspaceCreate } from '../../workspaces/creation/workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../workspaces/creation/workspace-create-telemetry'

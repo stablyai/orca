@@ -1,4 +1,4 @@
-import type * as WorktreeListingModule from '../git/worktree-listing'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
@@ -14,7 +14,7 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
-vi.mock('../git/worktree-listing', async (importOriginal) => {
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
   return {
     ...(await importOriginal<typeof WorktreeListingModule>()),
     listWorktreesStrict: listWorktreesStrictMock
@@ -27,10 +27,6 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
-vi.mock('../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict: listWorktreesStrictMock
-}))
 
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'

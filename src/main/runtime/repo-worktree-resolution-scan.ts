@@ -1,5 +1,5 @@
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
-import { listWorktreesStrict } from '../git/worktree'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 
 export type RuntimeWorktreeScanResult =

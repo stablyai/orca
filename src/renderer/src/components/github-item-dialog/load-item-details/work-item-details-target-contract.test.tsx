@@ -1,4 +1,4 @@
-import type * as GitRunner from '../../../../../main/git/runner'
+import type * as GitRunner from '../../../../../main/git/command-runner/gh-exec-file'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
@@ -89,7 +89,7 @@ const io = vi.hoisted(() => {
     unexpected: new Array<string>()
   }
 })
-vi.mock('../../../../../main/git/runner', async (original) => ({
+vi.mock('../../../../../main/git/command-runner/gh-exec-file', async (original) => ({
   ...(await original<typeof GitRunner>()),
   ghExecFileAsync: io.gh
 }))
@@ -115,7 +115,7 @@ vi.mock('../../../../../main/github/github-enterprise-repository', () => ({
   isGitHubHostAuthenticated: async () => true,
   isGitHubHostAuthenticatedForGlobalCli: async () => true
 }))
-vi.mock('../../../../../main/git/remote-name-listing', () => ({
+vi.mock('../../../../../main/git/remotes/remote-name-listing', () => ({
   shouldProbeGitRemote: async () => true
 }))
 vi.mock('../../../../../main/github/rate-limit', () => ({

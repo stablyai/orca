@@ -235,7 +235,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true })
+      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true }),
+      undefined
     )
   })
 
@@ -256,7 +257,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.not.objectContaining({ shellOverride: expect.anything() })
+      expect.not.objectContaining({ shellOverride: expect.anything() }),
+      undefined
     )
     expect(providerSpawn.mock.calls[0]?.[0].shellOverride).toBe('/bin/planned-shell')
   })

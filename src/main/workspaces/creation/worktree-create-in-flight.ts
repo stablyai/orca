@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 
 type InFlightWorktreeCreate = { repoId: string; paths: string[] }
 
