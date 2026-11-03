@@ -7,6 +7,7 @@ import {
 } from './editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorSaveTargetFile } from './editor-save-target'
+import { isCodeViewTab } from './editor-save-disk-precondition'
 
 type UseEditorCmdSaveRequestParams = {
   activeFile: OpenFile | null
@@ -41,13 +42,29 @@ export function useEditorCmdSaveRequest({
       // Read-only Markdown previews still save their source record’s current draft.
       const state = useAppStore.getState()
       const draft = state.editorDrafts[saveTargetFile.id]
-      if (!draft && !saveTargetFile.isUntitled && !saveTargetFile.isDirty) {
+      const loaded = fileContents[activeFile.id]
+      const cleanCodeContent =
+        state.settings?.editorInsertFinalNewline === true &&
+        activeFile.id === saveTargetFile.id &&
+        saveTargetFile.readOnly !== true &&
+        isCodeViewTab(state, saveTargetFile) &&
+        loaded &&
+        !loaded.isBinary &&
+        !loaded.loadError &&
+        !loaded.isStale
+          ? loaded.content
+          : undefined
+      if (
+        !draft &&
+        !saveTargetFile.isUntitled &&
+        !saveTargetFile.isDirty &&
+        cleanCodeContent === undefined
+      ) {
         return
       }
       const fallbackContent =
-        draft ??
-        (activeFile.mode === 'markdown-preview' ? fileContents[activeFile.id]?.content : '')
-      void handleSave(fallbackContent ?? '')
+        draft ?? (activeFile.mode === 'markdown-preview' ? loaded?.content : cleanCodeContent) ?? ''
+      void handleSave(fallbackContent)
     }
     window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
     return () => window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)

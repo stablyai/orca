@@ -7,7 +7,15 @@ import type { OpenFile } from '@/store/slices/editor'
 import { ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT } from './editor-autosave'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 
-const storeState = vi.hoisted(() => ({ editorDrafts: {} as Record<string, string> }))
+const storeState = vi.hoisted(() => {
+  const editorDrafts: Record<string, string> = {}
+  return {
+    editorDrafts,
+    editorViewMode: {},
+    markdownViewMode: {},
+    settings: { editorInsertFinalNewline: false }
+  }
+})
 const EMPTY_FILE_CONTENTS: Parameters<typeof useEditorCmdSaveRequest>[0]['fileContents'] = {}
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
@@ -56,6 +64,7 @@ describe('useEditorCmdSaveRequest', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     storeState.editorDrafts = {}
+    storeState.settings.editorInsertFinalNewline = false
     container = document.body.appendChild(document.createElement('div'))
     root = createRoot(container)
   })
@@ -138,5 +147,56 @@ describe('useEditorCmdSaveRequest', () => {
     })
 
     expect(save).toHaveBeenCalledExactlyOnceWith('source draft')
+  })
+
+  it('saves the loaded content of a clean code file when final-newline insertion is enabled', () => {
+    const file: OpenFile = {
+      ...makeFile('clean'),
+      filePath: '/repo/clean.ts',
+      relativePath: 'clean.ts',
+      language: 'typescript',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    act(() => {
+      root.render(
+        <SaveProbe
+          activeFile={file}
+          enabled
+          onSave={save}
+          fileContents={{ clean: { content: 'const x = 1', isBinary: false } }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).toHaveBeenCalledExactlyOnceWith('const x = 1')
+  })
+
+  it('does not save a clean code file without loaded text', () => {
+    const file: OpenFile = {
+      ...makeFile('clean'),
+      filePath: '/repo/clean.ts',
+      relativePath: 'clean.ts',
+      language: 'typescript',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    act(() => {
+      root.render(<SaveProbe activeFile={file} enabled onSave={save} />)
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).not.toHaveBeenCalled()
   })
 })
