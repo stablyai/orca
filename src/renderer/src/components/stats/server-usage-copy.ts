@@ -22,6 +22,14 @@ export function serverNoUsageForScope(provider: string): string {
   )
 }
 
+export function serverRecentSessionsDescription(provider: string): string {
+  return translate(
+    'auto.components.stats.StatsPane.serverRecentSessionsDescription',
+    'Most recent {{provider}} sessions on this server in this scope.',
+    { provider }
+  )
+}
+
 /** A provider pane's scope choices, with "all usage" naming the server instead of this computer. */
 export function serverScopeOptions<Scope extends string>(
   options: readonly { value: Scope; label: string }[],

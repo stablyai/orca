@@ -7,6 +7,7 @@ import type {
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
+import { serverRecentSessionsDescription, useStatsReadsServer } from './server-usage-copy'
 import { translate } from '@/i18n/i18n'
 
 type CodexUsageDetailsProps = {
@@ -24,6 +25,7 @@ export function CodexUsageDetails({
   recentSessions,
   summary
 }: CodexUsageDetailsProps): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
   return (
     <>
       <CodexUsageDailyChart daily={daily} />
@@ -60,10 +62,14 @@ export function CodexUsageDetails({
 
       <UsageRecentSessionsTable
         title={translate('auto.components.stats.CodexUsagePane.0cb0983c07', 'Recent sessions')}
-        description={translate(
-          'auto.components.stats.CodexUsagePane.0bd8655475',
-          'Most recent local Codex sessions in this scope.'
-        )}
+        description={
+          readsServer
+            ? serverRecentSessionsDescription('Codex')
+            : translate(
+                'auto.components.stats.CodexUsagePane.0bd8655475',
+                'Most recent local Codex sessions in this scope.'
+              )
+        }
         headings={[
           translate('auto.components.stats.CodexUsagePane.0c36b100be', 'Last active'),
           translate('auto.components.stats.CodexUsagePane.1a65900aea', 'Project'),

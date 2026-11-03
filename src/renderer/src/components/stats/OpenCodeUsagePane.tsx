@@ -219,10 +219,15 @@ export function OpenCodeUsagePane(): React.JSX.Element {
           />
         </div>
         <p className="px-1 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.stats.OpenCodeUsagePane.e5bb23d85e',
-            'Cost comes from the local OpenCode database when the assistant message recorded one.'
-          )}
+          {readsServer
+            ? translate(
+                'auto.components.stats.OpenCodeUsagePane.serverCostNote',
+                'Cost comes from the OpenCode database on this server when the assistant message recorded one.'
+              )
+            : translate(
+                'auto.components.stats.OpenCodeUsagePane.e5bb23d85e',
+                'Cost comes from the local OpenCode database when the assistant message recorded one.'
+              )}
         </p>
 
         <OpenCodeUsageDetails
