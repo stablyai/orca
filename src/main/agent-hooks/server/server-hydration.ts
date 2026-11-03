@@ -24,13 +24,13 @@ import {
 import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
 
-/** A saved row moved to `paneKey`; its tab half follows the key, or the id-match check drops it. */
-function readdressHydratedRow(
-  row: Record<string, unknown>,
+/** A saved record moved to `paneKey`; its tab half follows the key, or the id-match check drops it. */
+function readdressHydratedRecord(
+  record: Record<string, unknown>,
   paneKey: string
 ): Record<string, unknown> {
-  const movedTab = typeof row.tabId === 'string'
-  return { ...row, paneKey, ...(movedTab ? { tabId: parsePaneKey(paneKey)?.tabId } : {}) }
+  const movedTab = typeof record.tabId === 'string'
+  return { ...record, paneKey, ...(movedTab ? { tabId: parsePaneKey(paneKey)?.tabId } : {}) }
 }
 
 export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
@@ -88,7 +88,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
       const rawResolvedEntry =
         resolvedPaneKey === paneKey || !isRecord(rawEntry)
           ? rawEntry
-          : readdressHydratedRow(rawEntry, resolvedPaneKey)
+          : readdressHydratedRecord(rawEntry, resolvedPaneKey)
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
@@ -153,7 +153,12 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     }
     for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      const commitment = sanitizePersistedAuthorityCommitment(resolvedPaneKey, rawCommitment)
+      const commitment = sanitizePersistedAuthorityCommitment(
+        resolvedPaneKey,
+        resolvedPaneKey === paneKey || !isRecord(rawCommitment)
+          ? rawCommitment
+          : readdressHydratedRecord(rawCommitment, resolvedPaneKey)
+      )
       if (!commitment || commitment.observedAt < ttlCutoff) {
         dropped += 1
         continue
