@@ -150,6 +150,7 @@ export type CodexSession = {
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
   permissions?: {
     acquiredMode: AgentChatPermissionChoice
+    appliedMode?: AgentChatPermissionChoice
     acquiredSandbox?: CodexSandboxPolicy
     launchSandboxIntact: boolean
     cwd: string

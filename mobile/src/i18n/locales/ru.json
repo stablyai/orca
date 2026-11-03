@@ -2792,6 +2792,9 @@
       "title": "Голос",
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить"
+    },
+    "agents": {
+      "permissionOwnAll": "Собственные настройки агентов"
     }
   },
   "sourceControl": {

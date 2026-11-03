@@ -18,7 +18,7 @@ import {
   patchPackagedProcessPath,
   optOutOfHiddenPageWakeUpThrottling
 } from './configure-process'
-import { installServeSupervisorDisconnectQuit } from '../serve-update-handoff'
+import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
   installUncaughtPipeErrorGuard,
   installUnhandledRejectionLogging
@@ -31,7 +31,7 @@ import {
   downloadRemoteServerUpdate,
   installRemoteServerUpdate,
   isQuittingForUpdate
-} from '../updater'
+} from '../updater/updater-service'
 import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
 import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'

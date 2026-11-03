@@ -62,7 +62,9 @@ vi.mock('../ipc/ssh/ssh-host-user-disconnect', () => ({
 vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   initTccPromptNotice: initTccPromptNoticeMock
 }))
-vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
+vi.mock('../updater/updater-service', () => ({
+  resolveUpdateInstallMode: vi.fn(() => 'interactive')
+}))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../providers/accounts/agent-auth-restart-preservation', () => ({
   preserveAgentAuthBeforeRestart: preserveAgentAuthBeforeRestartMock

@@ -75,23 +75,39 @@ describe('a Codex send while a turn runs', () => {
     expect(settlements).toEqual([])
   })
 
-  it('settles on its echo when the turn completes with it', async () => {
-    const { connection, settlements, send, endTurn } = await rig({
-      'turn/steer': () => ({ turnId: 'turn-1' })
-    })
-    startTurn(connection, 'turn-1')
-
-    expect(await send('client-1')).toMatchObject({ state: 'admitted' })
-    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
-    endTurn('turn-1', 'completed')
-
-    expect(settlements).toEqual([
-      expect.objectContaining({
-        clientMessageId: 'client-1',
-        providerIdentity: expect.objectContaining({ turnId: 'turn-1' })
+  it.each([true, false])(
+    'settles on its echo with client ID=%s when the turn completes with it',
+    async (tagged) => {
+      const { connection, settlements, send, endTurn } = await rig({
+        'turn/steer': () => ({ turnId: 'turn-1' })
       })
-    ])
-  })
+      startTurn(connection, 'turn-1')
+
+      expect(await send('client-1')).toMatchObject({ state: 'admitted' })
+      if (tagged) {
+        echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+      } else {
+        connection.handlers.onNotification?.('item/started', {
+          threadId: CODEX_TEST_THREAD_ID,
+          turn: { id: 'turn-1' },
+          item: {
+            type: 'userMessage',
+            id: 'item-u1',
+            clientId: null,
+            content: [{ type: 'text', text: 'ship it' }]
+          }
+        })
+      }
+      endTurn('turn-1', 'completed')
+
+      expect(settlements).toEqual([
+        expect.objectContaining({
+          clientMessageId: 'client-1',
+          providerIdentity: expect.objectContaining({ turnId: 'turn-1' })
+        })
+      ])
+    }
+  )
 
   it.each([
     ['the turn ended first', () => refusedSteer('no active turn to steer')],

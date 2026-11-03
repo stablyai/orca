@@ -2,7 +2,7 @@ import * as usageLimit from './structured-agent-session-host-background'
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import { StructuredConversationCommandController } from './structured-conversation-command-controller'
+import { StructuredConversationCommandController as CommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
@@ -31,10 +31,7 @@ import { createStructuredAgentSessionWorkspaceSleeper } from './structured-agent
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
-  private readonly conversationCommands = new StructuredConversationCommandController(
-    () => this.mutationContext(),
-    this
-  )
+  private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
   private readonly sessions = createStructuredAgentSessionPublicationWiring({
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
@@ -101,6 +98,7 @@ export class StructuredAgentSessionHost {
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),
       // Retire at rest; the next start refreshes login and permission mode.
       stopOutgrownAgent: (id) => this.lifetime.stopAgent(id, { cause: 'evict', resting: true }),
+      stopPermissionTransitionChild: (id) => this.lifetime.stopAgent(id, { cause: 'evict' }),
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
