@@ -12,13 +12,23 @@ const mockState: {
   projectGroups: never[]
   repos: never[]
   worktreesByRepo: Record<string, never>
+  agentStatusByPaneKey: Record<string, never>
+  retainedAgentsByPaneKey: Record<string, never>
+  sleepingAgentSessionsByPaneKey: Record<string, never>
+  tabsByWorktree: Record<string, never>
+  terminalLayoutsByTabId: Record<string, never>
 } = {
   settings: {},
   runtimeEnvironments: [],
   folderWorkspaces: [],
   projectGroups: [],
   repos: [],
-  worktreesByRepo: {}
+  worktreesByRepo: {},
+  agentStatusByPaneKey: {},
+  retainedAgentsByPaneKey: {},
+  sleepingAgentSessionsByPaneKey: {},
+  tabsByWorktree: {},
+  terminalLayoutsByTabId: {}
 }
 const updateSettingsOrThrow = vi.fn(async (next: { aiVaultSearch: { enabled: boolean } }) => {
   mockState.settings = next

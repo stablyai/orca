@@ -36,6 +36,26 @@ const baseSession: AiVaultSession = {
   subagent: null
 }
 
+describe('filterAiVaultSessions tab titles', () => {
+  const filters = {
+    agents: ['claude'] as const,
+    scope: 'all' as const,
+    sort: 'updated' as const,
+    activeWorktreePaths: [],
+    hideEmptySessions: false
+  }
+
+  it('matches a renamed open terminal tab title', () => {
+    const result = filterAiVaultSessions([baseSession], {
+      ...filters,
+      query: 'payments',
+      terminalTabTitleFor: () => 'Payments refactor'
+    })
+    expect(result).toEqual([baseSession])
+    expect(filterAiVaultSessions([baseSession], { ...filters, query: 'payments' })).toEqual([])
+  })
+})
+
 describe('filterAiVaultSessions', () => {
   it('filters by workspace, agent, plain terms, repo: and path: operators', () => {
     const sessions: AiVaultSession[] = [

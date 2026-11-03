@@ -35,7 +35,7 @@ import { AgentSessionContinuationDialog } from '@/components/agent-session-conti
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
 import { useAiVaultPanelSearch } from './use-ai-vault-search'
-import { withAiVaultHistoryPreviews } from './ai-vault-search-session'
+import { useAiVaultSearchSessions } from './use-ai-vault-search-sessions'
 import { aiVaultSearchScopeIdentity } from './ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
@@ -167,11 +167,16 @@ export default function AiVaultPanel({
   )
   const search = useAiVaultPanelSearch(query, agents, searchWithin, executionHostScope, searchSort)
   const { searching, searchHits } = search
-  const searchSessions = useMemo(
-    () => withAiVaultHistoryPreviews(search.sessions, history),
-    [history, search.sessions]
+  const { sessions, terminalTabTitleFor, onDeleted } = useAiVaultSearchSessions(
+    searching,
+    search.sessions,
+    history,
+    query,
+    searchSort,
+    executionHostScope,
+    allWorktrees,
+    search.onDeleted
   )
-  const sessions = searching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     includeAntigravityIdeSessions: true,
@@ -217,7 +222,6 @@ export default function AiVaultPanel({
     hideEmptySessions,
     sessionLimit
   })
-
   const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, searching, group, {
     query,
     agents,
@@ -227,7 +231,9 @@ export default function AiVaultPanel({
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
+    hideEmptySessions,
+    terminalTabTitleFor,
+    searchHits: search.sessions
   })
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
@@ -252,7 +258,7 @@ export default function AiVaultPanel({
 
   const requestDelete = useAiVaultSessionDeleteAction({
     refresh,
-    onDeleted: search.onDeleted
+    onDeleted
   })
 
   return (
@@ -301,7 +307,11 @@ export default function AiVaultPanel({
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
-      <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
+      <AiVaultPanelSearch
+        search={search}
+        noAgents={agents.length === 0}
+        resultCount={filteredSessions.length}
+      >
         {searching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
