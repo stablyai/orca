@@ -1,3 +1,4 @@
+import { resolveHostedReviewGitHubOptions } from '../../source-control/hosted-review-git-options'
 import {
   withGitHubRepoExecution,
   getOwnerRepoForRemote,
@@ -74,6 +75,7 @@ export async function getGitHubApiRepositoryForRemote(
     if (ownerRepo) {
       return { ...ownerRepo, host: 'github.com' }
     }
+    localGitOptions = resolveHostedReviewGitHubOptions({ localGitExecOptions: localGitOptions })
     const cacheKey = githubApiRepositoryProbeCacheKey(
       repoPath,
       remoteName,
