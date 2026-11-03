@@ -55,7 +55,10 @@ export function durableQueuePauseMarks(
   marks: JournalReducerState['queuePauseMarks']
 ): JournalReducerState['queuePauseMarks'] {
   const stop = marks.latestStop
-  return { ...marks, latestStop: stop && { sequence: stop.sequence, event: stop.event } }
+  return {
+    ...marks,
+    latestStop: stop && { sequence: stop.sequence, event: stop.event }
+  }
 }
 
 const f = outcomeFormat1StoredScalars.shape

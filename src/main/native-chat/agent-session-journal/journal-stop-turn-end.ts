@@ -13,6 +13,7 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
 import type { JournalQueuePauseMarks, JournalStopSettle } from './queued-message-pause'
+import { stopCancellationBeside } from './journal-stop-cancellation'
 
 export type JournalLatestStop = NonNullable<JournalQueuePauseMarks['latestStop']>
 
@@ -30,7 +31,7 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
 
 type TurnEndState = Pick<
   JournalReducerState,
-  'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
+  'sessionId' | 'epoch' | 'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
 >
 
 /** Find the opening send; this does not decide cancellation ownership. */
@@ -82,17 +83,40 @@ function stopIsTurnCancellation(stop: JournalLatestStop, turnId: string): boolea
   return stop.settle?.settling || stop.settle?.turnId === turnId || stop.event.turnId === turnId
 }
 
+/** Queue retention stays on latestStop. A later personal close cancels its own turn. A restored chat
+ *  has not folded that close yet, so it uses the Stop. A close that names no turn must not hide the
+ *  Stop's session-ending settle. */
+function turnCancellationStop(state: TurnEndState): TurnEndState['queuePauseMarks']['latestStop'] {
+  const latest = state.queuePauseMarks.latestStop
+  const recorded = stopCancellationBeside(state, latest)
+  const unnamedClose =
+    recorded !== undefined &&
+    recorded.event.turnId === undefined &&
+    recorded.event !== latest?.event
+  if (recorded === undefined || unnamedClose) {
+    return latest
+  }
+  return recorded
+}
+
+/** The close that names a turn, and the Stop still holding the queue when that is a different event. */
+function personalCancellationStops(state: TurnEndState): JournalLatestStop[] {
+  const recorded = turnCancellationStop(state)
+  const latest = state.queuePauseMarks.latestStop
+  return [recorded, latest].filter(
+    (stop): stop is JournalLatestStop => stop !== null && stopIsAPersons(stop.event.reason)
+  )
+}
+
 /** Ends observed before Stop keep their meaning even if written later. */
 function stopEndsTurnAsCancellation(
   state: TurnEndState,
   turnId: string,
   endedAt: number | undefined
 ): boolean {
-  const stop = state.queuePauseMarks.latestStop
-  return (
-    stop !== null &&
-    stopIsTurnCancellation(stop, turnId) &&
-    (endedAt === undefined || endedAt >= stop.event.at)
+  return personalCancellationStops(state).some(
+    (stop) =>
+      stopIsTurnCancellation(stop, turnId) && (endedAt === undefined || endedAt >= stop.event.at)
   )
 }
 
@@ -102,12 +126,9 @@ export function personStopDecidesTurn(
   turnId: string | null,
   endedAt?: number
 ): boolean {
-  const stop = state.queuePauseMarks.latestStop
-  if (stop === null || !stopIsAPersons(stop.event.reason)) {
-    return false
-  }
+  const stops = personalCancellationStops(state)
   if (turnId === null) {
-    return stop.settle?.settling === true
+    return stops.some((stop) => stop.settle?.settling === true)
   }
   return stopEndsTurnAsCancellation(state, turnId, endedAt)
 }

@@ -47,10 +47,25 @@ function harness(options: { busy?: boolean } = {}) {
     getRun: () => undefined,
     getDispatchContextById: () => ({ run_id: 'run_1' }),
     getOutstandingMailboxDelivery: () => undefined,
-    getUndeliveredUnreadMessages: (handle: string) =>
-      [...mail.values()].filter(
-        (row) => row.to_handle === handle && !row.read && row.delivered_at === null
-      ),
+    getUndeliveredUnreadMessages: (
+      handle: string,
+      _types?: readonly string[],
+      options?: { excludeIds?: readonly string[]; limit?: number },
+      afterSequence?: number
+    ) => {
+      const excluded = new Set(options?.excludeIds ?? [])
+      const rows = [...mail.values()]
+        .filter(
+          (row) =>
+            row.to_handle === handle &&
+            !row.read &&
+            row.delivered_at === null &&
+            !excluded.has(row.id) &&
+            (afterSequence === undefined || row.sequence > afterSequence)
+        )
+        .sort((left, right) => left.sequence - right.sequence)
+      return options?.limit === undefined ? rows : rows.slice(0, Math.max(1, options.limit))
+    },
     areUnreadMessages: (handle: string, ids: string[]) =>
       ids.every((id) => mail.get(id)?.read === 0 && mail.get(id)?.to_handle === handle),
     getMessageById: (id: string) => mail.get(id),
@@ -255,6 +270,30 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.sent[0]!.text).toContain('[Reply: orca-dev orchestration reply --id m1')
     expect(h.mail.get('m1')).toMatchObject({ read: 1 })
     expect(h.records.size).toBe(0)
+  })
+
+  it('offers mail past a full page the queue is holding', async () => {
+    const h = harness({ busy: true })
+    for (let index = 1; index <= 51; index += 1) {
+      h.receive(`m${index}`)
+    }
+    h.host.send.mockImplementation(async (input) => {
+      if (!input.stillOwed()) {
+        return { kind: 'obsolete' }
+      }
+      const text = input.body.blocks.map((block) => ('text' in block ? block.text : '')).join('')
+      return text.includes('subject of m51') ? { kind: 'queued' } : { kind: 'held' }
+    })
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({ text: expect.stringContaining('subject of m51') })
+          ])
+        })
+      })
+    )
   })
 
   it('queues each message as its own card while the chat works, reading each on handover', async () => {

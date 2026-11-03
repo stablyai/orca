@@ -4,10 +4,15 @@
 import type { MessageRow, OrchestrationDb } from './db'
 import type { OrchestrationCliCommand } from './cli-command'
 import {
+  heldOrchestrationPageCursor,
   selectOrchestrationPointerBatch,
   shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
+import {
+  settleStructuredMailAdmit,
+  type StructuredMailAdmitStep
+} from './structured-mailbox-admit-step'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
 import { structuredMailMessage, structuredMailWrittenAt } from './structured-mail-source'
 import type { SenderSnapshotResolver } from './agent-message-sender'
@@ -49,8 +54,6 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   senderSnapshot: SenderSnapshotResolver
   host: StructuredMailboxPointerHost
 }
-
-type AdmitStep = 'next' | 'park'
 
 export class OrchestrationStructuredMailboxPointerDelivery<
   TWaiter extends OrchestrationMessageWaiter
@@ -197,6 +200,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const offered = new Set<string>()
     // Mail the person's Stop holds: later mail still goes, and the mailbox stays parked for it.
     const pass = { held: false }
+    let afterSequence: number | undefined
     for (;;) {
       const db = this.deps.getDb()
       if (!db) {
@@ -241,12 +245,14 @@ export class OrchestrationStructuredMailboxPointerDelivery<
           return
         }
       }
-      const batch = selectOrchestrationPointerBatch({
+      const page = selectOrchestrationPointerBatch({
         db,
         mailboxHandle,
         waiters: this.deps.getMessageWaiters(mailboxHandle),
-        reservedTypes: currentReservedTypes
-      }).messages.filter(
+        reservedTypes: currentReservedTypes,
+        afterSequence
+      })
+      const batch = page.messages.filter(
         (message) =>
           !outstanding.has(message.id) && !offered.has(`${message.id}:${target?.sessionId}`)
       )
@@ -260,6 +266,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         }
         return
       }
+      let heldCount = 0
       for (const message of batch) {
         // Whoever owns the mailbox now: a takeover during one send moves the rest of the batch.
         target = this.deps.resolveStructuredTarget(mailboxHandle)
@@ -272,14 +279,20 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         offered.add(`${message.id}:${target.sessionId}`)
         // Parked first, so a send that throws is retried on this session's next journal edge.
         this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
-        if ((await this.admit(db, mailboxHandle, target, message, pass)) === 'park') {
+        const step = await this.admit(db, mailboxHandle, target, message, pass)
+        if (step === 'park') {
           // An edge during the send may have taken the entry; the refusal still waits for the next one.
           this.parking.park(mailboxHandle, target.sessionId, currentReservedTypes)
           return
         }
+        // A non-held admission, or a skipped row, keeps this pass from walking past the page.
+        heldCount = step === 'held' ? heldCount + 1 : Number.NEGATIVE_INFINITY
       }
       // The arrival snapshot protects its first handoff; successors derive live waiter ownership.
       currentReservedTypes = undefined
+      afterSequence =
+        heldOrchestrationPageCursor(page.messages, heldCount === batch.length, afterSequence) ??
+        afterSequence
     }
   }
 
@@ -291,7 +304,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     message: MessageRow,
     pass: { held: boolean },
     again?: StructuredMailResend
-  ): Promise<AdmitStep> {
+  ): Promise<StructuredMailAdmitStep> {
     const sessionId = target.sessionId
     const fence = this.deps.host.currentFence(sessionId)
     if (fence === null) {
@@ -333,30 +346,14 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         )
       }
     })
-    switch (outcome.kind) {
-      case 'unattached':
-      case 'refused':
-        // Refused before admission (a full queue, a detached chat): retry on the session's next edge.
-        db.releaseStructuredMailSend(attempt)
-        return 'park'
-      case 'obsolete':
-        db.releaseStructuredMailSend(attempt)
-        return last.owed === 'unavailable' ? 'park' : 'next'
-      case 'held':
-        // Unread and undelivered again: the person's send or Resume redrives it.
-        db.releaseStructuredMailSend(attempt)
-        pass.held = true
-        return 'next'
-      case 'queued':
-        return 'next'
-      case 'sent':
-        // In doubt, including a resend the host answered from an earlier admission: never again.
-        if (outcome.state === 'accepted' || outcome.state === 'unknown') {
-          db.retireStructuredMailSend(attempt, outcome.state === 'accepted' && whole)
-        }
-        // Pending or rejected: the record decides on a later pass.
-        return 'next'
-    }
+    return settleStructuredMailAdmit({
+      db,
+      attempt,
+      outcome,
+      owed: last.owed,
+      whole,
+      held: pass
+    })
   }
 
   private redeliver(mailboxHandle: string): void {

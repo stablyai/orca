@@ -74,7 +74,7 @@ export function registerQueuedMessageStopPauseTests(
       expect(fixture.pauseTables()).toBe(0)
     })
 
-    it("any turn sent after the Stop and accepted lifts it, Orca's own mail included", async () => {
+    it("a turn accepted after the Stop does not lift it, Orca's own mail included", async () => {
       const journal = await fixture.open()
       await fixture.turn(journal, 'before-stop', false)
       await fixture.userStop(journal)
@@ -84,14 +84,14 @@ export function registerQueuedMessageStopPauseTests(
       await fixture.turn(journal, 'mail', false)
       expect(fixture.reason(journal)).toBe('stopped')
       await fixture.acceptTurn(journal, 'mail')
-      expect(fixture.reason(journal)).toBeNull()
+      expect(fixture.reason(journal)).toBe('stopped')
     })
 
-    it('a later Stop is the latest, and a Resume row lifts it', async () => {
+    it('a later Stop is the latest, and only a Resume row lifts it', async () => {
       const journal = await fixture.open()
       await fixture.userStop(journal)
       await fixture.turn(journal, 'typed')
-      expect(fixture.reason(journal)).toBeNull()
+      expect(fixture.reason(journal)).toBe('stopped')
       await fixture.userStop(journal)
       expect(fixture.reason(journal)).toBe('stopped')
       await journal.appendQueueResume(0)
@@ -216,12 +216,15 @@ export function registerQueuedMessageStopPauseTests(
       expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
     })
 
-    it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
+    it("a rewind's epoch replacement restates a Stop still pausing, and not one a Resume ended", async () => {
       const journal = await fixture.open()
       await fixture.userStop(journal)
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(fixture.reason(journal)).toBe('stopped')
       await fixture.turn(journal, 'typed')
+      await journal.replaceEpochItems('handle_forked', 0, [])
+      expect(fixture.reason(journal)).toBe('stopped')
+      await journal.appendQueueResume(0)
       await journal.replaceEpochItems('handle_forked', 0, [])
       expect(fixture.reason(journal)).toBeNull()
     })
@@ -237,15 +240,15 @@ export function registerQueuedMessageStopPauseTests(
       expect(fixture.reason(journal)).toBeNull()
     })
 
-    it("a later Stop of any reason ends a person's Stop, without pausing itself", async () => {
+    it("a later close, host stop or eviction does not end a person's Stop", async () => {
       const journal = await fixture.open()
       await fixture.queueDraft(journal, 'draft-1')
       for (const later of ['host-stop', 'evict', 'user-close'] as const) {
         await fixture.userStop(journal)
         expect(fixture.held(journal)).toEqual([['draft-1', true]])
         await journal.appendStopEvent({ reason: later }, 0)
-        expect(fixture.reason(journal)).toBeNull()
-        expect(fixture.held(journal)).toEqual([['draft-1', false]])
+        expect(fixture.reason(journal)).toBe('stopped')
+        expect(fixture.held(journal)).toEqual([['draft-1', true]])
       }
     })
 
@@ -256,6 +259,29 @@ export function registerQueuedMessageStopPauseTests(
       // Eviction rows must describe ended work or they would incorrectly lift this pause.
       expect(fixture.reason(journal)).toBe('stopped')
       expect(fixture.held(journal)).toEqual([['held', true]])
+    })
+
+    it('a failed turn keeps a card queued after Stop paused, even after that card was selectable', async () => {
+      const journal = await fixture.open()
+      await fixture.queueDraft(journal, 'old')
+      await fixture.userStop(journal)
+      await fixture.queueDraft(journal, 'fresh')
+      expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('fresh')
+      await journal.appendItem(
+        { provider: 'claude', sessionId: 'native-1', uuid: 'failed-turn' },
+        { kind: 'turn', turnId: 'failed-turn', state: 'completed', outcome: 'failure' },
+        { fence: 0, turnScope: { kind: 'thread' } }
+      )
+      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBeNull()
+    })
+
+    it("closing a later report does not lift a person's Stop, and that close still cancels its turn", async () => {
+      const journal = await fixture.open()
+      await journal.appendStopEvent({ reason: 'user-stop', turnId: 'A' }, 0)
+      await journal.appendStopEvent({ reason: 'user-close', turnId: 'B' }, 0)
+      expect(fixture.reason(journal)).toBe('stopped')
+      expect(journal.stopMarks.personStopDecides('B')).toBe(true)
+      expect(journal.stopMarks.personStopDecides('A')).toBe(true)
     })
 
     it('the restated Stop is the same event: its reason, turn, caller and time', async () => {

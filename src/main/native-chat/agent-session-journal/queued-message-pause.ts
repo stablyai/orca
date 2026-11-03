@@ -4,6 +4,7 @@
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { rememberStopCancellation } from './journal-stop-cancellation'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
@@ -58,12 +59,24 @@ function isReadableStopEvent(value: unknown): value is JournalStopEvent {
 
 export function foldJournalQueuePauseMark(
   marks: JournalQueuePauseMarks,
-  row: JournalTombstoneRow
+  row: JournalTombstoneRow,
+  scope: { sessionId: string; epoch: string }
 ): void {
   if (isReadableStopEvent(row.stopEvent)) {
+    const reason = row.stopEvent.reason
     // A close or host Stop during an agent's turn must not end what the person stopped.
-    if (row.stopEvent.reason === 'user-stop' || !journalQueueStopHolds(marks)) {
+    const replacesPause = reason === 'user-stop' || !journalQueueStopHolds(marks)
+    if (replacesPause) {
       marks.latestStop = { sequence: row.seq, event: row.stopEvent }
+    }
+    const latest = marks.latestStop
+    // A distinct close stays off the saved marks. The Stop's own settle still lives on latestStop.
+    if (
+      (reason === 'user-stop' || reason === 'user-close') &&
+      latest !== null &&
+      latest.event !== row.stopEvent
+    ) {
+      rememberStopCancellation(scope, latest.sequence, { sequence: row.seq, event: row.stopEvent })
     }
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq

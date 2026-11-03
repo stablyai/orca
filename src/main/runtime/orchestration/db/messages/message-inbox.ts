@@ -92,7 +92,8 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number }
+  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number },
+  afterSequence?: number
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
@@ -113,6 +114,10 @@ export function getUndeliveredUnreadMessages(
   if (options?.excludeIds?.length) {
     conditions.push(`id NOT IN (${options.excludeIds.map(() => '?').join(',')})`)
     params.push(...options.excludeIds)
+  }
+  if (afterSequence !== undefined) {
+    conditions.push('sequence > ?')
+    params.push(afterSequence)
   }
   const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
   if (options?.limit !== undefined) {

@@ -104,10 +104,11 @@ export class JournalInputCardIndex {
         Boolean(queuePauseHolding(this.pauses, card)))
     )
   }
-  /** Held by the personal Stop alone: a card queued after that Stop may pass it. */
+  /** Held by the personal Stop alone: a card queued after that Stop may pass it. A failed turn holds all of them. */
   stopHeldOnly(card: QueuedMessageRow): boolean {
     const [stop, ...others] = this.pauses
     return (
+      !this.failed &&
       stop?.reason === 'stopped' &&
       !this.cleared.has(card.messageId) &&
       queuePauseHolding([stop], card) !== undefined &&

@@ -74,7 +74,8 @@ export class JournalInputCandidates {
   private root: Node | undefined
   /** Changes with any candidate, so a walk's answer is reused only while none has. */
   private revision = 0
-  private walked: { head: QueuedMessageRow; key: string; next: JournalPastHead } | undefined
+  /** The first ready card, and the person card behind mail that cannot be decided, stay cached together. */
+  private walked: { head: QueuedMessageRow; key: string; next: JournalPastHead }[] = []
 
   set(card: QueuedMessageRow, candidate: boolean): void {
     const prior = this.byId.get(card.messageId)
@@ -127,12 +128,12 @@ export class JournalInputCandidates {
     walk: () => JournalPastHead
   ): JournalPastHead {
     const key = [this.revision, ...inputs].join(':')
-    const last = this.walked
-    if (last?.head === head && last.key === key) {
-      return last.next
+    const hit = this.walked.find((entry) => entry.head === head && entry.key === key)
+    if (hit) {
+      return hit.next
     }
     const next = walk()
-    this.walked = { head, key, next }
+    this.walked = [...this.walked, { head, key, next }].slice(-2)
     return next
   }
 }

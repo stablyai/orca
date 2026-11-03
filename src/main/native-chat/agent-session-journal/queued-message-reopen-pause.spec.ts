@@ -2,7 +2,6 @@ import type { createFixture } from './queued-message-pause-contract-test-fixture
 import { describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './journal-host-database'
-import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
 import type { AgentSessionJournal } from './journal-store'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -55,28 +54,27 @@ export function registerQueuedMessageReopenPauseTests(
       ])
     })
 
-    it("the queue's own consume refuses a newer card while an older one is held: nothing overtakes", async () => {
+    it('a card queued after the Stop is consumed while the older card stays waiting', async () => {
       const journal = await fixture.open()
       await fixture.queueDraft(journal, 'held')
       await fixture.userStop(journal)
       await fixture.queueDraft(journal, 'newer')
-      await expect(
-        journal.appendSubmission(
-          {
-            clientMessageId: 'drain-newer',
-            payloadFingerprint: fixture.fingerprintOf('newer'),
-            body: fixture.message('newer'),
-            fence: 0,
-            handoverRecorded: true
-          },
-          {
-            messageId: 'newer',
-            expect: 'waiting',
-            yieldsToPause: true
-          }
-        )
-      ).rejects.toBeInstanceOf(QueuedMessageNotConsumableError)
-      expect(journal.queuedMessages.get('newer')?.state).toBe('waiting')
+      await journal.appendSubmission(
+        {
+          clientMessageId: 'drain-newer',
+          payloadFingerprint: fixture.fingerprintOf('newer'),
+          body: fixture.message('newer'),
+          fence: 0,
+          handoverRecorded: true
+        },
+        {
+          messageId: 'newer',
+          expect: 'waiting',
+          yieldsToPause: true
+        }
+      )
+      expect(journal.queuedMessages.get('newer')?.state).toBe('dispatched')
+      expect(journal.queuedMessages.get('held')?.state).toBe('waiting')
     })
 
     it("'cleared' holds the cards already queued, not one typed after it", async () => {

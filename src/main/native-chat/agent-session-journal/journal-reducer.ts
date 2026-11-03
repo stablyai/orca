@@ -23,6 +23,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
+import { forgetStopCancellations } from './journal-stop-cancellation'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import { observeJournalProviderActivity } from './journal-provider-activity'
@@ -95,6 +96,7 @@ export function createJournalReducerState(
   epoch: string,
   originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
 ): JournalReducerState {
+  forgetStopCancellations({ sessionId, epoch })
   const state: JournalReducerState = {
     sessionId,
     epoch,
@@ -174,7 +176,10 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     return
   }
   if (isJournalStopOrResumeRow(row)) {
-    foldJournalQueuePauseMark(state.queuePauseMarks, row)
+    foldJournalQueuePauseMark(state.queuePauseMarks, row, {
+      sessionId: state.sessionId,
+      epoch: state.epoch
+    })
     return
   }
   if (row.kind === 'tombstone') {

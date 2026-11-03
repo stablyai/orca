@@ -47,8 +47,7 @@ function mail(text: string) {
       body: { ...hostTestMessage(text), from: { kind: 'agent', senders: [], orchestration: null } },
       delivery: 'queue',
       operationId: id,
-      expectedRuntimeFence: 1,
-      beforeRun: () => {}
+      expectedRuntimeFence: 1
     }
   })
   return { id, outcome }
