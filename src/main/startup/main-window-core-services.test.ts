@@ -64,7 +64,7 @@ vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
 }))
 vi.mock('../updater', () => ({ resolveUpdateInstallMode: vi.fn(() => 'interactive') }))
 vi.mock('./main-process-state', () => ({ mainProcessState: state }))
-vi.mock('../agent-auth-restart-preservation', () => ({
+vi.mock('../providers/accounts/agent-auth-restart-preservation', () => ({
   preserveAgentAuthBeforeRestart: preserveAgentAuthBeforeRestartMock
 }))
 vi.mock('../codex/codex-ai-vault-session-resume', () => ({

@@ -7,7 +7,7 @@ import * as openCodeCapabilities from '../../opencode/opencode-launch-capabiliti
 const applyAgentWorkspaceTrust = vi.hoisted(() =>
   vi.fn<(preset: string, path: string, context: unknown) => Promise<object>>(async () => ({}))
 )
-vi.mock('../../agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
+vi.mock('../../agent-launch/trust/agent-workspace-trust', () => ({ applyAgentWorkspaceTrust }))
 
 import { buildPtyIpcSpawnOptions } from './ipc/spawn-options'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './ipc/spawn-state'

@@ -4,8 +4,13 @@ import { windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { Repo } from '../../shared/repo-types'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import { getEffectiveHooks, hasHooksFile, hasUnrecognizedOrcaYamlKeys, loadHooks } from '../hooks'
-import { getEffectiveSetupRunPolicy } from '../effective-hook-config'
+import {
+  getEffectiveHooks,
+  hasHooksFile,
+  hasUnrecognizedOrcaYamlKeys,
+  loadHooks
+} from '../workspace-hooks/hooks'
+import { getEffectiveSetupRunPolicy } from '../workspace-hooks/effective-hook-config'
 import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupConfig, getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'

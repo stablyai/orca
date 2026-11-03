@@ -8,11 +8,11 @@ vi.mock('../git/worktree', () => ({
   listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 
-vi.mock('../hooks', () => ({
+vi.mock('../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
-vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>

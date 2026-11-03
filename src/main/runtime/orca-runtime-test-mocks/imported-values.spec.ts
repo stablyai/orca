@@ -40,13 +40,17 @@ import * as gitRunner from '../../git/runner'
 import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
 import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
-import { getEffectiveHooks, hasHooksFile, loadHooks, parseOrcaYaml, runHook } from '../../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../../worktree-runner-script'
+import { getEffectiveHooks, hasHooksFile, loadHooks, runHook } from '../../workspace-hooks/hooks'
+import { parseOrcaYaml } from '../../../shared/orca-yaml'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../../workspace-hooks/worktree-runner-script'
 import {
   getEffectiveHooksFromConfig,
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
-} from '../../effective-hook-config'
+} from '../../workspace-hooks/effective-hook-config'
 import {
   getBaseRefDefault,
   getBranchConflictKind,
