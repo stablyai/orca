@@ -195,7 +195,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
     const work = this.deps.currentWork(sessionId)
-    const steer = work !== null && work.activeTurnId() !== null
     const next = work
       ? nextStructuredQueuedMessage({
           journal,
@@ -208,6 +207,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     if (this.disposed || !next) {
       return
     }
+    const steer = work !== null && work.activeTurnId() !== null
     // Fresh submission IDs link drafts through queuedMessageId, never equality.
     const submissionId = createStructuredAgentSessionOperationId(randomUUID)
     const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)

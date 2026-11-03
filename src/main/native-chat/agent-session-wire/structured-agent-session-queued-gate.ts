@@ -47,13 +47,15 @@ export function nextStructuredQueuedMessage(
   const state = input.journal.queuedMessages.inputState()
   const cards = journalInputOrder(state).cards
   cards.ensure(state)
+  if (!cards.head()) {
+    return null
+  }
   const working = input.working ?? structuredInputExecutionWorking(input.journal, input.work)
   const steer = working && input.steer === true && input.work.activeTurnId() !== null
   if (
     (working && (!steer || structuredInputHandoverWorking(input.journal, input.work))) ||
     !input.record ||
     structuredAgentSessionSendBlock(input.record) ||
-    !cards.head() ||
     input.work.hasActionablePrompt()
   ) {
     return null
