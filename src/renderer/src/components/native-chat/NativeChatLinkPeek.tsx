@@ -84,7 +84,14 @@ function LinkPeekCard({ body, children }: { body: ReactNode; children: ReactNode
         onBlur={cancelPendingOpen}
       >
         {/* A click opens the link (or its action popover); the peek must not sit on top of it. */}
-        <span onClickCapture={dismiss} onAuxClickCapture={dismiss}>
+        <span
+          onClickCapture={dismiss}
+          onAuxClickCapture={(event) => {
+            if (event.button === 1) {
+              dismiss()
+            }
+          }}
+        >
           {children}
         </span>
       </HoverCardTrigger>
