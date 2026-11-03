@@ -61,8 +61,10 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
     // Keep tools usable if the managed script disappears: silence denies PreToolUse.
     event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
   )
+  const parentCapture =
+    'ORCA_HOOK_AGENT_PID="${ORCA_HOOK_AGENT_PID:-${PPID:-}}"; export ORCA_HOOK_AGENT_PID; '
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
-  return `/bin/sh -c ${quotePosixShell(command)}`
+  return `/bin/sh -c ${quotePosixShell(`${parentCapture}${command}`)}`
 }
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {

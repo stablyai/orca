@@ -99,7 +99,11 @@ export function resolveAgentStatusLiveEntryPaneOwner(args: {
   return {
     suppressedByPaneOwner,
     resolvePaneOwner: (resolvedAgentType) =>
-      incomingPaneOwner ??
+      (foregroundLeftExistingOwner &&
+      incomingPaneOwner?.agent === existingOwnerAgent &&
+      incomingPaneOwner.agent !== resolvedAgentType
+        ? undefined
+        : incomingPaneOwner) ??
       (sameTerminal &&
       !foregroundLeftExistingOwner &&
       existing?.paneOwner &&

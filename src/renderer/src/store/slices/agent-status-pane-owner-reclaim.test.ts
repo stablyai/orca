@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { effectiveAgentStatusOwnerType } from '../../../../shared/agent-status-types'
 import { createTestStore } from './store-test-helpers'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -118,10 +119,13 @@ describe('pane owner reclaim', () => {
           providerSession: { key: 'session_id', id: 'grok-direct-1' }
         }
       )
-    expect(store.getState().agentStatusByPaneKey[PANE_KEY]).toMatchObject({
+    const entry = store.getState().agentStatusByPaneKey[PANE_KEY]
+    expect(entry).toMatchObject({
       agentType: 'grok',
       state: 'working',
       prompt: 'Direct Grok session'
     })
+    expect(entry?.paneOwner).toBeUndefined()
+    expect(effectiveAgentStatusOwnerType(entry)).toBe('grok')
   })
 })
