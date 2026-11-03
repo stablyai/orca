@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { detectAgentStatusFromTitle } from '../../shared/agent-title-status'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {

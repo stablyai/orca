@@ -19,3 +19,12 @@ export const splitShortcut = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[aria-label="Split Chat Right"]')?.focus()
   }
 })
+
+export const settings = defineFixture({
+  ...splitShortcut,
+  interact: (frame) => {
+    frame
+      .querySelector<HTMLButtonElement>('button[aria-label="Chat settings"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  }
+})

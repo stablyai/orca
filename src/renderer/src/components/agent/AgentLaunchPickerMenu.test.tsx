@@ -23,11 +23,11 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { agentPickerChoiceSeeds } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import {
-  agentPickerChoiceSeeds,
   agentPickerLaunchInputs,
   type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 vi.mock('@floating-ui/dom', async (importOriginal) => {
   const actual = await importOriginal<typeof floating>()

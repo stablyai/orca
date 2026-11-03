@@ -1,5 +1,5 @@
 import type { AgentHookSource } from '../agent-hook-relay'
-import { readAgentEffortLevel } from '../agent-effort-level'
+import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
 import {
   extractAgentProviderSession,
   readPathFromKeys,

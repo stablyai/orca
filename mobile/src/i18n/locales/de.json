@@ -803,7 +803,8 @@
     },
     "prSidebar": {
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
+      "retryLoading": "Pull Request erneut laden"
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",

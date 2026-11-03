@@ -4814,7 +4814,7 @@
           "902f5dee1f": "Copiar ao Selecionar",
           "9129b7e805": "Passar o mouse sobre um painel de terminal o ativa sem precisar clicar.",
           "8eefeaa3da": "Foco Segue o Mouse",
-          "96fe15def8": "Comportamento do mouse e da área de transferência para painéis de terminal.",
+          "96fe15def8": "Comportamento de rolagem, mouse e área de transferência para painéis de terminal.",
           "45721f3e67": "Interação do Terminal",
           "9c0b1c1792": "Ativado",
           "c1fc9e9444": "Aceleração por GPU",
@@ -6820,7 +6820,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Permite que agentes inspecionem e operem apps de desktop locais.",
-          "93255aaf18": "Skill de Uso do Computador",
+          "93255aaf18": "Skill Orca Computer Use",
           "45f8e22c2e": "Abrir",
           "d95d1cfab8": "Atualizar",
           "0c29da5805": "Pronto",
@@ -8530,7 +8530,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Abrir Uso do Computador",
-          "79209b37b9": "Se a importação de cookies não for a opção ideal, o Uso do Computador pode controlar apps locais e usar sessões de navegador já conectadas quando aplicável. Instale a skill de Uso do Computador; o macOS também exige permissões de privacidade.",
+          "79209b37b9": "Se a importação de cookies não for a opção ideal, o Uso do Computador pode controlar apps locais e usar sessões de navegador já conectadas quando aplicável. Instale a skill Orca Computer Use; o macOS também exige permissões de privacidade.",
           "333984cf90": "Usar uma sessão de navegador existente"
         },
         "BranchPrefixFeedback": {
@@ -16313,7 +16313,7 @@
             "copyLinkFailed": "Falha ao copiar o link",
             "downloadOpenWithDefaultApp": "Baixar e abrir com o aplicativo padrão",
             "downloadOpenFailed": "Falha ao baixar '{{value0}}'.",
-            "openInThisGroup": "Abrir neste grupo",
+            "openInNewTab": "Abrir em nova aba",
             "openInThisGroupRefused": "Não foi possível abrir {{value0}} neste grupo"
           },
           "MobileDriverOverlay": {
@@ -20969,7 +20969,8 @@
         "effortPickerFailed": "Não foi possível abrir o seletor de esforço.",
         "modelApplyFailed": "Não foi possível aplicar o modelo {{value}}.",
         "effortApplyFailed": "Não foi possível aplicar o esforço {{value}}."
-      }
+      },
+      "settings": "Configurações do chat"
     },
     "tab": {
       "bar": {
@@ -21343,7 +21344,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Remover Margem ao Copiar",
         "copyTrimsGutterDescription": "Remove a margem esquerda onde a saída do agente é desenhada por trás, para que o texto copiado não fique indentado. Apenas a indentação compartilhada por todas as linhas selecionadas é removida.",
-        "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência."
+        "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência.",
+        "scrollOnUserInput": "Rolar para o final ao digitar",
+        "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição."
       },
       "terminal": {
         "clipboard": {
@@ -21358,6 +21361,15 @@
             "highlight": "destaque",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "digitação",
+          "input": "entrada",
+          "jump": "pular",
+          "bottom": "final",
+          "scrollback": "histórico",
+          "snap": "encaixar",
+          "position": "posição"
         }
       },
       "nativeChat": {

@@ -16,7 +16,7 @@ import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
 export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {

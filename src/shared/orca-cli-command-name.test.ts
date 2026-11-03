@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 
 const agentTeams = TUI_AGENT_CONFIG['claude-agent-teams']
 

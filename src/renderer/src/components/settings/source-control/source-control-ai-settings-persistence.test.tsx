@@ -14,7 +14,7 @@ import {
 } from '../__fixtures__/settings-persistence-test-fixture'
 import * as selection from '../../../../../shared/source-control-launch-agent-selection'
 import * as lifts from '../../../../../shared/source-control-action-permission-lift'
-import * as shell from '../../../../../shared/tui-agent-startup-shell'
+import * as shell from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { TooltipProvider } from '../../ui/tooltip'
 import { RUNTIME_CAPABILITIES } from '../../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
@@ -454,7 +454,7 @@ it('renders current native text-agent facts for a normalized legacy model recipe
     patch: Partial<NonNullable<ReturnType<typeof useAppStore.getState>['settings']>>
   ) => useAppStore.setState(({ settings }) => ({ settings: settings && { ...settings, ...patch } }))
   const { agentLaunchSettingsMutationUpdates } =
-    await import('../../../../../shared/agent-launch-settings')
+    await import('../../../../../shared/agent-launch/choices/agent-launch-settings')
   const config = normalizeSourceControlAiSettings({
     ...getDefaultSourceControlAiSettings(),
     actions: {

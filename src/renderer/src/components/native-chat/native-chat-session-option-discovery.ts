@@ -8,7 +8,7 @@ import {
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,

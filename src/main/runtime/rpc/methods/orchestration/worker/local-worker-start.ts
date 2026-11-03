@@ -11,10 +11,8 @@ import type {
   OrchestrationSessionCaller
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  resolveWorkerStartModeOnHost,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './folder-worktree-placement'

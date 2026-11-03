@@ -840,7 +840,8 @@
     },
     "prSidebar": {
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
+      "retryLoading": "Réessayer de charger la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",

@@ -19,7 +19,7 @@ const HOOK_ROOT_ANSWER_MS = 500
 // Queued reads past this budget are abandoned; each running subprocess has its own 1s timeout.
 const HOOK_ROOT_WORK_MS = 5_000
 // Retrying unproven evidence once per turn bounds the cost to turns, never tool calls.
-const TURN_EVENTS = new Set(['SessionStart', 'UserPromptSubmit'])
+const TURN_EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'PreInvocation'])
 
 /** How a host applies an answer the hook that asked could no longer wait for. */
 export type HookRootAcquisition = {

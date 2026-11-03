@@ -3,7 +3,7 @@ import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-l
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import { buildAgentPromptPasteBytes } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import type { RuntimeTerminalSummary } from '../../shared/runtime-terminal-contracts'
 import type { TerminalAgent } from '../../shared/terminal-agent'
 import { OrcaRuntimeService } from './orca-runtime'

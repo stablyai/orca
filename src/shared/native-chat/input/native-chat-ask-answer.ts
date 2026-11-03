@@ -1,6 +1,65 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
+import type { AgentJournalSubmission } from '../../agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
+import type { NativeChatMessage } from '../native-chat-types'
+import type { AsyncQuestionContributor } from './native-chat-ask'
+
+function isHumanSend(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'user' &&
+    message.from?.kind !== 'agent' &&
+    !message.unsent &&
+    !message.stoppedBeforeStart &&
+    !message.awaitsRetry &&
+    !message.sentWhileStopping
+  )
+}
+
+/** Delivered human input only; notices and undelivered sends answer no question. */
+export function isDeliveredNativeChatUserMessage(message: NativeChatMessage): boolean {
+  return isHumanSend(message) && !message.queued && !message.pendingSend && !message.deliveryState
+}
+
+export function isPendingNativeChatUserMessage(message: NativeChatMessage): boolean {
+  return (
+    isHumanSend(message) &&
+    (message.journalPosition !== undefined || (!message.deliveryState && !message.pendingSend)) &&
+    (message.deliveryState === 'pending' ||
+      message.pendingSend !== undefined ||
+      message.queued === true)
+  )
+}
+
+export function quotedByQueuedAnswer(
+  question: AskQuestion,
+  queuedTexts: readonly string[]
+): boolean {
+  const quote = askAnswerQuote(question)
+  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
+}
+
+/** A handed-off queue answer keeps its questions held until delivery settles. */
+export function withoutPendingQueuedAnswers(
+  contributors: AsyncQuestionContributor[],
+  message: NativeChatMessage
+): AsyncQuestionContributor[] {
+  if (!message.queuedMessageId || message.deliveryState !== 'pending') {
+    return contributors
+  }
+  const text = message.blocks
+    .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    .join('')
+  if (!text.startsWith('> ') && !text.includes('\n\n> ')) {
+    return contributors
+  }
+  const texts = [text]
+  return contributors.filter(
+    (contributor) =>
+      !contributor.questions.some((question) => quotedByQueuedAnswer(question, texts))
+  )
+}
 
 /** Option indices in display order plus free text; selectors address stable numbers rather than labels. */
 export type AskAnswerSelection = { indices: number[]; other?: string }
@@ -161,4 +220,43 @@ export function buildCodexAskAnswerKeys(
 /** Whether any question in `selections` carries an answer worth submitting. */
 export function hasAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): boolean {
   return prompt.questions.some((_, i) => isAnswered(selections[i]))
+}
+
+export type NativeChatAnswerOperation = { clientMessageId?: string; inFlight: boolean }
+
+/** Canonical evidence supersedes the form's local operation, even before its RPC returns. */
+export function nativeChatAnswerOperationEvidence(
+  clientMessageId: string | undefined,
+  messages: readonly NativeChatMessage[],
+  submissions: readonly AgentJournalSubmission[] = []
+): boolean | undefined {
+  if (!clientMessageId) {
+    return undefined
+  }
+  const key = agentJournalSubmissionKey(clientMessageId)
+  const message = messages.find((row) => row.id === key)
+  if (
+    message?.journalPosition ||
+    submissions.some((row) => row.clientMessageId === clientMessageId)
+  ) {
+    return false
+  }
+  return message?.deliveryState === 'pending' && !message.journalPosition ? true : undefined
+}
+
+export function nativeChatAnswerOperationPending(
+  operation: NativeChatAnswerOperation | null,
+  messages: readonly NativeChatMessage[],
+  submissions: readonly AgentJournalSubmission[] = []
+): boolean {
+  return (
+    operation !== null &&
+    (nativeChatAnswerOperationEvidence(operation.clientMessageId, messages, submissions) ??
+      operation.inFlight)
+  )
+}
+
+export type NativeChatAnswerSource = {
+  messages: readonly NativeChatMessage[]
+  submissions: readonly AgentJournalSubmission[]
 }

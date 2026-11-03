@@ -1,7 +1,7 @@
 /** Return runtime-minted paneKey because a client renderer cannot resolve main-side term_* handles. Identity crosses the wire; placement stays with the client. */
 
 import { describe, expect, it, vi } from 'vitest'
-import { isAgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import { isAgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { RpcContext } from '../core'
 import {
   CAPABLE_CLIENT,

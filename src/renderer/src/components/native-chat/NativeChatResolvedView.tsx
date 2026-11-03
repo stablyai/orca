@@ -222,20 +222,21 @@ export function NativeChatResolvedView({
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
     [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
   )
+  const messagesWithPending = useMemo(
+    () =>
+      pendingMessages.length === 0
+        ? sessionAfterCommandBoundaries.messages
+        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
+    [sessionAfterCommandBoundaries.messages, pendingMessages]
+  )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
-      messages: [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
+      messages: messagesWithPending,
       previewText: hookPreview,
       working: liveWorking,
       previewIsToolOutput: hookPreviewIsToolOutput
     })
-  }, [
-    sessionAfterCommandBoundaries.messages,
-    pendingMessages,
-    hookPreview,
-    liveWorking,
-    hookPreviewIsToolOutput
-  ])
+  }, [messagesWithPending, hookPreview, liveWorking, hookPreviewIsToolOutput])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries

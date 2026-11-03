@@ -2,21 +2,21 @@
 /** Shared agent.launch schema lets remote clients use typed RpcSendParams.
  * The host honors an explicit surface or refuses it; migrated worktree.create startup-agent fields are stripped. */
 
-import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
+import { AGENT_LAUNCH_SURFACES } from '../agent-launch/contracts/agent-launch-surface'
 import { z } from 'zod'
 import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
 import { parseAgentSessionOperationTimestamp } from '../agent-session/agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'
-import { isTuiAgent } from '../tui-agent-config'
-import type { TuiAgent } from '../tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { WorktreeCreate } from './worktree-create-params.pre-observation.test-fixture'
 import { FolderWorkspaceCreate } from './folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
 import { isStructuredAgentSessionIdFor } from '../agent-session/structured-agent-session-create'
-import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
+import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
 
 const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
 

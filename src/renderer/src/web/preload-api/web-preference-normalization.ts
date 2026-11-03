@@ -1,9 +1,9 @@
-import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch-choices'
+import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch/choices/agent-launch-choices'
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
 } from '../../../../shared/plugin-theme-settings'
-import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
+import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
   normalizeAgentDefaultSurface,
@@ -33,12 +33,12 @@ import {
   DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../../../../shared/tui-agent-launch-defaults'
-import { hasTypedAgentPermission } from '../../../../shared/tui-agent-permission-choice'
-import { migrateAgentPermissionChoice } from '../../../../shared/tui-agent-permission-lift'
+} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { hasTypedAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
-import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'

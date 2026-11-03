@@ -14,7 +14,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 import { rankWorktreeStatus, type WorktreeStatus } from '../../../shared/worktree-status-rollup'
 

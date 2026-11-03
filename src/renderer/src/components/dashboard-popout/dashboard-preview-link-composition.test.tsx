@@ -340,7 +340,7 @@ it.each([false, true])(
     pointer(screen, 'mousedown')
     pointer(screen, 'mouseup')
     const system = await view.findByRole('button', { name: /System Browser/ })
-    expect(view.queryByRole('button', { name: /Orca Browser|Open in this group/ })).toBeNull()
+    expect(view.queryByRole('button', { name: /Orca Browser|Open in new tab/ })).toBeNull()
     fireEvent.click(view.getByRole('button', { name: 'Copy link' }))
     await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
     fireEvent.click(system)

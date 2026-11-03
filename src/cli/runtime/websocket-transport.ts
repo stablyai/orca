@@ -4,7 +4,7 @@ import type {
   RuntimeOrchestrationEnvelope
 } from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 import {
   sendRemoteRuntimeRequest,

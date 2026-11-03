@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isOmpOverlayScreen } from './omp-terminal-readiness'
 
 /** An agent's grid as painted on its own PTY, and whether that is the alternate screen. */

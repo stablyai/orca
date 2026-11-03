@@ -2,7 +2,7 @@ import {
   configuredDeclarationModels,
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,

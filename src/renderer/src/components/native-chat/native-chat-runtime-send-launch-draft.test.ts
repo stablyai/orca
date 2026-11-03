@@ -29,7 +29,7 @@ import {
 import {
   AGENT_TUI_CLEAR_INPUT_MAX,
   buildAgentTuiClearInputForText
-} from '../../../../shared/agent-tui-input-clear'
+} from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 
 const PTY = 'pty-launch-draft'
 const DRAFT = 'Linked Linear issue: ABC-123\nhttps://linear.app/x/issue/ABC-123'

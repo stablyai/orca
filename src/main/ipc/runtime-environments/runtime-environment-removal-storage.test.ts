@@ -18,7 +18,7 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 
-vi.mock('../../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   clearBrowserRoutePartitionStorageForEnvironment: clearStorageMock
 }))
 
