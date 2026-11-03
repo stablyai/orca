@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import {
   EMPTY_DASHBOARD_FILTERS,
@@ -29,6 +29,23 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
 }
 
 describe('agent board filtering', () => {
+  it('matches note text consistently when the system locale lowercases I differently', () => {
+    const localeLowerCase = String.prototype.toLocaleLowerCase
+    const localeSpy = vi.spyOn(String.prototype, 'toLocaleLowerCase').mockImplementation(function (
+      this: string
+    ) {
+      return localeLowerCase.call(this, 'tr')
+    })
+    try {
+      const candidate = card({})
+      expect(
+        filterDashboardCards([candidate], 'invoice', EMPTY_DASHBOARD_FILTERS, () => 'INVOICE')
+      ).toEqual([candidate])
+    } finally {
+      localeSpy.mockRestore()
+    }
+  })
+
   it('supports the synthesized no-review filter and immutable toggles', () => {
     const cards = [
       card({ paneKey: 'none' }),

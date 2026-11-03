@@ -8,6 +8,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentKanbanCard } from './AgentKanbanCard'
+import { taskObservation } from './agent-task-status'
 
 const agentIconRender = vi.fn()
 const agentStateDotRender = vi.fn()
@@ -93,6 +94,31 @@ describe('AgentKanbanCard', () => {
       expect(agentStateDotRender).toHaveBeenLastCalledWith(verdict)
       expect(container.firstElementChild?.className).not.toContain('emerald')
     }
+  })
+
+  it('keeps the worktree visible when a task title replaces an unnamed conversation', () => {
+    const current = card()
+    render(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={current}
+          now={2_000}
+          onOpenTerminal={vi.fn()}
+          taskNote={{
+            status: 'automatic',
+            title: 'Validate the dashboard',
+            summary: '',
+            nextStep: '',
+            owner: '',
+            reviewReference: '',
+            observation: taskObservation(current),
+            savedAt: 2_000
+          }}
+        />
+      </TooltipProvider>
+    )
+    expect(screen.getByText('Validate the dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Orca · dashboard-review')).toBeInTheDocument()
   })
 
   it('does not render an invented age when the start time is unknown', () => {

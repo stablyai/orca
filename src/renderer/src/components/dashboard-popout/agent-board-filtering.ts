@@ -47,7 +47,7 @@ export function filterDashboardCards(
     const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
     return (
       (normalizedQuery.length === 0 ||
-        `${cardSearchText(card)} ${extraSearchText(card).toLocaleLowerCase()}`.includes(
+        `${cardSearchText(card)} ${extraSearchText(card).toLowerCase()}`.includes(
           normalizedQuery
         )) &&
       (filters.projects.length === 0 || filters.projects.includes(card.repoId)) &&

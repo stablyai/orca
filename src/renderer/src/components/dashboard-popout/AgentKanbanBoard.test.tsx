@@ -371,6 +371,16 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.now).toBe(initialNow)
   })
 
+  it('refreshes state age when the original start time is unknown', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(100_000)
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    renderBoard([card({ startedAt: 0, finishedAt: null, stateChangedAt: 1 })])
+    expect(screen.getByTestId('card').dataset.now).toBe('100000')
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(screen.getByTestId('card').dataset.now).toBe('130000')
+  })
+
   it('parks the clock while hidden, catches up on reveal, and ticks while visible', () => {
     vi.useFakeTimers()
     vi.setSystemTime(100_000)

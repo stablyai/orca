@@ -52,7 +52,6 @@ const snapshot: DashboardSnapshot = {
       lastAgentMessage: '<internal_tag>Long raw conversation stays in the detail.</internal_tag>'
     }),
     card('verified', {
-      conversationName: 'Done/AINF/VerifiedReview',
       bucket: 'idle',
       dotState: 'done',
       unseen: false,

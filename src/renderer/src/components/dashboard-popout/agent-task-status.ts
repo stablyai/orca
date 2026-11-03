@@ -24,6 +24,11 @@ export const TASK_BUCKET_ORDER: readonly DashboardTaskBucket[] = [
 ]
 export const RECENT_RESPONSE_MS = 48 * 60 * 60 * 1000
 
+/** Keep card labels and the board refresh clock on the same timestamp. */
+export function taskDisplayTimestamp(card: DashboardCard): number {
+  return card.finishedAt ?? (card.stateChangedAt || card.startedAt)
+}
+
 export function taskNoteIdentity(card: DashboardCard): string {
   return JSON.stringify([
     card.hostKind ?? 'local',

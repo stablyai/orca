@@ -24,6 +24,7 @@ import { DashboardHostBadge } from './DashboardHostBadge'
 import { AgentTaskDetails } from './AgentTaskDetails'
 import {
   currentTaskNote,
+  taskDisplayTimestamp,
   taskBucket,
   taskNextStep,
   taskResultVerified,
@@ -47,11 +48,6 @@ function formatStartedAgo(startedAt: number, now: number): string {
   return translate('dashboardPopout.card.time.days', '{{count}}d', {
     count: Math.floor(hours / 24)
   })
-}
-
-/** Label response age separately from the latest reported state change. */
-function displayTimestamp(card: DashboardCard): number {
-  return card.finishedAt ?? (card.stateChangedAt || card.startedAt)
 }
 
 function formatSubagentCount(count: number): string {
@@ -219,9 +215,9 @@ export const AgentKanbanCard = memo(
     const isDone = taskResultVerified(card, note)
     const activityState = dashboardCardDisplayState(card)
     const displayState = isDone ? 'done' : activityState === 'done' ? 'idle' : activityState
-    // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
+    // Keep the worktree visible when a task or conversation title supplies the heading.
     const heading = note?.title.trim() || card.conversationName || card.worktreeName
-    const worktreeInFooter = card.conversationName !== undefined
+    const worktreeInFooter = heading !== card.worktreeName
 
     return (
       <div
@@ -369,14 +365,14 @@ export const AgentKanbanCard = memo(
               : ''}
           </span>
           <ReviewPill card={card} />
-          {displayTimestamp(card) > 0 ? (
+          {taskDisplayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
               {card.finishedAt !== null
                 ? translate('dashboardPopout.task.respondedAt', 'Response {{age}} ago', {
-                    age: formatStartedAgo(displayTimestamp(card), now)
+                    age: formatStartedAgo(taskDisplayTimestamp(card), now)
                   })
                 : translate('dashboardPopout.task.changedAt', 'State {{age}} ago', {
-                    age: formatStartedAgo(displayTimestamp(card), now)
+                    age: formatStartedAgo(taskDisplayTimestamp(card), now)
                   })}
             </span>
           ) : null}
@@ -390,7 +386,7 @@ export const AgentKanbanCard = memo(
     previous.onSaveTaskNote === next.onSaveTaskNote &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
-    (displayTimestamp(previous.card) <= 0 ||
-      formatStartedAgo(displayTimestamp(previous.card), previous.now) ===
-        formatStartedAgo(displayTimestamp(next.card), next.now))
+    (taskDisplayTimestamp(previous.card) <= 0 ||
+      formatStartedAgo(taskDisplayTimestamp(previous.card), previous.now) ===
+        formatStartedAgo(taskDisplayTimestamp(next.card), next.now))
 )

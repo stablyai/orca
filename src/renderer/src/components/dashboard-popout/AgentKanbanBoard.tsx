@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { useDashboardTaskNotes } from './use-dashboard-task-notes'
 import {
   currentTaskNote,
+  taskDisplayTimestamp,
   isOlderResponse,
   taskBucket,
   taskNoteIdentity,
@@ -217,7 +218,7 @@ export function AgentKanbanBoard({
   )
   const grouped = useMemo(() => groupByBucket(filteredCards, notes), [filteredCards, notes])
   const hasRelativeTimestamps = useMemo(
-    () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
+    () => snapshot.cards.some((card) => taskDisplayTimestamp(card) > 0),
     [snapshot.cards]
   )
   const [now, setNow] = useState(() => Date.now())
