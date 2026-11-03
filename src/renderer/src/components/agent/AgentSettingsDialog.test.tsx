@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { AgentsPane } from '@/components/settings/AgentsPane'
+import type { AgentsPane } from '@/components/settings/agents/AgentsPane'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 
 const testState = vi.hoisted(() => ({
@@ -33,7 +33,7 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/components/settings/AgentsPane', () => ({
+vi.mock('@/components/settings/agents/AgentsPane', () => ({
   AgentsPane: (props: ComponentProps<typeof AgentsPane>) => {
     testState.agentsPaneProps = props
     return null

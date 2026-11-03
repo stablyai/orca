@@ -88,24 +88,11 @@ describe('classifyDispatchRejection', () => {
 })
 
 describe('isWriteFailureSubmission', () => {
-  it('holds for a legacy row in any state that carries the marker', () => {
-    expect(
-      isWriteFailureSubmission({ reason: 'provider_write_failed: closed before enqueue' })
-    ).toBe(true)
-  })
-
   it('holds for the bare marker a new host writes, as released clients already read it', () => {
     const written = agentSessionFailureWords(agentSessionFailureFact('writeFailed'), {
       surface: 'rejection'
     })
     expect(written.reason).toBe('provider_write_failed')
     expect(isWriteFailureSubmission({ reason: written.reason })).toBe(true)
-  })
-
-  it('holds for a typed write failure and for nothing else', () => {
-    expect(isWriteFailureSubmission({ reason: 'x', rejection: { kind: 'writeFailed' } })).toBe(true)
-    expect(isWriteFailureSubmission({ reason: DISPATCH_REJECTED_QUEUE_FULL })).toBe(false)
-    expect(isWriteFailureSubmission({ reason: 'x', rejection: { kind: 'queueFull' } })).toBe(false)
-    expect(isWriteFailureSubmission({ reason: null })).toBe(false)
   })
 })

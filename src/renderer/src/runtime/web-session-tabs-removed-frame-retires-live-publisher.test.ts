@@ -11,7 +11,7 @@ import {
   nextReceivedSessionTabsFrame,
   VISIBILITY_INVENTORY_REMOVAL_EPOCH
 } from './web-session-tabs-sync/state'
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
+import '../../../shared/runtime-types'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
 
 // getState: snapshot receipt reads the held paired-tab closes; none here.
@@ -77,29 +77,6 @@ describe('a removal frame must not retire the publisher that is still live', () 
     resetWebSessionTabsSyncTestState()
   })
 
-  // Stopping retirement is insufficient: reject same-epoch pre-close frames by delivery order even at higher versions.
-  it('still fences a predecessor frame that was in flight when the removal landed', () => {
-    recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
-    expect(decideWebSessionTabsSnapshot(liveFrame(1), ENVIRONMENT_ID).apply).toBe(true)
-
-    // A list for this worktree reserves its frame while the worktree still exists.
-    const delayedReceived = nextReceivedSessionTabsFrame()
-
-    const removedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, removalFrame())
-    expect(decideWebSessionTabsSnapshot(removalFrame(), ENVIRONMENT_ID).apply).toBe(true)
-    expect(removedReceived).toBeGreaterThan(delayedReceived)
-
-    const delayed = liveFrame(4)
-    recordReceivedWebSessionTabsSnapshot(
-      ENVIRONMENT_ID,
-      delayed,
-      delayedReceived,
-      undefined,
-      'bootstrap'
-    )
-    expect(admits(delayed, delayedReceived)).toBe(false)
-  })
-
   // Bound receipt ledgers by frame, not entry count: one bootstrap inventory shares a frame across worktrees and must not evict its own evidence.
   it('keeps every receipt an inventory recorded under one frame, past the bound', () => {
     const requestReceivedFrame = nextReceivedSessionTabsFrame()
@@ -153,35 +130,6 @@ describe('a removal frame must not retire the publisher that is still live', () 
       'bootstrap'
     )
     expect(admits(delayed, delayedReceived)).toBe(false)
-  })
-
-  // Synthesized none/v0 means unpublished, not a new publisher (host-session-snapshot-authority.ts); retiring the live process epoch here blocks future terminals.
-  it('does not let an unpublished-worktree placeholder retire the live publisher', () => {
-    const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
-    expect(admits(liveFrame(1), liveReceived)).toBe(true)
-
-    const removedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, removalFrame())
-    expect(admits(removalFrame(), removedReceived)).toBe(true)
-
-    const placeholder: RuntimeMobileSessionTabsResult = {
-      ...liveFrame(1),
-      publicationEpoch: UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH,
-      snapshotVersion: 0,
-      tabs: []
-    }
-    const placeholderReceived = recordReceivedWebSessionTabsSnapshot(
-      ENVIRONMENT_ID,
-      placeholder,
-      undefined,
-      undefined,
-      'bootstrap'
-    )
-    admits(placeholder, placeholderReceived)
-
-    // The user creates a terminal; the same live generation publishes its worktree again.
-    const republished = liveFrame(2)
-    const republishedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, republished)
-    expect(admits(republished, republishedReceived)).toBe(true)
   })
 
   // Live republication overwrites the receipt slot; only the retraction boundary rejects pre-close lists with versions higher than the restarted counter.

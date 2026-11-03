@@ -1,6 +1,9 @@
 import { antigravitySessionOrigin } from '../../shared/antigravity-session-origin'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { codexSessionAliasKey, codexSessionAliasBeats } from './codex-session-root-dedup'
+import {
+  codexSessionAliasKey,
+  codexSessionAliasBeats
+} from './scanners/codex/codex-session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
 
 function sessionAliasKey(session: AiVaultSession): string | null {

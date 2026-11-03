@@ -1,6 +1,6 @@
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { renderToStaticMarkup } from 'react-dom/server'

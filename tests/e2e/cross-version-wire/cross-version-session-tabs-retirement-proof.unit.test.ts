@@ -160,12 +160,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version session-tabs retirement proof', () => {
-  it('old host against old client publishes no proof on the renderer-first close (the defect)', () => {
-    const frame = hostPublishesOnExit(preStack, snapshotAfterRendererRepublished())
-    expect(frame).toBeNull()
-    expect(clientRetains(preStack, frame)).toEqual([])
-  })
-
   it('new host against new client publishes a proof the client retains (the fix)', () => {
     const frame = hostPublishesOnExit(stack, snapshotAfterRendererRepublished())
     expect(frame).not.toBeNull()

@@ -26,7 +26,7 @@ import {
   hasCompletedCodexSessionBackfillMarker,
   markCodexSessionBackfillMarkerNeedsFullScan
 } from '../codex/codex-session-backfill-marker'
-import { getDefaultWslDistro } from '../wsl'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
 import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'

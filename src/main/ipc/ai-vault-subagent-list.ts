@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
-import { listAiVaultSubagentSessionsInBackground } from '../ai-vault/session-scanner-background'
+import { listAiVaultSubagentSessionsInBackground } from '../ai-vault/scan-service/session-scanner-background'
 import { claudeProjectsRootDirs } from '../ai-vault/session-scanner-roots'
 import { sessionRowRootDirs } from '../ai-vault/session-scanner-agent-sources'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'

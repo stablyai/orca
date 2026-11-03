@@ -13,9 +13,12 @@ import {
 } from '../../../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../../../codex/codex-pane-launch-account'
 import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../../pty/codex-home-wsl-env'
+import {
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost
+} from '../../../pty/shell-startup/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
-import { parseWslPath } from '../../../wsl'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
 
 export function shouldSkipCodexHomeEnvForWindowsShell(

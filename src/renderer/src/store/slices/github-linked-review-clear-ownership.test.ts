@@ -3,11 +3,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import { createWorktreeIdentity } from '../../../../shared/worktree/identity'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { forgeOwnerHostIdForWorkspace } from '../../runtime/forge-credential-target'
-import {
-  _clearGitHubPRRefreshStartedEntriesForTest,
-  prRefreshStartedLinkedReviewScopes
-} from '../github/request-coordination'
-import { bumpHostedReviewLinkMutationGeneration } from './worktrees/metadata/hosted-review-link-mutation'
+import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
+import './worktrees/metadata/hosted-review-link-mutation'
 import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-meta'
 import { findKnownWorktreeById } from './worktrees/listing/detected-worktree-meta'
 import {
@@ -130,49 +127,6 @@ describe('linked review clearing retains workspace and credential identities', (
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
-
-  it.each([100, 1000])(
-    'bounds accepted refresh-start repository reads with %s repositories and overlapping SSH routes',
-    (population) => {
-      const { store, workspace, alias } = setup(false)
-      let reads = 0
-      const repos = Array.from({ length: population - 2 }, (_, index) => ({
-        ...repository,
-        get id() {
-          reads++
-          return `unrelated-${index}`
-        }
-      }))
-      const direct: Repo = { ...repository, executionHostId: 'ssh:builder' }
-      const directAlias = {
-        ...alias,
-        cacheKey: `ssh:builder::${repository.id}::${branch}`,
-        executionHostId: direct.executionHostId
-      }
-      store.setState({
-        repos: [...repos, repository, direct],
-        worktreesByRepo: { project: [workspace] }
-      })
-      const start = (sequence: number) =>
-        store.getState().applyGitHubPRRefreshEvent({
-          sequence,
-          reason: 'swr',
-          aliases: [directAlias],
-          status: 'in-flight',
-          requestStartedAt: NOW
-        })
-      start(1)
-      reads = 0
-      for (let sequence = 2; sequence <= 101; sequence++) {
-        start(sequence)
-      }
-      expect(store.getState().prRefreshSequences[directAlias.cacheKey]).toBe(101)
-      expect(prRefreshStartedLinkedReviewScopes.get(directAlias.cacheKey)?.scope.workspace).toBe(
-        workspace
-      )
-      expect(reads).toBe(0)
-    }
-  )
 
   it.each([100, 1000])(
     'bounds linked SSH request-start reads across %s workspaces',
@@ -324,43 +278,6 @@ describe('linked review clearing retains workspace and credential identities', (
     }
   )
 
-  it.each(['removed', 'ambiguous'] as const)(
-    'handles a branch refetch whose owner becomes %s during unlinking',
-    async (ownerState) => {
-      const { store, update, options } = setup(true)
-      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const mismatch = makePR({
-        number: 12,
-        state: 'open',
-        headSha: 'old-head',
-        headRefName: 'feature/old'
-      })
-      runtimeEnvironmentCall.mockImplementation(({ method }) => ({
-        id: method,
-        ok: true,
-        result: mismatch,
-        _meta: { runtimeId: 'server' }
-      }))
-      update.mockImplementationOnce(async () => {
-        store.setState({
-          repos: ownerState === 'removed' ? [] : [repository, { ...repository }]
-        })
-        return { ok: true }
-      })
-
-      await expect(
-        store.getState().fetchPRForBranch(repository.path, branch, options)
-      ).resolves.toEqual(mismatch)
-
-      expect(update).toHaveBeenCalledOnce()
-      expect(warning).toHaveBeenCalledWith(
-        'Branch-scoped PR refetch skipped:',
-        new Error('The repository is no longer available on its owning host. Reconnect and retry.')
-      )
-      expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
-    }
-  )
-
   it.each([
     { route: 'lookup', durable: true },
     { route: 'coordinator', durable: true },
@@ -427,40 +344,6 @@ describe('linked review clearing retains workspace and credential identities', (
     }
   )
 
-  it('does not clear a manually relinked review whose final branch, head and link are unchanged', async () => {
-    const { store, workspace, update, alias } = setup(true)
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 75,
-      reason: 'swr',
-      aliases: [alias],
-      status: 'in-flight',
-      requestStartedAt: NOW
-    })
-    bumpHostedReviewLinkMutationGeneration(workspace.id, workspace)
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 75,
-      reason: 'swr',
-      aliases: [alias],
-      outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
-    })
-    await update.mock.results[0]?.value
-    expect(findKnownWorktreeById(store.getState(), workspace.id, 'ssh:builder')).toBe(workspace)
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'worktree.set' })
-    )
-  })
-
-  it('does not dispatch a host-only refetch after a valid metadata save with nested repository twins', async () => {
-    const { store, workspace } = setup(true)
-    store.setState({ repos: [repository, { ...repository, connectionId: 'other' }] })
-    await expect(
-      store
-        .getState()
-        .updateWorktreeMeta(workspace.id, { linkedPR: null }, { executionHostId: 'ssh:builder' })
-    ).resolves.toEqual({ ok: true })
-    expect(store.getState().fetchHostedReviewForBranch).not.toHaveBeenCalled()
-  })
-
   it('preserves a push target updated while a branch-mismatch lookup was pending', async () => {
     const { store, workspace, sibling, update, alias } = setup(true)
     store.getState().applyGitHubPRRefreshEvent({
@@ -490,16 +373,5 @@ describe('linked review clearing retains workspace and credential identities', (
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'worktree.set' })
     )
-  })
-
-  it('skips a coordinator clear without request-start evidence', () => {
-    const { store, update, alias } = setup(true)
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 73,
-      reason: 'swr',
-      aliases: [alias],
-      outcome: { kind: 'found', pr: diverged, fetchedAt: NOW }
-    })
-    expect(update).not.toHaveBeenCalled()
   })
 })

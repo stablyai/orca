@@ -35,7 +35,7 @@ import type {
   CodexWslRuntimeHookInstallPlan,
   WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 /** True when touching the distro's `\\wsl.localhost` files now would start it (E9); a user act passes. */
 export async function isWslHookDistroBlocked(distro: string): Promise<boolean> {

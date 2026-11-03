@@ -2,13 +2,13 @@ import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
-} from '../../../worktree-removal-listing'
+} from '../../../workspaces/removal/worktree-removal-listing'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import {
@@ -29,7 +29,7 @@ import {
 import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
-} from '../../../local-worktree-scan-generation'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
 import {
   describeWorktreeScanFailure,
   loggedWorktreeListFailures,
@@ -38,8 +38,8 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
-import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
-import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
+import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
+import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,
   rescanWorktreesWhenWslDistroRuns,

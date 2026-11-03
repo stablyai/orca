@@ -28,7 +28,7 @@ vi.mock('../../../preflight/agent-detection', () => ({
 }))
 
 // The running gate is real on Windows CI; each case states whether the distro runs.
-vi.mock('../../../wsl/wsl-background-exec-gate', () => ({
+vi.mock('../../../wsl/discovery/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: assertWslDistroRunningForExecMock
 }))
 

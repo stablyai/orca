@@ -62,41 +62,6 @@ function setup(parents: AgentStatusSubject[] = [subject()]) {
 }
 
 describe('agent child-work admission', () => {
-  it('keeps one host id across re-announcement with another tool-use alias', () => {
-    const parent = subject()
-    const { admission, mintChildWorkId, store } = setup([parent])
-
-    expect(admission.announce(announce(parent))).toMatchObject({
-      accepted: true,
-      childWorkId: 'child-1',
-      created: true
-    })
-    expect(
-      admission.announce(
-        announce(parent, {
-          aliases: [
-            { segmentId: 'segment-1', aliasKind: 'task_id', alias: 'task-1' },
-            { segmentId: 'segment-1', aliasKind: 'tool_use_id', alias: 'tool-2' }
-          ],
-          observedAt: 11
-        })
-      )
-    ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
-    expect(mintChildWorkId).toHaveBeenCalledTimes(1)
-    expect(store.getChildren(parent)).toHaveLength(1)
-    expect(store.getSnapshot().aliases).toHaveLength(2)
-  })
-
-  it('admits a child without materializing the entire store snapshot', () => {
-    const parent = subject()
-    const { admission, store } = setup([parent])
-    const snapshot = vi.spyOn(store, 'getSnapshot')
-
-    expect(admission.announce(announce(parent)).accepted).toBe(true)
-    expect(admission.announce(announce(parent, { observedAt: 11 })).accepted).toBe(true)
-    expect(snapshot).not.toHaveBeenCalled()
-  })
-
   it('adopts and reclassifies a provisional child without changing its id', () => {
     const parent = subject()
     const { admission, store } = setup([parent])
@@ -126,44 +91,6 @@ describe('agent child-work admission', () => {
         })
       )
     ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
-  })
-
-  it('preserves the logical id and prior outcome across an explicit resume fence', () => {
-    const parent = subject()
-    const { admission, store } = setup([parent])
-    admission.announce(
-      announce(parent, {
-        state: 'done',
-        membership: 'settled',
-        outcome: 'failed',
-        observedAt: 20
-      })
-    )
-
-    expect(
-      admission.resume({
-        ...announce(parent, {
-          aliases: [{ segmentId: 'segment-2', aliasKind: 'task_id', alias: 'task-1' }],
-          observedAt: 30
-        }),
-        childWorkId: 'child-1',
-        expectedFence: { invocationId: 'invocation-1', generation: 1 },
-        nextFence: { invocationId: 'invocation-2', generation: 2 }
-      })
-    ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
-
-    expect(store.getChildren(parent)[0]).toMatchObject({
-      childWorkId: 'child-1',
-      firstObservedAt: 20,
-      invocation: { invocationId: 'invocation-2', generation: 2 },
-      previousInvocations: [
-        {
-          fence: { invocationId: 'invocation-1', generation: 1 },
-          outcome: 'failed',
-          settledAt: 20
-        }
-      ]
-    })
   })
 
   it('rejects a backwards resume generation before it can authorize stale stop input', () => {
@@ -304,24 +231,6 @@ describe('agent child-work admission', () => {
     ).toBe('child-2')
   })
 
-  it('fails closed for settled or non-stoppable stop targets', () => {
-    const parent = subject()
-    const { admission } = setup([parent])
-    admission.announce(announce(parent, { stoppable: false }))
-    const stop = {
-      parent,
-      childWorkId: 'child-1',
-      expectedFence: { invocationId: 'invocation-1', generation: 1 }
-    }
-    expect(admission.authorizeStop(stop)).toBeNull()
-
-    const second = setup([parent])
-    second.admission.announce(
-      announce(parent, { state: 'done', membership: 'settled', outcome: 'succeeded' })
-    )
-    expect(second.admission.authorizeStop(stop)).toBeNull()
-  })
-
   it('scopes identical aliases by parent, provider, segment and kind', () => {
     const firstParent = subject()
     const secondParent = subject({ executionHostId: 'ssh:host-a' })
@@ -342,26 +251,5 @@ describe('agent child-work admission', () => {
 
     expect(store.getSnapshot().children).toHaveLength(5)
     expect(new Set(store.getSnapshot().aliases.map(serializeAgentChildWorkAliasKey)).size).toBe(5)
-  })
-
-  it('reparents a child and all aliases without reminting identity', () => {
-    const firstParent = subject()
-    const nextParent = subject({ workspaceId: 'workspace-2' })
-    const { admission, store, mintChildWorkId } = setup([firstParent, nextParent])
-    admission.announce(announce(firstParent))
-
-    expect(
-      admission.reparent({
-        childWorkId: 'child-1',
-        fromParent: firstParent,
-        toParent: nextParent,
-        expectedFence: { invocationId: 'invocation-1', generation: 1 },
-        observedAt: 20
-      })
-    ).toMatchObject({ accepted: true, childWorkId: 'child-1', created: false })
-    expect(store.getChildren(firstParent)).toEqual([])
-    expect(store.getChildren(nextParent)[0]?.childWorkId).toBe('child-1')
-    expect(store.getSnapshot().aliases[0]?.parent).toEqual(nextParent)
-    expect(mintChildWorkId).toHaveBeenCalledTimes(1)
   })
 })

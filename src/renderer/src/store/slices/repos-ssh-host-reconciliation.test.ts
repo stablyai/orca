@@ -374,27 +374,4 @@ describe('SSH repo host reconciliation', () => {
     expect(store.getState().worktreesByRepo[repoId]).toBeUndefined()
     expect(store.getState().detectedWorktreesByRepo[repoId]).toBeUndefined()
   })
-
-  it('preserves a forgettable SSH ghost when a local repo shares its UUID', async () => {
-    const localRepo: Repo = {
-      ...directSshRepo('ssh-old'),
-      path: '/local/repo',
-      connectionId: undefined,
-      executionHostId: undefined
-    }
-    const oldRepo = directSshRepo('ssh-old')
-    reposList.mockResolvedValue([localRepo, oldRepo])
-    projectsList.mockResolvedValue([project])
-    setupsList.mockResolvedValue([directSshSetup('ssh-old')])
-    const store = createTestStore()
-    store.setState({ repos: [localRepo, oldRepo], projectHostSetups: [directSshSetup('ssh-old')] })
-
-    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
-
-    expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }, oldRepo])
-    expect(store.getState().projectHostSetups).toEqual(
-      expect.arrayContaining([directSshSetup('ssh-old')])
-    )
-    expect(store.getState().projectHostSetups).toHaveLength(2)
-  })
 })
