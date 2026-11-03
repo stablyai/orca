@@ -142,12 +142,16 @@ export function useAutomationCatalog(client: RpcClient | null, server: boolean) 
           }
         } finally {
           batch.finish()
-          if (scope.current() && scope.pending === pending) {
+          if (scope.pending === pending) {
             scope.pending = null
             const trailing = scope.trailing
             scope.trailing = null
             if (trailing) {
-              void run(trailing)
+              if (scope.current()) {
+                void run(trailing)
+              } else {
+                trailing.finish()
+              }
             }
           }
         }

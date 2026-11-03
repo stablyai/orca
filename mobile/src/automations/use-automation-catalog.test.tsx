@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker'
 import type { RpcRequestFrame } from '../transport/rpc-envelope-fields'
+import { BridgeConnectionCache } from '../mobile-web-shell/bridge/bridge-client-connection-cache'
 import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import { useAutomationCatalog } from './use-automation-catalog'
 import { automationClient, deferred, savedAutomation } from './automation-test-fixtures'
@@ -274,6 +275,49 @@ describe('host-owned automation reads', () => {
       expect(vi.getTimerCount()).toBe(1)
     }
   )
+
+  it('settles queued explicit intent when a rebuilt shell silently replaces its generation', async () => {
+    vi.useFakeTimers()
+    const cache = new BridgeConnectionCache()
+    cache.prime({
+      state: 'connected',
+      generation: 5,
+      reconnectAttempt: 0,
+      lastConnectedAt: null,
+      lastInboundAt: null
+    })
+    const transitions = vi.fn()
+    cache.onStateChange(transitions)
+    const port = trackedCatalog()
+    port.client.getState = () => cache.require().state
+    port.client.getGeneration = () => cache.require().generation ?? 0
+    port.client.onStateChange = (listener) => cache.onStateChange(listener)
+    const { read } = await mountCatalog(port.client)
+    let settled = false
+    await act(async () => {
+      port.event({ type: 'ready' })
+      void read()
+        .refresh(true)
+        .then(() => {
+          settled = true
+        })
+      cache.prime({ ...cache.require(), generation: 2 })
+      port.reply(0, 'Retired generation')
+    })
+    expect(transitions).not.toHaveBeenCalled()
+    expect(settled).toBe(true)
+    expect(read().loaded).toBe(false)
+    expect(read().isCurrentSnapshot()).toBe(false)
+    expect(port.tracker.size()).toBe(0)
+    await act(async () => vi.advanceTimersByTimeAsync(30000))
+    expect(port.frames).toHaveLength(2)
+    await act(async () => {
+      void read().refresh(true)
+    })
+    await act(async () => port.reply(2, 'Rebuilt shell'))
+    expect(read().rows[0]?.automation.name).toBe('Rebuilt shell')
+    expect(read().isCurrentSnapshot()).toBe(true)
+  })
 
   it('retires waiters and ignores late completion across connection, client and unmount lifetimes', async () => {
     const port = trackedCatalog()
