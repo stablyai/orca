@@ -18,7 +18,7 @@ vi.mock('../plugins/state/plugin-theme-apply', () => ({
 vi.mock('../plugins/state/use-plugin-in-use', () => ({ usePluginInUse: () => null }))
 vi.mock('../plugins/state/use-plugin-art-palettes', () => ({ usePluginArtPalettes: () => [] }))
 
-vi.mock('./SettingsSection', () => ({
+vi.mock('./section-layout/SettingsSection', () => ({
   SettingsSection: ({
     children,
     headerAction

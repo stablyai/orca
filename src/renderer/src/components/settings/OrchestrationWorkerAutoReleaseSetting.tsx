@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { SettingsSwitchRow } from './SettingsFormControls'
+import { SettingsSwitchRow } from './form-controls/SettingsFormControls'
 import {
   getWorkerAutoReleaseDescription,
   getWorkerAutoReleaseTitle

@@ -21,7 +21,7 @@ import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'

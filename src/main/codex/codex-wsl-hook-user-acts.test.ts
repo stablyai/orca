@@ -16,12 +16,12 @@ vi.mock('./codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: vi.fn()
 vi.mock('./codex-windows-sandbox-read-grant', () => ({
   grantCodexSandboxReadOnManagedHome: vi.fn()
 }))
-vi.mock('../wsl', async (importOriginal) => ({
+vi.mock('../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultWslDistro: () => 'Ubuntu'
 }))
 
-import { isWslUserActFor } from '../wsl/wsl-user-act-scope'
+import { isWslUserActFor } from '../wsl/discovery/wsl-user-act-scope'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from './managed-wsl-home-shell-preflight'
 import { createCodexRuntimeHomeLaunchPreparation } from './codex-runtime-home-launch-preparation'
 

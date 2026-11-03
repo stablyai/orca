@@ -1,8 +1,8 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsRow, SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 
 export const JIRA_ISSUE_KEY_CASING_KEYWORDS = [
   'jira',

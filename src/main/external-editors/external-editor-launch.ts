@@ -6,7 +6,7 @@ import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../../shared/remote-ssh-editor-launcher'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,

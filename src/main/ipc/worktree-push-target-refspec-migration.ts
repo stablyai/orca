@@ -9,7 +9,7 @@ import {
   pruneUntrackedForkRemoteRefs,
   remoteHasUrl,
   wildcardForkFetchRefspec
-} from '../git/fork-remote-refspec'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'

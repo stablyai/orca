@@ -22,7 +22,7 @@ vi.mock('./local-file-access-resolution', () => ({
   resolveUserNamedRegularFile: resolveAuthorizedPathMock
 }))
 
-vi.mock('../ai-vault/local-log-tail-reader', () => ({
+vi.mock('../ai-vault/transcripts/local-log-tail-reader', () => ({
   readLocalLogTailRange: readRangeMock
 }))
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
+import { resolveWslExecutablePath } from '../wsl/execution/wsl-executable-path'
 import { WslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'

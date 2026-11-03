@@ -14,20 +14,23 @@ import {
   storeSessionParseCacheEntry,
   storeSessionScopeCwd,
   resetSessionParseCacheForTests
-} from './session-parse-cache-store'
-import { createSessionParseStats, parseAgentSessionFileCached } from './session-scanner-parse-cache'
+} from './parse-cache/session-parse-cache-store'
+import {
+  createSessionParseStats,
+  parseAgentSessionFileCached
+} from './parse-cache/session-scanner-parse-cache'
 import { scanAiVaultSessions } from './session-scanner'
-import { createAntigravityWorkspaceResolver } from './session-scanner-antigravity-history'
+import { createAntigravityWorkspaceResolver } from './scanners/antigravity/session-scanner-antigravity-history'
 import { scanInScopeSessions } from './session-scanner-scope-walk'
 import * as eventLoop from '../../shared/event-loop-yield'
 import { AI_VAULT_SCOPE_CWD_SOURCES } from './session-scope-cwd'
-import { SessionParseCacheDatabase } from './session-parse-cache-database'
+import { SessionParseCacheDatabase } from './parse-cache/session-parse-cache-database'
 import SyncDatabase from '../sqlite/sync-database'
 import {
   initSessionParseCachePersistence,
   flushSessionParseCachePersist,
   resetSessionParseCachePersistenceForTests
-} from './session-parse-cache-persistence'
+} from './parse-cache/session-parse-cache-persistence'
 import {
   isolatedScanRoots,
   jsonLines,

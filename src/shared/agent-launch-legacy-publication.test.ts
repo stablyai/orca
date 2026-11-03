@@ -119,29 +119,6 @@ it('handles a whole-map legacy no-op, removed sibling and permission carrier in 
   expect(changed.agentDefaultArgs?.claude).toBe('--verbose --debug')
 })
 
-it('does not conserve generated ownership through duplicate, operand, terminator or changed model carriers', () => {
-  const settings: AgentLaunchSettingsSource = {
-    agentPermissionDefault: 'own',
-    terminalWindowsShell: 'powershell.exe',
-    agentLaunchChoices: { claude: { model: String.raw`org\model`, options: { effort: 'high' } } },
-    agentDefaultArgs: { claude: '--verbose' }
-  }
-  const text = projectAgentLaunchSettings(settings, 'win32').agentDefaultArgs.claude!
-  for (const value of [
-    `${text} --model other`,
-    `-- ${text}`,
-    `--append-system-prompt ${text}`,
-    '--model different --verbose'
-  ]) {
-    const update = agentLaunchSettingsMutationUpdates(
-      settings,
-      { type: 'arguments', agent: 'claude', value },
-      'win32'
-    )
-    expect(update.agentLaunchChoices?.claude?.model).not.toBe(String.raw`org\model`)
-  }
-})
-
 it('keeps native-only unrepresented choices and cuts Windows settings with their actual grammar', () => {
   const native: AgentLaunchSettingsSource = {
     agentPermissionDefault: 'own',

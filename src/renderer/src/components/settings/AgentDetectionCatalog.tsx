@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { AgentCatalogRow, type AgentCatalogRowProps } from './AgentCatalogRow'
-import { SettingsBadge, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsBadge, SettingsSubsectionHeader } from './form-controls/SettingsFormControls'
 import { AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 
 export function AgentDetectionCatalog({

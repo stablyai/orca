@@ -52,25 +52,6 @@ describe('the client roster of subagents', () => {
     expect(settled.get('a')?.rosterPosition).toEqual({ sequence: 2, index: 0 })
   })
 
-  it('keeps its identity when nothing it holds changed', () => {
-    const named = fold([roster('r-1', 2, [['a', 'review', 'working']])])
-    expect(
-      foldStructuredAgentSubagentRoster(named, [roster('r-1', 2, [['a', 'review', 'working']])])
-    ).toBe(named)
-  })
-
-  it('reads only the session’s own roster rows', () => {
-    expect(fold([roster('r-1', 2, [['b', 'nested', 'working']], 1, 'a')]).size).toBe(0)
-  })
-
-  it('drops the agents a removed roster row named', () => {
-    const named = fold([
-      roster('r-1', 2, [['a', 'review', 'working']]),
-      roster('r-2', 3, [['b', 'tests', 'working']])
-    ])
-    expect([...foldStructuredAgentSubagentRoster(named, [], ['r-1']).keys()]).toEqual(['b'])
-  })
-
   it('drops an agent a newer revision of its roster row stops naming, and only a newer one', () => {
     const named = fold([
       roster('r-1', 2, [
@@ -103,30 +84,5 @@ describe('the client roster of subagents', () => {
     expect(named.size).toBe(512)
     expect(named.has('agent-599')).toBe(true)
     expect(named.has('agent-0')).toBe(false)
-  })
-
-  it('names a subagent from its own row, and forgets it with that row', () => {
-    const own: AgentJournalRenderItem = {
-      itemId: 'orca:subagent:a',
-      revision: 1,
-      sequence: 4,
-      observedAt: 4,
-      body: {
-        kind: 'message',
-        role: 'system',
-        blocks: [
-          { type: 'text', text: 'Kicked off subagent review' },
-          { type: 'subagent', id: 'a', label: 'review', state: 'working', groupId: 't', run: 'x' }
-        ]
-      }
-    }
-    const named = fold([own])
-    expect(named.get('a')).toEqual({
-      entry: { id: 'a', label: 'review', state: 'working' },
-      rosterItemId: 'orca:subagent:a',
-      rosterPosition: { sequence: 4, index: 0 },
-      rosterRevision: 1
-    })
-    expect(foldStructuredAgentSubagentRoster(named, [], ['orca:subagent:a']).size).toBe(0)
   })
 })

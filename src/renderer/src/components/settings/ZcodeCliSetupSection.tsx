@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 
 const OnboardingInlineCommandTerminal = lazy(() =>
   import('../onboarding/OnboardingInlineCommandTerminal').then((module) => ({

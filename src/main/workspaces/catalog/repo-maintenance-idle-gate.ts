@@ -3,7 +3,7 @@ import {
   disposeLocalRepoRefMaintenance,
   postponeRepoRefMaintenance,
   setRepoMaintenanceActivityProbe
-} from '../../git/local-repo-ref-maintenance'
+} from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from '../../ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from '../creation/preparation/worktree-create-preparation'
 import { hasPendingWorktreeRemovals } from '../removal/worktree-removal-table'

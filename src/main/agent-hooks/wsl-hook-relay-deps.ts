@@ -25,15 +25,18 @@ import {
   spawnWslRelayProcess
 } from './wsl-hook-relay-launch'
 import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
-import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/wsl-default-distro'
-import { deferUntilWslDistroRunning, isWslDistroRunning } from '../wsl-background-distro-gate'
+import { resolveWslDefaultDistro as resolveSharedWslDefaultDistro } from '../wsl/discovery/wsl-default-distro'
+import {
+  deferUntilWslDistroRunning,
+  isWslDistroRunning
+} from '../wsl/discovery/wsl-background-distro-gate'
 import { isWslAgentHookRelayEnabled } from '../../shared/agent-hook-relay'
 import { wslBridgePtyPresence, type WslBridgePtyPresence } from './wsl-bridge-pty-presence'
 import {
   readDaemonBridgeSessions,
   type DaemonBridgeSessionVerdict
 } from './wsl-bridge-daemon-sessions'
-import { blockedWslDistroForExec } from '../wsl/wsl-background-exec-gate'
+import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 // Concurrent wsl.exe spawns can trigger transient E_UNEXPECTED failures.
 export const WSL_RELAY_TRANSIENT_RETRY_DELAY_MS = 2_000

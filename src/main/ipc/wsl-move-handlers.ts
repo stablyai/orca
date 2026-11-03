@@ -35,7 +35,7 @@ import {
   wslHostsGateOpen,
   wslHostsOptedIn,
   wslHostsServing
-} from '../wsl/wsl-host-gate'
+} from '../wsl/host-lifecycle/wsl-host-gate'
 
 type WslHostsSetting = Parameters<typeof wslHostsOptedIn>[0]
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'

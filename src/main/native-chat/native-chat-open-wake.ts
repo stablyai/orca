@@ -8,7 +8,7 @@ import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from './wsl-transcript-running-admission'
 import { agentHookServer } from '../agent-hooks/server'

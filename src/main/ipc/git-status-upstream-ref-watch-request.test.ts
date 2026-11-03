@@ -9,13 +9,16 @@ const mocks = vi.hoisted(() => ({
   setWatch: vi.fn(),
   isWslDistroRunning: vi.fn(async () => true)
 }))
-vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () =>
     (await mocks.isWslDistroRunning()) ? 'running' : 'stopped'
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: mocks.gitExec }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: mocks.gitExec
+}))
 vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
@@ -29,7 +32,7 @@ vi.mock('./worktrees/creation/worktree-base-directory-watcher', () => ({
 
 import { applyGitStatusUpstreamRefWatchRequest } from './git-status-upstream-ref-watch-request'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
-import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
+import { WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 
 describe('applyGitStatusUpstreamRefWatchRequest', () => {
   beforeEach(() => {

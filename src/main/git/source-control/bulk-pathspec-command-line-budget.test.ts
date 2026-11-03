@@ -10,7 +10,8 @@ const gitExecFileAsync = vi.fn(async (_args: string[], _options: { stdin?: strin
   stderr: ''
 }))
 
-vi.mock('../runner', () => ({
+vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: (args: string[], options: { stdin?: string }) => gitExecFileAsync(args, options)
 }))
 vi.mock('./git-read-cache-invalidation', () => ({ invalidateGitReadCaches: vi.fn() }))

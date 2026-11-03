@@ -14,8 +14,8 @@ import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data
 import { getAppEnvironment } from '../../shared/app-environment'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
-import { startWslHostsPolicyLiveUpdates } from '../wsl/wsl-hosts-policy-live-update'
-import { runPendingWslDriveUncConversions } from '../wsl/wsl-drive-unc-conversion-startup'
+import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
+import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
@@ -23,7 +23,7 @@ import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-prote
 import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
-import { neutralizeLegacyTerminalShimDir } from '../pty/legacy-terminal-shim-dir'
+import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
 import {
   configureWindowsHostGitEnvironmentReadiness,

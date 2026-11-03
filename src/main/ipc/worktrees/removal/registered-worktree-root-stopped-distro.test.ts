@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   realpath: vi.fn(),
   running: vi.fn(async () => true)
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readWslDistroRunningState: async () => ((await mocks.running()) ? 'running' : 'stopped')
 }))
@@ -24,7 +24,7 @@ vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', (
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
 import { resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
-import { runAsWslUserAct } from '../../../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

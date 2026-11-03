@@ -4,7 +4,7 @@ import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 import { getProjectRuntimeReadGitOptions } from './project-runtime-git-options'
-import { _resetWslCachesForTests, _setWslCachesForTests } from '../../wsl'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../../wsl/discovery/distro-catalog'
 
 const repo: Repo = {
   id: 'repo-1',
