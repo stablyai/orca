@@ -764,6 +764,7 @@
     "components.sessionLink.resume",
     "components.sessionLink.retry",
     "components.sessionLink.retryFirst",
+    "components.sessionLink.reviewBeforeContinue",
     "components.sessionLink.reviewer",
     "components.sessionLink.roles",
     "components.sessionLink.sameWorkspace",
