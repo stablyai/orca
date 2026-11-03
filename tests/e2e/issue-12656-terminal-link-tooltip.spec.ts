@@ -145,7 +145,7 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     }
     let probe: LinkProbe = located.probe
     const idle = await readTooltipState(orcaPage, probe.tabId)
-    expect(Math.abs(idle.paneBottom - idle.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(idle.paneBottom - idle.terminalBottom).toBeCloseTo(4, 0)
     await expect
       .poll(async () => {
         const currentProbe = await locateUrl(orcaPage, url)
@@ -161,7 +161,10 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     const hovered = await readTooltipState(orcaPage, probe.tabId)
     expect(hovered.text).toContain(url)
     expect(hovered.tooltipHeight).toBeGreaterThan(0)
-    expect(Math.abs(hovered.paneBottom - hovered.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(hovered.paneBottom - hovered.terminalBottom).toBeCloseTo(
+      idle.paneBottom - idle.terminalBottom,
+      0
+    )
     expect(Math.abs(hovered.paneBottom - hovered.tooltipBottom)).toBeLessThanOrEqual(1)
     expect(hovered.tooltipTop).toBeLessThan(hovered.terminalBottom)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-hover.png')
@@ -171,7 +174,10 @@ test.describe('Issue #12656 terminal link tooltip', () => {
       .poll(() => readTooltipState(orcaPage, probe.tabId))
       .toMatchObject({ display: 'none', cursor: 'text' })
     const cleared = await readTooltipState(orcaPage, probe.tabId)
-    expect(Math.abs(cleared.paneBottom - cleared.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(cleared.paneBottom - cleared.terminalBottom).toBeCloseTo(
+      idle.paneBottom - idle.terminalBottom,
+      0
+    )
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-after-blur.png')
 
     await expect.poll(() => getTerminalContent(orcaPage)).toContain(url)

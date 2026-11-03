@@ -178,7 +178,9 @@ test('board drops cross preload, settle optimistically, and roll back failures',
   await empty.scrollIntoViewIfNeeded()
   await done.getByRole('listitem').dragTo(empty)
   await expect(empty.getByRole('button', { name: title })).toBeVisible()
-  await expect(orcaPage.getByText('Board verification: offline', { exact: true })).toBeVisible()
+  await expect(
+    orcaPage.getByText('Network error — check your connection.', { exact: true })
+  ).toBeVisible()
   await expect(done.getByRole('button', { name: title })).toBeVisible()
   await expect(empty.getByRole('button', { name: title })).toHaveCount(0)
   await expect

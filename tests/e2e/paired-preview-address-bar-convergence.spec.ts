@@ -191,6 +191,12 @@ test('converts a preview to a web tab and back from the address bar', async ({
     await expect
       .poll(() => page.locator('webview').last().getAttribute('src'), { timeout: 30_000 })
       .toContain(marker.origin)
+    const browserTour = page.getByRole('dialog', {
+      name: 'This page renders on your desktop',
+      exact: true
+    })
+    await browserTour.getByRole('button', { name: 'Got it', exact: true }).click()
+    await expect(browserTour).toBeHidden()
 
     // Back's one-level return: the guest has no history, so Back crosses the conversion.
     await page.getByRole('button', { name: 'Back', exact: true }).click()
