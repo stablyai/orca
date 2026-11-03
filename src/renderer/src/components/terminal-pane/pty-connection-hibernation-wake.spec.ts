@@ -530,7 +530,11 @@ export function registerPtyConnectionHibernationWakeTests(): void {
 
       deferredSpawn.resolve('pty-resumed')
       await flushAsyncTicks()
-      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        paneKey,
+        origin: 'quit',
+        restoreOnTabOpenOnly: true
+      })
     })
 
     it('re-arms the exact hibernation target after a replacement spawn fails', async () => {

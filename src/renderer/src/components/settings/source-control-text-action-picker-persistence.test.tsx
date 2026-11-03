@@ -96,7 +96,7 @@ it('keeps unrelated delimiterless config operands when a text Model is picked an
     actions: { commitMessage: { agentId: 'codex', agentArgs } }
   })
   card.open('Codex')
-  expect(screen.queryByText('Set in Arguments')).toBeNull()
+  expect(screen.queryByText('Set by your Arguments')).toBeNull()
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.click(screen.getByRole('button', { name: 'Use' }))
   const saved = (await card.save()).sourceControlAi

@@ -1,6 +1,6 @@
 import { planAgentCliArgsSuffix } from './tui-agent-startup'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
 import {
   ensureDetectedAgentsForRepo,

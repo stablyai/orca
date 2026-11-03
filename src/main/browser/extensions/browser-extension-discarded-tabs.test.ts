@@ -56,7 +56,7 @@ vi.mock('../../runtime/browser/browser-tab-renderer-close', () => ({
 vi.mock('../../runtime/browser/browser-tab-renderer-activate', () => ({
   activateBrowserTabInRenderer: mocks.activate
 }))
-vi.mock('../../ipc/browser-tab-registration-wait', () => ({}))
+vi.mock('../../ipc/browser/browser-tab-registration-wait', () => ({}))
 vi.mock('./browser-extension-api-host', () => ({
   getBrowserExtensionProfileIdForSession: () => 'default',
   emitBrowserExtensionEvent: (

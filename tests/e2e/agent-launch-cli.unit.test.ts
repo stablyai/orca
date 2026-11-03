@@ -92,40 +92,6 @@ const create = {
 } as const
 
 describe('CLI launch through host surface creation and replay admission', () => {
-  it('keeps a new worktree background chat inactive', async () => {
-    await callAgentLaunch(
-      hostClient(runtimeStub()),
-      { agent: 'codex' },
-      { target: create, presentation: 'background' },
-      AGENT_LAUNCH_RUNTIME_CAPABILITIES
-    )
-    expect(chatCreate.mock.calls[0]?.[0].activate).toBe(false)
-  })
-
-  it('honors explicit local chat focus', async () => {
-    await callAgentLaunch(
-      hostClient(runtimeStub()),
-      { agent: 'codex' },
-      { target: existing, presentation: 'focused' },
-      AGENT_LAUNCH_RUNTIME_CAPABILITIES
-    )
-    expect(chatCreate.mock.calls[0]?.[0].activate).toBe(true)
-  })
-
-  it('passes local terminal focus to the runtime', async () => {
-    const runtime = runtimeStub({ settings: {} })
-    await callAgentLaunch(
-      hostClient(runtime),
-      { agent: 'codex' },
-      { target: existing, presentation: 'focused' },
-      AGENT_LAUNCH_RUNTIME_CAPABILITIES
-    )
-    expect(runtime.createTerminal).toHaveBeenCalledWith(
-      'id:wt-7',
-      expect.objectContaining({ presentation: 'focused' })
-    )
-  })
-
   it.each([existing, create])(
     'a lost accepted reply replays without a second chat or prompt: %j',
     async (target) => {

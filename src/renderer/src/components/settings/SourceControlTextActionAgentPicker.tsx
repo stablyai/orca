@@ -46,10 +46,10 @@ import {
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../shared/agent-launch-picker'
-import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import { getAgentCatalogForAction } from './source-control-action-recipe-options'
+import { SourceControlActionAgentPicker } from './source-control/SourceControlActionAgentPicker'
+import { getAgentCatalogForAction } from './source-control/source-control-action-recipe-options'
 import { DropdownMenuItem } from '../ui/dropdown-menu'
-import type { ActionRecipeDraftValue } from './source-control-ai-action-recipe-draft'
+import type { ActionRecipeDraftValue } from './source-control/source-control-ai-action-recipe-draft'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 type TextModelChange = (

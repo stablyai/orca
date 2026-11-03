@@ -1,6 +1,6 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
-import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
+
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
@@ -28,6 +28,8 @@ import {
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
+  type RuntimeDegradation,
+  type RuntimeStatus,
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
 } from '../../shared/runtime-types'
@@ -35,8 +37,11 @@ import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../shared/mobile-web-bundle/mob
 import { loadBundledMobileWebBundle } from './bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
-import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
+
+import {
+  type RuntimeWorktreeLifecycleEvent,
+  WORKTREE_CREATE_RESULT_TTL_MS
+} from './orca-runtime-core'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -44,7 +49,7 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 import { getManagedServerActions } from './managed-server-actions-registry'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'

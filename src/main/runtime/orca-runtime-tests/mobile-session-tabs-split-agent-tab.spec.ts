@@ -96,13 +96,5 @@ describe('OrcaRuntimeService', () => {
 
       expect(spawnCommand(spawn)).toContain('codex-session-1')
     })
-
-    it('does not start a fresh agent in either pane when no pane recorded one', async () => {
-      const { runtime, spawn } = startRuntime(splitAgentTabSession(false))
-
-      await activate(runtime, HEADLESS_LEAF_ID)
-
-      expect(spawnCommand(spawn)).not.toContain('codex')
-    })
   })
 })

@@ -1,5 +1,5 @@
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import { applySourceControlPickerDraft } from '../settings/source-control-agent-launch-picker'
+import { applySourceControlPickerDraft } from '../../lib/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
   commitSourceControlActionArguments,

@@ -2,7 +2,7 @@ import { isAbsolute, win32 as pathWin32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { resolveCommandOnLocalPath } from '../../ipc/command-path-resolver'
+import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../../shared/codex-shell-function'
 
 const CODEX_EXECUTABLE = /^codex(\.(exe|cmd|bat|ps1))?$/i

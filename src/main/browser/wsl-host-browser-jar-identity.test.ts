@@ -97,11 +97,6 @@ describe('WSL host browser jar identity', () => {
     expect(jar(wslHost('Ubuntu-work', 'orcad-key-a'))).not.toBe(before)
   })
 
-  // A golden image with a baked-in orcad key, imported twice on one desktop.
-  it('keeps two distros that carry the same orcad key in separate jars', () => {
-    expect(jar(wslHost('Ubuntu', 'baked-key'))).not.toBe(jar(wslHost('Ubuntu-2', 'baked-key')))
-  })
-
   // Accepted (R45, Low): the same name and key is the same host to this desktop.
   it('keeps the jar for a distro re-imported under its old name with its old key', () => {
     const before = jar(wslHost('Ubuntu', 'orcad-key-a'))

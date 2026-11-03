@@ -4,7 +4,7 @@ import {
   readActionRecipeTextDraft
 } from './repository-source-control-ai-draft'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
+
 import { useRepositoryActionPickerInputs } from './use-repository-action-picker-inputs'
 import { shallow } from 'zustand/shallow'
 import { sameAgentLaunchPickerModel } from '../../../tab-bar/new-tab-agent-menu-model'
@@ -16,19 +16,20 @@ import type { NativeChatDefaultSettings } from '../../../../../../shared/structu
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview
-} from '../../SourceControlActionAgentPicker'
+} from '../../source-control/SourceControlActionAgentPicker'
 import { memo, useMemo, type JSX } from 'react'
-import { invalidateAgentPickerDrafts } from '../../../agent/AgentLaunchSetupButton'
+import { invalidateAgentPickerDrafts } from '../../../agent/agent-launch-picker-drafts'
 
 import { isCustomAgentId } from '../../../../../../shared/commit-message-agent-spec'
 
 import {
+  type SourceControlActionId,
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_ACTION_LABELS
 } from '../../../../../../shared/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { RepositorySourceControlAiActionSaveControls } from '../../RepositorySourceControlAiActionSaveControls'
+import { RepositorySourceControlAiActionSaveControls } from '../../source-control/RepositorySourceControlAiActionSaveControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import {
@@ -37,7 +38,7 @@ import {
   getSourceControlActionAgentSupportText,
   getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
-} from '../../source-control-action-recipe-options'
+} from '../../source-control/source-control-action-recipe-options'
 import {
   ACTION_MODE_INHERIT,
   ACTION_MODE_OVERRIDE,
@@ -51,7 +52,7 @@ import {
 } from './repository-source-control-ai-labels'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
 import { translate } from '@/i18n/i18n'
-import { SourceControlActionOptionField } from '../../SourceControlActionOptionField'
+import { SourceControlActionOptionField } from '../../../agent/launch-settings/AgentChoiceOptionField'
 import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control-ai-operation-policy'

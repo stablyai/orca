@@ -15,7 +15,7 @@ import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-sessi
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
-import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
+import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'

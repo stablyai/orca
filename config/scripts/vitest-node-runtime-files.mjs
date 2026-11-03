@@ -19,7 +19,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
-  'src/main/ai-vault/parse-cache/session-parse-cache-devin-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-metadata-checkpoint.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
@@ -127,7 +126,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Reconciliation loads the real native Parcel watcher; Bun can abort on Linux ARM.
   'src/main/plugins/plugin-service-reconciliation.test.ts',
   'src/main/usage/usage-scan-worker-event-loop.test.ts',
-  'src/main/ipc/command-path-directory-worker.test.ts',
+  'src/main/ipc/command-path/command-path-directory-worker.test.ts',
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
   'src/main/git/command-runner/worker-exec-file.test.ts',
@@ -194,7 +193,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/codex/codex-shared-server-probe.test.ts',
   'src/main/opencode/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
-  'src/main/ipc/orca-profiles-switch-persistence.test.ts',
+  'src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts',
   'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
@@ -205,8 +204,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
   'src/main/ipc/runtime-environments/runtime-environment-preference.test.ts',
   // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
-  'src/main/ipc/rebinding-file-watch.test.ts',
-  'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
+  'src/main/ipc/filesystem/watcher-process/rebinding-file-watch.test.ts',
+  'src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',

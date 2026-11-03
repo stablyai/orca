@@ -12,7 +12,7 @@ import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog
 import * as rpc from '@/runtime/runtime-rpc-subscribe'
 import * as runtimeRpc from '@/runtime/runtime-rpc-client'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'

@@ -2,11 +2,11 @@ import { useAppStore } from '../../../store'
 import {
   renderChatSettingsSection,
   type ChatSettingsRenderContext
-} from '../settings-interface-secondary-section-renderers'
-import { getChatNamingSearchEntry } from '../chat-naming-search'
-import { useSettingsInteractionController } from '../use-settings-interaction-controller'
+} from '../page/settings-interface-secondary-section-renderers'
+import { getChatNamingSearchEntry } from '../chat/chat-naming-search'
+import { useSettingsInteractionController } from '../page/use-settings-interaction-controller'
 import type { SettingsPersistenceModel } from './settings-persistence-test-fixture'
-import { ActiveSettingsSectionProvider } from '../SettingsSection'
+import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
 import { TooltipProvider } from '../../ui/tooltip'
 
 /** The Chat settings section as the settings page renders it, saving through the queue. */

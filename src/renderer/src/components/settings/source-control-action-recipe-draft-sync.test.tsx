@@ -10,7 +10,7 @@ import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
-import { useSourceControlActionRecipeDraftState } from './source-control-action-recipe-draft-state'
+import { useSourceControlActionRecipeDraftState } from './source-control/source-control-action-recipe-draft-state'
 import { renderGlobalCommitCard } from './__fixtures__/global-commit-card-test-fixture'
 import { persist } from './__fixtures__/settings-persistence-test-fixture'
 

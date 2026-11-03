@@ -6,7 +6,7 @@ import {
   createAliasedWatcherRoot,
   removeAliasedWatcherRoot,
   type AliasedWatcherRoot
-} from '../../watcher-aliased-root-fixture'
+} from './watcher-aliased-root-fixture'
 import {
   acknowledgeWatcherSubscribe,
   currentWatcherChild,

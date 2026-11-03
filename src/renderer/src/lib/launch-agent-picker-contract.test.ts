@@ -3,7 +3,7 @@ import {
   useAgentPickerDraftScope
 } from '../components/agent/agent-launch-picker-drafts'
 // @vitest-environment happy-dom
-import type * as SettingsTransport from '../components/settings/agent-launch-settings-transport'
+import type * as SettingsTransport from '../runtime/agent-launch-settings/agent-launch-settings-transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
@@ -14,12 +14,14 @@ import {
   useAgentPickerInventoryEntries
 } from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import {
+  type AgentPickerDraft,
+  type AgentPickerEntry,
   agentPickerDraft,
   agentPickerLaunchInputs,
   agentPickerEntriesFromRows
 } from '../../../shared/agent-launch-picker'
+
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit
@@ -44,10 +46,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 const inventory = vi.hoisted(() => ({ settings: vi.fn(), legacy: vi.fn(), session: vi.fn() }))
-vi.mock('../components/settings/agent-launch-settings-transport', async (importOriginal) => ({
-  ...(await importOriginal<typeof SettingsTransport>()),
-  readHostAgentLaunchSettings: inventory.settings
-}))
+vi.mock(
+  '../runtime/agent-launch-settings/agent-launch-settings-transport',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SettingsTransport>()),
+    readHostAgentLaunchSettings: inventory.settings
+  })
+)
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: inventory.legacy,
   runtimeEnvironmentSupportsCapability: async () => false

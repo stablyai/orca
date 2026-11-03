@@ -13,7 +13,7 @@ import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAi
 import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourceControlAiHostedReviewDefaults'
 import { normalizeRepoAiDraft } from './repository-source-control-ai-draft'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
-import { getSettingOwnershipSummary } from '../../setting-ownership'
+import { getSettingOwnershipSummary } from '../../page/setting-ownership'
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiSectionProps = {
