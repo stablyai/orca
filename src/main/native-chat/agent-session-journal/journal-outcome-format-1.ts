@@ -53,6 +53,19 @@ const pauseMarks = z.object({
       })
     })
     .nullable(),
+  pendingCancellations: z
+    .array(
+      z.object({
+        sequence: number,
+        event: z.object({
+          reason: z.string(),
+          at: number,
+          turnId: z.string().optional(),
+          caller: z.string().optional()
+        })
+      })
+    )
+    .optional(),
   resumedSequence: number,
   reopenedSequence: number
 })

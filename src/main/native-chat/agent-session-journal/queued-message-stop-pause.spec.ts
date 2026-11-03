@@ -4,7 +4,9 @@ import Database from '../../sqlite/sync-database'
 import { journalDatabasePath } from './journal-host-database'
 import { liveTestJournalRows } from './journal-host-database-test-support'
 import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { restoreJournal } from './journal-open'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
+import { personStopDecidesTurn } from './journal-stop-turn-end'
 import { parseJournalRow } from './journal-row-schema'
 import type { AgentSessionJournal } from './journal-store'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
@@ -280,6 +282,16 @@ export function registerQueuedMessageStopPauseTests(
       await journal.appendStopEvent({ reason: 'user-stop', turnId: 'A' }, 0)
       await journal.appendStopEvent({ reason: 'user-close', turnId: 'B' }, 0)
       expect(fixture.reason(journal)).toBe('stopped')
+      expect(journal.stopMarks.personStopDecides('B')).toBe(true)
+      expect(journal.stopMarks.personStopDecides('A')).toBe(true)
+      const db = new Database(journalDatabasePath(fixture.root))
+      try {
+        const loaded = restoreJournal(db, fixture.IDENTITY.sessionId)
+        expect(loaded !== undefined && personStopDecidesTurn(loaded.state, 'B')).toBe(true)
+        expect(loaded !== undefined && personStopDecidesTurn(loaded.state, 'A')).toBe(true)
+      } finally {
+        db.close()
+      }
       expect(journal.stopMarks.personStopDecides('B')).toBe(true)
       expect(journal.stopMarks.personStopDecides('A')).toBe(true)
     })

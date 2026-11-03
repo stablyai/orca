@@ -4,7 +4,7 @@
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { rememberStopCancellation } from './journal-stop-cancellation'
+import { noteHeldStop, type PendingCancellation } from './journal-stop-cancellation'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
@@ -21,6 +21,8 @@ export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
 export type JournalQueuePauseMarks = {
   cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
   latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
+  /** Named Stops and closes whose turns have not ended. Absent when none are open. */
+  pendingCancellations?: PendingCancellation[]
   /** Zero means absent. */
   resumedSequence: number
   /** Zero means absent. */
@@ -59,25 +61,12 @@ function isReadableStopEvent(value: unknown): value is JournalStopEvent {
 
 export function foldJournalQueuePauseMark(
   marks: JournalQueuePauseMarks,
-  row: JournalTombstoneRow,
-  scope: { sessionId: string; epoch: string }
+  row: JournalTombstoneRow
 ): void {
   if (isReadableStopEvent(row.stopEvent)) {
-    const reason = row.stopEvent.reason
     // A close or host Stop during an agent's turn must not end what the person stopped.
-    const replacesPause = reason === 'user-stop' || !journalQueueStopHolds(marks)
-    if (replacesPause) {
-      marks.latestStop = { sequence: row.seq, event: row.stopEvent }
-    }
-    const latest = marks.latestStop
-    // A distinct close stays off the saved marks. The Stop's own settle still lives on latestStop.
-    if (
-      (reason === 'user-stop' || reason === 'user-close') &&
-      latest !== null &&
-      latest.event !== row.stopEvent
-    ) {
-      rememberStopCancellation(scope, latest.sequence, { sequence: row.seq, event: row.stopEvent })
-    }
+    const replacesPause = row.stopEvent.reason === 'user-stop' || !journalQueueStopHolds(marks)
+    noteHeldStop(marks, { seq: row.seq, stopEvent: row.stopEvent }, replacesPause)
   } else if (row.queueResume === true) {
     marks.resumedSequence = row.seq
   } else if (row.queueReopen === true) {

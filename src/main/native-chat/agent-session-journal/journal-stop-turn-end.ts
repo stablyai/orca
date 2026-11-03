@@ -13,7 +13,6 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
 import type { JournalQueuePauseMarks, JournalStopSettle } from './queued-message-pause'
-import { stopCancellationBeside } from './journal-stop-cancellation'
 
 export type JournalLatestStop = NonNullable<JournalQueuePauseMarks['latestStop']>
 
@@ -31,7 +30,7 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
 
 type TurnEndState = Pick<
   JournalReducerState,
-  'sessionId' | 'epoch' | 'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
+  'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
 >
 
 /** Find the opening send; this does not decide cancellation ownership. */
@@ -83,28 +82,12 @@ function stopIsTurnCancellation(stop: JournalLatestStop, turnId: string): boolea
   return stop.settle?.settling || stop.settle?.turnId === turnId || stop.event.turnId === turnId
 }
 
-/** Queue retention stays on latestStop. A later personal close cancels its own turn. A restored chat
- *  has not folded that close yet, so it uses the Stop. A close that names no turn must not hide the
- *  Stop's session-ending settle. */
-function turnCancellationStop(state: TurnEndState): TurnEndState['queuePauseMarks']['latestStop'] {
-  const latest = state.queuePauseMarks.latestStop
-  const recorded = stopCancellationBeside(state, latest)
-  const unnamedClose =
-    recorded !== undefined &&
-    recorded.event.turnId === undefined &&
-    recorded.event !== latest?.event
-  if (recorded === undefined || unnamedClose) {
-    return latest
-  }
-  return recorded
-}
-
-/** The close that names a turn, and the Stop still holding the queue when that is a different event. */
+/** The queue Stop, plus every named personal Stop or close whose turn has not ended. */
 function personalCancellationStops(state: TurnEndState): JournalLatestStop[] {
-  const recorded = turnCancellationStop(state)
   const latest = state.queuePauseMarks.latestStop
-  return [recorded, latest].filter(
-    (stop): stop is JournalLatestStop => stop !== null && stopIsAPersons(stop.event.reason)
+  const pending = state.queuePauseMarks.pendingCancellations ?? []
+  return [...pending, ...(latest === null ? [] : [latest])].filter((stop) =>
+    stopIsAPersons(stop.event.reason)
   )
 }
 

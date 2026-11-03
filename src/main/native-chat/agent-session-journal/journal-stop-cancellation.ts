@@ -1,39 +1,49 @@
 import type { JournalStopEvent } from './journal-row-schema'
 
-type RecordedStop = { sequence: number; event: JournalStopEvent }
+/** A personal Stop or close still waiting for its turn to end. Saved with the pause marks. */
+export type PendingCancellation = { sequence: number; event: JournalStopEvent }
 
-const besideHoldingStop = new Map<string, RecordedStop>()
-
-function holdingKey(scope: { sessionId: string; epoch: string }, sequence: number): string {
-  return `${scope.sessionId}\0${scope.epoch}\0${sequence}`
+type StopMarks = {
+  latestStop: { sequence: number; event: JournalStopEvent } | null
+  pendingCancellations?: PendingCancellation[]
 }
 
-/** A new journal for this chat drops closes remembered only in this process. */
-export function forgetStopCancellations(scope: { sessionId: string; epoch: string }): void {
-  const prefix = `${scope.sessionId}\0${scope.epoch}\0`
-  for (const key of besideHoldingStop.keys()) {
-    if (key.startsWith(prefix)) {
-      besideHoldingStop.delete(key)
-    }
+function isPersonal(reason: JournalStopEvent['reason']): boolean {
+  return reason === 'user-stop' || reason === 'user-close'
+}
+
+/** One open fact per turn. A later close for the same turn replaces the earlier one. */
+export function recordPendingCancellation(marks: StopMarks, recorded: PendingCancellation): void {
+  const turnId = recorded.event.turnId
+  const kept = (marks.pendingCancellations ?? []).filter((entry) => entry.event.turnId !== turnId)
+  marks.pendingCancellations = [...kept, recorded]
+}
+
+/** The turn's outcome now carries the cancellation, so the pending fact is done. */
+export function retirePendingCancellation(marks: StopMarks, turnId: string): void {
+  const kept = (marks.pendingCancellations ?? []).filter((entry) => entry.event.turnId !== turnId)
+  if (kept.length === 0) {
+    delete marks.pendingCancellations
+    return
   }
+  marks.pendingCancellations = kept
 }
 
-/** A close during a personal Stop, keyed by that Stop. The Stop itself is not stored again. */
-export function rememberStopCancellation(
-  scope: { sessionId: string; epoch: string },
-  holdingSequence: number,
-  recorded: RecordedStop
+/** Keep the queue's Stop, and keep every named personal Stop that it replaces. */
+export function noteHeldStop(
+  marks: StopMarks,
+  row: { seq: number; stopEvent: JournalStopEvent },
+  replacesPause: boolean
 ): void {
-  besideHoldingStop.set(holdingKey(scope, holdingSequence), recorded)
-}
-
-/** Undefined: this process has not seen a distinct close for the Stop. */
-export function stopCancellationBeside(
-  scope: { sessionId: string; epoch: string },
-  latest: RecordedStop | null
-): RecordedStop | undefined {
-  if (latest === null) {
-    return undefined
+  if (replacesPause) {
+    const previous = marks.latestStop
+    if (previous?.event.turnId !== undefined && isPersonal(previous.event.reason)) {
+      recordPendingCancellation(marks, { sequence: previous.sequence, event: previous.event })
+    }
+    marks.latestStop = { sequence: row.seq, event: row.stopEvent }
+    return
   }
-  return besideHoldingStop.get(holdingKey(scope, latest.sequence))
+  if (isPersonal(row.stopEvent.reason)) {
+    recordPendingCancellation(marks, { sequence: row.seq, event: row.stopEvent })
+  }
 }

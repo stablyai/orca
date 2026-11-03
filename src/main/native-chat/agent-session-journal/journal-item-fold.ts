@@ -10,6 +10,7 @@ import {
   namesAgentJournalProducer
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { retirePendingCancellation } from './journal-stop-cancellation'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(
@@ -43,6 +44,7 @@ export function upsertJournalItem(
     state.items.set(itemId, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
+    retireResolvedTurn(state, next.body)
     return
   }
   // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
@@ -63,6 +65,14 @@ export function upsertJournalItem(
     turnScope: existing.turnScope ?? next.turnScope
   })
   state.tombstones.delete(itemId)
+  retireResolvedTurn(state, submitted ? existing.body : next.body)
+}
+
+function retireResolvedTurn(state: JournalReducerState, body: AgentJournalItemBody): void {
+  const turn = readAgentJournalTurn(body)
+  if (turn !== null && turn.state !== 'running' && turn.state !== 'unverifiable') {
+    retirePendingCancellation(state.queuePauseMarks, turn.turnId)
+  }
 }
 
 export function removeJournalItem(

@@ -55,10 +55,16 @@ export function durableQueuePauseMarks(
   marks: JournalReducerState['queuePauseMarks']
 ): JournalReducerState['queuePauseMarks'] {
   const stop = marks.latestStop
-  return {
+  const pending = marks.pendingCancellations?.map(({ sequence, event }) => ({ sequence, event }))
+  const stored = {
     ...marks,
-    latestStop: stop && { sequence: stop.sequence, event: stop.event }
+    latestStop: stop && { sequence: stop.sequence, event: stop.event },
+    ...(pending !== undefined && pending.length > 0 ? { pendingCancellations: pending } : {})
   }
+  if (pending === undefined || pending.length === 0) {
+    delete stored.pendingCancellations
+  }
+  return stored
 }
 
 const f = outcomeFormat1StoredScalars.shape
