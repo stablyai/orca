@@ -6,24 +6,31 @@ import {
   type CardPreviewScenario
 } from './card-preview-scenario'
 
-const working: CardPreviewAgent = {
-  title: 'Claude',
-  state: 'working',
-  message: 'Rebuilding the card template compiler',
-  ago: '2m'
+// Sample copy a person reads in the gallery; agent names are product names.
+function sample(key: string, fallback: string): string {
+  return translate(`auto.components.cardStudio.sample.${key}`, fallback)
 }
-const blocked: CardPreviewAgent = {
-  title: 'Codex',
-  state: 'blocked',
-  message: 'Allow running pnpm test?',
-  ago: '1m'
+
+function agents(): Record<'working' | 'blocked' | 'done', CardPreviewAgent> {
+  return {
+    working: {
+      title: CLAUDE,
+      state: 'working',
+      message: sample('working', 'Rebuilding the card template compiler'),
+      ago: '2m'
+    },
+    blocked: {
+      title: CODEX,
+      state: 'blocked',
+      message: sample('blocked', 'Allow running pnpm test?'),
+      ago: '1m'
+    },
+    done: { title: CLAUDE, state: 'done', message: sample('done', 'Opened the PR'), ago: '12m' }
+  }
 }
-const done: CardPreviewAgent = {
-  title: 'Claude',
-  state: 'done',
-  message: 'Opened the PR',
-  ago: '12m'
-}
+
+const CLAUDE = 'Claude'
+const CODEX = 'Codex'
 
 function review(
   state: 'open' | 'merged',
@@ -32,7 +39,7 @@ function review(
   return {
     provider: 'github',
     number: 4182,
-    title: 'Draw workspace cards from a template',
+    title: sample('reviewTitle', 'Draw workspace cards from a template'),
     state,
     status,
     url: 'https://github.com/example/orca/pull/4182'
@@ -59,7 +66,13 @@ function scenario(id: string, title: string, input: ScenarioInput): CardPreviewS
     facts: previewFacts({
       ...input.facts,
       ...(prDisplay
-        ? { review: { state: prDisplay.state ?? 'open', status: prDisplay.status ?? null } }
+        ? {
+            review: {
+              title: prDisplay.title,
+              state: prDisplay.state ?? 'open',
+              status: prDisplay.status ?? null
+            }
+          }
         : {})
     })
   }
@@ -67,6 +80,7 @@ function scenario(id: string, title: string, input: ScenarioInput): CardPreviewS
 
 /** The states the Card Studio's gallery always shows, like a component library's stories. */
 export function cardPreviewScenarios(): CardPreviewScenario[] {
+  const { working, blocked, done } = agents()
   const t = (key: string, fallback: string): string =>
     translate(`auto.components.cardStudio.scenario.${key}`, fallback)
   return [
@@ -144,7 +158,7 @@ export function cardPreviewScenarios(): CardPreviewScenario[] {
         shortHead: 'a1b2c3d',
         sidebarLabel: 'Detached HEAD @ a1b2c3d',
         sourceControlLabel: 'a1b2c3d',
-        tooltip: 'Detached HEAD at a1b2c3d.'
+        tooltip: sample('detachedTooltip', 'Detached HEAD at a1b2c3d.')
       }
     })
   ]

@@ -115,7 +115,8 @@ export function previewFacts(overrides: Overrides): WorkspaceCardFacts {
 const defaultReview: NonNullable<WorkspaceCardFacts['review']> = {
   provider: 'github',
   number: 4182,
-  title: 'Draw workspace cards from a template',
+  // Overwritten by each scenario's localized review; facts keep a plain fallback.
+  title: '',
   state: 'open',
   status: 'success',
   url: 'https://github.com/example/orca/pull/4182'

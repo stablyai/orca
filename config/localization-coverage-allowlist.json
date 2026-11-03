@@ -30,28 +30,28 @@
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "언어",
+    "text": "\uc5b8\uc5b4",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "言語",
+    "text": "\u8a00\u8a9e",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "語言",
+    "text": "\u8a9e\u8a00",
     "dynamic": false,
     "count": 1
   },
   {
     "filePath": "src/renderer/src/components/settings/appearance-search.ts",
     "kind": "object-property:keywords",
-    "text": "语言",
+    "text": "\u8bed\u8a00",
     "dynamic": false,
     "count": 1
   },
@@ -128,7 +128,7 @@
   {
     "filePath": "src/renderer/src/component-fixtures/component-fixture-explorer.tsx",
     "kind": "jsx-text",
-    "text": "fixtures · files named *.fixture.tsx under src/renderer/src",
+    "text": "fixtures \u00b7 files named *.fixture.tsx under src/renderer/src",
     "dynamic": false,
     "count": 1
   },
@@ -193,7 +193,7 @@
   {
     "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
-    "text": "· ~/projects/acme-web",
+    "text": "\u00b7 ~/projects/acme-web",
     "dynamic": false,
     "count": 1,
     "reason": "Literal sample workspace path and CLI separator in the terminal still; paths are not translated."
@@ -225,7 +225,7 @@
   {
     "filePath": "src/renderer/src/components/settings/AgentDefaultSurfacePreviews.tsx",
     "kind": "jsx-text",
-    "text": "⎿ Read 84 lines",
+    "text": "\u23bf Read 84 lines",
     "dynamic": false,
     "count": 1,
     "reason": "Actual Claude CLI tool-result line in the terminal still; preserve the illustrative output and line count."
@@ -248,6 +248,34 @@
     "filePath": "src/renderer/src/components/sidebar/workspace-card/card-primitives.tsx",
     "kind": "object-property:title",
     "text": "text-[13px] leading-5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/preview/card-preview-scenarios.ts",
+    "kind": "object-property:title",
+    "text": "notes",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/preview/card-preview-scenarios.ts",
+    "kind": "object-property:title",
+    "text": "investigate-intermittent-renderer-compositor-stall-on-windows",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/preview/card-preview-elements.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "sidebar",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/sidebar/workspace-card/preview/card-preview-scenario.ts",
+    "kind": "object-property:title",
+    "text": "card-plugins",
     "dynamic": false,
     "count": 1
   }
