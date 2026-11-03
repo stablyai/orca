@@ -47,7 +47,10 @@ const fields = {
 
 describe('session link mutation recovery', () => {
   beforeEach(() => rpc.call.mockReset().mockResolvedValue(null))
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
   function hook() {
     return renderHook(() => useSessionLink('codex-work', { kind: 'local' }, false))
   }
@@ -136,6 +139,7 @@ describe('session link mutation recovery', () => {
   })
 
   it('reports a failed history read and stops polling the unavailable selected link', async () => {
+    vi.useFakeTimers()
     rpc.call.mockImplementation(async (_target, method) => {
       if (method === 'orchestration.linkCandidates') {
         return { source: participant('codex-work'), candidates: [], history: [] }
@@ -146,13 +150,16 @@ describe('session link mutation recovery', () => {
       return null
     })
     const { result } = renderHook(() => useSessionLink('codex-work', { kind: 'local' }, true))
-    await waitFor(() => expect(result.current.supported).toBe(true))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(result.current.supported).toBe(true)
     await act(async () => {
       await expect(result.current.show('old-link')).resolves.toBeUndefined()
     })
     expect(result.current.error).toBe('History unavailable')
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1600))
+      await vi.advanceTimersByTimeAsync(1500)
     })
     expect(
       rpc.call.mock.calls.filter(([, method]) => method === 'orchestration.linkShow')
