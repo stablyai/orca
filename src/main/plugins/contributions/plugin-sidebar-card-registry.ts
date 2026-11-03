@@ -30,6 +30,7 @@ export function createPluginSidebarCardRegistry(contentVerifier: PluginContentVe
           pluginName: plugin.manifest.name,
           label: contribution.title,
           ...(contribution.description ? { description: contribution.description } : {}),
+          ...(contribution.options ? { options: contribution.options } : {}),
           template: parsePluginSidebarCardArtifact(text)
         }
       } catch (error) {

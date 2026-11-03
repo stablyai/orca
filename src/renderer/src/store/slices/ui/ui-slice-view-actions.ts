@@ -34,6 +34,17 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeAutomations,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
       })),
+    openCardStudio: (worktreeId) =>
+      set((state) => ({
+        activeView: 'card-studio',
+        cardStudioWorktreeId: worktreeId ?? state.cardStudioWorktreeId,
+        previousViewBeforeCardStudio:
+          state.activeView === 'card-studio' ? state.previousViewBeforeCardStudio : state.activeView
+      })),
+    closeCardStudio: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeCardStudio
+      })),
     openSpacePage: () => {
       get().recordFeatureInteraction?.('workspace-cleanup')
       if (typeof window !== 'undefined' && window.api?.workspaceSpace?.openWindow) {

@@ -36,7 +36,12 @@ function showOptions(cardProps: readonly WorktreeCardProperty[]): WorkspaceCardS
 }
 
 /** Projects the card controller into the documented fact model a template reads. */
-export function buildWorkspaceCardFacts(card: WorktreeCardController): WorkspaceCardFacts {
+const NO_CARD_OPTIONS: WorkspaceCardFacts['cardOptions'] = {}
+
+export function buildWorkspaceCardFacts(
+  card: WorktreeCardController,
+  cardOptions: WorkspaceCardFacts['cardOptions'] = NO_CARD_OPTIONS
+): WorkspaceCardFacts {
   const { worktree, repo, hoverReview } = card
   const runtimeHost = !repo?.connectionId && card.parsedRepoHost?.kind === 'runtime'
   return {
@@ -122,6 +127,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       show: showOptions(card.cardProps),
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
     },
-    env: { projectGroups: card.projectGroups.length > 0 }
+    env: { projectGroups: card.projectGroups.length > 0 },
+    cardOptions
   }
 }

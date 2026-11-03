@@ -8,8 +8,7 @@ import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
-import { useSelectedPluginCard } from '@/store/plugin-sidebar-cards'
-import type { PluginSidebarCardRegistration } from '../../../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
+import { useSelectedPluginCard, type SelectedPluginCard } from '@/store/plugin-sidebar-cards'
 import {
   pluginCardRevisionKey,
   renderDefaultWorkspaceCard,
@@ -36,10 +35,10 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       boundaryId="workspace-card-plugin"
       surface="sidebar"
       reportAsCrash={false}
-      resetKey={`${pluginCardRevisionKey(pluginCard)}:${card.worktree.id}`}
+      resetKey={`${pluginCardRevisionKey(pluginCard.entry)}:${card.worktree.id}`}
       fallback={drawOrcaCard}
     >
-      <PluginCardSurface card={card} isSleeping={isSleeping} entry={pluginCard} />
+      <PluginCardSurface card={card} isSleeping={isSleeping} selected={pluginCard} />
     </RecoverableRenderErrorBoundary>
   )
 }
@@ -48,14 +47,14 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
 function PluginCardSurface({
   card,
   isSleeping,
-  entry
+  selected
 }: {
   card: WorktreeCardController
   isSleeping: boolean
-  entry: PluginSidebarCardRegistration
+  selected: SelectedPluginCard
 }): React.JSX.Element {
   return renderWorktreeCardSurface(card, isSleeping, (rootAttrs) =>
-    renderPluginWorkspaceCard(card, entry, rootAttrs)
+    renderPluginWorkspaceCard(card, selected.entry, rootAttrs, selected.options)
   )
 }
 

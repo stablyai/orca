@@ -171,7 +171,8 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   if (!isTopLevelView(value)) {
     return 'terminal'
   }
-  return value
+  // The Card Studio is opened for a moment's customizing, not a place to come back to.
+  return value === 'card-studio' ? 'terminal' : value
 }
 
 export function hydratedUIPartialMatchesState(

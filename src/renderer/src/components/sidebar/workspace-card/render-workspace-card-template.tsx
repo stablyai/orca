@@ -5,6 +5,7 @@ import {
   PLUGIN_CARD_TEMPLATE_LIMITS,
   type CardTemplate
 } from '../../../../../shared/workspace-cards/card-template-schema'
+import type { WorkspaceCardFacts } from '../../../../../shared/workspace-cards/workspace-card-facts'
 import type { WorktreeCardController } from '../use-worktree-card-controller'
 import { buildWorkspaceCardFacts } from './build-workspace-card-facts'
 import { WORKSPACE_CARD_ELEMENTS } from './card-element-registry'
@@ -34,9 +35,14 @@ export function getCompiledWorkspaceCard(template: CardTemplate): CompiledWorksp
 export function renderWorkspaceCardTemplate(
   card: WorktreeCardController,
   template: CardTemplate,
-  rootAttrs?: CardRootAttrs
+  rootAttrs?: CardRootAttrs,
+  cardOptions?: WorkspaceCardFacts['cardOptions']
 ): DrawnWorkspaceCard {
-  return getCompiledWorkspaceCard(template).render(buildWorkspaceCardFacts(card), card, rootAttrs)
+  return getCompiledWorkspaceCard(template).render(
+    buildWorkspaceCardFacts(card, cardOptions),
+    card,
+    rootAttrs
+  )
 }
 
 /** Identifies one plugin card file; recompiling only happens when this changes. */
@@ -77,7 +83,8 @@ function compiledPluginCard(entry: PluginSidebarCardRegistration): CompiledWorks
 export function renderPluginWorkspaceCard(
   card: WorktreeCardController,
   entry: PluginSidebarCardRegistration,
-  rootAttrs?: CardRootAttrs
+  rootAttrs?: CardRootAttrs,
+  cardOptions?: WorkspaceCardFacts['cardOptions']
 ): DrawnWorkspaceCard | null {
   const compiled = compiledPluginCard(entry)
   if (!compiled) {
@@ -85,7 +92,7 @@ export function renderPluginWorkspaceCard(
   }
   try {
     return withCardEvaluationBudget(PLUGIN_CARD_TEMPLATE_LIMITS.maxEvaluationSteps, () =>
-      compiled.render(buildWorkspaceCardFacts(card), card, rootAttrs)
+      compiled.render(buildWorkspaceCardFacts(card, cardOptions), card, rootAttrs)
     )
   } catch (error) {
     reportOnce(pluginCardRevisionKey(entry), error)

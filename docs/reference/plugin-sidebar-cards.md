@@ -24,9 +24,27 @@ Copying it gives you today's card exactly, which you can then change.
 }
 ```
 
-`orca plugin create <dir> --template card` scaffolds one. To use it for your workspaces, open the
-plugin's page and choose **Use for workspaces**; **Use Orca's card** goes back. If a card fails to
+`orca plugin create <dir> --template card` scaffolds one. To use it, right-click a workspace and
+choose **Customize** to open the Card Studio, then pick the card. The plugin's page also offers
+**Use for workspaces**, and **Use Orca's card** goes back. If a card fails to
 load or draw, Orca draws its own card for that workspace and logs why.
+
+## Options
+
+A card can declare `options` in the same format as `contributes.settings`. The Card Studio shows
+them as controls. The template reads the person's values, with defaults filled in, as
+`cardOptions.<key>`:
+
+```json
+"sidebarCards": [{
+  "id": "focus", "title": "Focus", "template": "cards/focus.json",
+  "options": [{ "key": "showBranch", "title": "Show branch", "type": "boolean", "default": true }]
+}]
+```
+
+```json
+{ "el": "Branch", "when": "cardOptions.showBranch" }
+```
 
 ## Template
 

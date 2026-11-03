@@ -6643,7 +6643,8 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "customize": "Customize"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -19204,6 +19205,31 @@
         "sidebarCard": {
           "useOrcaCard": "Use Orca's card",
           "useCard": "Use for workspaces"
+        }
+      },
+      "cardStudio": {
+        "orcaCard": "Orca's card",
+        "orcaCardDescription": "The built-in card, with the layout and properties below.",
+        "galleryEmpty": "Add a workspace to see its card here.",
+        "layout": "Layout",
+        "agents": "Agent rows",
+        "properties": "Show",
+        "title": "Workspace cards",
+        "subtitle": "Choose what each card in the sidebar shows. Changes apply right away.",
+        "close": "Close",
+        "card": "Card",
+        "preview": "Your workspaces",
+        "cardOptions": "Card options",
+        "state": {
+          "working": "Agent working",
+          "blocked": "Needs input",
+          "review": "Pull request",
+          "unread": "Unread",
+          "ssh": "Remote (SSH)",
+          "folder": "Folder",
+          "main": "Primary checkout",
+          "comment": "With notes",
+          "focused": "This workspace"
         }
       }
     },

@@ -1,3 +1,4 @@
+import { WorktreeCardCustomizeButton } from './WorktreeCardCustomizeButton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -155,9 +156,18 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
         >
-          <DropdownMenuLabel>
-            {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
-          </DropdownMenuLabel>
+          <div className="flex items-center justify-between gap-2 pr-1">
+            <DropdownMenuLabel>
+              {translate(
+                'auto.components.sidebar.WorktreeContextMenu.workspaceSection',
+                'Workspace'
+              )}
+            </DropdownMenuLabel>
+            <WorktreeCardCustomizeButton
+              worktreeId={worktree.id}
+              onOpen={() => setMenuOpenState(false)}
+            />
+          </div>
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>

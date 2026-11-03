@@ -28,7 +28,10 @@ function boardAttr(preserveWorkspaceBoardOpen: boolean): '' | undefined {
   return preserveWorkspaceBoardOpen ? '' : undefined
 }
 
-function useToggleCardProperty(): (property: WorktreeCardProperty, checked: boolean) => void {
+export function useToggleCardProperty(): (
+  property: WorktreeCardProperty,
+  checked: boolean
+) => void {
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const setWorktreeCardProperties = useAppStore((s) => s.setWorktreeCardProperties)
   return useCallback(

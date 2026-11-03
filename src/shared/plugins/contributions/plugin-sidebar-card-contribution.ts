@@ -2,10 +2,12 @@ import { z } from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import { pluginFieldDoc, pluginPathFieldDoc } from '../manifest/plugin-schema-field-docs'
+import { pluginSettingContributionSchema } from './plugin-settings-contribution'
 
 /** First release that reads `contributes.sidebarCards`. */
 export const PLUGIN_SIDEBAR_CARDS_SINCE = '1.4.248'
 export const PLUGIN_SIDEBAR_CARD_LIMIT = 16
+export const PLUGIN_SIDEBAR_CARD_OPTION_LIMIT = 24
 
 const SINCE = PLUGIN_SIDEBAR_CARDS_SINCE
 
@@ -26,7 +28,17 @@ export const pluginSidebarCardContributionSchema = z
         SINCE,
         ['cards/review-first.json']
       )
-    )
+    ),
+    options: z
+      .array(pluginSettingContributionSchema)
+      .max(PLUGIN_SIDEBAR_CARD_OPTION_LIMIT)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          `Options people set for this card in the Card Studio, in the settings format; the template reads them as \`cardOptions.<key>\`. At most ${PLUGIN_SIDEBAR_CARD_OPTION_LIMIT}.`,
+          SINCE
+        )
+      )
   })
   .strict()
   .meta({
