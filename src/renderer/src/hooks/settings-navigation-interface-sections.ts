@@ -3,6 +3,7 @@ import { getChatAppearanceSearchEntries } from '@/components/settings/appearance
 import { getChatBehaviorSearchEntries } from '@/components/settings/chat/chat-behavior-search'
 import { getChatNamingSearchEntry } from '@/components/settings/chat/chat-naming-search'
 import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat/chat-inline-visuals-search'
+import { getChatTransientErrorRecoverySearchEntry } from '@/components/settings/chat/chat-transient-error-recovery-search'
 import { getChatLaunchSearchEntries } from '@/components/settings/chat/chat-launch-search'
 import { getChatPermissionSearchEntry } from '@/components/settings/chat/chat-permission-search'
 import { getInputPaneSearchEntries } from '@/components/settings/input/input-search'
@@ -53,7 +54,11 @@ export function buildInterfaceSettingsSections({
           (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
         ),
         ...(showDesktopOnlySettings
-          ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+          ? [
+              getChatNamingSearchEntry(),
+              getChatInlineVisualsSearchEntry(),
+              getChatTransientErrorRecoverySearchEntry()
+            ]
           : [])
       ],
       group: 'interface'
