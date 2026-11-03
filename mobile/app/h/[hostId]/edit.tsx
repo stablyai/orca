@@ -184,7 +184,7 @@ export default function EditHostScreen() {
         await edgeAuth.persistAuthChanges(host.id, authNormalized.headers, endpointEdit.endpoint)
       } catch {
         if (revision === routeRevision.current) {
-          setSaveError('Could not save edge authentication.')
+          setSaveError(t('edgeAuth.saveFailed', 'Could not save edge authentication.'))
           savingRef.current = false
           setSaving(false)
         }

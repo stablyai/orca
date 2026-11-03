@@ -4519,6 +4519,7 @@
     "pairRequired": "Each header must be a name/value pair.",
     "invalidName": "Invalid header name: \"{{name}}\".",
     "invalidValue": "Invalid value for header \"{{name}}\".",
-    "tooMany": "At most {{limit}} headers are supported."
+    "tooMany": "At most {{limit}} headers are supported.",
+    "saveFailed": "Could not save edge authentication."
   }
 }
