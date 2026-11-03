@@ -9,10 +9,12 @@ import {
   forgetRemoteLayoutSnapshot,
   type RemoteLayoutSnapshotStore
 } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
+import type { HostRepoCatalogSnapshotStore } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 
-export type RemovedServerStore = RemoteLayoutSnapshotStore & {
-  removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
-}
+export type RemovedServerStore = RemoteLayoutSnapshotStore &
+  Pick<HostRepoCatalogSnapshotStore, 'setHostRepoCatalogSnapshot'> & {
+    removeWorkspaceSessionHost: (hostId: ExecutionHostId) => void
+  }
 
 /** Retires a removed server's client-side state; resolves once its transport is invalidated. */
 export function retireRemovedRuntimeEnvironment(
@@ -29,6 +31,7 @@ export function retireRemovedRuntimeEnvironment(
   // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))
   forgetRemoteLayoutSnapshot(store, environmentId)
+  store.setHostRepoCatalogSnapshot(environmentId, null)
   clearRuntimeEnvironmentManualDisconnect(environmentId)
   const retiring = Promise.resolve(invalidateTransport(environmentId))
   // Explicit removal retires browser storage after client hosts release their live partitions.

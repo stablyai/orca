@@ -105,14 +105,14 @@ describe('native Claude conversation content evidence', () => {
     expect(projectConversations(result.sessions, preferences)).toHaveLength(5)
   })
 
-  it('never calls a transcript empty when bounded reads skipped possible history', async () => {
+  it('keeps readable bounded history without warnings or calling the transcript empty', async () => {
     const { options, file } = await history()
     await writeJsonlFile(file('oversized'), [user('oversized', caveat)])
     await appendFile(file('oversized'), `${'x'.repeat(MAX_SESSION_TRANSCRIPT_RECORD_BYTES + 1)}\n`)
 
     const result = await scanAiVaultSessions(options)
 
-    expect(result.issues).toEqual([expect.objectContaining({ kind: 'notice' })])
+    expect(result.issues).toEqual([])
     expect(result.sessions[0]?.conversationContent).toBe('unknown')
     expect(projectConversations(result.sessions, preferences)).toHaveLength(1)
     await appendFile(file('oversized'), `${JSON.stringify(user('oversized', caveat))}\n`)

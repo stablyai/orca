@@ -6,6 +6,7 @@ import type { AgentSessionOptionsResult } from '../../../src/shared/agent-sessio
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/agent-session/options/structured-agent-session-options-read-owner'
+import { BoundedMap } from '../../../src/shared/bounded-map'
 import type { RpcClient } from '../transport/rpc-client'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
@@ -13,6 +14,9 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionReportsAtFence
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
+
+// Matches the transcripts this view retains per chat.
+const MAX_RETAINED_CHAT_READERS = 32
 
 export function useMobileStructuredOptionState(args: {
   client: RpcClient | null
@@ -57,11 +61,26 @@ export function useMobileStructuredOptionState(args: {
   )
   const providerStarting = summary?.hostExecutionPhase === 'starting'
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
-  const [reader] = useState(() =>
-    createStructuredAgentSessionOptionsReadOwner(
+  // One view serves every chat tab, so each chat keeps its own reader and its last answer on return.
+  const [readers] = useState(
+    () =>
+      new BoundedMap<string, ReturnType<typeof createStructuredAgentSessionOptionsReadOwner>>({
+        maxEntries: MAX_RETAINED_CHAT_READERS
+      })
+  )
+  const chatKey = JSON.stringify([agent, sessionId])
+  const reader = useMemo(() => {
+    const retained = readers.get(chatKey)
+    if (retained) {
+      return retained
+    }
+    const created = createStructuredAgentSessionOptionsReadOwner(
       createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
     )
-  )
+    readers.set(chatKey, created)
+    return created
+  }, [readers, chatKey, agent, optionCatalog])
+  useEffect(() => () => reader.markAway(), [reader])
   // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
   const projectRuntimeReports = <
     T extends { reportedPermissionMode?: string | null; reportedEffort?: string }
@@ -103,7 +122,8 @@ export function useMobileStructuredOptionState(args: {
         ? {
             conversationSupport: {
               sessionId: support.sessionId,
-              commands: support.result.conversationCommands ?? []
+              commands: support.result.conversationCommands ?? [],
+              compactInstructions: support.result.compactInstructions === true
             },
             imageSupport: {
               sessionId: support.sessionId,
@@ -117,7 +137,7 @@ export function useMobileStructuredOptionState(args: {
   useEffect(
     () =>
       reader.attach({
-        owner: [agent, sessionId, client, controller],
+        owner: [agent, sessionId, client],
         reset: [contextKey, clientGeneration, enabled, optionCatalog],
         sessionId,
         fence,

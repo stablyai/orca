@@ -31,7 +31,7 @@ import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,

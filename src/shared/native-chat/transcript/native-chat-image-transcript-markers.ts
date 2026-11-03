@@ -9,7 +9,7 @@ import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../../agent-image-paste'
 
 // Keep whitespace and path starts disjoint so incomplete markers cannot rescan their suffix.
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(\S.*?|[^\S\r\n\u2028\u2029])\]\s*$/
-const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/
+export const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 // A quoted file reference is matched whole, so a path that reads like a marker is left as typed.
 const IMAGE_PROMPT_MARKER_NUMBERS_OUTSIDE_FILE_REFERENCES = new RegExp(

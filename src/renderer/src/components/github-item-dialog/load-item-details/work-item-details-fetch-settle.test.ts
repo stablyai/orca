@@ -39,9 +39,10 @@ it.each([false, true])(
     const newer = new Promise<GitHubWorkItemDetails | null>(() => {})
     const entry = { details, fetchedAt: 20, pending: newer }
     touchWorkItemDetailsCache('key', entry)
+    const installed = workItemDetailsCache.get('key')
     finish()
     expect(await settling).toEqual({ status: 'superseded' })
-    expect(workItemDetailsCache.get('key')).toBe(entry)
+    expect(workItemDetailsCache.get('key')).toBe(installed)
   }
 )
 

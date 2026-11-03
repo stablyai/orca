@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
+import type { WorkerRequestTransport } from '../worker-threads/worker-thread-transport'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 
 const FAILURE = { status: 'error', error: 'Unable to read the Cursor desktop login' }

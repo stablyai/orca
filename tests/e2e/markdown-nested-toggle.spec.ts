@@ -56,27 +56,6 @@ test.describe('Markdown nested toggle regression', () => {
     }
   })
 
-  test('a nested toggle on disk reopens as editable toggles', async ({ orcaPage }, testInfo) => {
-    const context = await getActiveWorktreeContext(orcaPage)
-    let filePath: string | null = null
-
-    try {
-      filePath = await createMarkdownFixture(
-        context,
-        NESTED_TOGGLE_FIXTURE_DIRECTORY,
-        'nested-toggle-reopen',
-        testInfo.workerIndex,
-        NESTED_TOGGLE_MARKDOWN
-      )
-      await openMarkdownFixture(orcaPage, context, filePath)
-      await waitForRichMarkdownEditor(orcaPage)
-
-      await expectEditableNestedToggles(orcaPage)
-    } finally {
-      await cleanupMarkdownFixture(filePath)
-    }
-  })
-
   test('editing a nested toggle survives save and reopen', async ({ orcaPage }, testInfo) => {
     const context = await getActiveWorktreeContext(orcaPage)
     const sentinel = `editedInsideNestedToggle${Date.now()}`

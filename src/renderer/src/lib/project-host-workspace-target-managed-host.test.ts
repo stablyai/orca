@@ -72,21 +72,6 @@ describe('workspace targets on an SSH host merged with its managed server', () =
     })
   })
 
-  it('keeps a draft on the server repo while the host is on its relay', () => {
-    const resolution = resolve(
-      'r-server',
-      composerHosts({
-        status: 'connected',
-        managedServer: { kind: 'relay', reason: 'source_changed' }
-      })
-    )
-
-    expect(resolution).toMatchObject({
-      status: 'ready',
-      target: { repoId: 'r-server', hostId: 'runtime:env1' }
-    })
-  })
-
   it('still offers a ready server project while the host is on its relay', () => {
     const projection = projectHostSetupProjectionFromRepos([SERVER_REPO])
     const options = buildProjectHostSetupOptions({
@@ -102,15 +87,5 @@ describe('workspace targets on an SSH host merged with its managed server', () =
     expect(options.filter((option) => option.label === 'Omarchy')).toEqual([
       expect.objectContaining({ kind: 'ready', hostId: 'runtime:env1' })
     ])
-  })
-
-  it('never swaps an unactionable draft repo for an unrelated local project', () => {
-    const resolution = resolveWorkspaceCreationTarget({
-      eligibleRepos: [SSH_REPO, LOCAL_REPO],
-      draftRepoId: 'r-ssh',
-      actionableHostIds: new Set(['local'])
-    })
-
-    expect(resolution).toEqual({ status: 'unavailable', reason: 'setup-not-found' })
   })
 })

@@ -39,7 +39,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   // Usage scans synchronously walk histories/SQLite; keep them off the main loop.
   'usage-scan-worker-entry': resolve('src/main/usage/usage-scan-worker-entry.ts'),
-  'workspace-space-scan-worker-entry': resolve('src/main/workspace-space-scan-worker-entry.ts'),
+  'workspace-space-scan-worker-entry': resolve(
+    'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
+  ),
   // Why: a first account setup can merge a large history tree with sync fs calls.
   'claude-profile-setup-worker-entry': resolve(
     'src/main/claude-accounts/claude-profile-setup-worker-entry.ts'

@@ -218,9 +218,9 @@
         },
         "hooks": {
           "default": [],
-          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 7.",
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.",
           "x-orca-since": "1.4.248",
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "$ref": "#/$defs/HookContribution"
@@ -327,7 +327,7 @@
         },
         "statusBarItems": {
           "default": [],
-          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. At most 8.",
+          "description": "Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.",
           "x-orca-since": "1.4.248",
           "maxItems": 8,
           "type": "array",
@@ -680,6 +680,34 @@
           "minLength": 1,
           "maxLength": 256,
           "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+        },
+        "replaces": {
+          "description": "Built-in Orca action this worker command runs in place of, from its shortcut, the palette or a menu. To also run Orca’s own, the command calls `commands.run` with the action (`workspace:write`); that never reaches a replacement. If the worker fails or takes over 2 s, Orca runs its own. The person sees it before approving and can turn it off in Settings; when two plugins replace one action, the one installed first does.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "view.tasks"
+          ],
+          "enum": [
+            "worktree.history.back",
+            "worktree.history.forward",
+            "sidebar.left.toggle",
+            "sidebar.sleepingWorkspaces.toggle",
+            "floatingWorkspace.maximize",
+            "tab.rename",
+            "workspace.rename",
+            "workspace.openBoard",
+            "view.tasks",
+            "sidebar.right.toggle",
+            "sidebar.explorer.toggle",
+            "sidebar.search.toggle",
+            "sidebar.sourceControl.toggle",
+            "sidebar.checks.toggle",
+            "sidebar.ports.toggle"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
         }
       },
       "required": [
@@ -728,7 +756,8 @@
             "agent.launch.before",
             "agent.prompt.before",
             "agent.tool.before",
-            "agent.tool.after"
+            "agent.tool.after",
+            "editor.save.before"
           ],
           "description": "Hook the worker handles with `orca.hooks.on`.",
           "x-orca-since": "1.4.248",
@@ -739,7 +768,8 @@
             "agent.launch.before": "1.4.248",
             "agent.prompt.before": "1.4.248",
             "agent.tool.before": "1.4.248",
-            "agent.tool.after": "1.4.248"
+            "agent.tool.after": "1.4.248",
+            "editor.save.before": "1.4.248"
           }
         },
         "onError": {
@@ -1088,7 +1118,7 @@
           ]
         },
         "priority": {
-          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.",
+          "description": "`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.",
           "x-orca-since": "1.4.245",
           "examples": [
             "default"

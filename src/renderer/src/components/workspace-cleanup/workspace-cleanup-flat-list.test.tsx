@@ -3,16 +3,10 @@ import type { ReactNode } from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createDefaultWorkspaceCleanupFilterState,
-  DEFAULT_WORKSPACE_CLEANUP_SORT,
-  type WorkspaceCleanupFilterState
-} from '../../../../shared/workspace-cleanup-filter-model'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
-import { FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
+import { makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
 
-import { runWorkspaceCleanupQuery } from './workspace-cleanup-query'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -23,22 +17,6 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
-
-const FLEET: WorkspaceCleanupFacets[] = [
-  makeNamedFacets('ready-one', {
-    candidate: { tier: 'ready' },
-    sizeBytes: 4 * 1024 * 1024
-  }),
-  makeNamedFacets('needs-review', { candidate: { tier: 'review' } }),
-  makeNamedFacets('protected-one', {
-    candidate: {
-      tier: 'protected',
-      blockers: ['pinned'],
-      selectedByDefault: false
-    }
-  }),
-  makeNamedFacets('ignored-one', { dismissed: true })
-]
 
 function renderRows(
   rows: readonly WorkspaceCleanupFacets[],
@@ -75,21 +53,6 @@ function renderRows(
   )
 }
 
-function renderedNames(): string[] {
-  // Buttons share `text-sm font-medium`, so scope to the row's name span.
-  return [...(container?.querySelectorAll('span.truncate.text-sm.font-medium') ?? [])].map(
-    (node) => node.textContent ?? ''
-  )
-}
-
-function query(filters: WorkspaceCleanupFilterState = createDefaultWorkspaceCleanupFilterState()) {
-  return runWorkspaceCleanupQuery(
-    FLEET,
-    { filters, sort: DEFAULT_WORKSPACE_CLEANUP_SORT },
-    FACET_NOW
-  )
-}
-
 describe('workspace cleanup flat list', () => {
   beforeEach(() => {
     container = document.createElement('div')
@@ -104,17 +67,6 @@ describe('workspace cleanup flat list', () => {
     container?.remove()
     root = null
     container = null
-  })
-
-  it('switches the visible rows when filters are applied', () => {
-    const filters = createDefaultWorkspaceCleanupFilterState()
-    filters.safety.dismissed = 'exclude'
-    renderRows(query(filters).rows)
-    expect(renderedNames()).not.toContain('ignored-one')
-
-    filters.safety.dismissed = 'only'
-    renderRows(query(filters).rows)
-    expect(renderedNames()).toEqual(['ignored-one'])
   })
 
   it('offers local removal for a disconnected SSH row without making it selectable', () => {

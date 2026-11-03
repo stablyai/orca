@@ -1,6 +1,6 @@
-import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
 import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
-import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
+import { WorkerThreadRequestQueue } from '../worker-threads/worker-thread-request-queue'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
   OpenCodeNativeChatReadRequest,

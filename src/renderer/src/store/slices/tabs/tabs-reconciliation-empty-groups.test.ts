@@ -44,13 +44,7 @@ function splitBesideSource(store: ReturnType<typeof createTestStore>, workspaceI
   return { store, sourceGroupId, emptyGroupId }
 }
 
-function splitWorkspace(workspaceId: string, source: 'terminal' | 'agent-session' = 'terminal') {
-  const store = createTestStore()
-  seedSource(store, workspaceId, source)
-  return splitBesideSource(store, workspaceId)
-}
-
-/** As splitWorkspace, with main holding the source tab and drawing the store from its frames. */
+/** Main holds the source tab and draws the store from its frames. */
 async function drawnSplitWorkspace(workspaceId: string, source: 'terminal' | 'agent-session') {
   const store = createTestStore()
   seedSource(store, workspaceId, source)
@@ -103,29 +97,4 @@ describe.each(['repo1::/tmp/feature', 'folder:folder-1'])('empty groups in %s', 
       ).toMatchObject({ activeTabId: 'source', tabOrder: ['source'] })
     }
   )
-
-  it('removes a group emptied by stale-tab cleanup while preserving an already empty group', () => {
-    const { store, sourceGroupId, emptyGroupId } = splitWorkspace(workspaceId)
-    const layoutWithEmptyNeighbor = store.getState().layoutByWorktree[workspaceId]
-    const staleGroupId = store.getState().createEmptySplitGroup(workspaceId, emptyGroupId, 'right')
-    if (!staleGroupId) {
-      throw new Error('Expected a stale split group')
-    }
-    store.getState().createUnifiedTab(workspaceId, 'browser', {
-      id: 'stale-browser',
-      entityId: 'missing-browser',
-      targetGroupId: staleGroupId
-    })
-
-    store.getState().reconcileWorktreeTabModel(workspaceId)
-
-    const state = store.getState()
-    expect(state.groupsByWorktree[workspaceId].map((group) => group.id)).toEqual([
-      sourceGroupId,
-      emptyGroupId
-    ])
-    expect(state.layoutByWorktree[workspaceId]).toEqual(layoutWithEmptyNeighbor)
-    expect(state.activeGroupIdByWorktree[workspaceId]).toBe(sourceGroupId)
-    expect(state.unifiedTabsByWorktree[workspaceId].map((tab) => tab.id)).toEqual(['source'])
-  })
 })

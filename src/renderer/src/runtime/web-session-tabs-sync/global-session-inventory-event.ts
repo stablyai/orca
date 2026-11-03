@@ -14,6 +14,7 @@ import {
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './tracking-decisions'
 import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import {
   latestSessionTabsSnapshotByWorktree,
@@ -62,6 +63,7 @@ export function handleGlobalSessionInventoryEvent({
     coordinator.recordSnapshotReceipt(environmentId, snapshot, frame, runtimeId)
     return frame
   })
+  applyReceivedAgentSenderPublications(environmentId, event.snapshots, runtimeId)
   // After receipt: a held close dropped at receipt marks its unchanged frame for redraw.
   const unchanged = event.snapshots.map((snapshot) => {
     const key = `${environmentId}:${snapshot.worktree}`

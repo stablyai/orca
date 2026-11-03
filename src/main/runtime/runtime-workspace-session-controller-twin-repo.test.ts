@@ -47,7 +47,6 @@ function controllerFor({ repos, catalog = null, saved = [], staleOn = [] }: Setu
   return { controller, sessions, getRepos }
 }
 
-// The window's save routing is checked against the same table in workspace-session-twin-repo-host.test.ts.
 describe('routing a repo id registered on two hosts, in a layout-owner build', () => {
   it.each(TWIN_REPO_HOST_CASES)('$name', ({ repos, catalog, saved, staleOn, expected }) => {
     layoutOwner.isMain = true

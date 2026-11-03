@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { createWorktreeEventRuntime } from './worktree-event-runtime'
+import {
+  createWorktreeEventRuntime,
+  recentlyRenamedWorktreeIdExpiry
+} from './worktree-event-runtime'
 
 const { activateAndRevealWorktree } = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
@@ -10,6 +13,7 @@ vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
 const initialState = useAppStore.getState()
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   useAppStore.setState(initialState, true)
   vi.clearAllMocks()
 })
@@ -62,3 +66,64 @@ it.each([false, true])(
     }
   }
 )
+
+it('the actual rename event protects both identities before starting discovery', async () => {
+  recentlyRenamedWorktreeIdExpiry.clear()
+  const unsubs: (() => void)[] = []
+  vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
+    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/old')).toBe(true)
+    expect(recentlyRenamedWorktreeIdExpiry.has('repo::/new')).toBe(true)
+    return false
+  })
+  useAppStore.setState({
+    fetchWorktrees: initialState.fetchWorktrees,
+    fetchWorktreeLineage: vi.fn(),
+    migrateWorktreeIdentity: vi.fn()
+  })
+  const runtime = createWorktreeEventRuntime(unsubs, () => false)
+  runtime.worktreeChangeRefreshQueue.enqueue({
+    repoId: 'repo',
+    executionHostId: 'local',
+    renamed: { oldWorktreeId: 'repo::/old', newWorktreeId: 'repo::/new' }
+  })
+  await vi.waitFor(() => expect(useAppStore.getState().fetchWorktrees).toHaveBeenCalledOnce())
+  unsubs.forEach((unsubscribe) => unsubscribe())
+  recentlyRenamedWorktreeIdExpiry.clear()
+})
+
+import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+it('the conditionally installed qualified rename keeps ordinary setup content and other-host input', async () => {
+  drafts.clearNativeChatComposerDraftsForTests()
+  const from = drafts.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'local')
+  const twin = drafts.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'runtime:other')
+  drafts.updateNativeChatComposerDraft(from, { text: 'moving' }, 'immediate')
+  drafts.updateNativeChatComposerDraft(twin, { text: 'twin' }, 'immediate')
+  const fetched = Promise.withResolvers<void>()
+  vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
+    fetched.resolve()
+    return false
+  })
+  useAppStore.setState({
+    repos: [{ ...TEST_REPO, id: 'repo' }],
+    fetchWorktrees: initialState.fetchWorktrees,
+    migrateWorktreeIdentity: vi.fn()
+  })
+  const unsubs: (() => void)[] = []
+  const runtime = createWorktreeEventRuntime(unsubs, () => false)
+  runtime.worktreeChangeRefreshQueue.enqueue({
+    repoId: 'repo',
+    forceLocalOwner: true,
+    renamed: { oldWorktreeId: 'repo::/old', newWorktreeId: 'repo::/new' }
+  })
+  await fetched.promise
+  expect(
+    drafts.readNativeChatComposerDraft(
+      drafts.nativeChatLaunchPromptDraftScopeKey('repo::/new', 'claude', 'local')
+    ).text
+  ).toBe('moving')
+  expect(drafts.readNativeChatComposerDraft(twin).text).toBe('twin')
+  unsubs.forEach((unsubscribe) => unsubscribe())
+  drafts.clearNativeChatComposerDraftsForTests()
+  recentlyRenamedWorktreeIdExpiry.clear()
+})

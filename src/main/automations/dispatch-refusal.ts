@@ -11,7 +11,7 @@ import type { AutomationRunWriter } from './automation-run-writer'
 import { wslMoveRepoBackoff } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { isOrcadFencedAutomation } from './orcad-fenced-automation'
 import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
