@@ -1,5 +1,6 @@
 import { useRef, type ReactElement, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -42,13 +43,15 @@ export function AgentLaunchSetupSubmenu({
         }}
       >
         {renderAnchor(
-          <button
+          <Button
+            variant="menu-segment"
+            size="icon-sm"
             type="button"
             aria-label={label}
             aria-haspopup="menu"
             aria-expanded={open}
             disabled={disabled}
-            className="-my-1.5 -mr-2 flex h-8 w-8 shrink-0 items-center justify-center"
+            className="-my-1.5 -mr-2"
             onPointerEnter={(event) => {
               if (!disabled && event.pointerType === 'mouse') {
                 onOpenChange(true)
@@ -74,7 +77,7 @@ export function AgentLaunchSetupSubmenu({
             }}
           >
             <ChevronRight className="size-3.5 text-muted-foreground" />
-          </button>
+          </Button>
         )}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
