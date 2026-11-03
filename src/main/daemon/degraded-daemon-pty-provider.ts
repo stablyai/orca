@@ -51,7 +51,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       opts.current,
       opts.fallback,
       this.sessionProviders,
-      opts.probeCurrentDaemonSpawn ?? null
+      opts.probeCurrentDaemonSpawn ?? null,
+      typeof opts.current.replaceIdleDaemonForFreshSpawns === 'function'
+        ? () => opts.current.replaceIdleDaemonForFreshSpawns()
+        : null
     )
     this.ownerRecovery = new DegradedDaemonOwnerRecovery(
       this.allProviders(),

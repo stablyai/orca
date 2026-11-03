@@ -84,4 +84,22 @@ describe('terminal-daemon status', () => {
     expect(text).toContain('Terminal daemon: exited')
     expect(text).not.toContain('still hosts')
   })
+
+  it('says when fresh terminals run inside Orca because the kept daemon cannot start them', () => {
+    const text = formatSeveredDaemonStatus({
+      severed: null,
+      daemon: live,
+      freshSpawnsInProcess: true
+    })
+    expect(text).toContain('Terminal daemon: live (pid 4288)')
+    expect(text).toContain('New terminals run inside Orca')
+    expect(text).toContain('switches back by itself')
+  })
+
+  it('stays silent about routing when fresh terminals are daemon-backed or the host predates the field', () => {
+    expect(
+      formatSeveredDaemonStatus({ severed: null, daemon: live, freshSpawnsInProcess: false })
+    ).not.toContain('inside Orca')
+    expect(formatSeveredDaemonStatus({ severed: null, daemon: live })).not.toContain('inside Orca')
+  })
 })

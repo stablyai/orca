@@ -29,7 +29,11 @@ export const TERMINAL_DAEMON_METHODS = [
       // Import the probe lazily to avoid loading daemon providers with the RPC table.
       daemon: await (
         await import('../../../daemon/daemon-liveness-report')
-      ).readTerminalDaemonLiveness()
+      ).readTerminalDaemonLiveness(),
+      // Additive like `daemon`: true while a kept daemon cannot start terminals and fresh ones run in-process.
+      freshSpawnsInProcess: (
+        await import('../../../daemon/daemon-provider-state')
+      ).freshSpawnsRunInProcess()
     })
   }),
   defineMethod({

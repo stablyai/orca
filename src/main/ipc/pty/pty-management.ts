@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
-import { DegradedDaemonPtyProvider } from '../../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../../daemon/daemon-pty-adapter'
 import {
+  freshSpawnsRunInProcess,
   getCurrentDaemonMacTccAttributionHealth,
   getDaemonProvider
 } from '../../daemon/daemon-provider-state'
@@ -41,15 +41,6 @@ function sleep(ms: number): Promise<void> {
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()
   return provider ? [...getAllDaemonAdapters(provider)] : []
-}
-
-// A live daemon unable to spawn means new terminals lack persistence.
-function isDaemonDegraded(): boolean {
-  const provider = getDaemonProvider()
-  return (
-    provider instanceof DegradedDaemonPtyProvider &&
-    provider.routesFreshSpawnsToLocalProvider === true
-  )
 }
 
 // Match folder-access evidence against the current spawning daemon, never a legacy adapter.
@@ -190,7 +181,7 @@ export function registerDaemonManagementHandlers(): void {
     'pty:management:listSessions',
     async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
       const sessions = await collectSessions(getDaemonAdapters())
-      return { sessions, degraded: isDaemonDegraded() }
+      return { sessions, degraded: freshSpawnsRunInProcess() }
     }
   )
 
