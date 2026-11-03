@@ -156,10 +156,15 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     commandArgs: string[],
     execOptions?: AgentBrowserExecOptions
   ): Promise<string> {
+    const args = ['--session', sessionName]
     // Every invocation must pin CDP ownership or a restarted daemon may launch Chrome.
-    const args = ['--session', sessionName, '--cdp', String(session.proxy.getPort())]
+    // The endpoint carries the proxy token, so it goes through env: argv is visible to other users.
+    execOptions = {
+      ...execOptions,
+      envOverrides: { ...execOptions?.envOverrides, AGENT_BROWSER_CDP: session.cdpEndpoint }
+    }
     // A caller's own stdin (eval --stdin) cannot share the pipe with batch input.
-    if (!execOptions?.cliArgv && execOptions?.stdinText === undefined) {
+    if (!execOptions.cliArgv && execOptions.stdinText === undefined) {
       return this.runAgentBrowserRaw(sessionName, [...args, ...AGENT_BROWSER_BATCH_ARGS], {
         ...execOptions,
         stdinText: agentBrowserBatchInput(commandArgs)
