@@ -9411,7 +9411,6 @@
       "src/renderer/src/components/tab-bar/tab-strip-overflow-navigation.test.ts": 90,
       "src/renderer/src/components/tab-bar/tab-strip-pointer-activation.test.tsx": 2047,
       "src/renderer/src/components/tab-bar/tab-strip-scroll-metrics.test.ts": 48,
-      "src/renderer/src/components/tab-bar/tab-title-tooltip.test.tsx": 2754,
       "src/renderer/src/components/tab-bar/terminal-tab-activity-status.test.ts": 329,
       "src/renderer/src/components/tab-bar/terminal-tab-program-progress.test.ts": 297,
       "src/renderer/src/components/tab-bar/terminal-tab-spinner-launch-agent.test.ts": 280,
