@@ -291,7 +291,8 @@
       "stoppedManually": "Остановлено вручную",
       "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
       "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
-      "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт)."
+      "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
+      "modelFallback": "Claude переключил модель: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",

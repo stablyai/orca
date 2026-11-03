@@ -56,6 +56,9 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
