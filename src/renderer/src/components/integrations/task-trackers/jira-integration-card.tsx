@@ -20,6 +20,7 @@ import { getProviderAccountScope } from '../../provider-accounts/provider-accoun
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { JIRA_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { useTranslate } from '@/i18n/use-translate'
+import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
@@ -207,7 +208,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
                     aria-label={t(
                       'auto.components.settings.task.tracker.integration.cards.dd3529015d',
                       'Disconnect {{value0}}',
-                      { value0: site.displayName }
+                      { value0: getJiraSiteLabel(site) }
                     )}
                     className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                   >

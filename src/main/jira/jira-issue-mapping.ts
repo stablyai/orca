@@ -9,6 +9,7 @@ import type {
   JiraStatus,
   JiraUser
 } from '../../shared/jira/jira-types'
+import { getJiraSiteLabel } from '../../shared/jira/jira-site-label'
 import { adfToMarkdownText, textToAdf, type AdfToMarkdownOptions } from './adf-markdown'
 import {
   asRecord,
@@ -82,7 +83,7 @@ export function mapProject(value: unknown, site?: JiraSite): JiraProject {
     key: asString(project.key),
     name: asString(project.name, asString(project.key)),
     siteId: site?.id,
-    siteName: site?.displayName
+    siteName: site ? getJiraSiteLabel(site) : undefined
   }
 }
 
@@ -239,7 +240,7 @@ export function mapJiraIssue(
     id: asString(raw.id, key),
     key,
     siteId: site.id,
-    siteName: site.displayName,
+    siteName: getJiraSiteLabel(site),
     title: asString(fields.summary, key || 'Untitled issue'),
     description: adfToMarkdownText(fields.description, adfOptions),
     url: issueUrl(site, key),
