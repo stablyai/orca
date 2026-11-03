@@ -19845,7 +19845,8 @@
         "cancelled": "Orca no continuará este chat automáticamente.",
         "scheduled": "Orca continuará este chat a las {{time}}.",
         "cancel": "No continuar"
-      }
+      },
+      "settings": "Configuración del chat"
     },
     "tab": {
       "bar": {

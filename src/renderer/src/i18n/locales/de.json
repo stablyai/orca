@@ -20014,7 +20014,8 @@
         "effortPickerFailed": "Die Auswahl des Denkaufwands konnte nicht geöffnet werden.",
         "modelApplyFailed": "Modell {{value}} konnte nicht angewendet werden.",
         "effortApplyFailed": "Denkaufwand {{value}} konnte nicht angewendet werden."
-      }
+      },
+      "settings": "Chat-Einstellungen"
     },
     "tab": {
       "bar": {

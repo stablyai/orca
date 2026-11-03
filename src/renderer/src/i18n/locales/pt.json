@@ -20969,7 +20969,8 @@
         "effortPickerFailed": "Não foi possível abrir o seletor de esforço.",
         "modelApplyFailed": "Não foi possível aplicar o modelo {{value}}.",
         "effortApplyFailed": "Não foi possível aplicar o esforço {{value}}."
-      }
+      },
+      "settings": "Configurações do chat"
     },
     "tab": {
       "bar": {

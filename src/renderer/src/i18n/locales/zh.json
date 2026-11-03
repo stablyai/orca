@@ -19277,7 +19277,8 @@
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
         "cancel": "不要继续"
-      }
+      },
+      "settings": "聊天设置"
     },
     "tab": {
       "bar": {
