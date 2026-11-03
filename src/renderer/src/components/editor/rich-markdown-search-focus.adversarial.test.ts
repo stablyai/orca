@@ -219,7 +219,8 @@ describe('Find focus with editor-owned selection', () => {
 
         const boundaries = ['key', 'pending-flush', 'release', 'ordinary-click', 'multiple-click']
         for (const [step, boundary] of boundaries.entries()) {
-          if (boundary.endsWith('click') || boundary === 'release') {
+          const nativeDrag = boundary === 'release'
+          if (boundary.endsWith('click') || nativeDrag) {
             vi.advanceTimersByTime(501)
             vi.spyOn(active.view, 'posAtCoords').mockReturnValue({
               pos: active.state.selection.head,
@@ -229,13 +230,10 @@ describe('Find focus with editor-owned selection', () => {
               fireEvent.mouseDown(text.parentElement ?? active.view.dom, {
                 button: 0,
                 buttons: 1,
-                shiftKey: boundary === 'release'
+                shiftKey: nativeDrag
               })
             press()
-            expect(active.view).toHaveProperty(
-              'input.mouseDown.allowDefault',
-              boundary === 'release'
-            )
+            expect(active.view).toHaveProperty('input.mouseDown.allowDefault', nativeDrag)
             if (boundary === 'multiple-click') {
               fireEvent.mouseUp(text.parentElement ?? active.view.dom, { button: 0 })
               fireEvent.click(text.parentElement ?? active.view.dom, { button: 0, detail: 1 })
