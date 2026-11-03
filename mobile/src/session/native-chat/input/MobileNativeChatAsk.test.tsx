@@ -83,7 +83,11 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
   it.each([1000, 10000])(
     'does not revisit unchanged delivery history while editing after failure (%i rows)',
     async (count) => {
-      const prompt = { questions: [indent], replyAsMessage: true }
+      const prompt: AskPrompt = {
+        source: 'transcript',
+        questions: [indent],
+        replyAsMessage: true
+      }
       let messageReads = 0
       let submissionReads = 0
       const messages: NativeChatAnswerSource['messages'] = Array.from(
@@ -198,7 +202,11 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
   )
 
   it('owns the RPC-first echo and releases canonical uncertainty before an old reply can clear a retry', async () => {
-    const prompt = { questions: [indent], replyAsMessage: true }
+    const prompt: AskPrompt = {
+      source: 'transcript',
+      questions: [indent],
+      replyAsMessage: true
+    }
     let source: NativeChatAnswerSource = { messages: [], submissions: [] }
     const replies: (() => void)[] = []
     const onAnswer = vi.fn(
@@ -276,7 +284,11 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
   })
 
   it('keeps the picked answer disabled after admission and retryable when delivery is unconfirmed', async () => {
-    const prompt = { questions: [indent], replyAsMessage: true }
+    const prompt: AskPrompt = {
+      source: 'transcript',
+      questions: [indent],
+      replyAsMessage: true
+    }
     const onAnswer = render(prompt)
     press('Spaces')
     await passAutoAdvanceBeat()
@@ -305,7 +317,11 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
   it.each([false, true])(
     'cancels a scheduled step when delivery becomes pending (multiple: %s)',
     async (multiple) => {
-      const prompt = { questions: multiple ? [indent, fruit] : [indent], replyAsMessage: true }
+      const prompt: AskPrompt = {
+        source: 'transcript',
+        questions: multiple ? [indent, fruit] : [indent],
+        replyAsMessage: true
+      }
       const onAnswer = render(prompt)
       press('Spaces')
       act(() =>
