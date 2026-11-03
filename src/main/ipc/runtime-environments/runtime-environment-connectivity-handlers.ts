@@ -4,7 +4,6 @@ import {
 } from './runtime-environment-call-failure'
 import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
 import type { RuntimeEdgeAuthHeader } from '../../../shared/runtime-edge-auth-types'
-import { clearRuntimeEdgeAuth } from '../../credentials/runtime-edge-auth-store'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
@@ -149,7 +148,6 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       const removed = removeEnvironment(userDataPath, args.selector)
       void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store, userDataPath)
       closeLegacySelectorTransport(args.selector, removed.id)
-      clearRuntimeEdgeAuth(userDataPath, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
