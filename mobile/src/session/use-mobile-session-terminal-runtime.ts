@@ -4,7 +4,7 @@ import {
   type TerminalPaneViewport
 } from './mobile-terminal-pane-layout'
 import type { PendingSessionSelection } from './pending-session-selection'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -121,6 +121,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   )
   const {
     clearPendingLiveInputCommit,
+    clearSavedLiveInputSession,
     flushPendingLiveInputBeforeExternalSend,
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
@@ -128,6 +129,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
+    seedLiveInputFromTerminalPrompt,
     sendLiveInputClick
   } = useTerminalLiveInputCommit({
     activeHandle,
@@ -148,6 +150,22 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   })
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
+  const requestTerminalPromptBackload = useCallback(
+    async (targetHandle?: string | null): Promise<boolean> => {
+      const handle = targetHandle ?? activeHandleRef.current
+      if (!handle || handle !== activeHandleRef.current) {
+        return false
+      }
+      const promptText = await terminalRefs.current.get(handle)?.readPromptBackload?.()
+      return promptText ? seedLiveInputFromTerminalPrompt(handle, promptText) : false
+    },
+    [seedLiveInputFromTerminalPrompt]
+  )
+  useEffect(() => {
+    if (connState === 'connected' && activeHandle) {
+      void requestTerminalPromptBackload(activeHandle)
+    }
+  }, [activeHandle, connState, requestTerminalPromptBackload])
   const { handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
@@ -216,12 +234,14 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminalFrameRef,
     activeSessionTab,
     clearPendingLiveInputCommit,
+    clearSavedLiveInputSession,
     flushPendingLiveInputBeforeExternalSend,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
+    requestTerminalPromptBackload,
     sendLiveInputClick,
     canCompose,
     canSend,

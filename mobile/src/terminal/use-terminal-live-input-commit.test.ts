@@ -544,4 +544,42 @@ describe('terminal live input commit hook', () => {
 
     expect(sent).toEqual([])
   })
+
+  it('seeds Live Input from terminal prompt without sending PTY bytes and mirrors subsequent edits', async () => {
+    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    const seeded = handlers.seedLiveInputFromTerminalPrompt('terminal-a', 'fix mobile backload')
+
+    expect(seeded).toBe(true)
+    expect(captures.at(-1)).toBe('fix mobile backload')
+    expect(sent).toEqual([])
+
+    changeLiveInput(handlers, 'fix mobile bug', false)
+    await vi.waitFor(() => expect(sent).toEqual(['\x7f'.repeat(7) + 'ug']))
+  })
+
+  it('does not overwrite an active Live Input typing session when prompt backload arrives', async () => {
+    const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'typed', false)
+    await vi.waitFor(() => expect(sent).toEqual(['typed']))
+
+    expect(handlers.seedLiveInputFromTerminalPrompt('terminal-a', 'stale prompt')).toBe(false)
+    expect(captures.at(-1)).toBe('typed')
+  })
+
+  it('restores committed Live Input text when switching to another tab and back', async () => {
+    const { captures, getHandlers, sent, setActiveSessionTabType } =
+      createTerminalLiveInputCommitHarness()
+    changeLiveInput(getHandlers(), 'git commit -m "wip', false)
+    await vi.waitFor(() => expect(sent).toEqual(['git commit -m "wip']))
+
+    setActiveSessionTabType('chat')
+    expect(captures.at(-1)).toBe('')
+
+    setActiveSessionTabType('terminal')
+    expect(captures.at(-1)).toBe('git commit -m "wip')
+
+    changeLiveInput(getHandlers(), 'git commit -m "fix"', false)
+    await vi.waitFor(() => expect(sent).toEqual(['git commit -m "wip', '\x7f\x7f\x7ffix"']))
+  })
 })
