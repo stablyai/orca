@@ -19,6 +19,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Play,
   Trash2,
   Unlink,
   Workflow,
@@ -50,6 +51,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
     batchDeleteWorktrees,
+    canRunSetupScript,
     children,
     contentClassName,
     contextDeletePending,
@@ -75,6 +77,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRemoveParentLink,
     handleRemoveProjectFromGroup,
     handleRename,
+    handleRunSetupScript,
     handleSleepSubtree,
     handleTogglePin,
     handleToggleRead,
@@ -298,6 +301,16 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
+          ) : null}
+
+          {canRunSetupScript ? (
+            <DropdownMenuItem onSelect={handleRunSetupScript} disabled={isDeleting}>
+              <Play className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.WorktreeContextMenu.runSetupScript',
+                'Run setup script'
+              )}
+            </DropdownMenuItem>
           ) : null}
 
           {shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed, isMultiContext }) ? (
