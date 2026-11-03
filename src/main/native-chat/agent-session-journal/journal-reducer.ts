@@ -1,4 +1,10 @@
 import { journalItemDeclaresEcho } from './journal-item-echo'
+import {
+  journalInputOrder,
+  initializeJournalInputOrder,
+  type JournalInputOrder
+} from './journal-input-order'
+import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
@@ -7,15 +13,15 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalHistoryOrigin, type JournalHistoryOrigin } from './journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { journalItemRevisionIsStale } from './journal-item-revision'
@@ -23,11 +29,11 @@ import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
 import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
-import { isWriteFailureSubmission } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectJournalStopNote } from './journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { retireRewoundJournalSubmission } from './journal-rewind-submission-retirement'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
 import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,
@@ -79,11 +85,17 @@ export type JournalReducerState = {
   normalizedHandOffs: Set<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
+  inputEntries: Map<string, JournalInputEntry>
+  inputCards: Map<string, JournalInputCard>
   historyOrigin: JournalHistoryOrigin | null
 }
 
-export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
-  return {
+export function createJournalReducerState(
+  sessionId: string,
+  epoch: string,
+  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
+): JournalReducerState {
+  const state: JournalReducerState = {
     sessionId,
     epoch,
     lastSequence: 0,
@@ -108,8 +120,12 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     queuedHandOffPlaces: new Map(),
     normalizedHandOffs: new Set(),
     queue: createJournalQueueState(),
+    inputEntries: new Map(),
+    inputCards: new Map(),
     historyOrigin: null
   }
+  initializeJournalInputOrder(state, originalAcceptance)
+  return state
 }
 
 export function applyJournalRow(
@@ -117,8 +133,10 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
+  journalInputOrder(state).beforeRow(state, row)
   applyJournalRowFacts(state, row, savedAt)
   foldJournalQueueRow(state, row)
+  journalInputOrder(state).afterRow(state, row)
 }
 
 function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {

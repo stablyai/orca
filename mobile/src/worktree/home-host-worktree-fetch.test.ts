@@ -247,6 +247,23 @@ describe('fetchHomeHostWorktreeInfo', () => {
     expect(store.current['host-1'].staleCounts).toBe(true)
   })
 
+  it('answers a refresh asked mid-read with one trailing read, not the older reply', async () => {
+    const store = infoStore()
+    const host = fakeSession()
+
+    const first = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
+    const second = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
+    const third = fetchHomeHostWorktreeInfo(host.client, 'host-1', store.setInfo, notDisposed)
+    host.settle(catalogResponse(12, 2))
+    await first
+    await flush()
+    host.settle(catalogResponse(13, 3))
+    await Promise.all([second, third])
+
+    expect(host.calls).toBe(2)
+    expect(store.current['host-1']).toMatchObject({ totalWorktrees: 13, activeCount: 3 })
+  })
+
   it('ignores a response that lands after the screen is disposed', async () => {
     const store = infoStore()
     const host = fakeSession()

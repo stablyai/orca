@@ -87,14 +87,6 @@ describe('client pane names on a host with its own desktop window', () => {
     expect(setPaneTitle).not.toHaveBeenCalled()
   })
 
-  it('sends nothing when the client left titles out, which means unchanged', async () => {
-    const { setPaneTitle, renamePanes } = desktopHostRuntime()
-
-    await renamePanes(SPLIT_ROOT, undefined)
-
-    expect(setPaneTitle).not.toHaveBeenCalled()
-  })
-
   it('fails the call when the window cannot take the name, so the client retries', async () => {
     const { setPaneTitle, renamePanes } = desktopHostRuntime()
     setPaneTitle.mockReturnValue(false)

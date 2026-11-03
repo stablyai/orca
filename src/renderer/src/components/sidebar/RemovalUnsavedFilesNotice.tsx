@@ -7,6 +7,7 @@ import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles
 } from '@/components/editor/removal-unsaved-editor-files'
+import { runAfterEditorFramesFlush } from '@/components/editor/editor-pending-flush'
 import { discardedUnsavedFilesLabel, moreUnsavedFilesLabel } from './removal-unsaved-files'
 
 const MAX_LISTED_FILES = 5
@@ -26,7 +27,10 @@ export function RemovalUnsavedFilesNotice({
     if (enabled) {
       // Flush delayed typing so this list includes the latest unsaved drafts.
       const state = useAppStore.getState()
-      flushRemovalPendingEdits(state, worktreePurgeClosedFileIds(state, targets))
+      const fileIds = worktreePurgeClosedFileIds(state, targets)
+      flushRemovalPendingEdits(state, fileIds)
+      // Custom editor frames answer asynchronously; the list re-renders when their edits land.
+      runAfterEditorFramesFlush(state, fileIds, () => {})
     }
   }, [enabled, targets])
 

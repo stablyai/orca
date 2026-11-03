@@ -6,7 +6,7 @@ import { Button } from '../ui/button'
 import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,

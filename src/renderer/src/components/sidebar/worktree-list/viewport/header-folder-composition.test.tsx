@@ -3,7 +3,10 @@ import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { makeRepo, makeFolderWorkspace } from '../../../worktree-jump-palette-test-fixtures'
+import {
+  makeRepo,
+  makeFolderWorkspace
+} from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { createProjectGroup } from '../../../../../../shared/project-groups'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'

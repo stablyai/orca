@@ -1,4 +1,5 @@
 import React from 'react'
+import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'
 import {
   Dialog,
   DialogContent,
@@ -20,11 +21,13 @@ import { resolveSettingsHostScope } from '@/components/settings/settings-host-sc
 type AgentSettingsDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onCloseAutoFocus?: React.ComponentProps<typeof DialogContent>['onCloseAutoFocus']
 }
 
 export default function AgentSettingsDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  onCloseAutoFocus
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -63,7 +66,7 @@ export default function AgentSettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Allow name/pills/actions to fit; the agent list owns bounded height and scrolling. */}
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle className="text-sm">
             {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
@@ -89,4 +92,27 @@ export default function AgentSettingsDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+export function restoreAgentSettingsInvoker(event: Event, invoker: HTMLButtonElement | null): void {
+  if (event.defaultPrevented) {
+    return
+  }
+  event.preventDefault()
+  const active = document.activeElement
+  const dialog = event.target
+  if (
+    invoker?.isConnected &&
+    !invoker.disabled &&
+    !invoker.closest('[inert]') &&
+    (active === document.body ||
+      active === invoker ||
+      (dialog instanceof HTMLElement && active && overlayFocusContains(dialog, active))) &&
+    !getOverlayFocusOwners(invoker).some(
+      (owner) =>
+        owner !== dialog && !(dialog instanceof HTMLElement && overlayFocusContains(dialog, owner))
+    )
+  ) {
+    invoker.focus({ preventScroll: true })
+  }
 }

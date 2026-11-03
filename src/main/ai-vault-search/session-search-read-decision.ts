@@ -1,5 +1,5 @@
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import type { SessionParseReadRequirement } from '../ai-vault/session-scanner-parse-cache'
+import type { SessionParseReadRequirement } from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import { requiresWholeRead, type SessionSearchIndexedFile } from './session-search-file-cursor'
 import type { SessionSearchFileRow } from './session-search-store'
 

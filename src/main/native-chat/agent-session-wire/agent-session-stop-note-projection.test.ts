@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { restoreJournal } from '../agent-session-journal/journal-open'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'

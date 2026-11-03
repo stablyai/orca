@@ -25,7 +25,7 @@ import {
   type KnownExecutionHostPlatform
 } from '@/lib/execution-host-facts'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/structured-agent-session-launch-admission'
+import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   ensureDetectedAgentsForNewWorktree,
   type RepoHostFields
@@ -66,6 +66,7 @@ type PromptDelivery = 'draft' | 'submit-after-ready'
 export async function resolveDirectWorkItemAgent(args: {
   agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
+  preferredSurface?: 'chat'
   worktreeId: string
   repoHost: RepoHostFields
   latestStore: AppState
@@ -98,7 +99,13 @@ export async function resolveDirectWorkItemAgent(args: {
       unavailable:
         !isTuiAgentEnabled(args.agentOverride, preferences?.disabledTuiAgents) ||
         (!detected.includes(args.agentOverride) &&
-          !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
+          !agentChoiceMayOpenAsChat(
+            store,
+            args.agentOverride,
+            workspace,
+            detected,
+            args.preferredSurface
+          ))
     }
   }
   return {

@@ -2,6 +2,11 @@ import { z } from 'zod'
 import { AGENT_STATUS_STATES } from '../../agent-status-types'
 import { AGENT_TURN_OUTCOMES } from '../../agent-turn-outcome'
 import type { PluginEventName } from '../manifest/plugin-manifest'
+import {
+  PLUGIN_TERMINAL_ID_MAX_LENGTH,
+  PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
+  pluginWorkspaceContextSchema
+} from '../workers/plugin-host-api'
 
 /**
  * Payload contracts for the v0 plugin event set (workspace lifecycle + agent
@@ -41,6 +46,11 @@ export const workspaceRemovedPayloadSchema = z.object({
 export const agentStatusChangedPayloadSchema = z.object({
   workspaceId: z.string().min(1).max(2048).nullable(),
   paneKey: z.string().min(1).max(2048),
+  /** The pane's terminal, as `workspace.readContext` and `terminal.sendText` name it; absent when
+   *  Orca cannot tie the pane to a terminal it lists. */
+  terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
+  /** The pane's name, or its terminal title. */
+  title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional(),
   /** The combined status the user sees: `working` while the main agent or any live child works. */
   state: z.enum(AGENT_STATUS_STATES),
   receivedAt: z.number().finite().positive(),
@@ -58,11 +68,27 @@ export const agentStatusChangedPayloadSchema = z.object({
     .optional()
 })
 
+export const workspaceChangedPayloadSchema = z.object({
+  /** What `workspace.readContext` answers now; null when no workspace is focused. */
+  context: pluginWorkspaceContextSchema
+})
+
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,
   'workspace.removed': workspaceRemovedPayloadSchema,
-  'agent.status.changed': agentStatusChangedPayloadSchema
+  'agent.status.changed': agentStatusChangedPayloadSchema,
+  'workspace.changed': workspaceChangedPayloadSchema
 } satisfies Record<PluginEventName, z.ZodType>
+
+/** One line per event for the generated reference and author typings. */
+export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
+  'workspace.created': 'A worktree workspace was created.',
+  'workspace.removed': 'A worktree workspace was removed.',
+  'agent.status.changed':
+    'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.',
+  'workspace.changed':
+    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. Each new subscriber first gets the current context.'
+}
 
 export type PluginEventPayload<E extends PluginEventName> = z.infer<
   (typeof PLUGIN_EVENT_PAYLOAD_SCHEMAS)[E]

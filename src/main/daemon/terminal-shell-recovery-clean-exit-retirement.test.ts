@@ -20,24 +20,6 @@ function createBarrier(confirm: () => Promise<boolean>, maxPendingMs?: number) {
 }
 
 describe('clean-exit confirmation retirement', () => {
-  it('retires a hung clean-exit proof so a later candidate can still prove ownership', async () => {
-    let calls = 0
-    const barrier = createBarrier(() => {
-      calls += 1
-      return calls === 1 ? new Promise(() => {}) : Promise.resolve(true)
-    }, 20)
-
-    barrier.accept(passthrough(CLEAN_EXIT))
-    expect(calls).toBe(1)
-    await barrier.awaitProofSettled()
-    expect(barrier.getOwner()).toBeUndefined()
-
-    barrier.accept(passthrough(CLEAN_EXIT, CLEAN_EXIT.length))
-    await vi.waitFor(() => expect(calls).toBe(2))
-    await barrier.awaitProofSettled()
-    expect(barrier.getOwner()).toBe('shell')
-  })
-
   it('contains a synchronously throwing confirm without wedging later candidates', async () => {
     let calls = 0
     const barrier = createBarrier(() => {

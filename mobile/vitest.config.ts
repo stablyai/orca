@@ -9,11 +9,26 @@ export default defineConfig({
   oxc: vitestOxcConfig,
   resolve: {
     // A faithful Node stand-in for the native module, rather than a mock in every test that reaches it.
-    alias: {
-      'expo-crypto': fileURLToPath(
-        new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
-      )
-    }
+    alias: [
+      {
+        find: /^\.\/mobile-agent-icon-assets$/,
+        replacement: fileURLToPath(
+          new URL('./src/test-support/mobile-agent-icon-assets-node.ts', import.meta.url)
+        )
+      },
+      {
+        find: 'expo-crypto',
+        replacement: fileURLToPath(
+          new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
+        )
+      },
+      {
+        find: 'expo-haptics',
+        replacement: fileURLToPath(
+          new URL('./src/test-support/expo-haptics-node.ts', import.meta.url)
+        )
+      }
+    ]
   },
   test: {
     // Web renderer tests must resolve the SVG/icon libraries through the same host aliases.

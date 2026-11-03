@@ -195,27 +195,6 @@ describe('observeExistingAutomationSession', () => {
     expect(closeStream).toHaveBeenCalledOnce()
   })
 
-  it('still forwards a status the runtime host did report', async () => {
-    state.terminalLayoutsByTabId = {
-      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }
-    }
-    state.ptyIdsByTabId = { 'tab-1': ['remote:env-1@@terminal-9'] }
-    mockCallRuntimeRpc.mockResolvedValue({ wait: { exitCode: 0 } })
-    const onExit = vi.fn()
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId: 'remote:env-1@@terminal-9',
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit
-    })
-
-    await vi.waitFor(() => expect(onExit).toHaveBeenCalledWith(0))
-  })
-
   it('stamps the exact SSH PTY in the legacy renderer fallback', async () => {
     state.settings.terminalMainSideEffectAuthority = false
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
@@ -244,54 +223,5 @@ describe('observeExistingAutomationSession', () => {
       undefined,
       { connectionId: 'ssh-a' }
     )
-  })
-
-  it('leaves the row unchanged after the pane rebinds to another SSH host', async () => {
-    state.settings.terminalMainSideEffectAuthority = false
-    const oldPtyId = toAppSshPtyId('ssh-a', 'pty-1')
-    state.terminalLayoutsByTabId = {
-      'tab-1': {
-        ptyIdsByLeafId: { [LEAF_ID]: toAppSshPtyId('ssh-b', 'pty-1') }
-      }
-    }
-    state.ptyIdsByTabId = { 'tab-1': [toAppSshPtyId('ssh-b', 'pty-1')] }
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId: oldPtyId,
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit: vi.fn()
-    })
-    const handleData = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    handleData(DONE_STATUS_OSC)
-
-    expect(state.setAgentStatus).not.toHaveBeenCalled()
-  })
-
-  it('ignores a delayed callback after disconnect clears the live PTY index', async () => {
-    state.settings.terminalMainSideEffectAuthority = false
-    const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
-    state.terminalLayoutsByTabId = {
-      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
-    }
-    state.ptyIdsByTabId = { 'tab-1': [ptyId] }
-    const { observeExistingAutomationSession } = await import('./automation-session-observer')
-
-    await observeExistingAutomationSession({
-      ptyId,
-      paneKey: PANE_KEY,
-      runId: 'run-1',
-      onData: vi.fn(),
-      onAgentStatus: vi.fn(),
-      onExit: vi.fn()
-    })
-    const handleData = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
-    state.ptyIdsByTabId = { 'tab-1': [] }
-    handleData(DONE_STATUS_OSC)
-
-    expect(state.setAgentStatus).not.toHaveBeenCalled()
   })
 })

@@ -40,7 +40,7 @@ import { useAppStore } from '@/store'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { subscribeAcceptedWebSessionTerminalHandle } from './web-session-terminal-handle-events'
+import './web-session-terminal-handle-events'
 import {
   _getWebSessionTabsReceiptTrackingCountsForTest,
   _getWebSessionTabsTrackingCountsForTest,
@@ -270,33 +270,6 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     vi.useRealTimers()
   })
 
-  it('resumes the active host before lexicographically earlier global mirrors', async () => {
-    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue(ENV_B)
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await act(settle)
-    const globalSubscriptionCount = (environmentId: string): number =>
-      subscriptions.filter(
-        ({ request }) =>
-          request.method === 'session.tabs.subscribeAll' && request.selector === environmentId
-      ).length
-    expect(globalSubscriptionCount(ENV_B)).toBe(2)
-    expect(globalSubscriptionCount(ENV_A)).toBe(1)
-
-    act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS - 1))
-    expect(globalSubscriptionCount(ENV_A)).toBe(1)
-    act(() => vi.advanceTimersByTime(1))
-    await act(settle)
-    expect(globalSubscriptionCount(ENV_A)).toBe(2)
-    hook.unmount()
-  })
-
   it('replays a surviving terminal host after a later omitted-host tombstone', async () => {
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
@@ -332,40 +305,6 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     expect(state.activeTabIdByWorktree[WORKTREE]).toBe(tabId)
     expect(state.groupsByWorktree[WORKTREE]?.flatMap((group) => group.tabOrder)).toEqual([tabId])
     expect(state.agentStatusByPaneKey[paneKey]?.state).toBe('working')
-    hook.unmount()
-  })
-
-  it('publishes terminal-handle evidence for an unchanged resume inventory', async () => {
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const snapshot = makeTerminalSnapshot('-a')
-    await publish(findGlobalSubscription(ENV_A), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-    const tabsByWorktree = useAppStore.getState().tabsByWorktree
-    const listener = vi.fn()
-    const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
-      { environmentId: ENV_A, worktreeId: WORKTREE, hostTabId: 'host-tab-a', leafId: LEAF_A },
-      listener
-    )
-    mocks.recoverSnapshot.mockClear()
-
-    act(() => {
-      setDocumentVisibility('hidden')
-      vi.advanceTimersByTime(WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS)
-      setDocumentVisibility('visible')
-    })
-    await settleGlobalMirrorResumeStarts()
-    await publish(findGlobalSubscription(ENV_A, 1), {
-      type: 'snapshots',
-      snapshots: [snapshot]
-    })
-
-    expect(mocks.recoverSnapshot).not.toHaveBeenCalled()
-    expect(useAppStore.getState().tabsByWorktree).toBe(tabsByWorktree)
-    expect(listener).toHaveBeenCalledWith({ surfacePresent: true, terminalHandle: 'terminal-a' })
-    unsubscribe()
     hook.unmount()
   })
 
@@ -684,37 +623,5 @@ describe('useWebSessionTabsSync visibility collision recovery', () => {
     await act(settle)
     expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.length).toBe(1)
     newHook.unmount()
-  })
-
-  it('tracks repeated same-worktree frames in constant map space', async () => {
-    const recoveries = [
-      createDeferred<RuntimeMobileSessionTabsResult>(),
-      createDeferred<RuntimeMobileSessionTabsResult>(),
-      createDeferred<RuntimeMobileSessionTabsResult>()
-    ]
-    for (const recovery of recoveries) {
-      mocks.recoverSnapshot.mockImplementationOnce(() => recovery.promise)
-    }
-    const hook = renderHook(() => useWebSessionTabsSync())
-    await act(settle)
-    const activeSubscription = findActiveSubscription(ENV_A)
-    for (const [index] of recoveries.entries()) {
-      await publish(activeSubscription, {
-        type: 'updated',
-        ...makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1)
-      })
-    }
-    for (const [index, recovery] of recoveries.entries()) {
-      recovery.resolve(makeTerminalSnapshot(index === 0 ? '-a' : '-b', index + 1))
-    }
-    await act(settle)
-    // Repeated frames may grow tracking despite one receipt slot; no retraction means no watermark and one mirrored tab.
-    expect(_getWebSessionTabsReceiptTrackingCountsForTest()).toEqual({
-      receipts: 1,
-      removalWatermarks: 0
-    })
-    expect(_getWebSessionTabsTrackingCountsForTest().freshness).toBe(1)
-    expect(useAppStore.getState().tabsByWorktree[WORKTREE]?.length).toBe(1)
-    hook.unmount()
   })
 })

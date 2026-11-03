@@ -1,12 +1,12 @@
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as BackgroundDistroGateModule from '../../../wsl-background-distro-gate'
+import type * as BackgroundDistroGateModule from '../../../wsl/discovery/wsl-background-distro-gate'
 import type * as WslMoveScopeGuardModule from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
-import { isWslUserActFor } from '../../../wsl/wsl-user-act-scope'
+import { isWslUserActFor } from '../../../wsl/discovery/wsl-user-act-scope'
 
 const mocks = vi.hoisted(() => ({
   stat: vi.fn<(path: string) => Promise<{ isDirectory(): boolean }>>(),
@@ -16,7 +16,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
   stat: mocks.stat
 }))
-vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof BackgroundDistroGateModule>()),
   readWslDistroRunningState: mocks.readWslDistroRunningState
 }))

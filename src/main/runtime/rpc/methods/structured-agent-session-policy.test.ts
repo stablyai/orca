@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   createSupportFollowsHostSetting,
   isStructuredNativeChatDefaultFor,

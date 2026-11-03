@@ -8,7 +8,7 @@ import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 import { stablePaneHasLivePty } from '@/lib/sleeping-agent-pane-ownership'
 import {

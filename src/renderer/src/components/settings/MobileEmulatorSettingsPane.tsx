@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AndroidLogo, IosBrandIcon } from '../mobile/MobileBrandIcons'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
-import { SearchableSetting } from './SearchableSetting'
-import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
+import { SearchableSetting } from './section-layout/SearchableSetting'
+import { SettingsRow, SettingsSwitchRow } from './form-controls/SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
 import { emulatorErrorText, emulatorMessageText } from '@/lib/emulator-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type SimulatorDeviceRow = {
   name: string
@@ -75,7 +76,9 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
 
 function deviceLabel(device: SimulatorDeviceRow): string {
   const state = device.state.trim()
-  const name = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
+  const runtime = simulatorRuntimeLabel(device.runtime)
+  const bareName = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
+  const name = runtime ? `${bareName} · ${runtime}` : bareName
   if (device.isAvailable === false) {
     return `${name} (Unavailable)`
   }

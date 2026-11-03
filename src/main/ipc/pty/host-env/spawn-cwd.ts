@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { stat } from 'node:fs/promises'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import {
@@ -30,7 +30,7 @@ import {
   blockedWslDistroForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../../wsl/wsl-unc-access-gate'
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * A new PTY needs a workspace no WSL move is taking, and a folder that still exists. Reattaching to

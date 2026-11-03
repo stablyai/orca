@@ -36,7 +36,11 @@ import {
   getCodexHistorySharingTitle
 } from './codex-history-sharing-copy'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
+import {
+  searchKeywords,
+  translateSearchKeyword,
+  uniqueKeywords
+} from './search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 function buildAgentSettingsKeywords(): string[] {
@@ -145,7 +149,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'The default for agents on this computer.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
       ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
       ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI')
     ]
@@ -159,7 +163,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'Choose whether each agent opens as a chat or in its CLI.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
       ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI'),
       ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
       ...translateSearchKeyword('settings.chat.providers.title', 'Providers', {

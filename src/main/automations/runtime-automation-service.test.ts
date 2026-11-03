@@ -3,7 +3,7 @@ import type * as AgentLauncher from './automation-chat-agent-launch'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type { AutomationRunTerminalObserver } from './run-completion-watcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { automationRunOperationId } from './automation-run-operation'
 

@@ -4,9 +4,11 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
-  restoreFollowUpMail,
+  getFollowUpDispatch,
+  hasNewUnreadFollowUpMail,
   FOLLOW_UP_MESSAGE_TYPES,
-  listDispatchesWithFollowUpMail
+  listDispatchesWithFollowUpMail,
+  receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
@@ -47,20 +49,65 @@ export function continueUnreadWorkerMail(
   })
 }
 
+// The Task only points at the mail, which the follow-up's mailbox holds however much there is.
+const FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
+}
+
+// A chat is handed each message whole right after this Task, one at a time.
+const CHAT_FOLLOW_UP_TASK = {
+  subject: 'New messages',
+  body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
+}
+
 async function continueUnreadMail(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<void> {
-  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
-  const first = unread[0]
+  const first = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
   if (!first) {
     clearFollowUpMail(db, dispatchId)
     return
   }
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (worker?.state === 'stopped') {
+    // Orca does not restart a stopped worker on its own; the next send carries its mail.
+    return
+  }
+  if (
+    worker?.state === 'starting' &&
+    worker.runtime_epoch &&
+    worker.runtime_epoch !== runtime.getRuntimeId()
+  ) {
+    if (worker.agent_terminal_handle) {
+      // Its agent may still run, so only the coordinator can tell whether to retry.
+      noticeUnreadMailNotContinued(
+        runtime,
+        db,
+        dispatchId,
+        'Orca restarted while its follow-up was starting'
+      )
+      return
+    }
+    // Interrupted before it placed an agent, so nothing runs and the start can be retried.
+    db.failWorkerStart(dispatchId, worker.stage, 'Orca restarted before this follow-up started.')
+  }
+  if (custodyOf(db, dispatchId) === 'reported' && !hasNewUnreadFollowUpMail(db, dispatchId)) {
+    // Kept marked, so the coordinator's next send carries it; another short Task would only repeat this one.
+    noticeUnreadMailNotContinued(
+      runtime,
+      db,
+      dispatchId,
+      'its follow-up reported without reading the mail it was started for'
+    )
+    return
+  }
+  let plan: ReturnType<typeof planWorkerFollowUp> = undefined
   let outcome: WorkerFollowUpOutcome | undefined
   try {
-    const plan = planWorkerFollowUp(db, dispatchId, first.type)
+    plan = planWorkerFollowUp(db, dispatchId, first.type)
     outcome =
       plan?.kind === 'start'
         ? await startWorkerFollowUp({
@@ -68,19 +115,10 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: {
-              subject:
-                unread.length === 1
-                  ? first.subject
-                  : `${first.subject} (+${unread.length - 1} more)`,
-              body:
-                unread.length === 1
-                  ? first.body || first.subject
-                  : unread
-                      .map((message) => `${message.subject}\n${message.body}`.trim())
-                      .join('\n\n')
-            },
-            consumesMessageIds: unread.map((message) => message.id)
+            message: receivesMailWhole(plan.latest.assignee_handle)
+              ? CHAT_FOLLOW_UP_TASK
+              : FOLLOW_UP_TASK,
+            takesMailOf: dispatchId
           })
         : plan
   } catch (error) {
@@ -91,6 +129,10 @@ async function continueUnreadMail(
       dispatchId,
       error instanceof Error ? error.message : String(error)
     )
+    const claimed = plan?.kind === 'start' ? getFollowUpDispatch(db, plan.latest.id) : undefined
+    if (claimed) {
+      markUnreadFollowUpMail(db, claimed.id)
+    }
     return
   }
   const startedId = outcome?.kind === 'started' ? outcome.receipt.dispatchId : undefined
@@ -99,13 +141,14 @@ async function continueUnreadMail(
     return
   }
   if (outcome?.kind === 'started' && custodyOf(db, followUpId) === 'failed') {
-    // What it took goes back with the rest of the worker's held mail.
-    restoreFollowUpMail(
+    // The mail it took stays unread on it, marked below, for the next send.
+    const worker = db.getWorkerDispatch(followUpId)
+    noticeUnreadMailNotContinued(
+      runtime,
       db,
-      unread.map((message) => message.id)
+      dispatchId,
+      worker?.last_error ?? worker?.state ?? 'unknown'
     )
-    // A report replayed while it started may have cleared the marker the restored mail needs.
-    markUnreadFollowUpMail(db, dispatchId)
   }
   passHeldWorkerMail(runtime, db, followUpId)
 }
@@ -129,19 +172,24 @@ export function passHeldWorkerMail(
   db: OrchestrationDb,
   followUpId: string
 ): void {
-  const custody = custodyOf(db, followUpId)
-  if (custody === 'starting') {
-    return
-  }
-  const worker = db.getWorkerDispatch(followUpId)
+  // The follow-up's claim and the moves below re-address mail a chat may still hold as a card: the
+  // lineage's mailboxes are the only ones whose cards can go stale.
   const seen = new Set([followUpId])
-  let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id
   for (
-    ;
+    let source = db.getDispatchContextById(followUpId)?.follow_up_of_dispatch_id;
     source && !seen.has(source);
     source = db.getDispatchContextById(source)?.follow_up_of_dispatch_id
   ) {
     seen.add(source)
+  }
+  const lineageMailboxes = [...seen].map((id) => `dispatch:${id}`)
+  const custody = custodyOf(db, followUpId)
+  if (custody === 'starting') {
+    runtime.withdrawStaleChatMail(lineageMailboxes)
+    return
+  }
+  const worker = db.getWorkerDispatch(followUpId)
+  for (const source of [...seen].slice(1)) {
     const first = db.getDispatchContextById(source)?.follow_up_mail_at
       ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
       : undefined
@@ -155,7 +203,9 @@ export function passHeldWorkerMail(
         page = db.routeUnreadDirectMessagesToDispatchMailbox(
           followUpId,
           first.run_id,
-          `dispatch:${source}`
+          `dispatch:${source}`,
+          undefined,
+          true
         )
         for (const type of custody === 'failed' ? [] : page.types) {
           runtime.notifyMessageArrived(`dispatch:${followUpId}`, type)
@@ -164,9 +214,17 @@ export function passHeldWorkerMail(
     }
     clearFollowUpMail(db, source)
   }
-  if (custody !== 'ready') {
+  if (custody === 'ready') {
+    // A working worker's own report marks whatever it leaves unread.
+    clearFollowUpMail(db, followUpId)
+  } else {
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
+  }
+  runtime.withdrawStaleChatMail(lineageMailboxes)
+  if (custody === 'ready') {
+    // Its Task is in: a chat's moved mail follows it, each message whole.
+    runtime.deliverPendingMessagesForHandle(`dispatch:${followUpId}`)
   }
   if (custody === 'reported') {
     continueUnreadWorkerMail(runtime, db, followUpId)
@@ -196,7 +254,7 @@ function noticeUnreadMailNotContinued(
       mailbox: () => dispatchReportMailbox(db, dispatch),
       describe: (task) => ({
         subject: 'Mail did not reach the finished worker',
-        body: `Orca could not continue the worker of ${task} with the mail it had not read before reporting: ${reason}. The mail is kept; send to dispatch:${dispatchId} again to retry.`
+        body: `Orca could not continue the worker of ${task} with the mail it had not read before reporting: ${reason}. The mail is kept for your next send to dispatch:${dispatchId}.`
       }),
       payload: { dispatchId, reason }
     },

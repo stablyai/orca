@@ -6,7 +6,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '.
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
   type WorktreeSymlinkPathSuggestion

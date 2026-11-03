@@ -1,10 +1,10 @@
-import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
-} from '../../../src/shared/structured-agent-session-stop-join'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-stop-join'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,

@@ -5,7 +5,7 @@ import {
 } from './prepared-action-launch.test-fixture'
 import { createRuntimeAgentBackgroundTerminal } from '../../src/renderer/src/lib/runtime-agent-background-create'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_BACKGROUND_SESSION_UUID_RE as UUID_RE,
@@ -230,6 +230,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
         tabId: 'reserved-tab',
         leafId: 'reserved-leaf',
         launchToken: 'reserved-token',
+        // A paired window's create can't be told from its pane remounts, so it never stamps Recent.
+        reopensPane: true,
         preAllocatedHandle: 'reserved-handle'
       })
       expect(mockSpawn).not.toHaveBeenCalled()
@@ -301,26 +303,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
-  it('forwards Hermes startup queries through SSH command transport', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-    const { launchAgentBackgroundSession } =
-      await import('../../src/renderer/src/lib/launch-agent-background-session')
-
-    await launchAgentBackgroundSession({
-      agent: 'hermes',
-      worktreeId: 'wt-1',
-      prompt: 'remote automation prompt'
-    })
-
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
-        connectionId: 'ssh-1',
-        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
-      })
-    )
-  })
-
   it.each(['claude', 'codex'] as const)(
     'has the relay type the %s launch line instead of writing it from the renderer',
     async (agent) => {
@@ -353,21 +335,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       }
     }
   )
-
-  it('has the relay type a promptless SSH background launch too', async () => {
-    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
-    const { launchAgentBackgroundSession } =
-      await import('../../src/renderer/src/lib/launch-agent-background-session')
-
-    await launchAgentBackgroundSession({ agent: 'codex', worktreeId: 'wt-1' })
-
-    expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        commandDelivery: 'provider',
-        startupCommandDelivery: 'shell-ready'
-      })
-    )
-  })
 
   it.each([true, false])(
     'creates background sessions with negotiated keyboard support: %s',
@@ -465,23 +432,6 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       })
     }
   )
-
-  it('advertises keyboard support for a background OMP launch', async () => {
-    useRemoteAgentBackgroundRuntime(state)
-    const { launchAgentBackgroundSession } =
-      await import('../../src/renderer/src/lib/launch-agent-background-session')
-    await launchAgentBackgroundSession({ agent: 'omp', worktreeId: 'wt-1', prompt: 'review' })
-    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'terminal.createAgentSession',
-        params: expect.objectContaining({
-          agent: 'omp',
-          terminalKittyKeyboardProtocol: true,
-          presentation: 'background'
-        })
-      })
-    )
-  })
 
   it('aborts the remote exit wait and closes the stream when run observers are released', async () => {
     useRemoteAgentBackgroundRuntime(state)

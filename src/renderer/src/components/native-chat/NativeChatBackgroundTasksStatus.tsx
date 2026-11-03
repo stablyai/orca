@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
   AgentChildRowModel
@@ -169,7 +169,7 @@ export function NativeChatBackgroundTasksStatus(props: {
   return (
     <div
       data-native-chat-background-tasks="true"
-      className="group/tasks shrink-0 bg-chat-canvas px-3 pt-2 sm:px-4"
+      className="group/tasks shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
     >
       {/* When the goal tab is the next sibling, take its width and share its top edge. */}
       <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:px-2">

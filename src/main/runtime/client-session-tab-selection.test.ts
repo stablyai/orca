@@ -481,3 +481,22 @@ describe('client session-tab selection', () => {
     })
   })
 })
+
+it('reopening caller visibility retains host-follow policy without changing a bystander close', () => {
+  const store = new ClientSessionTabSelectionStore()
+  const tabs = browserStrip(['a', 'b'])
+  store.project(tabs, 'caller')
+  store.project(tabs, 'bystander')
+  store.forgetTabs('wt-1', ['a'])
+  const before = store.project(tabs, 'caller')
+  expect(before.activeTabId).toBe('b')
+  expect(store.serialize()).toEqual({})
+  const reopened = store.reopen(tabs, 'caller', 'a')
+  expect(reopened.activeTabId).toBe('a')
+  expect(store.project(tabs, 'caller').activeTabId).toBe('a')
+  expect(store.project(tabs, 'bystander').activeTabId).toBe('b')
+  expect(
+    store.project(browserStrip(['a', 'b'], { hostActiveTabId: 'b' }), 'caller').activeTabId
+  ).toBe('b')
+  expect(store.serialize()).toEqual({})
+})

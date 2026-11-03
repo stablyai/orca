@@ -22,7 +22,7 @@ afterEach(() => {
   expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as EditNormalization from '../../../../shared/native-chat/tools/native-chat-edit-normalize'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'

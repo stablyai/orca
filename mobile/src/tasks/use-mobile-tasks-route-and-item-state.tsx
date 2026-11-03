@@ -22,7 +22,6 @@ import { newTabRepoListRead } from '../session/mobile-session-read-operations'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useTaskHostRepos } from './use-task-host-repos'
 import {
-  type ActionableTaskItem,
   DEFAULT_LINEAR_DISPLAY_PROPERTIES,
   type GitHubPreset,
   type GitHubProjectRow,
@@ -48,6 +47,7 @@ import {
   getTaskPresetQuery
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
+import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
@@ -170,13 +170,15 @@ export function useMobileTasksRouteAndItemState() {
   const [linearTeams, setLinearTeams] = useState<LinearTeam[]>([])
   const [creatingTask, setCreatingTask] = useState(false)
   const [loading, setLoading] = useState(false)
+  // False until a list read settles, so an unread list is not shown as an empty one.
+  const [taskListSettled, setTaskListSettled] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [tasksSupportState, setTasksSupportState] = useState<TasksSupportState>({
     kind: 'unknown',
     client: null
   })
   const [error, setError] = useState('')
-  const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(null)
+  const itemSelection = useMobileTasksItemSelection()
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
@@ -333,14 +335,15 @@ export function useMobileTasksRouteAndItemState() {
     setCreatingTask,
     loading,
     setLoading,
+    taskListSettled,
+    setTaskListSettled,
     refreshing,
     setRefreshing,
     tasksSupportState,
     setTasksSupportState,
     error,
     setError,
-    actionItem,
-    setActionItem,
+    ...itemSelection,
     mergeMethodTaskItem,
     setMergeMethodTaskItem,
     mergeMethodProjectRow,

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const entryMap = useAppStore((state) => state.remoteServerUpdates)

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
@@ -25,7 +25,10 @@ const {
   getConfiguredBranchPrefixMock: vi.fn((_settings: unknown, username: string | null) => username)
 }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: resolveLocalGitUsernameMock }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,

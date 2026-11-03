@@ -248,11 +248,20 @@ export function setupFloatingTerminalPanelTest(): void {
   })
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
   vi.stubGlobal('HTMLElement', class {})
+  vi.stubGlobal(
+    'MutationObserver',
+    class {
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
   vi.stubGlobal('localStorage', localStorage)
   // Provide focus/listener defaults; tests may replace activeElement while retaining effect-safe listeners.
   vi.stubGlobal('document', {
     activeElement: null,
     addEventListener: vi.fn(),
+    documentElement: {},
+    querySelectorAll: vi.fn(() => []),
     removeEventListener: vi.fn()
   })
 }

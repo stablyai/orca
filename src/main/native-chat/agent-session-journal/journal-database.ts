@@ -74,6 +74,10 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureJournalOutcomeTables(probe)
+    // Sender identity follows clear predecessors without scanning saved conversations.
+    probe.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+      ON agent_session_records (CASE WHEN json_valid(record_json)
+        THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

@@ -10,15 +10,25 @@ import {
   pluginGitConfigArgs,
   pluginGitFetchCommitArgs
 } from '../../../shared/plugins/installation/plugin-git-arguments'
-import { gitExecFileAsync } from '../../git/runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../../git/runner'
 import { MAX_PLUGIN_TOTAL_BYTES } from '../plugin-content-hash'
-import { materializePluginGitTree } from './plugin-git-tree'
+import { materializePluginGitTree, type PluginGitBytesRunner } from './plugin-git-tree'
 
 const PLUGIN_GIT_TIMEOUT_MS = 120_000
 // Why headroom over the tree cap: a depth-1 pack of incompressible files carries per-object overhead.
 export const PLUGIN_GIT_DOWNLOAD_MAX_BYTES = MAX_PLUGIN_TOTAL_BYTES + 16 * 1024 * 1024
 const DOWNLOAD_POLL_MS = 200
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
+
+const mainProcessGitBytes: PluginGitBytesRunner = async (args, options) =>
+  (
+    await gitExecFileAsyncBuffer(args, {
+      cwd: options.cwd,
+      timeout: options.timeoutMs,
+      maxBuffer: options.maxBytes,
+      ...(options.stdin !== undefined ? { stdin: options.stdin } : {})
+    })
+  ).stdout
 
 /** Overrides any user `protocol.<helper>.allow`, so an insteadOf rewrite cannot reach a custom
  *  git-remote-* helper; a stricter inherited allowlist still narrows it. */
@@ -179,7 +189,8 @@ export async function checkoutPluginGitSource(input: {
         repository,
         commit: resolved,
         destination: input.destination,
-        ...(input.path ? { path: input.path } : {})
+        ...(input.path ? { path: input.path } : {}),
+        git: mainProcessGitBytes
       })
   )
   return commit

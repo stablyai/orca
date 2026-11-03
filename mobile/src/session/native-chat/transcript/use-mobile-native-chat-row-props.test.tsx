@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { equalMobileNativeChatRowContent as equal } from './mobile-native-chat-row-projection'
 
 it('keeps opaque wide payloads out of comparison', () => {

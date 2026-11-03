@@ -6,19 +6,19 @@ import { join } from 'node:path'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+} from './agent-session/structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_ID,

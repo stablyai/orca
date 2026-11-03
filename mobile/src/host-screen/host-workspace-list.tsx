@@ -8,13 +8,16 @@ import {
   Text,
   View
 } from 'react-native'
-import { ChevronDown, ChevronRight, FolderTree, Pin } from 'lucide-react-native'
+import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
+import { Presence } from '../components/AutoHeight'
+import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../components/WorktreeListRow'
+import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
@@ -91,16 +94,39 @@ export function HostWorkspaceList({
     [worktreeCardProperties, compactWorktreeCards, newCardStyle]
   )
 
+  // Group headers can exist before any row loads; the state then sits under them, not above the title.
+  const listState =
+    controller.feed?.kind === 'reopen' ? null : (
+      <HostWorkspaceListStates
+        connState={connState}
+        connectionVerdict={controller.connectionVerdict}
+        // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
+        worktreesLoaded={controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded}
+        // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
+        displayCount={controller.feed ? sections.length : displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={state.catalogError}
+        search={state.search}
+        activeFilterCount={controller.activeFilterCount}
+        bottomInset={hasRows ? 0 : Math.max(bottomBarHeight, insets.bottom)}
+        onClearSearch={() => state.setSearch('')}
+        onReconnect={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
+      />
+    )
+
   return (
     <>
-      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
-        <AuthFailedBanner
-          canRetry={!!hostId && forceReconnectHost !== null}
-          onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
-          onRepair={() => router.push('/pair-scan')}
-          onRemove={() => state.setConfirmRemoveHost(true)}
-        />
-      )}
+      {/* Banners ease in and out; a dismissed one keeps its message while it leaves. */}
+      <Presence>
+        {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
+          <AuthFailedBanner
+            canRetry={!!hostId && forceReconnectHost !== null}
+            onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
+            onRepair={() => router.push('/pair-scan')}
+            onRemove={() => state.setConfirmRemoveHost(true)}
+          />
+        )}
+      </Presence>
 
       {connState !== 'connected' &&
       !relayRecovery.pairingRejected &&
@@ -113,53 +139,47 @@ export function HostWorkspaceList({
         />
       ) : null}
 
-      {routeNotice && (
-        <HostRouteNoticeBanner
-          message={routeNotice}
-          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
-        />
-      )}
-      {state.serverNotice ? (
-        <HostRouteNoticeBanner
-          message={state.serverNotice}
-          onDismiss={() => state.setServerNotice(null)}
-        />
-      ) : null}
+      <Presence>
+        {routeNotice && (
+          <HostRouteNoticeBanner
+            message={routeNotice}
+            onDismiss={() => setDismissedNotice(noticeParam ?? null)}
+          />
+        )}
+      </Presence>
+      <Presence>
+        {state.serverNotice ? (
+          <HostRouteNoticeBanner
+            message={state.serverNotice}
+            onDismiss={() => state.setServerNotice(null)}
+          />
+        ) : null}
+      </Presence>
 
       {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
-      {state.actionError !== '' && (
-        <HostRouteNoticeBanner
-          message={state.actionError}
-          tone="failure"
-          onDismiss={() => state.setActionError('')}
-        />
-      )}
+      <Presence>
+        {state.actionError !== '' && (
+          <HostRouteNoticeBanner
+            message={state.actionError}
+            tone="failure"
+            onDismiss={() => state.setActionError('')}
+          />
+        )}
+      </Presence>
 
       {hasRows ? null : pageTitle?.element}
 
       {controller.feed?.kind === 'reopen' ? (
         <HostWorkspaceListReopen aboveRows={sections.length > 0} />
-      ) : (
-        <HostWorkspaceListStates
-          connState={connState}
-          connectionVerdict={controller.connectionVerdict}
-          // A feed-built list is loaded once the feed installs; rows draw before worktree.ps answers.
-          worktreesLoaded={
-            controller.feed ? controller.feed.kind === 'ready' : state.worktreesLoaded
-          }
-          // A feed-built list counts its sections, so collapsed ones and a failing worktree.ps never blank it.
-          displayCount={controller.feed ? sections.length : displayWorktrees.length}
-          sectionCount={sections.length}
-          catalogError={state.catalogError}
-          search={state.search}
-          activeFilterCount={controller.activeFilterCount}
-        />
+      ) : hasRows ? null : (
+        listState
       )}
 
       {sections.length > 0 && (
         <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
           ListHeaderComponent={pageTitle?.element}
+          ListFooterComponent={listState}
           onScroll={pageTitle?.collapsing.onScroll}
           {...pageTitle?.collapsing.touchHandlers}
           scrollEventThrottle={16}
@@ -199,22 +219,24 @@ export function HostWorkspaceList({
             return (
               <>
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.sectionHeader,
                     section.projectGroupDepth
                       ? {
                           paddingLeft:
-                            spacing.lg + projectGroupHeaderIndent(section.projectGroupDepth)
+                            WORKTREE_ROW_LAYOUT.indicatorInset +
+                            projectGroupHeaderIndent(section.projectGroupDepth)
                         }
-                      : null
+                      : null,
+                    pressed && { backgroundColor: colors.translucentFill }
                   ]}
                   onPress={() => settings.toggleCollapsed(collapseKey)}
                 >
-                  {isCollapsed ? (
-                    <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  ) : (
-                    <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  )}
+                  <View style={styles.sectionChevron}>
+                    <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>
+                      <ChevronRight size={12} color={colors.textMuted} />
+                    </DisclosureChevron>
+                  </View>
                   {section.icon === 'pin' && (
                     <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
                   )}

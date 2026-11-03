@@ -1,6 +1,6 @@
 import { View } from 'react-native'
 import { MobileSegmentedControl } from '../../../components/MobileSegmentedControl'
-import { SectionHeader } from '../../../components/list/SectionHeader'
+import { SectionHeader } from '../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   sessionOptionDispatchUnconfirmed,
@@ -10,7 +10,7 @@ import {
 import {
   nativeChatSessionChoiceShortLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
 

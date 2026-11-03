@@ -1,11 +1,12 @@
 import { app } from 'electron'
-import { createWslDistroHolder, type WslDistroHolder } from '../wsl/wsl-distro-holder'
+import { createWslDistroHolder } from '../wsl/discovery/wsl-distro-holder'
+import type { WslDistroHolder } from '../wsl/discovery/wsl-distro-holder-types'
 import { ensureWindowsAppDataPath } from './windows-app-data-path'
 import {
   stopWslHostServersForUninstall,
   wslHostUninstallStopDependencies,
   type WslHostUninstallStopDependencies
-} from '../wsl/wsl-host-uninstall-server-stop'
+} from '../wsl/host-lifecycle/wsl-host-uninstall-server-stop'
 
 /** The NSIS uninstaller's flag (config/nsis/orca-installer-hooks.nsh); keep the two in sync. */
 export const WSL_HOLDER_UNINSTALL_FLAG = '--orca-uninstall-release-wsl-holders'
@@ -13,15 +14,20 @@ export const WSL_HOLDER_UNINSTALL_FLAG = '--orca-uninstall-release-wsl-holders'
 export const WSL_SERVER_UNINSTALL_FLAG = '--orca-uninstall-stop-wsl-servers'
 
 // Uninstall must finish even if the process table or a distro never answers.
-const UNINSTALL_RELEASE_TIMEOUT_MS = 45_000
+const UNINSTALL_RELEASE_TIMEOUT_MS = 60_000
 
-/** Exit code 0 only when every recorded holder is proven gone; unverifiable ones are left running.
- * Then each running host's server is stopped too, best effort, so its distro can stop. */
+/** Each running host's server first, best effort, while its holder still keeps the distro up; then
+ * the holders. Exit code 0 only when every recorded holder is proven gone. */
 export async function releaseWslHoldersForUninstall(
   holder: WslDistroHolder,
   servers?: WslHostUninstallStopDependencies
 ): Promise<number> {
-  let code: number
+  if (servers) {
+    // Never changes the exit code: a server left running costs memory, not a broken uninstall.
+    await stopWslHostServersForUninstall(servers).catch((error: unknown) => {
+      console.warn('[wsl] uninstall could not stop WSL host servers:', error)
+    })
+  }
   try {
     const released = await holder.releaseAll({ forUninstall: true })
     for (const { distro, state } of released) {
@@ -29,18 +35,11 @@ export async function releaseWslHoldersForUninstall(
         console.warn(`[wsl] uninstall left the ${distro} holder ${state}`)
       }
     }
-    code = released.every(({ state }) => state === 'exited') ? 0 : 1
+    return released.every(({ state }) => state === 'exited') ? 0 : 1
   } catch (error) {
     console.warn('[wsl] uninstall could not release WSL distro holders:', error)
-    code = 1
+    return 1
   }
-  if (servers) {
-    // Never changes the exit code: a server left running costs memory, not a broken uninstall.
-    await stopWslHostServersForUninstall(servers).catch((error: unknown) => {
-      console.warn('[wsl] uninstall could not stop WSL host servers:', error)
-    })
-  }
-  return code
 }
 
 /** Uninstall only: ends the holders this profile recorded and its hosts' servers, so distros can stop. */

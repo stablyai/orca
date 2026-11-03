@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import {

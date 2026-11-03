@@ -33,6 +33,36 @@ describe('scrcpyVideoRegistry', () => {
     expect(scrcpyVideoRegistry.has('dev')).toBe(false)
   })
 
+  it('tells live and late subscribers that the session ended', () => {
+    scrcpyVideoRegistry.register('ended', () => {})
+    const live: ScrcpyVideoEvent['type'][] = []
+    scrcpyVideoRegistry.subscribe('ended', (event) => live.push(event.type))
+
+    scrcpyVideoRegistry.stop('ended')
+    expect(live).toEqual(['end'])
+
+    const late: ScrcpyVideoEvent['type'][] = []
+    scrcpyVideoRegistry.subscribe('ended', (event) => late.push(event.type))
+    expect(late).toEqual(['end'])
+  })
+
+  it('routes control only to the live session registered for the device', () => {
+    const control = { videoSize: () => null, sendControl: () => true }
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
+
+    scrcpyVideoRegistry.register('ctl', () => {})
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    expect(scrcpyVideoRegistry.control('ctl')).toBe(control)
+
+    // A replacement session must not inherit the previous server's control socket.
+    scrcpyVideoRegistry.register('ctl', () => {})
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
+    scrcpyVideoRegistry.attachControl('ctl', control)
+    scrcpyVideoRegistry.stop('ctl')
+    expect(scrcpyVideoRegistry.control('ctl')).toBeNull()
+  })
+
   it('replays the current GOP (keyframe + following deltas) to late subscribers', () => {
     scrcpyVideoRegistry.register('gop', () => {})
     const tag = (event: ScrcpyVideoEvent): string =>

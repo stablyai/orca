@@ -3,14 +3,14 @@ import { dirname, join } from 'node:path'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentModelCatalogEntry,
   serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
-import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.

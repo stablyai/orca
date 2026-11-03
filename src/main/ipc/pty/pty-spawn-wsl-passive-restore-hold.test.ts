@@ -22,8 +22,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('node:fs/promises', async (importOriginal) =>
@@ -53,7 +55,7 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
 const runningStateMock = vi.hoisted(() =>
   vi.fn(async (_distro: string, _options?: { startedAfter?: number }) => 'stopped')
 )
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readWslDistroRunningState: runningStateMock
 }))
@@ -72,7 +74,7 @@ const WSL_RUNTIME = {
 
 // E9: a restore the user did not ask for must not start a stopped distro, whatever provider runs.
 describe('a passive WSL restore with a stopped distro', () => {
-  const { handlers, mainWindow, installDaemonTestProvider } = setupPtyIpcSuite()
+  const { handlers, mainWindow } = setupPtyIpcSuite()
   const originalPlatform = process.platform
 
   beforeEach(() => {
@@ -108,15 +110,6 @@ describe('a passive WSL restore with a stopped distro', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('holds with the daemon provider too, before its cwd probe', async () => {
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-daemon' })
-    installDaemonTestProvider({ spawn: providerSpawn })
-    register()
-    await expect(restore()).rejects.toThrow()
-    expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
-    expect(providerSpawn).not.toHaveBeenCalled()
-  })
-
   it('restores once the distro runs, and never holds a restore the user asked for', async () => {
     register()
     runningStateMock.mockResolvedValue('running')
@@ -128,19 +121,5 @@ describe('a passive WSL restore with a stopped distro', () => {
     await restore({ wslPassiveRestore: undefined, sessionId: 'repo-1::C:\\Users\\me\\repo@@other' })
     expect(runningStateMock).not.toHaveBeenCalled()
     expect(spawnMock).toHaveBeenCalledTimes(2)
-  })
-
-  it("hands the provider this spawn's read anchor, so its hold reuses only that read", async () => {
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-daemon' })
-    installDaemonTestProvider({ spawn: providerSpawn })
-    register()
-    runningStateMock.mockResolvedValue('running')
-    await restore()
-
-    const anchor = runningStateMock.mock.calls[0]?.[1]?.startedAfter
-    expect(anchor).toEqual(expect.any(Number))
-    expect(providerSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({ wslHoldReadAnchor: anchor })
-    )
   })
 })

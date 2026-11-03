@@ -274,6 +274,19 @@ jobs:
           if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
           node node_modules/oxlint/bin/oxlint --config config/oxlint-js-plugins.json --format github src config tests mobile native .github
 
+      # Its single JS-plugin thread ran alone for ~12s as a foreground tail; overlapping it fills idle cores.
+      - name: Reject low-evidence patterns
+        if: '!cancelled()'
+        id: anti-slop
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/sync-anti-slop-plugin.mjs
+          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
+
       - name: Enforce ast-grep rules
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: |
@@ -285,13 +298,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node node_modules/oxfmt/bin/oxfmt --check .
 
-      - name: Reject low-evidence patterns
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: |
-          node config/scripts/sync-anti-slop-plugin.mjs
-          bun --smol node_modules/oxlint/bin/oxlint --config config/oxlint-anti-slop.json src config tests mobile --deny-warnings
-
       - wait: root-lint
+
+      # The type-aware pass needs most of the runner memory.
+      - wait: anti-slop
 
       - name: Enforce focused code-quality plugins
         if: '!cancelled()'
@@ -371,6 +381,19 @@ jobs:
             bun config/scripts/verify-localization-extraction.mjs
           fi
 
+      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
+      # Starts with the compiler: as a foreground step it made the serial chain outlast typecheck.
+      - name: Enforce ratchets
+        if: '!cancelled()'
+        id: ratchets
+        background: true
+        env:
+          PREFLIGHT_PHASE_SELECTED: ${{ needs.code_paths.outputs.static_analysis == 'true' }}
+          PREFLIGHT_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PREFLIGHT_PHASE_SELECTED" != true ] || [ "$PREFLIGHT_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/run-ratchets.mjs
+
       - name: Check Zustand selector fan-out budget
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/zustand-selector-fanout-benchmark.mjs --check
@@ -410,11 +433,6 @@ jobs:
           fi
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
-
-      # Runs every config/scripts/check-*-ratchet(s).mjs, so a new ratchet needs no step here.
-      - name: Enforce ratchets
-        if: needs.code_paths.outputs.static_analysis == 'true'
-        run: node config/scripts/run-ratchets.mjs
 
       - name: Check Node runtime pin
         if: needs.code_paths.outputs.static_analysis == 'true'
@@ -536,6 +554,8 @@ jobs:
 
       - wait: test-file-runners
 
+      - wait: ratchets
+
       - name: Test Mobile CI tools and runtime routing
         if: needs.code_paths.outputs.mobile_ci_tools == 'true'
         env:
@@ -547,7 +567,6 @@ jobs:
           config/scripts/mobile-release-check-scope.test.mjs
           config/scripts/mobile-test-change-scope.test.mjs
           config/scripts/pr-ready-check-reuse.test.mjs
-          config/scripts/ci-dependency-download-cache.test.mjs
           config/scripts/win32-test-lane-registration.test.mjs
           config/scripts/vitest-node-runtime-boundary.test.ts
           config/scripts/vitest-sqlite-runtime-boundary.test.ts
@@ -611,8 +630,8 @@ jobs:
           fi
           pnpm exec vitest run --config config/vitest.config.ts \
             src/shared/git-binary-compatibility.test.ts \
-            src/main/git/worktree-safety-real-git.test.ts \
-            src/main/git/worktree-rebase-update-refs-real-git.test.ts
+            src/main/git/worktrees/creation/worktree-safety-real-git.test.ts \
+            src/main/git/worktrees/removal/worktree-rebase-update-refs-real-git.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -669,7 +688,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/pty/codex-no-daemon-binary-contract.test.ts
+            src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts
 
       # Test pins plus latest because Codex’s managed-home approval hash can change before users encounter review prompts.
       - name: Verify Codex hook file-entry contract (pinned)
@@ -708,7 +727,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_TRUST_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/agent-trust-presets.test.ts
+            src/main/agent-launch/trust/agent-trust-presets.test.ts
 
   xterm_patch_sync:
     name: xterm patch sync
@@ -831,22 +850,22 @@ jobs:
             src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/pty/codex-shell-launch-preflight.test.ts \
-            src/main/pty/codex-shell-no-daemon.test.ts \
-            src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
-            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
-            src/main/fish-xdg-data-dirs-handoff.test.ts \
-            src/main/shell-startup-feature-channel.test.ts \
-            src/main/zsh-deferred-startup-line-init.live-shell.test.ts \
-            src/main/terminal-history-fish-session.node-pty.test.ts \
-            src/main/zsh-scoped-histfile.live-shell.test.ts \
-            src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            src/main/pty/shell-startup/codex-shell-launch-preflight.test.ts \
+            src/main/pty/shell-startup/codex-shell-no-daemon.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts \
+            src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts \
+            src/main/pty/shell-startup/fish-xdg-data-dirs-handoff.test.ts \
+            src/main/pty/shell-startup/shell-startup-feature-channel.test.ts \
+            src/main/pty/shell-startup/zsh-deferred-startup-line-init.live-shell.test.ts \
+            src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
+            src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
-            src/main/wsl-sh-cwd-report.node-pty.test.ts \
+            src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
@@ -858,6 +877,8 @@ jobs:
     uses: ./.github/workflows/unit-plan.yml
     with:
       selection_mode: ${{ vars.ORCA_UNIT_SELECTION_MODE || 'shadow' }}
+      # Only selected drafts apply a plan before tests; everything else defers shadow analysis.
+      defer_shadow: ${{ !(vars.ORCA_UNIT_SELECTION_MODE == 'selected' && github.event.pull_request.draft == true) }}
 
   test:
     needs: [code_paths, unit_plan]
@@ -875,15 +896,18 @@ jobs:
       # Restore main's transform cache; the `ci:cold-unit-cache` label or ORCA_UNIT_MODULE_CACHE=off forces cold.
       module_cache: ${{ (vars.ORCA_UNIT_MODULE_CACHE == 'off' || contains(github.event.pull_request.labels.*.name, 'ci:cold-unit-cache')) && 'off' || 'warm' }}
       shards: ${{ needs.unit_plan.outputs.shards }}
+      download_selection_plan: ${{ needs.unit_plan.outputs.selection_planned == 'true' }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
       browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Keep advisory evidence sibling to tests and outside verify.needs; reusable-workflow dependency otherwise added ~36s after last shard.
   unit_selection_evidence:
-    needs: [test]
+    needs: [unit_plan, test]
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
+    with:
+      rebuild_plan: ${{ needs.unit_plan.outputs.selection_planned != 'true' }}
 
   # Isolate two browser/mobile files to avoid every unit shard paying for their installs; test the same shipped bundle plus render/census.
   mobile_web_app:

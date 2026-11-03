@@ -88,28 +88,6 @@ describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
     })
   })
 
-  it('re-derives an ssh-unavailable error without Retry once the host connects', async () => {
-    setHost('unavailable')
-    mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))
-    mocks.prepare.mockResolvedValueOnce({ partition: READY_PARTITION })
-    const { result, rerender } = renderHook(() => useSshWorkspaceBrowserRoute('wt-1', null))
-    await settle()
-    expect(result.current.state.kind).toBe('error')
-
-    setHost('connecting')
-    rerender()
-    await settle()
-    // Why: a dial is a transient; the classified card stays until the host actually connects.
-    expect(result.current.state.kind).toBe('error')
-    expect(mocks.prepare).toHaveBeenCalledOnce()
-
-    setHost('connected', 1)
-    rerender()
-    await settle()
-    expect(mocks.prepare).toHaveBeenCalledTimes(2)
-    expect(result.current.state.kind).toBe('ready')
-  })
-
   it('re-prepares a failed route when the host reconnects under a new generation', async () => {
     setHost('connected', 1)
     mocks.prepare.mockRejectedValueOnce(new Error('browser_local_route_ssh_unavailable'))

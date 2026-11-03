@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionAcquisitionReceipt } from './structured-agent-session-startup-attempt-contract'
 import type {
@@ -57,6 +57,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     mode: AgentChatPermissionChoice
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
+
+  settlePermissionTransition: NonNullable<
+    StructuredAgentSessionAdapter['settlePermissionTransition']
+  > = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
+    Promise.resolve(true)
 
   /** Session support may narrow the owner’s declared rewind, never widen it. */
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (

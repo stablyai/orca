@@ -7,7 +7,6 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { PluginDevelopmentDialog } from '../plugins/dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../plugins/dialogs/PluginInstallDialog'
-import { PluginInstallTrustDialogHost } from '../plugins/dialogs/PluginInstallTrustDialog'
 import { sourceInstallTrustPrompt } from '../plugins/presentation/plugin-install-trust'
 import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PluginRemoveDialog } from '../plugins/dialogs/PluginRemoveDialog'
@@ -16,8 +15,8 @@ import { PluginsHeaderActions } from '../plugins/list/PluginSettingsMenu'
 import { PluginSettingsOverview } from '../plugins/list/PluginSettingsOverview'
 import { PluginsAlphaNotice } from '../plugins/list/PluginsAlphaNotice'
 import { PluginsSectionDescription } from '../plugins/list/PluginsSectionDescription'
-import { getPluginsSectionPresentation } from './plugins-search'
-import { SettingsSection } from './SettingsSection'
+import { getPluginsSectionPresentation } from './plugins/plugins-search'
+import { SettingsSection } from './section-layout/SettingsSection'
 import { usePluginLogs } from '../plugins/state/use-plugin-logs'
 import { usePluginMarketplaceLifecycle } from '../plugins/state/use-plugin-marketplace-lifecycle'
 import { usePluginPageNavigation } from '../plugins/state/use-plugin-page-navigation'
@@ -402,7 +401,6 @@ export function PluginsSettingsSection({
         busy={devPathsBusy}
         onChange={updateDevPaths}
       />
-      <PluginInstallTrustDialogHost />
       <PluginRemoveDialog
         plugin={removePlugin}
         busy={Boolean(removePlugin && busyPluginKeys.has(removePlugin.pluginKey))}

@@ -11,14 +11,16 @@ vi.mock('electron', () => ({
   app: { exit, getPath: () => 'C:\\Users\\u\\AppData\\Roaming\\orca' }
 }))
 vi.mock('./windows-app-data-path', () => ({ ensureWindowsAppDataPath: vi.fn() }))
-vi.mock('../wsl/wsl-distro-holder', () => ({ createWslDistroHolder: () => ({ releaseAll }) }))
-vi.mock('../wsl/wsl-host-uninstall-server-stop', () => ({
+vi.mock('../wsl/discovery/wsl-distro-holder', () => ({
+  createWslDistroHolder: () => ({ releaseAll })
+}))
+vi.mock('../wsl/host-lifecycle/wsl-host-uninstall-server-stop', () => ({
   stopWslHostServersForUninstall: stopServers,
   wslHostUninstallStopDependencies: () => ({ distros: () => [], listRunning: async () => [] })
 }))
 
-import type { WslDistroHolder } from '../wsl/wsl-distro-holder'
-import type { WslHostUninstallStopDependencies } from '../wsl/wsl-host-uninstall-server-stop'
+import type { WslDistroHolder } from '../wsl/discovery/wsl-distro-holder-types'
+import type { WslHostUninstallStopDependencies } from '../wsl/host-lifecycle/wsl-host-uninstall-server-stop'
 import {
   releaseWslHoldersForUninstall,
   runWslHolderUninstallPreflight,
@@ -43,7 +45,7 @@ describe('releaseWslHoldersForUninstall', () => {
     stopServers.mockImplementation(async () => {})
   })
 
-  it('stops the running hosts’ servers after releasing the holders', async () => {
+  it('stops the running hosts’ servers before releasing the holders that keep their distros up', async () => {
     const order: string[] = []
     const holder = holderReleasing([])
     vi.mocked(holder.releaseAll).mockImplementation(async () => {
@@ -55,7 +57,7 @@ describe('releaseWslHoldersForUninstall', () => {
     })
 
     await expect(releaseWslHoldersForUninstall(holder, SERVERS)).resolves.toBe(0)
-    expect(order).toEqual(['release-holders', 'stop-servers'])
+    expect(order).toEqual(['stop-servers', 'release-holders'])
   })
 
   it('keeps the holder verdict as the exit code whatever the server stop does', async () => {

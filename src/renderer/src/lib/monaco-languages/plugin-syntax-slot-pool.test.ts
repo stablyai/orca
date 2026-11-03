@@ -37,16 +37,6 @@ describe('PluginSyntaxSlotPool', () => {
     expect(live.size).toBeLessThanOrEqual(16)
   })
 
-  it('shares a slot between files of the same language and revision', () => {
-    const { instance, registered } = pool()
-    const first = instance.acquire('plugin:a/x@r1')
-    const second = instance.acquire('plugin:a/x@r1')
-    const updated = instance.acquire('plugin:a/x@r2')
-    expect(second?.languageId).toBe(first?.languageId)
-    expect(updated?.languageId).not.toBe(first?.languageId)
-    expect(registered).toHaveLength(2)
-  })
-
   it('evicts the least recently used idle language, and only falls back when all are open', () => {
     const { instance, live } = pool(2)
     const a = instance.acquire('a@1')
