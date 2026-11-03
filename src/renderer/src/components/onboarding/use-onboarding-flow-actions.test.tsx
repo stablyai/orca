@@ -19,7 +19,7 @@ function renderActions(hasSelectedWorkspace: boolean, stepIndex = STEPS.length -
   const update = vi.fn().mockResolvedValue({
     ...getDefaultOnboardingState(),
     outcome: 'completed',
-    closedAt: Date.now()
+    closedAt: 1
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -33,7 +33,7 @@ function renderActions(hasSelectedWorkspace: boolean, stepIndex = STEPS.length -
   const { result } = renderHook(() => {
     const closeWith = useCloseWith({
       onOnboardingChange,
-      startTimeRef: { current: Date.now() },
+      startTimeRef: { current: 1 },
       setError: vi.fn()
     })
     return useOnboardingFlowActions({
