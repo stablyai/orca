@@ -1,4 +1,9 @@
-import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
+import {
+  agentMessageSenderName,
+  type AgentMessageSender,
+  type AgentMessageSource
+} from './agent-session-message-source'
+import { isOrcaTerminalHandle, parseOrcaSessionAddress } from '../orca-session-address'
 import type { AgentStatusEntry } from '../agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
@@ -56,6 +61,7 @@ export function agentMessageHeading(
 }
 
 export function agentMessageSenderLabel(facts: {
+  sender?: AgentMessageSender
   localChat: boolean
   customLabel?: string | null
   conversationName?: string | null
@@ -63,6 +69,9 @@ export function agentMessageSenderLabel(facts: {
   tabLabel?: string | null
   fallback: string
 }): string {
+  if (agentMessageSenderIsNamedSource(facts.sender)) {
+    return facts.snapshotName || agentMessageSenderName(facts.sender?.party.address) || '—'
+  }
   return (
     (facts.localChat && (facts.customLabel?.trim() || facts.conversationName)) ||
     facts.snapshotName ||
@@ -78,9 +87,22 @@ export function agentMessageSavedKind(
   return sender?.agent === 'unknown' ? undefined : sender?.agent
 }
 
-/** A Dispatch address names work, not a pane; every other sender address can be opened. */
+/** Arbitrary CLI sender names are sources, not terminal identities; missing live rows prove nothing. */
+export function agentMessageSenderIsNamedSource(sender: AgentMessageSender | undefined): boolean {
+  return Boolean(
+    sender &&
+    !sender.party.orcaSessionId &&
+    !parseOrcaSessionAddress(sender.party.address) &&
+    !agentMessageSavedKind(sender) &&
+    !sender.party.address.startsWith('dispatch:') &&
+    !isOrcaTerminalHandle(sender.party.address) &&
+    !isOrcaTerminalHandle(sender.party.terminalHandle)
+  )
+}
+
+/** Named sources and Dispatch addresses have no sender pane to open. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
-  return !sender.party.address.startsWith('dispatch:')
+  return !sender.party.address.startsWith('dispatch:') && !agentMessageSenderIsNamedSource(sender)
 }
 
 export function agentMessagePrimarySender(

@@ -148,6 +148,38 @@ const store = {
 
 export const wide = defineFixture({ width: 720, store, render: cards })
 export const narrow = defineFixture({ width: 340, store, render: cards })
+export const commandSource = defineFixture({
+  width: 720,
+  render: () => {
+    const message: NativeChatMessage & { from: AgentMessageSource } = {
+      id: 'command-complete',
+      role: 'user',
+      source: 'transcript',
+      timestamp: 1_800_000_000_000,
+      blocks: [{ type: 'text', text: 'CI completed successfully. The review can continue.' }],
+      from: {
+        kind: 'agent',
+        orchestration: null,
+        senders: [
+          {
+            name: null,
+            party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
+          }
+        ]
+      }
+    }
+    return (
+      <div className="p-4">
+        <NativeChatAgentMessageCard
+          message={message}
+          from={message.from}
+          allowFileUriLinks={false}
+          onRefolded={() => {}}
+        />
+      </div>
+    )
+  }
+})
 export const mail = defineFixture({
   width: 720,
   render: () => {

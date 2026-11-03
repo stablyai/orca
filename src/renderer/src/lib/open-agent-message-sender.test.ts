@@ -81,6 +81,14 @@ beforeEach(() => {
   mocks.focus.mockReturnValue(true)
   mocks.rpc.mockResolvedValue({ ok: true })
 })
+it('does not look up or show agent feedback for a named source, including an old-host target', async () => {
+  await open({ address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null })
+  expect(mocks.rpc).not.toHaveBeenCalled()
+  expect(mocks.focus).not.toHaveBeenCalled()
+  expect(mocks.remoteFocus).not.toHaveBeenCalled()
+  expect(mocks.info).not.toHaveBeenCalled()
+  expect(mocks.toast).not.toHaveBeenCalled()
+})
 it.each([
   ['success', null],
   ...['terminal_exited', 'terminal_gone', 'terminal_handle_stale', 'terminal_not_found'].map(

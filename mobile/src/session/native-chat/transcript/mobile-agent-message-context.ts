@@ -3,6 +3,7 @@ import type { MobileSessionTab } from '../../mobile-session-route-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   agentMessageSenderLabel,
+  agentMessageSenderIsNamedSource,
   agentMessageSenderView,
   type AgentMessageSenderView
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
@@ -70,6 +71,7 @@ export function createMobileAgentMessageSource() {
     name(sender: Sender, fallback: string): string {
       const tab = indexed.get(senderKey(sender))?.tab
       return agentMessageSenderLabel({
+        sender,
         localChat: tab?.type === 'agent-session',
         customLabel: tab?.title,
         snapshotName: sender.name,
@@ -78,6 +80,9 @@ export function createMobileAgentMessageSource() {
       })
     },
     view(sender: Sender | undefined): AgentMessageSenderView {
+      if (agentMessageSenderIsNamedSource(sender)) {
+        return EMPTY_VIEW
+      }
       const key = senderKey(sender)
       const facts = indexed.get(key)
       const tab = facts?.tab
@@ -121,7 +126,7 @@ export function useMobileAgentMessageName(sender: Sender, fallback: string): str
   const read = useCallback(
     () =>
       source?.name(sender, fallback) ??
-      agentMessageSenderLabel({ localChat: false, snapshotName: sender.name, fallback }),
+      agentMessageSenderLabel({ sender, localChat: false, snapshotName: sender.name, fallback }),
     [source, sender, fallback]
   )
   return useSyncExternalStore(source?.subscribe ?? noopSubscribe, read, read)

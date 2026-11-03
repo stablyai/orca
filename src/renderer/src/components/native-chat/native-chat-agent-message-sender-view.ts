@@ -12,7 +12,10 @@ import {
   agentMessageSenderOpens,
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
-import { agentMessageSavedKind } from '../../../../shared/agent-session/agent-message-presentation'
+import {
+  agentMessageSavedKind,
+  agentMessageSenderIsNamedSource
+} from '../../../../shared/agent-session/agent-message-presentation'
 
 /** The card's sender, rebuilt only from the fields resolution reads, and where it runs now. */
 function useSenderLocation(
@@ -21,6 +24,7 @@ function useSenderLocation(
   target: RuntimeClientTarget | undefined,
   dispatchId: string | undefined
 ) {
+  sender = agentMessageSenderIsNamedSource(sender) ? undefined : sender
   const address = sender?.party.address
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle

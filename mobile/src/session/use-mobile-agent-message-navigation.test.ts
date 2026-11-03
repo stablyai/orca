@@ -176,6 +176,24 @@ function mount(
   }
 }
 
+it('does not change selection or contact the host for a named command source', () => {
+  const send = vi.fn<Parameters<typeof mount>[0]>(async () => reply({}))
+  const run = mount(send)
+  run.open({
+    ...from,
+    senders: [
+      {
+        name: null,
+        party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
+      }
+    ]
+  })
+  expect(send).not.toHaveBeenCalled()
+  expect(run.sourceSelection.selectedSessionTabIdRef.current).toBeNull()
+  expect(run.navigate).not.toHaveBeenCalled()
+  expect(run.toast).not.toHaveBeenCalled()
+})
+
 it.each(['claude', 'codex'] as const)(
   'opens a closed %s sender through the shared opener and real phone receiver',
   async (agent) => {

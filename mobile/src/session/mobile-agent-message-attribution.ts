@@ -1,5 +1,9 @@
 import { translate } from '../i18n/mobile-i18n'
 import {
+  agentMessageSenderIsNamedSource,
+  agentMessageSenderLabel
+} from '../../../src/shared/agent-session/agent-message-presentation'
+import {
   agentMessageSendersShown,
   type AgentMessageSource
 } from '../../../src/shared/agent-session/agent-session-message-source'
@@ -12,16 +16,26 @@ export function agentMessageAttribution(
     return null
   }
   const { shown, more } = agentMessageSendersShown(source)
-  if (shown.length === 0 || (shown.length === 1 && shown[0].name === null && more === 0)) {
+  if (
+    shown.length === 0 ||
+    (shown.length === 1 &&
+      shown[0].name === null &&
+      !agentMessageSenderIsNamedSource(shown[0]) &&
+      more === 0)
+  ) {
     return lead === 'Message from'
       ? translate('session.agentMessageAttribution.messageFromUnnamed', 'Message from an agent')
       : translate('session.agentMessageAttribution.fromUnnamed', 'From an agent')
   }
   // One name per sender, repeats included: two senders that share a name are still two.
   const sender = shown
-    .map(
-      (sender) =>
-        sender.name ?? translate('session.agentMessageAttribution.unnamedSender', 'an agent')
+    .map((sender) =>
+      agentMessageSenderLabel({
+        sender,
+        localChat: false,
+        snapshotName: sender.name,
+        fallback: translate('session.agentMessageAttribution.unnamedSender', 'an agent')
+      })
     )
     .join(', ')
   if (more > 0) {

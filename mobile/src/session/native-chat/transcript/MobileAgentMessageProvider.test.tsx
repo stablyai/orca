@@ -19,6 +19,56 @@ const userMessage = (blocks: NativeChatMessage['blocks']): NativeChatMessage => 
 })
 describe('phone sender provider', () => {
   let renderer: ReactTestRenderer | null = null
+  it.each([false, true])(
+    'keeps command source names and glyphs without navigation (provider %s)',
+    (provider) => {
+      const from: AgentMessageSource = {
+        kind: 'agent',
+        orchestration: null,
+        senders: [
+          {
+            name: null,
+            party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
+          }
+        ]
+      }
+      const open = vi.fn()
+      const card = createElement(MobileNativeChatMessage, {
+        message: { ...userMessage([{ type: 'text', text: 'CI completed.' }]), from }
+      })
+      try {
+        act(() => {
+          renderer = create(
+            provider ? (
+              <MobileAgentMessageProvider
+                tabs={[]}
+                terminals={[]}
+                scopeKey="host/workspace"
+                open={open}
+              >
+                {card}
+              </MobileAgentMessageProvider>
+            ) : (
+              card
+            )
+          )
+        })
+        const name = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
+          findAllByHostType(node, 'Text').some((text) => text.children.includes('ci-notifier'))
+        )
+        expect(name?.props.disabled).toBe(true)
+        expect(name?.props.accessibilityRole).toBeUndefined()
+        expect(findAllByHostType(renderer!.root, 'Terminal')).toHaveLength(1)
+        expect(findAllByHostType(renderer!.root, 'Bot')).toHaveLength(0)
+        expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
+        expect(findAllByHostType(renderer!.root, 'ArrowUpRight')).toHaveLength(0)
+        expect(open).not.toHaveBeenCalled()
+      } finally {
+        act(() => renderer?.unmount())
+        renderer = null
+      }
+    }
+  )
   it('keeps the sender name disabled when no navigation action is available', () => {
     const from: AgentMessageSource = {
       kind: 'agent',

@@ -2,7 +2,10 @@ import {
   hasAgentSenderPublication,
   selectAgentSenderAssociation
 } from '@/runtime/agent-sender-associations'
-import { agentMessageSenderLabel } from '../../../../shared/agent-session/agent-message-presentation'
+import {
+  agentMessageSenderIsNamedSource,
+  agentMessageSenderLabel
+} from '../../../../shared/agent-session/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -105,16 +108,19 @@ export function useAgentMessageSenderLabel(
   dispatchId?: string
 ): string {
   const { address, orcaSessionId } = sender.party
+  const namedSource = agentMessageSenderIsNamedSource(sender)
   const local = !address.startsWith('dispatch:')
   const owner = useAppStore((state) => agentMessageSenderOwner(state, chatWorktreeId, target))
   const association = useAppStore((state) =>
-    owner ? selectAgentSenderAssociation(state, owner, sender, dispatchId) : undefined
+    !namedSource && owner
+      ? selectAgentSenderAssociation(state, owner, sender, dispatchId)
+      : undefined
   )
   const authoritative = useAppStore((state) =>
     owner ? hasAgentSenderPublication(state, owner) : false
   )
   const legacyTab = useAppStore((state) =>
-    !authoritative && local && owner && orcaSessionId
+    !namedSource && !authoritative && local && owner && orcaSessionId
       ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
       : undefined
   )
@@ -122,6 +128,7 @@ export function useAgentMessageSenderLabel(
   const sessionId = association?.sessionId ?? legacyTab?.entityId
   const conversationName = useStructuredConversationName(association?.host ?? owner, sessionId)
   return agentMessageSenderLabel({
+    sender,
     localChat: Boolean(sessionId),
     customLabel: chatTab?.customLabel,
     conversationName,

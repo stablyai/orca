@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
+import { agentMessageSenderIsNamedSource } from '../../../src/shared/agent-session/agent-message-presentation'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
@@ -45,7 +46,7 @@ export function useMobileAgentMessageNavigation(
   return useCallback(
     (from: AgentMessageSource, sender: AgentMessageSource['senders'][number]) => {
       const visit = scope.current
-      if (!visit.active) {
+      if (!visit.active || agentMessageSenderIsNamedSource(sender)) {
         return
       }
       const generation = client?.getGeneration?.()

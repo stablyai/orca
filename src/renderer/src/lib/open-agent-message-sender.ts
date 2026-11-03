@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import { agentMessageSenderIsNamedSource } from '../../../shared/agent-session/agent-message-presentation'
 import {
   openDesktopStructuredSession,
   structuredSessionOpenFeedbackText,
@@ -45,6 +46,9 @@ export function openAgentMessageSender(
   dispatchId?: string,
   name?: string
 ): Promise<void> {
+  if (agentMessageSenderIsNamedSource(sender)) {
+    return Promise.resolve()
+  }
   const state = useAppStore.getState()
   // Read at click time, so a stale render cannot open what the host has since rejected.
   const resolved = resolveAgentMessageSenderTarget(

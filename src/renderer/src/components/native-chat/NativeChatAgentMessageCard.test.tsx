@@ -41,6 +41,33 @@ import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
 
+it.each(['ci-notifier', 'orca-bg-wake'])(
+  'shows %s as a command source alongside a real agent',
+  (address) => {
+    const message = orchestrationMailFixture()
+    const helper = {
+      ...message,
+      id: address,
+      from: {
+        ...message.from,
+        senders: [{ name: null, party: { address, terminalHandle: address, orcaSessionId: null } }]
+      }
+    }
+    const { container } = render(
+      <>
+        {card(helper)}
+        {card(message)}
+      </>
+    )
+    expect(screen.getByText('Message from')).toBeInTheDocument()
+    expect(screen.getByText(address).closest('button')).toBeNull()
+    expect(container.querySelectorAll('.lucide-terminal')).toHaveLength(1)
+    expect(screen.queryByText('an agent')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Go to agent' })).toHaveLength(1)
+    expect(screen.getByText('Review worker')).toBeInTheDocument()
+  }
+)
+
 it('renders and copies structured mail content without the agent envelope', async () => {
   const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
   const writeClipboardText = vi.fn(async () => {})

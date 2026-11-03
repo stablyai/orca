@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readAgentMessageSource, type AgentMessageSource } from './agent-session-message-source'
 import { testOrcaSessionId } from '../orca-session-address-test-fixture'
+import {
+  agentMessageSenderCanOpen,
+  agentMessageSenderIsNamedSource,
+  agentMessageSenderLabel
+} from './agent-message-presentation'
 
 const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 
@@ -28,6 +33,50 @@ const FROM: AgentMessageSource = {
     messages: [{ messageId: 'm1', runId: 'r1', from: 'term_a' }]
   }
 }
+
+it.each([
+  ['ci-notifier', undefined, true, false],
+  ['orca-bg-wake', undefined, true, false],
+  ['ci-notifier', 'unknown', true, false],
+  ['term_gone', undefined, false, true],
+  ['structworker_gone', undefined, false, true],
+  [`orca_session_id:${SESSION}`, undefined, false, true],
+  ['dispatch:gone', undefined, false, false],
+  ...['claude', 'codex', 'grok', 'future-agent'].map(
+    (agent) => ['sender', agent, false, true] as const
+  )
+] as const)(
+  'presents %s (%s) from its saved identity, independent of live availability',
+  (address, agent, named, opens) => {
+    const sender = {
+      party: { address, terminalHandle: address, orcaSessionId: null },
+      name: null,
+      ...(agent ? { agent } : {})
+    }
+    expect(agentMessageSenderIsNamedSource(sender)).toBe(named)
+    expect(agentMessageSenderCanOpen(sender)).toBe(opens)
+    expect(agentMessageSenderLabel({ sender, localChat: false, fallback: 'an agent' })).toBe(
+      named ? address : 'an agent'
+    )
+  }
+)
+
+it('bounds and normalizes a named source without making invisible addresses an agent', () => {
+  const sender = {
+    party: { address: `ci\n${'x'.repeat(300)}`, terminalHandle: null, orcaSessionId: null },
+    name: null
+  }
+  expect(agentMessageSenderLabel({ sender, localChat: false, fallback: 'an agent' })).toBe(
+    `ci ${'x'.repeat(197)}`
+  )
+  expect(
+    agentMessageSenderLabel({
+      sender: { ...sender, party: { ...sender.party, address: '  ' } },
+      localChat: false,
+      fallback: 'an agent'
+    })
+  ).toBe('—')
+})
 
 describe("a message's sender, read through its one reader", () => {
   it("reads a Dispatch's task back whole", () => {

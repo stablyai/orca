@@ -15,6 +15,24 @@ function from(names: (string | null)[]): AgentMessageSource {
 }
 
 describe('who another agent’s message is from, on mobile', () => {
+  it('names command sources in queued and mixed mail instead of calling them agents', () => {
+    const source: AgentMessageSource = {
+      ...from([]),
+      senders: [
+        {
+          name: null,
+          party: { address: 'ci-notifier', terminalHandle: 'ci-notifier', orcaSessionId: null }
+        }
+      ]
+    }
+    expect(agentMessageAttribution('From', source)).toBe('From ci-notifier')
+    expect(
+      agentMessageAttribution('Message from', {
+        ...source,
+        senders: [...source.senders, ...from(['Coder']).senders]
+      })
+    ).toBe('Message from ci-notifier, Coder')
+  })
   it('names nothing on the person’s own message', () => {
     expect(agentMessageAttribution('From', undefined)).toBeNull()
   })
