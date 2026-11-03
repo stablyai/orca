@@ -42,6 +42,7 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
+import { buildNativeChatFolderTrustPrompt } from '../../../../shared/native-chat/input/native-chat-approval-envelope'
 
 // Answered occurrences outlive a view by design; each test starts with none.
 beforeEach(nativeChatPromptDismissals.clearForTests)
@@ -297,6 +298,25 @@ describe('NativeChatInteractiveCard approvals', () => {
 
     await delivery.settle(true)
     expect(screen.queryByText('Allow Bash?')).not.toBeInTheDocument()
+    expect(composerShown()).toBe(true)
+  })
+
+  // Why: the dialog is still on screen until the observer sees it go; a message sent then would type into it.
+  it('keeps a delivered folder-trust card locked until its status settles', async () => {
+    status.interactivePrompt = buildNativeChatFolderTrustPrompt('\r')
+    const delivery = deferredDelivery()
+    const view = render(cardElement())
+    fireEvent.click(screen.getByRole('button', { name: 'Trust folder' }))
+    await delivery.settle(true)
+
+    expect(screen.getByRole('button', { name: 'Trust folder' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Trust folder' }))
+    expect(mocks.sendRawVerified).toHaveBeenCalledOnce()
+    expect(composerShown()).toBe(false)
+
+    status.interactivePrompt = undefined
+    status.state = 'done'
+    view.rerender(cardElement())
     expect(composerShown()).toBe(true)
   })
 
