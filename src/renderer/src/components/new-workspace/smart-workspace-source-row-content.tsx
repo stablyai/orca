@@ -135,12 +135,15 @@ export function RowLabel({
     const siteLabel = jiraSite
       ? `${getJiraSiteLabel(jiraSite)}${jiraSite.email ? ` — ${jiraSite.email}` : ''}`
       : row.issue.siteName
+    const siteContext = showJiraSiteContext && siteLabel ? siteLabel : null
     return (
-      <span className="min-w-0 truncate">
+      <span
+        className="min-w-0 truncate"
+        // A long title truncates the site, so hover still names it.
+        title={siteContext ? `${row.issue.key} ${row.issue.title} — ${siteContext}` : undefined}
+      >
         <span className="font-medium text-foreground">{row.issue.key}</span> {row.issue.title}
-        {showJiraSiteContext && siteLabel ? (
-          <span className="text-muted-foreground"> — {siteLabel}</span>
-        ) : null}
+        {siteContext ? <span className="text-muted-foreground"> — {siteContext}</span> : null}
       </span>
     )
   }
