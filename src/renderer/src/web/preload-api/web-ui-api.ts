@@ -258,6 +258,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCloseFloatingItem: () => noopUnsubscribe,
     onSelectFloatingIndex: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
+    onMoveActiveTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
