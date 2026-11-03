@@ -1269,7 +1269,10 @@
       "directionPad": "DIRECTION PAD",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
-      "showShortcut": "Show {{label}} shortcut"
+      "showShortcut": "Show {{label}} shortcut",
+      "gestures": "GESTURES",
+      "tripleTapEnter": "Triple-tap for Enter",
+      "tripleTapEnterDescription": "Tap the terminal three times to send Enter, confirming prompts or inline input without opening the keyboard."
     },
     "voiceModelList": {
       "modelSize": "{{size}} MB",

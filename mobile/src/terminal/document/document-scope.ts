@@ -96,7 +96,9 @@ export type TerminalDocumentState = {
   longPressTimer: ReturnType<typeof setTimeout> | null
   longPressOrigin: TerminalDocumentTouchOrigin | null
   interactionActive: boolean
+  tripleTapEnterEnabled: boolean
   tapCandidate: TerminalDocumentTapCandidate | null
+  tapStreak: TerminalDocumentTapStreak | null
   bottomRowBackdrop: string
   surface: HTMLElement | null
   pendingTerm: TerminalDocumentTerminal | null
@@ -138,6 +140,13 @@ export type TerminalDocumentSelection = {
 export type TerminalDocumentTouchOrigin = { x: number; y: number; identifier: number }
 
 export type TerminalDocumentTapCandidate = TerminalDocumentTouchOrigin & { t: number }
+
+export type TerminalDocumentTapStreak = {
+  count: number
+  t: number
+  x: number
+  y: number
+}
 
 export type TerminalDocumentModes = {
   bracketedPasteMode: boolean
@@ -221,7 +230,9 @@ function createTerminalDocumentState(): TerminalDocumentState {
     longPressTimer: null,
     longPressOrigin: null,
     interactionActive: true,
+    tripleTapEnterEnabled: true,
     tapCandidate: null,
+    tapStreak: null,
     wheelAccumDeltaY: 0,
     bottomRowBackdrop: '',
     surface: null,

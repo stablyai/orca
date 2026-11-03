@@ -12,7 +12,7 @@ import {
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { dispatcherShouldBlockSurface, disqualifyTapGesture } from './tap-dispatch'
 import {
   applyTextScale,
   MAX_TEXT_SCALE,
@@ -107,7 +107,7 @@ export function attachSurfaceEventHandlers(
         cancelDocumentFrame(scope, scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
         // A touch that stopped momentum must not also fire a tap.
-        scope.tapCandidate = null
+        disqualifyTapGesture(scope)
       }
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
@@ -197,7 +197,7 @@ export function attachSurfaceEventHandlers(
             scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(scope, lines, x, y)
             // Moving a row counts as scroll even inside tap slop.
-            scope.tapCandidate = null
+            disqualifyTapGesture(scope)
           }
         } else {
           if (enqueueNormalBufferScrollDelta(scope, deltaY)) {

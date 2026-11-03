@@ -30,6 +30,7 @@ type TerminalPaneViewProps = {
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
   textScale: number
+  tripleTapEnterEnabled?: boolean
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
@@ -43,6 +44,7 @@ type TerminalPaneViewProps = {
   onTerminalQueryReply: (handle: string, bytes: string) => void
   onTerminalInteraction: (handle: string) => void
   onTerminalTap: (handle: string) => void
+  onTerminalTripleTap?: (handle: string) => void
   onFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   onOpenUrl: (handle: string, url: string) => void
   onTextScaleChange: (scale: number) => void
@@ -62,6 +64,7 @@ export function TerminalPaneView({
   keyboardLift,
   terminalTheme,
   textScale,
+  tripleTapEnterEnabled = true,
   onRef,
   onWebReady,
   onSelectionMode,
@@ -75,6 +78,7 @@ export function TerminalPaneView({
   onTerminalQueryReply,
   onTerminalInteraction,
   onTerminalTap,
+  onTerminalTripleTap,
   onFileTap,
   onOpenUrl,
   onTextScaleChange,
@@ -180,6 +184,7 @@ export function TerminalPaneView({
             textScale={textScale}
             shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}
+            tripleTapEnterEnabled={tripleTapEnterEnabled}
             onWebReady={() => onWebReady(handle)}
             onSelectionMode={(a) => onSelectionMode(handle, a)}
             onSelectionCopy={(t) => onSelectionCopy(handle, t)}
@@ -192,6 +197,9 @@ export function TerminalPaneView({
             onTerminalQueryReply={(bytes) => onTerminalQueryReply(handle, bytes)}
             onTerminalInteraction={() => onTerminalInteraction(handle)}
             onTerminalTap={() => onTerminalTap(handle)}
+            onTerminalTripleTap={
+              onTerminalTripleTap ? () => onTerminalTripleTap(handle) : undefined
+            }
             onFileTap={(candidates) => onFileTap(handle, candidates)}
             onOpenUrl={(url) => onOpenUrl(handle, url)}
             onTextScaleChange={onTextScaleChange}

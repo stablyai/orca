@@ -9,6 +9,13 @@ export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
   directionPadEnabled?: boolean
+  tripleTapEnterEnabled?: boolean
+}
+
+function optionalGestureFields(candidate: {
+  tripleTapEnterEnabled?: unknown
+}): Pick<TerminalAccessoryLayout, 'tripleTapEnterEnabled'> {
+  return candidate.tripleTapEnterEnabled === false ? { tripleTapEnterEnabled: false } : {}
 }
 
 export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
@@ -110,9 +117,12 @@ export function normalizeTerminalAccessoryLayoutPreference(
     orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
     visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
     knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined,
-    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined
+    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined,
+    tripleTapEnterEnabled:
+      'tripleTapEnterEnabled' in value ? value.tripleTapEnterEnabled : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
+  const gestureFields = optionalGestureFields(candidate)
 
   if (candidate.version === 2) {
     const orderedInput = stringArray(candidate.orderedBuiltInIds)
@@ -132,7 +142,8 @@ export function normalizeTerminalAccessoryLayoutPreference(
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: ordered,
-      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+      visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id)),
+      ...gestureFields
     }
   }
 
@@ -154,7 +165,8 @@ export function normalizeTerminalAccessoryLayoutPreference(
       version: 2,
       directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: [...currentBuiltInIds],
-      visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id))
+      visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id)),
+      ...gestureFields
     }
   }
 
@@ -175,7 +187,8 @@ export function createTerminalAccessoryLayoutPreference(
     version: 2,
     directionPadEnabled: layout.directionPadEnabled !== false,
     orderedBuiltInIds: ordered,
-    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
+    visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id)),
+    ...optionalGestureFields(layout)
   }
 }
 
@@ -186,11 +199,13 @@ export function setTerminalAccessoryBuiltInVisible(
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
   const preference = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
+  const gestureFields = optionalGestureFields(preference)
   if (!new Set(currentBuiltInIds).has(id)) {
     return {
       directionPadEnabled: preference.directionPadEnabled,
       orderedBuiltInIds: preference.orderedBuiltInIds,
-      visibleBuiltInIds: preference.visibleBuiltInIds
+      visibleBuiltInIds: preference.visibleBuiltInIds,
+      ...gestureFields
     }
   }
   const visibleSet = new Set(preference.visibleBuiltInIds)
@@ -202,7 +217,10 @@ export function setTerminalAccessoryBuiltInVisible(
   return {
     directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
+    visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) =>
+      visibleSet.has(builtInId)
+    ),
+    ...gestureFields
   }
 }
 
@@ -218,7 +236,8 @@ export function reorderTerminalAccessoryBuiltInIds(
   return {
     directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
-    visibleBuiltInIds: preference.visibleBuiltInIds
+    visibleBuiltInIds: preference.visibleBuiltInIds,
+    ...optionalGestureFields(preference)
   }
 }
 

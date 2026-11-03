@@ -49,4 +49,13 @@ describe('dispatchTerminalWebViewNotification', () => {
     dispatchTerminalWebViewNotification({ type: 'terminal-input', bytes: wheel }, handlers)
     expect(onTerminalInput.mock.calls).toEqual([[click, { click: true }], [wheel]])
   })
+
+  it('dispatches terminal-triple-tap notifications', () => {
+    const onTerminalTripleTap = vi.fn()
+    dispatchTerminalWebViewNotification(
+      { type: 'terminal-triple-tap' },
+      { onTerminalTripleTap, reportEngineError: vi.fn() }
+    )
+    expect(onTerminalTripleTap).toHaveBeenCalledTimes(1)
+  })
 })

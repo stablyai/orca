@@ -16,6 +16,7 @@ import { resetWriteQueue } from './write-queue'
 
 export type TerminalHostMessage = {
   active?: boolean
+  enabled?: boolean
   id?: number
   type?: string
   cols?: number
@@ -96,6 +97,7 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'clear') {
     scope.pendingReplayScrollAnchorRows = null
+    scope.tapStreak = null
     scope.terminalGeneration++
     resetWriteQueue(scope)
     resumeTerminalDataReplyAuthority(scope)
@@ -127,7 +129,15 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     if (typeof msg.active === 'boolean') {
       scope.interactionActive = msg.active
       if (!msg.active) {
+        scope.tapStreak = null
         suspendSurfaceTouchGestures(scope)
+      }
+    }
+  } else if (msg.type === 'set-triple-tap-enter') {
+    if (typeof msg.enabled === 'boolean') {
+      scope.tripleTapEnterEnabled = msg.enabled
+      if (!msg.enabled) {
+        scope.tapStreak = null
       }
     }
   } else if (msg.type === 'set-theme') {

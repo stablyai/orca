@@ -13,6 +13,9 @@ import {
   findTerminalHttpLinkAtBufferPosition
 } from '../../../../src/shared/terminal/links/terminal-link-buffer-hit-testing'
 
+const TRIPLE_TAP_MAX_INTERVAL_MS = 400
+const TRIPLE_TAP_MAX_DISTANCE_PX = 45
+
 export function notifyTerminalSurfaceTap(
   scope: TerminalDocumentScope,
   originX: number,
@@ -21,10 +24,12 @@ export function notifyTerminalSurfaceTap(
 ) {
   const tappedOscLink = oscLinkAtViewportPoint(scope, originX, originY)
   if (tappedOscLink && tappedOscLink.kind === 'file') {
+    scope.tapStreak = null
     notify(scope, { type: 'terminal-file-tap', candidates: [tappedOscLink.fileTap] })
     return
   }
   if (tappedOscLink && tappedOscLink.kind === 'url') {
+    scope.tapStreak = null
     notify(scope, { type: 'open-url', url: tappedOscLink.url })
     return
   }
@@ -36,16 +41,38 @@ export function notifyTerminalSurfaceTap(
     const buffer = term.buffer.active
     const url = findTerminalHttpLinkAtBufferPosition(buffer, position, term.cols)
     if (url) {
+      scope.tapStreak = null
       notify(scope, { type: 'open-url', url })
       return
     }
     const { links, guesses } = findTerminalFileLinksAtBufferPosition(buffer, position, term.cols)
     // Why: a tap decides now, so only a path as written makes it a file tap; the host checks the guesses.
     if (links.length > 0) {
+      scope.tapStreak = null
       const candidates = uniqueFileTapCandidates([...links, ...guesses])
       notify(scope, { type: 'terminal-file-tap', candidates })
       return
     }
+  }
+  if (focusKeyboard && scope.tripleTapEnterEnabled) {
+    const now = Date.now()
+    const prev = scope.tapStreak
+    const dx = prev ? originX - prev.x : 0
+    const dy = prev ? originY - prev.y : 0
+    const withinStreak =
+      prev !== null &&
+      now - prev.t <= TRIPLE_TAP_MAX_INTERVAL_MS &&
+      dx * dx + dy * dy <= TRIPLE_TAP_MAX_DISTANCE_PX * TRIPLE_TAP_MAX_DISTANCE_PX
+    const nextCount = withinStreak ? prev.count + 1 : 1
+    if (nextCount >= 3) {
+      scope.tapStreak = null
+      notify(scope, { type: 'haptic', kind: 'selection' })
+      notify(scope, { type: 'terminal-triple-tap' })
+      return
+    }
+    scope.tapStreak = { count: nextCount, t: now, x: originX, y: originY }
+  } else {
+    scope.tapStreak = null
   }
   const clickInput = buildMouseClickInput(scope, originX, originY)
   if (clickInput) {
