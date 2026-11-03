@@ -3,6 +3,7 @@ import { parseOrcaSessionAddress } from '../../../../../src/shared/orca-session-
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { proseRenderCount } from './mobile-agent-message-renderer.test-fixture'
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import * as senderSelection from './mobile-agent-message-context'
 import { MobileAgentMessageProvider } from './MobileAgentMessageProvider'
@@ -21,7 +22,8 @@ describe('phone sender provider', () => {
   let renderer: ReactTestRenderer | null = null
   it.each([false, true])(
     'keeps command source names and glyphs without navigation (provider %s)',
-    (provider) => {
+    async (provider) => {
+      await activateMobileUiLocale(provider ? 'fr' : 'en')
       const from: AgentMessageSource = {
         kind: 'agent',
         orchestration: null,
@@ -62,10 +64,16 @@ describe('phone sender provider', () => {
         expect(findAllByHostType(renderer!.root, 'Bot')).toHaveLength(0)
         expect(findAllByHostType(renderer!.root, 'AgentStateDot')).toHaveLength(0)
         expect(findAllByHostType(renderer!.root, 'ArrowUpRight')).toHaveLength(0)
+        expect(
+          findAllByHostType(renderer!.root, 'Text').some((node) =>
+            node.children.includes('un agent')
+          )
+        ).toBe(false)
         expect(open).not.toHaveBeenCalled()
       } finally {
         act(() => renderer?.unmount())
         renderer = null
+        await activateMobileUiLocale('en')
       }
     }
   )

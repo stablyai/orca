@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
+import { activateMobileUiLocale } from '../i18n/mobile-i18n'
 import { agentMessageAttribution } from './mobile-agent-message-attribution'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'
 
@@ -15,7 +16,7 @@ function from(names: (string | null)[]): AgentMessageSource {
 }
 
 describe('who another agent’s message is from, on mobile', () => {
-  it('names command sources in queued and mixed mail instead of calling them agents', () => {
+  it('names command sources in queued and mixed mail instead of calling them agents', async () => {
     const source: AgentMessageSource = {
       ...from([]),
       senders: [
@@ -26,6 +27,12 @@ describe('who another agent’s message is from, on mobile', () => {
       ]
     }
     expect(agentMessageAttribution('From', source)).toBe('From ci-notifier')
+    try {
+      await activateMobileUiLocale('fr')
+      expect(agentMessageAttribution('From', source)).toBe('De la part de ci-notifier')
+    } finally {
+      await activateMobileUiLocale('en')
+    }
     expect(
       agentMessageAttribution('Message from', {
         ...source,

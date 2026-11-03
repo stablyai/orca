@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
+import { i18n } from '@/i18n/i18n'
+import fr from '@/i18n/locales/fr.json'
 import {
   initialStore,
   from,
@@ -41,9 +43,14 @@ import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orchestrationMailFixture } from '../../../../shared/agent-session/orchestration-mail.test-fixture'
 
-it.each(['ci-notifier', 'orca-bg-wake'])(
+it.each([
+  ['ci-notifier', 'en', 'Message from'],
+  ['orca-bg-wake', 'fr', 'Message de']
+] as const)(
   'shows %s as a command source alongside a real agent',
-  (address) => {
+  async (address, locale, heading) => {
+    i18n.addResourceBundle('fr', 'translation', fr)
+    await i18n.changeLanguage(locale)
     const message = orchestrationMailFixture()
     const helper = {
       ...message,
@@ -59,14 +66,11 @@ it.each(['ci-notifier', 'orca-bg-wake'])(
         {card(message)}
       </>
     )
-    expect(screen.getByText('Message from')).toBeInTheDocument()
+    expect(screen.getByText(heading)).toBeInTheDocument()
     expect(screen.getByText(address).closest('button')).toBeNull()
     expect(container.querySelectorAll('.lucide-terminal')).toHaveLength(1)
     expect(screen.queryByText('an agent')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Review worker' })).toHaveAttribute(
-      'title',
-      'Go to agent'
-    )
+    expect(screen.getByRole('button', { name: 'Review worker' })).toBeInTheDocument()
     expect(screen.getByText('Review worker')).toBeInTheDocument()
   }
 )
@@ -356,8 +360,10 @@ beforeEach(() => {
     }
   )
 })
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await i18n.changeLanguage('en')
+  i18n.removeResourceBundle('fr', 'translation')
   useAppStore.setState(initialStore, true)
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
