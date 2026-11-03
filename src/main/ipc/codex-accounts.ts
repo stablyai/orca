@@ -39,6 +39,11 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
+  ipcMain.handle(
+    'codexAccounts:importExistingHome',
+    (_event, args: { sourceHomePath: string } & CodexAccountAddTarget) =>
+      codexAccounts.importAccountFromExistingHome(args.sourceHomePath, args)
+  )
   ipcMain.handle('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
   ipcMain.handle('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
   // Settings reads the current link on mount; broadcasts carry later changes.
