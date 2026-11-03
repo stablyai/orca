@@ -29,8 +29,8 @@ export type CardPreviewScenario = {
 }
 
 type Overrides = {
-  [K in keyof WorkspaceCardFacts]?: Partial<WorkspaceCardFacts[K]>
-}
+  [K in Exclude<keyof WorkspaceCardFacts, 'cardOptions'>]?: Partial<WorkspaceCardFacts[K]>
+} & { cardOptions?: WorkspaceCardFacts['cardOptions'] }
 
 /** Fills a scenario's facts from a plain workspace, so each scenario names only what differs. */
 export function previewFacts(overrides: Overrides): WorkspaceCardFacts {
