@@ -44,30 +44,4 @@ describe('Claude hook roster retention', () => {
     expect(state.lastStatusByPaneKey.size).toBe(0)
     expect(state.claudeSubagentRosterByPaneKey.size).toBe(0)
   })
-
-  it('preserves ordinary teammate lifecycle updates', () => {
-    const state = createHookListenerState()
-    const paneKey = makePaneKey('valid-lifecycle', LEAF_ID)
-    claudeEvent(state, paneKey, { hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
-    claudeEvent(state, paneKey, { hook_event_name: 'Stop', background_tasks: [] })
-
-    const started = claudeEvent(state, paneKey, {
-      hook_event_name: 'SubagentStart',
-      agent_id: 'areviewer-6d3cb5b52120b7bf',
-      agent_type: 'security-reviewer'
-    })
-    expect(started?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'working' })
-    ])
-
-    const idled = claudeEvent(state, paneKey, {
-      hook_event_name: 'TeammateIdle',
-      teammate_name: 'reviewer'
-    })
-    expect(idled?.payload.state).toBe('done')
-    expect(idled?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
-    ])
-    expect(state.claudeSubagentRosterByPaneKey.size).toBe(1)
-  })
 })

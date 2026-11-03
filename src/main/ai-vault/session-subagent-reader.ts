@@ -1,7 +1,7 @@
 import type { AiVaultSubagentListResult } from '../../shared/ai-vault-types'
-import { listClaudeSubagentSessions } from './session-scanner-claude-subagents'
-import { listOmpSubagentSessions } from './session-scanner-omp-subagent-listing'
-import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
+import { listClaudeSubagentSessions } from './scanners/claude/session-scanner-claude-subagents'
+import { listOmpSubagentSessions } from './scanners/omp/session-scanner-omp-subagent-listing'
+import type { AiVaultServiceSubagentRequest } from './scan-service/session-scanner-service-protocol'
 
 export function listLocalAiVaultSubagentSessions(
   request: AiVaultServiceSubagentRequest

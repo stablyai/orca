@@ -29,17 +29,20 @@ it('renders trustworthy context through the phone consumer while capturing only 
         sendSelection: true
       })
       const effort = descriptorFor(harness.current().optionSnapshot, 'effort')
-      if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+      // A readback without this model's effort menu shows no effort, whatever the declaration.
+      const offersEffort = answer.models.find((row) => row.id === model)!.efforts.length > 0
+      const shown = offersEffort ? display : null
+      if (offersEffort) {
         expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
       } else {
         expect(effort).toBeUndefined()
       }
-      expect(effort?.kind.currentValue).toBe(display ?? undefined)
+      expect(effort?.kind.currentValue).toBe(shown ?? undefined)
       expect(harness.current().sendSelection()).toEqual({ selection: { model } })
       response = new Promise(() => {})
       await harness.rerender({ fence: 2 })
       expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.kind.currentValue).toBe(
-        display ?? undefined
+        shown ?? undefined
       )
       expect(harness.current().sendSelection()).toEqual({ selection: { model } })
       await harness.unmount()

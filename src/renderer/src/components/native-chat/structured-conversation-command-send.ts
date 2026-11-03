@@ -111,10 +111,14 @@ export function structuredConversationCommandRunner(args: {
   items: () => readonly AgentJournalRenderItem[]
   send: (
     command: AgentSessionConversationCommand,
-    delivery?: 'queue-if-active'
+    delivery?: 'queue-if-active',
+    instructions?: string
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
 }): {
-  runConversationCommand: (command: AgentSessionConversationCommand) => Promise<CommandOutcome>
+  runConversationCommand: (
+    command: AgentSessionConversationCommand,
+    instructions?: string
+  ) => Promise<CommandOutcome>
   commandRefusalCauses: StructuredConversationCommandCauses
 } {
   const promptPending = args.prompts.length > 0
@@ -128,7 +132,7 @@ export function structuredConversationCommandRunner(args: {
     sending: sendPending,
     retry: false
   }
-  const run = (command: AgentSessionConversationCommand) => {
+  const run = (command: AgentSessionConversationCommand, instructions?: string) => {
     const waitsInLine =
       command === 'compact' &&
       args.commandsWait &&
@@ -151,7 +155,8 @@ export function structuredConversationCommandRunner(args: {
       send: (command) =>
         args.send(
           command,
-          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined
+          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined,
+          instructions
         )
     })
   }

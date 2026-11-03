@@ -54,6 +54,7 @@ Everything a components panel (`"ui": "components"`) imports comes from `orca`. 
 - `Callout` (children: any): `tone?: Tone; title?: string; icon?: IconName`
 - `Skeleton` (children: none): `shape?: 'text' | 'block' | 'circle'; lines?: number; label?: string`
 - `RelativeTime` (children: none): `at: number; format?: RelativeTimeFormat; tone?: Tone; muted?: boolean`
+- `Box` (children: any): `direction?: 'row' | 'column'; gap?: Gap; padding?: Gap; paddingX?: Gap; paddingY?: Gap; margin?: Gap; align?: Align; justify?: 'start' | 'center' | 'end' | 'between'; wrap?: boolean; grow?: boolean; shrink?: boolean; width?: BoxLength; height?: BoxLength; minWidth?: BoxLength; minHeight?: BoxLength; maxWidth?: BoxLength; maxHeight?: BoxLength; columns?: 1 | 2 | 3 | 4 | 5 | 6; scroll?: 'x' | 'y' | 'both'; border?: boolean | Tone; radius?: 'none' | 'sm' | 'md' | 'lg' | 'full'; background?: 'none' | 'muted' | 'card' | Tone`
 
 ## Runtime
 

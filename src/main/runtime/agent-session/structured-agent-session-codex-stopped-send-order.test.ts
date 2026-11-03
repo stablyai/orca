@@ -17,7 +17,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session-goal-control-copy'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session/view/agent-session-goal-control-copy'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../../shared/native-chat/native-chat-stopped-before-start'
 import { projectNativeChatTranscript } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
-import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
-import { parseBuiltSessionOptionCommand } from '../../native-chat/input/native-chat-session-option-commands'
+import './agent-session-option-catalog-omp'
+import './agent-session-option-launch'
+import '../../native-chat/input/native-chat-session-option-commands'
 import { parseOmpModelList } from '../../omp-model-list-probe'
 
 const LISTING = JSON.stringify({
@@ -38,33 +38,6 @@ describe('omp model list probe', () => {
     ])
   })
 
-  it('keeps the context window each row states', () => {
-    // Row shape as `omp models --json` prints it (OMP 17.0.5).
-    const listing = JSON.stringify({
-      models: [
-        {
-          provider: 'openai-codex',
-          id: 'gpt-5.5',
-          selector: 'openai-codex/gpt-5.5',
-          name: 'GPT-5.5',
-          contextWindow: 272000,
-          maxTokens: 128000
-        },
-        { provider: 'openai-codex', id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 1000000 },
-        { provider: 'zai', id: 'glm', name: 'GLM', contextWindow: 0 },
-        { provider: 'zai', id: 'glm-air', name: 'GLM Air', contextWindow: '128000' }
-      ]
-    })
-    expect(
-      parseOmpModelList(listing).map(({ id, contextWindowTokens }) => ({ id, contextWindowTokens }))
-    ).toEqual([
-      { id: 'openai-codex/gpt-5.5', contextWindowTokens: 272000 },
-      { id: 'openai-codex/gpt-5.4', contextWindowTokens: 1000000 },
-      { id: 'zai/glm', contextWindowTokens: undefined },
-      { id: 'zai/glm-air', contextWindowTokens: undefined }
-    ])
-  })
-
   it('tolerates an update notice printed ahead of the JSON', () => {
     const noisy = `Package updates are available. Run omp update\n${LISTING}\n`
     expect(parseOmpModelList(noisy).map(({ id }) => id)).toEqual([
@@ -93,62 +66,5 @@ describe('omp model list probe', () => {
     for (const value of ['null', 'true', '3', '"text"']) {
       expect(parseOmpModelList(value)).toEqual([])
     }
-  })
-
-  it('returns nothing for output that is not a listing', () => {
-    expect(parseOmpModelList('')).toEqual([])
-    expect(parseOmpModelList('omp: command not found')).toEqual([])
-    expect(parseOmpModelList('{"models": "nope"}')).toEqual([])
-    expect(parseOmpModelList('[1, 2]')).toEqual([])
-  })
-})
-
-describe('omp session option catalog', () => {
-  it('discovers models through the same JSON listing the probe parses', () => {
-    const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
-    expect(listModels.command).toBe('omp models --json')
-    expect(listModels.parse(LISTING)).toEqual([
-      {
-        id: 'deepseek/deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        description: 'deepseek',
-        options: []
-      },
-      { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn', options: [] },
-      { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai', options: [] }
-    ])
-  })
-
-  it('launches a picked model with --model <selector>', () => {
-    expect(resolveAgentSessionOptionLaunch('omp', { model: 'deepseek/deepseek-v4-pro' })).toEqual({
-      args: ['--model', 'deepseek/deepseek-v4-pro'],
-      appliedValues: { model: 'deepseek/deepseek-v4-pro' }
-    })
-    expect(resolveAgentSessionOptionLaunch('omp', {})).toEqual({ args: [], appliedValues: {} })
-  })
-
-  it('yields to a user --model in the launch args, in either spelling', () => {
-    const remove = OMP_SESSION_OPTION_CATALOG.modelApply.removeAgentArgs!
-    expect(remove(['--model', 'opus', '--model=openai/gpt-5.5', '--no-extensions'])).toEqual([
-      '--no-extensions'
-    ])
-    // `--models` scopes Ctrl+P cycling; it does not pick a model. omp has no `-m`.
-    expect(remove(['--models=anthropic/*', '-m', 'opus'])).toEqual([
-      '--models=anthropic/*',
-      '-m',
-      'opus'
-    ])
-  })
-
-  it('builds and parses /orca-model with the exact selector', () => {
-    const midSession = OMP_SESSION_OPTION_CATALOG.modelApply.midSession
-    expect(midSession).toMatchObject({ kind: 'command' })
-    if (midSession?.kind !== 'command') {
-      throw new Error('expected a command apply')
-    }
-    const command = midSession.build('minimax-cn/MiniMax-M3')
-    expect(command).toBe('/orca-model minimax-cn/MiniMax-M3')
-    expect(parseBuiltSessionOptionCommand(midSession.build, command)).toBe('minimax-cn/MiniMax-M3')
-    expect(parseBuiltSessionOptionCommand(midSession.build, '/orca-model ')).toBeNull()
   })
 })

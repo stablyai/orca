@@ -79,7 +79,7 @@ vi.mock('../star-nag/service', () => ({
     registerIpcHandlers = vi.fn()
   }
 }))
-vi.mock('../browser/agent-browser-bridge', () => ({
+vi.mock('../browser/agent-browser/agent-browser-bridge', () => ({
   AgentBrowserBridge: class {
     sweepOrphanedSessions = vi.fn()
   }
@@ -105,7 +105,7 @@ vi.mock('./main-process-account-services', () => ({
 }))
 vi.mock('./main-process-automations', () => ({ initializeMainProcessAutomations: vi.fn() }))
 vi.mock('./main-process-plugins', () => ({ initializeMainProcessPlugins: vi.fn() }))
-vi.mock('../worktree-trash', () => ({
+vi.mock('../workspaces/removal/worktree-trash', () => ({
   collectWorktreeTrashSweepRoots: vi.fn(),
   sweepStaleWorktreeTrash: vi.fn()
 }))

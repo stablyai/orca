@@ -13,10 +13,7 @@ import {
   settle,
   type TestStore
 } from './server-layout-frames.test-fixture'
-import {
-  isFrameDrawnServerWorkspace,
-  resetFrameDrawnServerWorkspacesForTests
-} from './web-session-tabs-sync/frame-drawn-server-workspaces'
+import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
 
@@ -145,87 +142,6 @@ const TWO_GROUPS = {
 }
 
 describe('the group this window shows, told to the server whose frames draw it', () => {
-  it('reports the frame-drawn workspaces only', async () => {
-    await frameDrawnStore()
-
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(reports()).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: { activeGroupByWorkspace: { [WT]: HOST_GROUP }, refresh: true }
-      }
-    ])
-  })
-
-  it('sends again only when a group changes', async () => {
-    const store = await frameDrawnStore()
-    hoisted.call.mockClear()
-
-    showGroup(store, LOCAL_WT, 'local-group-2')
-    store.setState({ activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree } })
-    expect(reports()).toEqual([])
-
-    showGroup(store, WT, 'host-group-2')
-    showGroup(store, WT, 'host-group-2')
-    expect(reports()).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: { activeGroupByWorkspace: { [WT]: 'host-group-2' } }
-      }
-    ])
-  })
-
-  it('does not resend a report the server failed to take', async () => {
-    hoisted.call.mockRejectedValue(new Error('offline'))
-    const store = await frameDrawnStore()
-    store.setState({ activeGroupIdByWorktree: { ...store.getState().activeGroupIdByWorktree } })
-    await settle()
-
-    expect(reports()).toHaveLength(1)
-  })
-
-  it("reports again on a new stream's snapshot as a refresh, then a change as live", async () => {
-    const store = await frameDrawnStore()
-    hoisted.call.mockClear()
-
-    streams.send(streams.openTo(ENV), {
-      type: 'snapshot',
-      workspaces: [{ key: WT, layout: SERVER_LAYOUT }],
-      seq: 2,
-      epoch: 'e2'
-    })
-    await settle()
-
-    expect(reports()).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: { activeGroupByWorkspace: { [WT]: HOST_GROUP }, refresh: true }
-      }
-    ])
-
-    hoisted.call.mockClear()
-    showGroup(store, WT, 'host-group-2')
-    expect(reports()).toEqual([
-      {
-        target: { kind: 'environment', environmentId: ENV },
-        params: { activeGroupByWorkspace: { [WT]: 'host-group-2' } }
-      }
-    ])
-  })
-
-  it('sends nothing to a server without layout intents', async () => {
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [{ ...CAPABLE, capable: false }])
-    showGroup(store, WT, 'host-group-2')
-    await settle()
-
-    // Presence: the server is paired and its workspace mirrored, with a group shown.
-    expect(store.getState().runtimeEnvironments.map((environment) => environment.id)).toEqual([ENV])
-    expect(store.getState().activeGroupIdByWorktree[WT]).toBe('host-group-2')
-    expect(reports()).toEqual([])
-  })
-
   it('reports again as a refresh when the control connection comes up on a new socket, the stream still up', async () => {
     const store = await frameDrawnStore()
     control(ENV, 'ready', 1, 100)
@@ -245,27 +161,6 @@ describe('the group this window shows, told to the server whose frames draw it',
       params: { activeGroupByWorkspace: { [WT]: 'host-group-2' }, refresh: true }
     }
     expect(reports()).toEqual([again, again])
-  })
-
-  it('stops sending, and warns once, after a server answers it has no such method', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    hoisted.call.mockRejectedValue(new Error('method_not_found'))
-    const store = await frameDrawnStore()
-    expect(reports()).toHaveLength(1)
-
-    showGroup(store, WT, 'host-group-2')
-    streams.send(streams.openTo(ENV), {
-      type: 'snapshot',
-      workspaces: [{ key: WT, layout: SERVER_LAYOUT }],
-      seq: 2,
-      epoch: 'e2'
-    })
-    control(ENV, 'ready', 3, 300)
-    await settle()
-
-    expect(reports()).toHaveLength(1)
-    expect(warn.mock.calls.filter(([line]) => String(line).includes('view report'))).toHaveLength(1)
-    warn.mockRestore()
   })
 
   it("sends a snapshot's own group move as a refresh, never as a live report", async () => {

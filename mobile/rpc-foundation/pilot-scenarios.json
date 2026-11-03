@@ -5780,6 +5780,10 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
+                "setup": {
+                  "contentHash": "hash-1",
+                  "approvedAt": 1767225600000
+                },
                 "all": {
                   "approvedAt": 1767225600000
                 }
@@ -20348,8 +20352,7 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p",
-            "includeLineStats": false
+            "worktree": "id:repo42::/p"
           },
           "reply": {
             "ok": true,
@@ -23084,7 +23087,7 @@
       "id": "mobile-web-bundle-manifest-read",
       "operation": "mobileWeb.bundle-manifest",
       "family": "mobileWeb.bundle-manifest",
-      "sites": ["mobile/src/transport/mobile-web-bundle-operations.ts"],
+      "sites": ["mobile/src/transport/web-bundle/mobile-web-bundle-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23134,7 +23137,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],
@@ -23273,7 +23276,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],
@@ -23303,7 +23306,7 @@
       "operation": "mobileWeb.bundle-fetch",
       "family": "mobileWeb.bundle-fetch",
       "sites": [
-        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/transport/web-bundle/mobile-web-bundle-fetch.ts",
         "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
       ],
       "schedules": [],

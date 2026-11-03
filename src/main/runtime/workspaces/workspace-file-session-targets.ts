@@ -17,7 +17,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import {

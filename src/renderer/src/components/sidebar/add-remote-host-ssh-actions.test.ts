@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTargetCreateInput } from '../../../../shared/ssh-types'
-import { EMPTY_FORM } from '../settings/ssh-target-draft'
+import { EMPTY_FORM } from '../settings/ssh/targets/ssh-target-draft'
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),

@@ -66,10 +66,25 @@ describe('resolution receipts', () => {
     expect(screen.getByText('Run command?')).toBeInTheDocument()
     expect(screen.getByText('pnpm test')).toBeInTheDocument()
     expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.getByText('Answered on phone-client')).toBeInTheDocument()
+    expect(screen.getByText('Answered on another device')).toBeInTheDocument()
     expect(document.querySelector('time')).toHaveAttribute('datetime', new Date(1000).toISOString())
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  it.each([
+    [{ kind: 'current' }, 'this computer'],
+    [{ kind: 'named', name: 'My iPhone' }, 'My iPhone']
+  ] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+    'shows the projected device identity %j',
+    (resolvedByDevice, device) => {
+      render(
+        <NativeChatResolutionReceipt
+          body={{ ...approval, resolution: { ...approval.resolution, resolvedByDevice } }}
+        />
+      )
+      expect(screen.getByText(`Answered on ${device}`)).toBeInTheDocument()
+    }
+  )
 
   it('uses the SDK display name in the compact resolved receipt', () => {
     render(

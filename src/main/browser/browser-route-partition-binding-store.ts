@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { grantDirAcl, isPermissionError } from '../win32-utils'
-import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
+import { grantDirAcl } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
+import { durableWriteTempPath, writeFileDurableSync } from '../filesystem/durable-file-write'
 import {
   assertBinding,
   assertStorageScope,

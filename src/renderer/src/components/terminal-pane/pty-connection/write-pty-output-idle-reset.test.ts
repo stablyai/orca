@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/headless'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
+import { TerminalResumeEscapeGap } from '../terminal-resume-escape-gap'
 import { createTerminalInputEchoDelay } from './terminal-input-echo-delay'
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
@@ -35,6 +36,7 @@ function createSession() {
   const session = {
     disposed: false,
     idleCursorReset: new TerminalIdleCursorReset(),
+    resumeEscapeGap: new TerminalResumeEscapeGap(),
     inputEchoDelay: createTerminalInputEchoDelay(),
     deps: { isVisibleRef: { current: true } },
     kittyKeyboardModes: { scan: vi.fn() },

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DurableFileWrite from '../durable-file-write'
+import type * as DurableFileWrite from '../filesystem/durable-file-write'
 import { JIRA_IMAGE_SCHEME } from '../../shared/jira/jira-attachment-image'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   writeFileDurableSync: vi.fn()
 }))
 
-vi.mock('../durable-file-write', async (importOriginal) => {
+vi.mock('../filesystem/durable-file-write', async (importOriginal) => {
   const actual = await importOriginal<typeof DurableFileWrite>()
   return {
     ...actual,
@@ -138,7 +138,9 @@ vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
-vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShimDir: vi.fn() }))
+vi.mock('../pty/shell-startup/legacy-terminal-shim-dir', () => ({
+  neutralizeLegacyTerminalShimDir: vi.fn()
+}))
 vi.mock('./windows-shell-path-hydration', () => ({
   createWindowsShellPathHydration: () => ({
     configure: vi.fn(),
@@ -146,14 +148,19 @@ vi.mock('./windows-shell-path-hydration', () => ({
     whenReady: Promise.resolve()
   })
 }))
-vi.mock('../git/runner', () => ({
-  configureWindowsHostGitEnvironmentReadiness: vi.fn(),
+vi.mock('../git/command-runner/windows-host-git-environment', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  configureWindowsHostGitEnvironmentReadiness: vi.fn()
+}))
+
+vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()

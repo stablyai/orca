@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../shared/github/project-result-types'
+import type { ProjectRowContentPatch } from './cache-model'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { runtimeTargetForProjectRowOwner } from '../slices/github-project-row-owner'
@@ -97,73 +98,86 @@ export const createProjectRowActions = (
       table.project.host,
       projectViewCacheKeyTarget(cacheKey)
     )
-    if (
-      previousRow.itemType === 'PULL_REQUEST' &&
-      (updates.title !== undefined || updates.body !== undefined)
-    ) {
-      const args = {
-        owner,
-        repo,
-        host: table.project.host,
-        number,
-        updates: {
-          ...(updates.title !== undefined ? { title: updates.title } : {}),
-          ...(updates.body !== undefined ? { body: updates.body } : {})
+    const settle = get().githubTaskCache.projectOperation(
+      previousRow,
+      table.project.host,
+      target,
+      updates
+    )
+    try {
+      if (
+        previousRow.itemType === 'PULL_REQUEST' &&
+        (updates.title !== undefined || updates.body !== undefined)
+      ) {
+        const args = {
+          owner,
+          repo,
+          host: table.project.host,
+          number,
+          updates: {
+            ...(updates.title !== undefined ? { title: updates.title } : {}),
+            ...(updates.body !== undefined ? { body: updates.body } : {})
+          }
+        }
+        const prRes =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                target,
+                'github.project.updatePullRequestBySlug',
+                args,
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
+        if (!prRes.ok) {
+          envelope = prRes
         }
       }
-      const prRes =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubProjectMutationResult>(
-              target,
-              'github.project.updatePullRequestBySlug',
-              args,
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.updatePullRequestBySlug({ ...args, wakeWslDistro: true })
-      if (!prRes.ok) {
-        envelope = prRes
-      }
-    }
-    if (
-      envelope.ok &&
-      (updates.addLabels?.length ||
-        updates.removeLabels?.length ||
-        updates.addAssignees?.length ||
-        updates.removeAssignees?.length ||
-        (previousRow.itemType === 'ISSUE' &&
-          (updates.title !== undefined || updates.body !== undefined)))
-    ) {
-      const args = {
-        owner,
-        repo,
-        host: table.project.host,
-        number,
-        updates: {
-          ...(updates.title !== undefined ? { title: updates.title } : {}),
-          ...(updates.body !== undefined ? { body: updates.body } : {}),
-          ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
-          ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
-          ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
-          ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
+      if (
+        envelope.ok &&
+        (updates.addLabels?.length ||
+          updates.removeLabels?.length ||
+          updates.addAssignees?.length ||
+          updates.removeAssignees?.length ||
+          (previousRow.itemType === 'ISSUE' &&
+            (updates.title !== undefined || updates.body !== undefined)))
+      ) {
+        const args = {
+          owner,
+          repo,
+          host: table.project.host,
+          number,
+          updates: {
+            ...(updates.title !== undefined ? { title: updates.title } : {}),
+            ...(updates.body !== undefined ? { body: updates.body } : {}),
+            ...(updates.addLabels ? { addLabels: updates.addLabels } : {}),
+            ...(updates.removeLabels ? { removeLabels: updates.removeLabels } : {}),
+            ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
+            ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
+          }
+        }
+        const issueRes =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<GitHubProjectMutationResult>(
+                target,
+                'github.project.updateIssueBySlug',
+                args,
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
+        if (!issueRes.ok) {
+          envelope = issueRes
         }
       }
-      const issueRes =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<GitHubProjectMutationResult>(
-              target,
-              'github.project.updateIssueBySlug',
-              args,
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.updateIssueBySlug({ ...args, wakeWslDistro: true })
-      if (!issueRes.ok) {
-        envelope = issueRes
+      if (!envelope.ok) {
+        rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
       }
-    }
-    if (!envelope.ok) {
+      settle(envelope.ok)
+      return envelope
+    } catch (error) {
+      settle(false)
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
+      throw error
     }
-    return envelope
   },
 
   patchProjectRowIssueType: async (cacheKey, rowId, issueType) => {
@@ -258,30 +272,38 @@ export const createProjectRowActions = (
     if (!previousRow) {
       return
     }
-    const nextContent = { ...previousRow.content }
-    if (patch.title !== undefined) {
-      nextContent.title = patch.title
-    }
-    if (patch.body !== undefined) {
-      nextContent.body = patch.body
-    }
-    if (patch.state !== undefined) {
-      // ProjectV2 uses uppercase state enums while dialog uses lowercase; normalize optimistic patches.
-      nextContent.state = patch.state.toUpperCase()
-    }
-    if (patch.labels !== undefined) {
-      const existingByName = new Map(previousRow.content.labels.map((l) => [l.name, l]))
-      nextContent.labels = patch.labels.map(
-        (name) => existingByName.get(name) ?? { name, color: '808080' }
-      )
-    }
-    if (patch.assignees !== undefined) {
-      const existingByLogin = new Map(previousRow.content.assignees.map((u) => [u.login, u]))
-      nextContent.assignees = patch.assignees.map(
-        (login) => existingByLogin.get(login) ?? { login, name: null, avatarUrl: null }
-      )
-    }
-    const nextRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+    const nextRow = patchGitHubProjectRowContent(previousRow, patch)
     applyRowPatch(set, cacheKey, rowId, nextRow)
   }
 })
+
+export function patchGitHubProjectRowContent(
+  previousRow: GitHubProjectRow,
+  patch: ProjectRowContentPatch
+): GitHubProjectRow {
+  const nextContent = { ...previousRow.content }
+  if (patch.title !== undefined) {
+    nextContent.title = patch.title
+  }
+  if (patch.body !== undefined) {
+    nextContent.body = patch.body
+  }
+  if (patch.state !== undefined) {
+    // ProjectV2 uses uppercase state enums while dialog uses lowercase; normalize optimistic patches.
+    nextContent.state = patch.state.toUpperCase()
+  }
+  if (patch.labels !== undefined) {
+    const existingByName = new Map(previousRow.content.labels.map((l) => [l.name, l]))
+    nextContent.labels = patch.labels.map(
+      (name) => existingByName.get(name) ?? { name, color: '808080' }
+    )
+  }
+  if (patch.assignees !== undefined) {
+    const existingByLogin = new Map(previousRow.content.assignees.map((u) => [u.login, u]))
+    nextContent.assignees = patch.assignees.map(
+      (login) => existingByLogin.get(login) ?? { login, name: null, avatarUrl: null }
+    )
+  }
+  const nextRow: GitHubProjectRow = { ...previousRow, content: nextContent }
+  return nextRow
+}

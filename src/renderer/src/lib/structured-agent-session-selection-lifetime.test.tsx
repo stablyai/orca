@@ -439,7 +439,7 @@ it.each([false, true])(
     }
     expect(descriptor('model')?.kind).toMatchObject({ currentValue: 'gpt-5.5' })
     expect(descriptor('permissionMode')).toMatchObject({
-      description: 'Full access',
+      description: "Agent's own settings",
       settable: true
     })
     let picked: Promise<boolean> | undefined
@@ -460,8 +460,8 @@ it.each([false, true])(
       model: 'saved'
     })
     expect(descriptor('permissionMode')).toMatchObject({
-      description: 'Permissions',
-      settable: false
+      description: "Agent's own settings",
+      settable: true
     })
     await act(async () =>
       reads[1].resolve({

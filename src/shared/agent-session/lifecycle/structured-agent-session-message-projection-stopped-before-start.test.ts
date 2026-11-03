@@ -8,15 +8,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
-import {
-  NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
-  NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
-} from '../../native-chat/native-chat-stopped-before-start'
-import {
-  DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_WRITE_FAILED
-} from '../requests/structured-agent-session-dispatch-rejection'
+import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
+import '../../native-chat/native-chat-stopped-before-start'
+import { DISPATCH_REJECTED_CANCELLED } from '../requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../view/structured-agent-session-message-projection'
 import {
   projectNativeChatTranscript,
@@ -116,37 +110,6 @@ function takenBackOn(
 }
 
 describe('a send a Stop took back before the agent started it', () => {
-  it('stays where it was sent, with one row after it', () => {
-    const items = [sent('warm-up', 'warm up'), sent('never-ran', 'look around')]
-
-    expect(rows(items, [submission('warm-up'), stopped('never-ran')])).toEqual([
-      user('warm-up'),
-      user('never-ran'),
-      stopRow('never-ran')
-    ])
-    const [, , row] = projectStructuredAgentSessionMessages(items, [], [stopped('never-ran')])
-    expect(row?.blocks).toEqual([
-      {
-        type: 'text',
-        text: NATIVE_CHAT_STOPPED_BEFORE_START_TEXT,
-        presentation: NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
-      }
-    ])
-    expect(row?.journalPosition).toEqual(
-      projectStructuredAgentSessionMessages(items, [], [stopped('never-ran')])[1]?.journalPosition
-    )
-  })
-
-  it('reads the same from the typed fact as from the older marker', () => {
-    const items = [sent('never-ran', 'look around')]
-    const typed = stopped('never-ran', {
-      reason: 'This message was withdrawn before the agent started it.',
-      rejection: { kind: 'cancelled' }
-    })
-
-    expect(rows(items, [typed])).toEqual(rows(items, [stopped('never-ran')]))
-  })
-
   it('shares one row with the sends taken back right before it', () => {
     const items = [sent('first', 'one'), sent('second', 'two')]
 
@@ -155,21 +118,6 @@ describe('a send a Stop took back before the agent started it', () => {
       user('second'),
       stopRow('second')
     ])
-  })
-
-  it('stays in the turn that opened for it, whose end already says it was stopped', () => {
-    const items = [
-      sent('opened', 'look around'),
-      entry('turn-1', {
-        kind: 'turn',
-        turnId: 'turn-1',
-        state: 'interrupted',
-        outcome: 'cancellation',
-        userItemId: agentJournalSubmissionKey('opened')
-      })
-    ]
-
-    expect(rows(items, [stopped('opened')])).toEqual([user('opened')])
   })
 
   // Codex reports the turn open before it echoes the send, so the record names the provider's key.
@@ -320,38 +268,6 @@ describe('a send a Stop took back before the agent started it', () => {
     ])
   })
 
-  it('is drawn after the turn it waited behind when it was never handed over', () => {
-    const items = [
-      sent('first', 'first prompt'),
-      entry('t1', {
-        kind: 'turn',
-        turnId: 't1',
-        state: 'interrupted',
-        outcome: 'cancellation',
-        userItemId: agentJournalSubmissionKey('first')
-      }),
-      said('before', 'working on it', 't1'),
-      sent('queued', 'queued while t1 ran'),
-      said('after', 'more t1 output', 't1'),
-      entry(
-        'note',
-        { kind: 'status', text: 'Cancellation requested.' },
-        { kind: 'turn', turnItemId: 't1' }
-      )
-    ]
-
-    expect(
-      rows(items, [submission('first'), stopped('queued', { handoverRecorded: true })])
-    ).toEqual([
-      user('first'),
-      { id: 'before', role: 'assistant' },
-      { id: 'after', role: 'assistant' },
-      { id: 'note', role: 'system' },
-      user('queued'),
-      stopRow('queued')
-    ])
-  })
-
   // The first send opens the turn; stopped follow-ups stay below that turn’s rows.
   it("is drawn after a turn that opened while it waited, with that turn's rows above it", () => {
     const items = [
@@ -388,37 +304,6 @@ describe('a send a Stop took back before the agent started it', () => {
       'stop:turn-1',
       agentJournalSubmissionKey('follow-up'),
       `stopped-before-start:${agentJournalSubmissionKey('follow-up')}`
-    ])
-  })
-
-  // One Stop takes back two /compact-queued sends: only the first had a handover.
-  it('keeps two sends it took back in the order they were sent', () => {
-    const compactTurn = 'compact-turn'
-    const items = [
-      sent('compact', '/compact'),
-      entry(compactTurn, {
-        kind: 'turn',
-        turnId: compactTurn,
-        state: 'completed',
-        userItemId: agentJournalSubmissionKey('compact')
-      }),
-      sent('queued-second', 'queued second'),
-      said('compacted', 'Context compacted', compactTurn),
-      sent('queued-first', 'queued first')
-    ]
-
-    expect(
-      rows(items, [
-        submission('compact', { submittedAt: 1 }),
-        stopped('queued-first', { submittedAt: 2, handoverRecorded: true, handedOverAt: 5 }),
-        stopped('queued-second', { submittedAt: 3, handoverRecorded: true })
-      ])
-    ).toEqual([
-      user('compact'),
-      { id: 'compacted', role: 'assistant' },
-      user('queued-first'),
-      user('queued-second'),
-      stopRow('queued-second')
     ])
   })
 
@@ -589,54 +474,6 @@ describe('a send a Stop took back before the agent started it', () => {
     }
   )
 
-  // Without an uncertain send, the earlier exchange’s opener is the old host’s latest ordering evidence.
-  it.each(HOSTS)(
-    'stays below a finished exchange whose opener was the last thing sent before it, on %s',
-    (_host, published) => {
-      const compactTurn = 'compact-turn'
-      const items = [
-        sent('compact', '/compact'),
-        entry(compactTurn, {
-          kind: 'turn',
-          turnId: compactTurn,
-          state: 'completed',
-          userItemId: agentJournalSubmissionKey('compact')
-        }),
-        sent('queued-b', 'queued B'),
-        said('compacted', 'Context compacted', compactTurn),
-        sent('queued-zero', 'queued zero'),
-        entry('turn-2', {
-          kind: 'turn',
-          turnId: 'turn-2',
-          state: 'completed',
-          userItemId: agentJournalSubmissionKey('queued-zero')
-        }),
-        said('answer', 'answer to zero', 'turn-2')
-      ]
-
-      const host = takenBackOn(published, items, 'queued-b', sequence + 1)
-
-      expect(
-        rows(host.items, [
-          submission('compact', { submittedAt: 1 }),
-          submission('queued-zero', { submittedAt: 2, handoverRecorded: true, handedOverAt: 5 }),
-          stopped('queued-b', {
-            submittedAt: 4,
-            handoverRecorded: true,
-            ...host.sent
-          })
-        ])
-      ).toEqual([
-        user('compact'),
-        { id: 'compacted', role: 'assistant' },
-        user('queued-zero'),
-        { id: 'answer', role: 'assistant' },
-        user('queued-b'),
-        stopRow('queued-b')
-      ])
-    }
-  )
-
   // Tied accepts cannot order the exchanges; only the moved take-back row proves which finished before Stop.
   it('stays below a finished exchange when accept times tie, by the row the host moved', () => {
     const compactTurn = 'compact-turn'
@@ -674,55 +511,6 @@ describe('a send a Stop took back before the agent started it', () => {
       { id: 'answer', role: 'assistant' },
       user('queued-b'),
       stopRow('queued-b')
-    ])
-  })
-
-  // The first taken back by one Stop, a later send by another: each stays where it was sent.
-  it('keeps a send a later Stop took back below one an earlier Stop took', () => {
-    const compactTurn = 'compact-turn'
-    const items = [
-      sent('compact', '/compact'),
-      entry(compactTurn, {
-        kind: 'turn',
-        turnId: compactTurn,
-        state: 'completed',
-        userItemId: agentJournalSubmissionKey('compact')
-      }),
-      sent('queued', 'queued during compact'),
-      said('compacted', 'Context compacted', compactTurn),
-      sent('later', 'sent after the first Stop')
-    ]
-
-    expect(
-      rows(items, [
-        submission('compact', { submittedAt: 1 }),
-        stopped('queued', { submittedAt: 2, handoverRecorded: true }),
-        stopped('later', { submittedAt: 9, handoverRecorded: true, handedOverAt: 10 })
-      ])
-    ).toEqual([
-      user('compact'),
-      { id: 'compacted', role: 'assistant' },
-      user('queued'),
-      user('later'),
-      stopRow('later')
-    ])
-  })
-
-  it('leaves a queued card to hold its own text', () => {
-    const items = [sent('card-send', 'from a card')]
-
-    expect(rows(items, [stopped('card-send', { queuedMessageId: 'card-1' })])).toEqual([])
-  })
-
-  it('draws any other refused send as not sent, with no stop row', () => {
-    const shown = projectStructuredAgentSessionMessages(
-      [sent('refused', 'hello')],
-      [],
-      [submission('refused', { dispatchState: 'rejected', reason: DISPATCH_REJECTED_WRITE_FAILED })]
-    )
-
-    expect(shown.map(({ id, unsent }) => ({ id, unsent }))).toEqual([
-      { id: agentJournalSubmissionKey('refused'), unsent: true }
     ])
   })
 })

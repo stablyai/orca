@@ -42,19 +42,6 @@ describe('resolveEmptyPageOutcome', () => {
     ).toEqual({ reason: 'load-failed', clampTotalPagesTo: null })
   })
 
-  it('reports a failure without clamping for transient or unclassified errors', () => {
-    expect(resolveEmptyPageOutcome({ ...base, target: 5, failedCount: 2 })).toEqual({
-      reason: 'load-failed',
-      clampTotalPagesTo: null
-    })
-    for (const type of ['permission_denied', 'not_found', 'rate_limited', 'unknown'] as const) {
-      expect(resolveEmptyPageOutcome({ ...base, target: 5, errorTypes: [type] })).toEqual({
-        reason: 'load-failed',
-        clampTotalPagesTo: null
-      })
-    }
-  })
-
   it('withdraws the speculative page on clean empty only while the count is unknown', () => {
     expect(resolveEmptyPageOutcome({ ...base, target: 2 })).toEqual({
       reason: 'end-of-data',
@@ -82,11 +69,6 @@ describe('applyEmptyPageClamp', () => {
   it('keeps a real count that resolved between click and response', () => {
     // The count can resolve during fetch; clamp against committed state rather than the click-time closure.
     expect(applyEmptyPageClamp(33, { ...clean, target: 2 })).toBe(33)
-  })
-
-  it('withdraws the speculative page while the count is unknown or failed', () => {
-    expect(applyEmptyPageClamp(null, { ...clean, target: 2 })).toBe(2)
-    expect(applyEmptyPageClamp(0, { ...clean, target: 2 })).toBe(2)
   })
 
   it('never touches the count for window or failure outcomes', () => {

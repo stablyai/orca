@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
-import { LocalPtyProvider } from '../../providers/local-pty-provider'
+import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { registerPtyHandlers } from './register-handlers'
 import { clearPtyOwnershipForConnection, clearProviderPtyState } from './provider/state-cleanup'
 import { setPtyOwnership } from './provider/ownership-state'
@@ -25,8 +25,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>

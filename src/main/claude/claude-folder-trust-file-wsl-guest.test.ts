@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult, WslSpec } from '../wsl/wsl-runner'
+import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 import { grantClaudeFolderTrust } from './claude-folder-trust-file'
 
 const { DISTRO, GUEST_PREFIX, guest } = vi.hoisted(() => ({
@@ -72,7 +72,7 @@ vi.mock('proper-lockfile', () => ({
 }))
 
 const runWslProcess = vi.hoisted(() => vi.fn<(spec: WslSpec) => Promise<WslResult>>())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess }))
 
 async function guestChmod(spec: WslSpec): Promise<WslResult> {
   const [reference, separator, target] = spec.args ?? []

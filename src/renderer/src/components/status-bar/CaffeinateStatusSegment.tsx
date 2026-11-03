@@ -17,7 +17,7 @@ import {
   getAgentAwakeLidNote,
   getAgentAwakeModeLabel,
   getAgentAwakeTitle
-} from '../settings/agent-awake-copy'
+} from '../settings/agents/behavior/agent-awake-copy'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,

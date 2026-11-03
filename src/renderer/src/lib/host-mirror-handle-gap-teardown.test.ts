@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
-  setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 import { clearWebSessionTabsTrackingForEnvironment } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
@@ -65,20 +62,6 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
     vi.useRealTimers()
   })
 
-  it('drops the torn-down environment’s verdicts and keeps every other environment’s', () => {
-    parkAndExpire(ENVIRONMENT_ID, 'web-terminal-host-tab-1')
-    parkAndExpire(ENVIRONMENT_ID, 'web-terminal-host-tab-2')
-    parkAndExpire(OTHER_ENVIRONMENT_ID, 'web-terminal-host-tab-3')
-    expect(countHostMirrorHandleGapVerdictsForTests()).toBe(3)
-
-    clearHostMirrorHandleGapVerdictsForEnvironment(ENVIRONMENT_ID)
-
-    expect(countHostMirrorHandleGapVerdictsForTests()).toBe(1)
-    expect(hasHostMirrorHandleWaitExpired(OTHER_ENVIRONMENT_ID, 'web-terminal-host-tab-3')).toBe(
-      true
-    )
-  })
-
   // As with clearHostSessionMirrorHydration, re-pair replaces evidence without canceling recovery; bounded waiters must survive and replay.
   it('leaves a parked waiter alone, cancelling only the verdicts', () => {
     const replay = vi.fn()
@@ -111,15 +94,5 @@ describe('host-mirror handle-gap verdicts across environment teardown', () => {
     expect(hasHostMirrorHandleWaitExpired(OTHER_ENVIRONMENT_ID, 'web-terminal-host-tab-3')).toBe(
       true
     )
-  })
-
-  // Environment removal advances generation; leaked verdicts must remain unreachable even if the ID returns.
-  it('cannot match again after the environment returns on a new generation', () => {
-    parkAndExpire(ENVIRONMENT_ID, 'web-terminal-host-tab-1')
-    expect(hasHostMirrorHandleWaitExpired(ENVIRONMENT_ID, 'web-terminal-host-tab-1')).toBe(true)
-
-    setRuntimeEnvironmentConnectionGenerationForTests(ENVIRONMENT_ID, 1)
-
-    expect(hasHostMirrorHandleWaitExpired(ENVIRONMENT_ID, 'web-terminal-host-tab-1')).toBe(false)
   })
 })

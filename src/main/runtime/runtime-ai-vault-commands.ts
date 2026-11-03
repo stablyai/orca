@@ -13,7 +13,7 @@ import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
-import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
+import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-titles/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
   constructor(

@@ -1,3 +1,4 @@
+import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/journal-open-failure'
@@ -29,6 +30,7 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
+import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
@@ -77,6 +79,7 @@ function readOnlyStoreRefusal(): Error {
 
 type StagedStoreTransaction<T> = {
   result: T
+  draft: AgentSessionStoreState
   writes: AgentSessionStoreRowWrites | null
   /** Publish only after row commit. */
   adopt: () => void
@@ -88,6 +91,13 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
+  /** Moves only when a commit changes what chat sender identity reads. */
+  senderIdentityRevision = 0
+  /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
+   *  lookups derived from every record's lineage stay valid across admission and lease writes. */
+  private lineage: object = {}
+  /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
+  private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
   /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
@@ -116,6 +126,10 @@ export class AgentSessionStoreTransactions {
 
   get state(): AgentSessionStoreState {
     return this.published
+  }
+
+  lineageRevision(): object {
+    return this.lineage
   }
 
   get readOnly(): boolean {
@@ -151,6 +165,8 @@ export class AgentSessionStoreTransactions {
           throw readOnlyStoreRefusal()
         }
         admitted = row?.kind === 'submission' ? options.submissionSessionId : undefined
+        const transaction = this.journalDatabase.transactionNumber
+        const base = this.staged?.transaction === transaction ? this.staged.draft : this.published
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
@@ -162,7 +178,8 @@ export class AgentSessionStoreTransactions {
               updatedAt: row?.ts ?? record.updatedAt
             })
           }
-        })
+        }, base)
+        this.staged = { transaction, draft: staged.draft }
         const writes = staged.writes
         if (writes) {
           // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
@@ -179,6 +196,9 @@ export class AgentSessionStoreTransactions {
       },
       committed: () => {
         staged?.adopt()
+        if (this.staged?.draft === staged?.draft) {
+          this.staged = null
+        }
         if (admitted) {
           this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
           for (const listener of this.acceptedSendListeners) {
@@ -215,19 +235,63 @@ export class AgentSessionStoreTransactions {
     return staged.result
   }
 
-  private stage<T>(apply: (draft: AgentSessionStoreState) => T): StagedStoreTransaction<T> {
-    const published = this.published
+  private stage<T>(
+    apply: (draft: AgentSessionStoreState) => T,
+    published = this.published
+  ): StagedStoreTransaction<T> {
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
     attributeAgentSessionRuntime(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,
+      draft,
       writes,
       adopt: () => {
         if (writes) {
           freezeRows(draft, writes)
+          if (changesAgentSenderIdentity(published, draft, writes)) {
+            this.senderIdentityRevision++
+          }
           this.published = draft
+          const lineageChanged =
+            writes.records.remove.length > 0 ||
+            writes.records.upsert.some(([id]) => {
+              const before = published.records.get(id)
+              return before?.conversationCommand !== draft.records.get(id)?.conversationCommand
+            })
+          if (lineageChanged) {
+            this.lineage = {}
+          }
+          const topologyChanged =
+            writes.sessionTabs !== null ||
+            writes.records.remove.length > 0 ||
+            writes.records.upsert.some(([id]) => {
+              const before = published.records.get(id)
+              const after = draft.records.get(id)
+              return (
+                !before ||
+                !after ||
+                before.lease.claimStatus !== after.lease.claimStatus ||
+                before.provider !== after.provider ||
+                before.location !== after.location ||
+                before.conversationCommand !== after.conversationCommand
+              )
+            })
+          const renamed = writes.records.upsert
+            .filter(
+              ([id]) =>
+                published.records.get(id)?.conversationName !==
+                draft.records.get(id)?.conversationName
+            )
+            .map(([id]) => id)
+          if (topologyChanged) {
+            sessionCrewChanges.notify(new Set(['records']))
+          } else if (renamed.length) {
+            sessionCrewChanges.notify(
+              Object.assign(new Set(['names'] as const), { recordIds: renamed })
+            )
+          }
         }
       }
     }

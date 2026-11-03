@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import '../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
 import { RuntimeBrowserCommands } from '../runtime/browser/browser-commands'
@@ -11,6 +13,22 @@ const { webContentsFromIdMock } = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn()
 }))
 
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
 vi.mock('electron', () => ({
   webContents: { fromId: webContentsFromIdMock },
   shell: { openExternal: vi.fn() },
@@ -18,10 +36,14 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
 }))
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 import { BrowserManager } from './browser-manager'
 import { CdpBridge } from './cdp-bridge'

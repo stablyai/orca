@@ -10,7 +10,7 @@ import {
   type AgentJournalSubmission,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionQueuedMessage } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import {

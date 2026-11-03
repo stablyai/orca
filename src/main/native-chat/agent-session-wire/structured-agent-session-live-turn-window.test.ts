@@ -9,7 +9,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import {

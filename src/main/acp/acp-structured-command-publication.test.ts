@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import 'zod'
 import capture from '../../shared/__fixtures__/omp-native-commands.json'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { openHostRig, send } from './acp-structured-host.test-support'
@@ -24,6 +25,7 @@ import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../runtime/rpc/me
 import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 import { deferred, tick } from './acp-scripted-agent.test-support'
+import './acp-timeline-fixture.test-support'
 
 afterEach(closeProviderTimelineRigs)
 

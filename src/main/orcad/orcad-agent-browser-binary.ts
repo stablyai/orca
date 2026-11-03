@@ -2,7 +2,7 @@ import { accessSync, constants, existsSync } from 'node:fs'
 import { arch, platform } from 'node:os'
 import { dirname, join } from 'node:path'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
-import { ensureDependencyBinaryExecutable } from '../browser/agent-browser-dependency-binary'
+import { ensureDependencyBinaryExecutable } from '../browser/agent-browser/agent-browser-dependency-binary'
 
 /** A slot carries only its own target's driver, so trying both libc names needs no libc probe. */
 function hostDriverNames(): string[] {

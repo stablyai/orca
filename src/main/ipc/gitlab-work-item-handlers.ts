@@ -12,7 +12,7 @@ import { getWorkItemDetails } from '../gitlab/work-item-details'
 import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitLabWorkItemHandlers(store: Store): void {
   ipcMain.handle(

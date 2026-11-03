@@ -3,7 +3,7 @@ import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-
 import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence/loading-store/store'
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectGhExecOptions: () => ({})
 }))
 
@@ -84,6 +84,30 @@ describe('registered GitHub repo lookup for a repo id on two hosts', () => {
     expect(
       assertRegisteredPRRefreshCandidateRepo(candidate({ repoPath: localTwin.path }), store)
     ).toBe(samePathSshTwin)
+  })
+
+  it('keeps checks and comments on the requested host when both copies share a path', () => {
+    const store = storeWith([localTwin, samePathSshTwin])
+    expect(
+      assertRegisteredGitHubRepo(
+        {
+          repoPath: localTwin.path,
+          repoId: localTwin.id,
+          repoOwnerExecutionHostId: 'ssh:builder'
+        },
+        store
+      )
+    ).toBe(samePathSshTwin)
+    expect(() =>
+      assertRegisteredGitHubRepo(
+        {
+          repoPath: localTwin.path,
+          repoId: localTwin.id,
+          repoOwnerExecutionHostId: 'ssh:missing'
+        },
+        store
+      )
+    ).toThrow('host does not match repository host')
   })
 
   it("keeps a lone row's own host over a stale candidate host", () => {

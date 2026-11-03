@@ -12,7 +12,7 @@ import { registerMobileHandlers } from '../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
-import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
@@ -39,7 +39,7 @@ import {
 } from '../runtime/runtime-rpc-startup-failure'
 import { registerCliForHeadlessServe } from './serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../cli/appimage-copy-pre-extraction'
-import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
+import { scheduleAllPendingHistoryTreeRemovals } from '../pty/history/terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
 import { startDesktopPushService } from './main-process-push-startup'
 import {
@@ -49,8 +49,8 @@ import {
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../window/main-window-updater'
-import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
-import { resolveUpdateInstallMode } from '../updater'
+import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-preservation'
+import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../browser/browser-identity-mode-store'
@@ -118,6 +118,7 @@ function installRuntimeRpc(
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
+  runtime.setAgentSenderPeerKey(() => runtimeRpc.getE2EEPublicKey())
   runtimeRpc.setMobileDesktopRelayHosts(createRuntimeEnvironmentMobileRelayHosts())
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,

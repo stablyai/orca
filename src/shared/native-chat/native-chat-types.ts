@@ -232,9 +232,14 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** On a user-role message another agent sent through Orca: who, as the journal recorded it. */
   from?: AgentMessageSource
   /** Projected creation fact, never a user turn or provider input. */
+  agentStartDispatchId?: string
   agentStart?: true
+  /** On a creation fact: the agent was launched on its own, not started as a supervised worker. */
+  agentHandoff?: true
   /** Accepted but not yet handed to the agent: drawn after everything the agent has done. */
   queued?: true
+  /** Client-only terminal echo placement relative to the current streaming reply. */
+  pendingSend?: 'active' | 'queued'
   /** Unsent rows belong to no turn. Draw at journal position, or after the conversation when unplaced. */
   unsent?: true
   /** This client's send, made while the chat read Stopping, that the host has not recorded yet. */

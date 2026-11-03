@@ -106,8 +106,10 @@ export abstract class CodexRuntimeHomeState {
     target: CodexAccountSelectionTarget,
     runtimeHomePath: string | null
   ): void
+  /** `pinnedWslDistro`: the distro a background poll gated, read as launch reads its named target. */
   abstract prepareForRateLimitFetch(
-    target?: CodexAccountSelectionTarget
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution
   abstract syncForCurrentSelection(
     target?: CodexAccountSelectionTarget,

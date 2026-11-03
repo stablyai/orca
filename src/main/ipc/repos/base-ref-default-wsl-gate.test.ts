@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DistroGateModule from '../../wsl-background-distro-gate'
+import type * as DistroGateModule from '../../wsl/discovery/wsl-background-distro-gate'
 import type { Repo } from '../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => {
@@ -30,10 +30,10 @@ vi.mock('../../git/repo', () => ({
   getRemoteCount: mocks.getRemoteCount,
   searchBaseRefDetails: vi.fn(async () => [])
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getProjectRuntimeReadGitOptions: () => mocks.state.gitOptions
 }))
-vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof DistroGateModule>()),
   readWslDistroRunningState: vi.fn(async () => mocks.state.distroState)
 }))
@@ -42,7 +42,7 @@ import { registerBaseRefQueryHandlers } from './base-ref-query-handlers'
 import {
   _resetWslBackgroundDistroGateForTests,
   noteWslDistrosRunning
-} from '../../wsl-background-distro-gate'
+} from '../../wsl/discovery/wsl-background-distro-gate'
 import { RuntimeRepositoryRefQueries } from '../../runtime/runtime-repository-ref-queries'
 
 const WSL_REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'

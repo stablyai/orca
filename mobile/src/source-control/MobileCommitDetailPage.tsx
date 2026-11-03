@@ -34,6 +34,8 @@ type Props = {
   commit: MobileGitHistoryItem
   bottomInset: number
   onBack: () => void
+  // Opens a file in the shared diff screen; rows stay inert when the host offers none.
+  onOpenFile?: (filePath: string) => void
 }
 
 function splitPath(path: string): { name: string; dir: string } {
@@ -57,7 +59,8 @@ export function MobileCommitDetailPage({
   worktreeId,
   commit,
   bottomInset,
-  onBack
+  onBack,
+  onOpenFile
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -271,19 +274,33 @@ export function MobileCommitDetailPage({
             {t('sourceControl.gitHistoryList.noFileChanges', 'No file changes')}
           </Text>
         ) : (
-          loadedFiles.map((file) => <CommitFileRow key={file.path} file={file} />)
+          loadedFiles.map((file) => (
+            <CommitFileRow key={file.path} file={file} onOpen={onOpenFile} />
+          ))
         )}
       </ScrollView>
     </View>
   )
 }
 
-function CommitFileRow({ file }: { file: MobileGitChangedFile }) {
+function CommitFileRow({
+  file,
+  onOpen
+}: {
+  file: MobileGitChangedFile
+  onOpen?: (filePath: string) => void
+}) {
   useMobileColorScheme()
   const status = file.status ?? 'modified'
   const { name, dir } = splitPath(file.path)
   return (
-    <View style={styles.fileRow} accessibilityLabel={file.path}>
+    <Pressable
+      style={({ pressed }) => [styles.fileRow, pressed && onOpen && styles.fileRowPressed]}
+      disabled={!onOpen}
+      onPress={() => onOpen?.(file.path)}
+      accessibilityRole={onOpen ? 'button' : undefined}
+      accessibilityLabel={file.path}
+    >
       <Text style={[styles.fileStatus, { color: statusColor(status) }]}>
         {STATUS_LABELS[status]}
       </Text>
@@ -301,7 +318,7 @@ function CommitFileRow({ file }: { file: MobileGitChangedFile }) {
         ) : null}
       </View>
       <CommitLineStat added={file.added ?? 0} removed={file.removed ?? 0} />
-    </View>
+    </Pressable>
   )
 }
 
@@ -358,6 +375,7 @@ const styles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     fontWeight: '600'
   },
+  fileRowPressed: { backgroundColor: colors.bgRaised },
   fileMain: { flex: 1, minWidth: 0 },
   fileName: { color: colors.textPrimary, fontSize: typography.bodySize },
   fileNameDeleted: { textDecorationLine: 'line-through', color: colors.textMuted },

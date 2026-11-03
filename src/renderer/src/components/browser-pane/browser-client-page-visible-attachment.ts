@@ -119,7 +119,7 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   observer?.observe(container)
   window.addEventListener('resize', syncViewport)
   window.addEventListener('scroll', syncViewport, true)
-  // Pane moves can fire no resize/scroll event; the shared position loop remeasures each shown host.
+  // Pane moves can fire no resize/scroll event; the shared position driver remeasures after layout changes.
   const releasePositionSync = registerBrowserClientPagePositionSync(syncViewport)
   syncViewport()
   // Idempotent: the registry releases a page it tears down, and the pane's own detach follows.
