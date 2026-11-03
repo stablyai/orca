@@ -25,7 +25,14 @@ it.each([true, false])(
       async () => ({ origin: 'probe', fetchedAt: 1, models })
     )
     const { mutate } = recordingMutate(async (_call, fields) =>
-      accepted({ options: { model: String(fields.value), effort: 'high' } }, true)
+      accepted(
+        {
+          key: 'model',
+          value: String(fields.value),
+          options: { model: String(fields.value), effort: 'high' }
+        },
+        true
+      )
     )
     const harness = await mountOptions({
       ...BASE,
