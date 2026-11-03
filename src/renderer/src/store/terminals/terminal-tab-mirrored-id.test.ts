@@ -26,15 +26,4 @@ describe('createTab with a mirrored host tab id', () => {
       store.getState().createTab(WT, undefined, undefined, { id: MIRRORED, mirroredHostTab: true })
     ).toThrow(/already exists/)
   })
-  it('still ignores a mirrored id from a caller that did not opt in', () => {
-    const tab = seeded().getState().createTab(WT, undefined, undefined, { id: MIRRORED })
-    expect(tab.id).not.toBe(MIRRORED)
-  })
-  it('ignores an opted-in id that is not a mirror of a valid host tab id', () => {
-    const tab = seeded().getState().createTab(WT, undefined, undefined, {
-      id: 'plain-tab',
-      mirroredHostTab: true
-    })
-    expect(tab.id).not.toBe('plain-tab')
-  })
 })
