@@ -21484,8 +21484,8 @@
         "restartCount_one": "{{count}} oturumu yeniden başlat",
         "reviewBody_other": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
         "reviewBody_one": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
-        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
-        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler."
+        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar.",
+        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar."
       }
     },
     "managedData": {

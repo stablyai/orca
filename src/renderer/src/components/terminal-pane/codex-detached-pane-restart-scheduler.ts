@@ -28,10 +28,7 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       hasAddedPendingCodexPaneRestart(
         state.pendingPaneAccountRestarts,
         previousState.pendingPaneAccountRestarts
-      ) ||
-      // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
-      (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+      )
     ) {
       scheduleClaimSweep()
     }

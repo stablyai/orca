@@ -21863,9 +21863,9 @@
         "reviewBody_one": "{{count}} outra sessão do Claude não foi movida para {{next}}.",
         "reviewBody_other": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
         "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar."
+        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora."
       }
     },
     "managedData": {

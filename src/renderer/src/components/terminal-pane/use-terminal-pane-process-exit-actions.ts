@@ -2,10 +2,6 @@ import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
-import {
-  isAccountRestartReady,
-  selectReadyAccountRestartPtyIds
-} from './pane-account-restart-readiness'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -227,22 +223,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     }
   }, [managerRef, panePtyLayoutBindings, paneTransportsRef, tabId])
 
-  // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
-  const readyRestartPtyIds = useAppStore(
-    useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
+  // Why primitive ids: unrelated store writes stay shallow-equal and skip this pane.
+  const queuedRestartPtyIds = useAppStore(
+    useShallow((state) => Object.keys(state.pendingPaneAccountRestarts))
   )
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager || readyRestartPtyIds.length === 0) {
+    if (!manager || queuedRestartPtyIds.length === 0) {
       return
     }
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (
-        !ptyId ||
-        !readyRestartPtyIds.includes(ptyId) ||
-        !isAccountRestartReady(useAppStore.getState(), tabId, pane.leafId, ptyId)
-      ) {
+      if (!ptyId || !queuedRestartPtyIds.includes(ptyId)) {
         continue
       }
       const agent = consumePendingPaneAccountRestart(ptyId)
@@ -257,10 +249,9 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     consumePendingPaneAccountRestart,
     handleRestartPane,
     panePtyLayoutBindings,
-    readyRestartPtyIds,
+    queuedRestartPtyIds,
     managerRef,
-    paneTransportsRef,
-    tabId
+    paneTransportsRef
   ])
 
   return { handleRestartExitedPane, handleCloseExitedPane }

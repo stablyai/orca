@@ -21110,9 +21110,9 @@
         "reviewBody_one": "No se trasladó {{count}} sesión más de Claude a {{next}}.",
         "reviewBody_other": "No se trasladaron {{count}} sesiones más de Claude a {{next}}.",
         "reviewBody_many": "No se trasladaron {{count}} sesiones más de Claude a {{next}}.",
-        "body_one": "{{count}} sesión de Claude sigue ejecutándose en {{previous}}. Al reiniciarla, la conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
-        "body_other": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
-        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse."
+        "body_one": "{{count}} sesión de Claude sigue ejecutándose en {{previous}}. Al reiniciarla, la conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
+        "body_other": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
+        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora."
       }
     },
     "hostSignIn": {
