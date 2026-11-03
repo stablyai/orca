@@ -160,51 +160,61 @@ it('treats a turn that settled without an Orca dispatch as past startup on exit'
   await adapter.closeAll()
 })
 
-it("reads a missing CLI from Orca's exit when the SDK reports the exit first", async () => {
-  const claude = fakeClaude({ holdInit: true })
-  const adapter = adapterAtPublishFor(claude)
-  const acquired = await adapter.acquire({
-    identity: identityFor(),
-    fence: 7,
-    spawnToken: 'missing-cli'
-  })
-  const connection = claude.connections[0]
-  const exited = Promise.withResolvers<Error>()
-  connection.exited = exited.promise
-  // A supervised spawn ENOENT: the supervisor exits 127 and the SDK reports only that exit.
-  connection.initializationResult = () =>
-    runClaudeControl(
-      'initialize',
-      () =>
-        Promise.reject(
-          Object.assign(new Error('Claude Code process exited with code 127'), {
-            errorClass: 'process_exited_nonzero',
-            exitCode: 127
-          })
-        ),
-      null
-    )
-  const result = adapter
-    .open({
-      sessionId: 'session-1',
+it.each(['the SDK reports the exit first', "Orca's own exit arrives first"])(
+  "reads a missing CLI from Orca's exit when %s",
+  async (order) => {
+    const claude = fakeClaude({ holdInit: true })
+    const adapter = adapterAtPublishFor(claude)
+    const acquired = await adapter.acquire({
+      identity: identityFor(),
       fence: 7,
-      acquisitionGeneration: acquired.acquisitionGeneration,
-      signal: new AbortController().signal
+      spawnToken: 'missing-cli'
     })
-    .catch((error) => error)
-  await tick()
-  exited.resolve(
-    withMissingProviderExecutable(
+    const connection = claude.connections[0]
+    const exited = Promise.withResolvers<Error>()
+    connection.exited = exited.promise
+    const report = Promise.withResolvers<never>()
+    connection.initializationResult = () =>
+      runClaudeControl('initialize', () => report.promise, null)
+    // A supervised spawn ENOENT: the supervisor exits 127 and the SDK reports only that exit.
+    const sdkReport = Object.assign(new Error('Claude Code process exited with code 127'), {
+      errorClass: 'process_exited_nonzero',
+      exitCode: 127
+    })
+    const ownExit = withMissingProviderExecutable(
       withObservedProviderExit(
         new Error('claude stream-json exited (code 127): spawn claude ENOENT')
       )
     )
-  )
-  const error = await result
-  expect(error).toMatchObject({ retry: 'never', fact: { kind: 'cliMissing' } })
-  claude.dispose()
-  await adapter.closeAll()
-})
+    const result = adapter
+      .open({
+        sessionId: 'session-1',
+        fence: 7,
+        acquisitionGeneration: acquired.acquisitionGeneration,
+        signal: new AbortController().signal
+      })
+      .catch((error) => error)
+    await tick()
+    if (order === 'the SDK reports the exit first') {
+      report.reject(sdkReport)
+      await tick()
+      exited.resolve(ownExit)
+    } else {
+      exited.resolve(ownExit)
+      connection.closed = true
+      connection.exitVerdict = { root: 'exited', tree: 'exited' }
+      connection.handlers.onExit?.(ownExit, { expected: false })
+      await tick()
+      report.reject(sdkReport)
+    }
+    const error = await result
+    expect(error).toMatchObject({ retry: 'never', fact: { kind: 'cliMissing' } })
+    // The verdict keeps Orca's record, diagnostic and absence marker, not the SDK's summary.
+    expect(findInErrorChain(error, (cause) => (cause === ownExit ? true : undefined))).toBe(true)
+    claude.dispose()
+    await adapter.closeAll()
+  }
+)
 
 it('settles an unanswered Claude startup exit with the same bounded recovery eligibility', async () => {
   vi.useFakeTimers()

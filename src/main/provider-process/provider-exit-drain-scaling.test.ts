@@ -224,3 +224,70 @@ it.each(Object.keys(TRANSPORTS))(
     expect(tenN.drains).toBe(10 * n.drains)
   }
 )
+
+/** JSON-lines output ending while its root still runs, then the exit after it, no exit at all, or
+ *  Orca closing while an exit's drain is pending; counts what each cycle leaves at its close. */
+async function jsonlLiveRootCycles(count: number) {
+  drains.length = 0
+  const timers = vi.spyOn(globalThis, 'setTimeout')
+  const settled = { answered: 0, failed: 0 }
+  const left: { timers: number; drainListeners: number }[] = []
+  const waitsAfterExit: number[] = []
+  for (let cycle = 0; cycle < count; cycle++) {
+    for (const ending of ['exit after EOF', 'no exit', 'close mid-drain'] as const) {
+      const opened = await TRANSPORTS.jsonl()
+      const { child } = opened
+      opened.pending.then(
+        () => (settled.answered += 1),
+        () => (settled.failed += 1)
+      )
+      if (ending === 'close mid-drain') {
+        child.emit('exit', 1, null)
+      } else {
+        child.stdout.end()
+        await vi.advanceTimersByTimeAsync(0)
+        if (ending === 'exit after EOF') {
+          await vi.advanceTimersByTimeAsync(PROVIDER_EXIT_OUTPUT_DRAIN_MS / 2)
+          child.emit('exit', 1, null)
+          await vi.advanceTimersByTimeAsync(0)
+          // The exit settles the call and ends the wait its output's end started.
+          waitsAfterExit.push(vi.getTimerCount())
+        } else {
+          await vi.advanceTimersByTimeAsync(PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+        }
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      const closing = opened.close()
+      if (ending === 'no exit') {
+        child.emit('exit', 0, null)
+      }
+      await closing
+      await vi.advanceTimersByTimeAsync(0)
+      left.push({ timers: vi.getTimerCount(), drainListeners: drainListeners() })
+      child.emit('close', 0, null)
+      await vi.advanceTimersByTimeAsync(PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+    }
+  }
+  const timersScheduled = timers.mock.calls.length
+  timers.mockRestore()
+  const finished = drains.map((drain) => drain.finished)
+  return { settled, left, waitsAfterExit, timersScheduled, drains: drains.length, finished }
+}
+
+it('jsonl: output ending before a live root exits leaves no timer or listener, at N and 10N', async () => {
+  vi.useFakeTimers()
+  const n = await jsonlLiveRootCycles(10)
+  const tenN = await jsonlLiveRootCycles(100)
+  for (const run of [n, tenN]) {
+    for (const held of run.left) {
+      expect(held).toEqual({ timers: 0, drainListeners: 0 })
+    }
+    expect(run.waitsAfterExit.every((waits) => waits === 0)).toBe(true)
+    expect(run.finished.every((finished) => finished === 1)).toBe(true)
+  }
+  // Every unanswered call fails exactly once, however its output and process ended.
+  expect(n.settled).toEqual({ answered: 0, failed: 30 })
+  expect(tenN.settled).toEqual({ answered: 0, failed: 300 })
+  expect(tenN.timersScheduled).toBe(10 * n.timersScheduled)
+  expect(tenN.drains).toBe(10 * n.drains)
+})

@@ -5,11 +5,12 @@ import type {
 import type { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import type { StructuredAgentSessionProviderOpenInput } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { JsonlRpcAgentExitError } from '../jsonl-rpc/agent-connection'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import type { PiRpcSession } from './rpc-session'
 import { piStartFailure } from './rpc-startup-outcome'
 
-/** Takes this child's own exit when first seen, so a start settling meanwhile cannot miss it; a
- *  protocol failure before it stays the cause. */
+/** Takes this child's own exit when first seen, so a start settling meanwhile cannot miss it; the
+ *  verdict weighs a failure before it against that exit. */
 export function watchPiStartExit(
   session: PiRpcSession,
   input: Pick<StructuredAgentSessionAcquireInput, 'events'>,
@@ -20,8 +21,11 @@ export function watchPiStartExit(
   session.connection.onExit((requested) => {
     if (!requested) {
       input.events?.observeRootExit?.()
-      const exited = new JsonlRpcAgentExitError('Pi exited while starting')
-      endings.record(sessionId, session.generation, piStartFailure(session.failure ?? exited))
+      const exited = withProviderSpawnAbsence(
+        new JsonlRpcAgentExitError('Pi exited while starting'),
+        session.connection.spawnAbsence
+      )
+      endings.record(sessionId, session.generation, piStartFailure([session.failure, exited]))
     }
   })
 }
@@ -46,7 +50,11 @@ export async function openPiStart(
       )
     }
     if (session.connection.closed) {
-      throw session.failure ?? new Error('Pi child ended before it opened')
+      throw (
+        endings.get(input.sessionId, input.acquisitionGeneration) ??
+        session.failure ??
+        new Error('Pi child ended before it opened')
+      )
     }
     return await session.open(input.signal)
   } catch (error) {

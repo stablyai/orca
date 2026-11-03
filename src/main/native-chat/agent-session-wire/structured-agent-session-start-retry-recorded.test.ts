@@ -3,7 +3,14 @@ import sdkExit from '../../claude/fixtures/startup-sdk-process-exit.json'
 import { CodexAppServerUnsupportedError } from '../../codex/app-server/codex-app-server-session'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { AcpAgentError, AcpInvalidResponseError, AcpRpcError } from '../../acp/acp-errors'
+import {
+  AcpAgentError,
+  AcpAgentExitedError,
+  AcpConnectionClosedError,
+  AcpInvalidResponseError,
+  AcpRequestTimeoutError,
+  AcpRpcError
+} from '../../acp/acp-errors'
 import { acpRpcEnvelopeSchema, settleAcpResponse } from '../../acp/acp-rpc-envelope'
 import {
   ClaudeControlRequestError,
@@ -13,7 +20,14 @@ import { createCodexAppServerRecordDispatcher } from '../../codex/app-server/cod
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { JsonlRpcPeer, JsonlRpcResponseError } from '../../jsonl-rpc/peer'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
-import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
+import {
+  withMissingProviderExecutable,
+  withProviderSpawnAbsence
+} from '../../provider-process/provider-executable-missing'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { CodexAppServerExitError } from '../../codex/app-server/codex-app-server-exit-error'
+import { JsonlRpcAgentExitError } from '../../jsonl-rpc/agent-connection'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
@@ -25,12 +39,13 @@ import {
   agentSessionAcquireFailure,
   agentSessionStartFailure,
   retryableAgentSessionAcquisition,
-  type AgentSessionStartAnswer
+  type AgentSessionStartAnswer,
+  type AgentSessionStartFailure
 } from './structured-agent-session-start-failure'
-import { codexStartupAnswer } from '../../codex/app-server/codex-startup-outcome'
-import { acpStartupAnswer } from '../../acp/acp-startup-outcome'
-import { piStartupAnswer } from '../../pi/rpc-startup-outcome'
-import { claudeStartupAnswer } from '../../claude/claude-startup-failure'
+import { codexStartFailure, codexStartupAnswer } from '../../codex/app-server/codex-startup-outcome'
+import { acpStartFailure, acpStartupAnswer } from '../../acp/acp-startup-outcome'
+import { piStartFailure, piStartupAnswer } from '../../pi/rpc-startup-outcome'
+import { claudeStartFailure, claudeStartupAnswer } from '../../claude/claude-startup-failure'
 import captures from './__fixtures__/startup-protocol-rejections.json'
 
 // Each adapter reads only its own answers; the shared rule then gives the generic verdict.
@@ -350,5 +365,173 @@ describe('positive provider startup retry contracts', () => {
     expect(error.data).toBe(data)
     expect(Object.keys(error)).not.toContain('data')
     expectExitEvidenceRequired(error)
+  })
+})
+
+describe('one verdict from every observation of a failed start', () => {
+  const recordedSdkExit = async (exitCode: number) => {
+    const recorded = sdkExit.records[0].initializationError
+    if (!recorded) {
+      throw new Error('missing recorded initialization error')
+    }
+    // The Debian lane's supervised spawn ENOENT: the recorded SDK shape, with the supervisor's 127.
+    const cause = Object.assign(new Error(`Claude Code process exited with code ${exitCode}`), {
+      ...recorded,
+      exitCode
+    })
+    return runClaudeControl('initialize', () => Promise.reject(cause)).catch(
+      (error: unknown) => error
+    )
+  }
+  const claudeOwnExit = (message: string) => withObservedProviderExit(new Error(message))
+  const recordedCodexRefusal = async () => {
+    const pending = Promise.withResolvers<unknown>()
+    const failed = pending.promise.catch((caught: unknown) => caught)
+    const dispatcher = createCodexAppServerRecordDispatcher({
+      handlers: {},
+      writeResponse: vi.fn(),
+      onProtocolFailure: vi.fn()
+    })
+    dispatcher.addPending(captures.codex.request.id, {
+      method: captures.codex.request.method,
+      ...pending,
+      timer: undefined
+    })
+    dispatcher.dispatch(captures.codex.response)
+    return failed
+  }
+  const loadTimeout = new AcpRequestTimeoutError('session/load', 300_000)
+  type Row = {
+    name: string
+    verdict: (evidence: unknown[]) => AgentSessionStartFailure
+    observations: () => Promise<[explains: unknown, other: unknown]>
+    retry: 'safe' | 'never'
+    kind: string
+  }
+  const rows: Row[] = [
+    {
+      name: "Claude: Orca's exit that found no CLI over the SDK's exit 127 report",
+      verdict: (evidence) => claudeStartFailure(evidence),
+      observations: async () => [
+        withMissingProviderExecutable(
+          claudeOwnExit('claude stream-json exited (code 127): spawn claude ENOENT')
+        ),
+        await recordedSdkExit(127)
+      ],
+      retry: 'never',
+      kind: 'cliMissing'
+    },
+    {
+      name: "Claude: Orca's plain exit record over the SDK's report of it",
+      verdict: (evidence) => claudeStartFailure(evidence),
+      observations: async () => [
+        claudeOwnExit('claude stream-json exited (code 1)'),
+        await recordedSdkExit(1)
+      ],
+      retry: 'safe',
+      kind: 'providerStartFailed'
+    },
+    {
+      name: 'Claude: a recorded control rejection over its exit',
+      verdict: (evidence) => claudeStartFailure(evidence),
+      observations: async () => [
+        await runClaudeControl(captures.claude.request.request.subtype, () =>
+          Promise.reject(new Error(captures.claude.response.response.error))
+        ).catch((caught: unknown) => caught),
+        claudeOwnExit('claude stream-json exited (code 1)')
+      ],
+      retry: 'never',
+      kind: 'startFailed'
+    },
+    {
+      name: 'Codex: a recorded refusal over its drained exit, worded as that exit',
+      verdict: (evidence) => codexStartFailure(evidence, true),
+      observations: async () => [
+        await recordedCodexRefusal(),
+        new CodexAppServerExitError('codex app-server exited')
+      ],
+      retry: 'never',
+      kind: 'providerStartFailed'
+    },
+    {
+      name: 'Codex: a declared temporary answer beside its drained exit',
+      verdict: (evidence) => codexStartFailure(evidence, true),
+      observations: async () => [
+        new CodexAppServerRequestError('initialize', -32001, 'Server overloaded; retry later.'),
+        new CodexAppServerExitError('codex app-server exited')
+      ],
+      retry: 'safe',
+      kind: 'providerStartFailed'
+    },
+    {
+      name: 'ACP: a load deadline over the exit seen while its output drained',
+      verdict: (evidence) => acpStartFailure(evidence, true),
+      observations: async () => [loadTimeout, new AcpAgentExitedError('agent exited')],
+      retry: 'never',
+      kind: 'startFailed'
+    },
+    {
+      name: "ACP: a deleted launch folder over the transport's closed summary",
+      verdict: (evidence) => acpStartFailure(evidence),
+      observations: async () => [
+        withProviderSpawnAbsence(new AcpAgentExitedError('agent exited'), 'launchFolder'),
+        new AcpConnectionClosedError()
+      ],
+      retry: 'never',
+      kind: 'launchFolderMissing'
+    },
+    {
+      name: 'Pi: a recorded rejection over its exit',
+      verdict: (evidence) => piStartFailure(evidence),
+      observations: async () => [
+        new JsonlRpcResponseError(captures.pi.response.command, captures.pi.response.error),
+        new JsonlRpcAgentExitError('Pi exited while starting')
+      ],
+      retry: 'never',
+      kind: 'startFailed'
+    },
+    {
+      name: 'Pi: its exit explains an unexplained failure, which still keeps the start final',
+      verdict: (evidence) => piStartFailure(evidence),
+      observations: async () => [
+        new JsonlRpcAgentExitError('Pi exited while starting'),
+        new Error('Invalid agent RPC response')
+      ],
+      retry: 'never',
+      kind: 'providerStartFailed'
+    }
+  ]
+
+  it.each(rows)('$name', async ({ verdict, observations, retry, kind }) => {
+    const [explains, other] = await observations()
+    // Precedence is the policy's, not the order the adapter saw them in.
+    for (const evidence of [
+      [explains, other],
+      [other, explains]
+    ]) {
+      const failure = verdict(evidence)
+      expect(failure.cause).toBe(explains)
+      expect(failure.retry).toBe(retry)
+      expect(failure.fact.kind).toBe(kind)
+    }
+  })
+
+  it("keeps a deadline's method, duration and words over the exit around it", () => {
+    const failure = acpStartFailure([new AcpAgentExitedError('agent exited'), loadTimeout], true)
+    const timedOut = agentSessionFailureFact('startFailed', {
+      requestTimeout: { method: 'session/load', timeoutMs: 300_000 }
+    })
+    expect(failure.fact).toEqual(timedOut)
+    expect(agentSessionFailureWords(failure.fact, { surface: 'rejection' })).toEqual(
+      agentSessionFailureWords(timedOut, { surface: 'rejection' })
+    )
+  })
+
+  it('still lets an unanswered exit run again when every observation is that exit', async () => {
+    const own = claudeOwnExit('claude stream-json exited (code 1)')
+    expect(claudeStartFailure([own, await recordedSdkExit(1)]).retry).toBe('safe')
+    expect(piStartFailure([new JsonlRpcAgentExitError('Pi exited while starting')]).retry).toBe(
+      'safe'
+    )
   })
 })

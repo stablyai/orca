@@ -22,7 +22,8 @@ export function openCodexStart(
           new Error(`no spawned codex child for session ${input.sessionId}`)
       )
   return opening.catch((error: unknown) => {
-    throw codexStartFailure(error, attempt?.exitProven === true && !attempt.cancelled)
+    const exited = attempt?.exitProven === true && !attempt.cancelled
+    throw codexStartFailure([error, exited ? attempt?.exitError : undefined], exited)
   })
 }
 

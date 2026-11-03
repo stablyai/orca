@@ -7,41 +7,40 @@ import {
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeStartupAnswer } from '../claude-startup-failure'
+import { claudeStartFailure, claudeStartupAnswer } from '../claude-startup-failure'
+import type { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
 
-/** A physical exit waits briefly for initialize's answer; a delivered answer outranks the exit. */
+/** A physical exit waits briefly for initialize's answer, which the start's verdict weighs
+ *  against the exit; a query closed by that exit is no answer. */
 export async function claudeStartupAnswerAfterExit(
   connection: Pick<ClaudeStreamJsonConnection, 'startupFailure'>,
   control: Promise<unknown>,
   exit: unknown
-): Promise<unknown> {
+): Promise<AgentSessionStartFailure> {
   const outcome = await withTimeout(
     control.then(
-      () => exit,
+      () => undefined,
       (error: unknown) => error
     ),
     2_000,
+    undefined
+  )
+  return claudeStartFailure([
+    connection.startupFailure?.(),
+    isClaudeQueryClosed(outcome) ? undefined : outcome,
     exit
-  )
-  return (
-    connection.startupFailure?.() ??
-    (isClaudeQueryClosed(outcome) || reportsClaudeExit(outcome) ? exit : outcome)
-  )
+  ])
 }
 
-/** The SDK's report that Claude's process ended is no answer; Orca's own record of that exit
- *  carries what ended it, such as a missing CLI, so a start reads that record instead. */
+/** Orca's own record of the exit an SDK report describes, which carries what ended it, such as a
+ *  missing CLI; the start's verdict weighs it against the report. */
 export async function claudeExitForReport(
   connection: Pick<ClaudeStreamJsonConnection, 'exited'>,
   error: unknown
 ): Promise<unknown> {
-  return reportsClaudeExit(error) && connection.exited
-    ? withTimeout<unknown>(connection.exited, 2_000, error)
-    : error
-}
-
-function reportsClaudeExit(error: unknown): boolean {
-  return error instanceof Error && claudeStartupAnswer(error) === 'exited'
+  return error instanceof Error && claudeStartupAnswer(error) === 'reported' && connection.exited
+    ? withTimeout<unknown>(connection.exited, 2_000, undefined)
+    : undefined
 }
 
 /** An exit before publication can follow initialize's answer, which only publication reads. */
@@ -53,9 +52,11 @@ export async function claudeStartupError(
   if (refusal || !connection) {
     return refusal ?? error
   }
-  return providerExitObserved(error)
-    ? claudeStartupAnswerAfterExit(connection, connection.initializationResult(), error)
-    : (connection.startupFailure?.() ?? error)
+  if (providerExitObserved(error)) {
+    return claudeStartupAnswerAfterExit(connection, connection.initializationResult(), error)
+  }
+  const result = connection.startupFailure?.()
+  return result ? claudeStartFailure([result, error]) : error
 }
 
 /** An unexpected exit, and when it ends the start: a delivered initialize answer outranks it. The

@@ -20,8 +20,10 @@ import {
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-acquisition-errors'
 import {
+  launchPreparationDiagnosticOf,
   providerExitObserved,
   providerStartupFailureFact,
+  startupAcquisitionRefusal,
   withObservedProviderExit
 } from './structured-agent-session-failure-text'
 
@@ -29,8 +31,11 @@ import {
 export type AgentSessionStartRetry = 'safe' | 'never'
 
 /** An adapter's reading of one error in the chain: the agent's answer, final or declared
- *  temporary, or its own transport ending with no answer once output drained. */
-export type AgentSessionStartAnswer = (cause: Error) => 'final' | 'temporary' | 'exited' | undefined
+ *  temporary; Orca's own record of its transport ending with no answer once output drained; or
+ *  an SDK's report of that ending, which tells less than Orca's record of it. */
+export type AgentSessionStartAnswer = (
+  cause: Error
+) => 'final' | 'temporary' | 'exited' | 'reported' | undefined
 
 export class AgentSessionStartFailure extends Error {
   readonly fact: SubmissionRejectionFact
@@ -46,23 +51,52 @@ export class AgentSessionStartFailure extends Error {
   }
 }
 
-/** `exited`: the adapter saw its process end on its own, which words even a final answer as the
- *  agent's own failure to start without changing whether it may run again. */
+/** One verdict from every observation an adapter kept of a failed start: the operation's errors,
+ *  a failed result seen for it and Orca's own record of its process ending, earliest first. It
+ *  may run again only if every observation allows it; the most specific one explains it, ties
+ *  going to the earliest. `exited`: the adapter saw its process end on its own, which words even
+ *  a final answer as the agent's own failure to start without changing whether it may run again. */
 export function agentSessionStartFailure(
-  error: unknown,
+  evidence: unknown,
   answer?: AgentSessionStartAnswer,
   exited = false
 ): AgentSessionStartFailure {
-  if (error instanceof AgentSessionStartFailure) {
-    return error
+  const observed = Array.isArray(evidence)
+    ? evidence.filter((cause, index) => cause != null && evidence.indexOf(cause) === index)
+    : [evidence]
+  const verdict = observed.find((cause) => cause instanceof AgentSessionStartFailure)
+  if (verdict) {
+    return verdict
   }
-  const disposition = startDisposition(error, answer)
+  const readings = observed.map((cause) => startDisposition(cause, answer))
+  const ranks = observed.map((cause, index) => explanationRank(cause, readings[index].answers))
+  const selected = ranks.indexOf(Math.min(...ranks))
+  const error = observed[selected]
   // An adapter's own exit error words the start as the agent's failure, as an observed exit does.
   const worded =
-    (exited || disposition.exited) && error instanceof Error
+    (exited || readings[selected].exited) && error instanceof Error
       ? withObservedProviderExit(new Error(error.message, { cause: error }))
       : error
-  return new AgentSessionStartFailure(error, disposition.retry, providerStartupFailureFact(worded))
+  const retry = readings.every((reading) => reading.retry === 'safe') ? 'safe' : 'never'
+  return new AgentSessionStartFailure(error, retry, providerStartupFailureFact(worded))
+}
+
+/** Most specific first: what the user can act on, the request's deadline, the agent's answer,
+ *  Orca's record of its exit, an SDK's report of that exit, then anything else. */
+function explanationRank(cause: unknown, answers: ReadonlySet<string | undefined>): number {
+  const rank = [
+    agentCliInstallationProblemOf(cause),
+    startupAcquisitionRefusal(cause),
+    providerExecutableMissing(cause),
+    providerLaunchFolderMissing(cause),
+    launchPreparationDiagnosticOf(cause) ?? argumentProblemOf(cause),
+    providerRequestTimeoutOf(cause),
+    ['final', 'temporary', 'never', 'safe'].some((read) => answers.has(read)) ||
+      providerResourcePressure(cause),
+    answers.has('exited') || providerExitObserved(cause),
+    answers.has('reported')
+  ].findIndex(Boolean)
+  return rank === -1 ? 9 : rank
 }
 
 /** The adapter's verdict on an error where it read an answer or its own exit; otherwise none. */
@@ -167,7 +201,17 @@ export function retryableAgentSessionAcquisition(error: unknown): boolean {
 function startDisposition(
   error: unknown,
   answer?: AgentSessionStartAnswer
-): { retry: AgentSessionStartRetry; exited: boolean } {
+): {
+  retry: AgentSessionStartRetry
+  exited: boolean
+  answers: Set<ReturnType<AgentSessionStartAnswer> | AgentSessionStartRetry>
+} {
+  const answers = new Set<ReturnType<AgentSessionStartAnswer> | AgentSessionStartRetry>()
+  findInErrorChain(error, (cause) => {
+    answers.add(cause instanceof AgentSessionStartFailure ? cause.retry : answer?.(cause))
+    // An adapter's verdict already covers the errors beneath it.
+    return cause instanceof AgentSessionStartFailure ? true : undefined
+  })
   if (
     providerRequestTimeoutOf(error) ||
     argumentProblemOf(error) ||
@@ -181,27 +225,20 @@ function startDisposition(
       isAgentSessionPreSpawnError(cause)
         ? true
         : undefined
-    )
+    ) ||
+    answers.has('never') ||
+    answers.has('final')
   ) {
-    return { retry: 'never', exited: false }
+    return { retry: 'never', exited: false, answers }
   }
-  const answers = new Set<ReturnType<AgentSessionStartAnswer> | AgentSessionStartRetry>()
-  findInErrorChain(error, (cause) => {
-    answers.add(cause instanceof AgentSessionStartFailure ? cause.retry : answer?.(cause))
-    // An adapter's verdict already covers the errors beneath it.
-    return cause instanceof AgentSessionStartFailure ? true : undefined
-  })
-  if (answers.has('never') || answers.has('final')) {
-    return { retry: 'never', exited: false }
-  }
-  const exited = answers.has('exited')
+  const exited = answers.has('exited') || answers.has('reported')
   const safe =
     exited ||
     answers.has('safe') ||
     answers.has('temporary') ||
     providerExitObserved(error) ||
     providerResourcePressure(error)
-  return { retry: safe ? 'safe' : 'never', exited }
+  return { retry: safe ? 'safe' : 'never', exited, answers }
 }
 
 /** The host ran short of processes or files; the same launch can run once that passes. */

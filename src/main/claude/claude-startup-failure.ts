@@ -15,7 +15,7 @@ export function claudeStartupErrorClass(error: Error): string | undefined {
     : undefined
 }
 
-/** The SDK's tag says whether Claude's process ended unanswered; every other tag is its answer.
+/** The SDK's tag reports whether Claude's process ended unanswered; every other tag is its answer.
  *  A launch the host could not run for want of resources is left to the shared rule. */
 export const claudeStartupAnswer: AgentSessionStartAnswer = (error) => {
   const tag =
@@ -27,7 +27,7 @@ export const claudeStartupAnswer: AgentSessionStartAnswer = (error) => {
     return undefined
   }
   if (tag === 'process_exited_nonzero' || tag === 'process_killed_by_signal') {
-    return 'exited'
+    return 'reported'
   }
   if (tag === 'executable_launch_failed' || tag === 'spawn_failed' || tag === 'process_error') {
     return providerResourcePressure(error) ? undefined : 'final'

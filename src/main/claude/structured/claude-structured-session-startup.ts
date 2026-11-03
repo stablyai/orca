@@ -1,4 +1,5 @@
 import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
+import { claudeStartFailure } from '../claude-startup-failure'
 import {
   startupAcquisitionRefusal,
   providerExitObserved
@@ -82,18 +83,20 @@ export async function readClaudeStartupFacts(input: {
   })
   const initialization = await Promise.race([
     control.catch(async (error: unknown) => {
+      let proof: unknown
       try {
         input.initProof.seen()
       } catch (proofError) {
-        if (startupAcquisitionRefusal(proofError)) {
-          throw proofError
-        }
-        if (isClaudeQueryClosed(error)) {
-          throw input.connection.startupFailure?.() ?? proofError
-        }
+        // A refusal, or what closed the query before Claude identified itself, is an answer.
+        proof =
+          startupAcquisitionRefusal(proofError) || isClaudeQueryClosed(error) ? proofError : null
       }
-      const ended = await claudeExitForReport(input.connection, error)
-      throw input.connection.startupFailure?.() ?? ended
+      throw claudeStartFailure([
+        input.connection.startupFailure?.(),
+        proof,
+        error,
+        await claudeExitForReport(input.connection, error)
+      ])
     }),
     Promise.race([
       input.initProof.promise.then(() => new Promise<never>(() => {})),

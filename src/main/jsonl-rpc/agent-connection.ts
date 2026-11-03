@@ -69,6 +69,10 @@ export class JsonlRpcAgentConnection {
         ...options,
         // Output often ends just before the exit whose report says how the agent ended.
         onInputEnd: (finish) => {
+          // Output reports its end and then its close; both are one end, with one wait.
+          if (this.inputEnded) {
+            return
+          }
           this.inputEnded = true
           if (this.closing || managed.rootVerdict === 'exited') {
             finish()
