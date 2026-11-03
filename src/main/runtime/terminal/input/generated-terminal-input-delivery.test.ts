@@ -616,8 +616,8 @@ describe('generated input retargeted to a replacement running another agent', ()
 // only a permission event after its own text commit, or a current dialog, does.
 describe('generated input and permission history', () => {
   const PERMISSION_TITLE = '\x1b]0;Codex waiting for permission\x07'
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sizes the host's headless model to the recording, through its protected members.
   const sized = (runtime: OrcaRuntimeService) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sizes the host's headless model to the recording, through its protected members.
     const host = runtime as unknown as {
       ptyController: { getSize?: () => { cols: number; rows: number } }
       resizeHeadlessTerminal: (ptyId: string, cols: number, rows: number) => void

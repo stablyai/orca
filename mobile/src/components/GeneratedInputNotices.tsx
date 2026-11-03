@@ -86,40 +86,43 @@ export function GeneratedInputNotices({
 }) {
   // Indexed by id in add order: a live change touches only its own entry. The wrapper is new on
   // each change so React re-renders; the map itself is not copied.
-  const [view, setView] = useState(() => ({ notices: new Map<string, Shown>() }))
+  const [view, setView] = useState<{ notices: ReadonlyMap<string, Shown> }>(() => ({
+    notices: new Map()
+  }))
   const capable = capabilities.includes(GENERATED_INPUT_RECOVERY_RUNTIME_CAPABILITY)
   useEffect(() => {
     if (!client || !capable) {
       return
     }
+    // This subscription's view; each change hands React a new wrapper around it.
+    let notices = new Map<string, Shown>()
     const feed = createGeneratedInputNoticeFeed({
       // A refused page throws; the feed then keeps what it has rather than deleting anything.
       readPage: async (from) =>
         readNoticePage.interpret(await readNoticePage.request(client, from ?? {})),
-      onSnapshot: (notices, session) =>
-        setView(({ notices: previous }) => ({
-          // Unchanged notices keep their record, so their banners do not re-render.
-          notices: new Map(
-            notices.map((notice) => {
-              const kept = previous.get(notice.id)
-              const key = `${session}:${notice.id}`
-              return [notice.id, kept?.key === key ? kept : { key, notice }]
-            })
-          )
-        })),
-      // Set and delete are idempotent, so an updater React runs twice changes nothing more.
-      onDelta: (delta, session) =>
-        setView(({ notices }) => {
-          if (delta.kind === 'added') {
-            notices.set(delta.notice.id, {
-              key: `${session}:${delta.notice.id}`,
-              notice: delta.notice
-            })
-          } else {
-            notices.delete(delta.id)
-          }
-          return { notices }
-        })
+      onSnapshot: (snapshot, session) => {
+        const previous = notices
+        // Unchanged notices keep their record, so their banners do not re-render.
+        notices = new Map(
+          snapshot.map((notice) => {
+            const kept = previous.get(notice.id)
+            const key = `${session}:${notice.id}`
+            return [notice.id, kept?.key === key ? kept : { key, notice }]
+          })
+        )
+        setView({ notices })
+      },
+      onDelta: (delta, session) => {
+        if (delta.kind === 'added') {
+          notices.set(delta.notice.id, {
+            key: `${session}:${delta.notice.id}`,
+            notice: delta.notice
+          })
+        } else {
+          notices.delete(delta.id)
+        }
+        setView({ notices })
+      }
     })
     const unsubscribe = client.subscribe(
       'terminal.generatedInputNotices.subscribe',
