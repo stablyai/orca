@@ -235,7 +235,7 @@ describe('Pi host launch resolution', () => {
     expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc', '--session', file])
   })
 
-  it('distinguishes an unsaved creation from an existing session that could not restore', async () => {
+  it('supersedes an unsaved creation and refuses a resumed session whose file is gone', async () => {
     const h = await setup()
     const missing = join(root, 'missing.jsonl')
     h.withPrior(h.prior(missing))
@@ -246,11 +246,10 @@ describe('Pi host launch resolution', () => {
       supersedesKey: agentSessionProviderHandleKey(h.prior(missing).handle)
     })
     h.withPrior(h.prior(missing, 'resumed'))
-    const lost = await h.resolver(identity)
-    expect(lost.replacement).toBe('restore-failed')
-    expect(
-      piRpcProviderLink(lost, join(root, 'replacement.jsonl'), 2, 'replace', 200)
-    ).toMatchObject({ replaces: { reason: 'restore-failed', replacedAt: 200 } })
+    await expect(h.resolver(identity)).rejects.toMatchObject({
+      name: 'AgentSessionAcquisitionRefusal',
+      reason: 'savedConversationMissing'
+    })
   })
 
   it('refuses a different execution host and a foreign account home before resolving paths', async () => {

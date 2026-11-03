@@ -19,6 +19,9 @@ export function callAcpSession<T>(
           answered?.(false)
           throw acpAuthRequiredError(error)
         }
+        if (error instanceof AcpAgentError) {
+          error.request = { method, ...requestedSessionId(params) }
+        }
         throw error
       }
       const parsed = schema.safeParse(response.value)
@@ -35,6 +38,15 @@ export function callAcpSession<T>(
       return parsed.data
     }
   })
+}
+
+function requestedSessionId(params: unknown): { sessionId?: string } {
+  return typeof params === 'object' &&
+    params !== null &&
+    'sessionId' in params &&
+    typeof params.sessionId === 'string'
+    ? { sessionId: params.sessionId }
+    : {}
 }
 
 export type AcpResponse = { value: unknown } | { error: Error }

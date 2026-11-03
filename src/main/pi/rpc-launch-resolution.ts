@@ -16,6 +16,7 @@ import {
   type AgentCliVersionReader
 } from '../agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   assertStructuredAgentResolutionCurrent,
@@ -35,7 +36,7 @@ import {
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
-  replacement?: 'unsaved' | 'restore-failed'
+  replacement?: 'unsaved'
   /** Conversation files, newest first; empty for a new conversation. */
   lineage?: readonly string[]
 }
@@ -188,8 +189,15 @@ export function piRpcLaunchPart(
           reason: 'transcriptNotFound'
         })
       }
+      if (header === null && previous.origin !== 'created') {
+        // The pinned file is gone; resuming it is impossible and nothing replaces it in this chat.
+        throw new AgentSessionAcquisitionRefusal(
+          `Pi session file ${source} was not found`,
+          'savedConversationMissing'
+        )
+      }
       if (header === null) {
-        replacement = previous.origin === 'created' ? 'unsaved' : 'restore-failed'
+        replacement = 'unsaved'
       } else if (await samePiDirectory(header.cwd, cwd)) {
         sessionFile = source
       } else {
@@ -265,9 +273,6 @@ export function piRpcProviderLink(
     ...(launch.forkFile && key ? { forkedFromKey: key } : {}),
     ...(launch.replacement === 'unsaved' && key
       ? { supersedesKey: key, ...(previous?.replaces ? { replaces: previous.replaces } : {}) }
-      : {}),
-    ...(launch.replacement === 'restore-failed' && key
-      ? { replaces: { key, reason: 'restore-failed', replacedAt: at } }
       : {})
   }
 }

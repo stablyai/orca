@@ -7,11 +7,7 @@
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import {
-  ACP_REOPEN_FAILED,
-  acpReopenTakeover,
-  acpSessionNotRestoredRow
-} from './acp-session-reopen-failure'
+import { acpReopenTakeover, acpSessionNotRestoredRow } from './acp-session-reopen-failure'
 import { catchUpAcpHistory } from './history/acp-history-catch-up'
 import type { AcpLoadHistoryFrame } from './history/acp-history-replay'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
@@ -89,9 +85,7 @@ export async function initializeAcpStructuredSession(
     } catch (error) {
       assertStarting()
       takeover = acpReopenTakeover(error, resume, {
-        over: connection.closed || input.abandoned(),
-        now: now(),
-        warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
+        over: connection.closed || input.abandoned()
       })
     }
   }
@@ -168,11 +162,7 @@ export async function initializeAcpStructuredSession(
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
   // Include warning rows missed by earlier failed starts.
-  const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
-    ...(takeover?.replaces ? [takeover.replaces.key] : [])
-  ]
-  for (const key of lost) {
+  for (const key of launch.resume?.unannouncedLosses() ?? []) {
     liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
   }
   assertStarting()

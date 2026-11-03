@@ -12,8 +12,13 @@ export class AcpRpcError extends Error {
   }
 }
 
+/** The Orca request an agent rejection answered; never persisted. */
+export type AcpAgentErrorRequest = { method: string; sessionId?: string }
+
 /** A rejection received from the agent, distinct from local transport failures. */
 export class AcpAgentError extends AcpRpcError {
+  request?: AcpAgentErrorRequest
+
   constructor(code: number, message: string, data?: unknown) {
     super(code, message, data)
     this.name = 'AcpAgentError'
