@@ -304,7 +304,9 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications = this.sessions.observeConversationPublications.bind(this.sessions)
+  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
+    ...args
+  ) => this.sessions.observeConversationPublications(...args)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   queuedSendAnswer = this.reads.queuedSendAnswer
   /** What became of one send, answered by key, for callers that follow many sends. */
@@ -337,8 +339,7 @@ export class StructuredAgentSessionHost {
   /** Retains no per-session subscription. */
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
-  regenerateConversationName = (sessionId: string): boolean =>
-    this.deps.conversationNaming?.regenerate(sessionId) ?? false
+  regenerateConversationName = (id: string) => this.deps.conversationNaming?.regenerate(id) ?? false
   setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
     this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 
