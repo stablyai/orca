@@ -52,15 +52,13 @@ export function structuredAgentSessionShownSnapshot(
 ): SessionOptionDescriptor[] {
   const view = structuredAgentSessionOptionView(state, undefined, {})
   const snapshot = structuredAgentSessionOptionSnapshot(view)
-  const model = structuredAgentSessionModelId(view.record, 'any')
+  const modelOption = snapshot.find((descriptor) => descriptor.id === 'model')
+  const model = modelOption?.kind.currentValue
+  const descriptor = snapshot.find((entry) => entry.id === 'effort')
   if (
-    !model ||
-    !snapshot.some(
-      (descriptor) =>
-        descriptor.id === 'effort' &&
-        descriptor.kind.type === 'select' &&
-        descriptor.kind.currentValue === undefined
-    )
+    view.record.values.effort !== undefined ||
+    typeof model !== 'string' ||
+    descriptor?.kind.type !== 'select'
   ) {
     return snapshot
   }
@@ -76,24 +74,25 @@ export function structuredAgentSessionShownSnapshot(
           effort.defaultIsCliDefault
         ? effort.defaultValue
         : undefined
-  if (
-    !fallback ||
-    effort?.type !== 'select' ||
-    (declaration !== undefined && !effort.choices.some((choice) => choice.value === fallback))
-  ) {
+  const currentValue =
+    fallback &&
+    effort?.type === 'select' &&
+    (declaration === undefined || effort.choices.some((choice) => choice.value === fallback))
+      ? fallback
+      : undefined
+  if (descriptor.kind.currentValue === currentValue) {
     return snapshot
   }
-  // A declared default supplies context only; both Send paths still read the canonical snapshot.
-  return snapshot.map((descriptor) =>
-    descriptor.id === 'effort' &&
-    descriptor.kind.type === 'select' &&
-    descriptor.kind.currentValue === undefined
+  const kind = descriptor.kind
+  // Observations supply display context; capture reads accepted literal input separately.
+  return snapshot.map((entry) =>
+    entry === descriptor
       ? {
-          ...descriptor,
-          valueSource: 'default',
-          kind: { ...descriptor.kind, currentValue: fallback }
+          ...entry,
+          valueSource: currentValue ? 'default' : 'unknown',
+          kind: { ...kind, currentValue }
         }
-      : descriptor
+      : entry
   )
 }
 
@@ -118,7 +117,7 @@ function modelOptionView(
   return commitStructuredAgentSessionOptionValues(view, held)
 }
 
-/** Claude sends its own values plus held picks. New chats/older hosts pin shown defaults on first send; resumed chats display defaults without sending them. */
+/** Claude keeps the legacy model baseline; current-host effort comes only from accepted input. */
 export function structuredAgentSessionSendSelection(
   view: StructuredAgentSessionOptionState
 ): Record<string, string> | undefined {
@@ -134,9 +133,14 @@ export function structuredAgentSessionSendSelection(
     return kind?.type === 'select' ? kind.currentValue : undefined
   }
   const model = structuredAgentSessionOwnValue(view.record, 'model') ?? shown('model')
-  const effort = structuredAgentSessionOwnValue(view.record, 'effort') ?? shown('effort')
+  const effort =
+    view.acceptedInputSources !== undefined
+      ? view.acceptedInputSources.effort
+        ? view.record.values.effort?.value
+        : undefined
+      : (structuredAgentSessionOwnValue(view.record, 'effort') ?? shown('effort'))
   return model || effort
-    ? { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+    ? { ...(model ? { model } : {}), ...(effort ? { effort: String(effort) } : {}) }
     : undefined
 }
 
@@ -160,13 +164,16 @@ export function structuredAgentSessionMessageSelection(
       continue
     }
     const raw =
-      view.record.agent === 'pi' && (id === 'model' || id === 'effort')
+      (id === 'effort' && view.acceptedInputSources !== undefined) ||
+      (view.record.agent === 'pi' && (id === 'model' || id === 'effort'))
         ? view.record.values[id]?.value
         : undefined
     const value =
-      raw ??
-      descriptor?.kind.currentValue ??
-      (view.acceptedInputSources !== undefined ? view.record.values[id]?.value : undefined)
+      id === 'effort' && view.acceptedInputSources !== undefined
+        ? raw
+        : (raw ??
+          descriptor?.kind.currentValue ??
+          (view.acceptedInputSources !== undefined ? view.record.values[id]?.value : undefined))
     if (value !== undefined) {
       selection[id] = String(value)
     }

@@ -163,11 +163,17 @@ describe('what a send carries', () => {
       catalog,
       launch
     )
-    // The first send still pins policy defaults on hosts that have not answered options.
-    expect(structuredAgentSessionMessageSelection(state)).toMatchObject({
-      model: 'native',
-      effort: 'low'
-    })
+    // Learning the model does not choose an effort.
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'native' })
+    expect(
+      structuredAgentSessionMessageSelection({
+        ...state,
+        acceptedInputSources: {
+          ...state.acceptedInputSources,
+          effort: 'saved'
+        }
+      })
+    ).toEqual({ model: 'native' })
     state = applyStructuredAgentSessionOptions(
       state,
       CODEX_SESSION_OPTION_CATALOG,
@@ -264,6 +270,48 @@ describe('what a send carries', () => {
       }
     }
   )
+
+  it('captures literal accepted effort independently of reports, aliases and missing catalog rows', () => {
+    const literal = { model: 'opus[1m]', effort: 'vendor/custom' }
+    let state = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
+      models: CLI302,
+      current: {
+        model: 'claude-opus-5-5[1m]',
+        effort: 'high',
+        confirmed: ['effort'],
+        acceptedInputSources: { model: 'saved' },
+        defaulted: []
+      }
+    })
+    expect(structuredAgentSessionSendSelection(state)).toEqual({ model: 'claude-opus-5-5[1m]' })
+    const picked = commitStructuredAgentSessionOption(state, 'effort', literal.effort)
+    for (const view of [
+      picked,
+      structuredAgentSessionOptionView(withHostList(), literal, {}),
+      structuredAgentSessionOptionView(state, undefined, literal)
+    ]) {
+      expect(structuredAgentSessionMessageSelection(view).effort).toBe(literal.effort)
+      expect(structuredAgentSessionSendSelection(view)?.effort).toBe(literal.effort)
+    }
+    state = applyStructuredAgentSessionOptions(state, CLAUDE_SESSION_OPTION_CATALOG, {
+      models: [],
+      current: {
+        ...literal,
+        acceptedInputSources: { model: 'saved', effort: 'saved' },
+        defaulted: []
+      }
+    })
+    const capture = structuredAgentSessionMessageSelection(state)
+    state = commitStructuredAgentSessionOption(state, 'model', 'retired-unlisted')
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      ...literal,
+      model: 'retired-unlisted'
+    })
+    expect(capture).toEqual(literal)
+    const absent = { ...state, record: { ...state.record, values: {} } }
+    expect(structuredAgentSessionMessageSelection(absent)).not.toHaveProperty('effort')
+    expect(structuredAgentSessionSendSelection(absent)).toBeUndefined()
+  })
 
   it('carries held picks without committing them to the chat', () => {
     const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
