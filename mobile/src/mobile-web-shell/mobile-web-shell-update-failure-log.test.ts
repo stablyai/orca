@@ -117,7 +117,9 @@ describe('the generation store keeps the log', () => {
       totalBytes: 1,
       elapsedMs: 1
     }
-    await store.commitGeneration(await store.stageGeneration(host, bundle))
+    const lease = await store.commitGeneration(await store.stageGeneration(host, bundle))
+    await store.confirmGeneration(lease, () => true)
+    store.releaseGeneration(lease)
     expect((await store.readActiveGeneration(host))?.buildId).toBe(buildId)
     expect(fileSystem.paths()).toContain(`${host}/generations/${buildId}/manifest.json`)
     expect(fileSystem.bytes(`${host}/generations/${buildId}/index.html`)).toEqual(new Uint8Array(1))

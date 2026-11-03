@@ -135,7 +135,11 @@ async function cacheGeneration(
   manifest: MobileWebBundleManifestRead = GOOD_MANIFEST
 ): Promise<void> {
   const store = createGenerationStore({ fileSystem })
-  await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetchResultFor(manifest)))
+  const lease = await store.commitGeneration(
+    await store.stageGeneration(HOST_KEY, fetchResultFor(manifest))
+  )
+  await store.confirmGeneration(lease, () => true)
+  store.releaseGeneration(lease)
 }
 
 function refuseTheAssets(): Promise<MobileWebBundleFetchResult> {
@@ -344,6 +348,6 @@ describe('an update the shell refuses while the host is reachable', () => {
 
     expect(updated.state()).toMatchObject({ kind: 'ready', buildId: NEWER_BUILD_ID })
     expect(updated.updateNotice()).toBeNull()
-    expect(cachedBuildIds(fileSystem)).toEqual([NEWER_BUILD_ID])
+    expect(cachedBuildIds(fileSystem)).toEqual([GOOD_BUILD_ID, NEWER_BUILD_ID].sort())
   })
 })

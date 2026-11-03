@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
-// Grant-only edits keep the build id: use fresh grants online but preserve the downloaded manifest for offline entry. Test cold mounts sharing only the real store’s disk.
+// Grant-only edits keep the asset digest; the installed generation retains its own grants online and offline.
 type Doubles = {
   connection: { client: object | null; state: string }
   gates: {
@@ -109,7 +109,9 @@ async function cacheGeneration(
     totalBytes: TOTAL_BYTES,
     elapsedMs: 1
   }
-  await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetched))
+  const lease = await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetched))
+  await store.confirmGeneration(lease, () => true)
+  store.releaseGeneration(lease)
 }
 
 type Mounted = {
@@ -187,7 +189,7 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     const online = await mountRoute(fileSystem)
 
     expect(online.state()).toMatchObject({ kind: 'ready', buildId: BUILD_ID })
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual(GRANTS_A)
     const generationWrites = fileSystem.writes
       .slice(settled)
       .filter((path) => path.startsWith(`${HOST_KEY}/generations/`))
@@ -196,12 +198,12 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     await online.unmount()
   })
 
-  it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {
+  it('keeps the installed grants across online and offline cold mounts', async () => {
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
     doubles.manifest = M2
     const online = await mountRoute(fileSystem)
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual(GRANTS_A)
     await online.unmount()
 
     goOffline()

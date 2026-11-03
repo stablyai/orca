@@ -14,7 +14,7 @@ export type GenerationFileSystem = {
   list(uri: string): Promise<readonly GenerationDirectoryEntry[]>
   // Create parents and tolerate an existing directory.
   createDirectory(uri: string): Promise<void>
-  // Both writes create parents.
+  // Both writes create parents; Expo exposes no fsync or power-loss durability guarantee.
   writeBytes(uri: string, bytes: Uint8Array): Promise<void>
   writeText(uri: string, text: string): Promise<void>
   // Return null only for absence; unreadable files must throw so transient I/O cannot make the store delete a valid cache.

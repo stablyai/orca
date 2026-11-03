@@ -1,3 +1,4 @@
+import type { GenerationLease } from './generation-store'
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import type { MobileWebPageRoute, PageRouteRefusalVerdict } from './page-route-policy'
 import type {
@@ -95,7 +96,8 @@ export type MobileWebShellSessionEffect =
       readonly buildId: string
       readonly totalBytes: number
     }
-  | { readonly kind: 'delete-cache' }
+  | { readonly kind: 'rollback-generation'; readonly buildId: string }
+  | { readonly kind: 'confirm-generation' }
   | { readonly kind: 'remount' }
   // Stamp expiry with its flow; the reducer ignores it once ready arrives, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
@@ -128,7 +130,15 @@ export type MobileWebShellSessionEvent =
     }
   | { readonly type: 'download-staged'; readonly flow: number }
   | {
+      readonly type: 'rollback-read'
+      readonly flow: number
+      readonly generation: CachedGeneration | null
+    }
+  | { readonly type: 'generation-open-failed'; readonly flow: number }
+  | {
       readonly type: 'activated'
+      readonly lease?: GenerationLease
+      readonly generation?: CachedGeneration
       readonly flow: number
       readonly generationDirectory: string
       readonly sessionId: string

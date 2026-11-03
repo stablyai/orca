@@ -134,6 +134,10 @@ function cachedStore() {
     })
   }
   const store: GenerationStore = {
+    acquireGeneration: async () => ({ generation: active }),
+    releaseGeneration: () => undefined,
+    confirmGeneration: async () => undefined,
+    rejectGeneration: async () => undefined,
     readActiveGeneration: async () => {
       const answer = cached
       if (cache.holdReads) {
@@ -145,7 +149,7 @@ function cachedStore() {
     stageGeneration: async () => ({ ...active, hostKey: 'host-key' }),
     commitGeneration: async () => {
       cached = active
-      return active
+      return { generation: active }
     },
     abortStagedGeneration: async () => undefined,
     sweepStagedGenerations: async () => undefined,

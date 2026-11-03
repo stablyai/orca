@@ -9,7 +9,11 @@ import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { createGenerationStore } from './generation-store'
+import {
+  createGenerationStore,
+  type GenerationStore,
+  type StagedGeneration
+} from './generation-store'
 import { reusableAssetsOf } from './generation-reuse'
 import { deriveHostCacheKey } from './host-cache-key'
 
@@ -55,6 +59,13 @@ function bundles(count: number) {
     assets: renamed
   }
   return { old, next }
+}
+
+async function installConfirmed(store: GenerationStore, staged: StagedGeneration) {
+  const lease = await store.commitGeneration(staged)
+  await store.confirmGeneration(lease, () => true)
+  store.releaseGeneration(lease)
+  return lease.generation
 }
 
 function bundleHost(manifest: MobileWebBundleManifestRead) {
@@ -123,7 +134,7 @@ it.each([
     const fs = createFakeGenerationFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     const hostKey = deriveHostCacheKey('reuse-host')
-    await store.commitGeneration(await store.stageGeneration(hostKey, old))
+    await installConfirmed(store, await store.stageGeneration(hostKey, old))
     const active = await store.readActiveGeneration(hostKey)
     if (active === null) {
       throw new Error('Fixture generation did not activate')
@@ -149,7 +160,7 @@ it.each([
     ])
     const host = bundleHost(next)
     const fetched = await fetchMobileWebBundle({ client: host.client, reusable })
-    await store.commitGeneration(await store.stageGeneration(hostKey, fetched))
+    await installConfirmed(store, await store.stageGeneration(hostKey, fetched))
     const activated = await store.readActiveGeneration(hostKey)
     expect(activated?.buildId).toBe(next.buildId)
     for (const [index, asset] of next.assets.entries()) {
@@ -178,7 +189,7 @@ it('keeps the first cached path for duplicate content hashes, including a missin
   const fs = createFakeGenerationFileSystem()
   const store = createGenerationStore({ fileSystem: fs })
   const hostKey = deriveHostCacheKey('duplicate-host')
-  const active = await store.commitGeneration(await store.stageGeneration(hostKey, sameContent))
+  const active = await installConfirmed(store, await store.stageGeneration(hostKey, sameContent))
   await fs.delete(`${active.directory}/${first.path}`)
   const reusable = await store.openReusableAssets(hostKey)
   const renamed = { ...first, path: 'assets/renamed.js' }
@@ -209,12 +220,12 @@ it('opens a second host on the same build without transferring any assets', asyn
   const store = createGenerationStore({ fileSystem: fs })
   const first = deriveHostCacheKey('first-host')
   const second = deriveHostCacheKey('second-host')
-  await store.commitGeneration(await store.stageGeneration(first, old))
+  await installConfirmed(store, await store.stageGeneration(first, old))
   const reusable = await store.openReusableAssets(second)
   const host = bundleHost(old.manifest)
 
   const fetched = await fetchMobileWebBundle({ client: host.client, reusable })
-  await store.commitGeneration(await store.stageGeneration(second, fetched, undefined, reusable))
+  await installConfirmed(store, await store.stageGeneration(second, fetched, undefined, reusable))
 
   expect(host.reads).toEqual([])
   expect(fetched.totalBytes).toBe(0)
@@ -236,7 +247,7 @@ it.each(['missing', 'short', 'unreadable'] as const)(
     const second = deriveHostCacheKey('second-host')
     const target = deriveHostCacheKey('target-host')
     for (const key of [first, second]) {
-      await store.commitGeneration(await store.stageGeneration(key, old))
+      await installConfirmed(store, await store.stageGeneration(key, old))
     }
     const path = `${first}/generations/${old.manifest.buildId}/${old.manifest.entrypoint}`
     if (failure === 'missing') {
@@ -250,7 +261,7 @@ it.each(['missing', 'short', 'unreadable'] as const)(
     const host = bundleHost(old.manifest)
     const fetched = await fetchMobileWebBundle({ client: host.client, reusable })
 
-    await store.commitGeneration(await store.stageGeneration(target, fetched, undefined, reusable))
+    await installConfirmed(store, await store.stageGeneration(target, fetched, undefined, reusable))
 
     expect(host.reads).toEqual([])
     expect(
@@ -265,8 +276,9 @@ it('skips an ambiguous foreign generation without deleting its active or staged 
   const store = createGenerationStore({ fileSystem: fs })
   const first = deriveHostCacheKey('first-host')
   const second = deriveHostCacheKey('second-host')
-  await store.commitGeneration(await store.stageGeneration(first, old))
+  await installConfirmed(store, await store.stageGeneration(first, old))
   await store.stageGeneration(first, old)
+  await fs.delete(`${fs.rootUri}/${first}/activation`)
   fs.seed(`${first}/generations/${next.buildId}/stray`, { kind: 'file', bytes: Uint8Array.of(1) })
   const before = fs.paths()
 
@@ -282,7 +294,7 @@ it('rejects an evicted offer without activating an incomplete generation', async
   const store = createGenerationStore({ fileSystem: fs })
   const first = deriveHostCacheKey('first-host')
   const second = deriveHostCacheKey('second-host')
-  await store.commitGeneration(await store.stageGeneration(first, old))
+  await installConfirmed(store, await store.stageGeneration(first, old))
   const reusable = await store.openReusableAssets(second)
   const fetched = await fetchMobileWebBundle({ client: bundleHost(old.manifest).client, reusable })
   await store.deleteHostCache(first)
@@ -301,7 +313,7 @@ it('finishes cross-host copies before a queued source eviction', async () => {
   const store = createGenerationStore({ fileSystem: fs })
   const first = deriveHostCacheKey('first-host')
   const second = deriveHostCacheKey('second-host')
-  await store.commitGeneration(await store.stageGeneration(first, old))
+  await installConfirmed(store, await store.stageGeneration(first, old))
   const reusable = await store.openReusableAssets(second)
   const fetched = await fetchMobileWebBundle({ client: bundleHost(old.manifest).client, reusable })
   let entered = (): void => {}
@@ -325,7 +337,7 @@ it('finishes cross-host copies before a queued source eviction', async () => {
   release()
   const staged = await staging
   await eviction
-  await store.commitGeneration(staged)
+  await installConfirmed(store, staged)
 
   expect(await store.readActiveGeneration(first)).toBeNull()
   expect((await store.readActiveGeneration(second))?.buildId).toBe(old.manifest.buildId)
@@ -384,7 +396,7 @@ it.each(['duplicate', 'case-folded'] as const)(
       }
     }
     const poisoned = await fetchMobileWebBundle({ client: attacker.client })
-    await store.commitGeneration(await store.stageGeneration(first, poisoned))
+    await installConfirmed(store, await store.stageGeneration(first, poisoned))
     if (collision === 'duplicate') {
       expect(fs.bytes(`${first}/generations/${manifest.buildId}/${original.path}`)).toEqual(
         Uint8Array.of(255)
@@ -394,7 +406,7 @@ it.each(['duplicate', 'case-folded'] as const)(
     const host = bundleHost(old.manifest)
 
     const fetched = await fetchMobileWebBundle({ client: host.client, reusable })
-    await store.commitGeneration(await store.stageGeneration(second, fetched, undefined, reusable))
+    await installConfirmed(store, await store.stageGeneration(second, fetched, undefined, reusable))
 
     expect(host.reads).toEqual([original.path])
     expect(fs.bytes(`${second}/generations/${old.manifest.buildId}/${original.path}`)).toEqual(

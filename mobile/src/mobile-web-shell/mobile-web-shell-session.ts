@@ -9,7 +9,7 @@ import type {
   MobileWebShellSessionEvent,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import { onDownloadFailed } from './mobile-web-shell-download-failure'
+import { onDownloadFailed, openFallbackGeneration } from './mobile-web-shell-download-failure'
 import {
   awaitsGates,
   CHECKING,
@@ -20,7 +20,11 @@ import {
   ROUTE_UNAVAILABLE
 } from './mobile-web-shell-gates'
 import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
-import { CLEAR_PAGE_DOCUMENT_STATE, pageDocumentStatePatch } from './page-document-state'
+import {
+  CLEAR_PAGE_DOCUMENT_STATE,
+  canConfirmSelectedGeneration,
+  pageDocumentStatePatch
+} from './page-document-state'
 import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
 import { AWAIT_DOCUMENT_LOAD, reducePageDocumentLifecycle } from './page-document-lifecycle'
@@ -153,7 +157,7 @@ function onManifestRead(
   )
 }
 
-// Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
+// Roll back a failed boot before retrying; renderer loss gets one remount and isolation failure is terminal.
 // Retired document reports cannot interrupt recovery; profile failures can end startup before ready.
 function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): MobileWebShellStep {
   if (session.state.kind !== 'ready' && reason !== 'host-profile-unreadable') {
@@ -166,16 +170,24 @@ function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): Mo
   }
   if (reason === 'render-process-gone') {
     return session.remountedOnce
-      ? step(session, { state: failed })
+      ? onShellFailed(session, 'document-load-failed')
       : step(session, { remountedOnce: true }, [{ kind: 'remount' }])
   }
-  if (session.retriedOnce || session.gates === null) {
+  if (session.retriedOnce || session.gates === null || session.state.kind !== 'ready') {
     return step(session, { state: failed })
   }
   // Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
-  return startFlow(session, session.gates, { retriedOnce: true, cached: null }, [
-    { kind: 'delete-cache' }
-  ])
+  return step(
+    session,
+    {
+      state: gateState(gateVerdict(session.gates), true) ?? CHECKING,
+      flow: session.flow + 1,
+      retriedOnce: true,
+      cached: null,
+      updateNotice: null
+    },
+    [{ kind: 'rollback-generation', buildId: session.state.buildId }]
+  )
 }
 
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
@@ -195,7 +207,7 @@ function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileW
 }
 
 // Keep transitions pure; the runner may drop abandoned results, while this flow guard rejects late results it reports.
-export function reduceMobileWebShellSession(
+function reduceSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
@@ -210,6 +222,14 @@ export function reduceMobileWebShellSession(
         : step(session, { gates: event.gates })
     case 'cache-read':
       return onCacheRead(session, event.generation)
+    case 'rollback-read':
+      return event.generation === null && session.gates !== null
+        ? startFlow(session, session.gates, { cached: null })
+        : openFallbackGeneration({ ...session, cached: event.generation }, 'update-failed')
+    case 'generation-open-failed':
+      return step(session, {
+        state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+      })
     case 'manifest-read':
       return onManifestRead(session, event.manifest)
     case 'fetch-progress':
@@ -228,11 +248,19 @@ export function reduceMobileWebShellSession(
       return session.state.kind === 'fetching'
         ? step(session, { state: { kind: 'activating', source: 'download' } })
         : step(session, {})
-    case 'activated':
+    case 'activated': {
+      const checked =
+        event.generation === undefined
+          ? null
+          : openFallbackGeneration({ ...session, cached: event.generation }, session.updateNotice)
+      if (checked !== null && checked.session.state.kind !== 'activating') {
+        return checked
+      }
       // Count only download activation as an update: fetch rereads the manifest, so the committed build may differ from the offered id.
       return step(
         session,
         {
+          ...checked?.session,
           ...CLEAR_PAGE_DOCUMENT_STATE,
           state: {
             kind: 'ready',
@@ -247,6 +275,7 @@ export function reduceMobileWebShellSession(
           ? [{ kind: 'forget-update-failures' }, AWAIT_DOCUMENT_LOAD]
           : [AWAIT_DOCUMENT_LOAD]
       )
+    }
     case 'download-failed':
       return onDownloadFailed(session, event.cause)
     case 'shell-failed':
@@ -282,4 +311,14 @@ export function reduceMobileWebShellSession(
             cached: null
           })
   }
+}
+
+export function reduceMobileWebShellSession(
+  session: MobileWebShellSession,
+  event: MobileWebShellSessionEvent
+): MobileWebShellStep {
+  const result = reduceSession(session, event)
+  return !canConfirmSelectedGeneration(session) && canConfirmSelectedGeneration(result.session)
+    ? { ...result, effects: [...result.effects, { kind: 'confirm-generation' }] }
+    : result
 }
