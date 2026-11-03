@@ -5,11 +5,35 @@ import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+const planWorkflow = parse(readFileSync('.github/workflows/unit-plan.yml', 'utf8'))
 const evidenceWorkflow = parse(
   readFileSync('.github/workflows/unit-selection-evidence.yml', 'utf8')
 )
 
 describe('PR workflow parallelism', () => {
+  it.each([
+    ['shadow', false, true],
+    ['shadow', true, true],
+    ['selected', false, true],
+    ['selected', true, false],
+    ['', true, true]
+  ])('plans only once for mode %s, draft %s', (mode, draft, deferred) => {
+    const evaluate = (expression, context) => runInNewContext(expression.slice(3, -2), context)
+    const context = {
+      vars: { ORCA_UNIT_SELECTION_MODE: mode },
+      github: { event: { pull_request: { draft } } }
+    }
+    const inputs = {
+      defer_shadow: workflow.jobs.unit_plan.with.defer_shadow,
+      selection_mode: evaluate(workflow.jobs.unit_plan.with.selection_mode, context)
+    }
+    expect(evaluate(planWorkflow.jobs.plan.env.DEFER_SHADOW, { ...context, inputs })).toBe(deferred)
+    expect(evaluate(workflow.jobs.test.with.download_selection_plan, context)).toBe(!deferred)
+    expect(evaluate(workflow.jobs.unit_selection_evidence.with.rebuild_plan, context)).toBe(
+      deferred
+    )
+  })
+
   it('enforces import boundaries in the required static-analysis checks', () => {
     const guard = workflow.jobs.preflight.steps.find((step) =>
       step.run?.includes('bun config/scripts/check-import-boundaries.mjs')

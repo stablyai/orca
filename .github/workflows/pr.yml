@@ -906,7 +906,7 @@ jobs:
     if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
     uses: ./.github/workflows/unit-selection-evidence.yml
     with:
-      rebuild_plan: true
+      rebuild_plan: ${{ !(vars.ORCA_UNIT_SELECTION_MODE == 'selected' && github.event.pull_request.draft == true) }}
 
   # Isolate two browser/mobile files to avoid every unit shard paying for their installs; test the same shipped bundle plus render/census.
   mobile_web_app:
