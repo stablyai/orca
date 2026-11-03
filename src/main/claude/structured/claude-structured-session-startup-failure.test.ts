@@ -1,6 +1,7 @@
 import sdkExit from '../fixtures/startup-sdk-process-exit.json'
 import { afterEach, expect, it, vi } from 'vitest'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
+import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
 import { claudeStartupAnswerObservation } from '../claude-startup-answer-observation'
 import { runClaudeControl } from '../claude-agent-sdk-control-requests'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
@@ -68,7 +69,12 @@ it.each(['control_request_failed', 'process_exited_nonzero'])(
     )
     await vi.advanceTimersByTimeAsync(2_000)
     const error = await result
-    expect(error.cause.cause).toMatchObject({ errorClass, exitCode: 1 })
+    // The SDK's report of the exit is no answer, so Orca's own exit record decides the start.
+    if (errorClass === 'process_exited_nonzero') {
+      expect(error.cause).toBe(exit)
+    } else {
+      expect(error.cause.cause).toMatchObject({ errorClass, exitCode: 1 })
+    }
     expect(retryableStructuredAgentSessionStart(error)).toBe(
       errorClass === 'process_exited_nonzero'
     )
@@ -150,6 +156,52 @@ it('treats a turn that settled without an Orca dispatch as past startup on exit'
     expect.objectContaining({ leafUuid: 'undispatched-leaf' })
   )
   expect(events.at(-1)).toMatchObject({ type: 'ended', failure: { kind: 'providerExited' } })
+  claude.dispose()
+  await adapter.closeAll()
+})
+
+it("reads a missing CLI from Orca's exit when the SDK reports the exit first", async () => {
+  const claude = fakeClaude({ holdInit: true })
+  const adapter = adapterAtPublishFor(claude)
+  const acquired = await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'missing-cli'
+  })
+  const connection = claude.connections[0]
+  const exited = Promise.withResolvers<Error>()
+  connection.exited = exited.promise
+  // A supervised spawn ENOENT: the supervisor exits 127 and the SDK reports only that exit.
+  connection.initializationResult = () =>
+    runClaudeControl(
+      'initialize',
+      () =>
+        Promise.reject(
+          Object.assign(new Error('Claude Code process exited with code 127'), {
+            errorClass: 'process_exited_nonzero',
+            exitCode: 127
+          })
+        ),
+      null
+    )
+  const result = adapter
+    .open({
+      sessionId: 'session-1',
+      fence: 7,
+      acquisitionGeneration: acquired.acquisitionGeneration,
+      signal: new AbortController().signal
+    })
+    .catch((error) => error)
+  await tick()
+  exited.resolve(
+    withMissingProviderExecutable(
+      withObservedProviderExit(
+        new Error('claude stream-json exited (code 127): spawn claude ENOENT')
+      )
+    )
+  )
+  const error = await result
+  expect(error).toMatchObject({ retry: 'never', fact: { kind: 'cliMissing' } })
   claude.dispose()
   await adapter.closeAll()
 })

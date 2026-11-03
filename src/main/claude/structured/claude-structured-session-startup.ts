@@ -31,7 +31,10 @@ import {
   readClaudeSettingsEffort
 } from './launch/claude-structured-session-options'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
-import { claudeStartupAnswerAfterExit } from './claude-structured-session-startup-exit'
+import {
+  claudeExitForReport,
+  claudeStartupAnswerAfterExit
+} from './claude-structured-session-startup-exit'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,
@@ -78,7 +81,7 @@ export async function readClaudeStartupFacts(input: {
     return result
   })
   const initialization = await Promise.race([
-    control.catch((error: unknown) => {
+    control.catch(async (error: unknown) => {
       try {
         input.initProof.seen()
       } catch (proofError) {
@@ -89,7 +92,8 @@ export async function readClaudeStartupFacts(input: {
           throw input.connection.startupFailure?.() ?? proofError
         }
       }
-      throw input.connection.startupFailure?.() ?? error
+      const ended = await claudeExitForReport(input.connection, error)
+      throw input.connection.startupFailure?.() ?? ended
     }),
     Promise.race([
       input.initProof.promise.then(() => new Promise<never>(() => {})),
