@@ -12441,7 +12441,7 @@
       "invariant": "Typing, focus, terminal switch, workspace switch, visibility resume, resize, render, per-pane liveness, and tab-title synchronization must not call global pty:listSessions or aiVault.listSessions; they must use targeted APIs or cached provider-owned state.",
       "oracle": "The current executable slice asserts targeted visibility/first-input liveness, resize re-assertion after visibility resume, light tab/active-state resume, SSH/remote skip behavior, and a closed Resource Manager budget of one readiness seed plus one coalesced inventory read only for unknown spawn IDs. AI Vault title sync deterministically accepts only resolveSessionTitles, batches at most 64 exact identities, bounds scanner-service calls at sixteen, routes requests to the transcript-owning local/SSH/runtime host, and proves zero broad scans for unsupported hosts. The full hot-path oracle still needs instrumentation around raw focus, split focus, workspace switch, render ticks, and high-session PTY fixtures.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/scan-service/session-scanner-service-client.test.ts src/main/ai-vault/session-titles/session-title-file-reader.test.ts src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-startup-barrier-and-listing.test.ts src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx src/renderer/src/components/status-bar/resource-session-inventory.test.ts --maxWorkers=2 --reporter=dot"
       ],
       "testFiles": [
@@ -12449,9 +12449,9 @@
         "src/renderer/src/components/status-bar/use-resource-session-inventory.test.tsx",
         "src/renderer/src/components/status-bar/resource-session-inventory.test.ts",
         "src/renderer/src/lib/ai-vault-tab-title-sync.test.ts",
-        "src/main/ai-vault/session-scanner-service-client.test.ts",
-        "src/main/ai-vault/session-title-file-reader.test.ts",
-        "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+        "src/main/ai-vault/scan-service/session-scanner-service-client.test.ts",
+        "src/main/ai-vault/session-titles/session-title-file-reader.test.ts",
+        "src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts",
         "src/main/ipc/ai-vault.test.ts",
         "src/main/runtime/rpc/methods/ai-vault.test.ts"
       ],
@@ -12491,7 +12491,7 @@
           ]
         },
         {
-          "file": "src/main/ai-vault/session-scanner-service-client.test.ts",
+          "file": "src/main/ai-vault/scan-service/session-scanner-service-client.test.ts",
           "assertions": [
             "the service waits for ready and runs the cache and interactive lanes independently",
             "active and queued calls are bounded together at sixteen",
@@ -12500,7 +12500,7 @@
           ]
         },
         {
-          "file": "src/main/ai-vault/session-parse-cache-persistence.test.ts",
+          "file": "src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts",
           "assertions": [
             "the background scanner receives the configured persisted-cache identity",
             "unchanged transcripts remain reusable across process restarts"
@@ -12522,7 +12522,8 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/session-scanner-service-client.test.ts src/main/ai-vault/session-title-file-reader.test.ts src/main/ai-vault/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts",
           "result": "passed",
           "durationSeconds": 5.3,
-          "summary": "The focused run passed 138 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, per-lane scanner-service lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback."
+          "summary": "The focused run passed 138 tests across 7 files, proving exact-title-only renderer requests, provider-isolated batching, per-lane scanner-service lifecycle and fault recovery, exact transcript identity, host routing, mixed-version degradation, and zero broad-scan fallback.",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ai-vault-tab-title-sync.test.ts src/main/ai-vault/scan-service/session-scanner-service-client.test.ts src/main/ai-vault/session-titles/session-title-file-reader.test.ts src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts src/main/ipc/ai-vault.test.ts src/main/runtime/rpc/methods/ai-vault.test.ts"
         },
         {
           "date": "2026-10-06",
