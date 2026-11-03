@@ -36,6 +36,7 @@ export function reconcileMultiplexSnapshotOutput(
   pendingEscapeTailAnsi?: string,
   pendingOutput: readonly TerminalOutputChunk[] = []
 ): void {
+  const snapshotOutput = [...pendingOutput]
   if (typeof snapshotSeq === 'number') {
     const discarded: TerminalOutputFrameChunk[] = []
     stream.ackPendingOutput = stream.ackPendingOutput.flatMap((chunk) => {
@@ -66,6 +67,9 @@ export function reconcileMultiplexSnapshotOutput(
         return [chunk]
       }
       discarded.push(chunk)
+      if (!uncovered) {
+        snapshotOutput.push(output)
+      }
       return uncovered
         ? Array.from(iterateTerminalOutputFrameChunks(uncovered.data, uncovered.meta, 'span'))
         : []
@@ -76,7 +80,7 @@ export function reconcileMultiplexSnapshotOutput(
       0
     )
   }
-  replaySnapshotCoveredQueries(state, stream, pendingOutput, snapshotSeq, pendingEscapeTailAnsi)
+  replaySnapshotCoveredQueries(state, stream, snapshotOutput, snapshotSeq, pendingEscapeTailAnsi)
 }
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {

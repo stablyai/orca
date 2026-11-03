@@ -190,10 +190,19 @@ describe.each([
 it.each([
   { queryCount: 2, action: 'pause' },
   { queryCount: 20, action: 'drain' },
-  { queryCount: 200, action: 'drain' }
+  { queryCount: 200, action: 'drain' },
+  { queryCount: 2, action: 'drain', crossingAckFrame: true },
+  { queryCount: 3, action: 'drain', crossingAckFrame: true, sameLength: true },
+  { queryCount: 2, action: 'drain', crossingAckFrame: true, soleOwner: false }
 ])(
-  'preserves bounded query ownership for $queryCount transformed queries during $action',
-  async ({ queryCount, action }) => {
+  'preserves bounded transformed query ownership: $queryCount/$action crossing=$crossingAckFrame sameLength=$sameLength sole=$soleOwner',
+  async ({
+    queryCount,
+    action,
+    crossingAckFrame = false,
+    sameLength = false,
+    soleOwner = true
+  }) => {
     vi.useFakeTimers()
     let output: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
     let completeSnapshot:
@@ -202,7 +211,7 @@ it.each([
     let holdSnapshot = false
     const answerYieldedTerminalQueries = vi.fn()
     const harness = startDesktopMultiplexSubscribe({
-      isSoleRemoteTerminalQueryOwner: () => true,
+      isSoleRemoteTerminalQueryOwner: () => soleOwner,
       answerYieldedTerminalQueries,
       serializeTerminalBuffer: vi.fn(async () => {
         if (!holdSnapshot) {
@@ -241,13 +250,25 @@ it.each([
       output?.(fill, { seq: fill.length, rawLength: fill.length })
       await vi.runOnlyPendingTimersAsync()
       harness.binaryFrames.splice(0)
+      const rawLength = queryCount * (sameLength ? 3 : 10)
+      const seq = fill.length + rawLength
+      const emitQueries = () =>
+        output?.('\x1b[c'.repeat(queryCount), { seq, rawLength, transformed: true })
+      if (crossingAckFrame) {
+        emitQueries()
+      }
       holdSnapshot = true
       send(TerminalStreamOpcode.SnapshotRequest, {})
       await vi.waitFor(() => expect(completeSnapshot).toBeDefined())
-      const rawLength = queryCount * 10
-      const seq = fill.length + rawLength
-      output?.('\x1b[c'.repeat(queryCount), { seq, rawLength, transformed: true })
-      completeSnapshot?.({ data: '', cols: 80, rows: 24, seq })
+      if (!crossingAckFrame) {
+        emitQueries()
+      }
+      completeSnapshot?.({
+        data: '',
+        cols: 80,
+        rows: 24,
+        seq: crossingAckFrame ? fill.length + Math.floor(rawLength / 2) : seq
+      })
       await vi.runOnlyPendingTimersAsync()
       if (action === 'pause') {
         send(TerminalStreamOpcode.SetOutputPaused, { paused: true })
@@ -260,7 +281,9 @@ it.each([
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => frame && decodeTerminalStreamText(frame.payload))
         .join('')
-      expect(sentQueries).toBe('\x1b[c'.repeat(action === 'pause' ? 1 : 16))
+      expect(sentQueries).toBe(
+        '\x1b[c'.repeat(soleOwner ? (action === 'pause' ? 1 : Math.min(queryCount, 16)) : 0)
+      )
       if (action === 'pause') {
         expect(answerYieldedTerminalQueries).toHaveBeenCalledExactlyOnceWith('pty-1', '\x1b[c')
       } else {

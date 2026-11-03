@@ -33,7 +33,7 @@ export function recordYieldedTerminalQueries(
   }
   stream.initialQueryReplay?.record(data, meta)
   // Why: frames split large events with per-slice seqs, so settle by each query's own end seq; transformed text can't map offsets to seq.
-  const mapsToSeq = (meta.rawLength ?? data.length) === data.length
+  const mapsToSeq = meta.transformed !== true && (meta.rawLength ?? data.length) === data.length
   const { queries, state } = scanTerminalReplyQuerySequences(
     data,
     meta.seq - data.length,
