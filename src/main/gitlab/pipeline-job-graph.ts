@@ -11,6 +11,8 @@ import {
 // Child CI jobs live under bridge pipelines, not the parent pipeline's jobs endpoint.
 
 const PIPELINE_JOB_PAGE_SIZE = 100
+// Bound pagination per endpoint so a pathological pipeline cannot spawn glab indefinitely.
+const MAX_PIPELINE_JOB_PAGES = 20
 // Bound child-pipeline expansion per details load.
 const MAX_CHILD_PIPELINES_TO_EXPAND = 20
 // Each fetch launches glab; cap polling fan-out to match the shared CLI admission limit.
@@ -67,6 +69,36 @@ function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelin
   }
 }
 
+// GitLab caps per_page at 100, so larger pipelines need follow-up pages. A short page ends the walk.
+async function fetchAllPipelinePages<T>(
+  repoPath: string,
+  projectRef: ProjectRef,
+  endpoint: string,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<T[]> {
+  const items: T[] = []
+  for (let page = 1; page <= MAX_PIPELINE_JOB_PAGES; page += 1) {
+    const query =
+      page === 1
+        ? `per_page=${PIPELINE_JOB_PAGE_SIZE}`
+        : `per_page=${PIPELINE_JOB_PAGE_SIZE}&page=${page}`
+    const { stdout } = await glabExecFileAsync(
+      ['api', ...glabHostnameArgs(projectRef, connectionId), `${endpoint}?${query}`],
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+    )
+    const data = JSON.parse(stdout) as T[]
+    if (!Array.isArray(data)) {
+      break
+    }
+    items.push(...data)
+    if (data.length < PIPELINE_JOB_PAGE_SIZE) {
+      break
+    }
+  }
+  return items
+}
+
 async function fetchPipelineJobPage(
   repoPath: string,
   projectRef: ProjectRef,
@@ -74,18 +106,13 @@ async function fetchPipelineJobPage(
   connectionId: string | null | undefined,
   localGitOptions: LocalGitExecOptions
 ): Promise<GitLabPipelineJob[]> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs?per_page=${PIPELINE_JOB_PAGE_SIZE}`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  const data = await fetchAllPipelinePages<GitLabRawJob>(
+    repoPath,
+    projectRef,
+    `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs`,
+    connectionId,
+    localGitOptions
   )
-  const data = JSON.parse(stdout) as GitLabRawJob[]
-  if (!Array.isArray(data)) {
-    return []
-  }
   return data.map((job) => mapPipelineJob(job, pipelineId))
 }
 
@@ -96,16 +123,13 @@ async function fetchPipelineBridges(
   connectionId: string | null | undefined,
   localGitOptions: LocalGitExecOptions
 ): Promise<GitLabRawBridge[]> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/bridges?per_page=${PIPELINE_JOB_PAGE_SIZE}`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  return fetchAllPipelinePages<GitLabRawBridge>(
+    repoPath,
+    projectRef,
+    `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/bridges`,
+    connectionId,
+    localGitOptions
   )
-  const data = JSON.parse(stdout) as GitLabRawBridge[]
-  return Array.isArray(data) ? data : []
 }
 
 function childPipelineTarget(
