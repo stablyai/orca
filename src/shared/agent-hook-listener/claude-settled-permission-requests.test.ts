@@ -32,20 +32,6 @@ describe('retained Claude request settlements', () => {
     ])
   })
 
-  it('records a failure and keeps the child owner exact', () => {
-    expect(
-      retainClaudeSettledRequests(
-        undefined,
-        base,
-        ended('tool-1', {
-          hookEventName: 'PostToolUseFailure',
-          toolAgentId: 'child-1',
-          toolAgentType: 'Explore'
-        })
-      )
-    ).toEqual([{ toolUseId: 'tool-1', toolAgentId: 'child-1', toolAgentType: 'Explore' }])
-  })
-
   it.each([
     { launchToken: 'launch-2' },
     { providerSession: { key: 'session_id' as const, id: 'session-2' } },

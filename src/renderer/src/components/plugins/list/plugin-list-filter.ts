@@ -27,6 +27,8 @@ const KIND_BY_CATEGORY: Readonly<Record<string, PluginFilterKind>> = {
   syntaxes: 'languages',
   'language-packs': 'languages',
   localization: 'languages',
+  editors: 'editors',
+  'file-viewers': 'editors',
   keybindings: 'commands',
   commands: 'commands',
   panels: 'commands',
@@ -35,7 +37,14 @@ const KIND_BY_CATEGORY: Readonly<Record<string, PluginFilterKind>> = {
   recipes: 'machines'
 }
 
-const PLUGIN_FILTER_KINDS = ['themes', 'languages', 'icons', 'commands', 'machines'] as const
+const PLUGIN_FILTER_KINDS = [
+  'themes',
+  'languages',
+  'icons',
+  'editors',
+  'commands',
+  'machines'
+] as const
 export type PluginFilterKind = (typeof PLUGIN_FILTER_KINDS)[number]
 
 export function isPluginFilterKind(value: string): value is PluginFilterKind {
@@ -50,7 +59,7 @@ const KIND_BY_TYPE: Readonly<Record<PluginCatalogType, PluginFilterKind>> = {
   'interface-language': 'languages',
   instructions: 'commands',
   panel: 'commands',
-  editor: 'commands',
+  editor: 'editors',
   worker: 'commands'
 }
 

@@ -1,3 +1,4 @@
+import { TerminalCrewPortals } from '../orchestration-crew/TerminalCrewPortals'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -194,6 +195,7 @@ export function TerminalPaneSurface({
           paneTransportsRef={paneTransportsRef}
         />
       ))}
+      <TerminalCrewPortals controller={controller} />
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}

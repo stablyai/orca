@@ -67,11 +67,18 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)
   lines.push('')
+  lines.push(formatConnectionLogHistory(entries))
+  return lines.join('\n')
+}
+
+export function formatConnectionLogHistory(entries: readonly ConnectionLogEntry[]): string {
+  const lines: string[] = []
   if (entries.length === 0) {
     lines.push('No connection events recorded.')
   } else {
     lines.push(`Recent connection history (${entries.length} events, oldest first):`)
-    for (const entry of entries) {
+    for (const rawEntry of entries) {
+      const entry = redactConnectionLogEntry(rawEntry)
       const detail = entry.detail ? ` — ${entry.detail}` : ''
       const evidence = [entry.code, entry.path].filter(Boolean).join(' · ')
       lines.push(

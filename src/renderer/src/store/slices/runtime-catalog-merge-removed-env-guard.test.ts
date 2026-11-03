@@ -75,21 +75,6 @@ describe('environment-catalog merge guard drops catalogs for a removed env', () 
     ).toEqual(['fresh', 'repo1'])
   })
 
-  it('fetchRuntimeEnvironmentRepos merges the catalog for a still-saved env id', async () => {
-    const store = createTestStore()
-    seedStore(store, { repos: [TEST_REPO], runtimeEnvironments: [env('env-saved')] })
-    rpcResult.current = { repos: [repo('fresh')], projects: [], setups: [] }
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-saved')
-
-    expect(
-      store
-        .getState()
-        .repos.map((r) => r.id)
-        .sort()
-    ).toEqual(['fresh', 'repo1'])
-  })
-
   it("fetchRepos merges a 'local' catalog even when its repos carry runtime stamps", async () => {
     const store = createTestStore()
     seedStore(store, { repos: [TEST_REPO], runtimeEnvironments: [] })

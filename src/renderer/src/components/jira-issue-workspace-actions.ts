@@ -17,6 +17,7 @@ import {
   type IssueCopyTarget
 } from './issue-copy-target-messages'
 import type { JiraIssueWorkspaceAction } from './jira-issue-workspace-content'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function useJiraIssueWorkspaceActions({
   displayed,
@@ -101,7 +102,7 @@ export function getJiraIssueWorkspaceActions(issue: JiraIssue): JiraIssueWorkspa
     {
       label: translate('auto.components.JiraIssueWorkspace.69da9a208c', 'Open in Jira'),
       icon: ExternalLink,
-      action: () => window.api.shell.openUrl(issue.url)
+      action: () => openAppHttpLink(issue.url)
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),

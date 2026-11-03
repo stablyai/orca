@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isChromeExtensionId } from '../../../shared/browser-extension-url'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
 
 const SYNC_STORAGE_DIRECTORY = 'sync-storage'

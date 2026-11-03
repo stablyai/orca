@@ -1,16 +1,12 @@
 import React from 'react'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 
+import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
+import { hasWorktreeCardDetails } from './WorktreeCardMeta'
 import {
-  getFlushWorktreeCardPaddingLeft,
-  getNewCardStyleParentContentMarginLeft
-} from './worktree-list/rows/indentation'
-import {
-  hasWorktreeCardDetails,
-  WorktreeCardDetailsHover,
-  WorktreeCardMetaBadges
-} from './WorktreeCardMeta'
-import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
+  renderWorktreeCardIndicators,
+  WorktreeCardMetaDetailsHover
+} from './worktree-card-details-items'
 import type { WorktreeCardController } from './use-worktree-card-controller'
 
 function getVisibleContextLabel(
@@ -53,16 +49,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     remoteBranchConflict,
     visibleCardTitle,
     workspacePorts,
-    referenceDetails,
-    showPR,
-    showIssue,
-    showLinearIssue,
-    showJiraIssue,
-    metaIssue,
-    metaLinearIssue,
-    metaJiraIssue,
-    metaReview,
-    metaComment,
     metaAutomationProvenance,
     metaCliProvenance,
     hoverIssue,
@@ -70,20 +56,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hoverJiraIssue,
     hoverReview,
     hoverComment,
-    linearIssue,
-    handleEditIssue,
-    handleManageLinks,
-    handleEditComment,
-    handleOpenGitHubIssueInOrca,
-    handleOpenIssueInBrowser,
-    handleOpenLinearIssueInOrca,
-    handleOpenReviewInOrca,
-    handleOpenReviewInBrowser,
-    handleOpenAutomation,
-    handleOpenAutomationRun,
-    canUnlinkReview,
-    handleUnlinkReview,
-    detailsHoverControl,
     showDeleteQuickAction
   } = card
 
@@ -167,88 +139,17 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     ? (title: React.ReactElement): React.ReactElement => title
     : undefined
   // Why: sidebar rows need a small surface inset while content stays aligned with the pre-inset layout.
-  const applyNewCardStyleStatusLaneOffset = newCardStyle && showCombinedStatusSlot
-  const cardPaddingLeft = flushSurface
-    ? getFlushWorktreeCardPaddingLeft(contentIndent, applyNewCardStyleStatusLaneOffset)
-    : contentIndent > 0
-      ? `calc(0.125rem + ${contentIndent}px)`
-      : null
-  const parentContentMarginLeft =
-    flushSurface && applyNewCardStyleStatusLaneOffset
-      ? getNewCardStyleParentContentMarginLeft(contentIndent)
-      : 0
-  const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
-  const allReferenceItems = getWorkspaceAttachments(worktree)
-  const referenceItems = allReferenceItems.filter((item) =>
-    item.type !== 'issue'
-      ? showPR &&
-        (!newCardStyle ||
-          allReferenceItems.filter((candidate) => candidate.type !== 'issue').length > 1)
-      : item.provider === 'linear'
-        ? showLinearIssue
-        : item.provider === 'jira'
-          ? showJiraIssue
-          : showIssue
-  )
-  const detailsAndPortsContent =
-    hasDetails || hasPorts ? (
-      <div className="flex shrink-0 items-center gap-1">
-        {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
-        {hasDetails && (
-          <WorktreeCardMetaBadges
-            linkedItemCount={allReferenceItems.length}
-            referenceItems={referenceItems}
-            referenceDetails={referenceDetails}
-            issue={metaIssue}
-            linearIssue={metaLinearIssue}
-            jiraIssue={metaJiraIssue}
-            review={newCardStyle ? null : metaReview}
-            comment={metaComment}
-            automationProvenance={metaAutomationProvenance}
-            cliProvenance={metaCliProvenance}
-            className="ml-0 pr-0"
-          />
-        )}
-      </div>
-    ) : null
+  const { cardStyle, parentContentMarginLeft } = getWorktreeCardFrameGeometry({
+    flushSurface,
+    contentIndent,
+    statusLane: newCardStyle && showCombinedStatusSlot
+  })
+  const detailsAndPortsContent = renderWorktreeCardIndicators(card)
   const detailsAndPorts =
     detailsAndPortsContent && !newCardStyle && !compactCards ? (
-      <WorktreeCardDetailsHover
-        workspace={worktree}
-        referenceDetails={referenceDetails}
-        onManageLinks={affiliateListMode ? undefined : handleManageLinks}
-        issue={metaIssue}
-        linearIssue={metaLinearIssue}
-        jiraIssue={metaJiraIssue}
-        review={metaReview}
-        comment={metaComment}
-        automationProvenance={metaAutomationProvenance}
-        cliProvenance={metaCliProvenance}
-        detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
-        hoverControl={detailsHoverControl}
-        onEditIssue={affiliateListMode ? undefined : handleEditIssue}
-        onEditComment={affiliateListMode ? undefined : handleEditComment}
-        onOpenGitHubIssueInOrca={
-          metaIssue && 'url' in metaIssue && metaIssue.url ? handleOpenGitHubIssueInOrca : undefined
-        }
-        onOpenIssueInBrowser={
-          metaIssue && 'url' in metaIssue && metaIssue.url ? handleOpenIssueInBrowser : undefined
-        }
-        onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
-        onOpenReviewInOrca={repo ? handleOpenReviewInOrca : undefined}
-        onOpenReviewInBrowser={metaReview?.url ? handleOpenReviewInBrowser : undefined}
-        onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
-        onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
-        onUnlinkReview={
-          !affiliateListMode &&
-          (canUnlinkReview ||
-            getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue'))
-            ? handleUnlinkReview
-            : undefined
-        }
-      >
+      <WorktreeCardMetaDetailsHover card={card}>
         {detailsAndPortsContent}
-      </WorktreeCardDetailsHover>
+      </WorktreeCardMetaDetailsHover>
     ) : (
       detailsAndPortsContent
     )

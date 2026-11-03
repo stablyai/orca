@@ -172,6 +172,7 @@ export const UiUpdateFields = z
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
+    showAgentModels: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),

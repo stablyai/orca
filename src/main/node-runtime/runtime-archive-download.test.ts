@@ -79,6 +79,34 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[1]?.aborted).toBe(false)
   })
 
+  it('gives up at once, without retrying, when no response arrives within its connect budget', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      (_url, options) =>
+        new Promise<Response>((_resolve, reject) => {
+          // A firewall that drops packets: nothing comes back until the request is aborted.
+          requestSignal(options).addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
+    await expect(
+      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY, undefined, 20)
+    ).rejects.toThrow('Node runtime download got no response within 0.02 s')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a response that arrives in time download in full', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => ok())
+    await downloadVerifiedArchive(
+      archive(),
+      destination,
+      fetcher,
+      undefined,
+      NO_DELAY,
+      undefined,
+      5_000
+    )
+    expect(new Uint8Array(await readFile(destination))).toEqual(BODY)
+  })
+
   it('gives up after its bounded attempts with the last error', async () => {
     const signals: AbortSignal[] = []
     const failure = new Error('net::ERR_NETWORK_CHANGED')

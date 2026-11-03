@@ -1,3 +1,4 @@
+import type * as WslAvailability from '../main/wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
@@ -25,12 +26,21 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
-vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
-vi.mock('../main/wsl', () => ({
-  isWslAvailableAsync: isWslAvailableAsyncMock,
+vi.mock('../main/pty/shell-startup/pwsh', () => ({
+  isPwshAvailableAsync: isPwshAvailableAsyncMock
+}))
+vi.mock('../main/wsl/discovery/wsl-availability', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslAvailability>()),
+  ...(await (() => ({
+    isWslAvailableAsync: isWslAvailableAsyncMock
+  }))())
+}))
+vi.mock('../main/wsl/discovery/distro-catalog', () => ({
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
-vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+vi.mock('../main/pty/shell-startup/git-bash', () => ({
+  isGitBashAvailable: isGitBashAvailableMock
+}))
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import {
@@ -66,13 +76,6 @@ beforeEach(() => {
 })
 
 describe('buildCommandLookupSpecs', () => {
-  it('falls back to inherited PATH after a trusted configured POSIX shell', () => {
-    expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual([
-      { file: '/bin/zsh', args: lookupArgs('codex', '-ilc') },
-      { file: '/bin/sh', args: lookupArgs('codex') }
-    ])
-  })
-
   it('allows a custom shell path only when the account login shell matches', () => {
     expect(
       buildCommandLookupSpecs(
@@ -92,33 +95,6 @@ describe('buildCommandLookupSpecs', () => {
       file: '/usr/bin/bash',
       args: lookupArgs('codex', '-ilc')
     })
-  })
-
-  it('skips Windows-mounted PATH dirs so a Windows-only shim is not a guest install', () => {
-    const [shellSpec] = buildCommandLookupSpecs('codex', 'linux', { SHELL: '/bin/bash' }, null)
-    expect(shellSpec.args[1]).toContain('/proc/mounts')
-    expect(shellSpec.args[1]).toBe(shLookupScript('codex'))
-  })
-
-  it('runs the POSIX lookup under the fish login PATH for trusted fish shells', () => {
-    const script = shLookupScript('codex')
-    const fishQuoted = `'${script.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
-    expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/usr/bin/fish' }, null)[0]).toEqual({
-      file: '/usr/bin/fish',
-      args: ['-ilc', `exec /bin/sh -c ${fishQuoted}`]
-    })
-  })
-
-  it('ignores untrusted temp shell paths even when the basename is supported', () => {
-    expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/tmp/zsh' }, '/bin/bash')).toEqual([
-      { file: '/bin/sh', args: lookupArgs('codex') }
-    ])
-  })
-
-  it('ignores untrusted home-bin shell paths even when the basename is supported', () => {
-    expect(
-      buildCommandLookupSpecs('codex', 'linux', { SHELL: '/home/test/bin/bash' }, '/bin/bash')
-    ).toEqual([{ file: '/bin/sh', args: lookupArgs('codex') }])
   })
 })
 

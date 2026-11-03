@@ -37,7 +37,7 @@ import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
@@ -72,6 +72,7 @@ export type FilesystemApi = {
       followSymlinks?: boolean
       /** A user act (open or Retry); may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      access?: LocalFileAccess
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string

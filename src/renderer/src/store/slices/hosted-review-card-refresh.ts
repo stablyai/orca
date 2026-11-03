@@ -12,6 +12,7 @@ type RefreshHostedReviewCardArgs = {
   repoPath: string
   repoId: string
   branch: string
+  userRefresh?: boolean
   admissionTier?: 'interactive' | 'status' | 'background'
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
@@ -29,6 +30,7 @@ export function refreshHostedReviewCard(
   const fallbackGitHubPR = args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null
   return fetchHostedReviewForBranch(args.repoPath, args.branch, {
     force: true,
+    ...(args.userRefresh === true ? { userRefresh: true } : {}),
     repoId: args.repoId,
     ...(args.admissionTier ? { admissionTier: args.admissionTier } : {}),
     repoOwnerExecutionHostId: args.repoOwnerExecutionHostId,

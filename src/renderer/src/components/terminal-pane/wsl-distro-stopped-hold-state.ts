@@ -1,8 +1,11 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
+import type { WslDistroHoldState } from '../../../../shared/wsl-distro-stopped-hold'
 
 type HeldPane = {
   distro: string
+  /** What the running read said: a stop, or no answer. */
+  state: WslDistroHoldState
   /** Reconnects as the user's act, which may start the distro. */
   release: () => Promise<unknown>
 }
@@ -39,7 +42,11 @@ export function startHeldPanesForWslDistro(distro: string): void {
   }
 }
 
-/** The stopped distro this pane is held for, or null. */
-export function useWslDistroStoppedHold(paneKey: string): string | null {
-  return useStore(wslDistroStoppedHoldStore, (state) => state.panes[paneKey]?.distro ?? null)
+/** The distro this pane is held for and what its read said, or null. */
+export function useWslDistroStoppedHold(
+  paneKey: string
+): { distro: string; state: WslDistroHoldState } | null {
+  const distro = useStore(wslDistroStoppedHoldStore, (store) => store.panes[paneKey]?.distro)
+  const state = useStore(wslDistroStoppedHoldStore, (store) => store.panes[paneKey]?.state)
+  return distro && state ? { distro, state } : null
 }

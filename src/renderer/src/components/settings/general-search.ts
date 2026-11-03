@@ -5,6 +5,7 @@ import { searchKeywords, translateSearchKeyword } from './settings-search-keywor
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getUpdateDelayDescription, getUpdateDelayTitle } from './update-delay-copy'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
@@ -255,6 +256,15 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
         'release notes'
       ),
       ...translateSearchKeyword('auto.components.settings.general.search.e49e739a59', 'download')
+    ]
+  },
+  {
+    title: getUpdateDelayTitle(),
+    description: getUpdateDelayDescription(),
+    keywords: [
+      ...translateSearchKeyword('settings.updateDelay.keywordDelay', 'delay'),
+      ...translateSearchKeyword('settings.updateDelay.keywordCooldown', 'cooldown'),
+      ...translateSearchKeyword('settings.updateDelay.keywordSecurity', 'security')
     ]
   }
 ])

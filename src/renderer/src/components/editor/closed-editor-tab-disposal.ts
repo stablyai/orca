@@ -2,7 +2,9 @@ import type { OpenFile } from '@/store/slices/editor'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import {
   disposeUnattachedMonacoModelsByPathPrefixes,
+  forgetDiffViewerModelPaths,
   getDiffViewerMonacoModelPathPrefixes,
+  hasDiffViewerModelPaths,
   type MonacoModelRegistry,
   type DisposableMonacoModel
 } from './diff-monaco-model-disposal'
@@ -28,7 +30,21 @@ export function disposeClosedEditorModels(
   }
 
   const diffFilesByPrefix = new Map<string, ClosedEditorTab>()
+  const sweepDiffModels = (owner: ClosedEditorTab): void => {
+    if (!isStillClosed(owner)) {
+      return
+    }
+    forgetDiffViewerModelPaths(owner.id)
+    const { originalModelPathPrefix, modifiedModelPathPrefix } =
+      getDiffViewerMonacoModelPathPrefixes(owner.id)
+    diffFilesByPrefix.set(originalModelPathPrefix, owner)
+    diffFilesByPrefix.set(modifiedModelPathPrefix, owner)
+  }
   for (const closedFile of closedFiles) {
+    if (closedFile.mode === 'edit' && hasDiffViewerModelPaths(closedFile.id)) {
+      // Changes mode gives edit tabs diff models too; a live tab with this ID still owns them.
+      sweepDiffModels({ id: closedFile.id, mode: 'diff', filePath: closedFile.filePath })
+    }
     if (!isStillClosed(closedFile)) {
       continue
     }
@@ -42,10 +58,7 @@ export function disposeClosedEditorModels(
         model?.dispose()
       }
     } else if (closedFile.mode === 'diff') {
-      const { originalModelPathPrefix, modifiedModelPathPrefix } =
-        getDiffViewerMonacoModelPathPrefixes(closedFile.id)
-      diffFilesByPrefix.set(originalModelPathPrefix, closedFile)
-      diffFilesByPrefix.set(modifiedModelPathPrefix, closedFile)
+      sweepDiffModels(closedFile)
     }
   }
 

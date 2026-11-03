@@ -21,7 +21,7 @@ export const usePluginIconThemes = iconThemes.useEntries
 /** The selected icon theme as indexes into its registered icons; null means built-in icons. */
 export type ActivePluginIconTheme = Pick<
   PluginIconThemeRegistration,
-  'icons' | 'fileNames' | 'fileExtensions'
+  'icons' | 'fileNames' | 'fileExtensions' | 'folderNames' | 'folderNamesExpanded'
 >
 
 export const useActivePluginIconTheme = create<{ theme: ActivePluginIconTheme | null }>()(() => ({
@@ -71,14 +71,19 @@ function registerIcons(theme: PluginIconThemeRegistration): ActivePluginIconThem
   return {
     icons: keep(theme.icons),
     fileNames: keep(theme.fileNames),
-    fileExtensions: keep(theme.fileExtensions)
+    fileExtensions: keep(theme.fileExtensions),
+    folderNames: keep(theme.folderNames),
+    folderNamesExpanded: keep(theme.folderNamesExpanded)
   }
 }
 
-/** Loads the selected icon theme whenever the selection or the enabled themes change. */
+/** Loads the selected icon theme whenever the selection or its content changes. */
 export function usePluginIconThemeActivation(selectedId: string | null | undefined): void {
   const available = usePluginIconThemes()
-  const selected = available.find((theme) => theme.id === selectedId)?.id ?? null
+  const selectedTheme = available.find((theme) => theme.id === selectedId)
+  const selected = selectedTheme?.id ?? null
+  const revision = selectedTheme?.revision
+  // Why `revision`, not the list: reload on this theme's content change, not on other themes'.
   useEffect(() => {
     const generation = ++loadGeneration
     const load = window.api?.plugins?.loadIconTheme
@@ -98,5 +103,5 @@ export function usePluginIconThemeActivation(selectedId: string | null | undefin
           useActivePluginIconTheme.setState({ theme: theme ? registerIcons(theme) : null })
         }
       })
-  }, [selected, available])
+  }, [selected, revision])
 }

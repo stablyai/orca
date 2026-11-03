@@ -1,4 +1,4 @@
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'
@@ -69,8 +69,7 @@ export async function canCheckoutExistingLocalBranch(
     const ref = `refs/heads/${name}`
     const { stdout } = await gitExecFileAsync(['for-each-ref', '--format=%(refname)', ref], {
       cwd: repoPath,
-      ...gitOptions,
-      captureWslLoginShellOutput: true
+      ...gitOptions
     })
     return stdout.split(/\r?\n/).includes(ref)
   }

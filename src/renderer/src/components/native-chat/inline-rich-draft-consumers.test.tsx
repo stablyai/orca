@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useLayoutEffect, useRef, useState, useImperativeHandle } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
@@ -32,7 +32,7 @@ import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 import {
   structuredAgentSessionSendBody,
   agentSessionSendBodyFingerprint
-} from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const scope = 'agent-session:rich-return'
 let composing = false
@@ -261,13 +261,13 @@ vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], retry: () => {} })
 }))
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
-import { projectQueuedMessageCards } from '../../../../shared/structured-agent-session-queued-cards'
+import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
 let controller: ReturnType<typeof useStructuredAgentSessionQueuedEdit>
@@ -460,7 +460,7 @@ it('retains re-picked rich identity after unknown proof and saves the whole repl
   expect(nextSend().blocks).toEqual([{ type: 'text', text: 'occupied' }])
 })
 
-import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
@@ -472,20 +472,31 @@ function useCapturedPrompt(
 ) {
   const root = useRef<HTMLDivElement>(null)
   const handle = useRef<NativeChatComposerHandle>(null)
-  const insertion = useNativeChatTypedInsertion({
+  const ref = useRef<NativeChatComposerHandle>(null)
+  useNativeChatComposerHandle(handle, {
     textareaRef: input,
+    draft: readNativeChatComposerDraft(key).text,
+    addressPreviewsEnabled: true,
     isComposing: () => composing,
     setDraft,
     setCaret: () => {},
-    setActiveSuggestion: () => {}
+    setActiveSuggestion: () => {},
+    attachmentScopeKey: key,
+    targetKey: key,
+    disabled: false,
+    caret: input.current?.selectionStart ?? 0,
+    resolveAttachmentOwner: () => ({ kind: 'local' }),
+    attachResolvedPaths: () => {},
+    attachCopiedFiles: () => {},
+    captureCopiedFiles: () => async () => {},
+    beginPendingImageAttachment: () => null,
+    resolvePendingImageAttachment: () => {},
+    dropPendingImageAttachment: () => {},
+    setNotice: () => {},
+    pastedTextEditor: () => input.current
   })
-  useImperativeHandle(handle, () => ({
-    ...insertion,
-    isComposing: () => composing,
-    handlePasteEvent: () => {},
-    pasteFromClipboard: () => {}
-  }))
   useNativeChatComposerEditSession({
+    ref,
     root,
     handle,
     draftScopeKey: key,

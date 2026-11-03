@@ -1,13 +1,9 @@
-vi.mock('../../../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
-
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { AgentType } from '../../../../../src/shared/native-chat-types'
-import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat-paste-bytes'
+import type { AgentType } from '../../../../../src/shared/agent-status-types'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'

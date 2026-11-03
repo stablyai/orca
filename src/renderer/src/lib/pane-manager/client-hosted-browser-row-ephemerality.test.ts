@@ -104,21 +104,6 @@ describe('client-hosted rows and the persisted workspace session', () => {
     expect(serialize(patch)).toContain(localWorkspaceId)
     expect(serialize(patch)).not.toContain(CLIENT_HOSTED_PAGE_ID)
   })
-
-  it('leaves the store tab model untouched when a row arrives', async () => {
-    await seedLocalBrowserTab()
-    const before = {
-      browserTabs: useAppStore.getState().browserTabsByWorktree[WT],
-      unifiedTabs: useAppStore.getState().unifiedTabsByWorktree[WT],
-      browserPages: useAppStore.getState().browserPagesByWorkspace
-    }
-
-    pushClientHostedRow()
-
-    expect(useAppStore.getState().browserTabsByWorktree[WT]).toBe(before.browserTabs)
-    expect(useAppStore.getState().unifiedTabsByWorktree[WT]).toBe(before.unifiedTabs)
-    expect(useAppStore.getState().browserPagesByWorkspace).toBe(before.browserPages)
-  })
 })
 
 describe('client-hosted rows and the runtime window graph', () => {

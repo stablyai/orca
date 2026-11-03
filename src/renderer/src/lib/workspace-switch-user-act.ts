@@ -30,6 +30,9 @@ export function lastUserWorkspaceSwitchAt(workspaceKey: string): number | undefi
   return lastSwitchAt.get(workspaceKey)
 }
 
+/** How recent a switch must be for the mounts it causes to count as that switch (`withinMs`). */
+export const WORKSPACE_SWITCH_MOUNT_WINDOW_MS = 10_000
+
 /**
  * True once per noted switch for each consumer; a remount or re-render with no new switch is false.
  * `withinMs` also requires the switch to be that recent (the mounts a switch itself causes).
@@ -50,6 +53,13 @@ export function takeWorkspaceSwitchWake(
   }
   takenCounts.set(takenKey, switches)
   return true
+}
+
+/** `takeWorkspaceSwitchWake` for a consumer the switch itself mounts or runs. */
+export function takeRecentWorkspaceSwitchWake(workspaceKey: string, consumer: string): boolean {
+  return takeWorkspaceSwitchWake(workspaceKey, consumer, {
+    withinMs: WORKSPACE_SWITCH_MOUNT_WINDOW_MS
+  })
 }
 
 export function resetWorkspaceSwitchUserActsForTests(): void {

@@ -1,3 +1,5 @@
+import { getAgentPromptLabel } from './agent-row-primary-text'
+
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
 export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
@@ -70,8 +72,7 @@ function isGeneratedTabTitleWhitespace(code: number): boolean {
 export function deriveGeneratedTabTitle(prompt: string): string | null {
   // Bound renderer title cleanup before scanning paste-sized prompts.
   const promptPreview = prompt.slice(0, GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT)
-  const firstClause = promptPreview
-    .trim()
+  const firstClause = getAgentPromptLabel(promptPreview)
     // Strip URLs before punctuation: underscores in /merge_requests would leak fragments. Avoid a word boundary so _https://…_ also matches.
     .replace(/https?:\/\/\S+/gi, ' ')
     .replace(/[`*_~#>[\]{}()]/g, ' ')

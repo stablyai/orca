@@ -37,6 +37,8 @@ orca computer click --app com.spotify.client --element-index 42 --json
 
 Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
 
+Action results return only the accessibility-tree lines that changed since the last state for that window (`~` changed, `+` added, `-` removed), marked by `snapshot.treeDiff`; pass `--full-tree` to get the whole tree. To find one control in a large window, `get-app-state --query <text>` prints only matching elements and their ancestors, and `--max-elements <n>` caps the output.
+
 ## Multi-window apps
 
 ```bash
@@ -72,6 +74,8 @@ orca computer perform-secondary-action --app <app> --element-index <i> --action 
 ```
 
 Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
+
+On macOS, actions run in the background: the target app isn't brought forward, your frontmost app and key window stay put, and the pointer doesn't move, so you can keep working while an agent drives another window. Each action result reports `action.delivery` (`background` or `foreground`). Pass `--restore-window` only when an app ignores background input, such as drags in Chromium or Electron apps or games; it brings the app forward and uses the real pointer and keyboard. Popup menus and web `<select>` controls are set with `set-value` instead of a click. On Linux and Windows, clicks, scrolling, drags and keyboard input still bring the window forward.
 
 When accessibility targeting fails, fall back carefully to coordinates:
 

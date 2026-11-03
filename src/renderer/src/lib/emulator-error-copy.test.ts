@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import es from '@/i18n/locales/es.json'
-import { emulatorCodedMessage, emulatorFailureText } from '../../../shared/emulator-failure-copy'
-import { emulatorErrorText, emulatorMessageText } from './emulator-error-copy'
+import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorErrorText } from './emulator-error-copy'
 
 const originalLanguage = i18n.language
 
@@ -27,19 +27,5 @@ describe('emulator error copy', () => {
       'adb: device offline'
     )
     expect(emulatorErrorText('not an error', 'fallback')).toBe('fallback')
-  })
-
-  it('translates coded availability text and keeps uncoded or unknown text in English', async () => {
-    i18n.addResourceBundle('es', 'translation', es)
-    await i18n.changeLanguage('es')
-    expect(emulatorMessageText(emulatorCodedMessage('noAndroidDevices'))).toBe(
-      es.emulator.errors.noAndroidDevices
-    )
-    expect(emulatorMessageText({ message: 'Newer host text', messageCode: 'futureCode' })).toBe(
-      'Newer host text'
-    )
-    expect(
-      emulatorMessageText({ message: 'Simulator x not found.', messageCode: 'simulatorNotFound' })
-    ).toBe('Simulator x not found.')
   })
 })

@@ -266,6 +266,7 @@ describe('Run coordinator Orca session address', () => {
       coordinatorHandle: handle,
       coordinatorPaneKey: pane
     })
+    db.bindRun({ runId: second.id, coordinatorHandle: handle, coordinatorPaneKey: pane })
     expect(db.getRunRaw(first.id)).toMatchObject({
       coordinator_handle: null,
       coordinator_orca_session_id: null

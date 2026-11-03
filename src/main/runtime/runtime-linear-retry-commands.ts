@@ -84,7 +84,16 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     return /^[A-Za-z0-9._:@%+=,/-]+$/.test(value) ? value : placeholder
   }
 
-  public async notifyLinearLinkedIssueUpdated(
+  public notifyLinearLinkedIssueUpdated(
+    workspaceId: string,
+    identifier: string | readonly string[]
+  ): void {
+    void this.refreshLinearLinkedIssues(workspaceId, identifier).catch((error: unknown) => {
+      console.warn('[linear] Linked issue refresh failed:', error)
+    })
+  }
+
+  private async refreshLinearLinkedIssues(
     workspaceId: string,
     identifier: string | readonly string[]
   ): Promise<void> {

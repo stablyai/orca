@@ -179,6 +179,52 @@ describe('plugin image protocol', () => {
     expect((await handler(new Request(url('editor-1')))).status).toBe(404)
   })
 
+  it('serves an app theme background by slot, under the theme-background rules', async () => {
+    const pluginRoot = await temp()
+    await mkdir(join(pluginRoot, 'images'), { recursive: true })
+    await writeFile(join(pluginRoot, 'images', 'dusk.png'), png(1280, 720))
+    await writeFile(join(pluginRoot, 'images', 'tiny.png'), png(64, 64))
+    const theme = (path: string) =>
+      JSON.stringify({
+        base: 'dark',
+        tokens: { '--background': '#000', '--foreground': '#fff' },
+        background: { path }
+      })
+    await writeFile(join(pluginRoot, 'dusk.json'), theme('images/dusk.png'))
+    await writeFile(join(pluginRoot, 'tiny.json'), theme('images/tiny.png'))
+    const manifest = pluginManifestSchema.parse({
+      manifestVersion: 2,
+      execution: 'data',
+      id: 'dusk',
+      publisher: 'acme',
+      name: 'Dusk',
+      version: '1.0.0',
+      engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` },
+      contributes: {
+        themes: [
+          { id: 'dusk', title: 'Dusk', path: 'dusk.json' },
+          { id: 'tiny', title: 'Tiny', path: 'tiny.json' }
+        ]
+      }
+    })
+    const handler = createPluginImageRequestHandler({
+      cache: new PluginImageCache(await temp()),
+      findValidPlugin: () => ({
+        pluginKey: 'acme.dusk',
+        rootDir: pluginRoot,
+        manifest,
+        consentFingerprint: 'x',
+        contentHash: 'b'.repeat(64),
+        isDev: false
+      })
+    })
+    const url = (slot: string) => pluginInstalledImageUrl('acme.dusk', 'b'.repeat(64), slot)
+    expect((await handler(new Request(url('theme-0')))).status).toBe(200)
+    // Below the 640×360 minimum, so refused.
+    expect((await handler(new Request(url('theme-1')))).status).toBe(404)
+    expect((await handler(new Request(url('theme-2')))).status).toBe(404)
+  })
+
   it('refuses to cache anything that is not a static raster image', async () => {
     const cache = new PluginImageCache(await temp())
     await expect(

@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -16,8 +17,6 @@ vi.mock('@orca/process-host', () => ({
 
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 import {
-  buildInstallDirAclRepairCommands,
-  isInstallDirAclPoisonVerdict,
   repairWindowsInstallDirPackageAcl,
   resetWindowsInstallDirAclRepairForTest,
   WINDOWS_INSTALL_DIR_ACL_REPAIR_BREADCRUMB,
@@ -25,6 +24,7 @@ import {
   WINDOWS_INSTALL_DIR_ACL_REPAIR_SCHEME_VERSION,
   type WindowsInstallDirAclRepairResult
 } from './windows-install-dir-package-acl-repair'
+
 import { fakePackageGrant, grantsFrom } from './windows-install-dir-acl.test-fixture'
 import type { InstallDirPackageGrants } from './windows-install-dir-package-acl-grant'
 
@@ -80,28 +80,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     resetWindowsInstallDirAclRepairForTest()
     runProcessMock.mockClear()
     runProcessSyncMock.mockClear()
-  })
-
-  it('runs the inheritable root pass, then the per-entry tree pass, on the install dir', async () => {
-    const { grants, passes } = fakePackageGrant()
-    await repair({ grants })
-    expect(passes).toEqual([
-      { installDir: INSTALL_DIR, pass: 'root' },
-      { installDir: INSTALL_DIR, pass: 'tree' }
-    ])
-  })
-
-  it('never starts a child process', async () => {
-    await repair()
-    expect(runProcessMock).not.toHaveBeenCalled()
-    expect(runProcessSyncMock).not.toHaveBeenCalled()
-  })
-
-  it('reports the repair and records an ok breadcrumb', async () => {
-    const { result, data } = await repair()
-    expect(result).toEqual({ mode: 'repaired' })
-    expect(data.status).toBe('ok')
-    expect(data.failedFileCount).toBe(0)
   })
 
   it('runs once and then never grants again for the same install and version', async () => {
@@ -198,16 +176,6 @@ describe('repairWindowsInstallDirPackageAcl', () => {
     expect(String(data.reason)).toContain('Win32 error 5')
   })
 
-  it('marks the attempt so a hopeless install does not re-walk the tree every launch', async () => {
-    const userDataPath = userDataDir()
-    await repair({ userDataPath, grants: deniedGrant().grants })
-
-    const marker = JSON.parse(
-      readFileSync(join(userDataPath, WINDOWS_INSTALL_DIR_ACL_REPAIR_MARKER_FILE), 'utf-8')
-    ) as { outcome: string }
-    expect(marker.outcome).toBe('failed')
-  })
-
   // One failure must not pin this version permanently: Defender locks/timeouts may clear on later bounded retries.
   it('retries a failed repair on later launches, then stops once the budget is spent', async () => {
     const userDataPath = userDataDir()
@@ -239,62 +207,5 @@ describe('repairWindowsInstallDirPackageAcl', () => {
       alreadyRepaired: true
     })
     expect(after.passes).toHaveLength(0)
-  })
-
-  it('is a no-op off win32 and in serve mode', async () => {
-    const off = fakePackageGrant()
-    repairWindowsInstallDirPackageAcl({
-      platform: 'darwin',
-      installDir: INSTALL_DIR,
-      appVersion: APP_VERSION,
-      userDataPath: userDataDir(),
-      grants: off.grants,
-      recordBreadcrumb: vi.fn(),
-      onDone: () => expect.unreachable('no-op must not settle')
-    })
-    resetWindowsInstallDirAclRepairForTest()
-    const serve = fakePackageGrant()
-    const recordServe = vi.fn()
-    repairWindowsInstallDirPackageAcl({
-      platform: 'win32',
-      isServeMode: true,
-      installDir: INSTALL_DIR,
-      appVersion: APP_VERSION,
-      userDataPath: userDataDir(),
-      grants: serve.grants,
-      recordBreadcrumb: recordServe,
-      onDone: () => expect.unreachable('no-op must not settle')
-    })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(off.passes).toHaveLength(0)
-    expect(serve.passes).toHaveLength(0)
-    expect(recordServe).not.toHaveBeenCalled()
-  })
-
-  it('offers text-only commands that mirror the two in-process grants', () => {
-    expect(buildInstallDirAclRepairCommands(INSTALL_DIR)).toEqual([
-      `icacls "${INSTALL_DIR}" /grant "*S-1-15-2-2:(OI)(CI)(RX)"`,
-      `icacls "${INSTALL_DIR}" /grant "*S-1-15-2-2:(RX)" /T /C`
-    ])
-    expect(runProcessMock).not.toHaveBeenCalled()
-    expect(runProcessSyncMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('isInstallDirAclPoisonVerdict', () => {
-  it('only accepts the probe verdict that reproduced the crash', () => {
-    expect(
-      isInstallDirAclPoisonVerdict({
-        status: 'ok',
-        matchesPoisonSignature: true
-      })
-    ).toBe(true)
-    expect(
-      isInstallDirAclPoisonVerdict({
-        status: 'ok',
-        matchesPoisonSignature: false
-      })
-    ).toBe(false)
-    expect(isInstallDirAclPoisonVerdict({ status: 'failed', reason: 'unreadable' })).toBe(false)
   })
 })

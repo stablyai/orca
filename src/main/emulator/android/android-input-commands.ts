@@ -7,6 +7,7 @@ import {
   type DeviceScreenSize
 } from './android-input-mapping'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
+import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 
 export function androidShellArgs(serial: string, command: readonly string[]): string[] {
   return ['-s', serial, 'shell', ...command]
@@ -70,7 +71,10 @@ export async function androidTypeText(
 ): Promise<void> {
   // adb input text uses %s for spaces and cannot carry newlines.
   ensureAdbOk(
-    await runner(sdk.adb, androidShellArgs(serial, ['input', 'text', text.replace(/ /g, '%s')])),
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, ['input', 'text', quotePosixShell(text.replace(/ /g, '%s'))])
+    ),
     'adb type'
   )
 }

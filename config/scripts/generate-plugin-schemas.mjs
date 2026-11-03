@@ -1,6 +1,4 @@
-// Why: the zod schemas in src/shared/plugins are the only definition; this writes the published
-// JSON Schemas and author references from them. The drift test in plugin-json-schema.test.ts
-// fails when these files fall behind.
+// Generate published JSON Schemas and author references from the Zod schemas.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { loadPluginSchemaModule, REPO_ROOT } from './plugin-schema-module-loader.mjs'

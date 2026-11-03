@@ -3,13 +3,16 @@ import {
   CHAT_NAMING_FAILURE_COPY as EN,
   type ChatNamingFailureCode
 } from '../../../../shared/chat-naming-failure-copy'
-import type { AgentSessionNamingError } from '../../../../shared/agent-session-wire'
+import type { AgentSessionNamingError } from '../../../../shared/agent-session/agent-session-wire'
 
 const COPY: Record<ChatNamingFailureCode, () => string> = {
   noName: () => translate('tabHoverCard.namingFailure.errors.noName', EN.noName),
   agentNotRun: () => translate('tabHoverCard.namingFailure.errors.agentNotRun', EN.agentNotRun),
   noAgentAvailable: () =>
-    translate('tabHoverCard.namingFailure.errors.noAgentAvailable', EN.noAgentAvailable)
+    translate('tabHoverCard.namingFailure.errors.noAgentAvailable', EN.noAgentAvailable),
+  grokFailed: () => translate('tabHoverCard.namingFailure.errors.grokFailed', EN.grokFailed),
+  antigravityFailed: () =>
+    translate('tabHoverCard.namingFailure.errors.antigravityFailed', EN.antigravityFailed)
 }
 
 function isChatNamingFailureCode(code: unknown): code is ChatNamingFailureCode {

@@ -10,8 +10,14 @@ import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from '../runtime-managed-worktree-metadata'
-import { resolveRuntimeGitHubWorktreeBase } from '../runtime-github-worktree-base'
-import { resolveRuntimeGitLabWorktreeBase } from '../runtime-gitlab-worktree-base'
+import {
+  resolveRuntimeGitHubWorktreeBase,
+  type RuntimeGitHubWorktreeBaseArgs
+} from '../runtime-github-worktree-base'
+import {
+  resolveRuntimeGitLabWorktreeBase,
+  type RuntimeGitLabWorktreeBaseArgs
+} from '../runtime-gitlab-worktree-base'
 import { listWorktreesStrict } from '../../git/worktree-listing'
 import {
   adoptRuntimeProvisionedRoot,
@@ -181,26 +187,18 @@ export abstract class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRun
     })
   }
 
-  async resolveManagedPrBase(args: {
-    repoSelector: string
-    prNumber: number
-    headRefName?: string
-    baseRefName?: string
-    isCrossRepository?: boolean
-  }): Promise<GitHubPrStartPoint | { error: string }> {
+  async resolveManagedPrBase(
+    args: RuntimeGitHubWorktreeBaseArgs
+  ): Promise<GitHubPrStartPoint | { error: string }> {
     return resolveRuntimeGitHubWorktreeBase(args, {
       store: this.store ? this.requireStore() : null,
       resolveRepo: (selector) => this.resolveRepoSelector(selector)
     })
   }
 
-  async resolveManagedMrBase(args: {
-    repoSelector: string
-    mrIid: number
-    sourceBranch?: string
-    targetBranch?: string
-    isCrossRepository?: boolean
-  }): Promise<
+  async resolveManagedMrBase(
+    args: RuntimeGitLabWorktreeBaseArgs
+  ): Promise<
     { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget } | { error: string }
   > {
     return resolveRuntimeGitLabWorktreeBase(args, {

@@ -1,3 +1,5 @@
+import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   RuntimeConstructionBindings,
   RuntimeConstructionDependencies
@@ -17,6 +19,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from '../runtime-store-contract'
+import { installGitHubProjectAccounts } from '../../github/github-project-account'
 import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
@@ -88,7 +91,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly skillCommands: ServiceState['skillCommands']
 
   abstract showManagedWorktree(
-    worktreeSelector: string
+    ...args: Parameters<ListManagedWorktrees['showManagedWorktree']>
   ): ReturnType<ListManagedWorktrees['showManagedWorktree']>
   abstract resolveProjectRuntimeForWorktree(
     worktreeId: string | null | undefined
@@ -116,6 +119,12 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ) {
     super()
     this.store = store
+    installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
+    this.legacyStructuredSessionTabIds = Object.freeze(
+      collectSavedStructuredAgentSessionIds(
+        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+      )
+    )
     this.machineName.start()
     this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
@@ -198,7 +207,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     )
     this.automation = new RuntimeAutomationController(store, {
       showRepo: (selector) => this.showRepo(selector),
-      showManagedWorktree: (selector) => this.showManagedWorktree(selector)
+      showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
     })
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {

@@ -6,7 +6,8 @@ import {
   getAgentLabel as getExplicitAgentLabel,
   isClaudeAgent as isExplicitClaudeAgent,
   resolveExplicitTerminalTitleAgentType,
-  resolveTerminalTitleAgentType
+  resolveTerminalTitleAgentType,
+  resolveTerminalTitlePolicyAgentType
 } from './terminal-title-agent-type'
 
 /** Pin pre-memoization verdicts so caching cannot silently repaint panes with another agent’s identity. */
@@ -19,7 +20,8 @@ type PinnedRow = [
   explicitLabel: string | null,
   explicitClaude: boolean,
   titleAgent: string | null,
-  explicitTitleAgent: string | null
+  policyTitleAgent: string | null,
+  identityTitleAgent?: string | null
 ]
 
 const PINNED_CLASSIFICATIONS: readonly PinnedRow[] = [
@@ -85,7 +87,7 @@ const PINNED_CLASSIFICATIONS: readonly PinnedRow[] = [
     'copilot',
     'copilot'
   ],
-  ['droid.exe', null, null, false, false, null, false, null, null],
+  ['droid.exe', null, null, false, false, null, false, null, null, 'droid'],
   ['\u2733', 'idle', 'Claude Code', true, false, 'Claude Code', true, 'claude', null],
   [
     '\u2733 Claude Code',
@@ -228,7 +230,18 @@ const PINNED_CLASSIFICATIONS: readonly PinnedRow[] = [
   ['\u03c0 ! blocked-session', 'permission', 'Pi', false, false, 'Pi', false, 'pi', 'pi'],
   ['\u280b \u03c0 - session - ~/orca', 'working', 'Pi', true, false, 'Pi', true, 'pi', 'pi'],
   ['zsh | \u280b Codex', 'working', 'Codex', true, false, 'Codex', true, 'codex', 'codex'],
-  ['tmux | claude - action required', 'permission', null, false, false, null, false, null, null],
+  [
+    'tmux | claude - action required',
+    'permission',
+    null,
+    false,
+    false,
+    null,
+    false,
+    null,
+    null,
+    'claude'
+  ],
   [
     'ssh host | opencode ready',
     'idle',
@@ -254,7 +267,8 @@ describe('terminal title classification', () => {
       explicitLabel,
       explicitClaude,
       titleAgent,
-      explicitTitleAgent
+      policyTitleAgent,
+      identityTitleAgent
     ) => {
       expect(detectAgentStatusFromTitle(title)).toBe(status)
       expect(getAgentLabel(title)).toBe(label)
@@ -263,7 +277,10 @@ describe('terminal title classification', () => {
       expect(getExplicitAgentLabel(title)).toBe(explicitLabel)
       expect(isExplicitClaudeAgent(title)).toBe(explicitClaude)
       expect(resolveTerminalTitleAgentType(title)).toBe(titleAgent)
-      expect(resolveExplicitTerminalTitleAgentType(title)).toBe(explicitTitleAgent)
+      expect(resolveTerminalTitlePolicyAgentType(title)).toBe(policyTitleAgent)
+      expect(resolveExplicitTerminalTitleAgentType(title)).toBe(
+        identityTitleAgent === undefined ? policyTitleAgent : identityTitleAgent
+      )
     }
   )
 })

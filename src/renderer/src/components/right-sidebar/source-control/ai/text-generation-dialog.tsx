@@ -84,6 +84,41 @@ function buildBasePromptPreview(actionId: SourceControlTextActionId): string {
   }
 }
 
+function savedRecipeMessage(actionId: SourceControlTextActionId, scope: 'repo' | 'global'): string {
+  switch (actionId) {
+    case 'commitMessage':
+      return scope === 'repo'
+        ? translate(
+            'sourceControl.textGeneration.savedCommitRecipeRepo',
+            'Saved commit-message recipe for this repository.'
+          )
+        : translate(
+            'sourceControl.textGeneration.savedCommitRecipeGlobal',
+            'Saved commit-message recipe as a global default.'
+          )
+    case 'pullRequest':
+      return scope === 'repo'
+        ? translate(
+            'sourceControl.textGeneration.savedReviewRecipeRepo',
+            'Saved hosted-review recipe for this repository.'
+          )
+        : translate(
+            'sourceControl.textGeneration.savedReviewRecipeGlobal',
+            'Saved hosted-review recipe as a global default.'
+          )
+    case 'branchName':
+      return scope === 'repo'
+        ? translate(
+            'sourceControl.textGeneration.savedBranchRecipeRepo',
+            'Saved branch-name recipe for this repository.'
+          )
+        : translate(
+            'sourceControl.textGeneration.savedBranchRecipeGlobal',
+            'Saved branch-name recipe as a global default.'
+          )
+  }
+}
+
 export function SourceControlTextGenerationDialog({
   actionId,
   title,
@@ -119,12 +154,6 @@ export function SourceControlTextGenerationDialog({
     [actionId, discoveryHostKey, repo, settings, languageRevision]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
-  const recipeLabel =
-    actionId === 'commitMessage'
-      ? 'commit-message recipe'
-      : actionId === 'pullRequest'
-        ? 'hosted-review recipe'
-        : 'branch-name recipe'
   const saveTargets: SourceControlTextGenerationSaveTarget[] = repo?.id
     ? [
         {
@@ -133,7 +162,7 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.5959da1e4d',
             'Save for this repository only'
           ),
-          successMessage: `Saved ${recipeLabel} for this repository.`
+          successMessage: savedRecipeMessage(actionId, 'repo')
         },
         {
           target: { type: 'global' },
@@ -141,7 +170,7 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.7f1ec309a4',
             'Save as default for all repositories'
           ),
-          successMessage: `Saved ${recipeLabel} as a global default.`
+          successMessage: savedRecipeMessage(actionId, 'global')
         }
       ]
     : [
@@ -151,7 +180,7 @@ export function SourceControlTextGenerationDialog({
             'auto.components.right.sidebar.SourceControlTextGenerationDialog.c5b7fa7cb6',
             'Save as global default'
           ),
-          successMessage: `Saved ${recipeLabel} as a global default.`
+          successMessage: savedRecipeMessage(actionId, 'global')
         }
       ]
   const formKey = open

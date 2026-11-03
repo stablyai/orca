@@ -1,4 +1,5 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -8,7 +9,7 @@ import {
 } from '../../shared/node-cli-command-resolution'
 import {
   hasExplicitTuiLaunchCommand,
-  structuredAgentCommandToken
+  structuredAgentCommandPlan
 } from '../../shared/tui-agent-launch-command-override'
 import {
   AgentSessionPreSpawnError,
@@ -45,13 +46,26 @@ function resolveOverride(
   settings: CommandSettings | null | undefined,
   options: CommandOptions
 ) {
-  const token = structuredAgentCommandToken(settings?.agentCmdOverrides?.[agent] ?? '')
+  const plan = structuredAgentCommandPlan(
+    settings?.agentCmdOverrides?.[agent] ?? '',
+    options.platform ?? process.platform
+  )
   const overlay = settings?.agentDefaultEnv?.[agent]
-  return token
-    ? resolveExecutableCommand(token, {
+  const command = plan
+    ? resolveExecutableCommand(plan.program, {
         ...options,
         pathEnv: guestNativePathEnv(options.pathEnv ?? overlay?.PATH ?? overlay?.Path)
       })
+    : null
+  return command && plan
+    ? {
+        command,
+        prefixArgs: plan.prefixArgs.map((token) =>
+          token.startsWith('~/')
+            ? resolvePath(options.homePath ?? homedir(), token.slice(2))
+            : token
+        )
+      }
     : null
 }
 
@@ -60,13 +74,15 @@ function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
   return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
+export type StructuredAgentCommand = { command: string; prefixArgs: string[] }
+
 /** Read live settings on every lookup; invalid explicit commands must refuse instead of launching stock CLI. */
 export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
   options: CommandOptions = {},
   stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
-): string {
+): StructuredAgentCommand {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
@@ -77,15 +93,15 @@ export function resolveStructuredAgentCommand(
         { reason: 'cliMissing' }
       )
     }
-    return resolved
+    return { command: resolved, prefixArgs: [] }
   }
-  const command = resolveOverride(agent, settings, options)
-  if (!command || !spawnableOn(options.platform ?? process.platform, command)) {
+  const invocation = resolveOverride(agent, settings, options)
+  if (!invocation || !spawnableOn(options.platform ?? process.platform, invocation.command)) {
     throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
       reason: 'agentCommandNotRunnable'
     })
   }
-  return command
+  return invocation
 }
 
 export type ProgramSearch<T> = {

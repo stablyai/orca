@@ -27,7 +27,8 @@ export type ShellApi = {
   openFilePath: (path: string, ownerHostId: ExecutionHostId) => Promise<boolean>
   openFileUri: (uri: string, ownerHostId: ExecutionHostId) => Promise<void>
   pathsExist?: (paths: string[]) => Promise<ShellPathExistence[]>
-  pathExists: (path: string) => Promise<boolean>
+  /** `wakeWslDistro`: a click, a user act that may start a stopped WSL distro. */
+  pathExists: (path: string, options?: { wakeWslDistro?: boolean }) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
   pickAttachments: () => Promise<string[]>
   pickImage: () => Promise<string | null>

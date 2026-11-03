@@ -1,6 +1,6 @@
-import { agentJournalItemPosition } from '../../agent-session-journal-position'
-import type { AgentJournalRenderItem } from '../../agent-session-journal-types'
-import type { NativeChatMessage } from '../../native-chat-types'
+import { agentJournalItemPosition } from '../../agent-session/journal/agent-session-journal-position'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 /** A split result row keeps its source's journal position while gaining its own render identity. */
 export function nativeChatTurnRowAttribution<T>(

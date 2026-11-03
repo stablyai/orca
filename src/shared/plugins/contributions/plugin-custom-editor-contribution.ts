@@ -1,9 +1,12 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
-  PLUGIN_MANIFEST_V2_SINCE
+  PLUGIN_EDITOR_FRAME_SINCE,
+  PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
 import { pluginFileMatchFields } from './plugin-file-match'
 import { PLUGIN_ICON_RULE_TEXT } from '../images/plugin-image-fields'
@@ -16,6 +19,10 @@ export const PLUGIN_CUSTOM_EDITOR_PRIORITIES = ['default', 'option'] as const
 export const PLUGIN_CUSTOM_EDITOR_CONTENT_KINDS = ['text', 'bytes'] as const
 export type PluginCustomEditorContentKind = (typeof PLUGIN_CUSTOM_EDITOR_CONTENT_KINDS)[number]
 
+/** Where the editor may run: `isolated` needs the desktop app's isolated frame. */
+export const PLUGIN_CUSTOM_EDITOR_FRAMES = ['any', 'isolated'] as const
+export type PluginCustomEditorFrame = (typeof PLUGIN_CUSTOM_EDITOR_FRAMES)[number]
+
 export const pluginCustomEditorContributionSchema = z
   .object({
     id: pluginIdSchema.meta(
@@ -25,17 +32,13 @@ export const pluginCustomEditorContributionSchema = z
         ['excalidraw']
       )
     ),
-    title: z
-      .string()
-      .min(1)
-      .max(64)
-      .meta(
-        pluginFieldDoc(
-          "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
-          PLUGIN_MANIFEST_V2_SINCE,
-          ['Excalidraw']
-        )
-      ),
+    title: safePluginDisplayText(z.string().min(1).max(64)).meta(
+      pluginFieldDoc(
+        "Name shown in the editor's view toggle beside Source, and on the tab of a file it opens.",
+        PLUGIN_MANIFEST_V2_SINCE,
+        ['Excalidraw']
+      )
+    ),
     icon: pluginRelativePathSchema
       .optional()
       .meta(
@@ -51,7 +54,7 @@ export const pluginCustomEditorContributionSchema = z
     }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
-        'HTML file rendered inside a sandboxed editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.',
+        `HTML file rendered inside an editor frame, like a panel, or a \`.ts\`/\`.tsx\` module that Orca transpiles and loads in a generated page (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust.`,
         PLUGIN_MANIFEST_V2_SINCE,
         ['editor/index.html']
       )
@@ -61,7 +64,7 @@ export const pluginCustomEditorContributionSchema = z
       .optional()
       .meta(
         pluginFieldDoc(
-          '`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`.',
+          '`default` (the default) opens matching files in this editor; `option` only offers it in the view toggle, so files open in Source. Files Orca opens itself (such as `.json`, `.ts`, `.md`, `.csv`, `.yaml`, lockfiles and `.env` files) always behave as `option`; a longer suffix such as `.sketch.json` is not one of them and opens by default.',
           PLUGIN_MANIFEST_V2_SINCE,
           ['default']
         )
@@ -75,6 +78,16 @@ export const pluginCustomEditorContributionSchema = z
           PLUGIN_MANIFEST_V2_SINCE,
           ['bytes']
         )
+      ),
+    frame: z
+      .enum(PLUGIN_CUSTOM_EDITOR_FRAMES)
+      .optional()
+      .meta(
+        pluginFieldDoc(
+          "`any` (the default) runs in whatever frame the client gives. `isolated` runs only in the desktop app's isolated frame, never the browser-client fallback: browser clients, and desktop with isolated frames switched off, open the file in Source with a notice that the editor needs the Orca desktop app.",
+          PLUGIN_EDITOR_FRAME_SINCE,
+          ['isolated']
+        )
       )
   })
   .strict()
@@ -83,6 +96,12 @@ export const pluginCustomEditorContributionSchema = z
     description:
       'An editor for the listed files, shown in the editor tab beside Source. It must list at least one extension or file name. Requires the `sandboxed-ui` execution profile or higher.'
   })
+
+export function customEditorFrame(editor: {
+  frame?: PluginCustomEditorFrame
+}): PluginCustomEditorFrame {
+  return editor.frame ?? 'any'
+}
 
 export function customEditorContentKind(editor: {
   contentKind?: PluginCustomEditorContentKind

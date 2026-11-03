@@ -112,7 +112,7 @@ describe('orchestration recovery command identity', () => {
     ).toEqual(['orca-ide', 'orchestration', 'worker-stop', '--dispatch', 'dispatch_1'])
   })
 
-  it('reconstructs worker-retain when raw argv is unavailable', () => {
+  it('reconstructs worker-keep-open when raw argv is unavailable', () => {
     expect(
       buildOrchestrationRecoveryCommand('orchestration.workerRetain', {
         dispatch: 'dispatch_1'
@@ -120,7 +120,7 @@ describe('orchestration recovery command identity', () => {
     ).toEqual([
       resolveOrchestrationCliExecutable(),
       'orchestration',
-      'worker-retain',
+      'worker-keep-open',
       '--dispatch',
       'dispatch_1'
     ])

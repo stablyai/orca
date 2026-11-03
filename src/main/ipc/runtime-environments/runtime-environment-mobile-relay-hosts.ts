@@ -17,9 +17,9 @@ import {
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
-import { wslHostsGateOpen } from '../../wsl/wsl-host-gate'
-import type { WslHostPhoneReach } from '../../wsl/wsl-host-phone-reach'
-import { getWslHostPhoneGate } from '../../wsl/wsl-host-service-instance'
+import { wslHostsGateOpen } from '../../wsl/host-lifecycle/wsl-host-gate'
+import type { WslHostPhoneReach } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
+import { getWslHostPhoneGate } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import {
   getRegisteredSshState,

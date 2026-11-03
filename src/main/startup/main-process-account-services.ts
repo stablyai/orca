@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { KeybindingService } from '../keybindings/keybinding-service'
-import { createProviderAccountServices } from '../provider-account-services'
+import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
 import { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
 import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'

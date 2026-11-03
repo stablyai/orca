@@ -259,15 +259,17 @@ describe('Linear comment edit and delete', () => {
     }
   )
 
-  it('keeps add uncertainty while preventing an expired queued add from invoking Linear', async () => {
+  it('reports no attempt while preventing an expired queued add from invoking Linear', async () => {
     vi.useFakeTimers()
     await Promise.all([acquire(), acquire(), acquire(), acquire()])
     try {
-      const pending = createCommands().runLinearAgentWrite(
-        (signal) => addIssueCommentForAgent('issue-1', 'body', 'w2', { id: COMMENT_ID, signal }),
+      const pending = createCommands().runLinearAgentAction(
+        async () => null,
+        (_owner, options) =>
+          addIssueCommentForAgent('issue-1', 'body', 'w2', { id: COMMENT_ID, ...options }),
         () => linearError('linear_write_unconfirmed', 'Add was not confirmed.')
       )
-      const rejected = expect(pending).rejects.toMatchObject({ code: 'linear_write_unconfirmed' })
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'linear_timeout' })
       await vi.advanceTimersByTimeAsync(25_000)
       await rejected
       expect(mocks.createComment).not.toHaveBeenCalled()

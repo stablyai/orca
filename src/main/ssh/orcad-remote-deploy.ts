@@ -21,9 +21,9 @@ import { materializeOrcadArtifact } from '../orcad/orcad-artifact-materializer'
 import { readOrcadBundleTarget } from './orcad-deployment-target'
 import { resolveOrcadRuntimeTarget } from '../managed-server/lifecycle/orcad-runtime-target'
 import {
-  materializeNodeRuntimeArchive,
-  nodeRuntimeArchiveCachePath
-} from '../node-runtime/pinned-runtime-materializer'
+  orcadNodeRuntimeInstallOptions,
+  type NodeRuntimeDownloadBudget
+} from './orcad-node-runtime-install-options'
 import {
   orcadActivationFenceExists,
   resolveOrcadActivationReadinessTimeout,
@@ -66,6 +66,8 @@ export type OrcadDeployOptions = {
   readinessTimeoutMs?: number
   /** WSL only; SSH hosts always re-hash the runtime (see `installOrcadBundle`). */
   recordedNodeRuntimeProbe?: boolean
+  /** WSL only: bounded Node runtime downloads; SSH keeps the default timing. */
+  nodeRuntimeDownload?: NodeRuntimeDownloadBudget
   now?: () => Date
   sleep?: (ms: number) => Promise<void>
   signal?: AbortSignal
@@ -74,7 +76,16 @@ export type OrcadDeployOptions = {
 export type OrcadDeployResult =
   | { outcome: 'installed-and-activated'; fullVersion: string; verdict: OrcadActivationVerdict }
   | { outcome: 'already-active'; fullVersion: string }
-  | { outcome: 'installed-not-activated'; fullVersion: string; code: string; reason: string }
+  | {
+      outcome: 'installed-not-activated'
+      fullVersion: string
+      code: string
+      reason: string
+      /** The candidate's own preflight or launch check failed; a deferral never sets this. */
+      startCheckFailed?: true
+      /** This deploy uploaded the slot rather than finding it already installed. */
+      freshlyInstalled?: true
+    }
 
 export async function deployOrcad(
   input: OrcadDeployOptions,
@@ -94,9 +105,7 @@ export async function deployOrcad(
       input.readinessTimeoutMs,
       ORCAD_STARTUP_READINESS_TIMEOUT_MS
     ),
-    nodeRuntimeArchive: () =>
-      materializeNodeRuntimeArchive(target, runtimeCacheRoot, { signal: input.signal }),
-    nodeRuntimeOfflineArchivePath: nodeRuntimeArchiveCachePath(target, runtimeCacheRoot),
+    ...orcadNodeRuntimeInstallOptions(target, runtimeCacheRoot, input),
     localOrcadDir:
       input.localOrcadDir ?? (await materializeOrcadArtifact(target, { signal: input.signal }))
   }
@@ -130,12 +139,12 @@ export async function deployOrcad(
     return held()
   }
 
-  await installOrcadBundle(options, fullVersion, remoteDir)
+  const installed = await installOrcadBundle(options, fullVersion, remoteDir)
   if (options.sameVersionFencedByCaller && preUploadRecord.active === fullVersion) {
     return { outcome: 'already-active', fullVersion }
   }
 
-  return logOrcadActivationOutcome(
+  const result = await logOrcadActivationOutcome(
     `update to ${fullVersion}`,
     () =>
       withOrcadActivationLock(
@@ -146,4 +155,7 @@ export async function deployOrcad(
       ),
     ['installed-and-activated', 'already-active']
   )
+  return installed === 'uploaded' && result.outcome === 'installed-not-activated'
+    ? { ...result, freshlyInstalled: true }
+    : result
 }

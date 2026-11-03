@@ -14,47 +14,16 @@ import * as startupShell from './tui-agent-startup-shell'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import { describe, expect, it, vi } from 'vitest'
 import * as choiceArgs from './agent-choice-args'
-import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
-import { resolveAgentChoiceLayers } from './agent-choice-layers'
+import './agent-choice-layers'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
-import { agentLaunchNeedsPreparedCommand } from './agent-launch-preferences'
+import './agent-launch-preferences'
 
 const keys = new Set(['model', 'effort', 'permissionMode'])
 const load = (agent: 'claude' | 'codex', userArgs: string) =>
   reconcileAgentChoiceArgs({ agent, userArgs, choices: {}, mode: 'load', keys })
 
 describe('dedicated agent choices', () => {
-  it.each([
-    ['-c modelx', undefined, false],
-    ['--config=modelx', undefined, false],
-    ['-c model_reasoning_effortx', undefined, false],
-    ['-c model=value', { model: 'value' }, true],
-    ['-c model_reasoning_effort=low', { options: { effort: 'low' } }, true],
-    ['-c model=42', undefined, true]
-  ] as const)('requires a config assignment for %s ownership', (userArgs, choices, owned) => {
-    const migrated = load('codex', userArgs)
-    const patch = { model: 'gpt-5.5', options: { effort: 'high' } }
-    const edited = reconcileAgentChoiceArgs({
-      agent: 'codex',
-      userArgs,
-      choices: {},
-      mode: 'choice-edit',
-      keys,
-      patch
-    })
-    const projected = projectAgentLaunchProfile(
-      'codex',
-      { agentPermissionDefault: 'own' },
-      { target: 'terminal', userArgs, choices: patch }
-    )
-    expect.soft(migrated).toEqual(choices ? { userArgs: '', choices } : { userArgs, choices: {} })
-    expect.soft(edited).toEqual({ userArgs: owned ? '' : userArgs, choices: patch })
-    expect(projected.args).toBe(
-      ['-m gpt-5.5 -c model_reasoning_effort=high', owned ? '' : userArgs].filter(Boolean).join(' ')
-    )
-  })
-
   it('bounds range comparisons and copied bytes on repeated-flag choice edits', () => {
     const analyze = choiceArgs.analyzeAgentChoiceArgs
     const slice = String.prototype.slice
@@ -142,37 +111,6 @@ describe('dedicated agent choices', () => {
       joinSpy.mockRestore()
       sliceSpy.mockRestore()
     }
-  })
-
-  it('retains independent options and bounded opaque model ids without discovery', () => {
-    expect(normalizeAgentModelOptionChoices({ options: { effort: 'high' } })).toEqual({
-      options: { effort: 'high' }
-    })
-    expect(normalizeAgentModelOptionChoices({ model: 'retired-unlisted-id' })).toEqual({
-      model: 'retired-unlisted-id'
-    })
-    expect(normalizeAgentModelOptionChoices({ options: { model: 'other' } })).toBeUndefined()
-    expect(normalizeAgentModelOptionChoices({ model: 'x'.repeat(513) })).toBeUndefined()
-  })
-
-  it('lifts a complete tuple atomically and keeps surviving raw bytes', () => {
-    expect(
-      load('claude', '--model saved-unlisted-id  --effort high --permission-mode auto')
-    ).toEqual({
-      userArgs: '',
-      choices: { model: 'saved-unlisted-id', options: { effort: 'high' }, permissionMode: 'auto' }
-    })
-    expect(load('codex', '-c model=opus --search -c model_reasoning_effort=high')).toEqual({
-      userArgs: '--search',
-      choices: { model: 'opus', options: { effort: 'high' } }
-    })
-    expect(load('claude', '--effort high')).toEqual({
-      userArgs: '',
-      choices: { options: { effort: 'high' } }
-    })
-    expect(load('claude', '--model opus --append-system-prompt "keep  spacing"').userArgs).toBe(
-      '--append-system-prompt "keep  spacing"'
-    )
   })
 
   it('keeps duplicates, operands, uncertain regions and unproved TOML literal', () => {
@@ -288,72 +226,54 @@ describe('dedicated agent choices', () => {
       ).args
     ).toBe('--model claude-opus-4-8-thinking --verbose')
   })
+})
 
-  it('does not revive remembered model/options when raw text defeats a yielding layer', () => {
-    const input = {
-      agent: 'claude' as const,
-      remembered: { model: 'sonnet', options: { effort: 'high' } },
-      action: { permissionMode: 'ask' as const },
-      argumentOwner: 'launch' as const,
-      launchPreferencesYieldToAgentArgs: true
-    }
-    expect(resolveAgentChoiceLayers({ ...input, userArgs: '--model haiku' })).toEqual({
-      permissionMode: 'ask'
-    })
-    expect(resolveAgentChoiceLayers({ ...input, userArgs: '--effort medium' })).toEqual({
-      model: 'sonnet',
-      permissionMode: 'ask'
-    })
-    expect(
-      resolveAgentChoiceLayers({ ...input, userArgs: '--model haiku', explicit: { model: 'opus' } })
-    ).toEqual({ model: 'opus', permissionMode: 'ask' })
+it('edits only the last inline Claude settings object and never unshadows earlier settings on removal', () => {
+  const earlier = `--settings '{"language":"french"}'`
+  const effective = '{"__proto__":{"unchanged":1},"env":{"A":"B"},"fastMode":false}'
+  const text = `${earlier} --settings '${effective}' --add-dir docs`
+  const launch = projectAgentLaunchProfile('claude', undefined, {
+    target: 'terminal',
+    userArgs: text,
+    choices: { options: { fastMode: 'true' } }
   })
+  const parsed = tokenizeStartupCommand(launch.args, 'posix')
+  expect(parsed.ok).toBe(true)
+  if (!parsed.ok) {
+    throw new Error('invalid compiled arguments')
+  }
+  const objects = parsed.tokens
+    .filter((_, index) => parsed.tokens[index - 1] === '--settings')
+    .map((value) => JSON.parse(value))
+  expect(objects).toEqual([{ language: 'french' }, JSON.parse(effective.replace('false', 'true'))])
+  const analysis = choiceArgs.analyzeAgentChoiceArgs(
+    'claude',
+    `${earlier} --settings '{"fastMode":true}'`
+  )
+  const removed = analysis.cut(analysis.occurrences.filter((item) => item.key === 'fastMode'))
+  expect(removed).toBe(`${earlier} --settings '{}'`)
+  const shadowed = choiceArgs.analyzeAgentChoiceArgs(
+    'claude',
+    `--settings '{"fastMode":true}' --settings '{}'`
+  )
+  expect(shadowed.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+})
 
-  it('resolves raw inheritance before projecting and never imports another model’s options', () => {
-    expect(
-      resolveAgentChoiceLayers({
-        agent: 'claude',
-        defaults: { model: 'sonnet' },
-        action: { model: 'opus' },
-        userArgs: '--append-system-prompt hello',
-        argumentOwner: 'launch',
-        launchPreferencesYieldToAgentArgs: true
-      })
-    ).toEqual({ model: 'opus' })
-    expect(
-      resolveAgentChoiceLayers({
-        agent: 'claude',
-        remembered: { model: 'sonnet', options: { effort: 'high' } },
-        explicit: { model: 'opus' },
-        argumentOwner: 'defaults'
-      })
-    ).toEqual({ model: 'opus' })
-    expect(
-      resolveAgentChoiceLayers({
-        agent: 'claude',
-        remembered: { model: 'sonnet' },
-        defaults: { options: { effort: 'high' } },
-        argumentOwner: 'defaults'
-      })
-    ).toEqual({ model: 'sonnet', options: { effort: 'high' } })
-    expect(
-      projectAgentLaunchProfile(
-        'claude',
-        { agentPermissionDefault: 'ask' },
-        { target: 'terminal', choices: { options: { effort: 'high' } }, userArgs: '' }
-      ).args
-    ).toContain('--effort')
-    expect(
-      projectAgentLaunchProfile(
-        'claude',
-        { agentPermissionDefault: 'ask' },
-        { target: 'structured', choices: { model: 'opus' }, userArgs: '' }
-      )
-    ).toEqual({ args: '', choices: { model: 'opus', permissionMode: 'ask' } })
-    expect(agentLaunchNeedsPreparedCommand('codex', { model: 'unlisted', effort: 'high' })).toBe(
-      false
-    )
-  })
+it('leaves effective file and unparseable Claude settings literal and never reports Fast applied', () => {
+  for (const text of [
+    `--settings '{"fastMode":true}' --settings './file with spaces.json'`,
+    `--settings '{"language":"french"}' --settings '{broken'`
+  ]) {
+    const launch = projectAgentLaunchProfile('claude', undefined, {
+      target: 'terminal',
+      userArgs: text,
+      choices: { options: { fastMode: 'true' } }
+    })
+    expect(launch.args).toBe(text)
+    const analysis = choiceArgs.analyzeAgentChoiceArgs('claude', text)
+    expect(analysis.opaqueKeys.has('fastMode')).toBe(true)
+    expect(analysis.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+  }
 })
 
 it.each([
@@ -620,5 +540,74 @@ it('bounds real raw-edit transport across invalid, divergent, exhausted and two-
     )
   } finally {
     spy.mockRestore()
+  }
+})
+
+it('keeps settings equals, operand and terminator ownership at the shared analyzer boundary', () => {
+  const text = `--settings='{"fastMode":true,"shadowed":1}' --settings='{"fastMode":false,"env":{"fastMode":true}}' --add-dir docs`
+  const analysis = choiceArgs.analyzeAgentChoiceArgs('claude', text)
+  const fast = analysis.occurrences.filter((item) => item.key === 'fastMode')
+  expect(fast).toMatchObject([{ value: 'false', owned: false, lift: false }])
+  expect(
+    reconcileAgentChoiceArgs({
+      agent: 'claude',
+      userArgs: text,
+      choices: {},
+      mode: 'arguments-edit',
+      keys: new Set(['fastMode'])
+    })
+  ).toEqual({ userArgs: text, choices: {} })
+  const cut = analysis.cut(fast)!
+  for (const shell of ['posix', 'powershell', 'cmd'] as const) {
+    const parsed = tokenizeStartupCommand(cut, shell)
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: [
+        '--settings={"fastMode":true,"shadowed":1}',
+        '--settings',
+        '{"env":{"fastMode":true}}',
+        '--add-dir',
+        'docs'
+      ]
+    })
+  }
+  for (const raw of [
+    `-- --settings '{"fastMode":true}'`,
+    `--model --settings '{"fastMode":true}'`,
+    `--settings '{broken`
+  ]) {
+    const result = choiceArgs.analyzeAgentChoiceArgs('claude', raw)
+    expect(result.occurrences.filter((item) => item.key === 'fastMode')).toEqual([])
+    expect(result.cut([])).toBe(raw)
+  }
+})
+
+it('retains unlisted Codex effort until the complete selection actually emits its replacement', () => {
+  for (const raw of [
+    '-c model_reasoning_effort=future_effort --search',
+    `-c 'model_reasoning_effort="future_effort"' --search`
+  ]) {
+    const unprepared = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { options: { effort: 'future_effort' } }
+      }
+    )
+    expect(unprepared.args).toBe(raw)
+    expect(unprepared.launch).toEqual({ args: [], appliedValues: {} })
+    const emitted = projectAgentLaunchProfile(
+      'codex',
+      { agentPermissionDefault: 'own' },
+      {
+        target: 'terminal',
+        userArgs: raw,
+        choices: { model: 'gpt-5.6-sol', options: { effort: 'future_effort' } }
+      }
+    )
+    expect(emitted.launch.appliedValues).toEqual({ model: 'gpt-5.6-sol', effort: 'future_effort' })
+    expect(emitted.args).toBe("-m gpt-5.6-sol -c model_reasoning_effort=future_effort '--search'")
   }
 })

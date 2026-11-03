@@ -1,3 +1,5 @@
+import { projectAgentLaunchProfile } from '../../shared/agent-launch-profile'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   resolveTuiAgentLaunchArgs,
@@ -18,7 +20,16 @@ export function structuredAgentConfiguredArgs(
       isRemote: false,
       terminalWindowsShell: settings.terminalWindowsShell
     }) ?? 'posix'
-  const parsed = tokenizeStartupCommand(resolveTuiAgentLaunchArgs(agent, settings), shell)
+  const parsed = tokenizeStartupCommand(
+    isTuiAgent(agent)
+      ? projectAgentLaunchProfile(
+          agent,
+          { ...settings, agentLaunchChoices: undefined },
+          { target: 'structured', shell }
+        ).args
+      : resolveTuiAgentLaunchArgs(agent, settings),
+    shell
+  )
   if (!parsed.ok) {
     throw new Error(`${agent} Arguments are invalid: ${parsed.error}`)
   }

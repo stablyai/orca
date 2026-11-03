@@ -2,7 +2,7 @@ import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
-import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-action'
+import { getMobileNativeChatToggleActions } from './native-chat/mobile-native-chat-toggle-action'
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
 
@@ -25,6 +25,8 @@ export function getMobileTerminalActionSheetActions<
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
   bulkCloseActions?: (anchorTabId: string | undefined) => ActionSheetAction[]
+  /** Allow Auto-Close, on a worker the user kept open. */
+  workerActions?: ActionSheetAction[]
 }): ActionSheetAction[] {
   const { target } = args
   if (!target) {
@@ -69,6 +71,7 @@ export function getMobileTerminalActionSheetActions<
         args.onClear(target)
       }
     },
+    ...(args.workerActions ?? []),
     {
       id: 'close',
       label: translate('common.close', 'Close'),

@@ -34,7 +34,8 @@ export const shellApi = {
 
   pathsExist: (paths: string[]): Promise<ShellPathExistence[]> =>
     ipcRenderer.invoke('shell:pathsExist', paths),
-  pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
+  pathExists: (path: string, options?: { wakeWslDistro?: boolean }): Promise<boolean> =>
+    ipcRenderer.invoke('shell:pathExists', path, options),
 
   pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
 
