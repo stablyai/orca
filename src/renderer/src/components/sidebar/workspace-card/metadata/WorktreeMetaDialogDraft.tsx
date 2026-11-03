@@ -251,7 +251,10 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             }
             disabled={saving}
           />
-          <WorktreeWorkspaceUrlField draft={workspaceUrl} onEnter={handleSave} />
+          {/* Why: project-group folder workspaces have no workspaceUrl field in their store, so a save would be dropped. */}
+          {isFolderWorkspace ? null : (
+            <WorktreeWorkspaceUrlField draft={workspaceUrl} onEnter={handleSave} />
+          )}
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               {notesOpen ? (

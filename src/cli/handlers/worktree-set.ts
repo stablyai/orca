@@ -52,6 +52,12 @@ export const worktreeSetHandler: CommandHandler = async ({ flags, client, cwd, j
   })
   const workspaceUrl = getWorkspaceUrlFlag(flags)
   const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+  if (workspaceUrl !== undefined && worktree.startsWith('folder:')) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--url is not supported for folder workspaces; only repo workspaces can store a link.'
+    )
+  }
   await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
   const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
     worktree,

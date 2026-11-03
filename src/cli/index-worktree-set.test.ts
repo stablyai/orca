@@ -515,4 +515,16 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
   })
+
+  it('rejects --url on a folder workspace instead of dropping it', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'folder:docs', '--url', 'https://app.test'],
+      '/tmp/repo/feature'
+    )
+
+    expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+    expect(errSpy.mock.calls.flat().join('\n')).toContain('not supported for folder workspaces')
+  })
 })
