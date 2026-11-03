@@ -7,10 +7,65 @@ import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from './use-worktree-card-controller'
-import { useSelectedPluginCardTemplate } from '@/store/plugin-sidebar-cards'
-import { renderWorkspaceCardWithFallback } from './workspace-card/render-workspace-card-template'
+import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
+import { useSelectedPluginCard } from '@/store/plugin-sidebar-cards'
+import type { PluginSidebarCardRegistration } from '../../../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
+import {
+  pluginCardRevisionKey,
+  renderDefaultWorkspaceCard,
+  renderPluginWorkspaceCard,
+  type CardRootAttrs,
+  type DrawnWorkspaceCard
+} from './workspace-card/render-workspace-card-template'
+
+type DrawCardContent = (rootAttrs: CardRootAttrs) => DrawnWorkspaceCard | null
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
+  const isSleeping = useIsSleepingWorktree(card.worktree.id)
+  const pluginCard = useSelectedPluginCard()
+  const drawOrcaCard = (): React.JSX.Element =>
+    renderWorktreeCardSurface(card, isSleeping, (rootAttrs) =>
+      renderDefaultWorkspaceCard(card, rootAttrs)
+    )
+  if (!pluginCard) {
+    return drawOrcaCard()
+  }
+  // Why a reset key: a fixed plugin file, or another workspace in this row, gets a fresh try.
+  return (
+    <RecoverableRenderErrorBoundary
+      boundaryId="workspace-card-plugin"
+      surface="sidebar"
+      reportAsCrash={false}
+      resetKey={`${pluginCardRevisionKey(pluginCard)}:${card.worktree.id}`}
+      fallback={drawOrcaCard}
+    >
+      <PluginCardSurface card={card} isSleeping={isSleeping} entry={pluginCard} />
+    </RecoverableRenderErrorBoundary>
+  )
+}
+
+/** A plugin card's surface, as a component so the boundary above catches what it throws. */
+function PluginCardSurface({
+  card,
+  isSleeping,
+  entry
+}: {
+  card: WorktreeCardController
+  isSleeping: boolean
+  entry: PluginSidebarCardRegistration
+}): React.JSX.Element {
+  return renderWorktreeCardSurface(card, isSleeping, (rootAttrs) =>
+    renderPluginWorkspaceCard(card, entry, rootAttrs)
+  )
+}
+
+/** Orca's card frame around drawn content; content that cannot draw falls back to Orca's card,
+ *  so the frame always matches the content inside it. */
+function renderWorktreeCardSurface(
+  card: WorktreeCardController,
+  isSleeping: boolean,
+  drawContent: DrawCardContent
+): React.JSX.Element {
   const {
     worktree,
     selectedWorktrees,
@@ -44,20 +99,16 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     setShowRenameErrorDialog,
     contentIndent
   } = card
-  const isSleeping = useIsSleepingWorktree(worktree.id)
-  const pluginTemplate = useSelectedPluginCardTemplate()
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
-  const { content: parentCardContent, frame } = renderWorkspaceCardWithFallback(
-    card,
-    pluginTemplate,
-    (templateFrame) => {
-      const { parentContentMarginLeft } = geometryFor(templateFrame.statusLane)
-      return parentContentMarginLeft < 0
-        ? { style: { marginLeft: `${parentContentMarginLeft}px` } }
-        : undefined
-    }
-  )
+  const rootAttrs: CardRootAttrs = (templateFrame) => {
+    const { parentContentMarginLeft } = geometryFor(templateFrame.statusLane)
+    return parentContentMarginLeft < 0
+      ? { style: { marginLeft: `${parentContentMarginLeft}px` } }
+      : undefined
+  }
+  const { content: parentCardContent, frame } =
+    drawContent(rootAttrs) ?? renderDefaultWorkspaceCard(card, rootAttrs)
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
 

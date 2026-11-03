@@ -37,16 +37,33 @@ export type ExpandedCardTemplate = {
 /** Props an element accepts, or undefined when no such element exists. */
 export type CardElementPropsLookup = (el: string) => readonly string[] | undefined
 
-function expression(source: string, path: string): CardExpressionValue {
-  try {
-    return compileCardExpression(source).evaluate
-  } catch (error) {
-    throw new CardTemplateCompileError(error instanceof Error ? error.message : String(error), path)
-  }
-}
+/** How far a template may expand; plugin templates get a tighter cap than Orca's own. */
+export type CardExpansionCaps = { maxExpandedNodes: number }
 
-function propValue(value: CardPropValue, path: string): CardExpressionValue {
-  return isCardExpression(value) ? expression(value.slice(1), path) : () => value
+class Expressions {
+  // Why cached: a def reused at many places would otherwise compile its expressions each time.
+  private readonly compiled = new Map<string, CardExpressionValue>()
+
+  expression(source: string, path: string): CardExpressionValue {
+    const cached = this.compiled.get(source)
+    if (cached) {
+      return cached
+    }
+    try {
+      const evaluate = compileCardExpression(source).evaluate
+      this.compiled.set(source, evaluate)
+      return evaluate
+    } catch (error) {
+      throw new CardTemplateCompileError(
+        error instanceof Error ? error.message : String(error),
+        path
+      )
+    }
+  }
+
+  propValue(value: CardPropValue, path: string): CardExpressionValue {
+    return isCardExpression(value) ? this.expression(value.slice(1), path) : () => value
+  }
 }
 
 class Expander {
@@ -55,12 +72,15 @@ class Expander {
 
   constructor(
     private readonly propsOf: CardElementPropsLookup,
-    private readonly defs: Readonly<Record<string, CardTemplateNode>>
+    private readonly defs: Readonly<Record<string, CardTemplateNode>>,
+    private readonly caps: CardExpansionCaps,
+    private readonly expressions: Expressions
   ) {}
 
   /** `depth` is the node's depth in the expanded tree, since each def reference inlines a copy. */
   node(node: CardTemplateNode, path: string, depth = 1): ExpandedCardNode {
-    const when = node.when === undefined ? null : expression(node.when, `${path}.when`)
+    const when =
+      node.when === undefined ? null : this.expressions.expression(node.when, `${path}.when`)
     const def = Object.hasOwn(this.defs, node.el) ? this.defs[node.el] : undefined
     if (def) {
       if (node.props !== undefined || node.children !== undefined) {
@@ -91,9 +111,9 @@ class Expander {
       }
     }
     // Why count expanded nodes: defs reused at each level multiply, so the schema's own count is no bound.
-    if (++this.expandedNodes > CARD_TEMPLATE_LIMITS.maxExpandedNodes) {
+    if (++this.expandedNodes > this.caps.maxExpandedNodes) {
       throw new CardTemplateCompileError(
-        `expands to more than ${CARD_TEMPLATE_LIMITS.maxExpandedNodes} elements`,
+        `expands to more than ${this.caps.maxExpandedNodes} elements`,
         path
       )
     }
@@ -120,7 +140,7 @@ class Expander {
       props: entries.map(([name, value]) => ({
         name,
         literal: !isCardExpression(value),
-        value: propValue(value, `${path}.props.${name}`)
+        value: this.expressions.propValue(value, `${path}.props.${name}`)
       })),
       literalProps: entries.every(([, value]) => !isCardExpression(value))
         ? Object.fromEntries(entries)
@@ -136,14 +156,16 @@ class Expander {
  *  and plugin loading and `plugin check` call it to refuse what the renderer would. */
 export function expandCardTemplate(
   template: CardTemplate,
-  propsOf: CardElementPropsLookup
+  propsOf: CardElementPropsLookup,
+  caps: CardExpansionCaps = CARD_TEMPLATE_LIMITS
 ): ExpandedCardTemplate {
-  const expander = new Expander(propsOf, template.defs ?? {})
+  const expressions = new Expressions()
+  const expander = new Expander(propsOf, template.defs ?? {}, caps, expressions)
   const frameFlag = (value: CardPropValue | undefined, path: string): CardExpressionValue =>
-    value === undefined ? () => false : propValue(value, path)
+    value === undefined ? () => false : expressions.propValue(value, path)
   return {
     vars: Object.entries(template.vars ?? {}).map(
-      ([name, source]) => [name, expression(source, `vars.${name}`)] as const
+      ([name, source]) => [name, expressions.expression(source, `vars.${name}`)] as const
     ),
     frame: {
       singleLine: frameFlag(template.frame?.singleLine, 'frame.singleLine'),

@@ -31,7 +31,7 @@ export const CARD_ELEMENT_PROPS = {
   SparseBadge: [],
   DeleteQuickAction: [],
   MetaRepoBadge: [],
-  HostBadge: ['label'],
+  HostBadge: [],
   Branch: ['tooltip'],
   IdentityLabel: ['tooltip'],
   FolderPath: [],

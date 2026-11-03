@@ -6,6 +6,7 @@ import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { usePluginSyntaxStore } from '@/store/plugin-syntax-packs'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { PluginAddsSection } from './PluginAddsSection'
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), message: vi.fn() }))
@@ -124,4 +125,43 @@ it('opens a live panel over the workspace Settings came from', () => {
   expect(state.activeView).toBe('terminal')
   expect(state.rightSidebarTab).toBe('plugin:samples.hello-orca/hello')
   expect(state.rightSidebarOpen).toBe(true)
+})
+
+it('selects a card-only plugin by its registered id, so the chosen card is the one that draws', async () => {
+  const { usePluginSidebarCardStore, useSelectedPluginCardTemplate } =
+    await import('@/store/plugin-sidebar-cards')
+  const { renderHook } = await import('@testing-library/react')
+  const template = { version: 1 as const, facts: 1 as const, root: { el: 'Title' } }
+  usePluginSidebarCardStore.setState({
+    loaded: true,
+    entries: [
+      {
+        id: 'plugin:samples.focus/focus',
+        pluginKey: 'samples.focus',
+        pluginName: 'Focus',
+        label: 'Focus',
+        revision: 'r1',
+        template
+      }
+    ]
+  })
+  const previousSettings = useAppStore.getState().settings
+  const updateSettings = vi.fn(async (updates: Record<string, unknown>) => {
+    useAppStore.setState((state) => ({
+      settings: state.settings ? { ...state.settings, ...updates } : state.settings
+    }))
+  })
+  useAppStore.setState({
+    updateSettings,
+    settings: { ...getDefaultSettings('/home/test'), pluginSystemEnabled: true }
+  })
+  renderAdds({ ...gleam, pluginKey: 'samples.focus', name: 'Focus', publisher: 'samples' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Use for workspaces' }))
+
+  expect(updateSettings).toHaveBeenCalledWith({ workspaceCardId: 'plugin:samples.focus/focus' })
+  const selected = renderHook(() => useSelectedPluginCardTemplate())
+  expect(selected.result.current).toBe(template)
+  usePluginSidebarCardStore.setState({ entries: [], loaded: false })
+  useAppStore.setState({ settings: previousSettings })
 })

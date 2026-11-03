@@ -107,11 +107,7 @@
               "props": { "grow": true, "align": "center", "gap": "md", "overflow": "clip" },
               "children": [
                 { "el": "MetaRepoBadge", "when": "vars.metaRepo" },
-                {
-                  "el": "HostBadge",
-                  "when": "vars.hostBadge",
-                  "props": { "label": "=vars.hostLabel" }
-                },
+                { "el": "HostBadge", "when": "vars.hostBadge" },
                 {
                   "el": "IdentityLabel",
                   "when": "vars.identityInMeta",

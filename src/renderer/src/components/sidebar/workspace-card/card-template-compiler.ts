@@ -4,6 +4,7 @@ import type { CardTemplate } from '../../../../../shared/workspace-cards/card-te
 import {
   CardTemplateCompileError,
   expandCardTemplate,
+  type CardExpansionCaps,
   type ExpandedCardNode
 } from '../../../../../shared/workspace-cards/card-template-expansion'
 
@@ -109,10 +110,13 @@ function compileNode<Context>(
 /** Compile once per template; `render` then only evaluates expressions over one card's facts. */
 export function compileCardTemplate<Context>(
   template: CardTemplate,
-  registry: CardElementRegistry<Context>
+  registry: CardElementRegistry<Context>,
+  caps?: CardExpansionCaps
 ): CompiledCardTemplate<Context> {
-  const expanded = expandCardTemplate(template, (el) =>
-    Object.hasOwn(registry, el) ? registry[el]?.props : undefined
+  const expanded = expandCardTemplate(
+    template,
+    (el) => (Object.hasOwn(registry, el) ? registry[el]?.props : undefined),
+    caps
   )
   const root = compileNode(expanded.root, registry)
   const { vars, frame: flags } = expanded

@@ -15,7 +15,7 @@ Copying it gives you today's card exactly, which you can then change.
 {
   "manifestVersion": 2,
   "execution": "data",
-  "engines": { "orca": ">=1.4.249" },
+  "engines": { "orca": ">=1.4.248" },
   "contributes": {
     "sidebarCards": [
       { "id": "review-first", "title": "Review first", "template": "cards/review-first.json" }
@@ -53,7 +53,9 @@ load or draw, Orca draws its own card for that workspace and logs why.
 - **Props.** A string that starts with `=` is an expression, for example `"text": "=review.title"`.
   Any other value is used as it is.
 
-Limits: 64 KiB per file, 400 nodes, depth 24, 100 vars, 32 props per node, and 1 KiB per string.
+Limits: 64 KiB per file, 400 nodes (200 once defs are expanded), depth 24, defs nested 8 deep,
+100 vars, 32 props per node, and 1 KiB per string. A card may take 4,000 expression steps per draw;
+past that, that card draws as Orca's card and the reason is logged.
 Expressions are capped at 2 KiB and nesting depth 32. `orca plugin check` reports every problem
 with its path.
 
@@ -105,7 +107,9 @@ Layout and text primitives:
 | `Badge`        | `text`, `tone`                                                                                                                                                                                                                             |
 | `Icon`         | `name` (from the panel icon set), `tone`                                                                                                                                                                                                   |
 
-Orca parts draw Orca's own components and behave exactly as they do on Orca's card:
+Orca parts draw Orca's own components and behave exactly as they do on Orca's card. Each part shows
+only the state its facts say: a template chooses where a part goes, never what it claims (a
+`PrimaryBadge` on a workspace that is not the primary checkout draws nothing).
 
 | Part                                                                            | What it draws                                           |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------- |

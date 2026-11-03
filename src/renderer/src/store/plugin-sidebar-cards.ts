@@ -17,9 +17,9 @@ const sidebarCards = createPluginContentListStore<PluginSidebarCardRegistration>
 export const usePluginSidebarCardStore = sidebarCards.useStore
 export const usePluginSidebarCards = sidebarCards.useEntries
 
-/** The plugin card template the person picked, or null for Orca's own card. Cards share one
- *  template object, so this stays referentially stable across unrelated store writes. */
-export function useSelectedPluginCardTemplate(): CardTemplate | null {
+/** The plugin card the person picked, or null for Orca's own card. Every card shares one
+ *  registration object, so this stays referentially stable across unrelated store writes. */
+export function useSelectedPluginCard(): PluginSidebarCardRegistration | null {
   const cardId = useAppStore((s) => {
     const id = s.settings?.workspaceCardId
     return id && !isPluginContentSwitchedOff(s.settings ?? undefined, id) ? id : null
@@ -30,6 +30,11 @@ export function useSelectedPluginCardTemplate(): CardTemplate | null {
     }
   }, [cardId])
   return usePluginSidebarCardStore((s) =>
-    cardId ? (s.entries.find((entry) => entry.id === cardId)?.template ?? null) : null
+    cardId ? (s.entries.find((entry) => entry.id === cardId) ?? null) : null
   )
+}
+
+/** The picked card's template, for callers that only draw it. */
+export function useSelectedPluginCardTemplate(): CardTemplate | null {
+  return useSelectedPluginCard()?.template ?? null
 }

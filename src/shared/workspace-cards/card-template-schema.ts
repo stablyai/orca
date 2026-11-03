@@ -17,6 +17,14 @@ export const CARD_TEMPLATE_LIMITS = {
   maxStringLength: 1024
 } as const
 
+/** Plugin cards draw at Orca's own card's scale (about 65 elements and a few hundred expression
+ *  steps), with room to spare; past these a plugin card falls back to Orca's card. */
+export const PLUGIN_CARD_TEMPLATE_LIMITS = {
+  maxExpandedNodes: 200,
+  /** Expression steps one card may take per draw. */
+  maxEvaluationSteps: 4000
+} as const
+
 /** A string starting with `=` is an expression over facts; anything else is a literal. */
 export const CARD_EXPRESSION_PREFIX = '='
 

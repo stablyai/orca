@@ -110,6 +110,7 @@ function hasLiveContent(source: PluginContributionSource): boolean {
     source.themes.length +
       source.terminalThemes.length +
       source.iconThemes.length +
+      source.sidebarCards.length +
       source.syntaxes.length +
       source.languagePacks.length >
     0

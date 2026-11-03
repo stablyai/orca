@@ -79,6 +79,11 @@ function CardHostBadge({ card, label }: { card: Card; label: string }): React.JS
   return wslDistro ? <WslHostMark distro={wslDistro} /> : <WorktreeHostContextBadge label={label} />
 }
 
+// Parts show state from facts only: a template places them, it cannot make them claim a state.
+function isPrimaryCheckout(card: Card): boolean {
+  return card.worktree.isMainWorktree && !card.isFolder
+}
+
 function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
   return (
     <TruncatedSidebarLabel
@@ -98,23 +103,33 @@ export const CARD_IDENTITY_PARTS = {
   SshControl: part(CARD_ELEMENT_PROPS.SshControl, (props, _children, card) =>
     sshControl(props, card)
   ),
-  RuntimeHostMark: part(CARD_ELEMENT_PROPS.RuntimeHostMark, (_props, _children, card) => (
-    <WorktreeCardRuntimeHostMark
-      disconnected={card.isRuntimeDisconnected}
-      hostLabel={card.runtimeHostLabel}
-    />
-  )),
-  RenameError: part(CARD_ELEMENT_PROPS.RenameError, (_props, _children, card) => (
-    <WorktreeCardRenameErrorButton
-      onPointerDown={card.stopQuickActionPointerPropagation}
-      onOpen={card.handleOpenRenameErrorDialog}
-    />
-  )),
-  PrimaryBadge: part(CARD_ELEMENT_PROPS.PrimaryBadge, () => <WorktreeCardPrimaryBadge />),
-  PrimaryStar: part(CARD_ELEMENT_PROPS.PrimaryStar, () => <WorktreeCardPrimaryStar />),
-  SparseBadge: part(CARD_ELEMENT_PROPS.SparseBadge, (_props, _children, { worktree }) => (
-    <WorktreeCardSparseBadge directories={worktree.sparseDirectories} />
-  )),
+  RuntimeHostMark: part(CARD_ELEMENT_PROPS.RuntimeHostMark, (_props, _children, card) =>
+    !card.repo?.connectionId && card.parsedRepoHost?.kind === 'runtime' ? (
+      <WorktreeCardRuntimeHostMark
+        disconnected={card.isRuntimeDisconnected}
+        hostLabel={card.runtimeHostLabel}
+      />
+    ) : null
+  ),
+  RenameError: part(CARD_ELEMENT_PROPS.RenameError, (_props, _children, card) =>
+    typeof card.worktree.firstAgentMessageRenameError === 'string' &&
+    card.worktree.firstAgentMessageRenameError.length > 0 &&
+    !card.titleRenaming ? (
+      <WorktreeCardRenameErrorButton
+        onPointerDown={card.stopQuickActionPointerPropagation}
+        onOpen={card.handleOpenRenameErrorDialog}
+      />
+    ) : null
+  ),
+  PrimaryBadge: part(CARD_ELEMENT_PROPS.PrimaryBadge, (_props, _children, card) =>
+    isPrimaryCheckout(card) ? <WorktreeCardPrimaryBadge /> : null
+  ),
+  PrimaryStar: part(CARD_ELEMENT_PROPS.PrimaryStar, (_props, _children, card) =>
+    isPrimaryCheckout(card) ? <WorktreeCardPrimaryStar /> : null
+  ),
+  SparseBadge: part(CARD_ELEMENT_PROPS.SparseBadge, (_props, _children, { worktree }) =>
+    worktree.isSparse ? <WorktreeCardSparseBadge directories={worktree.sparseDirectories} /> : null
+  ),
   DeleteQuickAction: part(CARD_ELEMENT_PROPS.DeleteQuickAction, (_props, _children, card) => (
     <WorktreeCardDeleteQuickAction
       onPointerDown={card.stopQuickActionPointerPropagation}
@@ -124,9 +139,9 @@ export const CARD_IDENTITY_PARTS = {
   MetaRepoBadge: part(CARD_ELEMENT_PROPS.MetaRepoBadge, (_props, _children, { repo }) =>
     repo ? <WorktreeCardMetaRepoBadge repo={repo} /> : null
   ),
-  HostBadge: part(CARD_ELEMENT_PROPS.HostBadge, (props, _children, card) => (
-    <CardHostBadge card={card} label={typeof props.label === 'string' ? props.label : ''} />
-  )),
+  HostBadge: part(CARD_ELEMENT_PROPS.HostBadge, (_props, _children, card) =>
+    card.hostContextLabel ? <CardHostBadge card={card} label={card.hostContextLabel} /> : null
+  ),
   Branch: part(CARD_ELEMENT_PROPS.Branch, (props, _children, card) =>
     sidebarLabel(card.branch, props.tooltip)
   ),

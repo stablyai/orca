@@ -23,7 +23,7 @@ async function cardPlugin(template: unknown): Promise<ValidDiscoveredPlugin> {
     name: 'Focus',
     version: '1.0.0',
     execution: 'data',
-    engines: { orca: '>=1.4.249' },
+    engines: { orca: '>=1.4.248' },
     contributes: { sidebarCards: [{ id: 'focus', title: 'Focus', template: 'card.json' }] }
   })
   return {

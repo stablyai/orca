@@ -338,7 +338,7 @@
         "sidebarCards": {
           "default": [],
           "description": "Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "maxItems": 16,
           "type": "array",
           "items": {
@@ -1487,7 +1487,7 @@
           "maxLength": 64,
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "description": "Card id, unique among this plugin's cards.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "examples": [
             "review-first"
           ]
@@ -1497,14 +1497,14 @@
           "minLength": 1,
           "maxLength": 128,
           "description": "Name shown where people pick a card.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "examples": [
             "Review first"
           ]
         },
         "description": {
           "description": "One line on what the card emphasizes.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "type": "string",
           "maxLength": 512
         },
@@ -1514,7 +1514,7 @@
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
           "description": "JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
-          "x-orca-since": "1.4.249",
+          "x-orca-since": "1.4.248",
           "examples": [
             "cards/review-first.json"
           ]

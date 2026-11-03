@@ -1,3 +1,4 @@
+import { usePluginSidebarCards } from '@/store/plugin-sidebar-cards'
 import { Fragment } from 'react'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import {
@@ -205,6 +206,7 @@ function useContributionRowActions(
   const syntaxes = usePluginSyntaxes()
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
   const iconThemes = usePluginIconThemes()
+  const sidebarCards = usePluginSidebarCards()
   if (!isPluginContributionLive(plugin)) {
     return () => null
   }
@@ -254,8 +256,13 @@ function useContributionRowActions(
           </Button>
         ) : null
       }
-      case 'sidebarCards':
-        return <PluginSidebarCardUseButton cardId={id} />
+      case 'sidebarCards': {
+        // Only a card Orca loaded for this plugin can draw; its id is the registration's.
+        const card = sidebarCards.find(
+          (entry) => entry.id === id && entry.pluginKey === plugin.pluginKey
+        )
+        return card ? <PluginSidebarCardUseButton cardId={card.id} /> : null
+      }
       case 'themes':
       case 'terminalThemes':
       case 'customEditors':

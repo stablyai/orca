@@ -61,6 +61,46 @@ export function readCardFactPath(scope: CardExpressionScope, segments: readonly 
   return value ?? null
 }
 
+/** Longest string an expression can build; `+` stops growing text past it. */
+export const CARD_EXPRESSION_MAX_TEXT = 4096
+
+export class CardEvaluationBudgetExceeded extends Error {
+  constructor(steps: number) {
+    super(`card expressions took more than ${steps} steps`)
+    this.name = 'CardEvaluationBudgetExceeded'
+  }
+}
+
+// Why module state: evaluation is synchronous, so one budget covers exactly one card's render.
+const budget = { remaining: Number.POSITIVE_INFINITY, limit: Number.POSITIVE_INFINITY }
+
+function spend(): void {
+  if (--budget.remaining < 0) {
+    throw new CardEvaluationBudgetExceeded(budget.limit)
+  }
+}
+
+/** Runs `draw` with at most `steps` expression steps; past that it throws
+ *  CardEvaluationBudgetExceeded, so one heavy card cannot stall the list. */
+export function withCardEvaluationBudget<T>(steps: number, draw: () => T): T {
+  const previous = { ...budget }
+  budget.remaining = steps
+  budget.limit = steps
+  try {
+    return draw()
+  } finally {
+    budget.remaining = previous.remaining
+    budget.limit = previous.limit
+  }
+}
+
+function metered(evaluate: CardExpressionValue): CardExpressionValue {
+  return (scope) => {
+    spend()
+    return evaluate(scope)
+  }
+}
+
 function toText(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
     ? String(value)
@@ -71,10 +111,18 @@ function add(a: unknown, b: unknown): unknown {
   if (typeof a === 'number' && typeof b === 'number') {
     return a + b
   }
-  return toText(a) + toText(b)
+  return (toText(a) + toText(b)).slice(0, CARD_EXPRESSION_MAX_TEXT)
 }
 
 function binary(op: string, l: CardExpressionValue, r: CardExpressionValue): CardExpressionValue {
+  return metered(binaryUnmetered(op, l, r))
+}
+
+function binaryUnmetered(
+  op: string,
+  l: CardExpressionValue,
+  r: CardExpressionValue
+): CardExpressionValue {
   switch (op) {
     case '&&':
       return (s) => l(s) && r(s)
@@ -156,7 +204,7 @@ class Parser {
       const whenTrue = this.ternary()
       this.expectOp(':')
       const whenFalse = this.ternary()
-      return (s: CardExpressionScope) => (condition(s) ? whenTrue(s) : whenFalse(s))
+      return metered((s: CardExpressionScope) => (condition(s) ? whenTrue(s) : whenFalse(s)))
     })
   }
 
@@ -181,12 +229,12 @@ class Parser {
       if (this.peekOp('!')) {
         this.pos++
         const operand = this.unary()
-        return (s: CardExpressionScope) => !operand(s)
+        return metered((s: CardExpressionScope) => !operand(s))
       }
       if (this.peekOp('-')) {
         this.pos++
         const operand = this.unary()
-        return (s: CardExpressionScope) => -Number(operand(s))
+        return metered((s: CardExpressionScope) => -Number(operand(s)))
       }
       return this.primary()
     })
@@ -218,7 +266,7 @@ class Parser {
     }
     const segments = token.value.split('.')
     this.roots.add(segments[0] ?? token.value)
-    return (s) => readCardFactPath(s, segments)
+    return metered((s) => readCardFactPath(s, segments))
   }
 
   private call(name: string): CardExpressionValue {
@@ -238,7 +286,7 @@ class Parser {
       }
     }
     this.pos++
-    return (s) => fn(...args.map((arg) => arg(s)))
+    return metered((s) => fn(...args.map((arg) => arg(s))))
   }
 }
 

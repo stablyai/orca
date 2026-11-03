@@ -45,7 +45,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
-| `contributes.sidebarCards` | [SidebarCardContribution](#sidebarcardcontribution)[] | no | 1.4.249 | Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16. |
+| `contributes.sidebarCards` | [SidebarCardContribution](#sidebarcardcontribution)[] | no | 1.4.248 | Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -217,10 +217,10 @@ A workspace card for the left sidebar, drawn by Orca from a template; it runs no
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `id` | string | yes | 1.4.249 | Card id, unique among this plugin's cards. Example: `"review-first"` |
-| `title` | string | yes | 1.4.249 | Name shown where people pick a card. Example: `"Review first"` |
-| `description` | string | no | 1.4.249 | One line on what the card emphasizes. |
-| `template` | string | yes | 1.4.249 | JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"cards/review-first.json"` |
+| `id` | string | yes | 1.4.248 | Card id, unique among this plugin's cards. Example: `"review-first"` |
+| `title` | string | yes | 1.4.248 | Name shown where people pick a card. Example: `"Review first"` |
+| `description` | string | no | 1.4.248 | One line on what the card emphasizes. |
+| `template` | string | yes | 1.4.248 | JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"cards/review-first.json"` |
 
 ## Capability
 

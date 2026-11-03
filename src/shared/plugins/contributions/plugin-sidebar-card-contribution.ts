@@ -4,7 +4,7 @@ import { pluginIdSchema, pluginRelativePathSchema } from '../manifest/plugin-man
 import { pluginFieldDoc, pluginPathFieldDoc } from '../manifest/plugin-schema-field-docs'
 
 /** First release that reads `contributes.sidebarCards`. */
-export const PLUGIN_SIDEBAR_CARDS_SINCE = '1.4.249'
+export const PLUGIN_SIDEBAR_CARDS_SINCE = '1.4.248'
 export const PLUGIN_SIDEBAR_CARD_LIMIT = 16
 
 const SINCE = PLUGIN_SIDEBAR_CARDS_SINCE

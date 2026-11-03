@@ -71,25 +71,28 @@ export const CARD_ACTIVITY_PARTS = {
   ),
   LinearSetupPrompt: part(
     CARD_ELEMENT_PROPS.LinearSetupPrompt,
-    (_props, _children, { repo, settings }) => (
-      <LinearAgentSkillSetupPrompt
-        linked
-        remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
-        surface="modal"
-        settings={settings}
-      />
-    )
+    (_props, _children, { repo, settings, isActive, worktree }) =>
+      isActive && worktree.linkedLinearIssue ? (
+        <LinearAgentSkillSetupPrompt
+          linked
+          remote={Boolean(repo?.connectionId || settings?.activeRuntimeEnvironmentId?.trim())}
+          surface="modal"
+          settings={settings}
+        />
+      ) : null
   ),
-  ChildToggle: part(CARD_ELEMENT_PROPS.ChildToggle, (_props, _children, card) => (
-    <WorktreeLineageToggle
-      childWorktreeIds={card.lineageChildWorktreeIds}
-      collapsed={card.lineageCollapsed}
-      ariaLabel={card.lineageChildAriaLabel}
-      label={card.childWorkspaceShortLabel}
-      count={card.lineageChildCount}
-      onToggle={card.onLineageToggle}
-    />
-  )),
+  ChildToggle: part(CARD_ELEMENT_PROPS.ChildToggle, (_props, _children, card) =>
+    card.showLineageChildChip ? (
+      <WorktreeLineageToggle
+        childWorktreeIds={card.lineageChildWorktreeIds}
+        collapsed={card.lineageCollapsed}
+        ariaLabel={card.lineageChildAriaLabel}
+        label={card.childWorkspaceShortLabel}
+        count={card.lineageChildCount}
+        onToggle={card.onLineageToggle}
+      />
+    ) : null
+  ),
   Indicators: part(CARD_ELEMENT_PROPS.Indicators, (props, _children, card) => {
     const content = renderWorktreeCardIndicators(card)
     return content && props.hover === 'meta' ? (

@@ -13281,7 +13281,8 @@
           "accessFailed": "Couldn’t read its access",
           "retry": "Retry",
           "noAccessReach": "Nothing outside its own files",
-          "customEditor": "Editor"
+          "customEditor": "Editor",
+          "typeSidebarCard": "Workspace card"
         },
         "PluginManagerRows": {
           "reinstall": "Reinstall",
@@ -19199,6 +19200,10 @@
           "conflict": "Not used: {{value0}}, installed first, replaces it",
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
+        },
+        "sidebarCard": {
+          "useOrcaCard": "Use Orca's card",
+          "useCard": "Use for workspaces"
         }
       }
     },
