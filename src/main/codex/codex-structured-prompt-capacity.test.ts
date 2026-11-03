@@ -35,8 +35,6 @@ async function journalHarness(constrainedSink = false) {
     ...(constrainedSink
       ? {
           watermarks: {
-            maxQueuedOperations: 0,
-            maxLifecycleQueuedOperations: 8,
             pauseQueuedBytes: 16_000,
             lowQueuedBytes: 0,
             lowQueuedOperations: 0
@@ -438,7 +436,7 @@ describe('whole incoming prompt obligations', () => {
     }
   })
 
-  it('paces bytes and rejects whole incoming requests at actual sink count pressure, then completes every retained provider obligation after drain', async () => {
+  it('paces bytes at sink pressure, admits the next whole request, and completes every provider obligation after drain', async () => {
     const h = await journalHarness(true)
     try {
       const first = await h.deliver(0, 'form')
@@ -450,29 +448,26 @@ describe('whole incoming prompt obligations', () => {
       expect(h.deferred!.state().queuedBytes).toBeGreaterThan(16_000)
       expect(h.journal.snapshot().items).toEqual(before)
       expect(h.registry().sizes).toEqual({ prompts: 2, journalBindings: 65 })
-      for (let i = 0; i < 7; i++) {
-        expect(
-          h.deferred?.sink.tryPublish?.({ lifecycle: true, coalescingKey: `held-${i}` })
-        ).toEqual({ accepted: true })
-      }
-      expect(h.deferred?.state().queuedOperations).toBe(8)
-      expect((await h.deliver(2, 'form')).ids).toEqual([])
+      // A busy save queue paces reading; it never refuses a request the provider already sent.
+      const extra = await h.deliver(2, 'form')
+      expect(extra.ids).toHaveLength(1)
       expect(h.journal.snapshot().items).toEqual(before)
-      expect(h.codex.connections[0].replies).toEqual([
-        { id: 2, code: -32001, message: expect.any(String) }
-      ])
+      expect(h.codex.connections[0].replies).toEqual([])
       await h.resume()
       await h.answer(first.ids[0]!)
       for (const id of batch.ids) {
         await h.answer(id)
       }
+      await h.answer(extra.ids[0]!)
       await h.answer((await h.deliver(3, 'form')).ids[0]!)
-      expect(
-        h.codex.connections[0].replies.filter((reply) => reply.id === 0 || reply.id === 3)
-      ).toEqual(
-        [0, 3].map((id) => ({ id, result: { action: 'accept', content: {}, _meta: null } }))
+      const replies = h.codex.connections[0].replies
+      for (const id of [0, 1, 2, 3]) {
+        expect(replies.filter((reply) => reply.id === id)).toHaveLength(1)
+      }
+      expect(replies.filter((reply) => reply.id !== 1)).toEqual(
+        [0, 2, 3].map((id) => ({ id, result: { action: 'accept', content: {}, _meta: null } }))
       )
-      expect(h.codex.connections[0].replies.filter((reply) => reply.id === 1)).toEqual([
+      expect(replies.filter((reply) => reply.id === 1)).toEqual([
         {
           id: 1,
           result: {
