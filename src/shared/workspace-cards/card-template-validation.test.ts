@@ -10,24 +10,46 @@ describe('card template validation', () => {
     expect(cardTemplateIssues(cardTemplateSchema.parse(defaultCard))).toEqual([])
   })
 
-  it('names every problem with its path', () => {
-    const issues = cardTemplateIssues({
-      ...base,
-      vars: { broken: 'ws.name(' },
-      defs: { Loop: { el: 'Row', children: [{ el: 'Loop' }] } },
-      root: {
+  it('refuses what the renderer refuses, naming the path', () => {
+    const cases: [CardTemplate, RegExp][] = [
+      [{ ...base, vars: { broken: 'ws.name(' } }, /^vars\.broken: /],
+      [
+        {
+          ...base,
+          defs: { Loop: { el: 'Row', children: [{ el: 'Loop' }] } },
+          root: { el: 'Loop' }
+        },
+        /uses itself/
+      ],
+      [
+        { ...base, root: { el: 'Row', children: [{ el: 'Script' }] } },
+        /^root\.children\[0\]: unknown element Script/
+      ],
+      [
+        { ...base, root: { el: 'Text', props: { onClick: 'x' } } },
+        /^root\.props: Text has no prop onClick/
+      ],
+      [
+        { ...base, defs: { A: { el: 'Row' } }, root: { el: 'A', props: { gap: 'sm' } } },
+        /takes no props or children/
+      ]
+    ]
+    for (const [template, issue] of cases) {
+      expect(cardTemplateIssues(template)).toEqual([expect.stringMatching(issue)])
+    }
+  })
+
+  it('caps how far defs expand, as the renderer does', () => {
+    // Each level doubles the tree: 2^12 elements is past the expansion cap.
+    const defs: CardTemplate['defs'] = { L0: { el: 'Text' } }
+    for (let level = 1; level <= 12; level++) {
+      defs[`L${level}`] = {
         el: 'Row',
-        when: '1 +',
-        children: [{ el: 'Script' }, { el: 'Text', props: { onClick: 'x', text: '=a[' } }]
+        children: [{ el: `L${level - 1}` }, { el: `L${level - 1}` }]
       }
-    })
-    expect(issues).toEqual([
-      expect.stringMatching(/^vars\.broken: /),
-      'defs.Loop: uses itself',
-      expect.stringMatching(/^root\.when: /),
-      'root.children[0]: unknown element Script',
-      'root.children[1].props: Text has no prop onClick',
-      expect.stringMatching(/^root\.children\[1\]\.props\.text: /)
+    }
+    expect(cardTemplateIssues({ ...base, defs, root: { el: 'L12' } })).toEqual([
+      expect.stringMatching(/defs nested deeper|expands to more than/)
     ])
   })
 })
