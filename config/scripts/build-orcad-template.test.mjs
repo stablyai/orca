@@ -1,3 +1,7 @@
+import {
+  orcadTemplateTargetFilenames,
+  orcadTemplateCommonFilenames
+} from '../../src/shared/orcad-artifacts.ts'
 import { describe, expect, it } from 'vitest'
 import { ORCAD_TEMPLATE_TARGETS } from '../../src/shared/node-runtime-pin.ts'
 import { assertTemplateBuildAllowed, requestedTemplateTargets } from './build-orcad-template.mjs'
@@ -46,4 +50,12 @@ describe('assertTemplateBuildAllowed', () => {
     expect(() => assertTemplateBuildAllowed(argv, {})).not.toThrow()
     expect(() => assertTemplateBuildAllowed([...argv, '--dark-test-template'], {})).not.toThrow()
   })
+})
+
+// Target bytes must participate in each install/hash and never be shared between architectures.
+it('keeps the history filesystem binary in every target-specific template slot', () => {
+  expect(orcadTemplateCommonFilenames([])).not.toContain('history-filesystem.node')
+  for (const target of ORCAD_TEMPLATE_TARGETS) {
+    expect(orcadTemplateTargetFilenames(target)).toContain('history-filesystem.node')
+  }
 })

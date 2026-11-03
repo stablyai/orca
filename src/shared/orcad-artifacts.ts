@@ -7,6 +7,7 @@ export const ORCAD_BUILD_TARGET_FILENAME = '.build-target'
 export const ORCAD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 /** native/windows-security: secure-file ACLs without spawning icacls. */
 export const ORCAD_WINDOWS_SECURITY_FILENAME = 'windows-security.node'
+export const ORCAD_HISTORY_FILESYSTEM_FILENAME = 'history-filesystem.node'
 /** native/windows-cli-launcher: cmd.exe and .ps1 shims cannot carry every argv intact. */
 export const ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME = 'bin/orca.exe'
 
@@ -236,6 +237,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Account worker threads keep CLI probes and Claude setup off the event loop.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
+  { filename: 'claude-profile-wsl-entry.js' },
   // Dictation loads the recognizer named by orca serve (#31174).
   { filename: 'stt-worker.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).
@@ -272,7 +274,11 @@ export function orcadArtifactFilenames(
   const filenames = ORCAD_ARTIFACTS.filter((artifact) => !artifact.optional).map(
     (artifact) => artifact.filename
   )
-  filenames.push(...orcadNodePtyNativeArtifacts(target), orcadRipgrepArtifact(target))
+  filenames.push(
+    ORCAD_HISTORY_FILESYSTEM_FILENAME,
+    ...orcadNodePtyNativeArtifacts(target),
+    orcadRipgrepArtifact(target)
+  )
   if (isWindowsTarget(target)) {
     filenames.push(
       ORCAD_WINDOWS_PROCESS_TREE_FILENAME,

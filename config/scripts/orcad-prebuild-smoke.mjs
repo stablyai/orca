@@ -55,7 +55,10 @@ export async function runOrcadPrebuildSmoke({ slot, prebuildsDir }) {
       join(import.meta.dirname, 'orcad-prebuild-smoke-child.cjs'),
       nodePtyDir,
       NODE_RUNTIME_PIN.version,
-      ...compatAddonPaths(slot, nodePtyDir)
+      join(nodePtyDir, 'build', 'Release', 'history-filesystem.node'),
+      ...compatAddonPaths(slot, nodePtyDir).filter(
+        (path) => !path.endsWith('history-filesystem.node')
+      )
     ],
     timeoutMs: 60_000
   })

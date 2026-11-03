@@ -32,6 +32,9 @@ const sourceWindowsProcessTreeGypRebuildPath = fileURLToPath(
   new URL('./windows-process-tree-gyp-rebuild.mjs', import.meta.url)
 )
 // projectRequire resolves at project root, so module walker cannot discover this edge.
+const sourceHistoryFilesystemProbePath = fileURLToPath(
+  new URL('./history-filesystem-probe.cjs', import.meta.url)
+)
 const sourceWindowsProcessTreeCreationTimePath = fileURLToPath(
   new URL('./windows-process-tree-creation-time.cjs', import.meta.url)
 )
@@ -92,7 +95,45 @@ export function mkTempProject() {
     sourceWindowsProcessTreeGypRebuildPath,
     join(projectDir, 'config', 'scripts', 'windows-process-tree-gyp-rebuild.mjs')
   )
+  copyFileSync(
+    sourceHistoryFilesystemProbePath,
+    join(projectDir, 'config', 'scripts', 'history-filesystem-probe.cjs')
+  )
+  writeFakeHistoryFilesystem(projectDir)
   return projectDir
+}
+
+// Satisfies the exclusive-move probe so rebuild cases exercise only the other native modules.
+export function writeFakeHistoryFilesystem(projectDir) {
+  const historyDir = join(projectDir, 'node_modules', '@orca', 'history-filesystem')
+  mkdirSync(historyDir, { recursive: true })
+  writeFileSync(
+    join(historyDir, 'package.json'),
+    '{"name":"@orca/history-filesystem","version":"1.0.0","main":"index.js"}\n'
+  )
+  writeFileSync(
+    join(historyDir, 'index.js'),
+    `const fs = require('node:fs')
+const { join } = require('node:path')
+const directory = (path) => ({
+  path,
+  mkdir: (name) => fs.mkdirSync(join(path, name)),
+  open: (name) => directory(join(path, name)),
+  move(name, destination, target) {
+    try {
+      fs.linkSync(join(path, name), join(destination.path, target))
+    } catch (error) {
+      if (error.code === 'EEXIST') return 'collision'
+      throw error
+    }
+    fs.unlinkSync(join(path, name))
+    return 'moved'
+  },
+  close() {}
+})
+exports.openDirectory = (path) => directory(path)
+`
+  )
 }
 
 export function runRebuildScript(projectDir, extraEnv = {}, args = []) {

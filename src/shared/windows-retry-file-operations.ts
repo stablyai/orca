@@ -32,11 +32,10 @@ export function copyFileWithWindowsRetry(source: string, target: string): void {
   runFileOperationWithWindowsRetry(() => copyFileSync(source, target))
 }
 
-function runFileOperationWithWindowsRetry(operation: () => void): void {
+export function runFileOperationWithWindowsRetry<T>(operation: () => T): T {
   for (let attempt = 1; ; attempt++) {
     try {
-      operation()
-      return
+      return operation()
     } catch (error) {
       if (shouldRetryFileOperation(error, attempt)) {
         sleepSync(attempt * 50)

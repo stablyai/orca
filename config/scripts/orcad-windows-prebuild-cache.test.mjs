@@ -51,6 +51,7 @@ function fixture(arch = 'x64') {
       'conpty.node',
       Buffer.concat([peImage({ arch }), CYGWIN_BREAKAWAY_MARKER, NATIVE_HOST_JOB_MARKER])
     ],
+    ['history-filesystem.node', peImage({ arch })],
     ['conpty_console_list.node', peImage({ arch })],
     ['conpty/conpty.dll', peImage({ arch })],
     ['conpty/OpenConsole.exe', peImage({ arch })],
@@ -189,6 +190,16 @@ describe('Windows server prebuild cache validation', () => {
     f.entry.files['conpty.node'] = sha256Of(join(f.slotDir, 'conpty.node'))
     f.save()
     expect(() => validateWindowsPrebuildCache(f)).toThrow(error)
+  })
+
+  it('refuses a wrong-architecture history addon even with a matching digest', () => {
+    const f = fixture()
+    writeFileSync(join(f.slotDir, 'history-filesystem.node'), peImage({ arch: 'arm64' }))
+    f.entry.files['history-filesystem.node'] = sha256Of(join(f.slotDir, 'history-filesystem.node'))
+    f.save()
+    expect(() => validateWindowsPrebuildCache(f)).toThrow(
+      /history-filesystem.node has the wrong architecture/
+    )
   })
 
   it('checks both current source guards independently of cached payload bytes', () => {

@@ -1,6 +1,7 @@
 import type { BlockedWslDistro } from '../wsl/wsl-unc-access-gate'
 import { spawnSync } from 'node:child_process'
 import {
+  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -13,17 +14,27 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import type { WslSpec } from '../wsl/wsl-runner'
 import type * as WslPaths from '../../shared/wsl-paths'
 
 const guest = vi.hoisted(
-  (): { home: string; failure: { code: number; stdout: string } | null } => ({
-    home: '',
-    failure: null
-  })
+  (): {
+    home: string
+    failure: { code: number; stdout: string } | null
+    commands: WslSpec[]
+    slot: string
+  } => ({ home: '', failure: null, commands: [], slot: '' })
 )
+const setupModules = vi.hoisted(() => ({
+  materialize: vi.fn(async (_target: string, _options: unknown) => guest.slot),
+  runtime: vi.fn(async () => ({ executable: '/pinned/node', target: 'linux-arm64-musl' as const }))
+}))
+vi.mock('../wsl/wsl-pinned-runtime', () => ({ ensureWslPinnedRuntimeTarget: setupModules.runtime }))
+vi.mock('../orcad/orcad-artifact-materializer', () => ({
+  materializeOrcadArtifact: setupModules.materialize
+}))
 // Emulate the guest with local POSIX paths and /bin/sh.
 vi.mock('../../shared/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
@@ -41,8 +52,18 @@ const gate = vi.hoisted(() => ({
 vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
 vi.mock('../wsl/wsl-runner', () => ({
   runWslProcess: async (spec: WslSpec) => {
+    guest.commands.push(spec)
     if (guest.failure) {
       return { ...guest.failure, stderr: '', timedOut: false }
+    }
+    if (spec.program === 'wslpath') {
+      return { code: 0, stdout: spec.args?.at(-1) ?? '', stderr: '', timedOut: false }
+    }
+    if (spec.program === '/usr/bin/env') {
+      const profile = wslClaudeProfile(guest.home, 'Ubuntu', spec.args?.at(-1) ?? '').profile
+      mkdirSync(profile.home, { recursive: true })
+      writeFileSync(join(profile.home, '..', 'profile.json'), '{}')
+      return { code: 0, stdout: '', stderr: '', timedOut: false }
     }
     const result = spawnSync('/bin/sh', ['-c', spec.script ?? '', 'sh', ...(spec.args ?? [])], {
       encoding: 'utf8'
@@ -64,6 +85,10 @@ import { wslClaudeProfile } from './claude-profile-wsl-paths'
 // Guest emulation runs POSIX scripts and the Linux Node bundle.
 const posixHost = process.platform !== 'win32'
 const roots: string[] = []
+beforeEach(() => {
+  guest.commands.length = 0
+  vi.clearAllMocks()
+})
 afterEach(() => {
   guest.failure = null
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
@@ -113,6 +138,41 @@ function fixture() {
 }
 
 describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
+  it('executes the matching verified slot with pinned guest Node and preserves setup failure', async () => {
+    const f = fixture()
+    guest.slot = join(guest.home, 'installed-slot')
+    const router = new ClaudeWslProfileRouter({
+      getSettings: () => f.settings,
+      dataRoot: join(guest.home, 'orca-dev')
+    })
+    await expect(router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+    expect(setupModules.materialize).toHaveBeenCalledWith('linux-arm64-musl', {
+      cacheRoot: expect.stringContaining('orcad-artifacts'),
+      signal: expect.any(AbortSignal),
+      trustVerificationRecord: true
+    })
+    expect(setupModules.runtime.mock.calls).toHaveLength(1)
+    const setup = guest.commands.find((spec) => spec.program === '/usr/bin/env')
+    expect(setup?.args).toEqual([
+      '-u',
+      'NODE_OPTIONS',
+      '/pinned/node',
+      join(guest.slot, 'claude-profile-wsl-entry.js'),
+      guest.home,
+      'Ubuntu',
+      'a'
+    ])
+    rmSync(join(f.profileHome, '..', 'profile.json'))
+    setupModules.materialize.mockRejectedValueOnce(new Error('slot hash mismatch'))
+    const executed = guest.commands.filter((spec) => spec.program === '/usr/bin/env').length
+    await expect(router.prepareLaunch('Ubuntu')).rejects.toThrow(
+      CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
+    )
+    expect(guest.commands.filter((spec) => spec.program === '/usr/bin/env')).toHaveLength(executed)
+  })
+
   it('names why a silent guest command failed instead of a bare "command failed"', async () => {
     const f = fixture()
     guest.failure = { code: 0xffffffff, stdout: 'Wsl/Service/0x80072747\r\n' }
@@ -385,7 +445,7 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
 })
 
 it.skipIf(!posixHost)(
-  'the guest helper runs Step 1 setup as a standalone Linux Node bundle',
+  'the guest helper leaves history and the setup marker alone until the actual host addon loads',
   async () => {
     const root = mkdtempSync(join(tmpdir(), 'claude-wsl-helper-'))
     roots.push(root)
@@ -406,6 +466,15 @@ it.skipIf(!posixHost)(
     const run = (accountId: string, distro = 'Ubuntu') =>
       spawnSync(process.execPath, [helper, home, distro, accountId], { encoding: 'utf8' })
 
+    const withoutBinding = run('a')
+    expect(withoutBinding.status).toBe(0)
+    expect(withoutBinding.stdout).toContain('History filesystem build')
+    expect(existsSync(join(profileHome, 'projects'))).toBe(false)
+    expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(false)
+    copyFileSync(
+      resolve('native/history-filesystem/build/Release/history_filesystem.node'),
+      join(root, 'history-filesystem.node')
+    )
     expect(run('a').status).toBe(0)
     expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(true)
     expect(lstatSync(join(profileHome, 'projects')).isSymbolicLink()).toBe(true)

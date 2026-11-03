@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { NodeRuntimeTarget } from '../../shared/node-runtime-pin'
 import { basename } from 'node:path'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { materializeNodeRuntimeArchive } from '../node-runtime/pinned-runtime-materializer'
@@ -28,6 +29,14 @@ export async function ensureWslPinnedRuntime(
   cacheRoot: string,
   signal: AbortSignal
 ): Promise<string> {
+  return (await ensureWslPinnedRuntimeTarget(run, cacheRoot, signal)).executable
+}
+
+export async function ensureWslPinnedRuntimeTarget(
+  run: WslRuntimeCommand,
+  cacheRoot: string,
+  signal: AbortSignal
+): Promise<{ executable: string; target: NodeRuntimeTarget }> {
   const arch = await run({ program: 'uname', args: ['-m'], loginPath: 'none' })
   if (arch !== 'x86_64' && arch !== 'aarch64' && arch !== 'arm64') {
     throw new Error(`Unsupported WSL architecture: ${arch}`)
@@ -53,7 +62,7 @@ export async function ensureWslPinnedRuntime(
     loginPath: 'none'
   })
   if (probe === REMOTE_NODE_RUNTIME_READY) {
-    return executable
+    return { executable, target }
   }
   const key = `${cacheRoot}:${target}`
   let download = downloads.get(key)
@@ -84,5 +93,5 @@ export async function ensureWslPinnedRuntime(
     120_000
   )
   assertRemoteNodeRuntimePromoted(promoted)
-  return executable
+  return { executable, target }
 }
