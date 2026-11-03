@@ -9280,6 +9280,10 @@
               "native": "네이티브",
               "cleaned": "정리됨",
               "restart": "다시 시작"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "재사용",
+              "split": "분할"
             }
           },
           "use": {
@@ -12767,6 +12771,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "일치하는 항목이 없습니다."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "링크를 현재 브라우저 탭에서 열기",
+          "description": "터미널, 채팅, markdown의 링크를 새 탭이나 분할 대신 마지막으로 사용한 브라우저 탭에서 엽니다."
         }
       },
       "right": {

@@ -140,6 +140,7 @@ export function buildDefaultSettings(args: {
     openLinksInAppPreferencePrompted: false,
     openLinksInAppModifierInverts: false,
     openLinksInAppInBackground: false,
+    openLinksInExistingBrowserTab: false,
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',

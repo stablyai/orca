@@ -95,3 +95,32 @@ export function getLinkRoutingBackgroundSearchEntry(): SettingsSearchEntry {
     ]
   }
 }
+
+export function getLinkRoutingExistingTabSearchEntry(): SettingsSearchEntry {
+  return {
+    title: translate(
+      'auto.components.settings.BrowserLinkRoutingExistingTabSetting.title',
+      'Open links in the current browser tab'
+    ),
+    description: translate(
+      'auto.components.settings.BrowserLinkRoutingExistingTabSetting.description',
+      'Links from the terminal, chat, and markdown load in the browser tab you used last instead of a new tab or split.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+      ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingExistingTab.reuse',
+        'reuse'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingExistingTab.split',
+        'split'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.linkRoutingBackground.tab',
+        'tab'
+      )
+    ]
+  }
+}

@@ -9845,6 +9845,10 @@
               "native": "natif",
               "cleaned": "nettoyé",
               "restart": "redémarrage"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "réutiliser",
+              "split": "diviser"
             }
           },
           "use": {
@@ -13279,6 +13283,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Aucun résultat."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Ouvrir les liens dans l'onglet de navigateur actuel",
+          "description": "Les liens du terminal, du chat et du markdown se chargent dans le dernier onglet de navigateur utilisé au lieu d'un nouvel onglet ou d'une nouvelle division."
         }
       },
       "right": {

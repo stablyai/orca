@@ -4611,6 +4611,10 @@
               "native": "nativo",
               "cleaned": "limpo",
               "restart": "reiniciar"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "reutilizar",
+              "split": "dividir"
             }
           },
           "use": {
@@ -9664,6 +9668,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Nenhum resultado."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Abrir links na aba atual do navegador",
+          "description": "Links do terminal, do chat e do markdown carregam na última aba do navegador que você usou em vez de uma nova aba ou divisão."
         }
       },
       "right": {

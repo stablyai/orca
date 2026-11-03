@@ -9575,6 +9575,10 @@
               "native": "nativo",
               "cleaned": "limpiado",
               "restart": "Reanudar"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "reutilizar",
+              "split": "dividir"
             }
           },
           "use": {
@@ -13055,6 +13059,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Sin resultados."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Abrir enlaces en la pestaña actual del navegador",
+          "description": "Los enlaces de la terminal, el chat y markdown se cargan en la última pestaña del navegador que usaste en lugar de una pestaña o división nueva."
         }
       },
       "right": {

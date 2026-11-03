@@ -9317,6 +9317,10 @@
               "native": "ネイティブ",
               "cleaned": "クリーン",
               "restart": "再起動"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "再利用",
+              "split": "分割"
             }
           },
           "use": {
@@ -12767,6 +12771,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "一致する項目がありません。"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "リンクを現在のブラウザタブで開く",
+          "description": "ターミナル、チャット、Markdown のリンクを、新規タブや分割ではなく最後に使ったブラウザタブで読み込みます。"
         }
       },
       "right": {
