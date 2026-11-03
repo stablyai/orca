@@ -18,6 +18,7 @@ import {
   syncDiffEditorOriginalWordWrap
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
+import { isWholeFileAddition, WHOLE_FILE_ADDITION_DIFF_CLASS } from './diff-whole-file-addition'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 import { installCombinedDiffCursorReveal } from './combined-diff-cursor-reveal'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
@@ -250,6 +251,10 @@ export function DiffSectionBody({
       ) : (
         <DiffEditor
           height="100%"
+          className={cn(
+            isWholeFileAddition(section.originalContent, section.modifiedContent) &&
+              WHOLE_FILE_ADDITION_DIFF_CLASS
+          )}
           language={language}
           original={section.originalContent}
           modified={section.modifiedContent}
