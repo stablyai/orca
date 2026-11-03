@@ -20,7 +20,7 @@ const buttonVariants = cva(
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment':
-          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-ai-action-accent/20 hover:text-ai-action-accent focus-visible:bg-ai-action-accent/20 focus-visible:text-ai-action-accent',
+          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground aria-expanded:bg-primary aria-expanded:text-primary-foreground',
         'pane-title': 'pane-title-split-trigger',
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.
