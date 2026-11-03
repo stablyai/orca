@@ -9,7 +9,13 @@ import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-wor
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, defaultValue: string) => defaultValue
+}))
+
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
+    selector({ settingsSearchQuery: '' })
 }))
 
 describe('TerminalAdvancedSection', () => {
@@ -123,5 +129,19 @@ describe('TerminalAdvancedSection', () => {
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Reset')).toBe(
       false
     )
+  })
+
+  it('keeps shell history as a row inside Advanced', () => {
+    renderSection()
+
+    const headings = Array.from(container.querySelectorAll('h3')).map(
+      (heading) => heading.textContent
+    )
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Scope bash, zsh, and fish history by workspace"]'
+    )
+
+    expect(headings).toEqual(['Advanced'])
+    expect(toggle?.closest('section')?.querySelector('h3')?.textContent).toBe('Advanced')
   })
 })

@@ -147,6 +147,10 @@ vi.mock('./TerminalWindowsAdministratorSection', () => ({
   TerminalWindowsAdministratorSection: () => null
 }))
 
+vi.mock('./TerminalShellHistorySetting', () => ({
+  TerminalShellHistorySetting: () => null
+}))
+
 vi.mock('./TerminalInteractionSection', () => ({
   TerminalInteractionSection: function TerminalInteractionSection() {
     return null
