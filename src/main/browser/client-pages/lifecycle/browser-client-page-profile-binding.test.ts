@@ -34,7 +34,7 @@ import { createBrowserClientPageGuestBinding } from './browser-client-page-guest
 import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
-} from '../../browser-manager-test-harness'
+} from '../../guest-lifecycle/manager/browser-manager-test-harness'
 
 const registration = (webContentsId: number, pageHostGeneration: number) => ({
   partition: 'persist:route',

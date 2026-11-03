@@ -12,7 +12,7 @@ vi.mock('@orca/process-host', () => ({ spawnProcess: mocks.spawn }))
 vi.mock('playwright', () => ({
   chromium: { connectOverCDP: vi.fn(async () => ({ close: mocks.closeBrowser })) }
 }))
-vi.mock('../../browser-session-ua-cdp-collector', () => ({
+vi.mock('../../identity/browser-session-ua-cdp-collector', () => ({
   waitForBrowserCdpEndpoint: vi.fn(async () => undefined)
 }))
 

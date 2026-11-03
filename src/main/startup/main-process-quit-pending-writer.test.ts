@@ -41,7 +41,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
-  '../browser/browser-session-registry': { browserSessionRegistry: {} },
+  '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/routing/local-host-partitions/local-ssh-browser-route': {
     closeAllLocalSshBrowserRoutes: settled()
   },

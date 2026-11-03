@@ -19,7 +19,7 @@ import {
   type BrowserRouteProxyEndpoint
 } from '../sessions/browser-route-session-policy'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
-import { browserSessionRegistry } from '../../browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/browser-session-registry'
 import {
   closeLocalSshBrowserRouteForTarget,
   probeLocalSshBrowserRouteForwarding,

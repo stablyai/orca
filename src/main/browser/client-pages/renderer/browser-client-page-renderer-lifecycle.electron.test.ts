@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
-import { resolveElectronProbeLaunch } from '../../electron-probe-display-launch'
+import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []

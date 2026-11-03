@@ -56,33 +56,37 @@ vi.mock('electron', async () => {
     webContents: { getAllWebContents: () => state.guests }
   }
 })
-vi.mock('../../browser-session-cookie-staging', () => ({
+vi.mock('../../cookies/staging/browser-session-cookie-staging', () => ({
   applyPendingBrowserCookieImports() {},
   clearPendingBrowserCookieImport() {}
 }))
-vi.mock('../../browser-session-partition-policies', () => ({
+vi.mock('../../sessions/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: state.policy,
   clearBrowserSessionPartitionPolicies: state.clearPolicy,
   forgetBrowserSessionPartitionConfiguration() {},
   retireBrowserSessionUserAgentPolicy() {}
 }))
-vi.mock('../../browser-session-proxy', () => ({ invalidateBrowserSessionProxyApplication() {} }))
+vi.mock('../../sessions/browser-session-proxy', () => ({
+  invalidateBrowserSessionProxyApplication() {}
+}))
 vi.mock('../../../network/proxy-settings', () => ({ async retireProxySessionApplication() {} }))
-vi.mock('../../browser-webauthn-account-picker', () => ({
+vi.mock('../../webauthn/browser-webauthn-account-picker', () => ({
   cancelBrowserWebAuthnAccountRequestsForSession() {}
 }))
-vi.mock('../../extensions/browser-extension-session-loader', () => ({
+vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', () => ({
   attachBrowserExtensionsToProfileSession() {},
   async detachBrowserExtensionsFromProfileSession() {}
 }))
 vi.mock('../../../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => state.directory
 }))
-vi.mock('../../browser-identity-mode-store', () => ({
+vi.mock('../../identity/browser-identity-mode-store', () => ({
   async markBrowserIdentityMigrationNoticePending() {}
 }))
-vi.mock('../../browser-site-permission-store', () => ({ forgetBrowserSitePermissions() {} }))
-vi.mock('../../browser-site-display-store', () => ({ forgetBrowserSiteDisplay() {} }))
+vi.mock('../../site-settings/browser-site-permission-store', () => ({
+  forgetBrowserSitePermissions() {}
+}))
+vi.mock('../../site-settings/browser-site-display-store', () => ({ forgetBrowserSiteDisplay() {} }))
 vi.mock('../../network/egress/browser-route-webrtc-policy', () => ({
   enforceBrowserRouteWebRtcPolicy() {}
 }))
@@ -93,7 +97,7 @@ vi.mock('./local-ssh-browser-route', () => ({
 }))
 
 import { session } from 'electron'
-import { browserSessionRegistry as registry } from '../../browser-session-registry'
+import { browserSessionRegistry as registry } from '../../sessions/browser-session-registry'
 import {
   configureBrowserRoutePartitionBindingsForOrcaProfile,
   currentBrowserRoutePartitionBindingStore

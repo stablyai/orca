@@ -63,7 +63,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => importStore.get
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-import { browserSessionRegistry } from '../browser-session-registry'
+import { browserSessionRegistry } from '../sessions/browser-session-registry'
 vi.mock('../client-hosts/lifecycle/paired-runtime-browser-client-host-registry', () => ({
   PairedRuntimeBrowserClientHostRegistry: class {
     start = async () => ({})

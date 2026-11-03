@@ -37,8 +37,10 @@ vi.mock('../../browser/cookies/browser-partition-cookie-copy', () => ({
   copyBrowserPartitionCookies: vi.fn(),
   flushBrowserPartitionCookies: vi.fn()
 }))
-vi.mock('../../browser/browser-session-registry', () => ({ browserSessionRegistry: {} }))
-vi.mock('../../browser/browser-session-startup', () => ({ browserSessionsInitialized: vi.fn() }))
+vi.mock('../../browser/sessions/browser-session-registry', () => ({ browserSessionRegistry: {} }))
+vi.mock('../../browser/sessions/browser-session-startup', () => ({
+  browserSessionsInitialized: vi.fn()
+}))
 vi.mock('../../browser/routing/partitions/browser-route-partition-binding-runtime', () => ({
   activeBrowserRoutePartitionOrcaProfileId: vi.fn(),
   currentBrowserRoutePartitionBindingStore: vi.fn()

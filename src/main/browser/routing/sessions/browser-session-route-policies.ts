@@ -4,7 +4,7 @@ import { isBrowserRoutePartition } from '../partitions/browser-route-identity'
 import {
   clearBrowserSessionPartitionPolicies,
   installBrowserSessionPartitionPolicies
-} from '../../browser-session-partition-policies'
+} from '../../sessions/browser-session-partition-policies'
 
 export function installBrowserRoutePartitionPolicies(
   profile: BrowserSessionProfile,

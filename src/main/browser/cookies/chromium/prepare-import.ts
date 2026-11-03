@@ -5,7 +5,7 @@ import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain
 } from '../browser-cookie-import-policy'
-import { createChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
+import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import { planImportWrites } from '../browser-cookie-import-write'
 import { readChromiumRowPartition } from '../sources/browser-cookie-source-partition'
 import { diag } from '../browser-cookie-import-diagnostics'

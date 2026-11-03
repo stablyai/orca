@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { build } from 'vite'
-import { waitForBrowserCdpEndpoint } from '../../browser-session-ua-cdp-collector'
-import { resolveElectronProbeLaunch } from '../../electron-probe-display-launch'
+import { waitForBrowserCdpEndpoint } from '../../identity/browser-session-ua-cdp-collector'
+import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
 export function createPopupIdentityProbeRoot(): string {
   return mkdtempSync(join(tmpdir(), 'orca-popup-identity-'))

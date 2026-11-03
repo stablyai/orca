@@ -37,7 +37,7 @@ vi.mock('../browser-cookie-import', () => ({
 vi.mock('../../routing/partitions/browser-route-partition-binding-runtime', () => ({
   currentBrowserRoutePartitionBindingStore: () => bindingStore
 }))
-vi.mock('../../browser-session-registry', () => ({
+vi.mock('../../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: getProfileMock,
     requireRouteBrowserProfile: requireRouteBrowserProfileMock

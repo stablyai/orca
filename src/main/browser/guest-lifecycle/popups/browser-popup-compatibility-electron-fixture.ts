@@ -11,7 +11,7 @@ import { renameSync, writeFileSync } from 'node:fs'
 import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
 import { BrowserPopupCompatibilityManager } from './browser-popup-compatibility-manager-fixture'
 import { BrowserRouteWebContentsRegistry } from '../../routing/guest-authority/browser-route-webcontents-registry'
-import { initializeBrowserProcessUserAgent } from '../../browser-process-user-agent'
+import { initializeBrowserProcessUserAgent } from '../../identity/browser-process-user-agent'
 import {
   BrowserPopupNativeFixture,
   popupFixtureContentSecurity as contentSecurity

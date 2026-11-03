@@ -79,7 +79,7 @@ vi.mock('../sessions/browser-route-session-policy', () => ({
 vi.mock('../../network/egress/browser-route-webrtc-policy', () => ({
   enforceBrowserRouteWebRtcPolicy: vi.fn()
 }))
-vi.mock('../../browser-session-registry', () => ({
+vi.mock('../../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     requireRouteBrowserProfile: vi.fn(),
     setupRoutePartitionPolicies: vi.fn(),

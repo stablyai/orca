@@ -8,7 +8,7 @@ import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browse
 import { readContextMenuSpelling } from '../../../window/editable-context-menu'
 import { readGuestNavigationState } from '../browser-guest-navigation-state'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
-import { buildBrowserExtensionPageContextMenu } from '../../extensions/browser-extension-context-menu-host'
+import { buildBrowserExtensionPageContextMenu } from '../../extensions/context-menus/browser-extension-context-menu-host'
 
 export function setupGuestContextMenu(args: {
   browserTabId: string
