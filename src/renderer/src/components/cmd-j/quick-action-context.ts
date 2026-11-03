@@ -3,6 +3,10 @@ import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import {
+  getRepoRoutingConnectionId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   canRunNativeChatSplitTarget,
@@ -99,7 +103,10 @@ export function getActiveWorktreeSshStatus(
     return null
   }
   const repo = state.repos.find((entry) => entry.id === activeWorktree.repoId)
-  const connectionId = repo?.connectionId ?? null
+  // Why: folder workspaces have no repo row, and SSH-only repos have no connectionId; the host id covers both.
+  const connectionId =
+    getSshTargetIdForExecutionHost(activeWorktree.hostId) ??
+    (repo ? getRepoRoutingConnectionId(repo) : null)
   if (!connectionId) {
     return null
   }
