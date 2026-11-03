@@ -11,6 +11,7 @@ type MobilePairingQrSectionProps = {
   qrError: boolean
   pairingUrl: string | null
   endpoint: string | null
+  refreshesAutomatically?: boolean
   qrEnlarged: boolean
   codeCopied: boolean
   onQrEnlargedChange: (open: boolean) => void
@@ -24,6 +25,7 @@ export function MobilePairingQrSection({
   qrError,
   pairingUrl,
   endpoint,
+  refreshesAutomatically = false,
   qrEnlarged,
   codeCopied,
   onQrEnlargedChange,
@@ -133,6 +135,15 @@ export function MobilePairingQrSection({
               'auto.components.settings.MobilePane.310924ad2c',
               'Scan this code with the Orca mobile app. Each code creates a unique device token.'
             )}
+            {refreshesAutomatically ? (
+              <>
+                {' '}
+                {translate(
+                  'auto.components.settings.MobilePane.codeRefreshesAutomatically',
+                  'Code refreshes automatically.'
+                )}
+              </>
+            ) : null}
           </p>
         )}
         {pairingUrl && (

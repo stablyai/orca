@@ -1180,7 +1180,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca bu sayfadan eşleştirmeyi reddetti: sayfa başka bir makinede şifrelenmemiş http kullanıyor, dolayısıyla ağ yolu üzerindeki herhangi biri sayfayı değiştirebilir ve eşleştirme kodunu ele geçirebilir. Web istemcisini https üzerinden, bu bilgisayarda localhost üzerinden veya bir SSH tüneli aracılığıyla açın. Yine de izin vermek için sunucu yöneticisi Orca'yı ORCA_ALLOW_INSECURE_WEB_PAIRING=1 ile yeniden başlatabilir.",
         "deviceDowngraded": "Bu Orca sunucusu artık bu tarayıcının oturum açma anahtarını desteklemiyor (sunucunun sürümü düşürülmüş olabilir). Sunucuyu güncelleyin veya bu tarayıcıyı tekrar eşleştirin.",
-        "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin."
+        "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin.",
+        "unauthorizedNewLink": "Yetkisiz erişim. Yeni bir eşleştirme bağlantısı isteyin."
       }
     },
     "store": {
@@ -8333,7 +8334,8 @@
           "copyPairingCode": "Eşleştirme kodunu kopyala",
           "diagnosticsCopied": "Tanılama bilgileri kopyalandı",
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
-          "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz."
+          "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
+          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8847,7 +8849,9 @@
           "browserLinkLabel": "Tarayıcı bağlantısı",
           "accessLinkLabel": "Erişim bağlantısı",
           "accessLinkHelp": "Bunu diğer Orca'daki Sunucu ekle alanına yapıştırın.",
-          "staleAddressCreate": "Bağlantı adresi değişti. {{address}} için yeni bir bağlantı oluşturun."
+          "staleAddressCreate": "Bağlantı adresi değişti. {{address}} için yeni bir bağlantı oluşturun.",
+          "linkExpired": "Bağlantının süresi doldu",
+          "unusedLinkExpires": "Kullanılmayan bağlantının süresi {{time}} itibarıyla dolar"
         },
         "Settings": {
           "3bf149e873": "Proje Ayarları > {{value0}}",

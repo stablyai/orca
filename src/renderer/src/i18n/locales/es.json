@@ -755,7 +755,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca se negó a emparejar desde esta página: usa http sin cifrar en otro equipo, así que cualquiera en la ruta de red podría reemplazarla y quedarse con el código de emparejamiento. Abre el cliente web por https, en localhost en este equipo o a través de un túnel SSH. Para permitirlo de todos modos, el operador del servidor puede reiniciar Orca con ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca ya no admite la clave de inicio de sesión de este navegador (puede que se haya degradado). Actualiza el servidor o vuelve a emparejar este navegador.",
-        "unauthorized": "No autorizado. Vuelve a emparejar este cliente web."
+        "unauthorized": "No autorizado. Vuelve a emparejar este cliente web.",
+        "unauthorizedNewLink": "No autorizado. Pide un nuevo enlace de emparejamiento."
       }
     },
     "store": {
@@ -7957,7 +7958,8 @@
           "copyPairingCode": "Copiar código de emparejamiento",
           "diagnosticsCopied": "Diagnóstico copiado",
           "diagnosticsCopyFailed": "No se pudieron copiar los diagnósticos",
-          "5e2c7a1f84": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar o Restaurar todo en el banner para cambiar el tamaño manualmente."
+          "5e2c7a1f84": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar o Restaurar todo en el banner para cambiar el tamaño manualmente.",
+          "codeRefreshesAutomatically": "El código se actualiza automáticamente."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8466,7 +8468,9 @@
           "browserLinkLabel": "Enlace para navegador",
           "accessLinkLabel": "Enlace de acceso",
           "accessLinkHelp": "Pégalo en «Añadir servidor» en el otro Orca.",
-          "staleAddressCreate": "La dirección de conexión cambió. Crea un enlace nuevo para {{address}}."
+          "staleAddressCreate": "La dirección de conexión cambió. Crea un enlace nuevo para {{address}}.",
+          "linkExpired": "Enlace caducado",
+          "unusedLinkExpires": "El enlace sin usar caduca a las {{time}}"
         },
         "Settings": {
           "3bf149e873": "Configuración del proyecto > {{value0}}",

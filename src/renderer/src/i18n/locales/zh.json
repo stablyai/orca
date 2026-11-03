@@ -747,7 +747,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca 拒绝从此页面配对：它是另一台机器上的纯 http 页面，因此网络路径上的任何人都可以替换它并取走配对码。请通过 https、本机的 localhost 或 SSH 隧道打开 Web 客户端。如需仍然允许，服务器操作员可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新启动 Orca。",
         "deviceDowngraded": "此 Orca 服务器不再支持此浏览器的登录密钥（可能已被降级）。请更新服务器，或重新配对此浏览器。",
-        "unauthorized": "未授权。请重新配对此 Web 客户端。"
+        "unauthorized": "未授权。请重新配对此 Web 客户端。",
+        "unauthorizedNewLink": "未授权。请索取新的配对链接。"
       }
     },
     "store": {
@@ -7664,7 +7665,8 @@
           "copyPairingCode": "复制配对码",
           "diagnosticsCopied": "已复制诊断信息",
           "diagnosticsCopyFailed": "无法复制诊断信息",
-          "5e2c7a1f84": "当您在手机上使用终端时，Orca 会将其缩小以适合您的手机屏幕。当您关闭应用程序或切换离开时，这可以控制它是保持手机大小（因此交互式 CLI 工具不会回流）还是将大小调整回桌面。您始终可以使用横幅上的“还原”或“全部还原”来手动调整大小。"
+          "5e2c7a1f84": "当您在手机上使用终端时，Orca 会将其缩小以适合您的手机屏幕。当您关闭应用程序或切换离开时，这可以控制它是保持手机大小（因此交互式 CLI 工具不会回流）还是将大小调整回桌面。您始终可以使用横幅上的“还原”或“全部还原”来手动调整大小。",
+          "codeRefreshesAutomatically": "配对码会自动刷新。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "应用商店",
@@ -8172,7 +8174,9 @@
           "browserLinkLabel": "浏览器链接",
           "accessLinkLabel": "访问链接",
           "accessLinkHelp": "将其粘贴到另一个 Orca 的“添加服务器”中。",
-          "staleAddressCreate": "连接地址已更改。请为 {{address}} 创建新链接。"
+          "staleAddressCreate": "连接地址已更改。请为 {{address}} 创建新链接。",
+          "linkExpired": "链接已过期",
+          "unusedLinkExpires": "未使用的链接将于 {{time}} 过期"
         },
         "Settings": {
           "3bf149e873": "项目设置 > {{value0}}",
