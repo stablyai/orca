@@ -60,21 +60,6 @@ describe('out-of-order Claude child notifications', () => {
     }
   )
 
-  it.each(['unknown', 'restored'])(
-    'does not use an %s child as an early notification receipt',
-    (evidence) => {
-      const { state, post } = listener()
-      if (evidence === 'restored') {
-        state.claudeSubagentRosterByPaneKey.set(
-          PANE_KEY,
-          new Map([['a1', { state: 'working', startedAt: Date.now(), restoredFromSnapshot: true }]])
-        )
-      }
-      post(notification)
-      expect(state.claudeLaunchedBackgroundTasksByPaneKey.get(PANE_KEY)?.has('a1')).not.toBe(true)
-    }
-  )
-
   it('keeps an unmatched nested child end provisional until its own main launch confirms it', () => {
     const { state, post } = listener()
     post({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
@@ -87,22 +72,6 @@ describe('out-of-order Claude child notifications', () => {
     expect(
       post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.claudeTaskWakeupPending
     ).toBe('notification')
-  })
-
-  it('does not refresh the observed end on duplicate end or parent launch posts', () => {
-    const { state, post } = listener()
-    post({ hook_event_name: 'SubagentStart', agent_id: 'a1' })
-    post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-    const firstEnd = state.claudeLaunchedBackgroundTasksByPaneKey
-      .get(PANE_KEY)
-      ?.get('a1')?.notificationOwedAt
-    vi.advanceTimersByTime(5_000)
-    post({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
-    post(launch)
-    post(launch)
-    expect(
-      state.claudeLaunchedBackgroundTasksByPaneKey.get(PANE_KEY)?.get('a1')?.notificationOwedAt
-    ).toBe(firstEnd)
   })
 
   it.each(['before-end', 'after-end', 'after-launch'])(

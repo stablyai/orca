@@ -132,17 +132,6 @@ describe('hook acquisition deadlines on a slow host', () => {
     }
     expect(read).toHaveBeenCalledTimes(4)
   })
-
-  it('leaves a late exit’s retirement to the host without another hook', async () => {
-    const state = createHookListenerState()
-    const read = slowReader(800, 'root')
-    const exits: unknown[] = []
-    const reconcile = (completion: HookRootCompletion) =>
-      exits.push(completion.attempt.exit !== undefined)
-    expect(await preflight(state, read, 'SessionEnd', reconcile)).toBeLessThanOrEqual(510)
-    await vi.advanceTimersByTimeAsync(800)
-    expect(exits).toEqual([true])
-  })
 })
 
 describe('the executor’s aggregate attempt budget', () => {

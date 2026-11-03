@@ -39,7 +39,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../repo-worktrees', () => ({
+vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktrees: listRepoWorktreesMock,
   createFolderWorktree: vi.fn()
 }))
@@ -52,7 +52,7 @@ vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 

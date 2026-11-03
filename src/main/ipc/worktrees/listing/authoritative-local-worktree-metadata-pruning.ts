@@ -13,9 +13,9 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import { pruneWorkspaceCleanupScanSnapshots } from '../../../workspaces/cleanup/workspace-cleanup-scan-snapshot'
 import { pruneWorkspaceSpaceAnalysisSnapshots } from '../../../workspaces/space-analysis/workspace-space-analysis-snapshot'
-import { isLocalWorktreeScanGenerationCurrent } from '../../../local-worktree-scan-generation'
-import { localWorktreePathsExistOrAreUnverifiable } from '../../../local-worktree-path-presence'
-import { worktreeRetentionPathComparisonKey } from '../../../worktree-retention-path-comparison'
+import { isLocalWorktreeScanGenerationCurrent } from '../../../workspaces/catalog/local-worktree-scan-generation'
+import { localWorktreePathsExistOrAreUnverifiable } from '../../../workspaces/catalog/local-worktree-path-presence'
+import { worktreeRetentionPathComparisonKey } from '../../../workspaces/catalog/worktree-retention-path-comparison'
 import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 
 type AuthoritativeLocalMetadataPruneStore = Pick<

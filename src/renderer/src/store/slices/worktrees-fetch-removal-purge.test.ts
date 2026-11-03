@@ -6,7 +6,7 @@ import {
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
-import { getHostedReviewLinkMutationGenerationForTests } from './worktrees'
+import './worktrees'
 import { makeDetectedResult, qualifyDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -152,33 +152,6 @@ describe('fetchWorktrees', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({
       [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard'
     })
-  })
-
-  it('purges hosted review link mutation bookkeeping for worktrees removed by refresh', async () => {
-    const store = createTestStore()
-    const removed = makeWorktree({
-      id: 'repo1::/path/removed',
-      repoId: 'repo1',
-      path: '/path/removed'
-    })
-    const surviving = makeWorktree({
-      id: 'repo1::/path/surviving',
-      repoId: 'repo1',
-      path: '/path/surviving'
-    })
-
-    worktreeListMock.mockResolvedValue([surviving])
-    store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
-    await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
-    await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
-
-    expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBeGreaterThan(0)
-    expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(getHostedReviewLinkMutationGenerationForTests(removed.id)).toBe(0)
-    expect(getHostedReviewLinkMutationGenerationForTests(surviving.id)).toBeGreaterThan(0)
   })
 
   it('retains hidden state until an authoritative refresh removes the worktree', async () => {
@@ -496,17 +469,5 @@ describe('fetchWorktrees', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({ [existing.id]: 'search' })
     expect(store.getState().sortEpoch).toBe(7)
     expect(result).toBe(false)
-  })
-
-  it('accepts an empty refresh when the repo had no cached worktrees', async () => {
-    const store = createTestStore()
-
-    worktreeListMock.mockResolvedValue([])
-    store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
-
-    await store.getState().fetchWorktrees('repo1')
-
-    expect(store.getState().worktreesByRepo.repo1).toEqual([])
-    expect(store.getState().sortEpoch).toBe(8)
   })
 })

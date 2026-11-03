@@ -44,7 +44,7 @@ import {
   getTargetWorktreeIdsByRepo,
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
-import { isWorktreeMetaOwnedByRepo } from '../../worktree-metadata-ownership'
+import { isWorktreeMetaOwnedByRepo } from '../../workspaces/catalog/worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Overlap repo scans to avoid summing SSH listing round-trip latency.

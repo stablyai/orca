@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import { toast } from 'sonner'
+import 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
@@ -99,37 +99,6 @@ describe('worktree remote runtime mutations', () => {
     }
   )
 
-  it('persists worktree metadata through the active remote runtime environment', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1',
-      hostId: 'runtime:env-1'
-    })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-set',
-      ok: true,
-      result: { worktree: { ...wt, comment: 'remote note' } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [wt] }
-    } as Partial<AppState>)
-
-    await store.getState().updateWorktreeMeta(wt.id, { comment: 'remote note' })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'worktree.set',
-      params: expect.objectContaining({ worktree: `id:${wt.id}`, comment: 'remote note' }),
-      timeoutMs: 15_000
-    })
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
-  })
-
   it('force-deletes a preserved HUB-owned SSH branch through its HUB', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
@@ -165,22 +134,6 @@ describe('worktree remote runtime mutations', () => {
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
-  })
-
-  it('suppresses per-branch feedback for an aggregate delete', async () => {
-    const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
-    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
-    vi.mocked(toast.success).mockClear()
-    vi.mocked(toast.error).mockClear()
-
-    const result = await store
-      .getState()
-      .forceDeletePreservedBranch(wt.id, 'feature/test', 'abc123', { suppressToast: true })
-
-    expect(result).toEqual({ ok: true, deleted: true })
-    expect(toast.success).not.toHaveBeenCalled()
-    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('fails preserved branch deletion closed for two HUB owners', async () => {

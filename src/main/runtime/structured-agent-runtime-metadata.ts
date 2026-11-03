@@ -1,5 +1,5 @@
 import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
+import { applyStructuredCodexWorkspaceTrust } from '../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'

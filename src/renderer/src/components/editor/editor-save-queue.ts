@@ -33,7 +33,7 @@ import {
   type EditorSaveResult,
   type EditorSaveTrigger
 } from './editor-save-disk-precondition'
-import { editorSavePluginHook } from './editor-save-plugin-hook'
+import { editorSaveTransform } from './editor-save-transform-pipeline'
 import { withEditorFileWriteLock } from './editor-file-write-lock'
 import {
   liveEditorSaveWriter,
@@ -132,8 +132,8 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       return nothingToWrite
     }
     const buffered = store.getState().editorDrafts[fileId] ?? request.fallbackContent
-    const hooked = editorSavePluginHook(store, liveFile, trigger, buffered)
-    const contentToSave = hooked ? await hooked : buffered
+    const transformed = editorSaveTransform(store, liveFile, request, buffered)
+    const contentToSave = transformed ? await transformed : buffered
     if (
       trigger === 'autosave' &&
       hasPendingEditorBufferChange(store.getState(), fileId) &&

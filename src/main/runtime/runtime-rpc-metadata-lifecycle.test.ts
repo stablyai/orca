@@ -1,3 +1,5 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktree-listing'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,6 +12,22 @@ import { createRuntimeTransportMetadata } from './runtime-rpc/runtime-rpc-socket
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { DeviceRegistry } from './device-registry'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../git/worktree', () => {
   const worktrees = [

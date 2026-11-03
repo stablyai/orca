@@ -1,12 +1,12 @@
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type * as pty from 'node-pty'
-import { readPtsName } from '../../pty/node-pty-pts-name'
-import { readPtyForegroundGroup } from '../../pty/pty-master-foreground-observation'
-import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
+import { readPtyForegroundGroup } from '../../pty/process-retirement/pty-master-foreground-observation'
+import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { isWslAvailableAsync } from '../../wsl-availability'
-import { resolveGitBashPath } from '../../git-bash'
+import { isWslAvailableAsync } from '../../wsl/discovery/wsl-availability'
+import { resolveGitBashPath } from '../../pty/shell-startup/git-bash'
 import { resolveProcessCwd } from '../process-cwd'
 import {
   dataListeners,

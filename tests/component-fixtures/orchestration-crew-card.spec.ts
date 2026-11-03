@@ -15,15 +15,10 @@ async function openFixture(page: Page, name: string) {
   return bounds
 }
 
-test('a saved opt-in keeps the suspended native chat card hidden and the composer visible', async ({
-  page
-}) => {
-  await page.goto(
-    '/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:tenWorkersShortChatExpanded'
-  )
-  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
-  await expect(page.getByRole('complementary', { name: 'Orchestration' })).toHaveCount(0)
-  await expect(page.getByTestId('composer')).toBeVisible()
+test('in a short native chat the card stops above the composer and scrolls', async ({ page }) => {
+  const card = await openFixture(page, 'tenWorkersShortChatExpanded')
+  const composer = await page.getByTestId('composer').boundingBox()
+  expect(card.y + card.height).toBeLessThanOrEqual(composer!.y)
 })
 
 test('in a short terminal the card keeps the bottom quarter clear and scrolls', async ({
@@ -72,4 +67,54 @@ for (const [name, width] of [
     await collapse.click()
     await expect(page.getByRole('complementary', { name: 'Orchestration' })).toHaveCount(0)
   })
+}
+
+for (const name of ['terminalQuestionDetails', 'nativeLatestDetails']) {
+  for (const width of [280, 360]) {
+    test(`${name} keeps long expanded details inside a ${width}px frame`, async ({ page }) => {
+      await page.goto(`/fixtures.html?id=orchestration-crew/OrchestrationCrewPanel:${name}`)
+      await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
+      const frame = page.locator('#component-fixture-frame')
+      await frame.evaluate((element, frameWidth) => {
+        element.style.width = `${frameWidth}px`
+      }, width)
+      const card = page.getByRole('complementary', { name: 'Orchestration' })
+      const details = card.locator('dl')
+      await expect(details).toBeVisible()
+      await expect(details).toContainText('dispatched')
+      expect(await details.innerText()).toContain('unbroken'.repeat(128))
+      const overflow = await details.evaluate((element) => {
+        const card = element.closest('aside')!
+        const bounds = card.getBoundingClientRect()
+        const violations: string[] = []
+        for (const value of element.querySelectorAll('dd')) {
+          const rect = value.getBoundingClientRect()
+          if (rect.left < bounds.left || rect.right > bounds.right + 1) {
+            violations.push('detail value outside card')
+          }
+          if (value.scrollWidth > value.clientWidth + 1) {
+            violations.push('detail value scrolls horizontally')
+          }
+          const walker = document.createTreeWalker(value, NodeFilter.SHOW_TEXT)
+          while (walker.nextNode()) {
+            const range = document.createRange()
+            range.selectNodeContents(walker.currentNode)
+            for (const line of range.getClientRects()) {
+              if (line.left < bounds.left || line.right > bounds.right + 1) {
+                violations.push('text outside card')
+              }
+            }
+          }
+        }
+        return violations
+      })
+      await test.info().attach('expanded-details', {
+        body: await frame.screenshot(),
+        contentType: 'image/png'
+      })
+      expect(overflow).toEqual([])
+      await card.getByRole('button', { name: /^Show .*task and latest message$/ }).click()
+      await expect(details).toHaveCount(0)
+    })
+  }
 }

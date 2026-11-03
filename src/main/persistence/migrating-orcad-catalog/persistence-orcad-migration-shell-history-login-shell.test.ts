@@ -3,8 +3,8 @@ import type * as NodeFs from 'node:fs'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { injectHistoryEnv } from '../../terminal-history'
-import { getHistoryRoot } from '../../terminal-history-paths'
+import { injectHistoryEnv } from '../../pty/history/terminal-history'
+import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
 import { DORMANT_WORKTREE_ID, manifest } from './persistence-orcad-migration-catalog-fixture'
 import {
   BASH,

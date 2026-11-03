@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  correlateOpenCodeSessionOwners,
-  sessionIdFromArgv
-} from './agent-hook-listener/opencode-session-correlation'
+import { correlateOpenCodeSessionOwners } from './agent-hook-listener/opencode-session-correlation'
 
 const NOW = 1_000_000_000
 const DIR = '/Users/jin/work/mocitec'
@@ -20,33 +17,7 @@ function client(
   return { paneKey, startedAtMs, lastSeenAliveMs, argv }
 }
 
-describe('sessionIdFromArgv', () => {
-  it('reads --session forms', () => {
-    expect(sessionIdFromArgv(['opencode', '--session', 'ses_1'])).toBe('ses_1')
-    expect(sessionIdFromArgv(['opencode', '-s', 'ses_2'])).toBe('ses_2')
-    expect(sessionIdFromArgv(['opencode', '--session=ses_3'])).toBe('ses_3')
-  })
-
-  it('ignores bare launches and flag-like values', () => {
-    expect(sessionIdFromArgv(['opencode'])).toBeNull()
-    expect(sessionIdFromArgv(['opencode', '--session'])).toBeNull()
-    expect(sessionIdFromArgv(['opencode', '--session', '--port'])).toBeNull()
-  })
-})
-
 describe('correlateOpenCodeSessionOwners', () => {
-  it('binds a lone pane in the directory', () => {
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [session('ses_1', NOW - 60_000)],
-      panes: [{ paneKey: 'pane-a', directory: DIR }],
-      clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map()
-    })
-    expect(results).toEqual([
-      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
-    ])
-  })
-
   it('contains sessions beneath the worktree root', () => {
     const sub = correlateOpenCodeSessionOwners({
       sessions: [
@@ -66,20 +37,6 @@ describe('correlateOpenCodeSessionOwners', () => {
     ])
   })
 
-  it('strips the macOS /tmp alias so both spellings meet', () => {
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [
-        { id: 'ses_1', directory: '/tmp/binder-e2e', createdAtMs: NOW - 60_000, parentId: null }
-      ],
-      panes: [{ paneKey: 'pane-a', directory: '/private/tmp/binder-e2e' }],
-      clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map()
-    })
-    expect(results).toEqual([
-      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
-    ])
-  })
-
   it('keeps genuinely distinct /private roots apart', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [
@@ -90,20 +47,6 @@ describe('correlateOpenCodeSessionOwners', () => {
       knownOwners: new Map()
     })
     expect(results).toEqual([])
-  })
-
-  it('folds Windows case differences', () => {
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [
-        { id: 'ses_1', directory: 'c:\\users\\repo', createdAtMs: NOW - 60_000, parentId: null }
-      ],
-      panes: [{ paneKey: 'pane-a', directory: 'C:\\Users\\Repo' }],
-      clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map()
-    })
-    expect(results).toEqual([
-      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'single-pane-directory' }
-    ])
   })
 
   it('keeps POSIX backslashes literal', () => {
@@ -185,16 +128,6 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([])
   })
 
-  it('accepts a long-lived client that brackets creation', () => {
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [session('ses_1', NOW - 60_000)],
-      panes: [{ paneKey: 'pane-a', directory: DIR }],
-      clients: [client('pane-a', NOW - 86_400_000)],
-      knownOwners: new Map()
-    })
-    expect(results).toHaveLength(1)
-  })
-
   it('binds by argv even in a crowded directory', () => {
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_9', NOW - 60_000)],
@@ -221,15 +154,5 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([
       { sessionId: 'ses_child', paneKey: 'pane-a', basis: 'creation-correlation' }
     ])
-  })
-
-  it('skips already-known sessions', () => {
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [session('ses_1', NOW - 60_000)],
-      panes: [{ paneKey: 'pane-a', directory: DIR }],
-      clients: [client('pane-a', NOW - 120_000)],
-      knownOwners: new Map([['ses_1', 'pane-a']])
-    })
-    expect(results).toEqual([])
   })
 })

@@ -14,7 +14,7 @@ import {
   PtyExitProof,
   PtyRetirementWithoutProof,
   type PtyRetirementEvidence
-} from '../../../pty-exit-proof'
+} from '../../../pty/process-retirement/pty-exit-proof'
 import {
   closeLegacyRelayPane,
   isLegacyRelayBridgedPty,
