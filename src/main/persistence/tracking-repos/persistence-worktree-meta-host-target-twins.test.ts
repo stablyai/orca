@@ -225,16 +225,15 @@ describe('worktree meta and lineage writes for same-id twins', () => {
       notifyChanged
     })
 
-    expect(result).toEqual({ updated: 2 })
+    // Only the twin moved above solo is re-ranked; solo keeps its rank.
+    expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'local')?.sortOrder).toBe(100)
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:ssh-1')?.sortOrder).toBeGreaterThan(
       store.getWorktreeMetaForHost(solo.id, 'local')?.sortOrder ?? Infinity
     )
-    // ID-only patches would change both twins; re-list twinned repos instead.
-    expect(notifyChanged).toHaveBeenCalledWith('dup', undefined)
-    expect(notifyChanged).toHaveBeenCalledWith('solo', [
-      expect.objectContaining({ worktreeId: solo.id })
-    ])
+    expect(store.getWorktreeMetaForHost(solo.id, 'local')?.sortOrder).toBe(5)
+    // ID-only patches would change both twins; re-list twinned repos instead. Solo's repo had no write.
+    expect(notifyChanged.mock.calls).toEqual([['dup', undefined]])
   })
 
   it("reads a client's local as this server's own runtime stamp", async () => {
@@ -258,7 +257,9 @@ describe('worktree meta and lineage writes for same-id twins', () => {
       notifyChanged: vi.fn()
     })
 
-    expect(result).toEqual({ updated: 2 })
+    // Only the row moved above the other is re-ranked, and it lands on the runtime-stamped row.
+    expect(result).toEqual({ updated: 1 })
+    expect(store.getWorktreeMetaForHost(first.id, 'runtime:env-1')?.sortOrder).toBeGreaterThan(5)
   })
 
   it('skips a client host no repo row of this store lives on, never redirecting it', async () => {
@@ -277,7 +278,8 @@ describe('worktree meta and lineage writes for same-id twins', () => {
       notifyChanged: vi.fn()
     })
 
-    expect(result).toEqual({ updated: 1 })
+    // The skipped row was the only one that moved, so nothing is written.
+    expect(result).toEqual({ updated: 0 })
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'local')?.sortOrder).toBe(1)
     expect(store.getWorktreeMetaForHost(WORKTREE_ID, 'ssh:removed')).toBeUndefined()
   })

@@ -249,19 +249,18 @@ describe('OrcaRuntimeService', () => {
     expect(setWorktreeMeta).not.toHaveBeenCalled()
     expect(events).toEqual([])
 
-    expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 2 })
+    // Only the row that moved is re-ranked; the other keeps its rank.
+    expect(runtime.persistManagedWorktreeSortOrder([secondId, firstId])).toEqual({ updated: 1 })
     unsubscribe()
 
-    expect(setWorktreeMeta).toHaveBeenCalledTimes(2)
+    expect(setWorktreeMeta).toHaveBeenCalledTimes(1)
+    expect(metaById[firstId].sortOrder).toBe(200)
     expect(events).toEqual([
       {
         type: 'worktreesChanged',
         repoId: TEST_REPO_ID,
         sortOrderOnly: true,
-        sortOrders: [
-          { worktreeId: secondId, sortOrder: metaById[secondId].sortOrder },
-          { worktreeId: firstId, sortOrder: metaById[firstId].sortOrder }
-        ]
+        sortOrders: [{ worktreeId: secondId, sortOrder: metaById[secondId].sortOrder }]
       }
     ])
   })

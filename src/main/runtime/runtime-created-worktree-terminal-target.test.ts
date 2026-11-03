@@ -395,9 +395,10 @@ describe('workspace activation and metadata reentry', () => {
       { sortOrder: 0 }
     )
     store.setWorktreeMeta(hostWorktreeTarget({ id: otherId, hostId: 'local' }), { sortOrder: 0 })
+    // Only the row moved above the tie is re-ranked; the other keeps its rank.
     expect(runtime.persistManagedWorktreeSortOrder([runtime.selectedWorktree.id, otherId])).toEqual(
       {
-        updated: 2
+        updated: 1
       }
     )
     expect(notify.mock.calls).toEqual([
@@ -407,10 +408,7 @@ describe('workspace activation and metadata reentry', () => {
         {
           invalidateGitScans: false,
           sortOrderOnly: true,
-          sortOrders: [
-            { worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) },
-            { worktreeId: otherId, sortOrder: expect.any(Number) }
-          ]
+          sortOrders: [{ worktreeId: runtime.selectedWorktree.id, sortOrder: expect.any(Number) }]
         }
       ]
     ])
