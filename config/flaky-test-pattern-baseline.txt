@@ -1074,9 +1074,6 @@
 2 test-no-wall-clock:src/renderer/src/runtime/structured-agent-session-tab-retirement.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/github-pr-branch-linked-pr-divergence.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/github-pr-refresh-hosted-review-cache-leak.test.ts
-1 test-no-wall-clock:src/renderer/src/store/slices/github-project-request-coordination.test.ts
-2 test-no-wall-clock:src/renderer/src/store/slices/github-worktree-refresh-if-stale.test.ts
-2 test-no-wall-clock:src/renderer/src/store/slices/jira-issue-patch-action.test.ts
 11 test-no-wall-clock:src/renderer/src/store/slices/jira.test.ts
 2 test-no-wall-clock:src/renderer/src/store/slices/linear-invalidation.test.ts
 1 test-no-wall-clock:src/renderer/src/store/slices/linear-issue-cache-refresh.test.ts
