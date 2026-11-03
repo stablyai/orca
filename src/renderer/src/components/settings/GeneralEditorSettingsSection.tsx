@@ -21,6 +21,7 @@ import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
+import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
@@ -97,6 +98,8 @@ export function GeneralEditorSettingsSection({
           'Configure how Orca persists file edits.'
         )}
       />
+
+      <EditorFormatOnSaveSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

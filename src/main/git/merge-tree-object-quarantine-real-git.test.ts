@@ -12,10 +12,10 @@ import {
   getPRConflictSummary
 } from '../github/conflict-summary'
 import { __resetPRConflictSummaryDerivationCachesForTests } from '../github/conflict-summary-cache'
-import { getLocalGitCapabilityCache } from './git-capability-state'
+import { getLocalGitCapabilityCache } from './command-runner/git-capability-state'
 import { createLocalGitObjectQuarantine } from './local-git-object-quarantine'
 import { gitExecFileAsync } from './runner'
-import { deleteBranchAfterWorktreeRemoval } from './worktree-branch-removal'
+import { deleteBranchAfterWorktreeRemoval } from './worktrees/removal/worktree-branch-removal'
 
 const scratchFoldersMade = vi.hoisted((): string[] => [])
 

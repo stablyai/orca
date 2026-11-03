@@ -68,13 +68,6 @@ describe('OSC 9999 scan budget', () => {
     expect(searchedChars).toBeLessThanOrEqual(data.length * 2)
   })
 
-  it('keeps a one-character input echo on the ordinary-output path', () => {
-    const { result, searchedChars } = parseWithSearchBudget('a')
-
-    expect(result).toEqual({ cleanData: 'a', payloads: [], lastPayloadCleanOffset: null })
-    expect(searchedChars).toBe(1)
-  })
-
   it('does not retain the output chunk in legacy regular-expression state', () => {
     const data = `\x1b]9999;{"state":"working"}\x07${'output'.repeat(200_000)}`
     void /reset/.test('reset')

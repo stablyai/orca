@@ -5,7 +5,7 @@ import {
   type HostedReviewForBranchOutcome,
   type HostedReviewInfo
 } from '../../shared/hosted-review'
-import { assertRemoteUrlReadable } from '../git/remote-url-probe'
+import { assertRemoteUrlReadable } from '../git/remotes/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'

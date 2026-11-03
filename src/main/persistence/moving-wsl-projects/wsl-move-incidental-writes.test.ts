@@ -12,7 +12,10 @@ import type * as LinearCurrentIssueContext from '../../linear/issue-context/curr
 import type { ResolvedWorktree } from '../../runtime/runtime-worktree-path-identity'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
-vi.mock('../../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 vi.mock('../../linear/issue-context/current', async (importOriginal) => ({
   ...(await importOriginal<typeof LinearCurrentIssueContext>()),
   resolveLegacyLinearLinkWorkspace: () => ({ workspaceId: 'ws-1', organizationUrlKey: 'acme' })

@@ -3,18 +3,17 @@ import {
   resolveConflict,
   stageFile,
   unstageFile,
-  discardChanges,
-  bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   stageWorktreeChanges
-} from '../../git/status'
+} from '../../git/source-control/staging'
+import { discardChanges, bulkDiscardChanges } from '../../git/source-control/discard-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
-import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
+import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'

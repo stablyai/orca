@@ -11,7 +11,7 @@ import { RuntimeRemoteFetchController } from '../runtime/runtime-remote-fetch-co
 import {
   clearGitCapabilityStateForTests,
   withLocalGitCapabilityCacheForExecution
-} from '../git/git-capability-state'
+} from '../git/command-runner/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
   buildConflictSummaryCacheKey,
