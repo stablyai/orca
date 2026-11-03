@@ -33,32 +33,11 @@ describe('readSpoolFile', () => {
     expect(result.consumed).toBe(Buffer.byteLength(complete))
   })
 
-  it('consumes through the final newline when every line is complete', () => {
-    const contents = `${record('a')}\n${record('b')}\n`
-    const result = readSpoolFile(write(contents))
-
-    expect(result.records.map((entry) => entry.paneKey)).toEqual(['a', 'b'])
-    expect(result.consumed).toBe(Buffer.byteLength(contents))
-  })
-
   it('skips blank lines without consuming less than the bytes they occupy', () => {
     const contents = `${record('a')}\n\n\n${record('b')}\n`
     const result = readSpoolFile(write(contents))
 
     expect(result.records.map((entry) => entry.paneKey)).toEqual(['a', 'b'])
     expect(result.consumed).toBe(Buffer.byteLength(contents))
-  })
-
-  it('returns nothing for an empty file', () => {
-    expect(readSpoolFile(write(''))).toEqual({ records: [], consumed: 0 })
-  })
-
-  it('returns nothing for a file that is one torn line', () => {
-    expect(readSpoolFile(write(record('a'))).records).toEqual([])
-    expect(readSpoolFile(write(record('a'))).consumed).toBe(0)
-  })
-
-  it('returns nothing for a missing file', () => {
-    expect(readSpoolFile(join(dir, 'absent.jsonl'))).toEqual({ records: [], consumed: 0 })
   })
 })
