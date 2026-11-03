@@ -172,7 +172,7 @@ it.each([1, 5, 100])(
     expect(view.banners()[0].props.message).toContain('may have received part')
     expect(view.rows()).toHaveLength(n > 1 ? 1 : 0)
     if (n === 1) {
-      view.mounted.unmount()
+      act(() => view.mounted.unmount())
       return
     }
     expect(view.rows()[0].props.label).toBe(
@@ -196,7 +196,7 @@ it.each([1, 5, 100])(
     expect(view.banners()).toHaveLength(n - 1)
     await act(async () => view.rows()[0]?.props.onToggle())
     expect(view.banners()).toHaveLength(1)
-    view.mounted.unmount()
+    act(() => view.mounted.unmount())
   }
 )
 
