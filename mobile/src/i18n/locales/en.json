@@ -4528,5 +4528,24 @@
         }
       }
     }
+  },
+  "edgeAuth": {
+    "title": "Edge authentication",
+    "hint": "Optional headers sent on the connection handshake, for tunnels protected by edge authentication (for example Cloudflare Access service tokens). Stored in this phone's keychain, never in pairing links. Pair over LAN or Relay before configuring these headers. If the secure host or port changes, save the address, then reopen this form to enter credentials for it. Leave all rows blank for none.",
+    "saved_one": "{{count}} header saved.",
+    "saved_other": "{{count}} headers saved.",
+    "name": "Header {{index}} name",
+    "namePlaceholder": "CF-Access-Client-Id",
+    "value": "Header {{index}} value",
+    "valuePlaceholder": "Secret value",
+    "remove": "Remove header {{index}}",
+    "add": "Add header",
+    "secureAddressRequired": "Edge authentication needs a wss:// address — headers are never sent over ws://.",
+    "listRequired": "Headers must be a list.",
+    "pairRequired": "Each header must be a name/value pair.",
+    "invalidName": "Invalid header name: \"{{name}}\".",
+    "invalidValue": "Invalid value for header \"{{name}}\".",
+    "tooMany": "At most {{limit}} headers are supported.",
+    "saveFailed": "Could not save edge authentication."
   }
 }
