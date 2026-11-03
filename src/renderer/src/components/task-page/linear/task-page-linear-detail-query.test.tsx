@@ -8,7 +8,7 @@ import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import { getIssue } from '../../../../../main/linear/linear-issue-lookups'
-import { createLinearClient } from '../../../../../main/linear/linear-sdk'
+import { createLinearClient, loadLinearSdk } from '../../../../../main/linear/linear-sdk'
 import { ISSUE_QUERY } from '../../../../../main/linear/issue-context/raw'
 import { linearIssueSchema } from '../../../../../../mobile/src/tasks/task-item-detail-reply-schema'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
@@ -16,7 +16,7 @@ import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 const clients = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../../../../../main/linear/client', () => ({
   getClients: clients.get,
-  isAuthError: () => false
+  isAuthError: (error: unknown) => error instanceof loadLinearSdk().AuthenticationLinearError
 }))
 vi.mock('../../../../../main/linear/linear-token-store', () => ({ clearToken: vi.fn() }))
 
@@ -152,3 +152,36 @@ it('linked-issue refresh uses one issue query and retains identifier and workspa
   expect(linearIssueSchema.parse(linked.result.current.data[0])).toEqual(expected)
   expectQuery(1, 'DAT-124')
 })
+
+it('keeps readable core detail when an optional relation returns partial GraphQL errors', async () => {
+  vi.mocked(globalThis.fetch).mockImplementation(async (_input, init) => {
+    requests.push(JSON.parse(String(init?.body)))
+    return Response.json({
+      data: {
+        issue: { ...responseIssue, assignee: { ...responseIssue.assignee, avatarUrl: null } }
+      },
+      errors: [{ message: 'Avatar resolver failed', path: ['issue', 'assignee', 'avatarUrl'] }]
+    })
+  })
+  await expect(getIssue(task().id, 'w')).resolves.toEqual({ ...expected, assignee: undefined })
+  expect(requests).toHaveLength(1)
+  expectQuery(0, task().id)
+})
+
+it.each([
+  { path: ['issue', 'title'], extensions: undefined, auth: false },
+  { path: ['issue', 'assignee'], extensions: { type: 'authentication error' }, auth: true }
+])(
+  'does not accept partial data for a core or authentication failure: $path',
+  async ({ path, extensions, auth }) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json({
+        data: { issue: responseIssue },
+        errors: [{ message: 'Read failed', path, extensions }]
+      })
+    )
+    const read = getIssue(task().id, 'w')
+    await (auth ? expect(read).rejects.toThrow('Linear') : expect(read).resolves.toBeNull())
+  }
+)
