@@ -1,6 +1,17 @@
 /** The app window as the WSL move's write hold reloads it (wsl-move-window-write-hold.ts). */
 import type { WebContents } from 'electron'
+import type { Store } from '../persistence/loading-store/store'
 import type { WslMoveReloadableWindow } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+
+/**
+ * Settings cannot restore its page, so a reload from it would open General (and keep reopening
+ * there on launch); land on the workspace view, which the move already focused on its projects.
+ */
+export function leaveSettingsForWslMoveReload(ui: Pick<Store, 'getUI' | 'updateUI'>): void {
+  if (ui.getUI().activeView === 'settings') {
+    ui.updateUI({ activeView: 'terminal' })
+  }
+}
 
 export function wslMoveReloadableWindow(contents: WebContents): WslMoveReloadableWindow {
   return {

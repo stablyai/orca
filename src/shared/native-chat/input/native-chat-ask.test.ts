@@ -8,7 +8,7 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from '../../agent-session/agent-session-message-source'
-import { nativeChatAskDismissKey } from '../../native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from './native-chat-ask-dismiss-key'
 import { projectStructuredItemToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
 import {
   extractPendingAsk,

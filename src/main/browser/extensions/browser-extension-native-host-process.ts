@@ -6,7 +6,7 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
-import { getForkedChildEntryPath } from '../../forked-child-entry-path'
+import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
 import { NATIVE_HOST_ERRORS } from './browser-extension-native-host-errors'
 import {
   createNativeHostMessageReader,

@@ -7,7 +7,7 @@ import {
   type RuntimeRpcResponse
 } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
-import type { RuntimeStatus } from '../../runtime-types'
+import type { RuntimeStatus } from '../../runtime-session-contracts'
 
 type RequestResponseRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake

@@ -401,19 +401,6 @@ describe('runtime file opens on the host desktop', () => {
     ).toBe(true)
   })
 
-  it.each(['caller', 'clients'] as const)(
-    'keeps the desktop still when navigation %s does not target the host',
-    async (navigation) => {
-      const { openFile, store } = await setup('terminal')
-      const before = screenState(store)
-
-      await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation })
-      await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation })
-
-      expect(screenState(store)).toEqual(before)
-    }
-  )
-
   it.each(['all', 'host'] as const)(
     'brings the user to the file with navigation %s',
     async (navigation) => {

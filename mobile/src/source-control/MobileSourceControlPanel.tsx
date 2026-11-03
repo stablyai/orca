@@ -207,7 +207,7 @@ export function MobileSourceControlPanel({
     review,
     prState: prController.prSidebarState,
     reviewsSupported: isHostedRepo && prBranch !== null,
-    refetchPr,
+    rereadPr: prController.rereadPRSidebarAfterWrite,
     headSha: prHeadSha,
     showWorkflowErrors: activeTab !== 'changes',
     onMerge: openMergeSheet

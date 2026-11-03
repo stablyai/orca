@@ -4,7 +4,7 @@
 import { readdirSync, readlinkSync, statSync } from 'node:fs'
 // posix: /proc paths are Linux-only, and tests run this matcher on every host.
 import { posix } from 'node:path'
-import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
+import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 
 function listPids(): number[] {
   try {

@@ -51,6 +51,7 @@ export type MessageRowProps = {
   subagentDisclosure?: NativeChatSubagentDisclosure
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
@@ -156,6 +157,7 @@ export const MessageRow = memo(function MessageRow(
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         runtimeContext={runtimeContext}
+        structuredAttachments={props.structuredAttachments}
         rewind={rewind}
         deliveryNotice={deliveryNotice}
       />

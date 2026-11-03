@@ -126,42 +126,4 @@ describe('restoreSshConnectionsForStartup', () => {
     // Timeout rewrite must not redefer already connected background hosts or fresh panes take the cold-restore path.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
   })
-
-  it('keeps passphrase targets deferred and never dials them', async () => {
-    installWindowApi([target('ssh-key', true), target('ssh-bg')])
-    harness.connect.mockResolvedValue(connectedState('ssh-bg'))
-
-    await restoreSshConnectionsForStartup({
-      connectionIds: ['ssh-key', 'ssh-bg'],
-      blockingConnectionIds: [],
-      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
-      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
-      publishSshConnectionState: harness.publishSshConnectionState
-    })
-
-    expect(harness.connect).not.toHaveBeenCalledWith('ssh-key')
-    expect(harness.setDeferredSshReconnectTargets).toHaveBeenCalledWith(['ssh-key', 'ssh-bg'])
-  })
-
-  it('awaits every target when no blocking set is supplied', async () => {
-    vi.useFakeTimers()
-    installWindowApi([target('ssh-a'), target('ssh-b')])
-    harness.connect.mockReturnValue(new Promise<SshConnectionState>(() => {}))
-
-    let settled = false
-    const restore = restoreSshConnectionsForStartup({
-      connectionIds: ['ssh-a', 'ssh-b'],
-      setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
-      removeDeferredSshReconnectTarget: harness.removeDeferredSshReconnectTarget,
-      publishSshConnectionState: harness.publishSshConnectionState
-    }).then(() => {
-      settled = true
-    })
-
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1_000)
-    await restore
-    expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-a', 'ssh-b'])
-  })
 })

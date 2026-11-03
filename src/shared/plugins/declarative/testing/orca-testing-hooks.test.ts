@@ -43,4 +43,28 @@ describe('orca/testing hooks', () => {
     expect(acknowledgesByDefault({ result: z.object({ ok: z.literal(true) }) })).toBe(true)
     expect(acknowledgesByDefault({ result: z.object({ delivered: z.boolean() }) })).toBe(false)
   })
+
+  it('fires editor.save.before and returns the text the worker wrote', async () => {
+    const formatter = {
+      default(orca: {
+        hooks: {
+          on(hook: string, handler: (e: unknown, next: (e: unknown) => unknown) => unknown): unknown
+        }
+      }) {
+        orca.hooks.on('editor.save.before', (event, next) =>
+          next({ ...Object(event), text: `${String(Object(event).text).trim()}\n` })
+        )
+      }
+    }
+    const worker = await mountWorker(formatter, {
+      events: [],
+      commands: [],
+      hooks: ['editor.save.before']
+    })
+    const save = { workspaceId: 'wt-1', path: 'src/a.ts', languageId: 'typescript', text: '  x  ' }
+    await expect(worker.hooks.fire('editor.save.before', save)).resolves.toEqual({
+      kind: 'continue',
+      event: { ...save, text: 'x\n' }
+    })
+  })
 })

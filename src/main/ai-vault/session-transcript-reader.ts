@@ -10,7 +10,10 @@ import {
 } from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
 import { hasTranscriptConsumers, transcriptResumableOffsets } from './session-transcript-consumers'
-import { mergeSkippedTranscriptRecords } from './session-transcript-record-budget'
+import {
+  mergeSkippedTranscriptRecords,
+  type SkippedTranscriptRecord
+} from './session-transcript-record-budget'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 
 type TranscriptSessionEnrichment = {
@@ -168,6 +171,7 @@ export async function readWholeTranscript(
     platform: NodeJS.Platform
     stats?: TranscriptReadStats
     signal?: AbortSignal
+    onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
   }
 ): Promise<AiVaultSession | null> {
   const { file } = args.candidate
@@ -178,7 +182,13 @@ export async function readWholeTranscript(
   const channel = new TranscriptMessageChannel()
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
-    const session = await parseAgentSessionFile(args.candidate, args.platform, channel, args.signal)
+    const session = await parseAgentSessionFile(
+      args.candidate,
+      args.platform,
+      channel,
+      args.signal,
+      args.onSkippedRecords
+    )
     const consumerSession = args.sessionForConsumers
       ? await args.sessionForConsumers(session)
       : session

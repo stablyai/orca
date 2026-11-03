@@ -52,6 +52,7 @@ export type AcpDialectNotification =
       started?: boolean
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
+      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit'>
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -67,6 +68,8 @@ export type AcpTurnEnding = {
   failureDetail?: string
   notSignedIn?: boolean
   usageLimit?: AgentSessionUsageLimit
+  /** Structured error data shows the model provider failed; runtime only. */
+  providerFailure?: boolean
   hookBlock?: AcpHookBlock
 }
 
@@ -125,7 +128,7 @@ export type AcpDialect = {
   promptFailure?(
     error: AcpAgentError,
     at: number
-  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
+  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit' | 'providerFailure'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
   /** The agent dropped this session; only a new child can reopen it. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean

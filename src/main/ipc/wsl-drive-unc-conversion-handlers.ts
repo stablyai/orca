@@ -9,7 +9,7 @@ import type {
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
 } from '../../shared/wsl-drive-unc-conversion-types'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchApp } from '../startup/quit/app-relaunch'
 import { gitExecFileAsync } from '../git/command-runner/git-exec-file'
 import { readProfileProjectTransferState } from '../orca-profiles/profile-project-domain-state'
 import { getOrcaProfileListState } from '../orca-profiles/profile-index-store'

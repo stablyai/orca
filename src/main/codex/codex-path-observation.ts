@@ -1,6 +1,6 @@
 import { statSync, type Stats } from 'node:fs'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { readAgentStateFileSync } from '../agent-state-file-reader'
+import { readAgentStateFileSync } from './configuration/agent-state-file-reader'
 
 // Distinguish unreadable from absent before mutations; existsSync collapses both to false.
 export type CodexPathObservation<T> =

@@ -24,6 +24,10 @@ import {
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import { sidecarUnchanged } from './session-sidecar-stat'
 import {
+  mergeSkippedTranscriptRecords,
+  type SkippedTranscriptRecord
+} from './session-transcript-record-budget'
+import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
   sidecarEnrichesWithoutReparse,
@@ -222,12 +226,16 @@ async function parseCachedInLane(
     return enriched.session
   }
 
+  let skippedRecords: SkippedTranscriptRecord[] = []
   const session = await readWholeTranscript({
     candidate,
     platform,
     stats,
     signal,
-    sessionForConsumers
+    sessionForConsumers,
+    onSkippedRecords: (records) => {
+      skippedRecords = mergeSkippedTranscriptRecords([], records)
+    }
   })
   storeSessionParseCacheEntry(key, {
     agent: candidate.agent,
@@ -237,7 +245,8 @@ async function parseCachedInLane(
     session: enriched.session,
     sidecar: enriched.refused ? 'unknown' : file.sidecar,
     foldSession: session,
-    resume: null
+    resume: null,
+    skippedRecords
   })
   return enriched.session
 }

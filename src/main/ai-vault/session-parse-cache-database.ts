@@ -18,6 +18,10 @@ import {
   writeScopeCwdRows
 } from './session-scope-cwds-table'
 import { parsePersistedSidecar } from './session-sidecar-stat'
+import {
+  mergeSkippedTranscriptRecords,
+  type SkippedTranscriptRecord
+} from './session-transcript-record-budget'
 
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
 export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
@@ -32,6 +36,7 @@ CREATE TABLE IF NOT EXISTS rows(
   -- JSON, validated on read like any other untrusted file content.
   sidecar TEXT,
   session TEXT NOT NULL,
+  skipped_records TEXT NOT NULL,
   -- Wall-clock ms the transcript was last parsed or found still on disk. Rows
   -- past an age are re-checked, which is what ends a row whose transcript was
   -- deleted outside Orca.
@@ -55,7 +60,9 @@ export class SessionParseCacheDatabase {
   read(path: string): PersistedSessionParseCacheEntry | undefined {
     return this.run((db) => {
       const row = db
-        .prepare('SELECT mtime_ms, size_bytes, platform, sidecar, session FROM rows WHERE path = ?')
+        .prepare(
+          'SELECT mtime_ms, size_bytes, platform, sidecar, session, skipped_records FROM rows WHERE path = ?'
+        )
         .get(path)
       if (row === undefined) {
         return undefined
@@ -67,7 +74,9 @@ export class SessionParseCacheDatabase {
           sizeBytes: row.size_bytes,
           platform: row.platform,
           sidecar: typeof row.sidecar === 'string' ? JSON.parse(row.sidecar) : undefined,
-          session: typeof row.session === 'string' ? JSON.parse(row.session) : undefined
+          session: typeof row.session === 'string' ? JSON.parse(row.session) : undefined,
+          skippedRecords:
+            typeof row.skipped_records === 'string' ? JSON.parse(row.skipped_records) : undefined
         }
       ])
       return entry?.[1]
@@ -97,7 +106,7 @@ export class SessionParseCacheDatabase {
   ): void {
     this.run((db) => {
       const insert = db.prepare(
-        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT OR ${keepExisting ? 'IGNORE' : 'REPLACE'} INTO rows(path, mtime_ms, size_bytes, platform, sidecar, session, skipped_records, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -109,6 +118,7 @@ export class SessionParseCacheDatabase {
             entry.platform,
             entry.sidecar === undefined ? null : JSON.stringify(entry.sidecar),
             JSON.stringify(entry.session),
+            JSON.stringify(entry.skippedRecords ?? []),
             seenAt
           )
         }
@@ -237,6 +247,29 @@ export function parsePersistedSessionParseCacheRow(
     return null
   }
   const sidecar = parsePersistedSidecar(entry.sidecar)
+  const skippedRecords: SkippedTranscriptRecord[] = []
+  if (entry.skippedRecords !== undefined) {
+    if (!Array.isArray(entry.skippedRecords)) {
+      return null
+    }
+    for (const record of entry.skippedRecords) {
+      if (
+        !isRecord(record) ||
+        typeof record.byteOffset !== 'number' ||
+        !Number.isSafeInteger(record.byteOffset) ||
+        record.byteOffset < 0 ||
+        typeof record.approximateBytes !== 'number' ||
+        !Number.isSafeInteger(record.approximateBytes) ||
+        record.approximateBytes <= 0
+      ) {
+        return null
+      }
+      skippedRecords.push({
+        byteOffset: record.byteOffset,
+        approximateBytes: record.approximateBytes
+      })
+    }
+  }
   return [
     path,
     {
@@ -246,6 +279,7 @@ export function parsePersistedSessionParseCacheRow(
       platform: platform as NodeJS.Platform,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written only from AiVaultSession values by this build or one with the same schema version; a semantics change bumps the version and drops the rows.
       session: session as AiVaultSession | null,
+      skippedRecords: mergeSkippedTranscriptRecords([], skippedRecords),
       ...(sidecar === undefined ? {} : { sidecar })
     }
   ]

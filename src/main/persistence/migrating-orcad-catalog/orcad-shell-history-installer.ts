@@ -22,7 +22,7 @@ import {
   durableWriteTempPath,
   syncDirectoryDurablySync,
   writeFileDurableSync
-} from '../../durable-file-write'
+} from '../../filesystem/durable-file-write'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { readHistoryMeta, resolveShellKind } from '../../terminal-history'

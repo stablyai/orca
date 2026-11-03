@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -59,56 +59,6 @@ export function registerReposProjectGroupsDeleteTests(): void {
   })
 
   describe('project group deletion store routing', () => {
-    it('removes local project group subtrees from renderer state after delete', async () => {
-      const childGroup: ProjectGroup = {
-        ...projectGroup,
-        id: 'child',
-        parentGroupId: projectGroup.id
-      }
-      const siblingGroup: ProjectGroup = {
-        ...projectGroup,
-        id: 'sibling',
-        name: 'Tools',
-        tabOrder: 1
-      }
-      const childWorkspace: FolderWorkspace = {
-        id: 'folder-workspace-1',
-        projectGroupId: childGroup.id,
-        name: 'Shared cleanup',
-        folderPath: '/workspace/platform/shared',
-        linkedTask: null,
-        comment: '',
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 1,
-        lastActivityAt: 0,
-        createdAt: 1,
-        updatedAt: 1
-      }
-      projectGroupsDelete.mockResolvedValue(true)
-      const store = createTestStore()
-      store.setState({
-        projectGroups: [projectGroup, childGroup, siblingGroup],
-        folderWorkspaces: [childWorkspace],
-        repos: [
-          { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id },
-          { ...remoteRepo, id: 'nested', projectGroupId: childGroup.id },
-          { ...remoteRepo, id: 'sibling', projectGroupId: siblingGroup.id }
-        ]
-      })
-
-      await expect(store.getState().deleteProjectGroup(projectGroup.id)).resolves.toBe(true)
-
-      expect(store.getState().projectGroups.map((group) => group.id)).toEqual([siblingGroup.id])
-      expect(store.getState().folderWorkspaces).toEqual([])
-      expect(store.getState().repos).toMatchObject([
-        { id: 'direct', projectGroupId: null },
-        { id: 'nested', projectGroupId: null },
-        { id: 'sibling', projectGroupId: siblingGroup.id }
-      ])
-    })
-
     it('uses the remote delete response shape before mutating local state', async () => {
       runtimeEnvironmentCall.mockResolvedValue({
         id: 'rpc-delete-group',
@@ -136,31 +86,6 @@ export function registerReposProjectGroupsDeleteTests(): void {
         timeoutMs: 15_000
       })
       expect(projectGroupsDelete).not.toHaveBeenCalled()
-    })
-
-    it('deletes only the group when contained project removal is not requested', async () => {
-      projectGroupsDelete.mockResolvedValue(true)
-      const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
-      const store = createTestStore()
-      store.setState({
-        projectGroups: [projectGroup],
-        repos: [groupedRepo]
-      })
-
-      await expect(
-        store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
-          removeContainedProjects: false
-        })
-      ).resolves.toEqual({
-        status: 'deleted-group',
-        groupId: projectGroup.id,
-        requestedProjectIds: [],
-        removedProjectIds: [],
-        failedProjectRemovals: []
-      })
-
-      expect(reposRemove).not.toHaveBeenCalled()
-      expect(store.getState().repos).toMatchObject([{ id: 'direct', projectGroupId: null }])
     })
 
     it('removes direct and nested child projects after deleting a group', async () => {

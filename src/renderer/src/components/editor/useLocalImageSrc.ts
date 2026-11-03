@@ -32,6 +32,7 @@ export function getLocalImageCacheKey(
     : 'client'
   return [
     runtimeEnvironmentId,
+    runtimeContext?.expectedEnvironmentPairingRevision?.toString() ?? '',
     runtimeContext?.connectionId ?? connectionId ?? 'local',
     runtimeContext?.expectedExecutionHostId ?? 'unknown-host',
     runtimeContext?.expectedSshTargetId ?? '',

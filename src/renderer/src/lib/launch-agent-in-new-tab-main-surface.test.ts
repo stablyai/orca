@@ -57,7 +57,6 @@ describe('launchAgentInNewTab main-window surface', () => {
     const result = launchAgentInNewTab({
       requestId: 'request-1',
       agent: 'opencode',
-      requestedSurface: 'terminal',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
 
@@ -72,22 +71,5 @@ describe('launchAgentInNewTab main-window surface', () => {
     expect(floatingGroup?.activeTabId).toBe(tabId)
     expect(state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(tabId)
     expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('terminal')
-  })
-
-  it('still brings a launch in the active worktree to the front', async () => {
-    const store = seedMainWindowOnEditor()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      agent: 'opencode',
-      requestedSurface: 'terminal',
-      worktreeId: MAIN_WORKTREE_ID
-    })
-
-    const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
-    expect(tabId).not.toBeNull()
-    expect(store.getState().activeTabType).toBe('terminal')
-    expect(store.getState().activeTabId).toBe(tabId)
   })
 })

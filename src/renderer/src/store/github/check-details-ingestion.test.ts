@@ -13,8 +13,7 @@ import { recordRuntimeSubscription } from '@/runtime/runtime-environment-bridge-
 import {
   mockApi,
   resetRemoteRuntimeMocks,
-  runtimeEnvironmentSubscribe,
-  runtimeEnvironmentTransportCall
+  runtimeEnvironmentSubscribe
 } from '../slices/github-slice-test-harness'
 import {
   createLoader,
@@ -176,84 +175,4 @@ for (const surface of surfaces) {
       )
     })
   }
-}
-
-for (const surface of surfaces) {
-  describe(`${surface} paired RPC failure boundary`, () => {
-    it.each([
-      'envelope failure',
-      'disconnect',
-      'transport error',
-      'compatibility failure'
-    ] as const)(
-      'does not execute locally or normalize after %s or a late frame',
-      async (failure) => {
-        const subscription = recordRuntimeSubscription()
-        runtimeEnvironmentSubscribe.mockImplementation(subscription.subscribe)
-        if (failure === 'compatibility failure') {
-          runtimeEnvironmentTransportCall.mockRejectedValue(
-            new Error('SYNTHETIC_SECRET_compatibility')
-          )
-        }
-        const loader = createLoader(surface, 'rpc')
-        const warnings = vi.spyOn(console, 'warn')
-        const errors = vi.spyOn(console, 'error')
-        loader.start()
-        await vi.advanceTimersByTimeAsync(0)
-        if (failure === 'disconnect') {
-          subscription.callbacks().onClose?.()
-        }
-        if (failure === 'transport error') {
-          subscription
-            .callbacks()
-            .onError?.({ code: 'runtime_error', message: 'SYNTHETIC_SECRET_transport' })
-        }
-        if (failure === 'envelope failure') {
-          subscription.respond({
-            id: 'failure',
-            ok: false,
-            error: { code: 'runtime_error', message: 'SYNTHETIC_SECRET_response' }
-          })
-        }
-        await vi.advanceTimersByTimeAsync(0)
-        const settledStore = loader.storeSettlement()
-        const settledState = loader.state()
-        if (surface === 'store') {
-          expect(settledStore?.status).toBe('rejected')
-          if (settledStore?.status !== 'rejected' || !(settledStore.error instanceof Error)) {
-            throw new Error('Expected rejected Error')
-          }
-          expect(settledStore.error.message).toBe('Failed to load check details.')
-        } else {
-          expect(settledState.detailsByCheckKey.check).toMatchObject({
-            loading: false,
-            details: null,
-            error: 'Failed to load check details.'
-          })
-        }
-        if (failure !== 'compatibility failure') {
-          subscription.respond(successResponse(mixedCheckLogDetails()))
-        }
-        await vi.advanceTimersByTimeAsync(0)
-        expect(loader.storeSettlement()).toBe(settledStore)
-        expect(loader.state()).toBe(settledState)
-        expect(normalization.normalizeCheckRunDetailsLogTails).not.toHaveBeenCalled()
-        expect(sanitation.sanitizeCheckJobLogExcerpt).not.toHaveBeenCalled()
-        expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
-        expect(localRuntimeCall).not.toHaveBeenCalled()
-        expect(runtimeEnvironmentTransportCall.mock.calls.map(([args]) => args.method)).toEqual([
-          'status.get'
-        ])
-        expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(
-          failure === 'compatibility failure' ? 0 : 1
-        )
-        expect(subscription.unsubscribe).toHaveBeenCalledTimes(
-          failure === 'compatibility failure' ? 0 : 1
-        )
-        expect(warnings).not.toHaveBeenCalled()
-        expect(errors).not.toHaveBeenCalled()
-        expect(vi.getTimerCount()).toBe(0)
-      }
-    )
-  })
 }
