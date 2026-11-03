@@ -1,4 +1,4 @@
-import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -13,7 +13,7 @@ import {
   getProfileTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
 } from '../../terminal-scrollback-snapshots'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'

@@ -13,7 +13,11 @@ import {
   collectLocalUploadPlan,
   type LocalUploadPlan
 } from '../ssh/system-transport/system-ssh-file-transfer'
-import { buildUstarEntryHeader, USTAR_BLOCK_BYTES, ustarPaddingBytes } from '../ustar-entry-header'
+import {
+  buildUstarEntryHeader,
+  USTAR_BLOCK_BYTES,
+  ustarPaddingBytes
+} from '../archive/ustar-entry-header'
 
 export const WSL_GUEST_SOURCE_UNAVAILABLE = 'ORCA_WSL_GUEST_SOURCE_UNAVAILABLE'
 export const WSL_UPLOAD_PROMOTED = 'ORCA_WSL_UPLOAD_PROMOTED'

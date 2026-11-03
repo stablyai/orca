@@ -91,6 +91,8 @@ export type StructuredAgentSessionCommandRun = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
   running: AgentJournalTurnItem
+  /** Only agents declaring `compactInstructions` receive this. */
+  instructions?: string
 }
 
 /** Commands may answer in place without echoing provider items. */

@@ -12,7 +12,7 @@ const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
   userDataDirHolder: { dir: '' }
 }))
 
-vi.mock('../../sidecar-snapshot-file', async (importOriginal) => {
+vi.mock('../../filesystem/sidecar-snapshot-file', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   const writeSidecarSnapshot = actual.writeSidecarSnapshot as (
     file: string,

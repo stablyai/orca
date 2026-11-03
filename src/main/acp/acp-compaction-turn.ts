@@ -1,5 +1,6 @@
 // Consume /compact output; select its one result: an ordinary provider failure or the command's own row.
 
+import { agentSessionCompactCommandText } from '../../shared/agent-session/agent-session-conversation-command'
 import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../shared/agent-session/agent-session-compaction'
@@ -15,7 +16,9 @@ import {
 } from './acp-turn-failures'
 import type { ContentBlock, SessionUpdate } from './generated/acp-protocol.generated'
 
-export const ACP_COMPACT_PROMPT: readonly ContentBlock[] = [{ type: 'text', text: '/compact' }]
+export function acpCompactPrompt(instructions?: string): ContentBlock[] {
+  return [{ type: 'text', text: agentSessionCompactCommandText(instructions) }]
+}
 
 export type AcpCompaction = { reply: string; failure?: AcpTurnFailureEvidence }
 

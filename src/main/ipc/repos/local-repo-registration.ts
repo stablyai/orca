@@ -13,7 +13,7 @@ import {
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { findProjectAtSameRealPath } from '../../project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 
 export async function addLocalRepoFromPath(

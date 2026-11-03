@@ -96,7 +96,7 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/agent-hooks/posix-hook-command',
   'src/main/agent-hooks/hook-post-command',
   'src/main/codex-cli/codex-read-only-app-server-args',
-  'src/main/agent-trust-presets',
+  'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/config-toml-trust',
   'src/main/pty/codex-no-daemon-binary-contract',
   'src/main/pty/codex-shell-launch-preflight',

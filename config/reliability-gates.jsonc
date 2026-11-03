@@ -1423,18 +1423,18 @@
       "coveredProviders": ["local", "ssh"],
       "coverageNotes": "The actual renderer and runtime spawn-option builders with a mocked dispatcher, the spawn hook with a mocked dispatcher, the structured Codex create intent with a mocked dispatcher, the dispatcher with mocked preset writers and the real Claude config writer on a temp file, the execution-host writer and the relay spawn function with every real preset writer under a throwaway home, and the relay pty.spawn handler with a mocked trust function. Proves the builders await trust before returning, the fresh-launch and setting gates, the per-preset deadlines, that SSH launches hand every preset to the relay, and, for the agents that inherit trust from a home (Claude, Copilot, Qoder), the refusal of any stored path that is a root, a home or a folder above one, while Codex, Cursor and Antigravity still trust a home. No native PTY, agent CLI, live SSH host or WSL guest.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/main/agent-workspace-trust.ts"
+        "https://github.com/stablyai/orca/blob/main/src/main/agent-launch/trust/agent-workspace-trust.ts"
       ],
       "invariant": "A fresh PTY launch of an agent with a trust preset pre-trusts its workspace root (for Codex, whose lookup keys on its start folder, the folder it starts in, including a floating terminal's) before the provider spawn, in both spawn builders, on the host that runs the agent: main for local and WSL launches, the SSH relay on its own disk for SSH launches. It never waits past the preset's deadline: 20 s for local Codex, the short budget for every other write, local or on the relay. A failed or abandoned write lets the launch proceed untrusted, so the agent asks. Restored or reattached panes, spawns with no launch command and the setting turned off are never trusted; for an agent whose trust on a home covers the folders below it (Claude, Copilot, Qoder), no writer stores a path that is a root, a home or a folder above one, and an unknown home writes nothing; Codex, Cursor and Antigravity, whose trust on a home covers only the home, trust it as they did before; and a WSL launch never writes the Windows home. A structured Codex chat, which has no PTY, pre-trusts its folder the same way when it is created, under the same setting.",
       "oracle": "A trust write held pending keeps each builder from returning until it settles. A never-settling local Codex write resolves the dispatcher only after the long deadline; a never-settling local Claude write resolves after the short budget with a named warning. Rejected and throwing writes, and a throwing guard, resolve with a warning. Restored panes, spawns without a command and the setting off make no dispatcher call; Codex in a floating terminal or a workspace subfolder is trusted at that folder, and every other preset at the workspace root. Creating a structured Codex chat trusts its folder before launch preparation, and nothing with the setting off. An SSH launch returns the relay field for every preset and calls no writer, and the relay's pty.spawn starts no process until that launch's trust call settles. A home, a folder above one, a root, a symlink to a home and a missing path that climbs back to the home through `..` write no Claude, Copilot or Qoder trust file, on this machine and on the relay, and the home writes Codex, Cursor and Antigravity trust.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts",
-        "src/main/agent-workspace-trust-spawn.test.ts",
-        "src/main/agent-workspace-trust.test.ts",
-        "src/main/execution-host-workspace-trust.test.ts",
+        "src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts",
+        "src/main/agent-launch/trust/agent-workspace-trust.test.ts",
+        "src/main/agent-launch/trust/execution-host-workspace-trust.test.ts",
         "src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts"
       ],
       "assertionRefs": [
@@ -1447,7 +1447,7 @@
           ]
         },
         {
-          "file": "src/main/agent-workspace-trust-spawn.test.ts",
+          "file": "src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts",
           "assertions": [
             "does nothing with the setting off",
             "does nothing for a restored or reattached pane",
@@ -1456,7 +1456,7 @@
           ]
         },
         {
-          "file": "src/main/agent-workspace-trust.test.ts",
+          "file": "src/main/agent-launch/trust/agent-workspace-trust.test.ts",
           "assertions": [
             "contains a rejected or throwing write so the launch proceeds",
             "gives only Codex the long deadline its shared config lane needs",
@@ -1467,7 +1467,7 @@
           ]
         },
         {
-          "file": "src/main/execution-host-workspace-trust.test.ts",
+          "file": "src/main/agent-launch/trust/execution-host-workspace-trust.test.ts",
           "assertions": [
             "writes no %s trust",
             "guards exactly the agents that inherit trust from a home",
@@ -1488,6 +1488,7 @@
           "date": "2026-09-29",
           "runner": "local",
           "platform": "macos",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-launch/trust/agent-workspace-trust-spawn.test.ts src/main/agent-launch/trust/agent-workspace-trust.test.ts src/main/agent-launch/trust/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/spawn-options-agent-workspace-trust.test.ts src/main/agent-workspace-trust-spawn.test.ts src/main/agent-workspace-trust.test.ts src/main/execution-host-workspace-trust.test.ts src/main/runtime/orca-runtime-structured-agent-session-create-intent.test.ts",
           "result": "passed",
           "durationSeconds": 4.16,
@@ -1860,7 +1861,7 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "Real authenticated sockets plus isolated desktop and headless hosts with desktop and browser viewers; deterministic lifecycle tests cover stale results and reader deadlines.",
+      "coverageNotes": "Real authenticated sockets plus isolated desktop and headless hosts with desktop and browser viewers; deterministic lifecycle tests cover stale results and reader deadlines. The test-value audit removes the standalone runtime-status-snapshot.test.ts example that immediately applied the same supplied snapshots to two isolated slice stores. Its direct sequence-2 then older unavailable sequence-1 acceptance/rejection alarm is intentionally lost; it did not exercise a pending read, subscription delivery or a shared viewer connection. The suite retains failed-verification/recovery, disconnect/pairing retirement and catalog-refresh replay examples, which are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new live host, process restart or platform evidence is claimed.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/19163"],
       "invariant": "Failed bootstrap and authenticated reconnect converge without UI triggers; one connection owner publishes verified status, with no independent healthy status polling.",
       "oracle": "Observe automatic recovery, retained runtime identity on failure, ordered publications, exact request counts, isolated viewer outages, and retirement on disconnect.",
@@ -1915,7 +1916,8 @@
       "knownGaps": [
         "No live Linux, Windows, SSH, or mixed-version pair validation.",
         "TCP interruption exercises reconnect, not a full real host process restart.",
-        "The outage begins on the first saved-host check, not by relaunching a preseeded desktop profile."
+        "The outage begins on the first saved-host check, not by relaunching a preseeded desktop profile.",
+        "The test-value audit removes the standalone runtime-status-snapshot.test.ts example that immediately applied the same supplied snapshots to two isolated slice stores. Its direct sequence-2 then older unavailable sequence-1 acceptance/rejection alarm is intentionally lost; it did not exercise a pending read, subscription delivery or a shared viewer connection. The suite retains failed-verification/recovery, disconnect/pairing retirement and catalog-refresh replay examples, which are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new live host, process restart or platform evidence is claimed."
       ],
       "demotionRule": "Keep experimental until repeated runs establish reliability; preserve request-count and lifecycle assertions."
     },
@@ -3935,7 +3937,7 @@
       "providers": ["local", "ssh", "paired-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "paired-runtime"],
-      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal without activation reconciliation, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected. The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical.",
+      "coverageNotes": "Deterministic store/controller tests cover local, direct-SSH, paired-runtime identity, folder workspaces, queue quiescence, stale route and connection-generation rejection, authoritative active-workspace projection, owner-derived IDs, drafts and editor maps, tab/group placement, exact watch replacement, change/delete/rename correlation, explicit save, autosave, collision refusal without activation reconciliation, provenance, and restart hot-exit persistence. Live headed/headless paired-runtime and post-establish Electron IPC remain uncollected. The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical. The test-value audit narrows restored-editor-owner-reparent.test.ts by removing standalone unrelated-explorer-reveal, duplicate-tab repair/refusal, clean/dirty collision-table, watcher-target projection, folder-workspace context and direct-SSH provenance examples. Their exact scalar/ID/reference, selector and route/generation-field alarms are intentionally lost. The dirty collision variant did not assert preservation of its destination draft, and the main-owned duplicate-tab branch checked a synthetic missing-group refusal rather than duplicate repair. Remaining authored cases still check coupled dirty-state migration, subscribed activation, hot-exit roundtrip, rejection without destination reconciliation, mounted watch replacement and destination event correlation. They are not equivalent replacements for the deleted alarms. Historical executed commands, counts and results remain unchanged; no new live host, process restart or platform evidence is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/11304",
         "https://github.com/stablyai/orca/pull/11369"
@@ -3956,8 +3958,7 @@
             "one atomic commit rekeys owner-derived editor, preview, draft, cursor, view, tab, group, active, reveal, focus, provenance, and persistence state",
             "active reparenting uses the centralized workspace activation transaction for terminal, browser, pending-creation, explorer, first-activation, and post-commit state",
             "source watch unsubscribes once, destination watch subscribes once, and only destination change/delete/rename events reach the file",
-            "dirty and clean destination collisions fail closed without changing either open session or reconciling destination tabs and groups",
-            "folder and direct-SSH owners retain exact root, host, target, and connection-generation authority"
+            "a destination collision fails closed without changing current selection or reconciling destination tabs and groups"
           ]
         },
         {
@@ -4005,7 +4006,8 @@
         "Headed Electron post-establish IPC, paired headless, reconnect, and physical Windows/WSL journeys are uncollected.",
         "Cold many-repo main-process sibling discovery remains a separately measured follow-up.",
         "Registered-workspace symlink policy remains inherited and unchanged.",
-        "The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical."
+        "The test-value audit removed the standalone runtime-workspace file-route suite. Its direct same-host sibling, folder-root, exact-SSH, outside-path and directory-routing alarms are lost. Retained editor lifecycle contracts do not establish equivalent selector coverage; historical run commands and results remain historical.",
+        "The test-value audit narrows restored-editor-owner-reparent.test.ts by removing standalone unrelated-explorer-reveal, duplicate-tab repair/refusal, clean/dirty collision-table, watcher-target projection, folder-workspace context and direct-SSH provenance examples. Their exact scalar/ID/reference, selector and route/generation-field alarms are intentionally lost. The dirty collision variant did not assert preservation of its destination draft, and the main-owned duplicate-tab branch checked a synthetic missing-group refusal rather than duplicate repair. Remaining authored cases still check coupled dirty-state migration, subscribed activation, hot-exit roundtrip, rejection without destination reconciliation, mounted watch replacement and destination event correlation. They are not equivalent replacements for the deleted alarms. Historical executed commands, counts and results remain unchanged; no new live host, process restart or platform evidence is claimed."
       ],
       "demotionRule": "Keep experimental or demote if migration can race a save, retain source authority, fan out watches, lose dirty/editor state, accept an owner-generation change, merge a collision, or the focused contract flakes without a product or harness bug."
     },
@@ -4877,17 +4879,17 @@
       "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
       "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, and fill a partial pushed authority before clearing that target's PTY bindings once.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees/creation/worktree-base-directory-event-filter.test.ts src/main/ipc/worktrees/creation/worktree-base-directory-watcher.test.ts src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts src/main/ipc/worktrees/creation/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
         "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/connection/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts --reporter=dot"
       ],
       "testFiles": [
-        "src/main/ipc/worktree-base-directory-event-filter.test.ts",
-        "src/main/ipc/worktree-base-directory-watcher.test.ts",
-        "src/main/ipc/worktree-base-directory-poller.test.ts",
-        "src/main/ipc/worktree-head-identity-reader.test.ts",
+        "src/main/ipc/worktrees/creation/worktree-base-directory-event-filter.test.ts",
+        "src/main/ipc/worktrees/creation/worktree-base-directory-watcher.test.ts",
+        "src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts",
+        "src/main/ipc/worktrees/creation/worktree-head-identity-reader.test.ts",
         "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
         "src/main/window/attach-main-window-services.test.ts",
@@ -4898,7 +4900,7 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/main/ipc/worktree-base-directory-event-filter.test.ts",
+          "file": "src/main/ipc/worktrees/creation/worktree-base-directory-event-filter.test.ts",
           "assertions": [
             "primary HEAD and packed-refs classify as structural while primary index classifies as status-only",
             "linked HEAD/gitdir/locked classify as structural while linked index classifies as status-only",
@@ -4908,7 +4910,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/worktree-base-directory-watcher.test.ts",
+          "file": "src/main/ipc/worktrees/creation/worktree-base-directory-watcher.test.ts",
           "assertions": [
             "linked index bursts produce zero notifyWorktreesChanged calls and one debounced status-only notification",
             "linked HEAD and locked metadata still produce a structural worktree notification",
@@ -4917,7 +4919,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/worktree-base-directory-poller.test.ts",
+          "file": "src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts",
           "assertions": [
             "non-darwin git-common polling emits entry create/delete and allowlisted HEAD/index leaf events",
             "linked HEAD rewrites are detected even after restoring the entry-directory mtime",
@@ -4934,7 +4936,7 @@
           ]
         },
         {
-          "file": "src/main/ipc/worktree-head-identity-reader.test.ts",
+          "file": "src/main/ipc/worktrees/creation/worktree-head-identity-reader.test.ts",
           "assertions": [
             "loose-ref, packed-refs, detached, unborn, and relative-gitdir layouts resolve or skip without spawning Git",
             "traversal-shaped or backslash/colon symrefs are rejected before any path join and only hex object ids are ever emitted"
@@ -4992,7 +4994,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees/creation/worktree-base-directory-event-filter.test.ts src/main/ipc/worktrees/creation/worktree-base-directory-watcher.test.ts src/main/ipc/worktrees/creation/worktree-base-directory-poller.test.ts src/main/ipc/worktrees/creation/worktree-head-identity-reader.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
           "result": "passed",
           "durationSeconds": 3.12,
           "summary": "7 files and 130 tests passed locally, adding head-identity emit-on-change without structural fanout, reflog status triggers, config.worktree structural classification, the in-place index backstop, and the spawn-free head reader with symref traversal rejection and hex-object-id output validation."
@@ -10660,7 +10662,7 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected. The static wrapper-rendering suite was removed during the low-value-test audit; its supplied-prop host-browser and control-visibility output assertions are no longer checked by that suite. This removal supplies no new runtime-routing evidence. The fake-React Clone hook unit suite was also retired: its captured-owner and same-ID sibling assertions no longer supply unit evidence. Historical run commands and counts remain historical; this retirement adds no runtime-routing, cross-platform, or mobile evidence. The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical. The test-value audit narrowed worktree-runtime-owner.test.ts to deterministic owner-lookup work bounds with correct worktree/folder results and changed-collection invalidation. Its separate host/default/folder/mirror inventory alarms are lost; these retained in-memory checks establish no actual host delivery, restart or equivalent replacement coverage. Historical run commands and results remain historical. web-runtime-session.test.ts no longer supplies the terminal/browser/staged-browser explicit-host collision assertions formerly referenced here. Those direct routing alarms are lost; the remaining selector and live routing evidence does not establish equivalent replacement coverage. The test-value audit removes the direct host/provider/project-setup selector tables. selectors.test.ts retains only floating-tab/unread scan-cost checks, which supply no current Active Server routing evidence. Its separate missing-runtime/no-local-fallback and owner-choice alarms are lost; other gate evidence is not an equivalent replacement. Historical executed commands and results remain historical. browser.test.ts no longer supplies the host/profile projection examples. Current routing commands and references name the retained deferred host-list/import completion tests in browser-session-host-selection.test.ts instead. Its actual source supports stale-completion fencing; it does not establish the formerly listed multi-client selection or restart-reset claims. Other evidence is not an equivalent replacement; historical executed commands/counts/results remain historical. The test-value audit deletes repos-paired-runtime-add.test.ts. Its supplied-result assertion that an explicitly selected paired host receives repo.add with the selected path, folder kind and 15000ms timeout while native repos.add and pickFolder remain unused is intentionally lost. Other gate evidence is not an equivalent replacement. Historical executed commands, counts and results remain unchanged.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected. The static wrapper-rendering suite was removed during the low-value-test audit; its supplied-prop host-browser and control-visibility output assertions are no longer checked by that suite. This removal supplies no new runtime-routing evidence. The fake-React Clone hook unit suite was also retired: its captured-owner and same-ID sibling assertions no longer supply unit evidence. Historical run commands and counts remain historical; this retirement adds no runtime-routing, cross-platform, or mobile evidence. The test-value audit narrowed resolved-worktree-execution-host.test.ts to cache reuse and invalidation. Its direct hydrated-worktree, missing-folder, restored-owner, host-stamp and empty-runtime selection alarms are lost. Other routing and recovery suites do not establish equivalent selector coverage; historical run commands and results remain historical. The test-value audit narrowed worktree-runtime-owner.test.ts to deterministic owner-lookup work bounds with correct worktree/folder results and changed-collection invalidation. Its separate host/default/folder/mirror inventory alarms are lost; these retained in-memory checks establish no actual host delivery, restart or equivalent replacement coverage. Historical run commands and results remain historical. web-runtime-session.test.ts no longer supplies the terminal/browser/staged-browser explicit-host collision assertions formerly referenced here. Those direct routing alarms are lost; the remaining selector and live routing evidence does not establish equivalent replacement coverage. The test-value audit removes the direct host/provider/project-setup selector tables. selectors.test.ts retains only floating-tab/unread scan-cost checks, which supply no current Active Server routing evidence. Its separate missing-runtime/no-local-fallback and owner-choice alarms are lost; other gate evidence is not an equivalent replacement. Historical executed commands and results remain historical. browser.test.ts no longer supplies the host/profile projection examples. Current routing commands and references name the retained deferred host-list/import completion tests in browser-session-host-selection.test.ts instead. Its actual source supports stale-completion fencing; it does not establish the formerly listed multi-client selection or restart-reset claims. Other evidence is not an equivalent replacement; historical executed commands/counts/results remain historical. The test-value audit deletes repos-paired-runtime-add.test.ts. Its supplied-result assertion that an explicitly selected paired host receives repo.add with the selected path, folder kind and 15000ms timeout while native repos.add and pickFolder remain unused is intentionally lost. Other gate evidence is not an equivalent replacement. Historical executed commands, counts and results remain unchanged. The test-value audit narrows repos-selected-owner-routing.test.ts to an overlapping selected-runtime import/local refresh, reversed same-host folder replies, and group/folder replies crossing an actual pairing revision. Its separate same-ID host-partition, desktop-only pruning, sequential explicit-runtime preservation, and SSH scan/cancel forwarding alarms are intentionally lost. The stale-response case overwrites its group result before the final assertion, so it supplies only a folder stale-response alarm. The catalog-reconciliation caller also retires the refresh-identity and runtime-visibility-default registrars: their immediate reference/field/count, filter/dismissal, readoption-inventory, timestamp and settings/capability-copy/retention alarms are lost. No equivalent replacement or new live host, restart, platform or mobile evidence is claimed; historical executed commands, counts and results remain unchanged. The test-value audit removes the reversed-order direct worktree lookup example from selected-host-active-workspace-identity.test.ts. Its explicit-runtime path lookup with reversed same-ID catalog rows is intentionally lost; that example did not activate a workspace. Current assertions name the retained local-first worktree activation and selected-runtime folder/group activation only. They are not equivalent replacements for the reversed-order lookup alarm. Historical executed commands, counts and results remain unchanged; no new live host, restart, platform or mobile evidence is claimed. The test-value audit narrows renderer store settings.test.ts by removing immediate authoritative-settings/response rebasing, checked-failure forwarding, best-effort logging, mobile-address/provider normalization, successful catalog-start, hand-seeded partial-status coverage and ghost-status filtering examples. Those direct response, normalization, error and catalog-projection alarms are intentionally lost. The runtime focus-switch resource/draft preservation, unreachable/incompatible refusal and held catalog coalescing/retry/staleness cases remain; they are not equivalent replacements for the removed alarms. Historical executed commands, counts and results remain unchanged; no new live host, restart, platform or mobile evidence is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/9687",
         "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr"
@@ -10759,12 +10761,9 @@
         {
           "file": "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
           "assertions": [
-            "keeps same-ID local, direct-SSH, and runtime group/folder rows partitioned by execution host",
-            "drops reversed same-host and pre-reconnect group/folder responses without pruning newer catalogs",
-            "prunes deleted direct-SSH rows from the desktop-owned catalog without erasing same-ID runtime siblings",
-            "keeps explicit runtime groups and folders after a later ordinary local refresh",
             "keeps a selected-runtime import refresh across an overlapping local refresh",
-            "pins selected SSH scans and cancellation to local IPC over an ambient runtime"
+            "drops reversed same-host folder responses without replacing the newer folder catalog",
+            "rejects pre-reconnect group and folder responses after the runtime pairing revision changes"
           ]
         },
         {
@@ -10785,7 +10784,7 @@
         {
           "file": "src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts",
           "assertions": [
-            "selects the runtime worktree when exact repo/worktree IDs collide in local-first or reversed order",
+            "selects and activates the runtime worktree when exact repo/worktree IDs collide in local-first order",
             "keeps exact-ID folder/group activation on the explicitly selected runtime without local fallback"
           ]
         },
@@ -10930,7 +10929,10 @@
         "web-runtime-session.test.ts no longer supplies the terminal/browser/staged-browser explicit-host collision assertions formerly referenced here. Those direct routing alarms are lost; the remaining selector and live routing evidence does not establish equivalent replacement coverage.",
         "The test-value audit removes the direct host/provider/project-setup selector tables. selectors.test.ts retains only floating-tab/unread scan-cost checks, which supply no current Active Server routing evidence. Its separate missing-runtime/no-local-fallback and owner-choice alarms are lost; other gate evidence is not an equivalent replacement. Historical executed commands and results remain historical.",
         "browser.test.ts no longer supplies the host/profile projection examples. Current routing commands and references name the retained deferred host-list/import completion tests in browser-session-host-selection.test.ts instead. Its actual source supports stale-completion fencing; it does not establish the formerly listed multi-client selection or restart-reset claims. Other evidence is not an equivalent replacement; historical executed commands/counts/results remain historical.",
-        "The test-value audit deletes repos-paired-runtime-add.test.ts. Its supplied-result assertion that an explicitly selected paired host receives repo.add with the selected path, folder kind and 15000ms timeout while native repos.add and pickFolder remain unused is intentionally lost. Other gate evidence is not an equivalent replacement. Historical executed commands, counts and results remain unchanged."
+        "The test-value audit deletes repos-paired-runtime-add.test.ts. Its supplied-result assertion that an explicitly selected paired host receives repo.add with the selected path, folder kind and 15000ms timeout while native repos.add and pickFolder remain unused is intentionally lost. Other gate evidence is not an equivalent replacement. Historical executed commands, counts and results remain unchanged.",
+        "The test-value audit narrows repos-selected-owner-routing.test.ts to an overlapping selected-runtime import/local refresh, reversed same-host folder replies, and group/folder replies crossing an actual pairing revision. Its separate same-ID host-partition, desktop-only pruning, sequential explicit-runtime preservation, and SSH scan/cancel forwarding alarms are intentionally lost. The stale-response case overwrites its group result before the final assertion, so it supplies only a folder stale-response alarm. The catalog-reconciliation caller also retires the refresh-identity and runtime-visibility-default registrars: their immediate reference/field/count, filter/dismissal, readoption-inventory, timestamp and settings/capability-copy/retention alarms are lost. No equivalent replacement or new live host, restart, platform or mobile evidence is claimed; historical executed commands, counts and results remain unchanged.",
+        "The test-value audit removes the reversed-order direct worktree lookup example from selected-host-active-workspace-identity.test.ts. Its explicit-runtime path lookup with reversed same-ID catalog rows is intentionally lost; that example did not activate a workspace. Current assertions name the retained local-first worktree activation and selected-runtime folder/group activation only. They are not equivalent replacements for the reversed-order lookup alarm. Historical executed commands, counts and results remain unchanged; no new live host, restart, platform or mobile evidence is claimed.",
+        "The test-value audit narrows renderer store settings.test.ts by removing immediate authoritative-settings/response rebasing, checked-failure forwarding, best-effort logging, mobile-address/provider normalization, successful catalog-start, hand-seeded partial-status coverage and ghost-status filtering examples. Those direct response, normalization, error and catalog-projection alarms are intentionally lost. The runtime focus-switch resource/draft preservation, unreachable/incompatible refusal and held catalog coalescing/retry/staleness cases remain; they are not equivalent replacements for the removed alarms. Historical executed commands, counts and results remain unchanged; no new live host, restart, platform or mobile evidence is claimed."
       ],
       "demotionRule": "Demote or block release if any non-Advanced path mutates Active Server, if local reveal or Add Project depends on the durable default instead of captured workspace/host ownership, if an Add Project operation reaches a different host after it begins, or if transient host state survives restart."
     },
@@ -14446,7 +14448,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added. Protocol-version constant inventories are excluded from handshake and foreground-confirmation evidence.",
+      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added. Protocol-version constant inventories are excluded from handshake and foreground-confirmation evidence. The test-value audit narrows store-active-worktree-terminal-creation.test.ts to selected same-ID local/SSH folder creation and owner-context propagation plus split-survivor relay-drop/orphan protection. Immediate detach PTY/relay/tab-map synchronization, plain root-group inventory, quick-command/startup-cwd field normalization, and Windows default/project-runtime/UNC/SSH/Git-Bash shell-metadata examples are intentionally removed. Those direct state and metadata alarms are lost; remaining cases are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new shell-spawn, input-byte, live platform, remote or mobile evidence is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7620",
         "https://github.com/stablyai/orca/pull/7668"
@@ -14708,7 +14710,8 @@
         "If both Windows process-enumeration backends remain unavailable through the bounded ladder, routing fails closed to the legacy Esc+CR path; no live Droid artifact covers that degraded host configuration.",
         "Protocol v21 restarts older daemons because the minimal persisted launchAgent is a new contract; sessions preserved by pre-v21 daemons cannot supply warm-reattach launch ownership and fail closed until current process confirmation or restart.",
         "No live daemon, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected; SSH is covered only by a macOS-client-to-Linux-host relay run.",
-        "A running PTY keeps its spawn-time ORCA_PANE_KEY after pane-to-tab detach. This change transfers launch/process routing evidence and retires the stale hook snapshot, but does not redesign future hook reattribution across tab IDs."
+        "A running PTY keeps its spawn-time ORCA_PANE_KEY after pane-to-tab detach. This change transfers launch/process routing evidence and retires the stale hook snapshot, but does not redesign future hook reattribution across tab IDs.",
+        "The test-value audit narrows store-active-worktree-terminal-creation.test.ts to selected same-ID local/SSH folder creation and owner-context propagation plus split-survivor relay-drop/orphan protection. Immediate detach PTY/relay/tab-map synchronization, plain root-group inventory, quick-command/startup-cwd field normalization, and Windows default/project-runtime/UNC/SSH/Git-Bash shell-metadata examples are intentionally removed. Those direct state and metadata alarms are lost; remaining cases are not equivalent replacements. Historical executed commands, counts and results remain unchanged; no new shell-spawn, input-byte, live platform, remote or mobile evidence is claimed."
       ],
       "demotionRule": "Keep non-blocking or demote to protection none if the Windows byte test silently skips, flakes without an actionable artifact, routes bytes using tab/title/terminal-output heuristics, or adds any ordinary-key lookup, IPC, polling, scan, or lifecycle leak."
     },

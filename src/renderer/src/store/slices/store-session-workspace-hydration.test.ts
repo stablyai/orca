@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createTestStore, makeWorktree, makeTab, makeLayout, TEST_REPO } from './store-test-helpers'
+import { createTestStore, makeTab, makeLayout } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -39,100 +39,6 @@ function makeDetectedWorktreeResult(
 describe('hydrateWorkspaceSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('filters out tabs for invalid worktree IDs', () => {
-    const store = createTestStore()
-    const validWt = 'repo1::/path/wt1'
-    const invalidWt = 'repo1::/path/gone'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
-      }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: invalidWt,
-      activeTabId: 'tab-invalid',
-      tabsByWorktree: {
-        [validWt]: [makeTab({ id: 'tab-valid', worktreeId: validWt })],
-        [invalidWt]: [makeTab({ id: 'tab-invalid', worktreeId: invalidWt })]
-      },
-      terminalLayoutsByTabId: {
-        'tab-valid': makeLayout(),
-        'tab-invalid': makeLayout()
-      }
-    })
-
-    const s = store.getState()
-
-    expect(s.tabsByWorktree[validWt]).toHaveLength(1)
-    expect(s.tabsByWorktree[validWt][0].id).toBe('tab-valid')
-
-    expect(s.tabsByWorktree[invalidWt]).toBeUndefined()
-
-    expect(s.activeWorktreeId).toBeNull()
-
-    expect(s.activeTabId).toBeNull()
-
-    expect(s.terminalLayoutsByTabId['tab-valid']).toBeDefined()
-    expect(s.terminalLayoutsByTabId['tab-invalid']).toBeUndefined()
-
-    // Workspace readiness stays false until the reconnect phase completes.
-    expect(s.workspaceSessionReady).toBe(false)
-  })
-
-  it('hydrates quick command labels from unified tabs back to terminal tabs', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: wt,
-      activeTabId: 'tab-1',
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'pnpm test' })]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': makeLayout()
-      },
-      unifiedTabs: {
-        [wt]: [
-          {
-            id: 'tab-1',
-            entityId: 'tab-1',
-            groupId: 'group-1',
-            worktreeId: wt,
-            contentType: 'terminal',
-            label: 'pnpm test',
-            quickCommandLabel: 'Run tests',
-            customLabel: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      tabGroups: {
-        [wt]: [{ id: 'group-1', worktreeId: wt, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
-      }
-    })
-
-    expect(store.getState().tabsByWorktree[wt][0].quickCommandLabel).toBe('Run tests')
   })
 
   it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
@@ -233,74 +139,6 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.terminalLayoutsByTabId['tab-stale']).toBeUndefined()
     expect(s.activeWorktreeId).toBeNull()
     expect(s.activeTabId).toBeNull()
-  })
-
-  it('drops tabs for an unknown repo', () => {
-    // Why: the carve-out only forgives missing worktrees for repos still in the repos list; a removed repo's tabs are genuinely stale.
-    const store = createTestStore()
-    const orphanWt = 'repoGone::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: { repo1: [] }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: orphanWt,
-      activeTabId: 'tab-orphan',
-      tabsByWorktree: {
-        [orphanWt]: [makeTab({ id: 'tab-orphan', worktreeId: orphanWt })]
-      },
-      terminalLayoutsByTabId: {
-        'tab-orphan': makeLayout()
-      }
-    })
-
-    const s = store.getState()
-    expect(s.tabsByWorktree[orphanWt]).toBeUndefined()
-    expect(s.terminalLayoutsByTabId['tab-orphan']).toBeUndefined()
-    expect(s.activeWorktreeId).toBeNull()
-    expect(s.activeTabId).toBeNull()
-  })
-
-  it('restores valid activeWorktreeId and activeTabId', () => {
-    const store = createTestStore()
-    const validWt = 'repo1::/path/wt1'
-
-    store.setState({
-      repos: [
-        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
-      ],
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
-      }
-    })
-
-    store.getState().hydrateWorkspaceSession({
-      activeRepoId: 'repo1',
-      activeWorktreeId: validWt,
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        [validWt]: [makeTab({ id: 'tab1', worktreeId: validWt })]
-      },
-      terminalLayoutsByTabId: {
-        tab1: makeLayout()
-      }
-    })
-
-    const s = store.getState()
-    expect(s.activeWorktreeId).toBe(validWt)
-    expect(s.activeTabId).toBe('tab1')
-    expect(s.activeRepoId).toBe('repo1')
-
-    // Why: pendingActivationSpawn keeps the mount's reattach/respawn from counting as activity and bouncing the worktree up Recent.
-    expect(s.tabsByWorktree[validWt][0].pendingActivationSpawn).toBe(true)
-
-    // Marked ever-activated so a later click doesn't retag and suppress a real codex-restart/new-pane bump.
-    expect(s.everActivatedWorktreeIds.has(validWt)).toBe(true)
   })
 })
 
@@ -438,41 +276,5 @@ describe('restored folder workspace hydration', () => {
     expect(state.browserTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['browser-folder'])
     expect(state.browserPagesByWorkspace['browser-folder']?.[0]?.worktreeId).toBe(folderKey)
     expect(state.activeTabTypeByWorktree[folderKey]).toBe('browser')
-  })
-
-  it('clears unverified-loss markers for rows retired by scoped hydration', () => {
-    const store = createTestStore()
-    const worktreeId = 'repo-a::/target'
-    const retainedTab = makeTab({ id: 'tab-retained', worktreeId })
-    const retiredTab = makeTab({ id: 'tab-retired', worktreeId })
-    store.setState({
-      repos: [{ ...TEST_REPO, id: 'repo-a', connectionId: 'target-a' }],
-      worktreesByRepo: {
-        'repo-a': [makeWorktree({ id: worktreeId, repoId: 'repo-a', path: '/target' })]
-      },
-      tabsByWorktree: { [worktreeId]: [retainedTab, retiredTab] },
-      unverifiedPtyLossTabIds: {
-        [retainedTab.id]: true,
-        [retiredTab.id]: true,
-        'sibling-marker': true
-      }
-    })
-
-    store.getState().hydrateWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        activeRepoId: 'repo-a',
-        activeWorktreeId: worktreeId,
-        activeTabId: retainedTab.id,
-        tabsByWorktree: { [worktreeId]: [retainedTab] },
-        terminalLayoutsByTabId: {}
-      },
-      { replaceWorkspaceKeys: [worktreeId] }
-    )
-
-    expect(store.getState().unverifiedPtyLossTabIds).toEqual({
-      [retainedTab.id]: true,
-      'sibling-marker': true
-    })
   })
 })

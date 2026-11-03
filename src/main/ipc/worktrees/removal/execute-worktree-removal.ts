@@ -22,7 +22,7 @@ import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safet
 import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { removeStaleLocalWorktreeRegistration } from '../../../local-worktree-removal-recovery'
 import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
-import { getEffectiveHooks, runHook } from '../../../hooks'
+import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'

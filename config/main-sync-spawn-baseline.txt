@@ -41,7 +41,7 @@
 1 src/main/runtime/runtime-skill-install-authority.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
-1 src/main/worktree-runner-script.ts
+1 src/main/workspace-hooks/worktree-runner-script.ts
 3 src/main/wsl.ts
 2 src/main/zsh-startup-hook-pty-harness.ts
 1 src/shared/fish-binary-requirement.ts

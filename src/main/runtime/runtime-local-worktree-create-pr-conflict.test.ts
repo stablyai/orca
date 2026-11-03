@@ -32,7 +32,7 @@ vi.mock('../git/repo', () => ({
   getBranchConflictKind: mocks.branchConflict
 }))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: async () => '' }))
-vi.mock('../hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
+vi.mock('../workspace-hooks/hooks', () => ({ getEffectiveHooks: mocks.effectiveHooks }))
 vi.mock('../git/worktree-base-ref-probe', () => ({ hasLocalWorktreeBaseRef: mocks.hasBase }))
 vi.mock('./runtime-worktree-create-git', () => ({
   resolveCreateBranchName: mocks.branchName,
@@ -41,7 +41,9 @@ vi.mock('./runtime-worktree-create-git', () => ({
   getSelectedHostedReviewForBranch: vi.fn()
 }))
 vi.mock('./runtime-worktree-filesystem', () => ({ runtimePathExists: mocks.pathExists }))
-vi.mock('../worktree-create-preparation', () => ({ consumePreparedWorktreeCreate: mocks.consume }))
+vi.mock('../workspaces/creation/preparation/worktree-create-preparation', () => ({
+  consumePreparedWorktreeCreate: mocks.consume
+}))
 vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))

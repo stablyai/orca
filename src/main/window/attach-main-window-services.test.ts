@@ -130,7 +130,7 @@ vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
 
-vi.mock('../ipc/worktree-base-directory-watcher', () => ({
+vi.mock('../ipc/worktrees/creation/worktree-base-directory-watcher', () => ({
   setWorktreeBaseDirectoryWatcherSyncContext: setWorktreeBaseDirectoryWatcherSyncContextMock,
   scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))

@@ -38,7 +38,7 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
-import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
+import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,

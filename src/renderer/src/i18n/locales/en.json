@@ -19384,6 +19384,23 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "textAttachmentPreview": {
+        "copiedContents": "Copied contents",
+        "textAttachment": "Text attachment",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copy contents",
+        "saveFile": "Save file",
+        "copyTooLarge": "This file is too large to copy. Save it instead.",
+        "exportError": "Unable to export attachment. Try again.",
+        "unreadableReply": "Unreadable attachment reply. Try again.",
+        "incompleteReply": "Attachment changed or its reply was incomplete. Close it and try again.",
+        "notText": "This file cannot be previewed as text. Save it to open it in another app.",
+        "openFailed": "Unable to open attachment. Try again.",
+        "hostUpdate": "This host cannot open text attachments yet. Update Orca on that host, then retry.",
+        "hostUnavailable": "The attachment host is unavailable. Reconnect and retry.",
+        "connectionChanged": "Connection changed. Close this attachment and reopen it.",
+        "readFailed": "Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed."
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…"
       },
@@ -19446,6 +19463,7 @@
         "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
         "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
         "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+        "attachmentsExpired": "{{names}} expired.",
         "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
         "emptyMessage": "This message is empty, so it was not sent.",
         "commandUnavailable": "This command isn't available in {{agent}} chats, so it was not sent.",
@@ -19535,6 +19553,7 @@
         "recordFailed": "Orca couldn't save this to the chat's history.",
         "attachmentExpired": "This attachment expired.",
         "reattachFile": "Remove it and attach it again.",
+        "reattachFiles": "Remove them and attach them again.",
         "conversationCleared": "This conversation has been cleared.",
         "openCurrentConversation": "Open the current conversation to continue.",
         "clearUnfinished": "The last /clear didn't finish.",
@@ -21909,6 +21928,9 @@
         "reasonOwnFolder": "Uses your own Claude folder",
         "reasonUnknownAccount": "Account unknown",
         "reasonNoSession": "Can't resume",
+        "reasonSharedSession": "Also open in another pane",
+        "sharedOne": "1 Claude session stays on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
+        "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",

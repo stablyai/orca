@@ -9,7 +9,7 @@ import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { resolveFolderToGitConversion } from '../folder-repo-git-conversion'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos/repos-changed-notification'
 import { notifyWorktreesChanged } from './worktree-remote'
@@ -18,8 +18,8 @@ import {
   createWorktreePollerWindowVisibility,
   WORKTREE_BASE_POLL_INTERVAL_MS,
   type WorktreePollerWindowVisibility
-} from './worktree-base-directory-poller'
-import { WORKTREE_BASE_BACKSTOP_TICKS } from './worktree-base-directory-marker-poller'
+} from './worktrees/creation/worktree-base-directory-poller'
+import { WORKTREE_BASE_BACKSTOP_TICKS } from './worktrees/creation/worktree-base-directory-marker-poller'
 
 // Empty catalogs idle until mutations wake fast polling.
 const IDLE_POLL_INTERVAL_MS = WORKTREE_BASE_POLL_INTERVAL_MS * WORKTREE_BASE_BACKSTOP_TICKS

@@ -12,7 +12,7 @@ import {
   durableWriteTempPath,
   syncDirectoryDurablySync,
   writeFileDurableSync
-} from '../durable-file-write'
+} from '../filesystem/durable-file-write'
 import { rewriteWslMoveOrchestrationHistoryFile } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
 import Database from '../sqlite/sync-database'
 import { hashWorktreeId } from '../terminal-history-id'
