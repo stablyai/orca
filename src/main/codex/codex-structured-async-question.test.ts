@@ -108,7 +108,10 @@ it('keeps a revised existing question available through the translator, both red
       appendItem: (identity, body) =>
         applyJournalRow(
           host,
-          journalItemRowBuilder(() => host, identity, body, { fence: 1 })(++sequence, sequence)
+          journalItemRowBuilder(() => host, identity, body, {
+            fence: 1,
+            turnScope: host.derivedTurnScope.scopeFor(body)
+          })(++sequence, sequence)
         ),
       appendTombstone: () => {},
       publish: () => {}
