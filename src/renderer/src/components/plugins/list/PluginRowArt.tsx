@@ -7,6 +7,7 @@ import {
   Palette,
   PanelRight,
   PenTool,
+  PanelLeft,
   Puzzle,
   SquareTerminal
 } from 'lucide-react'
@@ -17,6 +18,7 @@ const TYPE_ICON: Record<PluginCatalogType, typeof Palette> = {
   'app-theme': Palette,
   'terminal-theme': SquareTerminal,
   'icon-theme': FileCode,
+  card: PanelLeft,
   syntax: Highlighter,
   'interface-language': Languages,
   instructions: Command,
@@ -34,6 +36,7 @@ const TYPE_ORDER: readonly PluginCatalogType[] = [
   'app-theme',
   'terminal-theme',
   'icon-theme',
+  'card',
   'syntax',
   'interface-language'
 ]

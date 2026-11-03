@@ -13,6 +13,7 @@ export const PLUGIN_CATALOG_TYPES = [
   'app-theme',
   'terminal-theme',
   'icon-theme',
+  'card',
   'syntax',
   'instructions',
   'panel',

@@ -23,7 +23,9 @@ export function CardStudioPluginOptions({ cardId }: { cardId: string }): React.J
           <PluginSettingRow
             key={option.key}
             setting={option}
-            value={values && Object.hasOwn(values, option.key) ? values[option.key] : undefined}
+            value={
+              values && Object.hasOwn(values, option.key) ? values[option.key] : option.default
+            }
             error={errors[option.key] || undefined}
             onWrite={(value) => {
               const issue = value === null ? null : pluginSettingValueIssue(option, value)

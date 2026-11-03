@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "facts": 1,
+  "vars": {
+    "reviewTone": "review.status == 'failure' ? 'danger' : review.state == 'merged' ? 'accent' : 'neutral'",
+    "reviewLabel": "review.state == 'merged' ? 'merged' : '#' + review.number"
+  },
+  "frame": { "singleLine": true, "statusLane": false },
+  "root": {
+    "el": "Row",
+    "props": { "fill": true, "gap": "xs", "align": "center", "marker": "parent-content" },
+    "children": [
+      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "Row",
+        "props": { "grow": true, "align": "center", "gap": "md", "inset": "end" },
+        "children": [
+          { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
+          { "el": "Title" },
+          {
+            "el": "Badge",
+            "when": "review != null",
+            "props": { "text": "=vars.reviewLabel", "tone": "=vars.reviewTone" }
+          }
+        ]
+      }
+    ]
+  }
+}

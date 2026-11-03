@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "facts": 1,
+  "vars": {
+    "checkTone": "review.status == 'failure' ? 'danger' : review.status == 'pending' ? 'warning' : 'success'"
+  },
+  "root": {
+    "el": "Row",
+    "props": { "fill": true, "gap": "xs", "align": "start", "marker": "parent-content" },
+    "children": [
+      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "Stack",
+        "props": { "grow": true, "gap": "sm", "overflow": "visible" },
+        "children": [
+          {
+            "el": "Row",
+            "props": { "align": "center", "gap": "md", "inset": "end" },
+            "children": [
+              { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
+              { "el": "Title" },
+              { "el": "Badge", "when": "review != null", "props": { "text": "='#' + review.number", "tone": "=vars.checkTone" } }
+            ]
+          },
+          { "el": "Agents" },
+          {
+            "el": "Row",
+            "when": "cardOptions.showBranch && ws.kind == 'git'",
+            "props": { "align": "center", "gap": "md", "overflow": "clip" },
+            "children": [
+              { "el": "Branch" },
+              { "el": "ConflictBadge", "when": "git.conflictOperation != null" }
+            ]
+          },
+          { "el": "FolderPath", "when": "ws.kind == 'folder'" },
+          { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
+          { "el": "ChildToggle", "when": "lineage.toggleable" }
+        ]
+      }
+    ]
+  }
+}

@@ -280,5 +280,5 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why declarative: a static item only names its own command; updating it needs a worker.
   statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
   // Why data: Orca draws the template from facts the person already sees; it runs no code.
-  sidebarCards: { execution: 'data', catalogType: null, bindsContent: false }
+  sidebarCards: { execution: 'data', catalogType: 'card', bindsContent: false }
 }

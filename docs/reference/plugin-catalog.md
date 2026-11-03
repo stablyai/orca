@@ -52,7 +52,7 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `contentHash` | string | yes | 1.4.245 | SHA-256 of the plugin's installed files, as Orca computes it at install. |
 | `execution` | `"data"` \| `"declarative"` \| `"sandboxed-ui"` \| `"trusted-worker"` | yes | 1.4.245 | The manifest's `execution` profile. Example: `"data"` |
 | `minimumOrca` | string | yes | 1.4.245 | The manifest's `engines.orca` without `>=`. Older Orca lists the plugin but will not install it. Example: `"1.4.245"` |
-| `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"editor"` \| `"worker"`)[] | no | 1.4.245 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
+| `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"card"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"editor"` \| `"worker"`)[] | no | 1.4.245 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
 | `name` | string | no | 1.4.245 | The manifest's `name`, so Orca can suggest the plugin before downloading it. Example: `"Gleam"` |
 | `license` | string | no | 1.4.245 | SPDX license expression. Example: `"MIT"` |
 | `repository` | string | no | 1.4.245 | Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher. Example: `"https://github.com/acme/orca-gleam-syntax"` |
@@ -62,6 +62,7 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `changelog` | string | no | 1.4.245 | What changed in this release, as plain text. At most 2000 characters. Example: `"Adds highlighting for use expressions."` |
 | `images` | [CatalogImages](#catalogimages) | no | 1.4.245 | Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon PNG, WEBP, static, at least 128×128, square, at most 256 KB. Cover PNG, JPEG, WEBP, static, at least 800×500, at most 1024 KB. Screenshots PNG, JPEG, WEBP, static, at least 1280×800, at most 1536 KB. Images must not imitate Orca's trust badges. |
 | `themePreview` | [CatalogThemePreview](#catalogthemepreview)[] | no | 1.4.245 | Up to 4 theme palettes for listing art. Display only; the installed theme files decide the real colors. |
+| `cardPreview` | [CatalogCardPreview](#catalogcardpreview)[] | no | 1.4.248 | Up to 4 workspace cards to preview before install. Orca draws them from made-up workspaces; the installed files decide the real cards. |
 | `contributes` | [CatalogContribution](#catalogcontribution)[] | no | 1.4.245 | What the release adds, as the listing shows it. Generate it with the catalog tooling; Orca refuses an install whose manifest says otherwise. |
 | `capabilities` | (`"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"`)[] | no | 1.4.245 | Every capability the release asks for. Orca refuses an install whose manifest asks for different ones. Example: `["notifications:show"]` |
 | `fileTypes` | string[] | no | 1.4.245 | Extensions, without the dot, that this release opens. Orca suggests the plugin when such a file has no viewer. |
@@ -101,6 +102,34 @@ Colors to draw a theme card before install.
 | `foreground` | string | yes | 1.4.245 | Main text. Example: `"#1b1430"` |
 | `accent` | string | yes | 1.4.245 | Accent, such as buttons. Example: `"#1b1430"` |
 | `surface` | string | yes | 1.4.245 | Cards and sidebars. Example: `"#1b1430"` |
+
+## CatalogCardPreview
+
+A workspace card to draw before install.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `label` | string | yes | 1.4.248 | Card name. Example: `"Review first"` |
+| `template` | object | yes | 1.4.248 | The card's template, the same file the plugin ships, so Orca can preview it before install. |
+| `template.version` | `1` | yes |  |  |
+| `template.facts` | `1` | yes |  |  |
+| `template.vars` | object | no |  |  |
+| `template.defs` | object | no |  |  |
+| `template.frame` | object | no |  |  |
+| `template.frame.singleLine` | string \| number \| boolean \| null | no |  |  |
+| `template.frame.statusLane` | string \| number \| boolean \| null | no |  |  |
+| `template.root` | [__schema0](#__schema0) | yes |  |  |
+
+## __schema0
+
+
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `el` | string | yes |  |  |
+| `when` | string | no |  |  |
+| `props` | object | no |  |  |
+| `children` | [__schema0](#__schema0)[] | no |  |  |
 
 ## CatalogContribution
 

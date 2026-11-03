@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "facts": 1,
+  "vars": {
+    "checkTone": "review.status == 'failure' ? 'danger' : review.status == 'pending' ? 'warning' : 'success'",
+    "reviewState": "review.state == 'merged' ? 'merged' : review.state == 'closed' ? 'closed' : 'open'"
+  },
+  "root": {
+    "el": "Row",
+    "props": { "fill": true, "gap": "xs", "align": "start", "marker": "parent-content" },
+    "children": [
+      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "Stack",
+        "props": { "grow": true, "gap": "sm", "overflow": "visible" },
+        "children": [
+          {
+            "el": "Row",
+            "props": { "align": "center", "gap": "md" },
+            "children": [
+              { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
+              { "el": "Title" },
+              { "el": "ConflictBadge", "when": "git.conflictOperation != null" }
+            ]
+          },
+          {
+            "el": "Row",
+            "when": "review != null",
+            "props": { "align": "center", "gap": "md", "inset": "end" },
+            "children": [
+              { "el": "Text", "props": { "text": "='#' + review.number", "size": "meta", "muted": true, "mono": true } },
+              { "el": "Text", "props": { "text": "=review.title", "size": "meta", "truncate": true } },
+              { "el": "Badge", "props": { "text": "=vars.reviewState", "tone": "=vars.checkTone" } }
+            ]
+          },
+          {
+            "el": "Text",
+            "when": "review == null && ws.kind == 'git'",
+            "props": { "text": "='No pull request · ' + ws.branch", "size": "meta", "muted": true, "truncate": true }
+          },
+          { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
+          { "el": "Agents" },
+          { "el": "ChildToggle", "when": "lineage.toggleable" }
+        ]
+      }
+    ]
+  }
+}
