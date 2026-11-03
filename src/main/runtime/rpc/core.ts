@@ -5,6 +5,7 @@ import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } fr
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
+  PairingCreateOfferParams,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
@@ -35,9 +36,25 @@ export type DeviceSelfRpcContext = {
   registerDeviceKey(params: RegisterDeviceKeyParams): RegisterDeviceKeyResult
 }
 
+// Why: createOffer is host-local minting; getEndpoints/provisionRelay are post-pair mobile relay helpers.
+export type PairingCreateOfferResult =
+  | {
+      available: false
+      reason: string
+      guidance: string
+    }
+  | {
+      available: true
+      pairingUrl: string
+      endpoint: string
+      deviceId: string
+      webClientUrl: string | null
+    }
+
 export type PairingRpcContext = {
-  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
-  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  getEndpoints?(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay?(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+  createOffer?(params: PairingCreateOfferParams): PairingCreateOfferResult
 }
 
 export type RpcEnvelopeMeta = {

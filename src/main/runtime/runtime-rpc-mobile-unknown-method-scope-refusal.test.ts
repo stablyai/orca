@@ -57,4 +57,10 @@ describe('an unknown method reaching a mobile-scoped device', () => {
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.getEndpoints')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.provisionRelay')).toBe(true)
   })
+
+  it('does not let mobile credentials mint access grants', () => {
+    // Why: mobile scope exists to keep repo/provisioning primitives out of reach;
+    // pairing.createOffer would escalate a phone token into new runtime grants.
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('pairing.createOffer')).toBe(false)
+  })
 })
