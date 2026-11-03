@@ -135,13 +135,8 @@ async function startOrcadRuntime(
     console.warn('[orcad] Could not prepare the profile CLI launcher', error)
   })
   const idleExitStartup = beginOrcadIdleExit(runtimeUserDataPath)
-  const { orcadSessionScannerIdleTimeoutMs } = await import('./orcad-session-scanner-idle')
-  const scannerIdleTimeoutMs = orcadSessionScannerIdleTimeoutMs()
-  if (scannerIdleTimeoutMs !== null) {
-    const { setAiVaultServiceIdleTimeoutMs } =
-      await import('../ai-vault/session-scanner-service-spawn')
-    setAiVaultServiceIdleTimeoutMs(scannerIdleTimeoutMs)
-  }
+  const { applyOrcadSessionScannerIdleTimeout } = await import('./orcad-session-scanner-idle')
+  await applyOrcadSessionScannerIdleTimeout()
   // Initialize sealing before Store load unseals protected settings.
   await timed('secret-store', () => prepareOrcadSecretStoreAndMigrate(runtimeUserDataPath))
   const { store: profileStore, authority: profileStateAuthority } = await timed('profile', () =>
@@ -195,7 +190,10 @@ async function startOrcadRuntime(
 
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
+  let runtimeRpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   const runtime = new OrcaRuntimeService(profileStore, stats, {
+    getPairedDeviceName: (deviceId) =>
+      runtimeRpc?.getDeviceRegistry()?.getDevice(deviceId)?.name ?? null,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.
     agentSessionClaimSigner: loadAgentSessionClaimSigner(runtimeUserDataPath, runtimeUserDataPath),
     getAdditionalAiVaultCodexHomePaths: () => [
@@ -307,6 +305,8 @@ async function startOrcadRuntime(
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
+  runtimeRpc = rpc
+  runtime.setAgentSenderPeerKey(() => rpc.getE2EEPublicKey())
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())

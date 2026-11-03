@@ -83,7 +83,7 @@ export function sendNativeChatObservedWrites(
           send()
         }
       }
-      clearThenWrite(ptyId, options, delay, () => writeAt(0))
+      clearThenWrite(ptyId, options, delay, () => writeAt(0), markSubmitted)
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )

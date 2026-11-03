@@ -10,10 +10,10 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { forceDeleteLocalBranch } from '../git/worktree'
+import { forceDeleteLocalBranch } from '../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../git/runner'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'

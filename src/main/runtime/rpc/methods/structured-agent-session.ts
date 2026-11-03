@@ -66,9 +66,11 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
-// Require structured.v1 from remote callers before exposing journals/mutations; legacy mobile may receive session-tab metadata placeholders.
-
 import * as queuedImages from './structured-agent-session-queued-image-capability'
+import {
+  projectReceiptDeviceEvent,
+  projectReceiptDeviceHistory
+} from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -203,21 +205,24 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        queuedImages.projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              queuedImages.queuedImageHistoryReader(ctx),
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+      return projectReceiptDeviceHistory(
+        projectTurnItemHistory(
+          queuedImages.projectQueuedImageCardHistory(
+            projectBackgroundTaskHistory(
+              await host.history(
+                params,
+                undefined,
+                queuedImages.queuedImageHistoryReader(ctx),
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+              ),
+              ctx
             ),
-            ctx
+            ctx,
+            host.sessionAgent(params.sessionId)
           ),
           ctx
         ),
-        ctx,
-        host.sessionAgent(params.sessionId)
+        ctx
       )
     }
   }),
@@ -245,10 +250,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           queuedImages.projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
+            projectReceiptDeviceEvent(
+              projectTurnItemEvent(
+                projectBackgroundTaskEvent(event, ctx),
+                ctx,
+                host.sessionAgent(params.sessionId)
+              ),
+              ctx
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),

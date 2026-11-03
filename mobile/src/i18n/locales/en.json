@@ -1342,7 +1342,7 @@
       "linkButton": "Link pull request"
     },
     "prViewPanel": {
-      "providerUnavailable": "Hosted review panel unavailable for this provider.",
+      "githubRemoteRequired": "This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.",
       "branchUnavailable": "Current branch unavailable."
     },
     "prActionsSection": {
@@ -3063,7 +3063,10 @@
       "resolved": "Resolved",
       "cancelled": "Cancelled",
       "resolver": "Answered on {{device}}",
-      "cancelledBy": "Cancelled on {{device}}"
+      "cancelledBy": "Cancelled on {{device}}",
+      "thisPhone": "this phone",
+      "computer": "the computer",
+      "otherDevice": "another device"
     },
     "subagentGroup": {
       "stateCompleted": "completed",

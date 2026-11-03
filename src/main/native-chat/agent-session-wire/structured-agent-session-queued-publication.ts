@@ -19,10 +19,7 @@ import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from './structured-agent-session-host-current-work'
-// The published view of a conversation's queue: its whole draft list, the queue's
-// pause and the card it sends next, on the `commands` precedent — read per emit,
-// reference-stable while unchanged, so the subscribers' identity dedup keeps token
-// streams from re-sending it. They ride together: a client never sees one without the others.
+import { structuredInputExecutionWorking } from './structured-agent-session-input-selection'
 
 export type QueuePublication = {
   queuedMessages: AgentSessionQueuedMessage[]
@@ -119,32 +116,37 @@ export function readQueuePublication(
   gate: QueueSendGate
 ): QueuePublication {
   const queuedMessages = readPublishedQueuedMessages(journal)
-  // Show personal Stop only when Resume can send a card; hide old pauses after clear/reopen.
+  // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
   // Re-derive per emit because submission acceptance can lift a pause.
   const pauses = structuredQueuePauses(journal)
-  const stop = pauses.find((pause) => pause.reason === 'stopped')?.since
+  const visible = Math.max(
+    0,
+    ...pauses
+      .filter((pause) => pause.reason === 'stopped' || pause.reason === 'failed')
+      .map((pause) => pause.since?.sequence ?? 0)
+  )
   const silent = pauses.some(
     (pause) =>
       pause.reason === 'cleared' ||
-      (pause.reason === 'restarted' &&
-        (!stop ||
-          !pause.since ||
-          stop.epoch !== pause.since.epoch ||
-          stop.sequence < pause.since.sequence))
+      (pause.reason === 'restarted' && (!visible || !pause.since || visible < pause.since.sequence))
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
-  // Avoid scanning submissions when no pause can show.
+  // The input order indexes pending sends, so a held queue never rescans history.
+  const input = gate(journal)
   const pause =
     resumable &&
-    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.recoverableSubmissions(), (submission) =>
-      gate(journal).work.owesSend(submission)
+    !queuePauseLiftOnItsWay(resumable, journal.inputOrder.sendingSubmissions(), (submission) =>
+      input.work.owesSend(submission)
     )
       ? resumable
       : null
-  // The test narrows the type.
-  const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
+  const working = structuredInputExecutionWorking(journal, input.work)
+  const queuePause =
+    pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
+      ? { reason: pause.reason }
+      : null
   const nextQueuedMessageId =
-    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
+    nextStructuredQueuedMessage({ journal, ...input, working })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&

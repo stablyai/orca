@@ -1643,7 +1643,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Aktueller Branch nicht verfügbar.",
-      "providerUnavailable": "Gehostetes Review-Panel für diesen Anbieter nicht verfügbar."
+      "githubRemoteRequired": "Dieser Tab benötigt ein GitHub-Remote, um Pull-Request-Details anzuzeigen. Für andere unterstützte Plattformen kannst du unter Änderungen ein Review erstellen und im Browser öffnen."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Personen konnten nicht geladen werden.",

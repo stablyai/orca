@@ -57,35 +57,41 @@ export function sendNativeChatMessageWithImageAttachments(
       if (isCancelled()) {
         return
       }
-      clearThenWrite(ptyId, options, delay, () => {
-        if (isCancelled()) {
-          return
-        }
-        markWriteStarted()
-        for (const payload of agentImagePasteWrites(
-          agent,
-          imagePaths.map((path) =>
-            buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-          ),
-          trimmedText.length > 0
-        )) {
-          sendRuntimePtyInput(ptyId, payload, 'driving')
-        }
-        if (trimmedText.length > 0) {
-          delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-            sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-            delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-              sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-              markSubmitted()
+      clearThenWrite(
+        ptyId,
+        options,
+        delay,
+        () => {
+          if (isCancelled()) {
+            return
+          }
+          markWriteStarted()
+          for (const payload of agentImagePasteWrites(
+            agent,
+            imagePaths.map((path) =>
+              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+            ),
+            trimmedText.length > 0
+          )) {
+            sendRuntimePtyInput(ptyId, payload, 'driving')
+          }
+          if (trimmedText.length > 0) {
+            delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
+              sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
+              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+                markSubmitted()
+              })
             })
+            return
+          }
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
+            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+            markSubmitted()
           })
-          return
-        }
-        delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-          markSubmitted()
-        })
-      })
+        },
+        markSubmitted
+      )
     },
     {
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)

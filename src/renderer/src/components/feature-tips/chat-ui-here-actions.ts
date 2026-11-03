@@ -3,7 +3,7 @@ import type { AgentDefaultSurface } from '../../../../shared/native-chat/native-
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
+import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents/agents-search'
 import {
   trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction

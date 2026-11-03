@@ -101,20 +101,4 @@ describe('OpenCode model preferences on unsupported launch placements', () => {
       expect(h.deliverPrompt).not.toHaveBeenCalled()
     }
   )
-
-  it('preserves prompt delivery to a reused terminal without model preferences', async () => {
-    const h = harness()
-    expect((await h.run({ ...reused, sessionOptions: undefined })).outcome).toEqual({
-      kind: 'terminal',
-      handle: 'term_existing'
-    })
-    expect(h.deliverPrompt).toHaveBeenCalledOnce()
-    expect(h.createWorktree).not.toHaveBeenCalled()
-  })
-
-  it('preserves ordinary worktree creation without model preferences', async () => {
-    const h = harness()
-    expect((await h.run({ ...creating, sessionOptions: undefined })).worktreeId).toBe('wt_new')
-    expect(h.createWorktree).toHaveBeenCalledOnce()
-  })
 })

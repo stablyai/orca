@@ -4,12 +4,12 @@ import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo
 import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
-} from '../../shell-prompt-readiness-probe'
+} from '../../pty/shell-startup/shell-prompt-readiness-probe'
 import {
   createShellStartupOutputScanState,
   drainShellStartupOutputScanState,
   scanShellStartupOutput
-} from '../../shell-startup-output-scanner'
+} from '../../pty/shell-startup/shell-startup-output-scanner'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import { ptyCleanupCallbacks } from './local-pty-provider-state'
 import {

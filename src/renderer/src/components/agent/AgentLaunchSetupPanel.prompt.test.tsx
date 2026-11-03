@@ -1,16 +1,23 @@
 // @vitest-environment happy-dom
+import { compilePickerTerminalLaunch } from './agent-launch-picker-menu-test-fixture'
 import {
   agentPickerLaunchInputs,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { i18n } from '@/i18n/i18n'
 import de from '../../i18n/locales/de.json'
+import { readLaunchSetupOptions } from '../native-chat/native-chat-launch-draft-source'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { focusMountedNativeChatEditor } from '../native-chat/native-chat-mounted-editor-view'
 import { changePrompt, promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
@@ -32,7 +39,9 @@ function prompt(): HTMLElement {
 }
 
 function launchButton(label: string): HTMLButtonElement {
-  return [...host.querySelectorAll('button')].find((button) => button.textContent === label)!
+  return [...host.querySelectorAll('button')].find(
+    (button) => button.getAttribute('aria-label') === label
+  )!
 }
 
 it('launches with the typed first prompt from Enter or either Launch button, and without one as before', async () => {
@@ -308,7 +317,10 @@ it.each(['claude', 'codex'] as const)(
     const configure = () =>
       document.querySelector<HTMLButtonElement>(`button[aria-label="Configure ${agent}"]`)!
     fireEvent.click(configure())
-    const panel = () => document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    const panel = () =>
+      document.querySelector<HTMLElement>(
+        '[data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]'
+      )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     fireEvent.change(panel().querySelector('textarea')!, {
@@ -350,12 +362,35 @@ it.each(['claude', 'codex'] as const)(
     launch.mockReturnValueOnce(false)
     fireEvent.keyDown(panel().querySelector('textarea')!, { key: 'Enter' })
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
-    expect(agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)).toMatchObject({
-      agentArgs:
-        agent === 'claude'
-          ? '--model selected --effort high --add-dir "authored exact path"'
-          : '-m selected -c model_reasoning_effort=high --add-dir "authored exact path"',
+    const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)
+    expect(inputs).toMatchObject({
+      agentArgs: '--add-dir "authored exact path"',
       sessionOptions: { model: 'selected', effort: 'high' }
+    })
+    expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
+      ok: true,
+      tokens:
+        agent === 'claude'
+          ? [
+              'claude',
+              '--add-dir',
+              'authored exact path',
+              '--model',
+              'selected',
+              '--effort',
+              'high'
+            ]
+          : [
+              'codex',
+              '-c',
+              'disable_paste_burst=true',
+              '--add-dir',
+              'authored exact path',
+              '-m',
+              'selected',
+              '-c',
+              'model_reasoning_effort=high'
+            ]
     })
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe(
@@ -371,6 +406,56 @@ it.each(['claude', 'codex'] as const)(
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe('')
     )
+  }
+)
+
+it.each(['claude', 'codex'] as const)(
+  'launches exact pending-only %s Args after a pending-defaults refresh',
+  async (agent) => {
+    const own: AgentPickerEntry = {
+      ...entry,
+      agent,
+      label: agent,
+      terminal: {},
+      structured: {},
+      arguments: '',
+      ownerKey: 'pending-before',
+      worktreeId: 'repo::/pending-only',
+      rows: [{ agent, kind: 'cli', executionHostId: 'local' }]
+    }
+    const launch = vi.fn().mockReturnValue(true)
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupPanel entry={own} onUse={launch} />
+        </TooltipProvider>
+      )
+    )
+    const text = '--add-dir "pending exact path"'
+    fireEvent.change(host.querySelector('textarea')!, { target: { value: text } })
+    const held = readLaunchSetupOptions(agentLaunchPromptScopeKey(own))!
+    expect(held.arguments).toBeUndefined()
+    expect(held.pendingArguments).toBe(text)
+    const refreshed = {
+      ...own,
+      ownerKey: 'pending-current',
+      defaultsPending: true,
+      arguments: '--add-dir changed-default'
+    }
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupPanel entry={refreshed} onUse={launch} />
+        </TooltipProvider>
+      )
+    )
+    expect(host.querySelector('textarea')).toHaveProperty('disabled', false)
+    expect(host.querySelector('textarea')).toHaveProperty('value', text)
+    fireEvent.keyDown(host.querySelector('textarea')!, { key: 'Enter' })
+    await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+    expect(launch.mock.lastCall![0].argumentsOwner).toBe(refreshed.ownerKey)
+    expect(launch.mock.lastCall![0].pendingArguments).toBeUndefined()
+    expect(agentPickerLaunchInputs(launch.mock.lastCall![0], refreshed).agentArgs).toBe(text)
   }
 )
 

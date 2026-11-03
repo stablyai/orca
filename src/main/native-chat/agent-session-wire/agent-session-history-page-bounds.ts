@@ -44,6 +44,24 @@ export function historyEntryBytes(
   return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
 }
 
+/** Count removal IDs and submissions alongside the exact items sent to a reader. */
+export function historyContentBytes(
+  items: readonly HistoryItemForm[],
+  removedItemIds: readonly string[],
+  submissionBytes: ReadonlyMap<string, number>
+): number {
+  return (
+    items.reduce(
+      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
+      0
+    ) +
+    removedItemIds.reduce(
+      (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
+      0
+    )
+  )
+}
+
 // Snapshot arrays change with submissions, so cache serialization once per paged snapshot.
 const bytesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],

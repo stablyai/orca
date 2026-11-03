@@ -4,12 +4,15 @@ import {
   currentJournalInputIdentity,
   journalInputOrderChanged,
   isJournalInputOverride,
-  recordJournalInputAdmission
+  recordJournalInputAdmission,
+  releaseJournalInputHistory
 } from './journal-input-order-state'
 export type { JournalInputPlace } from './journal-input-order-state'
 
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { JournalSubmissionIndex } from './journal-submission-index'
+import { JournalNewestTurn } from './journal-newest-turn'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -40,11 +43,12 @@ export class JournalInputOrder extends JournalInputEvidence {
   private legacyPlaces = 0
   private readonly recoveryOwed = new Set<string>()
   private readonly originals = new Map<string, AgentJournalCursor | undefined>()
-  private readonly unsettled = new Map<string, AgentJournalSubmission>()
+  private readonly unsettled = new JournalSubmissionIndex()
+  // Recovered unknown sends stay unsettled forever; only pending ones can still be accepted.
+  private readonly sending = new JournalSubmissionIndex()
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   private readonly overrides = new Map<string, AgentJournalSubmission>()
-  private pending: readonly AgentJournalSubmission[] | undefined
   readonly lineage: JournalInputLineageOwner
   readonly cards: JournalInputCardIndex
   private receiptCount = 0
@@ -53,7 +57,8 @@ export class JournalInputOrder extends JournalInputEvidence {
 
   constructor(
     state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    readonly newestTurn = new JournalNewestTurn(state)
   ) {
     super(state)
     this.lineage = new JournalInputLineageOwner(state.inputCards)
@@ -161,7 +166,10 @@ export class JournalInputOrder extends JournalInputEvidence {
     return this.entered.values()
   }
   unsettledSubmissions(): readonly AgentJournalSubmission[] {
-    return (this.pending ??= [...this.unsettled.values()])
+    return this.unsettled.list()
+  }
+  sendingSubmissions(): readonly AgentJournalSubmission[] {
+    return this.sending.list()
   }
   version(): number {
     return this.revision
@@ -216,6 +224,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
+    this.newestTurn.afterRow(state, row)
     if (journalInputOrderChanged(state, row, (key) => this[key])) {
       this.revision++
     }
@@ -248,17 +257,12 @@ export class JournalInputOrder extends JournalInputEvidence {
     const entry = state.submissions.get(id)
     this.refreshInputEvidence(state, id, entry)
     this.refreshLink(id)
-    if (entry?.dispatchState === 'pending' || entry?.dispatchState === 'unknown') {
-      if (this.unsettled.get(id) !== entry) {
-        this.unsettled.set(id, entry)
-        this.pending = undefined
-        this.revision++
-      }
-    } else if (this.unsettled.delete(id)) {
-      this.pending = undefined
+    const dispatch = entry?.dispatchState
+    if (this.unsettled.keep(id, entry, dispatch === 'pending' || dispatch === 'unknown')) {
       this.revision++
     }
-    if (entry?.dispatchState !== 'pending') {
+    this.sending.keep(id, entry, dispatch === 'pending')
+    if (dispatch !== 'pending') {
       this.releasePlace(state, id)
     }
     if (entry && isQueuedAgentJournalSubmission(entry)) {
@@ -288,6 +292,7 @@ export class JournalInputOrder extends JournalInputEvidence {
           this.legacyPlaces === 0 &&
           !this.currentIdentity(state, card.messageId)
         ) {
+          this.cards.releaseCard(card.messageId, state.lastSequence)
           this.lineage.cards.delete(card.messageId)
         }
       }
@@ -309,8 +314,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   }
 
   private releaseHistory(state: JournalReducerState): void {
-    this.lineage.releaseHistory((id) => this.currentIdentity(state, id))
-    this.cards.releaseHistory()
+    releaseJournalInputHistory(state, this.lineage, this.cards)
   }
 
   precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {

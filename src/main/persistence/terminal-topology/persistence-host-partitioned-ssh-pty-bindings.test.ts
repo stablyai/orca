@@ -14,7 +14,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 
 import { TEST_LEAF_1 } from '../persistence-session-fixtures'
-import { PtyExitProof } from '../../pty-exit-proof'
+import { PtyExitProof } from '../../pty/process-retirement/pty-exit-proof'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),

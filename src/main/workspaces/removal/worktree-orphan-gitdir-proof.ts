@@ -5,7 +5,7 @@ import {
   areResolvedPathsEqual,
   canonicalOwnerPathsEqual,
   isDirectWorktreeAdmin
-} from '../../worktree-owner-path-equivalence'
+} from '../catalog/worktree-owner-path-equivalence'
 
 type PathOps = typeof posix
 export type StatPath = (path: string) => Promise<unknown>

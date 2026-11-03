@@ -30,6 +30,7 @@ export function useNativeChatPendingDelivery(args: {
   paneKey: string
   agent: AgentType
   composerRef?: { current: NativeChatComposerHandle | null }
+  workingEpoch?: number | null
   /** `readPhase` 'ready' with a `sessionId` means an empty `messages` was a real read. */
   session: {
     messages: NativeChatMessage[]
@@ -38,7 +39,7 @@ export function useNativeChatPendingDelivery(args: {
   }
 }) {
   const languageRevision = useUiLanguageRevision()
-  const { paneKey, agent, composerRef } = args
+  const { paneKey, agent, composerRef, workingEpoch } = args
   const { messages } = args.session
   const sessionId = args.session.sessionId ?? null
   // Without a sessionId, ready is an unread placeholder.
@@ -74,6 +75,7 @@ export function useNativeChatPendingDelivery(args: {
         text,
         ...(recovery ? { recovery: true } : {}),
         sentAt,
+        ...(workingEpoch !== undefined ? { queuedDuringWorkingEpoch: workingEpoch } : {}),
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
         ...(readEmptySessionId ? { afterEmptyTranscriptSessionId: readEmptySessionId } : {}),
@@ -82,7 +84,7 @@ export function useNativeChatPendingDelivery(args: {
       setPending(appendPendingSendCache(scope, entry))
       return entry.id
     },
-    [messages, readEmptySessionId, scope]
+    [messages, readEmptySessionId, scope, workingEpoch]
   )
   const cancel = useCallback(
     (id: string, discard = false) =>

@@ -2,11 +2,11 @@ import { appendFile, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests
-} from '../ai-vault/session-transcript-consumers'
+} from '../ai-vault/transcripts/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import { parseTranscript } from './session-search-transcript-fixtures'

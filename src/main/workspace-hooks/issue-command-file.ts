@@ -3,12 +3,12 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from 'node
 import { join } from 'node:path'
 import { loadHooks } from './hooks'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
-import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
 import {
   guardWslUncPathAccess,
   WslDistroStoppedError,
   WslDistroUnverifiableError
-} from '../wsl/wsl-unc-access-gate'
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 type IssueCommandGitOptions = GitRuntimeOptions | (() => GitRuntimeOptions)
 

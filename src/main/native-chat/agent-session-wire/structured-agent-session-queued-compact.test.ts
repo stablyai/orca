@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { reportedChildWork } from './structured-agent-session-reported-child-work.test-support'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
+import {
+  CAPTURED_COMPACT_SESSION_ID,
+  CAPTURED_COMPACT_STOPPED_THEN_SEND
+} from '../../claude/claude-captured-compact-frames.test-fixture'
+import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { ConversationCommandParams } from '../../../shared/rpc-contract/structured-agent-session-params'
@@ -538,6 +547,136 @@ describe('a /compact that waits in line', () => {
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     expect(rig.store.listRecords()).toHaveLength(1)
   })
+})
+
+describe('a queued /compact that fails', () => {
+  async function compactThenCard() {
+    const working = await rig.workingSend()
+    const compactId = await queuedCompact()
+    const later = await rig.send('sent after the compact', 'queue-if-active').result
+    if (!later.ok || !('queued' in later.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    return { working, compactId, laterId: later.value.queued.messageId }
+  }
+
+  async function handedOver() {
+    await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+    const { command } = rig.compact.mock.calls.at(-1)![0]
+    return { ...command, itemId: agentJournalItemKey(command.identity) }
+  }
+
+  async function held(laterId: string) {
+    await settleMs()
+    expect(await rig.handoff(laterId)).toBeUndefined()
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.queuedMessages.pauses()).toContainEqual(
+      expect.objectContaining({ reason: 'failed' })
+    )
+  }
+
+  it("lets the next card run after Claude's recorded failed compaction", async () => {
+    const { working, laterId } = await compactThenCard()
+    await rig.settleAccepted(working, 'a')
+    const command = await handedOver()
+    const sink = rig.providerEvents()
+    const translator = createClaudeJournalTranslator({ sink })
+    const capture = CAPTURED_COMPACT_STOPPED_THEN_SEND.filter((event) => !('interrupt' in event))
+    const end = capture.findIndex((event) => 'frame' in event && event.frame.type === 'result')
+    for (const event of capture.slice(0, end + 1)) {
+      if ('sent' in event) {
+        const start = { providerSessionId: CAPTURED_COMPACT_SESSION_ID, sentUuid: event.sent.uuid }
+        translator.beginCommand({ ...command, ...start })
+      } else if ('frame' in event) {
+        translator.handle({
+          type: 'message',
+          sessionId: SESSION,
+          observedAt: event.at,
+          message: { session_id: CAPTURED_COMPACT_SESSION_ID, ...event.frame }
+        })
+      }
+    }
+    translator.dispose()
+    await sink.written?.()
+    await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+    const { items } = await rig.host.journalSnapshot(SESSION)
+    const turn = items.find((item) => item.itemId === command.itemId)
+    expect(turn?.body).toMatchObject({ state: 'completed', outcome: 'failure' })
+    expect(items).toContainEqual(
+      expect.objectContaining({ body: expect.objectContaining({ tone: 'error' }) })
+    )
+  })
+
+  it('keeps an older failure holding the other card when Send runs the /compact into a refusal', async () => {
+    rig.compact.mockResolvedValue({
+      state: 'rejected',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('providerRejected', {
+          detail: { text: 'Not enough messages to compact.', audience: 'person' }
+        }),
+        { surface: 'rejection' }
+      )
+    })
+    const { working, compactId, laterId } = await compactThenCard()
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'a')
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    await held(laterId)
+    expect(await rig.sendNow(compactId)).toMatchObject({ ok: true })
+    await eventually(async () =>
+      expect(await rig.handoff(compactId)).toMatchObject({ dispatchState: 'rejected' })
+    )
+    await held(laterId)
+    await rig.restartHostProcess()
+    await held(laterId)
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+  })
+
+  it.each(['before', 'after'] as const)(
+    'holds when a usage limit lands %s the compaction ends, across a restart',
+    async (order) => {
+      const { working, laterId } = await compactThenCard()
+      await rig.settleAccepted(working, 'a')
+      const command = await handedOver()
+      const events = rig.providerEvents()
+      const limit = () =>
+        events.appendItem(
+          { provider: 'orca', clientMessageId: `terminal-failure:claude:${command.itemId}` },
+          {
+            kind: 'status',
+            tone: 'warning',
+            ...agentSessionFailureWords(agentSessionFailureFact('usageLimitReached'), {
+              surface: 'row'
+            })
+          },
+          { turnScope: { kind: 'turn', turnItemId: command.itemId } }
+        )
+      if (order === 'before') {
+        limit()
+      }
+      events.appendLifecycleBatch!(
+        `turn-completed:${command.clientMessageId}`,
+        [
+          {
+            kind: 'item',
+            identity: command.identity,
+            body: { ...command.running, state: 'completed', outcome: 'failure', completedAt: 2 },
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ],
+        { lifecycle: true }
+      )
+      if (order === 'after') {
+        limit()
+      }
+      await held(laterId)
+      await rig.restartHostProcess()
+      await held(laterId)
+      expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+      await eventually(async () => expect(await rig.handoff(laterId)).toBeDefined())
+    }
+  )
 })
 
 describe('/compact instructions', () => {

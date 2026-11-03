@@ -1,4 +1,4 @@
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { isStaleLocalWorktreeRegistration } from './stale-worktree-registration-preflight'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
@@ -26,7 +26,7 @@ import {
   resolveWorktreeRemovalRoute
 } from '../../workspaces/removal/worktree-removal-execution-host-route'
 import { listWorktreesOnRemovalRoute } from '../worktree-removal-route-listing'
-import { authorizeUnregisteredWindowsRemoval } from '../../git/windows-worktree-removal'
+import { authorizeUnregisteredWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import { findRegisteredDeletableWorktree } from '../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from '../runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../workspaces/removal/local-worktree-removal-recovery'

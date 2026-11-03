@@ -14,6 +14,7 @@ import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   boundHistoryItemsByBytes,
   isSubagentRow,
+  historyContentBytes,
   type HistoryReader,
   type HistoryPageInput,
   measureHistoryItem,
@@ -217,21 +218,6 @@ function readForward(
     return historyReset(journal, since.reset, reader)
   }
   let submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // The page cost is EVERYTHING variable it carries: items with their
-  // submissions AND removal ids — a legal pre-bounding tombstone id can dwarf
-  // every item on the page.
-  const pageContentBytes = (
-    items: readonly ReturnType<HistoryReader['form']>[],
-    removedItemIds: readonly string[]
-  ): number =>
-    items.reduce(
-      (total, { item, bytes }) => total + bytes + (submissionBytes.get(item.itemId) ?? 0),
-      0
-    ) +
-    removedItemIds.reduce(
-      (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
-      0
-    )
   // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
   let rows = since.rows.slice(0, limit)
   const project = (window: typeof rows) => {
@@ -257,7 +243,11 @@ function readForward(
   if (!projected.ok) {
     return historyReset(journal, projected.reset, reader)
   }
-  let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+  let contentBytes = historyContentBytes(
+    projected.batch.items,
+    projected.batch.removedItemIds,
+    submissionBytes
+  )
   while (rows.length > 1 && contentBytes > reader.budgetBytes) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
     const shrunk = project(rows)
@@ -265,7 +255,11 @@ function readForward(
       return historyReset(journal, shrunk.reset, reader)
     }
     projected = shrunk
-    contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+    contentBytes = historyContentBytes(
+      projected.batch.items,
+      projected.batch.removedItemIds,
+      submissionBytes
+    )
   }
   let items = projected.batch.items
   if (contentBytes > reader.budgetBytes) {
@@ -275,7 +269,7 @@ function readForward(
         ? measureHistoryItem(oversizedHistoryItem(formed.item))
         : formed
     })
-    contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
+    contentBytes = historyContentBytes(items, projected.batch.removedItemIds, submissionBytes)
   }
   if (contentBytes > reader.budgetBytes) {
     // A single row's semantic payload — in practice a pre-bounding oversized

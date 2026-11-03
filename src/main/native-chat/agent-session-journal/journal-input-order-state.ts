@@ -1,10 +1,21 @@
+import type { QueuedMessageRow } from './queued-message-table'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputCardIndex } from './journal-input-card-index'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalInputEntry } from './journal-input-lineage'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow, JournalSubmissionRow } from './journal-row-schema'
+import {
+  queryInputContext,
+  type JournalInputEntry,
+  type JournalInputCard,
+  type JournalInputLineageOwner
+} from './journal-input-lineage'
+import {
+  mergeInputPlaces,
+  type InputPlaceQuery,
+  type JournalInputPlaceIndex
+} from './journal-input-place-index'
 
 export type JournalInputPlace = JournalInputEntry & {
   coordinate: AgentJournalCursor
@@ -109,4 +120,106 @@ export function recordJournalInputAdmission(
     ...(place.witnessCardId ? { witnessCardId: place.witnessCardId } : {})
   })
   return place.context.basis === 'legacy'
+}
+
+export function readJournalInputAdmission(
+  state: JournalReducerState,
+  row: JournalSubmissionRow,
+  cards: JournalInputCardIndex,
+  cut: number,
+  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+): JournalInputPlace {
+  const coordinate = { epoch: row.epoch, sequence: row.seq }
+  const context = row.inputOrderContext ?? {
+    source: coordinate,
+    basis: 'legacy' as const,
+    cut
+  }
+  const original =
+    context.basis === 'legacy' ? originalAcceptance?.(row.clientMessageId) : undefined
+  const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
+  const exposed = row.inputOrderContext?.basis === 'legacy' ? cards.command() : undefined
+  const selected =
+    row.inputOrderContext?.basis === 'legacy'
+      ? exposed && cards.relation(exposed, place)
+        ? exposed
+        : undefined
+      : !row.inputOrderContext
+        ? cards.queryCurrent(place).command
+        : cards.query(place).command
+  return { ...place, ...(selected ? { witnessCardId: selected.messageId } : {}) }
+}
+
+export function releaseJournalInputHistory(
+  state: JournalReducerState,
+  lineage: JournalInputLineageOwner,
+  cards: JournalInputCardIndex
+): void {
+  lineage.releaseHistory((id) => {
+    const keep = currentJournalInputIdentity(state, id, () => cards.hasOverlay(id))
+    if (!keep) {
+      cards.releaseCard(id, state.lastSequence)
+    }
+    return keep
+  })
+  cards.releaseHistory()
+}
+
+export function queryJournalInputCurrent(
+  place: JournalInputPlace,
+  coordinates: JournalInputPlaceIndex
+): InputPlaceQuery {
+  return queryInputContext(
+    place.context,
+    place.original,
+    (coordinate) => coordinates.query(coordinate.epoch, coordinate.sequence),
+    () => coordinates.allPlaces(),
+    mergeInputPlaces
+  )
+}
+
+export function journalInputCardPrecedes(
+  lineage: JournalInputCard | undefined,
+  place: JournalInputPlace
+): boolean {
+  if (!lineage || lineage.introduced >= place.context.cut) {
+    return false
+  }
+  if (place.context.basis === 'observed') {
+    return true
+  }
+  if (!lineage.baseline) {
+    return false
+  }
+  const coordinate = lineage.baseline.coordinate
+  return queryInputContext(
+    place.context,
+    place.original,
+    (boundary) => coordinate?.epoch === boundary.epoch && coordinate.sequence < boundary.sequence,
+    () => true,
+    (a, b) => a || b
+  )
+}
+
+export function gateJournalInputPlaces(result: InputPlaceQuery, failed: boolean): InputPlaceQuery {
+  if (!failed) {
+    return result
+  }
+  const { head, handoff, position } = result
+  return { ...(head ? { head } : {}), ...(handoff ? { handoff } : {}), position }
+}
+
+export function sameJournalInputCardPlace(
+  prior: QueuedMessageRow,
+  card: QueuedMessageRow
+): boolean {
+  return (
+    prior.position === card.position &&
+    prior.state === card.state &&
+    prior.holdReason === card.holdReason &&
+    prior.consumedAs === card.consumedAs &&
+    prior.queuedAt?.epoch === card.queuedAt?.epoch &&
+    prior.queuedAt?.sequence === card.queuedAt?.sequence &&
+    Boolean(prior.body.command) === Boolean(card.body.command)
+  )
 }

@@ -7,6 +7,7 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   readSourceControlAiModelChoiceForHost,
   resolveSourceControlAiForOperation,
+  resolveSourceControlAiActionModelDefault,
   resolveSourceControlAiPrCreationDefaults,
   selectSourceControlAiModelChoiceForHost,
   sourceControlAiSettingsFromLegacy
@@ -491,6 +492,93 @@ describe('source-control AI resolution', () => {
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
 
     expect(merged.modelOverridesByOperation?.commitMessage).toBeUndefined()
+  })
+
+  it('keeps existing per-action host picks on upgrade and derives the inherited row through the same resolver', () => {
+    const model = (input: GlobalSettings, hostKey: string) => {
+      const result = resolveSourceControlAiForOperation({
+        settings: input,
+        operation: 'commitMessage',
+        discoveryHostKey: hostKey
+      })
+      return result.ok && result.value.params.model
+    }
+    // A feature-wall pick reconciled into the Commit message entry stays local-only.
+    const wall = settings()
+    wall.sourceControlAi!.selectedModelByAgentByHost = { 'ssh:one': { codex: 'gpt-5.4' } }
+    const legacy = projectSourceControlAiToLegacyCommitMessageAi(wall.sourceControlAi!)
+    wall.sourceControlAi = mergeLegacyCommitMessageAiIntoSourceControlAi(wall.sourceControlAi!, {
+      ...legacy,
+      selectedModelByAgent: { ...legacy.selectedModelByAgent, codex: 'gpt-5.4-mini' }
+    })
+    wall.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(wall.sourceControlAi)
+    expect(wall.sourceControlAi.modelOverridesByOperation?.commitMessage).toEqual({
+      selectedModelByAgent: { codex: 'gpt-5.4-mini' }
+    })
+    expect([model(wall, 'local'), model(wall, 'ssh:one')]).toEqual(['gpt-5.4-mini', 'gpt-5.4'])
+    // A host-specific pick keeps winning over the host-agnostic one on that host.
+    const hosts = settings()
+    hosts.sourceControlAi!.modelOverridesByOperation = {
+      commitMessage: {
+        selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+        selectedModelByAgentByHost: { local: { codex: 'gpt-5.5' }, 'ssh:box': { codex: 'gpt-5.4' } }
+      }
+    }
+    // A host the pick never covered keeps its own default.
+    expect([model(hosts, 'local'), model(hosts, 'ssh:box'), model(hosts, 'ssh:new')]).toEqual([
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.6-terra'
+    ])
+
+    const base = settings()
+    base.sourceControlAi!.modelOverridesByOperation = {
+      branchName: {
+        selectedModelByAgent: { codex: 'gpt-5.4' },
+        selectedThinkingByModel: { 'gpt-5.4': 'high' }
+      }
+    }
+    const choice = base.sourceControlAi!.modelOverridesByOperation.branchName
+    const input = { settings: base, operation: 'branchName' as const }
+    const repo = {
+      sourceControlAi: {
+        modelOverridesByOperation: {
+          branchName: { selectedModelByAgent: { codex: 'gpt-5.4-mini' } }
+        }
+      }
+    }
+    const repoDefault = resolveSourceControlAiActionModelDefault({ ...input, repo }, 'repo')
+    expect(repoDefault.ok && repoDefault.value.params).toMatchObject({
+      model: 'gpt-5.4',
+      thinkingLevel: 'high'
+    })
+    const inherited = resolveSourceControlAiActionModelDefault({ ...input, repo })
+    const withoutPicks = {
+      ...base,
+      sourceControlAi: { ...base.sourceControlAi!, modelOverridesByOperation: undefined }
+    }
+    expect(inherited).toEqual(
+      resolveSourceControlAiForOperation({ ...input, settings: withoutPicks })
+    )
+    expect(base.sourceControlAi!.modelOverridesByOperation.branchName).toBe(choice)
+    base.sourceControlAi!.modelOverridesByOperation.commitMessage = {
+      selectedModelByAgent: { codex: 'gpt-5.4' },
+      selectedThinkingByModel: { 'gpt-5.4': 'high' }
+    }
+    base.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(base.sourceControlAi!)
+    const commitDefault = resolveSourceControlAiActionModelDefault({
+      settings: base,
+      operation: 'commitMessage'
+    })
+    expect(commitDefault.ok && commitDefault.value.params).toMatchObject({
+      model: 'gpt-5.5',
+      thinkingLevel: 'medium'
+    })
+    const branchDefault = resolveSourceControlAiActionModelDefault({
+      settings: base,
+      operation: 'branchName'
+    })
+    expect(branchDefault.ok && branchDefault.value.params.model).toBe('gpt-5.5')
   })
 
   it('reads and selects host-scoped model choices with local fallback rules', () => {

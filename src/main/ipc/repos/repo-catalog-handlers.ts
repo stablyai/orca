@@ -8,8 +8,8 @@ import {
   parseExecutionHostId
 } from '../../../shared/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
-import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
+import { enrichRepoGitUsernames } from '../../workspaces/catalog/repo-git-username-enrichment'
+import { enrichMissingRepoGitRemoteIdentities } from '../../workspaces/catalog/repo-git-remote-identity-enrichment'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from '../worktrees/creation/worktree-base-directory-watcher'
@@ -24,7 +24,7 @@ import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-
 import { listHostRepoCatalogSnapshots } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export function registerRepoCatalogHandlers(
   mainWindow: BrowserWindow,

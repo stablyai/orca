@@ -338,7 +338,7 @@ it('retains recorded Jcode session-start identity without a status row', () => {
   const store = createTestStore()
   seedStore(store, { tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] } })
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-  // Jcode 0.87.1 captured input; agent-hook-listener-jcode.test.ts pins provenance.
+  // Jcode 0.87.1 captured input.
   const payload = {
     hook_event_name: 'session_start',
     event: 'session_start',
@@ -368,4 +368,32 @@ it('retains recorded Jcode session-start identity without a status row', () => {
     agent: 'jcode',
     providerSession: { key: 'session_id', id: 'session_jc_5' }
   })
+})
+
+it('replaces only the captured pane resume handle and keeps a newer session through manual sleep', () => {
+  const store = createTestStore()
+  const paneKey = 'tab-1:leaf-1'
+  const captured = {
+    paneKey,
+    worktreeId: 'wt-1',
+    agent: 'codex' as const,
+    providerSession: { key: 'session_id' as const, id: 'old' },
+    prompt: '',
+    state: 'done' as const,
+    origin: 'live' as const,
+    capturedAt: 1,
+    updatedAt: 1
+  }
+  store.getState().rememberSleepingAgentSession(captured)
+  const resumed = { ...captured, origin: 'quit' as const, restoreOnTabOpenOnly: true }
+  store.getState().rememberSleepingAgentSession(resumed, captured)
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(resumed)
+  const newer = { ...resumed, providerSession: { ...captured.providerSession, id: 'new' } }
+  store.getState().rememberSleepingAgentSession(newer, resumed)
+  store.getState().rememberSleepingAgentSession(resumed, captured)
+  store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(newer)
+  store.getState().clearSleepingAgentSession(paneKey)
+  store.getState().rememberSleepingAgentSession(resumed, newer)
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 })

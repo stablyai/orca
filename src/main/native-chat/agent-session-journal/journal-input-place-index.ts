@@ -53,13 +53,15 @@ function update(node: Node): Node {
   return node
 }
 function left(node: Node): Node {
-  const next = node.right!
+  node = { ...node }
+  const next = { ...node.right! }
   node.right = next.left
   next.left = update(node)
   return update(next)
 }
 function right(node: Node): Node {
-  const next = node.left!
+  node = { ...node }
+  const next = { ...node.left! }
   node.left = next.right
   next.right = update(node)
   return update(next)
@@ -84,6 +86,7 @@ function put(node: Node | undefined, entry: Entry, remove: boolean): Node | unde
   if (!node) {
     return remove ? undefined : { entry, height: 1, result: entry }
   }
+  node = { ...node }
   const order = compare(entry, node.entry)
   if (order < 0) {
     node.left = put(node.left, entry, remove)
@@ -112,6 +115,7 @@ function put(node: Node | undefined, entry: Entry, remove: boolean): Node | unde
 export class JournalInputPlaceIndex {
   private readonly epochs = new Map<string, Node>()
   private all: Node | undefined
+  private undomained = 0
   private readonly entries = new Map<string, Entry>()
 
   constructor(_epoch: string) {}
@@ -142,13 +146,20 @@ export class JournalInputPlaceIndex {
   }
 
   /** Numeric summaries retain positions/sequences without retaining or walking record bodies. */
-  setPosition(id: string, position: number, tie = 0): void {
+  setPosition(id: string, position: number, tie = 0, coordinate?: AgentJournalCursor): void {
     const prior = this.entries.get(id)
-    if (prior?.position === position && (prior.tie ?? 0) === tie) {
+    const sequence = coordinate?.sequence ?? position
+    const domain = coordinate?.epoch
+    if (
+      prior?.position === position &&
+      prior.sequence === sequence &&
+      prior.domain === domain &&
+      (prior.tie ?? 0) === tie
+    ) {
       return
     }
     this.delete(id)
-    const entry: Entry = { id, sequence: position, domain: undefined, position, tie }
+    const entry: Entry = { id, sequence, domain, position, tie }
     this.entries.set(id, entry)
     this.change(entry, false)
   }
@@ -204,6 +215,12 @@ export class JournalInputPlaceIndex {
       } else {
         this.epochs.delete(epoch)
       }
+      if (root && this.epochs.size === 1 && this.undomained === 0) {
+        this.all = root
+        return
+      }
+    } else {
+      this.undomained += remove ? -1 : 1
     }
     this.all = put(this.all, entry, remove)
   }

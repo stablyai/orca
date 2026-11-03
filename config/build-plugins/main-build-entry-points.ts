@@ -24,14 +24,16 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'foreign-sqlite-reader-entry': resolve(
     'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts'
   ),
-  'session-scanner-service-entry': resolve('src/main/ai-vault/session-scanner-service-entry.ts'),
+  'session-scanner-service-entry': resolve(
+    'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
+  ),
   'wsl-transcript-fs-process-entry': resolve(
     'src/main/native-chat/wsl-transcript-fs-process-entry.ts'
   ),
   // libuv spawns inline; run port probes on a worker to keep the UI loop free.
   'port-scan-command-worker-entry': resolve('src/main/ports/port-scan-command-worker-entry.ts'),
   'command-path-directory-worker-entry': resolve(
-    'src/main/ipc/command-path-directory-worker-entry.ts'
+    'src/main/ipc/command-path/command-path-directory-worker-entry.ts'
   ),
   // Focus-triggered usage probes must not block UI on cold CreateProcessW (#27362).
   'worker-thread-child-process-entry': resolve(

@@ -129,7 +129,7 @@ vi.mock('./single-instance-lock', () => ({
 }))
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
-vi.mock('../own-chromium-tree-kill-guard')
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard')
 vi.mock('../../shared/secret-store', () => ({
   setSecretStore: () => {
     mocks.events.push('continued-after-browser-identity')
@@ -146,7 +146,7 @@ vi.mock('../host/electron-http-client')
 vi.mock('../network/http-client')
 vi.mock('../host/electron-speech-services')
 vi.mock('../speech/speech-runtime-service')
-vi.mock('../ipc/worktree-watcher-removal')
+vi.mock('../workspaces/removal/worktree-watcher-removal')
 vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
   desktopWorktreeWatcherRemoval: {
     closeLocal: vi.fn(),
@@ -166,7 +166,7 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
   }
 }))
 vi.mock('../window/desktop-integration/macos-press-and-hold-default')
-vi.mock('../ai-vault/session-parse-cache-persistence')
+vi.mock('../ai-vault/parse-cache/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/canonical-user-data'

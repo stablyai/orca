@@ -36,6 +36,10 @@ type CreateMessageFixtureMocks = {
   admit: Mock<() => Promise<HostCreateSupport>>
   inventory: Mock
   settings: Record<string, unknown>
+  runtimeStatusByEnvironmentId: Map<
+    string,
+    { status: { capabilities: string[]; hostPlatform: string } }
+  >
 }
 
 const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
@@ -50,7 +54,8 @@ const mocks: CreateMessageFixtureMocks = vi.hoisted(() => {
     exactSupport: vi.fn<() => Promise<boolean>>(),
     admit: vi.fn<() => Promise<HostCreateSupport>>(),
     inventory: vi.fn(),
-    settings
+    settings,
+    runtimeStatusByEnvironmentId: new Map()
   }
 })
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
@@ -90,7 +95,7 @@ vi.mock('@/store', () => {
     settings: mocks.settings,
     unifiedTabsByWorktree: { 'workspace-1': mocks.tabs },
     agentStatusByPaneKey: {},
-    runtimeStatusByEnvironmentId: new Map(),
+    runtimeStatusByEnvironmentId: mocks.runtimeStatusByEnvironmentId,
     groupsByWorktree: {},
     seedNativeChatLaunchDraft: vi.fn(),
     clearNativeChatLaunchDraft: vi.fn()
@@ -114,6 +119,7 @@ export function resetCreateMessageFixture() {
   })
   vi.useFakeTimers()
   vi.clearAllMocks()
+  mocks.runtimeStatusByEnvironmentId.clear()
   layoutOwner.isMain = false
   mocks.hostBusy = false
   mocks.tabs = []

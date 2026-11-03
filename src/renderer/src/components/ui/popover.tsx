@@ -5,6 +5,7 @@ import * as PopoverPrimitive from 'radix-ui/popover'
 
 import { cn } from '@/lib/utils'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-focus-ownership'
+import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
@@ -64,12 +65,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
     return
   }
 
-  const delta =
-    event.deltaMode === WheelEvent.DOM_DELTA_LINE
-      ? event.deltaY * 16
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-        ? event.deltaY * el.clientHeight
-        : event.deltaY
+  const delta = getWheelScrollDeltaY(event, el.clientHeight)
   const maxScrollTop = el.scrollHeight - el.clientHeight
   const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
 
