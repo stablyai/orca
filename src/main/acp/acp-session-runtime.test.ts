@@ -5,7 +5,7 @@ import {
   type AcpSessionRuntimeOptions,
   type AcpSessionEvent
 } from './acp-session-runtime'
-import { AcpScriptedAgent, deferred } from './acp-scripted-agent.test-support'
+import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 import type {
   AgentCapabilities,
   RequestPermissionResponse
@@ -42,6 +42,119 @@ afterEach(() => {
 })
 
 describe('ACP session runtime', () => {
+  it('retains one logical prompt and its content across typed busy refusals with capped backoff', async () => {
+    const { runtime, agent } = fixture({}, { retryBusyPrompts: true })
+    await runtime.start(startOptions)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    agent.on('session/prompt', (frame) =>
+      agent.fail(frame, -32003, 'Agent is already processing.', { reason: 'session_busy' })
+    )
+    const content = [...textPrompt, { type: 'image' as const, data: 'AA==', mimeType: 'image/png' }]
+    const meta = { promptId: 'original', requestId: 'original' }
+    const pending = runtime.prompt(content, meta)
+    const frames = () => agent.frames.filter((frame) => frame.method === 'session/prompt')
+    await tick()
+    await expect(runtime.prompt([...textPrompt])).rejects.toThrow('already in progress')
+    for (const [index, delay] of [1_000, 2_000, 4_000, 5_000, 5_000].entries()) {
+      await vi.advanceTimersByTimeAsync(delay - 1)
+      expect(frames()).toHaveLength(index + 1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(frames()).toHaveLength(index + 2)
+    }
+    agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await pending).toEqual({ stopReason: 'end_turn' })
+    expect(new Set(frames().map((frame) => frame.id)).size).toBe(7)
+    for (const frame of frames()) {
+      expect(frame.params).toEqual({ sessionId: 'session-1', prompt: content, _meta: meta })
+    }
+    expect(await runtime.prompt([...textPrompt])).toEqual({ stopReason: 'end_turn' })
+  })
+
+  it.each(['waiting', 'in-flight'] as const)(
+    'cancels recovery when Stop arrives while %s',
+    async (phase) => {
+      const { runtime, agent } = fixture({}, { retryBusyPrompts: true })
+      await runtime.start(startOptions)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      agent.on('session/prompt', (frame) => {
+        if (phase === 'waiting') {
+          agent.fail(frame, -32003, 'busy', { reason: 'session_busy' })
+        }
+      })
+      const pending = runtime.prompt([...textPrompt])
+      await tick()
+      await runtime.cancel()
+      if (phase === 'in-flight') {
+        const frame = agent.frames.find((frame) => frame.method === 'session/prompt')
+        if (!frame) {
+          throw new Error('Prompt missing')
+        }
+        agent.fail(frame, -32003, 'busy', { reason: 'session_busy' })
+      }
+      expect(await pending).toEqual({ stopReason: 'cancelled' })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
+    }
+  )
+
+  it.each(['close', 'EOF'] as const)('ends delayed busy recovery on %s', async (action) => {
+    const { runtime, agent } = fixture({}, { retryBusyPrompts: true })
+    await runtime.start(startOptions)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    agent.on('session/prompt', (frame) =>
+      agent.fail(frame, -32003, 'busy', { reason: 'session_busy' })
+    )
+    const pending = runtime.prompt([...textPrompt])
+    const rejected = expect(pending).rejects.toBeInstanceOf(AcpConnectionClosedError)
+    await tick()
+    if (action === 'close') {
+      runtime.close()
+    } else {
+      agent.stdout.end()
+    }
+    await rejected
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
+  })
+
+  it.each([
+    ['code alone', true, { code: -32003, message: 'busy' }, -32003],
+    [
+      'reason alone',
+      true,
+      { code: -32603, message: 'busy', data: { reason: 'session_busy' } },
+      -32603
+    ],
+    ['prose', true, { code: -32603, message: 'Agent is already processing.' }, -32603],
+    [
+      'sign-in',
+      true,
+      { code: -32000, message: 'Sign in', data: { reason: 'session_busy' } },
+      -32000
+    ],
+    [
+      'malformed refusal',
+      true,
+      { code: '-32003', message: 'busy', data: { reason: 'session_busy' } },
+      -32603
+    ],
+    [
+      'no opt-in',
+      false,
+      { code: -32003, message: 'busy', data: { reason: 'session_busy' } },
+      -32003
+    ]
+  ] as const)('never replays %s', async (_label, retryBusyPrompts, error, code) => {
+    const { runtime, agent } = fixture({}, { retryBusyPrompts })
+    await runtime.start(startOptions)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    agent.on('session/prompt', (frame) => agent.send({ jsonrpc: '2.0', id: frame.id, error }))
+    await expect(runtime.prompt([...textPrompt])).rejects.toMatchObject({ code })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(agent.frames.filter((frame) => frame.method === 'session/prompt')).toHaveLength(1)
+  })
+
   it('uses raw underscored extension methods and bounds control requests without closing the session', async () => {
     const { runtime, agent } = fixture()
     await runtime.initialize()
