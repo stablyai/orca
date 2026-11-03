@@ -10,6 +10,8 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from '../settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -172,10 +174,21 @@ export function AgentLaunchSetupPanel({
   return (
     <div
       className="flex w-full flex-col"
+      onKeyDownCapture={(event) => {
+        if (isScreenSubmitShortcut(event)) {
+          event.preventDefault()
+          event.stopPropagation()
+          const alternate = entry.surfaces.find((surface) => surface !== entry.defaultSurface)
+          if (alternate && !disabled && !event.repeat) {
+            use(alternate)
+          }
+        }
+      }}
       onKeyDown={(event) => {
         event.stopPropagation()
         if (
           !disabled &&
+          !isImeOwnedKeyboardEvent(event) &&
           event.key === 'Enter' &&
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
@@ -190,6 +203,7 @@ export function AgentLaunchSetupPanel({
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
+            !isImeOwnedKeyboardEvent(event) &&
             event.key === 'Enter' &&
             event.currentTarget.querySelector(
               '[cmdk-item][data-selected="true"][data-current="true"]'

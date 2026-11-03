@@ -32,7 +32,9 @@ function prompt(): HTMLElement {
 }
 
 function launchButton(label: string): HTMLButtonElement {
-  return [...host.querySelectorAll('button')].find((button) => button.textContent === label)!
+  return [...host.querySelectorAll('button')].find(
+    (button) => button.getAttribute('aria-label') === label
+  )!
 }
 
 it('launches with the typed first prompt from Enter or either Launch button, and without one as before', async () => {

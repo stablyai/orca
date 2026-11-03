@@ -445,7 +445,7 @@ it('opens setup with a clicked chevron without launching, then dispatches its se
   expect(document.body.textContent).toContain('Arguments')
   expect(getByRole(document.body, 'menu', { name: 'Configure Codex' })).not.toBeNull()
   const terminal = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.textContent === 'Launch terminal'
+    (button) => button.getAttribute('aria-label') === 'Launch terminal'
   )
   act(() => terminal?.click())
   expect(launch).toHaveBeenCalledTimes(1)
@@ -584,7 +584,7 @@ it('opens a searched setup only from its chevron and launches the alternate way 
   act(() => row.querySelector<HTMLButtonElement>('button')?.click())
   expect(launch).not.toHaveBeenCalled()
   const alternate = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (button) => button.textContent === 'Launch terminal'
+    (button) => button.getAttribute('aria-label') === 'Launch terminal'
   )
   act(() => alternate?.click())
   expect(launch).toHaveBeenCalledTimes(1)
@@ -704,7 +704,9 @@ it('retains authored Arguments on close/reopen and rebinds their acquisition aut
   show({ ...own, ownerKey: 'pair8/runtime2', arguments: '--add-dir new-owner' })
   expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir old-owner')
   fireEvent.click(
-    [...document.querySelectorAll('button')].find((b) => b.textContent === 'Launch terminal')!
+    [...document.querySelectorAll('button')].find(
+      (b) => b.getAttribute('aria-label') === 'Launch terminal'
+    )!
   )
   expect(launch).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
