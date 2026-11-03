@@ -10,7 +10,7 @@ on:
         default: shadow
         type: string
       defer_shadow:
-        description: Emit the full matrix without dependencies; rebuild advisory selection after tests.
+        description: Emit the full matrix without dependencies; the caller owns the selected-draft exception.
         default: false
         type: boolean
 
@@ -18,23 +18,27 @@ on:
       shards:
         description: JSON array of shard assignments for the unit matrix.
         value: ${{ jobs.plan.outputs.shards }}
+      selection_planned:
+        description: Whether a selection plan artifact was uploaded for shards to download.
+        value: ${{ jobs.plan.outputs.selection_planned }}
 
 permissions:
   contents: read
 
 jobs:
   plan:
-    runs-on: ${{ inputs.defer_shadow && !(inputs.selection_mode == 'selected' && github.event.pull_request.draft == true) && 'ubuntu-slim' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.defer_shadow && 'ubuntu-slim' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     env:
-      DEFER_SHADOW: ${{ inputs.defer_shadow && !(inputs.selection_mode == 'selected' && github.event.pull_request.draft == true) }}
+      DEFER_SHADOW: ${{ inputs.defer_shadow }}
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
+      selection_planned: ${{ !inputs.defer_shadow }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
-          sparse-checkout: ${{ inputs.defer_shadow && !(inputs.selection_mode == 'selected' && github.event.pull_request.draft == true) && '/config/scripts/ci-unit-matrix.mjs' || '' }}
+          sparse-checkout: ${{ inputs.defer_shadow && '/config/scripts/ci-unit-matrix.mjs' || '' }}
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies

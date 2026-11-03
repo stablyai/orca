@@ -24,14 +24,25 @@ describe('PR workflow parallelism', () => {
       github: { event: { pull_request: { draft } } }
     }
     const inputs = {
-      defer_shadow: workflow.jobs.unit_plan.with.defer_shadow,
+      defer_shadow: evaluate(workflow.jobs.unit_plan.with.defer_shadow, context),
       selection_mode: evaluate(workflow.jobs.unit_plan.with.selection_mode, context)
     }
-    expect(evaluate(planWorkflow.jobs.plan.env.DEFER_SHADOW, { ...context, inputs })).toBe(deferred)
-    expect(evaluate(workflow.jobs.test.with.download_selection_plan, context)).toBe(!deferred)
-    expect(evaluate(workflow.jobs.unit_selection_evidence.with.rebuild_plan, context)).toBe(
+    const planContext = { ...context, inputs }
+    expect(evaluate(planWorkflow.jobs.plan.env.DEFER_SHADOW, planContext)).toBe(deferred)
+    // Downstream jobs read the plan's output rather than re-deriving the draft condition.
+    const planned = String(evaluate(planWorkflow.jobs.plan.outputs.selection_planned, planContext))
+    const needs = { unit_plan: { outputs: { selection_planned: planned } } }
+    expect(evaluate(workflow.jobs.test.with.download_selection_plan, { needs })).toBe(!deferred)
+    expect(evaluate(workflow.jobs.unit_selection_evidence.with.rebuild_plan, { needs })).toBe(
       deferred
     )
+  })
+
+  it('keeps the selected-draft condition in one place', () => {
+    const sources = ['pr.yml', 'unit-plan.yml', 'unit-tests.yml', 'unit-selection-evidence.yml']
+      .map((file) => readFileSync(`.github/workflows/${file}`, 'utf8'))
+      .join('\n')
+    expect(sources.match(/pull_request\.draft == true/g)).toHaveLength(1)
   })
 
   it('enforces import boundaries in the required static-analysis checks', () => {
@@ -55,7 +66,7 @@ describe('PR workflow parallelism', () => {
     // Keep advisory continue-on-error work off unit-tests.yml’s critical path: caller needs:test otherwise waits ~36s beyond last shard.
     const evidence = workflow.jobs.unit_selection_evidence
     expect(evidence.uses).toBe('./.github/workflows/unit-selection-evidence.yml')
-    expect(evidence.needs).toEqual(['test'])
+    expect(evidence.needs).toEqual(['unit_plan', 'test'])
     for (const [result, cancelled, expected] of [
       ['success', false, true],
       ['failure', false, true],
