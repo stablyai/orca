@@ -136,7 +136,8 @@ export function reconcileOpenFilesForStatus(
 
   const nextOpenFiles = openFiles.flatMap((originalFile) => {
     let file = originalFile
-    if (file.worktreeId !== worktreeId) {
+    // Linked-repo diffs live in this workspace's tabs but follow another repo's status.
+    if (file.worktreeId !== worktreeId || file.gitWorktreeId) {
       return [file]
     }
 

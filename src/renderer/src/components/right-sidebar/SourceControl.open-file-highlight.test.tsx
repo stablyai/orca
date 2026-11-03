@@ -58,6 +58,9 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/store/selectors', () => ({
+  // Linked-repo sections read the full catalog; these panels have no other projects.
+  getAllWorktreesFromState: () => [],
+  getRepoMapFromState: () => new Map(),
   useActiveWorktree: () => mocks.activeWorktree,
   useRepoById: (repoId: string | null) =>
     repoId === mocks.activeRepo.id

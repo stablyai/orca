@@ -93,6 +93,7 @@ export type EditorTabView =
       branchCompare?: BranchCompareSnapshot
       commitCompare?: CommitCompareSnapshot
       branchOldPath?: string
+      gitWorktreeId?: string
       combinedAlternate?: CombinedDiffAlternate
       combinedAreaFilter?: string
       branchEntriesSnapshot?: GitBranchChangeEntry[]

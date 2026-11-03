@@ -71,10 +71,12 @@ export function useEditorPanelDiffContentLoader({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
-        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+        // Linked-repo diffs sit in this workspace's tabs but read Git from the linked workspace.
+        const gitWorktreeId = file.gitWorktreeId ?? file.worktreeId
+        const connectionId = getConnectionIdForFile(gitWorktreeId, file.filePath) ?? undefined
         const fileTarget = requireRuntimeTargetForFileOwner(
           useAppStore.getState(),
-          file.worktreeId,
+          gitWorktreeId,
           file.runtimeEnvironmentId
         )
         const gitScope = getRuntimeGitScope(fileTarget, connectionId)
@@ -105,7 +107,7 @@ export function useEditorPanelDiffContentLoader({
                 ? getRuntimeGitCommitDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },
@@ -122,7 +124,7 @@ export function useEditorPanelDiffContentLoader({
                 ? getRuntimeGitBranchDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },
@@ -141,7 +143,7 @@ export function useEditorPanelDiffContentLoader({
                 : getRuntimeGitDiff(
                     {
                       target: fileTarget,
-                      worktreeId: file.worktreeId,
+                      worktreeId: gitWorktreeId,
                       worktreePath,
                       connectionId
                     },

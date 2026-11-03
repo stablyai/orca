@@ -32,7 +32,18 @@ export function createOpenUnstagedDiff(
           options?.runtimeEnvironmentId
         )
         const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
-        const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
+        const gitWorktreeId =
+          options?.gitWorktreeId && options.gitWorktreeId !== worktreeId
+            ? options.gitWorktreeId
+            : undefined
+        const baseId = buildDiffEditorFileId(
+          worktreeId,
+          diffSource,
+          relativePath,
+          runtimeEnvironmentId
+        )
+        // Linked repos can share relative paths with this workspace; keep their tabs distinct.
+        const id = gitWorktreeId ? `${baseId}::git::${encodeURIComponent(gitWorktreeId)}` : baseId
         editorItemFileId = id
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
@@ -67,6 +78,7 @@ export function createOpenUnstagedDiff(
           mode: 'diff',
           diffSource,
           branchOldPath: staged ? options?.oldPath : undefined,
+          ...(gitWorktreeId ? { gitWorktreeId } : {}),
           conflict: undefined,
           skippedConflicts: undefined,
           conflictReview: undefined,
