@@ -42,10 +42,14 @@ export async function resolveGhAccountRequiredHost(
   const alias = rawSshTransportHost(remoteUrl) ?? host
   const resolved = await resolveAlias(alias, context).catch(() => null)
   const hostname = resolved?.hostname?.trim().toLowerCase()
+  const dottedHost = !isUnresolvedSshHostAlias(host)
   if (!hostname || isUnresolvedSshHostAlias(hostname)) {
     // Why: a dotted host ssh -G cannot expand is still a literal login host (GitHub Enterprise).
-    return isUnresolvedSshHostAlias(host) ? undefined : host
+    return dottedHost ? host : undefined
   }
   // Why: only github.com's SSH/www aliases fold; gh keys an Enterprise login by its exact host.
-  return foldComparableGitHubHost(hostname) === 'github.com' ? 'github.com' : hostname
+  const resolvedHost = foldComparableGitHubHost(hostname) === 'github.com' ? 'github.com' : hostname
+  // Why: a dotted Enterprise Host entry may point HostName at another SSH endpoint (an IP or an
+  // SSH-only name) while its gh login stays under the remote's host, so only github.com expands it.
+  return dottedHost && resolvedHost !== 'github.com' ? host : resolvedHost
 }

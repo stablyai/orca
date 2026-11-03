@@ -34,4 +34,14 @@ describe('resolveGhAccountRequiredHost', () => {
       )
     ).resolves.toBe('ghe.example.com')
   })
+
+  it('keeps a dotted Enterprise host whose ssh config points at another endpoint', async () => {
+    await expect(
+      resolveGhAccountRequiredHost(
+        repoFor('git@ghe.example.com:example/sample-app.git'),
+        {},
+        async () => ({ hostname: '10.0.0.5' })
+      )
+    ).resolves.toBe('ghe.example.com')
+  })
 })
