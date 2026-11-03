@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { partialRuntimeStore } from './orca-runtime-tests/runtime-store-partial-fixture'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
@@ -31,10 +32,18 @@ function hookRow(
   return { state: 'done', stateStartedAt: fields.receivedAt, connectionId: null, ...fields }
 }
 
-function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
+function makeRuntime(
+  initialVerdict: Verdict,
+  holderVerdict: Verdict = null,
+  sessionOverrides: Partial<WorkspaceSessionState> = {},
+  rowProviderSession: AgentStatusIpcPayload['providerSession'] = {
+    key: 'session_id',
+    id: SESSION_ID
+  }
+) {
   let verdict = initialVerdict
-  const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-    makeWorkspaceSessionWithHeadlessTerminal()
+  const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+    makeWorkspaceSessionWithHeadlessTerminal(sessionOverrides)
   )
   const live = new Set<string>()
   let spawned = 0
@@ -46,7 +55,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const row = hookRow({
     paneKey: PANE_KEY,
     agentType: 'claude',
-    providerSession: { key: 'session_id', id: SESSION_ID },
+    providerSession: rowProviderSession,
     prompt: 'first prompt',
     state: 'done',
     receivedAt: 1,
@@ -85,7 +94,7 @@ function makeRuntime(initialVerdict: Verdict, holderVerdict: Verdict = null) {
   const setVerdict = (next: Verdict): void => {
     verdict = next
   }
-  return { runtime, spawn, reportAgent, reportHolder, setVerdict }
+  return { runtime, spawn, reportAgent, reportHolder, setVerdict, getSession }
 }
 
 function userActivate(runtime: InstanceType<typeof OrcaRuntimeService>) {
@@ -267,5 +276,133 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       connectionId: 'ssh-target',
       launchConfig
     })
+  })
+
+  it('leaves a slept record out when its conversation lives in another tabbed worktree (#37799)', () => {
+    const SIBLING_WORKTREE_ID = `${TEST_WORKTREE_ID}-sibling`
+    const foreign = {
+      paneKey: PANE_KEY,
+      worktreeId: TEST_WORKTREE_ID,
+      agent: 'claude' as const,
+      providerSession: {
+        key: 'session_id' as const,
+        id: 'foreign-worktree-session',
+        cwd: `${TEST_WORKTREE_ID.split('::')[1]}-sibling/pkg`
+      },
+      prompt: '',
+      state: 'done' as const,
+      capturedAt: 1,
+      updatedAt: 1,
+      connectionId: null
+    }
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    session.tabsByWorktree = {
+      ...session.tabsByWorktree,
+      [SIBLING_WORKTREE_ID]: [
+        {
+          id: 'sibling-tab',
+          ptyId: 'sibling-pty',
+          worktreeId: SIBLING_WORKTREE_ID,
+          title: 'Sibling',
+          customTitle: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: 1
+        }
+      ]
+    }
+    const own = {
+      ...foreign,
+      providerSession: {
+        key: 'session_id' as const,
+        id: SESSION_ID,
+        cwd: `${TEST_WORKTREE_ID.split('::')[1]}/pkg`
+      }
+    }
+    const next = applyWorktreeSleepResumeRecords(
+      session,
+      new Map([['pty', { retiredPaneKeys: [], records: [foreign] }]]),
+      ['pty']
+    )
+    expect(next).toBeNull()
+    const kept = applyWorktreeSleepResumeRecords(
+      session,
+      new Map([['pty', { retiredPaneKeys: [], records: [own] }]]),
+      ['pty']
+    )
+    expect(kept?.sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.providerSession.id).toBe(SESSION_ID)
+  })
+})
+
+describe('reopen refuses a conversation that lives in another tabbed worktree (#37799)', () => {
+  const SIBLING_WORKTREE_ID = `${TEST_WORKTREE_ID}-sibling`
+  const SIBLING_CWD = `${TEST_WORKTREE_ID.split('::')[1]}-sibling/pkg`
+
+  function sessionWithSiblingWorktree(
+    overrides: Partial<WorkspaceSessionState> = {}
+  ): Partial<WorkspaceSessionState> {
+    const base = makeWorkspaceSessionWithHeadlessTerminal()
+    return {
+      ...overrides,
+      tabsByWorktree: {
+        ...base.tabsByWorktree,
+        [SIBLING_WORKTREE_ID]: [
+          {
+            id: 'sibling-tab',
+            ptyId: 'sibling-pty',
+            worktreeId: SIBLING_WORKTREE_ID,
+            title: 'Sibling',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+  }
+
+  it('reopen keeps a plain shell when a stored record names the sibling worktree', async () => {
+    const { runtime, spawn } = makeRuntime(
+      null,
+      null,
+      sessionWithSiblingWorktree({
+        sleepingAgentSessionsByPaneKey: {
+          [PANE_KEY]: {
+            paneKey: PANE_KEY,
+            tabId: 'host-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'claude',
+            providerSession: { key: 'session_id', id: SESSION_ID, cwd: SIBLING_CWD },
+            prompt: '',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1,
+            connectionId: null,
+            origin: 'live'
+          }
+        }
+      })
+    )
+
+    await userActivate(runtime)
+
+    expect(spawnCommand(spawn, 0).includes(SESSION_ID)).toBe(false)
+  })
+
+  it('reopen adopts neither a slept capture nor hook rows naming the sibling worktree', async () => {
+    const { runtime, spawn, reportAgent } = makeRuntime(null, null, sessionWithSiblingWorktree(), {
+      key: 'session_id',
+      id: 'foreign-session',
+      cwd: SIBLING_CWD
+    })
+    await userActivate(runtime)
+    reportAgent()
+    await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+
+    await userActivate(runtime)
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawnCommand(spawn, 1).includes('foreign-session')).toBe(false)
   })
 })
