@@ -19998,7 +19998,8 @@
         "effortPickerFailed": "Çaba seçici açılamadı.",
         "modelApplyFailed": "{{value}} modeli uygulanamadı.",
         "effortApplyFailed": "Çaba düzeyi {{value}} olarak ayarlanamadı."
-      }
+      },
+      "settings": "Sohbet ayarları"
     },
     "tab": {
       "bar": {

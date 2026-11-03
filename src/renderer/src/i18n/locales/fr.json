@@ -20065,7 +20065,8 @@
         "cancelled": "Orca ne reprendra pas ce chat automatiquement.",
         "scheduled": "Orca reprendra ce chat à {{time}}.",
         "cancel": "Ne pas reprendre"
-      }
+      },
+      "settings": "Paramètres du chat"
     },
     "tab": {
       "bar": {

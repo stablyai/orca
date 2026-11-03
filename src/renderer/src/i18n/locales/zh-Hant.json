@@ -19707,7 +19707,8 @@
         "effortPickerFailed": "無法開啟推理強度選擇器。",
         "modelApplyFailed": "無法套用模型 {{value}}。",
         "effortApplyFailed": "無法套用推理強度 {{value}}。"
-      }
+      },
+      "settings": "聊天設定"
     },
     "tab": {
       "bar": {
