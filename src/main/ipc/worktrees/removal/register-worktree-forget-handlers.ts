@@ -19,7 +19,7 @@ import {
   cleanupUnusedWorktreePushTargetRemote
 } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { forceDeleteLocalBranch } from '../../../git/worktree'
 import { gitExecFileAsync } from '../../../git/runner'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'

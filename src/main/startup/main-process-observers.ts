@@ -25,7 +25,7 @@ import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
-import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
+import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 import { runAfterFirstWindowShown } from './first-window-deferral'
 

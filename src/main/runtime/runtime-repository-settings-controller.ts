@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../../shared/repo-kind'
-import { commitProvenRepoKindChange } from '../folder-repo-git-conversion'
+import { commitProvenRepoKindChange } from '../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeRepoSelector } from './runtime-repo-selector'
 import type { GhAccountBinding } from '../../shared/github/account-binding'

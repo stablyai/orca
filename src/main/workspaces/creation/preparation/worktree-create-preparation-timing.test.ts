@@ -26,7 +26,7 @@ vi.mock('../../../git/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
 vi.mock('../../../git/worktree-base-divergence', () => ({ measureRetargetDivergence: vi.fn() }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: vi.fn(),
   getWorktreeMirrorDistro: vi.fn()
 }))

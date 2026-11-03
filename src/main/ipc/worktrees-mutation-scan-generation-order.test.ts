@@ -1,7 +1,8 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 // Bump catalog generation before post-mutation awaits so clients can reject listings from before a create or removal.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isWorktreeCatalogVersion } from '../../shared/worktree/catalog-version'
-import { getLocalWorktreeScanGeneration } from '../local-worktree-scan-generation'
+import { getLocalWorktreeScanGeneration } from '../workspaces/catalog/local-worktree-scan-generation'
 import {
   addWorktreeMock,
   listWorktreesMock,
@@ -10,6 +11,15 @@ import {
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()

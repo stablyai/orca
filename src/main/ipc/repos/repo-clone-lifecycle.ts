@@ -25,8 +25,8 @@ import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { runWithClonePathLock } from './clone-path-lock'
-import { resolveClonedFolderConversion } from '../../folder-repo-git-conversion'
-import { findExtraFolderWorkspaceIds } from '../../folder-workspace-meta-presence'
+import { resolveClonedFolderConversion } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 type ActiveCloneMetadata = {
   path: string

@@ -11,6 +11,7 @@ import { flushSync } from 'react-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
@@ -50,6 +51,7 @@ export function AgentLaunchSetupButton({
   initial,
   renderAnchor,
   disabled,
+  submenu = false,
   open: controlledOpen,
   replacedByAnotherSetup = false,
   onOpenChange,
@@ -59,6 +61,7 @@ export function AgentLaunchSetupButton({
   initial?: AgentPickerDraft
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
+  submenu?: boolean
   open?: boolean
   replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
@@ -93,7 +96,7 @@ export function AgentLaunchSetupButton({
   const content = useRef<HTMLDivElement>(null)
   const anchor = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || submenu) {
       return
     }
     let frame = 0
@@ -126,7 +129,7 @@ export function AgentLaunchSetupButton({
       observer.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [open])
+  }, [open, submenu])
   const changeOpen = (next: boolean) => {
     if (next) {
       setPlacement('right')
@@ -136,6 +139,39 @@ export function AgentLaunchSetupButton({
     }
     onOpenChange?.(next)
   }
+  const panel = (
+    <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+      <AgentLaunchSetupPanel
+        key={`${draftKey}${slot}`}
+        entry={entry}
+        value={draft}
+        disabled={disabled}
+        onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft, slot)}
+        onUse={(draft) => {
+          const accepted = onUse(draft)
+          if (accepted !== false) {
+            changeOpen(false)
+          }
+          return accepted
+        }}
+      />
+    </div>
+  )
+  const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
+  if (submenu && renderAnchor) {
+    return (
+      <AgentLaunchSetupSubmenu
+        open={open}
+        onOpenChange={changeOpen}
+        renderAnchor={renderAnchor}
+        disabled={disabled}
+        label={label}
+      >
+        {panel}
+      </AgentLaunchSetupSubmenu>
+    )
+  }
+
   const trigger = (
     <div className="flex shrink-0 items-center gap-1">
       <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
@@ -191,22 +227,7 @@ export function AgentLaunchSetupButton({
           }
         }}
       >
-        <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-          <AgentLaunchSetupPanel
-            key={`${draftKey}${slot}`}
-            entry={entry}
-            value={draft}
-            disabled={disabled}
-            onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft, slot)}
-            onUse={(draft) => {
-              const accepted = onUse(draft)
-              if (accepted !== false) {
-                changeOpen(false)
-              }
-              return accepted
-            }}
-          />
-        </div>
+        {panel}
       </PopoverContent>
     </Popover>
   )

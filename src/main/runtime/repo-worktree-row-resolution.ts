@@ -1,4 +1,4 @@
-import { preserveFolderUpgradeWorktreePath } from '../folder-upgrade-worktree-path'
+import { preserveFolderUpgradeWorktreePath } from '../workspaces/catalog/folder-upgrade-worktree-path'
 import {
   composeWorktreeId,
   splitWorktreeId,
@@ -26,9 +26,9 @@ import type { RuntimeStore } from './runtime-store-contract'
 
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import { mergeWorktree } from '../ipc/worktree-metadata-merge'
-import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
-import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
-import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
+import { pruneLineageForMissingRepoWorktrees } from '../workspaces/catalog/worktree-lineage-pruning'
+import { getRepoOwnedWorktreeMeta } from '../workspaces/catalog/worktree-metadata-ownership'
+import { resolveLocalProjectRuntimesForRepos } from '../workspaces/execution-host/local-project-runtime-resolution'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
 type RepoWorktreeRowStore = Pick<

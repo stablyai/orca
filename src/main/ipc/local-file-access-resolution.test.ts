@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { Store } from '../persistence/loading-store/store'
-import type * as RepoWorktrees from '../repo-worktrees'
+import type * as RepoWorktrees from '../workspaces/catalog/repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
@@ -25,8 +25,8 @@ import { invalidateAuthorizedRootsCache } from './worktrees/removal/registered-w
 const { userData } = vi.hoisted(() => ({ userData: { path: '' } }))
 
 vi.mock('electron', () => ({ app: { getPath: () => userData.path } }))
-vi.mock('../repo-worktrees', async () => {
-  const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
+vi.mock('../workspaces/catalog/repo-worktrees', async () => {
+  const actual = await vi.importActual<typeof RepoWorktrees>('../workspaces/catalog/repo-worktrees')
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
 })
 

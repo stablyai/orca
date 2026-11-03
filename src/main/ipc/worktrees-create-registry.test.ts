@@ -1,7 +1,17 @@
+import type * as WorktreeScanCacheModule from '../git/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { addWorktreeMock, listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers } from './worktrees-test-harness'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+vi.mock('../git/worktree-scan-cache', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeScanCacheModule>('../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrictAllowingTrueEmpty: facade.listWorktreesSharedStrictAllowingTrueEmpty
+  }
+})
 
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('electron', async () =>

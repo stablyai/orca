@@ -16,11 +16,11 @@ vi.mock('../../../wsl-background-distro-gate', async (importOriginal) => ({
 }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path }))
 vi.mock('node:fs/promises', () => ({ stat: vi.fn(async () => ({})), realpath: mocks.realpath }))
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreeGraph: mocks.graph,
   isRepoRoot: vi.fn(() => false)
 }))
-vi.mock('../../../local-project-runtime-resolution', () => ({
+vi.mock('../../../workspaces/execution-host/local-project-runtime-resolution', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.runtimes
 }))
 import { resolveAuthorizedPath } from '../../filesystem/filesystem-auth'
