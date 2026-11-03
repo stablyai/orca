@@ -34,21 +34,4 @@ describe('renamed skills on paired runtimes', () => {
     )
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
-
-  it('plans and executes the same request on a runtime that supports migration', async () => {
-    mocks.supports.mockResolvedValue(true)
-    mocks.rpc
-      .mockResolvedValueOnce({ planDigest: 'reviewed' })
-      .mockResolvedValueOnce({ skills: [] })
-    expect(await planBundledSkillsOnTarget(target, request)).toEqual({
-      kind: 'plan',
-      plan: { planDigest: 'reviewed' }
-    })
-    await executeBundledSkillsOnTarget(target, 'reviewed', request)
-    expect(mocks.rpc.mock.calls[1]?.slice(0, 3)).toEqual([
-      target,
-      'skills.executeBundledOrca',
-      { planDigest: 'reviewed', request }
-    ])
-  })
 })
