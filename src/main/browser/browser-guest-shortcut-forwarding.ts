@@ -59,12 +59,12 @@ export function setupGuestShortcutForwarding(args: {
   const forwardContext: GuestShortcutForwardContext = {
     browserTabId,
     resolveRenderer,
+    hasEditableFocus: () => guestHasEditableFocus(guest),
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
-    hasEditableFocus: () => guestHasEditableFocus(guest),
     forwardBrowserPageZoom
   }
 
