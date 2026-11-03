@@ -8,9 +8,9 @@
 3 src/main/ipc/ephemeral-vm-recipe-context.ts
 2 src/main/ipc/filesystem/filesystem-source-control-ai-targets.ts
 1 src/main/ipc/folder-repo-git-upgrade.ts
-2 src/main/ipc/github-repo-routing.ts
-1 src/main/ipc/github-work-item-args.ts
-1 src/main/ipc/gitlab-repo-access.ts
+2 src/main/ipc/source-control/github-repo-routing.ts
+1 src/main/ipc/source-control/github-work-item-args.ts
+1 src/main/ipc/source-control/gitlab-repo-access.ts
 1 src/main/ipc/local-worktree-runtime-options.ts
 1 src/main/ipc/worktrees/removal/registered-worktree-root-owner.ts
 4 src/main/ipc/repos/local-repo-registration.ts

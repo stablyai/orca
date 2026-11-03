@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
 import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
 import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import { buildMobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import { buildMobileGitStatusEntryViews } from './mobile-source-control-screen-state'
+import {
+  buildMobileSourceControlSections,
+  countStagedEntries,
+  countUnstagedEntries,
+  getStageablePaths
+} from './mobile-git-status'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 type MobileSourceControlContentState = Omit<MobileSourceControlState, 'primaryActionArgs'> & {
@@ -16,6 +24,10 @@ import type {
 } from './mobile-source-control-screen-state'
 
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    isReduceMotionEnabled: async () => false,
+    addEventListener: () => ({ remove: () => {} })
+  },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -255,6 +267,7 @@ function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
     null,
     createElement(MobileSourceControlContent, {
       state: liveState,
+      stageAllInBar: state.primaryAction.kind === 'stage',
       bottomInset: 0,
       onOpenCommits: noop
     }),
@@ -407,6 +420,56 @@ describe('committed branch files during commit-message typing', () => {
     expect(text()).toContain('Reconnecting to desktop')
     expect(text()).toContain('offline')
   })
+})
+
+describe('Stage all presentation', () => {
+  it.each(['unstaged', 'mixed', 'capped-staged'] as const)(
+    'offers one working action for %s changes',
+    async (layout) => {
+      const initial = initialState()
+      const stageAll = vi.fn(async () => {})
+      const unstaged = { path: 'app.ts', status: 'modified', area: 'unstaged' } as const
+      const staged = { path: 'staged.ts', status: 'modified', area: 'staged' } as const
+      const entries =
+        layout === 'unstaged' ? [unstaged] : layout === 'mixed' ? [staged, unstaged] : [staged]
+      initial.sections = buildMobileSourceControlSections(
+        buildMobileGitStatusEntryViews(entries),
+        'changes-first'
+      )
+      initial.status = { entries, didHitLimit: layout === 'capped-staged' }
+      initial.stageablePaths = getStageablePaths(entries)
+      initial.stagedCount = countStagedEntries(entries)
+      initial.unstagedCount = countUnstagedEntries(entries)
+      initial.stageAll = stageAll
+      initial.primaryAction = buildMobileSourceControlPrimaryAction({
+        status: initial.status,
+        hasUnresolvedConflicts: false,
+        stageablePaths: initial.stageablePaths,
+        stagedCount: initial.stagedCount,
+        unstagedCount: initial.unstagedCount,
+        commitMessage: '',
+        busyAction: null,
+        branchCompareResult: null,
+        handlers: {
+          stageAll,
+          commit: unusedAsync,
+          runActionSheetGitSequence: unusedAsync,
+          runActionSheetGitSync: unusedAsync
+        }
+      })
+      render(initial)
+      const actions = renderer?.root.findAll(
+        (node) =>
+          String(node.type) === 'Pressable' &&
+          node.findAll(
+            (child) => String(child.type) === 'Text' && child.children.includes('Stage all')
+          ).length > 0
+      )
+      expect(actions).toHaveLength(1)
+      await act(async () => actions?.[0]?.props.onPress())
+      expect(stageAll).toHaveBeenCalledOnce()
+    }
+  )
 })
 
 describe('AI commit message button', () => {

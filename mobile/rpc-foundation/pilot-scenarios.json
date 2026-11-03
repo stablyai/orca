@@ -15944,10 +15944,24 @@
           "id": "one"
         },
         {
+          "complete": "terminal.read#1",
+          "params": {
+            "terminal": "terminal-1",
+            "screen": true,
+            "limit": 1
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {}
+            }
+          }
+        },
+        {
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u0015",
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16000,10 +16014,24 @@
           "id": "two"
         },
         {
+          "complete": "terminal.read#1",
+          "params": {
+            "terminal": "terminal-1",
+            "screen": true,
+            "limit": 1
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {}
+            }
+          }
+        },
+        {
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u0015",
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16076,10 +16104,24 @@
           "id": "two"
         },
         {
+          "complete": "terminal.read#1",
+          "params": {
+            "terminal": "terminal-1",
+            "screen": true,
+            "limit": 1
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {}
+            }
+          }
+        },
+        {
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u0015",
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -16132,10 +16174,24 @@
           "id": "trailing"
         },
         {
+          "complete": "terminal.read#1",
+          "params": {
+            "terminal": "terminal-1",
+            "screen": true,
+            "limit": 1
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {}
+            }
+          }
+        },
+        {
           "complete": "terminal.send#1",
           "params": {
             "terminal": "terminal-1",
-            "text": "\u0015",
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b",
             "enter": false,
             "client": {
               "id": "device-token-1",
@@ -18388,11 +18444,25 @@
           "id": "send-notes"
         },
         {
+          "complete": "terminal.read#1",
+          "params": {
+            "terminal": "terminal-1",
+            "screen": true,
+            "limit": 1
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {}
+            }
+          }
+        },
+        {
           "complete": "terminal.send#1",
           "params": {
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u0015"
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b"
           },
           "reply": {
             "ok": true,

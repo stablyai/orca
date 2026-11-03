@@ -1643,7 +1643,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
-      "providerUnavailable": "Bu sağlayıcı için barındırılan inceleme paneli kullanılamıyor."
+      "githubRemoteRequired": "Bu sekmede çekme isteği ayrıntılarını görmek için bir GitHub uzak deposu gerekir. Desteklenen diğer platformlarda Değişiklikler bölümünden bir inceleme oluşturup tarayıcınızda açın."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",

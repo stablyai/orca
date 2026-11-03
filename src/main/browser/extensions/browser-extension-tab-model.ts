@@ -5,7 +5,7 @@ import { browserManager } from '../browser-manager'
 import { createBrowserTabInRenderer } from '../../runtime/browser/browser-tab-renderer-create'
 import { closeBrowserTabInRenderer } from '../../runtime/browser/browser-tab-renderer-close'
 import { activateBrowserTabInRenderer } from '../../runtime/browser/browser-tab-renderer-activate'
-import { waitForTabRegistration } from '../../ipc/browser-tab-registration-wait'
+import { waitForTabRegistration } from '../../ipc/browser/browser-tab-registration-wait'
 import { emitBrowserExtensionEvent } from './browser-extension-api-host'
 import {
   BrowserExtensionApiError,

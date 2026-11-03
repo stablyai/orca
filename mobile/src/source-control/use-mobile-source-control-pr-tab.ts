@@ -64,8 +64,8 @@ export function useMobileSourceControlPrTab({
       ? {
           kind: 'blocked',
           message: t(
-            'pullRequest.prViewPanel.providerUnavailable',
-            'Hosted review panel unavailable for this provider.'
+            'pullRequest.prViewPanel.githubRemoteRequired',
+            'This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.'
           )
         }
       : prBranch === null

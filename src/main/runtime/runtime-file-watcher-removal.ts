@@ -1,10 +1,10 @@
-import { getWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
-import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
+import { getWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
+import { acquireWatcherRemovalGate } from '../workspaces/removal/watcher-removal-gate'
 import {
   createWatcherRemovalDeadline,
   drainBeforeWatcherRemoval,
   type WatcherRemovalDeadline
-} from '../ipc/watcher-removal-drain'
+} from '../workspaces/removal/watcher-removal-drain'
 
 type FileExplorerWatcherCommands = {
   closeFileExplorerWatchersForPath(worktreePath: string, connectionId?: string): Promise<void>
