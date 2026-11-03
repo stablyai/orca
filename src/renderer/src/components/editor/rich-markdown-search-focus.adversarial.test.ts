@@ -217,17 +217,31 @@ describe('Find focus with editor-owned selection', () => {
         samples.push(activeReads)
         expectWork(1, 0, 0, 0, 3)
 
-        for (const [step, boundary] of ['key', 'pending-flush', 'release'].entries()) {
-          if (boundary === 'release') {
+        const boundaries = ['key', 'pending-flush', 'release', 'ordinary-click', 'multiple-click']
+        for (const [step, boundary] of boundaries.entries()) {
+          if (boundary.endsWith('click') || boundary === 'release') {
+            vi.advanceTimersByTime(501)
             vi.spyOn(active.view, 'posAtCoords').mockReturnValue({
               pos: active.state.selection.head,
               inside: -1
             })
-            fireEvent.mouseDown(text.parentElement ?? active.view.dom, {
-              button: 0,
-              buttons: 1,
-              shiftKey: true
-            })
+            const press = () =>
+              fireEvent.mouseDown(text.parentElement ?? active.view.dom, {
+                button: 0,
+                buttons: 1,
+                shiftKey: boundary === 'release'
+              })
+            press()
+            expect(active.view).toHaveProperty(
+              'input.mouseDown.allowDefault',
+              boundary === 'release'
+            )
+            if (boundary === 'multiple-click') {
+              fireEvent.mouseUp(text.parentElement ?? active.view.dom, { button: 0 })
+              fireEvent.click(text.parentElement ?? active.view.dom, { button: 0, detail: 1 })
+              press()
+              expect(active.view).toHaveProperty('input.mouseDown', null)
+            }
           }
           native.setBaseAndExtent(text, 7 + step, text, 2 + step)
           restorations.mockClear()
@@ -236,7 +250,7 @@ describe('Find focus with editor-owned selection', () => {
           notifications.mockClear()
           reads.fill(0)
           clearWork()
-          if (boundary !== 'key') {
+          if (boundary === 'pending-flush' || boundary === 'release') {
             const measuredActive = measuredViews.at(-1)
             if (!measuredActive) {
               throw new Error('Expected active observer')
@@ -245,6 +259,13 @@ describe('Find focus with editor-owned selection', () => {
           }
           if (boundary === 'release') {
             fireEvent.mouseUp(document, { button: 0 })
+          } else if (boundary.endsWith('click')) {
+            fireEvent.mouseUp(text.parentElement ?? active.view.dom, { button: 0 })
+            expect(publications).toHaveBeenCalledTimes(boundary === 'ordinary-click' ? 1 : 0)
+            fireEvent.click(text.parentElement ?? active.view.dom, {
+              button: 0,
+              detail: boundary === 'multiple-click' ? 2 : 1
+            })
           } else {
             fireEvent.keyDown(active.view.dom, { key: 'Control' })
           }
@@ -271,13 +292,14 @@ describe('Find focus with editor-owned selection', () => {
             throw new Error('Expected settled owner mapping count')
           }
           expect(settledReads).toBeLessThanOrEqual(30 * paragraphs)
-          // A pending nonheld observe parses once, then consume confirms it; release stays held until consume.
+          // Pending observe and ordinary up→click each read twice; held release and untracked click read once.
+          const readsTwice = boundary === 'pending-flush' || boundary === 'ordinary-click'
           expectWork(
-            boundary === 'pending-flush' ? 2 : 1,
+            readsTwice ? 2 : 1,
             0,
             1,
-            boundary === 'release' ? 0 : 1,
-            boundary === 'pending-flush' ? 8 : 4
+            boundary === 'key' || boundary === 'pending-flush' ? 1 : 0,
+            readsTwice ? 8 : 4
           )
         }
 
