@@ -100,7 +100,11 @@ async function getPullRequestStatuses(
   if (!commitId) {
     return { statuses: pr.statuses ?? [], complete: false }
   }
-  return read(`${root}/commits/${encodePathSegment(commitId)}/statuses`)
+  const commitStatuses = await read(`${root}/commits/${encodePathSegment(commitId)}/statuses`)
+  return {
+    statuses: commitStatuses.statuses,
+    complete: prStatuses.complete && commitStatuses.complete
+  }
 }
 
 async function normalizePullRequest(

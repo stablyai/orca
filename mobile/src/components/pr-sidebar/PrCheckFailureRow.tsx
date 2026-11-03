@@ -62,7 +62,9 @@ export function PrCheckFailureRow({
   const details = entry?.status === 'loaded' ? entry.details : null
   const content = details ? presentCheckDetail(details) : null
   const annotation = content?.annotations[0] ?? null
-  const fallbackLine = content?.jobs[0]?.failedSteps[0]?.name ?? content?.summaryLines[1] ?? null
+  const step = content?.jobs[0]?.failedSteps[0] ?? null
+  const fallbackLine = step?.name ?? content?.summaryLines[1] ?? null
+  const isCancelled = check.conclusion === 'cancelled'
   const errorText = annotation
     ? [annotation.locator, annotation.title, annotation.message].filter(Boolean).join('\n')
     : fallbackLine
@@ -130,7 +132,7 @@ export function PrCheckFailureRow({
           <View style={styles.leading}>
             <CircleX
               size={20}
-              color={check.conclusion === 'cancelled' ? colors.textSecondary : colors.statusRed}
+              color={isCancelled ? colors.textSecondary : colors.statusRed}
               strokeWidth={2}
             />
           </View>
@@ -139,7 +141,7 @@ export function PrCheckFailureRow({
               {check.name}
             </Text>
             <Text style={styles.subtitle} numberOfLines={1}>
-              {check.conclusion === 'cancelled'
+              {isCancelled
                 ? t('pullRequest.checkStatus.cancelled', 'Cancelled')
                 : duration
                   ? t('pullRequest.screens.failedAfter', 'Failed after {{duration}}', { duration })
@@ -167,18 +169,33 @@ export function PrCheckFailureRow({
           ) : entry.status === 'error' ? (
             <Text style={styles.muted}>{entry.message}</Text>
           ) : annotation ? (
-            <View style={styles.error}>
+            <View style={[styles.error, isCancelled && styles.cancelledDetail]}>
               <Text style={styles.codeMuted} numberOfLines={1}>
                 {annotation.locator}
               </Text>
               {annotation.title ? <Text style={styles.codeText}>{annotation.title}</Text> : null}
-              <Text style={styles.codeError} numberOfLines={6}>
+              <Text
+                style={
+                  isCancelled && annotation.level !== 'failure'
+                    ? styles.codeMuted
+                    : styles.codeError
+                }
+                numberOfLines={6}
+              >
                 {annotation.message}
               </Text>
             </View>
           ) : fallbackLine ? (
-            <View style={styles.error}>
-              <Text style={styles.codeText}>{fallbackLine}</Text>
+            <View style={[styles.error, isCancelled && styles.cancelledDetail]}>
+              <Text
+                style={
+                  isCancelled && step && step.state !== 'cancelled'
+                    ? styles.codeError
+                    : styles.codeText
+                }
+              >
+                {fallbackLine}
+              </Text>
             </View>
           ) : null}
           {actionable ? (
@@ -272,6 +289,7 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: 2,
     gap: 2
   },
+  cancelledDetail: { borderLeftColor: colors.textSecondary },
   codeMuted: {
     color: colors.textMuted,
     fontFamily: typography.monoFamily,

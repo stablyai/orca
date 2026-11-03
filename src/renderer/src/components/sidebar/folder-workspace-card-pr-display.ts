@@ -109,7 +109,10 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
     ...(row.reviewState ? { state: row.reviewState } : {}),
     ...(row.reviewUrl ? { url: row.reviewUrl } : {}),
     status: row.checkTone === 'cancelled' ? 'failure' : row.checkTone,
-    checksSummary: row.checksSummary
+    // Review attention tones must not be reinterpreted as check outcomes.
+    checksSummary: ['failing', 'pending', 'cancelled', 'success', 'neutral'].includes(row.status)
+      ? row.checksSummary
+      : undefined
   }
 }
 
