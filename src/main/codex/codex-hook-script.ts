@@ -15,6 +15,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
+      // Why: Codex fails closed on non-JSON hook stdout (#16356); neutral JSON first, like claude/hook-script.ts.
+      'echo {}',
       // Reload the endpoint so surviving PTYs reach the current server after restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
@@ -27,6 +29,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    // Why: Codex fails closed on non-JSON hook stdout (#16356); neutral JSON first, like claude/hook-script.ts.
+    'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('codex'),
     ...buildPosixClaudeBackgroundJobGuardLines(),
