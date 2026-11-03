@@ -73,7 +73,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     statusUpdatedAt: event.receivedAt,
     finishedAt: dotState === 'done' && stateChanged ? event.stateStartedAt : card.finishedAt,
     askSummary:
-      bucket === 'attention'
+      bucket === 'attention' && dotState !== 'done'
         ? event.interactivePrompt !== undefined
           ? event.interactivePrompt || undefined
           : card.askSummary

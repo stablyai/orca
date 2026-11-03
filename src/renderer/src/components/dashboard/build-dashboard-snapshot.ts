@@ -245,7 +245,10 @@ export function buildDashboardSnapshot(
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
         unseen,
-        askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
+        askSummary:
+          bucket === 'attention' && dotState !== 'done'
+            ? (row.entry.interactivePrompt ?? undefined)
+            : undefined,
         conversationName: boundedLabelOrUndefined(
           rowConversationName(
             row,
