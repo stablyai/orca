@@ -123,7 +123,7 @@ function CompactAgentMessageCard({
         </div>
         <span
           id={labelId}
-          className="pointer-events-none max-w-1/2 shrink-0 truncate text-xs text-muted-foreground"
+          className="pointer-events-none max-w-1/3 shrink-0 truncate text-xs text-muted-foreground"
         >
           {heading(from, message)}
         </span>
