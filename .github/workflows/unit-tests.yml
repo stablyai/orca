@@ -130,6 +130,7 @@ jobs:
         if: steps.module-cache.outputs.key != ''
         env:
           ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-matched-key != '' }}
+          ORCA_UNIT_CACHE_MODE: ${{ inputs.module_cache }}
         run: node config/scripts/ci-unit-module-cache.mjs prepare
 
       - uses: actions/download-artifact@v8
