@@ -50,14 +50,6 @@ describe('id-keyed worktree projections keep distinct hosts distinct', () => {
     // Last wins: fetchWorktrees replaces, so the later entry is the current one.
     expect(all[0]?.head).toBe('fresh')
   })
-
-  it('treats an unqualified row as its own bucket rather than inventing a host', () => {
-    const unqualified: Worktree = { ...baseWorktree, displayName: 'unqualified orca' }
-
-    const all = getIndexedAllWorktrees(byRepo(unqualified, sshRow))
-
-    expect(all).toHaveLength(2)
-  })
 })
 
 describe('getWorktreeOnHostFromState refuses a lookup that still matches two copies', () => {

@@ -95,13 +95,13 @@ export class AcpTimelineTranslator {
     const stopReason = failure?.stopReason ?? 'error'
     const ended = this.prompts.last
     const notSignedIn = this.authenticationRequired(error)
+    const ending = { ...failure, stopReason, at, failureDetail: detail, notSignedIn }
     if (this.prompts.current?.clientMessageId !== clientMessageId) {
       // A late prompt answer may supply a failure reason missing from the provider's end.
       return ended?.clientMessageId === clientMessageId && this.failures.has(ended.turn)
-        ? this.failures.row(ended.turn, detail, stopReason, notSignedIn, failure?.usageLimit)
+        ? this.failures.row(ended.turn, ending)
         : []
     }
-    const ending = { ...failure, stopReason, at, failureDetail: detail, notSignedIn }
     return this.finishPrompt(clientMessageId, ending)
   }
 
@@ -209,8 +209,10 @@ export class AcpTimelineTranslator {
     const offeredTurn =
       providerTurn ?? (this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn)
     const owner = update ? this.messages.owner(offeredTurn, update) : { turn: offeredTurn }
-    // Compaction frames join the host's open command turn without a provider turn key.
-    const turn = this.prompts.compacting(owner.turn) ? undefined : owner.turn
+    // Host command IDs cannot join provider-keyed turns, even when their late frames outlive `last`.
+    const settledCommand =
+      owner.turn?.startsWith('compact:') === true && this.prompts.current?.turn !== owner.turn
+    const turn = this.prompts.compacting(owner.turn) || settledCommand ? undefined : owner.turn
     if (
       owner.settled &&
       (update?.sessionUpdate === 'agent_message_chunk' ||
@@ -242,12 +244,10 @@ export class AcpTimelineTranslator {
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))
     }
-    if (this.prompts.absorbCompaction(owner.turn, extension, update)) {
+    if (settledCommand || this.prompts.absorbCompaction(owner.turn, extension, update)) {
       return events
     }
-    if (extension?.failureDetail && turn) {
-      events.push(...this.failures.row(turn, extension.failureDetail))
-    }
+    events.push(...this.failures.notification(turn, extension))
     const end = extension?.end
     if (end && turn) {
       // Hook refusal ends immediately; normal completion waits for the prompt reply.
@@ -298,9 +298,8 @@ export class AcpTimelineTranslator {
 
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
-    const { stopReason, failureDetail, notSignedIn, usageLimit } = ending
-    const events = this.prompts.endCompaction(turn, ending) ?? [
-      ...this.failures.ended(turn, stopReason, failureDetail, notSignedIn, usageLimit),
+    const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
+      ...this.failures.ended(turn, ending),
       ...acpTurnEndEvents(this.options.sessionId, turn, ending)
     ]
     this.end(turn)

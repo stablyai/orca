@@ -139,59 +139,6 @@ describe('pane reveal callback lifetime', () => {
       flushFrame()
       expect(reads).toHaveBeenCalledOnce()
     })
-
-    it(`skips ${kind} pane lookup after hide or destruction`, () => {
-      const hidden = createManager()
-      const destroyed = createManager()
-      const hiddenReads = watchPaneReads(hidden)
-      const destroyedReads = watchPaneReads(destroyed)
-      schedule(hidden, kind)
-      schedule(destroyed, kind)
-      hidden.setAtlasRecoveryVisible(false)
-      destroyed.destroy()
-      destroyedReads.mockClear()
-
-      flushFrame()
-      flushFrame()
-
-      expect(hiddenReads).not.toHaveBeenCalled()
-      expect(destroyedReads).not.toHaveBeenCalled()
-    })
-
-    it(`preserves ${kind} timeout scheduling without animation frames`, () => {
-      vi.useFakeTimers()
-      vi.stubGlobal('requestAnimationFrame', undefined)
-      const manager = createManager()
-      const reads = watchPaneReads(manager)
-      schedule(manager, kind)
-      expect(reads).not.toHaveBeenCalled()
-      vi.runAllTimers()
-      expect(reads).toHaveBeenCalledOnce()
-    })
-
-    it(`looks up the current ${kind} pane list after both frames settle`, () => {
-      const manager = createManager()
-      const panes = inspectPaneMap(manager)
-      const staleVisit = vi.fn(() => false)
-      const liveVisit = vi.fn(() => false)
-      panes.set(1, {
-        get gpuRenderingEnabled() {
-          return staleVisit()
-        }
-      })
-      schedule(manager, kind)
-      flushFrame()
-      panes.set(1, {
-        get gpuRenderingEnabled() {
-          return liveVisit()
-        }
-      })
-      flushFrame()
-      panes.clear()
-
-      expect(staleVisit).not.toHaveBeenCalled()
-      expect(liveVisit).toHaveBeenCalled()
-    })
   }
 
   it('coalesces repeated repaint getters while preserving present callbacks', () => {

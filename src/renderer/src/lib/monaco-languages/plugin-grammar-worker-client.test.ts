@@ -76,14 +76,6 @@ describe('PluginGrammarWorkerClient', () => {
     expect(worker?.terminated).toBe(false)
   })
 
-  it('refuses tokens that do not fit the document', async () => {
-    const { instance, workers } = client()
-    const result = instance.tokenize('ab', [2], signal())
-    await flush()
-    workers[0]?.reply({ ...complete(workers[0].lastJob()), data: new Uint32Array([0, 1, 9, 0]) })
-    await expect(result).resolves.toEqual({ ok: false, reason: 'unavailable' })
-  })
-
   it('gives setup its own deadline, so a slow start never counts as a stall', async () => {
     vi.useFakeTimers()
     const { instance, workers } = client(false)

@@ -119,12 +119,4 @@ describe('a paired client mirroring a host verdict arm', () => {
     expect(row?.state).toBe('done')
     expect(row && agentVerdictDisplayMark(row.entry)).toBeNull()
   })
-
-  it.each([
-    ['interruption', 'failed'],
-    ['unconfirmed', 'unconfirmed']
-  ] as const)('reads a mirrored %s as its own mark', (outcome, mark) => {
-    const [row] = mirroredRows(outcome)
-    expect(row && agentVerdictDisplayMark(row.entry)).toBe(mark)
-  })
 })

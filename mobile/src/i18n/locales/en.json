@@ -145,6 +145,9 @@
       "speechModelHeading": "SPEECH MODEL",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
+    },
+    "agents": {
+      "permissionOwnAll": "Agents' own settings"
     }
   },
   "common": {
@@ -2299,7 +2302,6 @@
       "notesSent": "Notes sent"
     },
     "prActionsEngine": {
-      "refreshFailed": "Failed to refresh pull request.",
       "mergeFailed": "Failed to merge pull request."
     },
     "prAiTriageLaunch": {
@@ -2491,6 +2493,7 @@
       "attachmentNotAFile": "An image on this message isn't a file, so the message was not sent.",
       "attachmentNoSource": "An image on this message has no file to send, so the message was not sent.",
       "attachmentInvalid": "An attachment on this message can't be sent to the agent.",
+      "attachmentsExpired": "{{names}} expired.",
       "attachmentUnreadable": "An attachment on this message couldn't be read, so the message was not sent.",
       "emptyMessage": "This message is empty, so it was not sent.",
       "commandUnavailable": "This command isn't available in {{agent}} chats, so it was not sent.",
@@ -2589,6 +2592,7 @@
       "recordFailed": "Orca couldn't save this to the chat's history.",
       "attachmentExpired": "This attachment expired.",
       "reattachFile": "Remove it and attach it again.",
+      "reattachFiles": "Remove them and attach them again.",
       "conversationCleared": "This conversation has been cleared.",
       "openCurrentConversation": "Open the current conversation to continue.",
       "clearUnfinished": "The last /clear didn't finish.",
@@ -2628,6 +2632,7 @@
       "hostReconciling": "Orca is still checking on this chat after restarting.",
       "waitMoment": "Wait a moment.",
       "recordUnreadable": "Orca couldn't read this chat's saved state.",
+      "mailOwnerUnconfirmed": "Orca couldn't confirm this message is still meant for this chat.",
       "chatNotFound": "Orca can't find this chat.",
       "startNewChat": "Start a new chat to continue.",
       "tryAgain": "Try again."
@@ -3081,6 +3086,24 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Unreadable attachment reply. Try again.",
+      "incompleteReply": "Attachment changed or its reply was incomplete. Close it and try again.",
+      "notText": "This file cannot be previewed as text. Save it to open it in another app.",
+      "openFailed": "Unable to open attachment. Try again.",
+      "hostUpdate": "This host cannot open text attachments yet. Update Orca on that host, then retry.",
+      "copyTooLarge": "This file is too large to copy. Save it instead.",
+      "connectionChanged": "Connection changed. Retry to reopen the attachment.",
+      "hostChanged": "The attachment host changed. Close it and reopen it.",
+      "readFailed": "Unable to read this attachment. Reconnect and try again. The file may have been removed or changed.",
+      "copyFrame": "Full Copy for this attachment needs the upcoming phone update.",
+      "copyFailed": "Unable to copy attachment. Try again.",
+      "pastedText": "Pasted text",
+      "textAttachment": "Text attachment",
+      "byteSize": "{{size}} bytes",
+      "saveUpdate": "Save will be available in a phone update.",
+      "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
     },
     "agentMessage": {
       "startedWorker": "Started worker",
