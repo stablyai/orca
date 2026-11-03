@@ -2,6 +2,7 @@
 import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import type { HostCatalogEntry, HostProfile } from './types'
+import type { ReportedHostDescriptor } from './host-name-identity'
 
 // The page gets no device credential or public key; RPC uses the shell’s paired client.
 function pageHosts(): HostProfile[] {
@@ -37,7 +38,7 @@ export function updateHostNameAndEndpoint(
 // Last-known descriptors belong to the native host list.
 export function updateHostDescriptor(
   _hostId: string,
-  _descriptor: { machineName: string | null; platform: NodeJS.Platform | null }
+  _descriptor: ReportedHostDescriptor
 ): Promise<void> {
   return Promise.resolve()
 }

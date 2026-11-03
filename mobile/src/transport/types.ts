@@ -9,6 +9,8 @@ import {
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import type { HostMachine } from '../../../src/shared/host-machine-line'
+import { HostMachineSchema } from './host-status-reply-schema'
 
 export { PairingOfferSchema }
 export type { PairingOffer }
@@ -107,6 +109,7 @@ export type HostProfile = {
   // Last desktop-reported name, retained offline and across restarts.
   lastKnownMachineName?: string
   lastKnownHostPlatform?: NodeJS.Platform
+  lastKnownHostMachine?: HostMachine
   endpoint: string
   deviceToken: string
   publicKeyB64: string
@@ -130,7 +133,8 @@ const hostNameIdentityFields = {
   lastKnownHostPlatform: salvagedOptional(
     'lastKnownHostPlatform',
     z.enum(NODE_PLATFORM_NAMES)
-  ).optional()
+  ).optional(),
+  lastKnownHostMachine: salvagedOptional('lastKnownHostMachine', HostMachineSchema).optional()
 }
 
 export const HostProfileSchema = z.object({
