@@ -1,4 +1,4 @@
-import React from 'react'
+import type React from 'react'
 import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
 import type { CardTemplate } from '../../../../../shared/workspace-cards/card-template-schema'
 import type { WorktreeCardController } from '../use-worktree-card-controller'
@@ -55,15 +55,15 @@ export function renderWorkspaceCardWithFallback(
   }
   return {
     frame: drawn.frame,
-    content: React.createElement(
-      RecoverableRenderErrorBoundary,
-      {
-        boundaryId: 'workspace-card-plugin',
-        surface: 'sidebar',
-        reportAsCrash: false,
-        fallback: () => drawDefault().content
-      },
-      drawn.content
+    content: (
+      <RecoverableRenderErrorBoundary
+        boundaryId="workspace-card-plugin"
+        surface="sidebar"
+        reportAsCrash={false}
+        fallback={() => drawDefault().content}
+      >
+        {drawn.content}
+      </RecoverableRenderErrorBoundary>
     )
   }
 }
