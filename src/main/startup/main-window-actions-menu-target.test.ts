@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { quit: vi.fn() } }))
-vi.mock('../updater', () => ({ checkForUpdatesFromMenu: vi.fn(), isQuittingForUpdate: vi.fn() }))
+vi.mock('../updater/updater-service', () => ({
+  checkForUpdatesFromMenu: vi.fn(),
+  isQuittingForUpdate: vi.fn()
+}))
 vi.mock('../tray/system-tray', () => ({
   createSystemTray: vi.fn(),
   setMacMenuBarIconVisible: vi.fn()

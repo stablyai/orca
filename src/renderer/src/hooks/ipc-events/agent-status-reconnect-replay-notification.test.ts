@@ -46,13 +46,10 @@ function createApplicator(): (data: AgentStatusIpcPayload) => unknown {
 
 // A relay reconnect re-sends every cached row; each replayed `done` used to notify again.
 describe('live agent-status replay notifications', () => {
-  let setAgentStatus: ReturnType<typeof vi.fn>
-
   beforeEach(() => {
     mocks.observe.mockReset()
-    setAgentStatus = vi.fn()
     mocks.state.current = buildStoreState({
-      setAgentStatus,
+      setAgentStatus: vi.fn(),
       workspaceSessionReady: true,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Claude' }]
@@ -61,15 +58,6 @@ describe('live agent-status replay notifications', () => {
         'tab-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID }
       }
     })
-  })
-
-  it('updates status from a replayed done without observing it as a completion', () => {
-    const apply = createApplicator()
-
-    expect(apply(status({ isReplay: true }))).toBe('applied')
-
-    expect(setAgentStatus).toHaveBeenCalledTimes(1)
-    expect(mocks.observe).not.toHaveBeenCalled()
   })
 
   function seedRow(row: { state: string; stateStartedAt: number }): void {

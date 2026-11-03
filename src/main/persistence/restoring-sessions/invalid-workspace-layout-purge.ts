@@ -16,7 +16,7 @@ import {
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
-import { getLocalWorktreeCatalogVersion } from '../../local-worktree-scan-generation'
+import { getLocalWorktreeCatalogVersion } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type WorkspaceValidityCatalog = Parameters<typeof buildValidWorktreeIdsForSessionHydration>[0]
 

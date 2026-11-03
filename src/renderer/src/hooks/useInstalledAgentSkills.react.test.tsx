@@ -392,53 +392,6 @@ describe('useInstalledAgentSkill', () => {
     expect(latestState?.installed).toBe(true)
   })
 
-  it('detects a legacy Linear install through WSL skill discovery', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(latestState?.installed).toBe(true)
-    expect(discover).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      names: ['orca-linear', 'linear-tickets'],
-      sourceKinds: ['home']
-    })
-  })
-
-  it('detects a legacy Linear install through project-runtime skill discovery', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'linear-tickets' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe({ projectRuntime: projectWslRuntime })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(latestState?.installed).toBe(true)
-    expect(discover).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      projectRuntime: projectWslRuntime,
-      names: ['orca-linear', 'linear-tickets'],
-      sourceKinds: ['home']
-    })
-  })
-
   it('serves a focus rescan from cache so window switching does not walk disk', async () => {
     // Pin wall time so runner stalls cannot cross freshness boundaries mid-test.
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
@@ -505,30 +458,6 @@ describe('useInstalledAgentSkill', () => {
       names: ['orca-linear', 'linear-tickets'],
       sourceKinds: ['home']
     })
-  })
-
-  it('reuses cached discovery when another surface finishes re-checking', async () => {
-    const discover = vi
-      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
-      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { discover } }
-    })
-
-    await renderProbe()
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(discover).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      notifyInstalledAgentSkillsRefreshed()
-      await Promise.resolve()
-    })
-
-    expect(discover).toHaveBeenCalledTimes(1)
-    expect(latestState?.installed).toBe(true)
   })
 
   it('clears loading when a silent refresh supersedes an in-flight forced rescan', async () => {

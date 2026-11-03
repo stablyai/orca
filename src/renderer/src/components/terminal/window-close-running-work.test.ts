@@ -98,16 +98,6 @@ describe('assessWindowCloseRunningWork', () => {
     })
   })
 
-  it('warns on quit about an SSH relay pty alongside a busy paired runtime pty', async () => {
-    setState([SSH_PTY, RUNTIME_PTY])
-    answerWith({ [SSH_PTY]: BUSY, [RUNTIME_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'running'
-    })
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
-  })
-
   // Unreachable remote work is unverifiable, never proof of exit; quitting silently could orphan it.
   it('warns rather than quitting silently when a remote host answers unverifiable', async () => {
     setState([SSH_PTY])

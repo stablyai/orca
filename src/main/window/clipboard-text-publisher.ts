@@ -11,7 +11,7 @@ import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { stageClipboardPublisher } from './clipboard-publisher-executable'
 import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
-import { isLegacyAppImageRuntimeIdentity } from '../linux-update-package-type'
+import { isLegacyAppImageRuntimeIdentity } from '../updater/linux-package/linux-update-package-type'
 
 const WAYLAND_CLIPBOARD_WRITE_FAILED_ERROR = 'Wayland clipboard write failed'
 const MAX_PENDING_CLIPBOARD_WRITES = 32

@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
+import { HOST_SESSION_ROUTE, type HostStackRouteTarget } from '../navigation/host-stack-navigation'
 
 export type MobileSessionRouteParams = {
   hostId: string
@@ -21,7 +21,7 @@ export function mobileSessionRouteTarget({
   projectOpen
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
-    name: '[hostId]/session/[worktreeId]',
+    name: HOST_SESSION_ROUTE,
     params: {
       hostId,
       worktreeId,

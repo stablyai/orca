@@ -2,7 +2,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 /** Project removal must close structured sessions and retire chat tabs itself; PTY sweeps cannot see them. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'

@@ -25,7 +25,7 @@ import {
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../shared/native-chat-paste-bytes'
+} from '../../../../shared/native-chat/input/native-chat-paste-bytes'
 import {
   AGENT_TUI_CLEAR_INPUT_MAX,
   buildAgentTuiClearInputForText

@@ -276,7 +276,10 @@ export async function installStagedPluginTree(input: {
     resolvedCommit: input.resolvedCommit,
     contentHash: sourceInspection.contentHash,
     consentFingerprint,
-    installedAt: Date.now()
+    // Why kept on update: install order decides which plugin replaces a built-in action.
+    installedAt:
+      (await readPluginLockfile(input.pluginsDir).catch(() => null))?.plugins[pluginKey]
+        ?.installedAt ?? Date.now()
   }
   try {
     await publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })

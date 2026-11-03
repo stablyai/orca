@@ -1,7 +1,7 @@
 import { setTimeout, clearTimeout } from 'node:timers'
 import { Worker } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
-import type { WorkerRequestTransport } from '../../worker-thread-transport'
+import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
 

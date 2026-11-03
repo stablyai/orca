@@ -1837,6 +1837,7 @@
       "attachmentAtMost": "{{agent}} tek mesajda en fazla {{limit}} görsel kabul ettiği için bu mesaj gönderilmedi.",
       "attachmentEmpty": "Bu mesajdaki bir görsel boş olduğu için mesaj gönderilmedi.",
       "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+      "attachmentsExpired": "Süresi doldu: {{names}}.",
       "attachmentLargerThan": "Bu mesajdaki bir görsel {{size}} MB sınırını aştığı için mesaj gönderilmedi.",
       "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
       "attachmentNotAFile": "Bu mesajdaki görsellerden biri dosya olmadığı için mesaj gönderilmedi.",
@@ -1910,6 +1911,7 @@
       "providerRetrying": "{{agent}} geçici bir sorunla karşılaştı ve yeniden deniyor.",
       "providerRetryingQuoted": "{{agent}} yeniden deniyor: {{detail}}.",
       "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+      "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
       "queueFull": "Ajana iletilmeyi bekleyen çok fazla mesaj olduğu için bu mesaj gönderilmedi.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
@@ -2039,8 +2041,7 @@
       "promptUnconfirmed": "Ajan başlatıldı, ancak istemin gönderildiği doğrulanamadı."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull request merge edilemedi.",
-      "refreshFailed": "Pull request yenilenemedi."
+      "mergeFailed": "Pull request merge edilemedi."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Ajan başlatıldı",
@@ -2421,6 +2422,7 @@
       "queueTooLarge": "Kuyrukta çok fazla metin bekliyor.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "reattachFile": "Kaldırıp yeniden ekleyin.",
+      "reattachFiles": "Kaldırıp yeniden ekleyin.",
       "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
       "recordUnreadable": "Orca'da bu sohbetin kayıtlı durumu okunamadı.",
       "reopenChat": "Yeniden kontrol etmek için sohbeti tekrar açın.",
@@ -2647,6 +2649,9 @@
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi"
+    },
+    "agents": {
+      "permissionOwnAll": "Ajanların kendi ayarları"
     }
   },
   "sourceControl": {

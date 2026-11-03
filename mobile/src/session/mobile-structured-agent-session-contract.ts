@@ -1,5 +1,5 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
-import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type {
@@ -60,6 +60,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
 
 export type MobileStructuredAgentSessionArgs = {
   client: RpcClient | null
+  /** The route's paired host owns follow-up behavior even when another host executes the chat. */
+  pairedHostClient: RpcClient | null
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string

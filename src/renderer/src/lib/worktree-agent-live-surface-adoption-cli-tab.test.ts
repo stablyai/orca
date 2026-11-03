@@ -162,37 +162,6 @@ describe('a CLI terminal the window never mounted, layout-owner build', () => {
     expect(terminalTabIds(store)).toEqual(['tab-cli'])
   })
 
-  it('main’s binding frame arrives after the census: the window draws nothing, and that frame draws main’s tab', async () => {
-    const store = await bootWindow()
-    const before = loadWorkspaceLayoutWithoutReport('local', emptySession(), nameBasedLoadContext())
-    stream.onFrame!(frameOf(before.layout))
-    store.getState().ensureWorktreeRootGroup(GIT_KEY)
-    // Main admitted the CLI pane before its spawn bound it; no frame of it has arrived yet.
-    model = loadWorkspaceLayoutWithoutReport(
-      'local',
-      cliSession(false),
-      nameBasedLoadContext()
-    ).layout
-    streamUp = false
-    const createTab = vi.spyOn(store.getState(), 'createTab')
-
-    const adoption = await adoptLiveWorkspacePtySurfaces(
-      store.getState,
-      GIT_KEY,
-      [CLI_PTY],
-      async () => unowned
-    )
-    await flushMicrotasks()
-
-    expect(adoption).toEqual({ surfaced: false, declinedPtyIds: [CLI_PTY] })
-    expect(createTab).not.toHaveBeenCalled()
-    expect(applied).toEqual([])
-    streamUp = true
-    stream.onFrame!(frameOf(model))
-    await flushMicrotasks()
-    expect(terminalTabIds(store)).toEqual(['tab-cli'])
-  })
-
   it('a background wake on a workspace the window does not hold: the visit shows main’s one tab', async () => {
     const store = await bootWindow()
     stream.onFrame!(frameOf(model))

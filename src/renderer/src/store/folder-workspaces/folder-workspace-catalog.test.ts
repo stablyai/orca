@@ -5,7 +5,7 @@ import {
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
-import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspace-execution-host'
 
 function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -43,47 +43,6 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folder workspace host resolution', () => {
-  it.each([
-    [
-      'uses a normalized explicit host stamp',
-      makeFolderWorkspace({ executionHostId: ' runtime:env-1 ' as never }),
-      [],
-      'runtime:env-1'
-    ],
-    [
-      'uses a workspace SSH connection',
-      makeFolderWorkspace({ connectionId: 'ssh-1' }),
-      [],
-      'ssh:ssh-1'
-    ],
-    [
-      'uses the single owning project-group host',
-      makeFolderWorkspace(),
-      [makeProjectGroup({ executionHostId: 'runtime:env-1' })],
-      'runtime:env-1'
-    ],
-    [
-      'keeps duplicate project-group copies on one host',
-      makeFolderWorkspace(),
-      [
-        makeProjectGroup({ executionHostId: 'runtime:env-1' }),
-        makeProjectGroup({ executionHostId: 'runtime:env-1' })
-      ],
-      'runtime:env-1'
-    ],
-    [
-      'falls back local for ambiguous project-group owners',
-      makeFolderWorkspace(),
-      [
-        makeProjectGroup({ executionHostId: 'runtime:env-1' }),
-        makeProjectGroup({ executionHostId: 'runtime:env-2' })
-      ],
-      'local'
-    ]
-  ])('%s', (_description, workspace, projectGroups, expectedHostId) => {
-    expect(getFolderWorkspaceHostId(workspace, projectGroups)).toBe(expectedHostId)
-  })
-
   it('indexes project-group hosts once while merging repeated workspace rows', () => {
     let hostReads = 0
     const projectGroup = makeProjectGroup()

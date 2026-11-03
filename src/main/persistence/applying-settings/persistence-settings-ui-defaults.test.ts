@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { nativeChatQueueFollowUps } from '../../../shared/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../shared/onboarding-defaults'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({

@@ -39,7 +39,7 @@ export function useMobileSessionFoundation() {
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
-  const { client, clientId, state: connState } = useWorkspaceClient(hostId)
+  const { client, clientId, state: connState, pairedHostClient } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const uiViewClient =
     useRpcClientContext()
@@ -111,6 +111,7 @@ export function useMobileSessionFoundation() {
     client,
     clientId,
     connState,
+    pairedHostClient,
     hostCapabilities,
     reconnectAttempts,
     lastConnectedAt,

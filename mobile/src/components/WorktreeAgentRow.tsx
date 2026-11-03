@@ -28,6 +28,7 @@ type Props = {
   childRow?: AgentChildRowModel
   isReadOnly?: boolean
   onPress?: (paneKey: string) => void
+  onLongPress?: () => void
   trailing?: ReactNode
 }
 
@@ -40,6 +41,7 @@ function WorktreeAgentRowComponent({
   childRow,
   isReadOnly,
   onPress,
+  onLongPress,
   trailing
 }: Props) {
   useMobileColorScheme()
@@ -83,15 +85,17 @@ function WorktreeAgentRowComponent({
       <Text style={styles.time}>{ts}</Text>
     </View>
   )
-  return childRow ? (
+  return onPress ? (
     <Pressable
       style={({ pressed }) => pressed && pressedStyle}
-      disabled={isReadOnly || !onPress}
+      disabled={isReadOnly}
       accessibilityRole="button"
       onPress={(event) => {
         event.stopPropagation()
-        onPress?.(agent.paneKey)
+        onPress(agent.paneKey)
       }}
+      onLongPress={onLongPress}
+      delayLongPress={400}
     >
       {content}
     </Pressable>
