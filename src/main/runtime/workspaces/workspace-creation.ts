@@ -20,6 +20,7 @@ import type { PreparationRearmHolder } from '../../workspaces/creation/preparati
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../runtime-local-worktree-terminal-startup'
+import { baseDriftWarningResult } from '../../git/worktrees/creation/worktree-base-drift-warning'
 import { trackRuntimeWorkspaceCreate } from '../../workspaces/creation/workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../workspaces/creation/workspace-create-telemetry'
@@ -250,7 +251,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         activate: activationCallbacks.local
       }
     })
-    warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -289,7 +289,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
-      ...(warning ? { warning } : {}),
+      ...baseDriftWarningResult(localCreate.localBaseRefDriftWarning, terminalWarning),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

@@ -1,3 +1,4 @@
+import { registerLocalBaseDriftWarningTest } from './worktrees-local-base-drift-warning.spec'
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
@@ -230,6 +231,8 @@ describe('registerWorktreeHandlers', () => {
       worktree: expect.objectContaining({ branch: 'jdoe/concurrent-probe' })
     })
   })
+
+  registerLocalBaseDriftWarningTest(() => runtimeStub)
 
   it('skips the broad remote fetch when creating from an existing commit SHA base', async () => {
     const sha = 'a'.repeat(40)

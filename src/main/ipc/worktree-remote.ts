@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/git-admission-tier-params'
 import type { Repo } from '../../shared/repo-types'
+import type { LocalBaseRefDriftWarning } from '../../shared/worktree/base-ref-drift-types'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
@@ -41,6 +42,10 @@ import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
+import {
+  formatLocalBaseRefDriftWarning,
+  getLocalBaseRefDriftWarningForWorktreeCreate
+} from '../git/worktrees/creation/worktree-base-drift-warning'
 import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
@@ -998,6 +1003,7 @@ async function performLocalWorktreeCreate(
     !args.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
       : Promise.resolve('')
+  let localBaseRefDriftWarning: LocalBaseRefDriftWarning | undefined
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
@@ -1023,6 +1029,14 @@ async function performLocalWorktreeCreate(
         }
       }
       return hasLocalWorktreeBaseRef(repo.path, baseBranchCandidate, localGitExecOptions)
+    },
+    onPersistedBaseSelected: async (baseRef, defaultBaseRef) => {
+      localBaseRefDriftWarning = await getLocalBaseRefDriftWarningForWorktreeCreate(
+        repo.path,
+        baseRef,
+        defaultBaseRef,
+        localGitExecOptions
+      )
     }
   })
   const [username, resolvedBaseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
@@ -1759,7 +1773,12 @@ async function performLocalWorktreeCreate(
     repo.id,
     worktreeLineage?.parentWorktreeId
   )
-  const createWarning = [includeCopyWarning, addResult.upstreamWarning, stagedStartup.warning]
+  const createWarning = [
+    includeCopyWarning,
+    addResult.upstreamWarning,
+    stagedStartup.warning,
+    localBaseRefDriftWarning ? formatLocalBaseRefDriftWarning(localBaseRefDriftWarning) : undefined
+  ]
     .filter((warning): warning is string => Boolean(warning))
     .reduce<string | undefined>(appendWorktreeCreateWarning, undefined)
   return {
@@ -1788,6 +1807,7 @@ async function performLocalWorktreeCreate(
     ...(addResult.localBaseRefUpdateSuggestion
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
+    ...(localBaseRefDriftWarning ? { localBaseRefDriftWarning } : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
     ...(createWarning ? { warning: createWarning } : {}),
