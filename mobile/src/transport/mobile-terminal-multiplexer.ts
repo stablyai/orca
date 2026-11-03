@@ -130,24 +130,25 @@ export class MobileTerminalMultiplexer {
       return true
     }
     const retained = bytes.byteLength * 2
+    const snapshot =
+      frame.opcode === TerminalStreamOpcode.SnapshotStart ||
+      frame.opcode === TerminalStreamOpcode.SnapshotChunk ||
+      frame.opcode === TerminalStreamOpcode.SnapshotEnd
+    const frames = snapshot && frame.opcode !== TerminalStreamOpcode.SnapshotStart ? 0 : 1
     if (
       this.retainedBytes + retained > REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES ||
-      this.retainedFrames >= REMOTE_RUNTIME_MAX_PENDING_REQUESTS
+      this.retainedFrames + frames > REMOTE_RUNTIME_MAX_PENDING_REQUESTS
     ) {
       this.fail(streamId, 'Terminal application buffer overflow')
       return true
     }
     this.retainedBytes += retained
-    this.retainedFrames++
+    this.retainedFrames += frames
     stream.bytes += retained
-    stream.frames++
-    const snapshot =
-      frame.opcode === TerminalStreamOpcode.SnapshotStart ||
-      frame.opcode === TerminalStreamOpcode.SnapshotChunk ||
-      frame.opcode === TerminalStreamOpcode.SnapshotEnd
+    stream.frames += frames
     if (snapshot) {
       stream.snapshotBytes += retained
-      stream.snapshotFrames++
+      stream.snapshotFrames += frames
     }
     const outputBytes =
       frame.opcode === TerminalStreamOpcode.Output ||

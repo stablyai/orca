@@ -2,6 +2,7 @@ import { readLateMobileRendererSnapshot } from './mobile-terminal-snapshot-prepa
 import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
 import { sendMobileResizeRestream, sendSnapshotFrames } from './terminal-snapshot-publication'
 import { updateViewportForClient } from './terminal-viewport-update'
+import { reconcileMultiplexSnapshotOutput } from './terminal-multiplex-flow-control'
 import {
   isMultiplexStreamAttached,
   type MultiplexSubscribeRequest,
@@ -41,20 +42,37 @@ export function activateMultiplexStream(
         if (!recovery) {
           return
         }
-        sendSnapshotFrames(
-          (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
+        stream.outputBatcher.flush()
+        const publication = sendSnapshotFrames(
+          (opcode, payload) =>
+            isMultiplexStreamAttached(state, stream) &&
+            state.sendFrame(request.streamId, opcode, payload),
           {
             ...frame,
             cols: recovery.cols,
             rows: recovery.rows,
             displayMode: runtime.getMobileDisplayMode(ptyId),
             source: recovery.source,
+            pendingEscapeTailAnsi: recovery.pendingEscapeTailAnsi,
             truncated: false,
             truncatedByByteBudget: recovery.truncatedByByteBudget,
             data: recovery.data
           }
         )
+        if (!publication.published || !isMultiplexStreamAttached(state, stream)) {
+          return
+        }
+        reconcileMultiplexSnapshotOutput(
+          state,
+          stream,
+          recovery.seq,
+          recovery.pendingEscapeTailAnsi
+        )
         stream.lastResizeCols = recovery.cols
+        state.flushAllAckPendingOutput()
+        if (!isMultiplexStreamAttached(state, stream)) {
+          return
+        }
         await deepenHeadlessCopyToDesktopDepth(runtime, ptyId, recovery, () =>
           isMultiplexStreamAttached(state, stream)
         )
@@ -112,13 +130,28 @@ export function activateMultiplexStream(
       void sendMobileResizeRestream(
         runtime,
         ptyId,
-        (opcode, payload) => state.sendFrame(request.streamId, opcode, payload),
+        (opcode, payload) =>
+          isMultiplexStreamAttached(state, stream) &&
+          stream.resizeGeneration === resizeGeneration &&
+          state.sendFrame(request.streamId, opcode, payload),
         event,
         () =>
           isMultiplexStreamAttached(state, stream) && stream.resizeGeneration === resizeGeneration,
         stream.snapshotByteBudget && {
           ...stream.snapshotByteBudget,
           frame: { ...event, kind: 'resized' }
+        },
+        {
+          before: () => stream.outputBatcher.flush(),
+          after: (snapshot) => {
+            reconcileMultiplexSnapshotOutput(
+              state,
+              stream,
+              snapshot.seq,
+              snapshot.pendingEscapeTailAnsi
+            )
+            state.flushAllAckPendingOutput()
+          }
         }
       )
         .then((restreamed) => {

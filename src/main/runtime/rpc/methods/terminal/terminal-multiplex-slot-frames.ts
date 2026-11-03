@@ -21,8 +21,7 @@ import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-v
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
   answerUndeliveredYieldedQueries,
-  discardPendingMultiplexOutput,
-  replaySnapshotCoveredQueries
+  discardPendingMultiplexOutput
 } from './terminal-multiplex-yielded-queries'
 import {
   isMultiplexStreamAttached,
@@ -30,6 +29,7 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream, TerminalViewportClient } from './terminal-stream-types'
+import { reconcileMultiplexSnapshotOutput } from './terminal-multiplex-flow-control'
 
 function decodeViewportFrame(
   payload: TerminalStreamFrame['payload']
@@ -159,6 +159,10 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
     stream.pendingOutputOverflowed = false
     stream.buffering = true
     const requestId = request.requestId
+    const snapshotByteBudget = stream.snapshotByteBudget && {
+      ...stream.snapshotByteBudget,
+      frame: { kind: 'scrollback' as const, requestId }
+    }
     let sentSnapshotOutputSeq: number | undefined
     let sentSnapshotEscapeTail: string | undefined
     try {
@@ -166,7 +170,8 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       let serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
-        scrollbackRows
+        scrollbackRows,
+        snapshotByteBudget
       )
       if (!isMultiplexStreamAttached(state, stream)) {
         return
@@ -176,7 +181,12 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       if (stream.pendingOutputOverflowed) {
         // Overflow tail is newer than the initial snapshot; request a current image rather than return null.
         discardPendingMultiplexOutput(stream)
-        serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, scrollbackRows)
+        serialized = await serializeBudgetedRequestedSnapshot(
+          runtime,
+          stream.ptyId,
+          scrollbackRows,
+          snapshotByteBudget
+        )
         if (!isMultiplexStreamAttached(state, stream)) {
           return
         }
@@ -200,30 +210,35 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
           return
         }
       }
-      sentSnapshotOutputSeq = serialized?.seq
-      sentSnapshotEscapeTail = serialized?.pendingEscapeTailAnsi
-      sendSnapshotFrames((opcode, payload) => state.sendFrame(stream.streamId, opcode, payload), {
-        kind: 'scrollback',
-        cols: serialized?.cols ?? size?.cols ?? 80,
-        rows: serialized?.rows ?? size?.rows ?? 24,
-        requestId,
-        displayMode,
-        seq: serialized?.seq,
-        cwd: serialized?.cwd,
-        source: serialized?.source,
-        kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
-        alternateScreen: serialized?.alternateScreen,
-        terminalOwner: serialized?.terminalOwner,
-        lastTitle: serialized?.lastTitle,
-        oscLinks: serialized?.oscLinks,
-        pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-        truncated: false,
-        truncatedByByteBudget: serialized?.truncatedByByteBudget,
-        scrollbackRows: serialized?.scrollbackRows,
-        // No serializer answer does not prove emptiness; never publish an invented empty buffer.
-        unavailable: serialized ? undefined : 'no-serializable-buffer',
-        data: serialized?.data ?? ''
-      })
+      const publication = sendSnapshotFrames(
+        (opcode, payload) => state.sendFrame(stream.streamId, opcode, payload),
+        {
+          kind: 'scrollback',
+          cols: serialized?.cols ?? size?.cols ?? 80,
+          rows: serialized?.rows ?? size?.rows ?? 24,
+          requestId,
+          displayMode,
+          seq: serialized?.seq,
+          cwd: serialized?.cwd,
+          source: serialized?.source,
+          kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+          alternateScreen: serialized?.alternateScreen,
+          terminalOwner: serialized?.terminalOwner,
+          lastTitle: serialized?.lastTitle,
+          oscLinks: serialized?.oscLinks,
+          pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
+          truncated: false,
+          truncatedByByteBudget: serialized?.truncatedByByteBudget,
+          scrollbackRows: serialized?.scrollbackRows,
+          // No serializer answer does not prove emptiness; never publish an invented empty buffer.
+          unavailable: serialized ? undefined : 'no-serializable-buffer',
+          data: serialized?.data ?? ''
+        }
+      )
+      if (publication.published && isMultiplexStreamAttached(state, stream)) {
+        sentSnapshotOutputSeq = serialized?.seq
+        sentSnapshotEscapeTail = serialized?.pendingEscapeTailAnsi
+      }
     } catch (error) {
       state.sendStreamError(
         stream.streamId,
@@ -239,12 +254,12 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         const pendingOutput = stream.pendingOutput.splice(0)
         if (shouldFlushPendingOutput) {
           if (typeof requestId !== 'number') {
-            replaySnapshotCoveredQueries(
+            reconcileMultiplexSnapshotOutput(
               state,
               stream,
-              pendingOutput,
               sentSnapshotOutputSeq,
-              sentSnapshotEscapeTail
+              sentSnapshotEscapeTail,
+              pendingOutput
             )
           }
           for (const chunk of pendingOutput) {

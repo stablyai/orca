@@ -65,6 +65,49 @@ function observeBacklogs(): BridgeTerminalOutputBacklog[] {
 afterEach(() => vi.restoreAllMocks())
 
 describe('bridge subscription start cleanup', () => {
+  it('rejects application receipts when subscribe fails after delivering output', async () => {
+    let receipt: unknown
+    let settled = false
+    const subscriptions = new BridgeHostSubscriptions({
+      client: {
+        ...createFakeRpcClient(),
+        subscribe: (_method, _params, onData) => {
+          receipt = onData({ type: 'data', chunk: 'held' })
+          Promise.resolve(receipt).then(
+            () => {},
+            () => {
+              settled = true
+            }
+          )
+          throw new Error('subscribe failed after output')
+        }
+      },
+      post: vi.fn(),
+      onBinaryFrameDropped: vi.fn()
+    })
+    expect(() =>
+      subscriptions.start(ID, 'terminal.subscribe', { capabilities: { ackOutput: 1 } })
+    ).toThrow('subscribe failed after output')
+    await Promise.resolve()
+    expect(settled).toBe(true)
+    await expect(receipt).rejects.toThrow('Terminal bridge application ended')
+    expect(subscriptions.size).toBe(0)
+  })
+  it('settles ignored teardown receipts while preserving rejection for application observers', async () => {
+    const client = createFakeRpcClient()
+    const subscriptions = new BridgeHostSubscriptions({
+      client,
+      post: vi.fn(),
+      onBinaryFrameDropped: vi.fn()
+    })
+    subscriptions.start(ID, 'terminal.subscribe', { capabilities: { ackOutput: 1 } })
+    const receipt = client.streams[0]?.emit({ type: 'data', chunk: 'held' })
+    client.streams[0]?.emit({ type: 'end' })
+    subscriptions.closeAll(null)
+    await expect(receipt).rejects.toThrow('Terminal bridge application ended')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(client.streams[0]?.unsubscribes).toBe(1)
+  })
   it('rethrows the original immediate failure without keeping a slot or timer', () => {
     const failure = new Error('subscribe failed')
     const timers = manualTimers()

@@ -99,8 +99,11 @@ export class BridgeHostSubscriptions {
           : { onBinaryFrame, envelope }
       )
     } catch (error) {
-      this.open.delete(id)
-      record.backlog?.dispose()
+      if (this.open.get(id) === record) {
+        this.cancel(id, null)
+      } else {
+        record.backlog?.dispose()
+      }
       throw error
     }
     // A synchronous overflow retires the record before subscribe returns its cleanup; call the late unsubscribe now to avoid leaking it.
@@ -182,12 +185,14 @@ export class BridgeHostSubscriptions {
       return
     }
     if (record.applicationReceipts) {
-      return new Promise<void>((resolve, reject) => {
+      const receipt = new Promise<void>((resolve, reject) => {
         this.sendEvent(id, record, seq, json, false, {
           applied: resolve,
           rejected: () => reject(new Error('Terminal bridge application ended'))
         })
       })
+      void receipt.catch(() => {})
+      return receipt
     }
     this.sendEvent(id, record, seq, json, false)
   }

@@ -239,6 +239,29 @@ afterEach(() => {
 })
 
 describe('a terminal first subscribe', () => {
+  it('retires output when native chat covers it and rearms an input-only lease', () => {
+    const h = subscriptionHarness({ fit: PHONE, webReady: true })
+    h.subscribe()
+    h.fields.showNativeChatRef.current = true
+    const receipt = h.event(0, { type: 'data', chunk: 'covered output' })
+    expect(receipt).toBeUndefined()
+    expect(h.terminal.write).not.toHaveBeenCalled()
+    expect(h.stopStream).toHaveBeenCalledTimes(1)
+    expect(h.fields.terminalUnsubsRef.current.has(HANDLE)).toBe(false)
+    h.subscribe()
+    expect(h.fields.client.subscribe).toHaveBeenLastCalledWith(
+      'terminal.subscribe',
+      expect.objectContaining({
+        capabilities: { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
+      }),
+      expect.any(Function)
+    )
+    h.event(1, { type: 'subscribed' })
+    expect(h.fields.markNativeChatInputLeaseReady).toHaveBeenCalledWith(HANDLE)
+    h.event(1, { type: 'data', chunk: 'old host lease output' })
+    expect(h.stopStream).toHaveBeenCalledTimes(1)
+    expect(h.fields.terminalUnsubsRef.current.has(HANDLE)).toBe(true)
+  })
   it('does not subscribe before its document is ready, then subscribes once from its box', async () => {
     const harness = subscriptionHarness({ fit: PHONE, webReady: false })
     harness.subscribe()

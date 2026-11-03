@@ -166,130 +166,134 @@ describe('terminal multiplex RPC', () => {
     await harness.dispatchPromise
   })
 
-  it('falls back to smaller requested snapshots when serialized data exceeds the send budget', async () => {
-    const messages: string[] = []
-    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const handlers = new Map<
-      number,
-      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
-    >()
-    const cleanups = new Map<string, () => void>()
-    const runtime = stubRuntime({
-      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
-      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
-      serializeTerminalBuffer: vi
-        .fn()
-        .mockResolvedValueOnce({ data: 'initial', cols: 120, rows: 40 })
-        .mockResolvedValueOnce({
-          data: 'x'.repeat(2 * 1024 * 1024 + 1),
-          cols: 120,
-          rows: 40
-        })
-        .mockResolvedValueOnce({
-          data: 'budgeted snapshot',
-          cols: 120,
-          rows: 40
+  it.each([undefined, 600 * 1024])(
+    'fits requested snapshots to the admitted byte budget %s',
+    async (snapshotByteBudget) => {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const runtime = stubRuntime({
+        resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi
+          .fn()
+          .mockResolvedValueOnce({ data: 'initial', cols: 120, rows: 40 })
+          .mockResolvedValueOnce({
+            data: snapshotByteBudget ? '\x01'.repeat(120 * 1024) : 'x'.repeat(2 * 1024 * 1024 + 1),
+            cols: 120,
+            rows: 40
+          })
+          .mockResolvedValueOnce({
+            data: 'budgeted snapshot',
+            cols: 120,
+            rows: 40
+          }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+        getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
         }),
-      getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
-      getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
-      getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-      subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
-      subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
-      subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
-      getTerminalFitOverride: vi.fn().mockReturnValue(null),
-      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
-      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
-      updateDesktopViewport: vi.fn().mockResolvedValue(true)
-    })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: TERMINAL_METHODS
-    })
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+      })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
-    const dispatchPromise = dispatcher.dispatchStreaming(
-      makeRequest('terminal.multiplex', {}),
-      (msg) => messages.push(msg),
-      {
-        connectionId: 'conn-budgeted-request',
-        sendBinary: (bytes) => {
-          binaryFrames.push(bytes)
-        },
-        registerBinaryStreamHandler: (streamId, handler) => {
-          handlers.set(streamId, handler)
-          return () => handlers.delete(streamId)
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.multiplex', {}),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-budgeted-request',
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          },
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
         }
-      }
-    )
+      )
 
-    await vi.waitFor(() =>
-      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
-    )
-    handlers.get(0)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.Subscribe,
-          streamId: 0,
-          seq: 1,
-          payload: encodeTerminalStreamJson({
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+      )
+      handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: encodeTerminalStreamJson({
+              streamId: 14,
+              snapshotByteBudget,
+              terminal: 'terminal-1',
+              client: { id: 'desktop-1', type: 'desktop' },
+              viewport: { cols: 120, rows: 40 }
+            })
+          })
+        )!
+      )
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      const frameCountBeforeSnapshotRequest = binaryFrames.length
+
+      handlers.get(14)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.SnapshotRequest,
             streamId: 14,
-            terminal: 'terminal-1',
-            client: { id: 'desktop-1', type: 'desktop' },
-            viewport: { cols: 120, rows: 40 }
+            seq: 2,
+            payload: encodeTerminalStreamJson({
+              requestId: 55,
+              scrollbackRows: 5000
+            })
           })
-        })
-      )!
-    )
-    await vi.waitFor(() =>
-      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
-    )
-    const frameCountBeforeSnapshotRequest = binaryFrames.length
+        )!
+      )
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(3))
 
-    handlers.get(14)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.SnapshotRequest,
-          streamId: 14,
-          seq: 2,
-          payload: encodeTerminalStreamJson({
-            requestId: 55,
-            scrollbackRows: 5000
-          })
-        })
-      )!
-    )
-    await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalledTimes(3))
+      const requestedFrames = binaryFrames
+        .slice(frameCountBeforeSnapshotRequest)
+        .map((frame) => decodeTerminalStreamFrame(frame))
+      const requestedStart = requestedFrames.find(
+        (frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart
+      )
+      expect(requestedStart && decodeTerminalStreamJson(requestedStart.payload)).toMatchObject({
+        requestId: 55,
+        truncatedByByteBudget: true
+      })
+      expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(2, 'pty-1', {
+        scrollbackRows: 5000
+      })
+      expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(3, 'pty-1', {
+        scrollbackRows: 1000
+      })
+      expect(
+        requestedFrames
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .join('')
+      ).toBe('budgeted snapshot')
 
-    const requestedFrames = binaryFrames
-      .slice(frameCountBeforeSnapshotRequest)
-      .map((frame) => decodeTerminalStreamFrame(frame))
-    const requestedStart = requestedFrames.find(
-      (frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart
-    )
-    expect(requestedStart && decodeTerminalStreamJson(requestedStart.payload)).toMatchObject({
-      requestId: 55,
-      truncatedByByteBudget: true
-    })
-    expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(2, 'pty-1', {
-      scrollbackRows: 5000
-    })
-    expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(3, 'pty-1', {
-      scrollbackRows: 1000
-    })
-    expect(
-      requestedFrames
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
-        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
-        .join('')
-    ).toBe('budgeted snapshot')
-
-    cleanups.get('terminal-multiplex:conn-budgeted-request')?.()
-    await dispatchPromise
-  })
+      cleanups.get('terminal-multiplex:conn-budgeted-request')?.()
+      await dispatchPromise
+    }
+  )
 
   it('bounds live output queued while a multiplex snapshot is loading', async () => {
     vi.useFakeTimers()

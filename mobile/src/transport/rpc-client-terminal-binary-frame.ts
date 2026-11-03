@@ -7,10 +7,13 @@ import {
 } from '../../../src/shared/terminal-stream-protocol'
 import type { TerminalUnreadableFrameResets } from './terminal-unreadable-frame-resets'
 import { translate } from '../i18n/mobile-i18n'
-import {
-  REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES,
-  REMOTE_RUNTIME_MAX_PENDING_REQUESTS
-} from '../../../src/shared/remote-runtime/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES } from '../../../src/shared/remote-runtime/remote-runtime-memory-limits'
+import { TERMINAL_STREAM_CHUNK_BYTES } from '../../../src/shared/terminal-multiplex-flow-control'
+
+// Admit full host chunks through the byte cap while also bounding empty-chunk metadata.
+const TERMINAL_SNAPSHOT_MAX_CHUNKS = Math.ceil(
+  REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / TERMINAL_STREAM_CHUNK_BYTES
+)
 
 export type TerminalSnapshotState = {
   streamId: number
@@ -86,7 +89,7 @@ export function handleTerminalBinaryFrame(
     )
     if (
       retainedBytes + frame.payload.byteLength * 2 > REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES ||
-      snapshot.chunks.length >= REMOTE_RUNTIME_MAX_PENDING_REQUESTS
+      snapshot.chunks.length >= TERMINAL_SNAPSHOT_MAX_CHUNKS
     ) {
       options.terminalSnapshots.delete(frame.streamId)
       listener({

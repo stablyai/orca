@@ -21,6 +21,30 @@ function encodeFrame(opcode: TerminalStreamOpcode, streamId: number, payload: un
 }
 
 describe('handleTerminalBinaryFrame', () => {
+  it('assembles a legal snapshot larger than 256 host chunks and bounds empty-chunk metadata', () => {
+    const listener = vi.fn()
+    const options = {
+      terminalSnapshots: new Map(),
+      unreadableFrames: new TerminalUnreadableFrameResets(),
+      getListener: () => listener
+    }
+    const chunk = 'x'.repeat(48 * 1024)
+    handleTerminalBinaryFrame(encodeFrame(TerminalStreamOpcode.SnapshotStart, 7, {}), options)
+    for (let i = 0; i < 260; i++) {
+      handleTerminalBinaryFrame(encodeFrame(TerminalStreamOpcode.SnapshotChunk, 7, chunk), options)
+    }
+    handleTerminalBinaryFrame(encodeFrame(TerminalStreamOpcode.SnapshotEnd, 7, ''), options)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener.mock.calls[0]?.[0].type).toBe('scrollback')
+    expect(listener.mock.calls[0]?.[0].serialized === chunk.repeat(260)).toBe(true)
+    listener.mockClear()
+    handleTerminalBinaryFrame(encodeFrame(TerminalStreamOpcode.SnapshotStart, 7, {}), options)
+    for (let i = 0; i < 1024; i++) {
+      handleTerminalBinaryFrame(encodeFrame(TerminalStreamOpcode.SnapshotChunk, 7, ''), options)
+    }
+    expect(listener).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ type: 'error' }))
+    expect(options.terminalSnapshots.size).toBe(0)
+  })
   it('routes terminal metadata frames to the stream listener', () => {
     const listener = vi.fn()
 

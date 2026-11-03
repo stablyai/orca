@@ -98,7 +98,7 @@ export function createMobileTerminalStreamEventListener({
       markNativeChatInputLeaseReady(handle)
       return
     }
-    // Covered streams keep input ownership without changing hidden xterm state; returning view gets fresh history.
+    // Retire visible output before the existing cover reconciler acquires its input-only lease.
     if (
       nativeChatTerminalStream.isTerminalCoveredByNativeChat(
         showNativeChatRef.current,
@@ -106,6 +106,9 @@ export function createMobileTerminalStreamEventListener({
         handle
       )
     ) {
+      if (!scope.leaseOnlyHandlesRef.current.has(handle)) {
+        lifetime.end()
+      }
       return
     }
     // Layout versions and scrollback output offsets are separate sequence domains.

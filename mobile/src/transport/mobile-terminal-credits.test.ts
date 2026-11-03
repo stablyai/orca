@@ -121,6 +121,57 @@ describe.each(['direct', 'relay'] as const)('%s terminal credit compatibility', 
     ).toEqual([])
     stopReplacement()
   })
+
+  it('applies a large unbudgeted snapshot as one bounded application event', async () => {
+    const { streams, sent, binary } = connection()
+    const events: unknown[] = []
+    let applied = () => {}
+    const stop = streams.subscribe('terminal.subscribe', params, (event) => {
+      events.push(event)
+      return new Promise<void>((resolve) => {
+        applied = resolve
+      })
+    })
+    await vi.waitFor(() => expect(sent).toHaveLength(1))
+    streams.handleResponse(
+      response(sent[0]!.id, { type: 'ready', capabilities: { mobileTerminalOutputCredits: 1 } })
+    )
+    const id = JSON.parse(
+      new TextDecoder().decode(decodeTerminalStreamFrame(binary[0]!)!.payload)
+    ).streamId
+    const deliver = (opcode: TerminalStreamOpcode, text: string) =>
+      streams.handleBinary(
+        encodeTerminalStreamFrame({
+          streamId: id,
+          opcode,
+          seq: 0,
+          payload: encodeTerminalStreamText(text)
+        })
+      )
+    deliver(TerminalStreamOpcode.SnapshotStart, '{}')
+    const chunk = 'x'.repeat(48 * 1024)
+    for (let i = 0; i < 260; i++) {
+      deliver(TerminalStreamOpcode.SnapshotChunk, chunk)
+    }
+    deliver(TerminalStreamOpcode.SnapshotEnd, '')
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ type: 'scrollback' })
+    const event = events[0]
+    expect(
+      typeof event === 'object' &&
+        event !== null &&
+        'serialized' in event &&
+        event.serialized === chunk.repeat(260)
+    ).toBe(true)
+    expect(
+      binary
+        .map(decodeTerminalStreamFrame)
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Ack)
+    ).toEqual([])
+    applied()
+    await Promise.resolve()
+    stop()
+  })
 })
 
 it.each([1, 10])('bounds raw conversions across %sx retired physical connections', async (load) => {

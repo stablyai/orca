@@ -19,7 +19,7 @@ import {
 
 type OutputMeta = { seq?: number; rawLength?: number }
 
-async function setupMultiplexStream(): Promise<{
+async function setupMultiplexStream(ackOutput = false): Promise<{
   binaryFrames: Uint8Array<ArrayBufferLike>[]
   sendClientFrame: (opcode: TerminalStreamOpcode, payload: Uint8Array<ArrayBufferLike>) => void
   emitOutput: (data: string, meta?: OutputMeta) => void
@@ -116,7 +116,8 @@ async function setupMultiplexStream(): Promise<{
         payload: encodeTerminalStreamJson({
           streamId: 5,
           terminal: 'terminal-1',
-          client: { id: 'desktop-1', type: 'desktop' }
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: ackOutput ? { ackOutput: 1 } : undefined
         })
       })
     )!
@@ -174,6 +175,34 @@ function outputTextsAfterLastSnapshotEnd(frames: Uint8Array<ArrayBufferLike>[]):
 }
 
 describe('terminal.multiplex requested-snapshot replay trim', () => {
+  it.each([undefined, 7])(
+    'reconciles ACK-queued output only for live resync request %s',
+    async (requestId) => {
+      vi.useFakeTimers()
+      try {
+        const h = await setupMultiplexStream(true)
+        h.emitOutput('x'.repeat(512 * 1024), { seq: 512 * 1024, rawLength: 512 * 1024 })
+        h.emitOutput('coveredbbbccc', { seq: 512 * 1024 + 13, rawLength: 13 })
+        await vi.advanceTimersByTimeAsync(5)
+        h.setSnapshot({ data: 'RECOVERED', seq: 512 * 1024 + 10 })
+        h.sendClientFrame(
+          TerminalStreamOpcode.SnapshotRequest,
+          encodeTerminalStreamJson({ requestId })
+        )
+        await vi.runOnlyPendingTimersAsync()
+        h.emitOutput('TAIL', { seq: 512 * 1024 + 17, rawLength: 4 })
+        await vi.advanceTimersByTimeAsync(5)
+        h.sendClientFrame(TerminalStreamOpcode.Ack, encodeTerminalStreamJson({ bytes: 512 * 1024 }))
+        expect(outputTextsAfterLastSnapshotEnd(h.binaryFrames).join('')).toBe(
+          requestId ? 'coveredbbbcccTAIL' : 'cccTAIL'
+        )
+        await h.finish()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('drops snapshot-covered buffered output after an untagged resync reply', async () => {
     vi.useFakeTimers()
     try {
