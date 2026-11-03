@@ -16,6 +16,20 @@ function githubIssueErrorMessage(error: unknown): string {
   return stderr.trim() || stdout.trim()
 }
 
+/**
+ * Combined stderr+stdout for matching against error detail.
+ *
+ * `gh api` writes the reduced status line (e.g. "gh: Validation Failed (HTTP 422)")
+ * to stderr and the full response JSON (which carries the per-field validation
+ * message such as "body is too long (maximum is 65536 characters)") to stdout.
+ * Matchers must inspect both; `githubIssueErrorMessage` returns stderr alone when
+ * present and would hide the stdout detail.
+ */
+function githubIssueErrorDetail(error: unknown): string {
+  const { stderr, stdout } = extractExecError(error)
+  return [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+}
+
 /** Explicit owner/repo preserves the Tasks-selected source independently of cwd remotes. */
 export async function createIssue(
   repoPath: string,
@@ -70,9 +84,13 @@ export async function createIssue(
       const { stdout } = await createIssueRequest(body)
       data = parseIssue(stdout)
     } catch (err) {
-      const message = githubIssueErrorMessage(err)
-      if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
-        return { ok: false, error: message }
+      // gh puts "gh: Validation Failed (HTTP 422)" on stderr and the detailed
+      // "body is too long ..." on stdout, so match against the combined output;
+      // matching stderr alone misses the detail and surfaces a hard 422 instead
+      // of running the establish-then-update recovery below.
+      const detail = githubIssueErrorDetail(err)
+      if (!/body is too long \(maximum is \d+ characters\)/i.test(detail)) {
+        return { ok: false, error: githubIssueErrorMessage(err) }
       }
 
       // GitHub can accept a body on update that it rejects during creation; establish the issue first.
