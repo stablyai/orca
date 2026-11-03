@@ -150,8 +150,11 @@ class Parser {
     let left = this.unary()
     for (;;) {
       const token = this.tokens[this.pos]
-      const precedence = token?.kind === 'op' ? BINARY_PRECEDENCE[token.value] : undefined
-      if (token === undefined || precedence === undefined || precedence < minPrecedence) {
+      if (token?.kind !== 'op') {
+        return left
+      }
+      const precedence = BINARY_PRECEDENCE[token.value]
+      if (precedence === undefined || precedence < minPrecedence) {
         return left
       }
       this.pos++
