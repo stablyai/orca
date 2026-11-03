@@ -437,6 +437,30 @@ describe('account CLI handlers', () => {
     )
   })
 
+  it('blames an unsafe OpenCode answer, not the launcher path, without echoing it', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+    resolveCliCommandMock.mockImplementation((command: string) => `C:\\tools\\${command}.cmd`)
+    spawnProcessMock.mockImplementation(() => helpChild('--standalone'))
+    const error = await ACCOUNT_HANDLERS['account add']({
+      ...context('opencode'),
+      flags: new Map([
+        ['agent', 'opencode'],
+        ['answer', 'token=abc!123']
+      ])
+    }).catch((thrown: unknown) => thrown)
+    const message = error instanceof Error ? error.message : String(error)
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(message).toContain('Cannot pass a login argument')
+    expect(message).not.toContain('abc!123')
+    expect(message).not.toContain('the path contains')
+  })
+
   it('explains an unspawnable Windows shim path instead of leaking the error sentinel', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     resolveCliCommandMock.mockReturnValue('C:\\Users\\A&B\\codex.cmd')

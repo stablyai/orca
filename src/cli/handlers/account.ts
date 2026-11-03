@@ -18,8 +18,7 @@ import {
 } from '../../shared/node-cli-command-resolution'
 import {
   getSpawnArgsForWindows,
-  UnsafeWindowsBatchArgumentsError,
-  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+  UnsafeWindowsBatchArgumentsError
 } from '../../shared/windows-batch-spawn'
 import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
 import {
@@ -37,6 +36,7 @@ import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
+import { describeUnsafeWindowsLoginLaunch } from './account-login-launch-error'
 import { getWslAccountTarget } from './account-wsl-location'
 import {
   addDataAccount,
@@ -96,9 +96,7 @@ async function runAgentLoginInTerminal(
         error instanceof UnsafeWindowsBatchArgumentsError
           ? new RuntimeClientError(
               'invalid_environment',
-              `Cannot run \`${command}\` from "${resolvedCommand}": the path contains characters ` +
-                `cmd.exe would reinterpret. Install it somewhere without ` +
-                `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL} in the path.`
+              describeUnsafeWindowsLoginLaunch(command, resolvedCommand)
             )
           : error
       )
