@@ -118,6 +118,7 @@ function dispatchStructuredAttention(
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
+          workspaceExecutionHostId: owner?.executionHostId ?? undefined,
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),

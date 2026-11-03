@@ -1,3 +1,4 @@
+import type { NotificationAttentionAcknowledgement } from './notification-settings-types'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -12,6 +13,10 @@ import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
 
 export type RuntimeClientEvent =
+  | {
+      type: 'notificationAttentionAcknowledged'
+      acknowledgement: NotificationAttentionAcknowledgement
+    }
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */

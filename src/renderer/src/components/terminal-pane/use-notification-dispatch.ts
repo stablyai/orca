@@ -192,6 +192,7 @@ export function dispatchTerminalNotification(
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
+        workspaceExecutionHostId: owner?.executionHostId ?? undefined,
         ...(executionHost ? { executionHost } : {}),
         paneKey: request.subjectKey ?? undefined,
         ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),

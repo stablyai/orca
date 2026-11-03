@@ -422,6 +422,37 @@ describe('orca cli worktree awareness', () => {
   )
 
   it.each([
+    { flags: ['--read'], isUnread: false, acknowledges: true },
+    { flags: ['--unread'], isUnread: true, acknowledges: false },
+    { flags: [], isUnread: undefined, acknowledges: false }
+  ])(
+    'sends acknowledgement intent only for explicit --read: $flags',
+    async ({ flags, isUnread, acknowledges }) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_read', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenCalledExactlyOnceWith(
+        'worktree.set',
+        expect.objectContaining(isUnread === undefined ? {} : { isUnread })
+      )
+      const params = callMock.mock.calls[0][1]
+      if (acknowledges) {
+        expect(params).toHaveProperty('acknowledgeAttention', true)
+      } else {
+        expect(params).not.toHaveProperty('acknowledgeAttention')
+      }
+    }
+  )
+
+  it.each([
     [['--unread', '--read'], 'Choose either --unread or --read'],
     [['--read', '--unread'], 'Choose either --unread or --read'],
     [['--read', 'yes'], '--read takes no value'],

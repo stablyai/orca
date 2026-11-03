@@ -1,9 +1,15 @@
-import type {
-  StructuredAttentionRead,
-  StructuredAttentionOrigin
+import {
+  type StructuredAttentionRead,
+  type StructuredAttentionOrigin,
+  isStructuredAttentionRead
 } from './agent-session/agent-session-attention'
+import {
+  isAgentSessionExecutionLocation,
+  type AgentSessionExecutionLocation
+} from './agent-session/lifecycle/agent-session-record'
 import type { AgentStatusState, AgentType } from './agent-status/contracts/agent-status-types'
 import type { AgentTurnOutcome } from './agent-status/lifecycle/agent-turn-outcome'
+import type { ExecutionHostId } from './execution-host'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {
@@ -37,6 +43,29 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type StructuredNotificationRead = StructuredAttentionRead & {
   paneKey: string
+  executionHost?: NotificationDispatchRequest['executionHost']
+}
+
+export type NotificationAttentionAcknowledgement = {
+  worktree?: AgentSessionExecutionLocation
+  reads: (StructuredAttentionRead & { paneKey?: string })[]
+}
+
+export function isNotificationAttentionAcknowledgement(
+  value: unknown
+): value is NotificationAttentionAcknowledgement {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'reads' in value &&
+    Array.isArray(value.reads) &&
+    value.reads.every(
+      (read) =>
+        isStructuredAttentionRead(read) &&
+        (!('paneKey' in read) || typeof read.paneKey === 'string')
+    ) &&
+    (!('worktree' in value) || isAgentSessionExecutionLocation(value.worktree))
+  )
 }
 
 export type NotificationDispatchRequest = {
@@ -45,6 +74,7 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  workspaceExecutionHostId?: ExecutionHostId
   /** Configured notification source; independent of physical execution location. */
   notificationSourceId?: NotificationSourceId
   /** The server the workspace runs on, so a paired phone opens it there; absent for this desktop's own work. */
@@ -87,6 +117,7 @@ export type NotificationDispatchResult = {
     | 'not-displayed'
     | 'blocked-by-system'
     | 'invalid-request'
+    | 'already-read'
 }
 
 export type NotificationDismissResult = {
