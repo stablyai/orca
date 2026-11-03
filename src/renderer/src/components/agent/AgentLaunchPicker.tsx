@@ -38,6 +38,7 @@ export const AgentLaunchPicker = memo(
     agent,
     disabled,
     setupDisabled,
+    matchTriggerWidth,
     emptyLabel,
     cli,
     children,
@@ -53,6 +54,7 @@ export const AgentLaunchPicker = memo(
     agent: AgentPickerEntry['agent'] | null
     disabled?: boolean
     setupDisabled?: boolean
+    matchTriggerWidth?: boolean
     emptyLabel?: string
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
@@ -130,7 +132,14 @@ export const AgentLaunchPicker = memo(
               <ChevronDown className="size-3.5 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-64">
+          <DropdownMenuContent
+            align="start"
+            className={
+              matchTriggerWidth
+                ? 'w-(--radix-dropdown-menu-trigger-width) min-w-(--radix-dropdown-menu-trigger-width)'
+                : 'min-w-64'
+            }
+          >
             {children}
             {model.state === 'settled' ? (
               <AgentLaunchPickerMenu
