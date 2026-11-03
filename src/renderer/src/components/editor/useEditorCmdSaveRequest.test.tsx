@@ -202,6 +202,73 @@ describe('useEditorCmdSaveRequest', () => {
   })
 
   it.each([
+    { label: 'empty', content: '' },
+    { label: 'LF-terminated', content: 'const x = 1\n' },
+    { label: 'CRLF-terminated', content: 'const x = 1\r\n' },
+    { label: 'CR-terminated', content: 'const x = 1\r' }
+  ])('does not save a clean $label file just to insert a final newline', ({ content }) => {
+    const file: OpenFile = {
+      ...makeFile('clean'),
+      filePath: '/repo/clean.ts',
+      relativePath: 'clean.ts',
+      language: 'typescript',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    act(() => {
+      root.render(
+        <SaveProbe
+          activeFile={file}
+          enabled
+          onSave={save}
+          fileContents={{ [file.id]: { content, isBinary: false } }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'empty', draft: '' },
+    { label: 'newline-terminated', draft: 'updated\n' }
+  ])('still saves an $label draft when the loaded file needs no newline', ({ draft }) => {
+    const file: OpenFile = {
+      ...makeFile('clean'),
+      filePath: '/repo/clean.ts',
+      relativePath: 'clean.ts',
+      language: 'typescript',
+      isDirty: false
+    }
+    const save = vi.fn(async () => true)
+    storeState.settings.editorInsertFinalNewline = true
+    storeState.editorDrafts = { [file.id]: draft }
+    act(() => {
+      root.render(
+        <SaveProbe
+          activeFile={file}
+          enabled
+          onSave={save}
+          fileContents={{ [file.id]: { content: 'original\n', isBinary: false } }}
+        />
+      )
+    })
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, { detail: { fileId: file.id } })
+      )
+    })
+
+    expect(save).toHaveBeenCalledExactlyOnceWith(draft)
+  })
+
+  it.each([
     { csvPreviewOnly: true, shouldSave: false },
     { csvPreviewOnly: false, shouldSave: true }
   ])(

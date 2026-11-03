@@ -9,6 +9,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { getEditorSaveTargetFile } from './editor-save-target'
 import { isCodeViewTab } from './editor-save-disk-precondition'
 import { isEditorWritableView } from './editor-save-writer-view'
+import { needsFinalNewline } from './editor-final-newline'
 
 type UseEditorCmdSaveRequestParams = {
   activeFile: OpenFile | null
@@ -52,11 +53,12 @@ export function useEditorCmdSaveRequest({
         loaded &&
         !loaded.isBinary &&
         !loaded.loadError &&
-        !loaded.isStale
+        !loaded.isStale &&
+        needsFinalNewline(loaded.content)
           ? loaded.content
           : undefined
       if (
-        !draft &&
+        draft === undefined &&
         !saveTargetFile.isUntitled &&
         !saveTargetFile.isDirty &&
         cleanCodeContent === undefined

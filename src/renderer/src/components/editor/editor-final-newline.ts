@@ -9,6 +9,10 @@ import {
   endProgrammaticContentSync
 } from './monaco-programmatic-sync'
 
+export function needsFinalNewline(text: string): boolean {
+  return text !== '' && !text.endsWith('\n') && !text.endsWith('\r')
+}
+
 function finalLineEnding(text: string, modelEol: string | undefined): '\n' | '\r\n' {
   const lastLf = text.lastIndexOf('\n')
   if (lastLf !== -1) {
@@ -27,7 +31,7 @@ export function insertFinalNewlineBeforeSave(
   content: string,
   buffered: string
 ): string {
-  const needsNewline = content !== '' && !content.endsWith('\n') && !content.endsWith('\r')
+  const needsNewline = needsFinalNewline(content)
   const draft = state.editorDrafts[file.id]
   const cleanTransformed =
     content !== buffered &&
