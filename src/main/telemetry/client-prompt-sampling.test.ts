@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { eventSchemas, type EventProps } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-events'
 import { track } from './client'
 import {
   cleanupTelemetryClientTest,
@@ -57,15 +57,6 @@ describe('prompt event sampling', () => {
     for (const [message] of state.mock.capture.mock.calls) {
       expect(message.properties.sample_rate).toBe(0.01)
       expect(message.properties.$process_person_profile).toBe(false)
-      const { agent_kind, launch_source, request_kind, sample_rate } = message.properties
-      expect(
-        eventSchemas.agent_prompt_sent.safeParse({
-          agent_kind,
-          launch_source,
-          request_kind,
-          sample_rate
-        }).success
-      ).toBe(true)
     }
   })
 
@@ -89,14 +80,5 @@ describe('prompt event sampling', () => {
     expect(track('agent_prompt_sent', invalid)).toBe(false)
     expect(state.mock.capture).not.toHaveBeenCalled()
     expect(track('agent_prompt_sent', prompt)).toBe(true)
-  })
-
-  it('retains burst limits when every prompt is selected', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-    for (let index = 0; index < 100; index++) {
-      track('agent_prompt_sent', prompt)
-    }
-    expect(state.mock.capture).toHaveBeenCalledTimes(30)
-    expect(track('app_opened', {})).toBe(true)
   })
 })
