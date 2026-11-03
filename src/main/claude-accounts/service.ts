@@ -118,6 +118,16 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 
+  async updateDisplayName(
+    accountId: string,
+    displayName: string | null
+  ): Promise<ClaudeRateLimitAccountsState> {
+    this.supersedePendingLogin()
+    return this.serializeMutation(async () =>
+      this.selection.updateDisplayName(accountId, displayName)
+    )
+  }
+
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }

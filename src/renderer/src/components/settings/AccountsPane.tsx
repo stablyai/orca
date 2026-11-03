@@ -71,6 +71,7 @@ import {
 import { MiniMaxAccountsSection } from './MiniMaxAccountsSection'
 import { useUsageHostSettings } from './use-usage-host-settings'
 import { ManagedDataAccountsSection } from './ManagedDataAccountsSection'
+import { ClaudeAccountRenameDialog } from './accounts-pane-claude-rename-dialog'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
@@ -157,6 +158,7 @@ export function AccountsPane({
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameClaudeTarget, setRenameClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -309,6 +311,7 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameClaudeTarget,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -388,6 +391,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
+      <ClaudeAccountRenameDialog model={model} renameClaudeTarget={renameClaudeTarget} />
       <SettingsSectionStack sections={visibleSections} spacing="group" />
     </div>
   )
