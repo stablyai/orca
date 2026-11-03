@@ -272,6 +272,11 @@
       "autocomplete": "Autocomplete & autocorrect",
       "autocompleteOn": "On",
       "autocompleteOff": "Off",
+      "directoryListingsHeading": "DIRECTORY LISTINGS",
+      "directoryListingsDescription": "Dim trailing file-size tokens (1.4K, 738B, …) that coding agents print in directory listings. Visual only — selection and copy still include the original text. Off by default.",
+      "dimFileSizes": "Dim file sizes",
+      "dimFileSizesOn": "On",
+      "dimFileSizesOff": "Off",
       "restoreHost": "Restore {{name}}",
       "textSizePickerTitle": "Terminal text size"
     }
