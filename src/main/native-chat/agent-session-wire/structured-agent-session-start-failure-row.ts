@@ -17,7 +17,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { failedProviderChildStart } from './structured-agent-session-provider-child'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 
@@ -160,4 +160,23 @@ export async function recordStructuredAgentSessionDeliveryFailure(
     { startKey: failure.startKey, ...structuredAgentSessionStartFailure(failure.cause, context) },
     clientMessageId
   )
+}
+
+export async function failedStructuredAgentSessionInputContinuation(
+  journal: StructuredAgentSessionHostSession['journal'],
+  context: AgentSessionFailureWordsContext,
+  cause: StructuredAgentSessionStartFailureCause,
+  fence: number,
+  startKey: string
+) {
+  const words = structuredAgentSessionStartFailure(cause, context)
+  if (!('failure' in cause && cause.failure.kind === 'cancelled')) {
+    await journal.appendLifecycleBatch({
+      settlementId: `start-failure:${startKey}`,
+      fence,
+      recovered: true,
+      mutations: [structuredAgentSessionStartFailureRow(startKey, words)]
+    })
+  }
+  return { kind: 'failed' as const, fence, outcome: { state: 'rejected' as const, ...words } }
 }

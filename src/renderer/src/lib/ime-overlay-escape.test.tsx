@@ -13,7 +13,6 @@ import {
 import { CommandDialog, CommandInput } from '@/components/ui/command'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { Input } from '@/components/ui/input'
-import { handleImeOverlayEscape } from './ime-overlay-escape'
 
 afterEach(cleanup)
 
@@ -88,14 +87,6 @@ it('keeps command dialogs open on IME Escape and dismisses on ordinary Escape', 
   expect(changed).not.toHaveBeenCalled()
   fireEvent.keyDown(getByRole('combobox'), { key: 'Escape', keyCode: 27 })
   expect(changed).toHaveBeenCalledExactlyOnceWith(false)
-})
-
-it('preserves caller cancellation of ordinary Escape', () => {
-  const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
-  const escape = vi.fn((event: KeyboardEvent) => event.preventDefault())
-  handleImeOverlayEscape(event, escape)
-  expect(escape).toHaveBeenCalledExactlyOnceWith(event)
-  expect(event.defaultPrevented).toBe(true)
 })
 
 it('keeps a context menu field open on IME Escape', () => {

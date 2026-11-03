@@ -40,13 +40,17 @@ import * as gitRunner from '../../git/runner'
 import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
 import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
 import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
-import { getEffectiveHooks, hasHooksFile, loadHooks, parseOrcaYaml, runHook } from '../../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../../worktree-runner-script'
+import { getEffectiveHooks, hasHooksFile, loadHooks, runHook } from '../../workspace-hooks/hooks'
+import { parseOrcaYaml } from '../../../shared/orca-yaml'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../../workspace-hooks/worktree-runner-script'
 import {
   getEffectiveHooksFromConfig,
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
-} from '../../effective-hook-config'
+} from '../../workspace-hooks/effective-hook-config'
 import {
   getBaseRefDefault,
   getBranchConflictKind,
@@ -90,8 +94,8 @@ import {
   unregisterPty as unregisterLocalPtyMemoryRow
 } from '../../memory/pty-registry'
 import { inspectPtyProviderProcess } from '../../providers/pty-process-inspection'
-import * as worktreePathComparison from '../../worktree-path-comparison-key'
-import * as localWorktreeFilesystem from '../../local-worktree-filesystem'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   FLOATING_TERMINAL_WORKTREE_ID,

@@ -1,14 +1,14 @@
+import { useDiffCommentView } from '../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
-import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
+import { useRichMarkdownViewport } from './useRichMarkdownViewport'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
@@ -41,6 +41,7 @@ export default function RichMarkdownEditor({
   worktreeId,
   externalSshTargetId,
   runtimeEnvironmentId,
+  operationProvenance,
   scrollCacheKey,
   onContentChange,
   onDirtyStateHint,
@@ -62,13 +63,16 @@ export default function RichMarkdownEditor({
   const runtimeTarget = useFileOwnerRuntimeTarget(worktreeId, runtimeEnvironmentId)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+  // One read: the stable notes array and the copy it belongs to; filter below so unrelated writes don't invalidate.
+  const noteSource = { runtimeEnvironmentId, externalSshTargetId, operationProvenance }
+  const { owner: commentOwner, comments: allDiffComments } = useDiffCommentView(
+    worktreeId,
+    noteSource
+  )
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
-    selectWorktreeDiffComments(s, worktreeId)
-  )
   const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
     filePath,
     runtimeEnvironmentId,
@@ -106,11 +110,13 @@ export default function RichMarkdownEditor({
     editorRef,
     filePath,
     markdownAnnotationFilePath,
-    markdownAnnotationsEnabled,
+    // Notes of an unknown copy can't be added to.
+    markdownAnnotationsEnabled: markdownAnnotationsEnabled && commentOwner !== null,
     markdownReviewContent,
     markdownSourceLineOffset,
     rootRef,
     scrollContainerRef,
+    noteSource,
     worktreeId,
     worktreeRoot
   })
@@ -146,21 +152,6 @@ export default function RichMarkdownEditor({
       onContentChangeRef,
       reconcileRoundTripRef
     })
-
-  const { clearTransientReviewState } = review
-  const setRootElement = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (node === null) {
-        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
-        clearTransientReviewState()
-        cancelAutoFocusRef.current?.()
-        cancelAutoFocusRef.current = null
-        window.api.ui.setMarkdownEditorFocused(false)
-      }
-      rootRef.current = node
-    },
-    [clearTransientReviewState]
-  )
 
   const editor = useRichMarkdownEditorInstance({
     codec,
@@ -216,6 +207,27 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+
+  const { bindRoot, bindContainer } = useRichMarkdownViewport(
+    editor,
+    scrollCacheKey,
+    rootRef,
+    scrollContainerRef
+  )
+  const { clearTransientReviewState } = review
+  const setRootElement = useCallback(
+    (node: HTMLDivElement | null) => {
+      bindRoot(node)
+      if (node === null) {
+        // Release root-owned transient resources on detach instead of waiting for passive cleanup.
+        clearTransientReviewState()
+        cancelAutoFocusRef.current?.()
+        cancelAutoFocusRef.current = null
+        window.api.ui.setMarkdownEditorFocused(false)
+      }
+    },
+    [clearTransientReviewState, bindRoot]
+  )
 
   useRichMarkdownPendingFocus({
     editor,
@@ -318,12 +330,14 @@ export default function RichMarkdownEditor({
 
   return (
     <RichMarkdownEditorSurface
+      commentOwner={commentOwner}
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
       rootElement={rootRef.current}
       rootRef={setRootElement}
       onFocusLeave={flushOnFocusLeave}
       scrollContainerRef={scrollContainerRef}
+      scrollContainerCallbackRef={bindContainer}
       headerSlot={headerSlot}
       reviewRailExpanded={review.reviewRailExpanded}
       reviewRailVisible={review.reviewRailVisible}
@@ -388,11 +402,15 @@ export default function RichMarkdownEditor({
       onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
       onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
       onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
-      onReviewNotesDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onReviewNotesDelivered={(notes) =>
+        void (commentOwner && clearDeliveredDiffComments(commentOwner, notes))
+      }
       onReviewNoteSourceClick={review.scrollRichMarkdownReviewNoteSourceIntoView}
-      onDeleteReviewComment={(commentId) => void deleteDiffComment(worktreeId, commentId)}
+      onDeleteReviewComment={(commentId) =>
+        void (commentOwner && deleteDiffComment(commentOwner, commentId))
+      }
       onSubmitReviewCommentEdit={(commentId, body) =>
-        updateDiffComment(worktreeId, commentId, body)
+        commentOwner ? updateDiffComment(commentOwner, commentId, body) : Promise.resolve(false)
       }
       onReviewNoteContentResize={review.syncNotePositions}
       onNavigateTableOfContentsItem={navigateToTableOfContentsItem}

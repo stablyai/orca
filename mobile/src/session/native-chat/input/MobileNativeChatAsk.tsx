@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -10,7 +10,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../src/shared/native-chat-ask-card-rules'
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-card-rules'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

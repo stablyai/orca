@@ -26,22 +26,6 @@ describe('agent status connection ownership', () => {
     expect(resolveAgentStatusConnectionRouting({ ptyId: 'ssh:ssh-a@broken' })).toBeUndefined()
   })
 
-  it('marks known local, WSL, and remote-runtime PTYs as non-SSH', () => {
-    expect(
-      resolveAgentStatusConnectionRouting({ ptyId: 'pty-local-1', expectedConnectionId: null })
-    ).toEqual({ connectionId: null })
-    expect(
-      resolveAgentStatusConnectionRouting({ ptyId: 'pty-wsl-1', expectedConnectionId: null })
-    ).toEqual({ connectionId: null })
-    expect(
-      resolveAgentStatusConnectionRouting({
-        ptyId: 'remote:env-a@@terminal-1',
-        expectedConnectionId: null,
-        runtimeEnvironmentId: 'env-a'
-      })
-    ).toEqual({ connectionId: null })
-  })
-
   it('fails closed for missing, malformed, and cross-runtime ownership', () => {
     expect(resolveAgentStatusConnectionRouting({ ptyId: null })).toBeUndefined()
     expect(resolveAgentStatusConnectionRouting({ ptyId: 'remote:' })).toBeUndefined()

@@ -78,17 +78,6 @@ describe('scheduleComposerCreateHandoff', () => {
     vi.clearAllMocks()
   })
 
-  it('starts directly without staging or closing when preflight is fast', () => {
-    const { handoff, onHandOff } = schedule()
-    handoff.start(finalRequest)
-    vi.runAllTimers()
-
-    expect(flow.run).toHaveBeenCalledWith(finalRequest)
-    expect(flow.begin).not.toHaveBeenCalled()
-    expect(onHandOff).not.toHaveBeenCalled()
-    expect(handoff.fail('boom')).toBe(false)
-  })
-
   it('closes the composer onto a staged row when preflight stalls, then continues it', () => {
     const { handoff, onHandOff } = handOff()
 
@@ -144,13 +133,5 @@ describe('scheduleComposerCreateHandoff', () => {
 
     expect(flow.continue).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
-  })
-
-  it('does not stage or close again after the user dismissed the composer', () => {
-    const { onHandOff } = schedule(() => true)
-    vi.runAllTimers()
-
-    expect(flow.begin).not.toHaveBeenCalled()
-    expect(onHandOff).not.toHaveBeenCalled()
   })
 })

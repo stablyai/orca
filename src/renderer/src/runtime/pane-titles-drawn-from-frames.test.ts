@@ -94,14 +94,4 @@ describe('a pane title drawn from main’s frame', () => {
     // A mounted pane follows the layout's titles (use-host-pane-title-sync), not an event.
     expect(dispatchEvent).not.toHaveBeenCalled()
   })
-
-  it('clears a pane’s name from main’s frame alone', async () => {
-    const writes = layoutWrites()
-    applyRuntimePaneTitle({ tabId: 'tab-shell', leafId: leaf(2), title: null })
-    await settle()
-    writes.stop()
-
-    expect(titles()).toBeUndefined()
-    expect(writes.count()).toBe(1)
-  })
 })

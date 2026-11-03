@@ -9,6 +9,9 @@ const quote = (text: string | undefined): string => {
   return JSON.stringify(flat.length > MAX_TEXT ? `${flat.slice(0, MAX_TEXT - 1)}…` : flat)
 }
 
+const isAlarm = (value: unknown): value is 'danger' | 'warning' =>
+  value === 'danger' || value === 'warning'
+
 const countOf = (value: unknown): number => (Array.isArray(value) ? value.length : 0)
 
 /** One line for an element worth a glance, or null for structure and plain controls. */
@@ -34,6 +37,11 @@ function summaryLine(element: TestElement, tabs: ReadonlyMap<string, string>): s
       return props.tone === 'danger' || props.tone === 'warning'
         ? `Text ${String(props.tone)} ${quote(element.text)}`
         : null
+    case 'Box': {
+      // A danger or warning tinted (or outlined) box reads like a callout.
+      const tone = [props.background, props.border].find(isAlarm)
+      return tone ? `Box ${tone} ${quote(element.text)}` : null
+    }
     default:
       return null
   }
@@ -42,7 +50,7 @@ function summaryLine(element: TestElement, tabs: ReadonlyMap<string, string>): s
 /**
  * What a person would notice first in a drawn panel, one short line each: headings, callouts,
  * empty states, tables and trees with their size, the selected tab, loading placeholders and
- * danger or warning text. For `orca plugin check` and quick test assertions.
+ * danger or warning text or boxes. For `orca plugin check` and quick test assertions.
  */
 export function summarizeElements(
   elements: readonly TestElement[],

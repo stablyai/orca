@@ -1,4 +1,4 @@
-import * as selectionOperations from '../../../src/shared/structured-agent-session-selection-operations'
+import * as selectionOperations from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import {
   rememberMobileCreatedStructuredSession,
   mobileCreatedStructuredSession
@@ -235,7 +235,7 @@ describe('the permission mode on the phone', () => {
       })
     }
     const options = await mountOptions({ client, fence: 1, optionStamp: '', permissionOwn: true })
-    expect(options.permission()).toBe('full-access')
+    expect(options.permission()).toBe('own')
     expect(options.offered()).not.toContain('own')
     await options.pick('full-access')
     expect(mutate).toHaveBeenCalledExactlyOnceWith(

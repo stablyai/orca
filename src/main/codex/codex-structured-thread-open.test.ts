@@ -2,7 +2,7 @@ import { providerStartupFailureFact } from '../native-chat/agent-session-wire/st
 import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
-import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
@@ -326,16 +326,21 @@ describe('openCodexThread', () => {
       )
     })
 
-    it('keeps the resume failure for a thread a resume already proved', async () => {
+    it('explains a missing saved conversation without replacing it', async () => {
       const request = codexWithoutRollout()
+      const error = await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
+        2_000
+      ).catch((error: unknown) => error)
 
-      await expect(
-        openCodexThread(
-          connectionFor(request),
-          { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
-          2_000
-        )
-      ).rejects.toThrow('no rollout found for thread id thread-unsaved')
+      expect(providerStartupFailureFact(error)).toMatchObject({
+        kind: 'savedConversationMissing',
+        detail: {
+          text: expect.stringContaining('no rollout found for thread id thread-unsaved'),
+          audience: 'log'
+        }
+      })
       expect(request).toHaveBeenCalledOnce()
     })
 

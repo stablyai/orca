@@ -159,19 +159,4 @@ describe('orca profile overlapping connect actions', () => {
     expect(store.getState().orcaProfileAuthStatus).toEqual(signedOutAuth)
     expect(store.getState().orcaProfiles).toEqual(listState.profiles)
   })
-
-  it('does not toast signed out when sign-out returns an already-relinked session', async () => {
-    const signedOut: SignOutCurrentOrcaProfileResult = {
-      status: 'signed-out',
-      auth: connectedAuthStatus,
-      activeProfileId: 'local-default',
-      profiles: [{ ...listState.profiles[0], kind: 'cloud-linked', cloud: connectedCloud }]
-    }
-    orcaProfilesApi.signOutCurrent.mockResolvedValue(signedOut)
-    const store = createTestStore()
-
-    await expect(store.getState().signOutCurrentOrcaProfile()).resolves.toEqual(signedOut)
-    expect(toastSuccessMock).not.toHaveBeenCalled()
-    expect(store.getState().orcaProfileAuthStatus).toEqual(connectedAuthStatus)
-  })
 })

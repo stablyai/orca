@@ -3,6 +3,7 @@ import type { SourceControlAiSettingsPatch } from '../../../../shared/source-con
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import { mergeFontSuggestions } from './SettingsConstants'
+import { listInstalledFontFamilies, setInstalledFontsUnavailable } from './installed-font-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
 import {
@@ -145,22 +146,19 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
       return
     }
 
-    installedFontsLoadPromiseRef.current = window.api.settings
-      .listFonts()
+    installedFontsLoadPromiseRef.current = listInstalledFontFamilies()
       .then((fonts) => {
         if (!settingsMountedRef.current) {
           return
         }
-        // Latch successful empty results too so font-less systems do not repeatedly list fonts.
+        // Latch empty results too so an unreadable font list is not re-requested on every focus.
         installedFontsLoadedRef.current = true
-        if (fonts.length === 0) {
-          return
+        setInstalledFontsUnavailable(fonts.length === 0)
+        if (fonts.length > 0) {
+          setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
         }
-        setFontSuggestions((prev) => mergeFontSuggestions(fonts, prev))
       })
-      .catch(() => {
-        // Fall back to curated cross-platform suggestions.
-      })
+      .catch(() => setInstalledFontsUnavailable(true))
       .finally(() => {
         installedFontsLoadPromiseRef.current = null
       })

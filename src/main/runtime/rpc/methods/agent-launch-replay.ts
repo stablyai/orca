@@ -62,14 +62,17 @@ function answerFromRecordedRow(
   outcome: AgentSessionOperationOutcome
 ): AgentLaunchAdmission | null {
   if (outcome.status === 'failed') {
+    const message =
+      typeof outcome.message === 'string' && outcome.message.length > 0
+        ? outcome.message
+        : undefined
     // Replay the original code verbatim; narrowing to agentSession refusals would falsely label a failed launch as an invalid id and invite retry.
     return {
       decision: 'refuse',
       refusal: {
         code: outcome.code,
-        message:
-          outcome.message ?? `Launch operation ${operationId} already failed: ${outcome.code}.`,
-        ...(outcome.message ? { said: outcome.message } : {})
+        message: message ?? `Launch operation ${operationId} already failed: ${outcome.code}.`,
+        ...(message ? { said: message } : {})
       }
     }
   }
@@ -222,7 +225,7 @@ export async function admitAgentLaunchOperation(
     record: succeeded,
     settle: succeeded,
     fail: (code, cause) => {
-      const message = agentLaunchFailureMessage(cause)
+      const message = agentLaunchFailureMessage(cause, params.target.kind)
       return store.recordOperationOutcome({
         callerKey,
         operationId,

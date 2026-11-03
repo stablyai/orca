@@ -26,6 +26,7 @@ ORCA plugin system on|off --json
 ORCA plugin restart <plugin-key> --json
 ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] --json
 ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>] [--act '<json>'] [--out <file.png>] --json
+ORCA plugin shot <dir> --scenario <name> [--panel <id>] [--theme light|dark] [--width <px>] [--out <file.png>] --json
 ```
 
 Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or `approval_stale`.
@@ -73,7 +74,12 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    `toggle`, `slide`, Table `sort`/`selectRows`/`activateRow`/`loadMore`, Tree
    `expand`/`collapse`/`selectItem`/`activateItem`; at most 20) and reports
    `actions: [{ ok, error? }]`; it needs Orca's window hidden or minimized and never counts as a
-   user gesture. Afterwards the panel's atoms are put back (`restored`); worker-side effects stay. `plugin dev watch <dir> --shot <out-dir>` opens one panel once (the
+   user gesture. Afterwards the panel's atoms are put back (`restored`); worker-side effects stay.
+   `plugin shot <dir> --scenario <name>` shoots one `<entry>.check.ts` scenario instead: it renders
+   it here like `plugin check` (unsandboxed, the worker on a stand-in host), and Orca draws that
+   tree apart from the plugin, so the live panel, storage and worker are never touched. It returns
+   `replay: true` and `scenario`; a still frame (images placeholder, no `--act`), local only,
+   window hidden or minimized; an unknown name lists the scenarios. `plugin dev watch <dir> --shot <out-dir>` opens one panel once (the
    first, or `--shot-panel <id>`) and captures it after every reload while it stays on screen;
    when the user shows something else it skips (`shot_skipped`) and never switches back. `plugin open
    <plugin-key>` shows a panel to the user (`--editor <file>` opens a file in its custom editor).

@@ -192,7 +192,8 @@ describe('plugin dev watch --shot', () => {
           colorScheme: 'dark',
           themeApplied: false,
           settled: true,
-          errors: []
+          errors: [],
+          pendingRequests: 1
         },
         {
           pluginKey: 'acme.notes',
@@ -209,7 +210,8 @@ describe('plugin dev watch --shot', () => {
       const shot = bindPluginDevWatchHost(ctx, '/work/notes').shot
       await shot?.open('acme.notes', 'a')
       await expect(shot?.take('acme.notes', 'a')).resolves.toMatchObject({
-        path: join(dir, 'acme.notes-a.png')
+        path: join(dir, 'acme.notes-a.png'),
+        pendingRequests: 1
       })
       await expect(shot?.take('acme.notes', 'a')).resolves.toEqual({
         notShown: 'the right sidebar is closed'

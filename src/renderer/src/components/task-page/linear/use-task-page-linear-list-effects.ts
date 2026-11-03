@@ -1,7 +1,7 @@
 import {
   observeLinearIssueRead,
   type LinearIssueRead
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import { taskProviderErrorText } from '@/lib/task-provider-error-copy'

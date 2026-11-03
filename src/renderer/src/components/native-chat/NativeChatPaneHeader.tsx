@@ -1,7 +1,10 @@
+import { Fragment } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, X } from 'lucide-react'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { agentForksConversations } from '../../../../shared/agent-resume-argv'
 import type { NativeChatTabSession } from '../tab-bar/tab-session-history-switch'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
@@ -37,6 +40,7 @@ export function NativeChatPaneHeader({
   const documentDark = useDocumentDarkTheme()
   const light = colorScheme ? colorScheme === 'light' : !documentDark
   const split = translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right')
+  const splitShortcutCombos = useShortcutKeyComboDetails('terminal.splitRight')
   const handOffLabel = translate(
     'components.agentSessionContinuation.handOffToAnotherAgent',
     'Hand Off to Another Agent'
@@ -95,7 +99,24 @@ export function NativeChatPaneHeader({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {split}
+            <span className="inline-flex items-center gap-1.5">
+              <span>
+                {split}
+                {splitShortcutCombos.length > 0 ? ': ' : null}
+              </span>
+              {splitShortcutCombos.map((shortcut, index) => (
+                <Fragment key={JSON.stringify([shortcut.keys, shortcut.doubleTap])}>
+                  {index > 0 ? <span>{', '}</span> : null}
+                  <ShortcutKeyCombo
+                    keys={shortcut.keys}
+                    doubleTap={shortcut.doubleTap}
+                    className="gap-0.5"
+                    keyCapClassName="min-w-0 border-background/30 bg-background/10 px-1 py-0 text-3xs text-background shadow-none"
+                    separatorClassName="mx-0 text-3xs text-background/70"
+                  />
+                </Fragment>
+              ))}
+            </span>
           </TooltipContent>
         </Tooltip>
         {actions.canClosePane ? (

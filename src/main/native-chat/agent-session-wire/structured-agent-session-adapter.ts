@@ -1,4 +1,4 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -17,7 +17,7 @@ import type {
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-identity'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
@@ -91,6 +91,8 @@ export type StructuredAgentSessionCommandRun = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
   running: AgentJournalTurnItem
+  /** Only agents declaring `compactInstructions` receive this. */
+  instructions?: string
 }
 
 /** Commands may answer in place without echoing provider items. */
@@ -188,6 +190,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     sessionId: string,
     mode: AgentChatPermissionChoice
   ): boolean | undefined
+  /** Settle native work without withdrawing previously admitted input; false proves no permission transition. */
+  settlePermissionTransition?(input: {
+    sessionId: string
+    fence: number
+    mode: AgentChatPermissionChoice
+    signal?: AbortSignal
+  }): Promise<boolean>
   dispatch(input: {
     sessionId: string
     clientMessageId: string

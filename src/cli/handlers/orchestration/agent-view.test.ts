@@ -238,7 +238,8 @@ describe('orchestration agent views', () => {
             workspace: { id: 'wt_1::/repo' },
             stage: { activity: 'working' },
             liveness: { verdict: 'live' },
-            nextAction: { argv: ['orchestration', 'worker-stop', '--dispatch', 'ctx_1'] }
+            nextAction: { argv: ['orchestration', 'worker-stop', '--dispatch', 'ctx_1'] },
+            attention: { categories: ['input', 'stale', 'root_completion'] }
           }
         }
       ],
@@ -247,7 +248,7 @@ describe('orchestration agent views', () => {
 
     expect(stdout).toBe(
       'scope.run=run_1 scope.source=flag\n' +
-        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo host=local next="orca-dev orchestration worker-stop --dispatch ctx_1"'
+        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo host=local attention=input next="orca-dev orchestration worker-stop --dispatch ctx_1"'
     )
   })
 

@@ -4,7 +4,7 @@ import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles,
   writeFileDurable
-} from '../durable-file-write'
+} from '../filesystem/durable-file-write'
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 /** Per-distro record intentionally survives Orca quit so the next launch can re-adopt the surviving holder. */

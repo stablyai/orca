@@ -122,6 +122,22 @@ function omittedValue(token: PluginAppThemeToken): string {
   return light === dark ? light : `light: ${light}; dark: ${dark}`
 }
 
+const APP_THEME_TOKENS: ReadonlySet<string> = new Set(PLUGIN_APP_THEME_TOKENS)
+const isAppThemeToken = (token: string): token is PluginAppThemeToken => APP_THEME_TOKENS.has(token)
+// Frame variables that are not colours of an app theme.
+const FRAME_ONLY_ROLES: Record<string, string> = {
+  '--radius': 'Corner radius of cards and controls'
+}
+
+/** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
+export function pluginFrameThemeVariables(): { variable: string; token: string; paints: string }[] {
+  return PANEL_DESIGN_TOKEN_ALLOWLIST.map((token) => ({
+    variable: `--orca-${token.slice(2)}`,
+    token,
+    paints: isAppThemeToken(token) ? TOKEN_ROLES[token] : (FRAME_ONLY_ROLES[token] ?? '')
+  }))
+}
+
 /** Colour token list for theme authors, rendered from the public token set. */
 export function renderPluginThemeTokenReference(): string {
   const lines = [
@@ -144,8 +160,8 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '| Variable | Orca token |',
     '| --- | --- |',
-    ...PANEL_DESIGN_TOKEN_ALLOWLIST.map(
-      (token) => `| \`--orca-${token.slice(2)}\` | \`${token}\` |`
+    ...pluginFrameThemeVariables().map(
+      ({ variable, token }) => `| \`${variable}\` | \`${token}\` |`
     )
   ]
   return `${lines.join('\n')}\n`

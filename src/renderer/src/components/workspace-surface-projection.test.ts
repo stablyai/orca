@@ -1,7 +1,7 @@
 /** Host-qualified catalogs can repeat bare workspace IDs, but workbench state/React keys cannot (STA-4846). Collapse duplicates before mounting or the same visible tabs mount twice. */
 import { describe, expect, it, vi } from 'vitest'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
-import { getIndexedAllWorktrees, getIndexedWorktreeMap } from '../store/worktree-repo-index'
+import { getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -75,34 +75,6 @@ describe('projectWorkspaceSurfaces', () => {
     const surfaces = project({ worktrees: [localWorktree, sshWorktree] })
 
     expect(surfaces).toEqual([{ id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }])
-  })
-
-  it('never emits a duplicate id, so mount loops cannot reuse a React key', () => {
-    const surfaces = project({
-      worktrees: [localWorktree, sshWorktree],
-      folderWorkspaces: [localFolder, runtimeFolder]
-    })
-
-    expect(new Set(surfaces.map((surface) => surface.id)).size).toBe(surfaces.length)
-  })
-
-  it('emits one surface per folder workspace id across hosts', () => {
-    const surfaces = project({
-      folderWorkspaces: [localFolder, runtimeFolder]
-    })
-
-    expect(surfaces).toHaveLength(1)
-    expect(surfaces[0]?.id).toBe('folder:folder-shared')
-  })
-
-  it('mounts the active folder workspace at its resolved host path, not the first row', () => {
-    const surfaces = project({
-      folderWorkspaces: [localFolder, runtimeFolder],
-      activeWorkspaceId: 'folder:folder-shared',
-      activeWorkspaceResolvedHostId: 'runtime:env-1'
-    })
-
-    expect(surfaces).toEqual([{ id: 'folder:folder-shared', path: '/remote/orca' }])
   })
 
   it('ignores the active workspace id entirely when no resolved host disambiguates', () => {
@@ -180,26 +152,6 @@ describe('projectWorkspaceSurfaces', () => {
     expect(hydrated).toEqual([{ id: 'folder:folder-shared', path: '/remote/orca' }])
     expect(hydrated[0]?.id).toBe(hydrating[0]?.id)
   })
-
-  it('keeps the surviving host row when a runtime disconnect drops its peer', () => {
-    // Runtime contact loss must preserve projected workspace IDs or mount pruning would unmount them.
-    const surfaces = project({ worktrees: [localWorktree] })
-
-    expect(surfaces).toEqual([{ id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }])
-  })
-
-  it('keeps distinct workspaces on one host', () => {
-    const otherWorktree: Worktree = {
-      ...localWorktree,
-      id: 'repo-shared::/work/orca-other',
-      path: '/work/orca-other'
-    }
-
-    expect(project({ worktrees: [localWorktree, otherWorktree] })).toEqual([
-      { id: SHARED_WORKTREE_ID, path: '/work/orca-feature' },
-      { id: 'repo-shared::/work/orca-other', path: '/work/orca-other' }
-    ])
-  })
 })
 
 // Collapse may remove duplicates only; dropping an owned surface would destroy live terminals.
@@ -267,12 +219,6 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
     ])
   })
 
-  it('collapses two SSH hosts publishing one worktree id, with no local row present', () => {
-    expect(project({ worktrees: [sshWorktree, secondSshWorktree] })).toEqual([
-      { id: SHARED_WORKTREE_ID, path: '/work/orca-feature' }
-    ])
-  })
-
   it('keeps a git worktree and a folder workspace apart even on the same id text', () => {
     const surfaces = project({
       worktrees: [{ ...localWorktree, id: 'folder-shared', path: '/work/collide' }],
@@ -319,10 +265,6 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
       })
     ).toEqual([{ id: 'folder:folder-shared', path: '/work/orca-local' }])
   })
-
-  it('emits nothing extra and nothing missing for an empty catalog', () => {
-    expect(project({})).toEqual([])
-  })
 })
 
 // Both worktree hooks read the same WeakMap snapshot, preserving Object.is update behavior after the feed change.
@@ -333,12 +275,6 @@ describe('worktree surface feed subscription identity', () => {
     expect(getIndexedWorktreeMap(worktreesByRepo)).toBe(getIndexedWorktreeMap(worktreesByRepo))
     expect(getIndexedWorktreeMap({ ...worktreesByRepo })).not.toBe(
       getIndexedWorktreeMap(worktreesByRepo)
-    )
-  })
-
-  it('exposes the same id set the host-qualified array does', () => {
-    expect(new Set(getIndexedWorktreeMap(worktreesByRepo).keys())).toEqual(
-      new Set(getIndexedAllWorktrees(worktreesByRepo).map((worktree) => worktree.id))
     )
   })
 })

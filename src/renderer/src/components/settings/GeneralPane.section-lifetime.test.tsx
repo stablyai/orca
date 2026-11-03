@@ -3,18 +3,24 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
+import { TooltipProvider } from '../ui/tooltip'
+import type { UpdateStatus } from '../../../../shared/update-status-types'
 const fake = vi.hoisted(() => ({
   query: '',
   platform: 'linux',
   getVersion: vi.fn(async () => '1.4.100'),
   refresh: vi.fn(async () => {}),
   action: vi.fn(),
+  updateStatus: vi.fn<() => UpdateStatus>(() => ({ state: 'idle' })),
+  updateSettings: vi.fn(async () => {}),
+  check: vi.fn(),
   updates: new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'current', name: 'Synthetic' }]
   ])
 }))
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
@@ -26,7 +32,8 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       settingsSearchQuery: fake.query,
-      updateStatus: { state: 'idle' },
+      updateStatus: fake.updateStatus(),
+      updateSettings: fake.updateSettings,
       remoteServerUpdates: fake.updates,
       remoteServerUpdatesChecking: false,
       remoteServerUpdatesRunning: false,
@@ -51,14 +58,30 @@ beforeEach(() => {
   vi.clearAllMocks()
   fake.query = ''
   fake.platform = 'linux'
+  fake.updateStatus.mockReturnValue({ state: 'idle' })
   fake.updates = new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'current', name: 'Synthetic' }]
   ])
-  Object.assign(window, { api: { updater: { getVersion: fake.getVersion } } })
+  Object.assign(window, { api: { updater: { getVersion: fake.getVersion, check: fake.check } } })
 })
 afterEach(() => {
   cleanup()
   Reflect.deleteProperty(window, 'api')
+})
+it('requests a fresh delayed check after saving the delay during an active check', async () => {
+  fake.updateStatus.mockReturnValue({ state: 'checking', userInitiated: true })
+  render(
+    <GeneralPane
+      settings={getDefaultSettings('/synthetic')}
+      updateSettings={vi.fn()}
+      fontSuggestions={[]}
+    />,
+    { wrapper: TooltipProvider }
+  )
+  fireEvent.click(screen.getByRole('radio', { name: '7 days' }))
+  await act(async () => {})
+  expect(fake.updateSettings).toHaveBeenCalledWith({ updateDelayDays: 7 })
+  expect(fake.check).toHaveBeenCalledWith({ ignoreUpdateDelay: false })
 })
 it.each([false, true])(
   'retains update sections with Windows runtime support %s',
@@ -69,7 +92,7 @@ it.each([false, true])(
       fontSuggestions: [],
       wslSupportedPlatform
     }
-    const view = render(<GeneralPane {...props} />)
+    const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
     await act(async () => {})
     // Assert DOM identity across query edits so search cannot remount sections and add reads.
     const mountedHeading = screen.getByText('Updates', { exact: true })
@@ -107,7 +130,7 @@ it('keeps showing store-published remote update state without a remount', async 
     fontSuggestions: []
   }
   fake.query = 'update'
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   const mountedHeading = screen.getByText('Updates', { exact: true })
   expect(screen.getByText('1 paired server · 1 up to date')).toBeTruthy()
@@ -127,7 +150,7 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Check for Server Updates' }))
   expect(fake.refresh).toHaveBeenCalledTimes(2)
@@ -143,7 +166,7 @@ it('keeps explicit remote refresh and true hide/reopen reads', async () => {
 it('preserves an autosave draft until external settings change or the section hides', async () => {
   const settings = { ...getDefaultSettings('/synthetic'), editorAutoSaveDelayMs: 1000 }
   const props = { settings, updateSettings: vi.fn(), fontSuggestions: [] }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.change(screen.getByRole('spinbutton', { name: 'Auto Save Delay' }), {
     target: { value: '2500' }
@@ -178,7 +201,7 @@ it('retains the revealed release picker only while Updates remains visible', asy
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fireEvent.click(screen.getByText('Updates', { exact: true }), { altKey: true })
   expect(screen.getByText('Release picker open')).toBeTruthy()
@@ -204,7 +227,7 @@ it('does not publish a version result from a genuinely unmounted section', async
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   fake.query = 'Tab Order'
   await act(async () => view.rerender(<GeneralPane {...props} />))
@@ -223,7 +246,7 @@ it('shows hold-to-quit beside closing confirmations and keeps its local settings
     updateSettings: vi.fn(),
     fontSuggestions: []
   }
-  const view = render(<GeneralPane {...props} />)
+  const view = render(<GeneralPane {...props} />, { wrapper: TooltipProvider })
   await act(async () => {})
   const toggle = screen.getByRole('switch', { name: 'Hold ⌘Q while agents are working' })
   expect(toggle.getAttribute('aria-checked')).toBe('false')

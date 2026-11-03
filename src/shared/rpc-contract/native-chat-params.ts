@@ -31,8 +31,19 @@ export const NativeChatSession = z.object({
       transcriptSourceOrder: z.literal(1).optional()
     })
     .optional(),
-  beforeOffset: z.number().int().nonnegative().optional()
+  beforeOffset: z.number().int().nonnegative().optional(),
+  // The newest row the client holds; a value this host can't read means no resume, not a failed subscribe.
+  resumeAfter: z
+    .object({
+      id: z.string().min(1),
+      transcriptOrder: z.number(),
+      timestamp: z.number().nullable()
+    })
+    .optional()
+    .catch(undefined)
 })
+
+export type NativeChatResumePoint = NonNullable<z.infer<typeof NativeChatSession>['resumeAfter']>
 
 export const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
