@@ -62,6 +62,78 @@ describe('federated transport safety', () => {
     }
   })
 
+  it('proves the contract once per host incarnation and pins each mutation to it', async () => {
+    let currentRuntimeId = 'epoch-1'
+    let currentCapabilities = [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY]
+    const call = vi.fn(
+      async (
+        _selector: string,
+        method: string,
+        _params?: unknown,
+        _timeoutMs?: number,
+        _envelope?: unknown,
+        _pairingRevision?: number,
+        expectedRuntimeId?: string
+      ) =>
+        expectedRuntimeId !== undefined && expectedRuntimeId !== currentRuntimeId
+          ? {
+              id: method,
+              ok: false as const,
+              error: { code: 'runtime_environment_changed', message: 'changed' },
+              _meta: { runtimeId: currentRuntimeId }
+            }
+          : {
+              id: method,
+              ok: true as const,
+              result:
+                method === 'status.get'
+                  ? runtimeStatus(currentCapabilities)
+                  : { acknowledgedThrough: 1 },
+              _meta: { runtimeId: currentRuntimeId }
+            }
+    )
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      orchestrationEnvironmentTransport: { resolve: () => server, call }
+    })
+    const ack = () =>
+      runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        'orchestration.federationAck',
+        { dispatchId: 'dispatch-worker', throughSequence: 1 },
+        15_000,
+        { orchestrationRequestId: 'ack-request' }
+      )
+    const sent = () => call.mock.calls.map((entry) => [entry[1], entry[6]])
+
+    await ack()
+    await ack()
+    expect(sent()).toEqual([
+      ['status.get', undefined],
+      ['orchestration.federationAck', 'epoch-1'],
+      ['orchestration.federationAck', 'epoch-1']
+    ])
+
+    // The host restarted: the pinned send is refused before any effect, then the new incarnation is proved.
+    call.mockClear()
+    currentRuntimeId = 'epoch-2'
+    await ack()
+    expect(sent()).toEqual([
+      ['orchestration.federationAck', 'epoch-1'],
+      ['status.get', undefined],
+      ['orchestration.federationAck', 'epoch-2']
+    ])
+
+    // A downgraded restart lacks the contract, so no mutation reaches it.
+    call.mockClear()
+    currentRuntimeId = 'epoch-3'
+    currentCapabilities = []
+    await expect(ack()).rejects.toMatchObject({ code: 'orchestration_migration_required' })
+    expect(sent()).toEqual([
+      ['orchestration.federationAck', 'epoch-2'],
+      ['status.get', undefined]
+    ])
+  })
+
   it('fences structured reads and worker-show to the resolved pairing revision', async () => {
     const updateFederatedDispatchRuntimeEpoch = vi.fn()
     const db = {

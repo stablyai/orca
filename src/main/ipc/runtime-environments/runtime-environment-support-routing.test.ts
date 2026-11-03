@@ -49,9 +49,9 @@ import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runti
 import {
   subscribeSupportRoutedRuntimeEnvironment,
   routeRuntimeEnvironmentCallBySupport,
-  routeRuntimeEnvironmentSubscriptionBySupport,
-  shouldUseSharedControlEnvelope
+  routeRuntimeEnvironmentSubscriptionBySupport
 } from './runtime-environment-support-routing'
+import { shouldUseSharedControlEnvelope } from './runtime-environment-shared-control-envelope'
 
 beforeEach(() => {
   resetRuntimeEnvironmentCapabilityEvidence()

@@ -1,5 +1,6 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -69,4 +70,23 @@ export async function sendSupportRoutedCallOnRuntime(
         )
       : await sendOneShotRequestOnRuntime(route.connection, call, expectedRuntimeId)
   return response ?? runtimeEnvironmentChangedFailure(route.environment, call.method)
+}
+
+/** One-shot enveloped call; a pinned one proves its runtime on the sending socket, since the registry's id can predate a restart. */
+export function sendEnvelopedOneShotCall(
+  route: { environment: KnownRuntimeEnvironment; connection: PairedRuntimeConnection },
+  call: PinnedCall,
+  expectedRuntimeId: string | undefined
+): Promise<RuntimeRpcResponse<unknown>> {
+  return expectedRuntimeId === undefined
+    ? sendRemoteRuntimeRequestAbortable(
+        route.connection,
+        call.method,
+        call.params,
+        call.timeoutMs,
+        call.envelope,
+        call.signal,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      )
+    : sendSupportRoutedCallOnRuntime(route, call, expectedRuntimeId, 'one-shot')
 }

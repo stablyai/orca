@@ -33,11 +33,12 @@ import {
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
 import {
   executeSupportRoutedCall,
-  shouldUseSharedControlEnvelope,
   shouldRouteCallBySupport,
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
 } from './runtime-environment-support-routing'
+import { shouldUseSharedControlEnvelope } from './runtime-environment-shared-control-envelope'
+import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -108,15 +109,17 @@ export async function callRuntimeEnvironment(
         const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
         if (envelope && !sharedControlEnvelope) {
-          const response = await sendRemoteRuntimeRequestAbortable(
-            pairedConnection,
-            method,
-            params,
-            effectiveTimeoutMs,
-            envelope,
-            options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-            options?.prepareRequest
+          const response = await sendEnvelopedOneShotCall(
+            { environment: currentEnvironment, connection: pairedConnection },
+            {
+              method,
+              params,
+              timeoutMs: effectiveTimeoutMs,
+              envelope,
+              signal: options?.signal,
+              prepareRequest: options?.prepareRequest
+            },
+            options?.expectedEnvironmentRuntimeId
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response

@@ -7,17 +7,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  markEnvironmentUsed
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
-const { sendRemoteRuntimeRequestMock, sendRemoteRuntimeSharedControlRequestMock } = vi.hoisted(
-  () => ({
-    sendRemoteRuntimeRequestMock: vi.fn(),
-    sendRemoteRuntimeSharedControlRequestMock: vi.fn()
-  })
-)
+const {
+  sendRemoteRuntimeRequestMock,
+  sendRemoteRuntimeRequestWithStatusPreflightMock,
+  sendRemoteRuntimeSharedControlRequestMock
+} = vi.hoisted(() => ({
+  sendRemoteRuntimeRequestMock: vi.fn(),
+  sendRemoteRuntimeRequestWithStatusPreflightMock: vi.fn(),
+  sendRemoteRuntimeSharedControlRequestMock: vi.fn()
+}))
 
 vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock
+  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
+  sendRemoteRuntimeRequestWithStatusPreflight: sendRemoteRuntimeRequestWithStatusPreflightMock
 }))
 
 vi.mock('./runtime-environment-request-connections', async () => {
@@ -51,6 +58,7 @@ describe('federated read RPC transport routing', () => {
     }).id
     resetSharedControlSupport()
     sendRemoteRuntimeRequestMock.mockReset()
+    sendRemoteRuntimeRequestWithStatusPreflightMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
   })
 
@@ -185,6 +193,38 @@ describe('federated read RPC transport routing', () => {
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a runtime-pinned one-shot mutation when its socket reaches a restarted host', async () => {
+    markEnvironmentUsed(userDataPath, environmentId, { runtimeId: 'runtime-proven' })
+    const mutationSent = vi.fn()
+    sendRemoteRuntimeRequestWithStatusPreflightMock.mockImplementation(
+      async (_connection, method, _params, _timeoutMs, validateStatus) => {
+        validateStatus({
+          id: 'status',
+          ok: true,
+          result: { capabilities: [] },
+          _meta: { runtimeId: 'runtime-restarted' }
+        })
+        mutationSent(method)
+        return { id: method, ok: true, result: {}, _meta: { runtimeId: 'runtime-restarted' } }
+      }
+    )
+
+    await expect(
+      callRuntimeEnvironment(
+        userDataPath,
+        environmentId,
+        'orchestration.federationRelease',
+        { dispatchId: 'dispatch-1' },
+        15_000,
+        undefined,
+        { orchestrationContractVersion: 1, orchestrationRequestId: 'release-1' },
+        { expectedEnvironmentRuntimeId: 'runtime-proven' }
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
+    expect(mutationSent).not.toHaveBeenCalled()
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
