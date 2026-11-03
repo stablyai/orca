@@ -74,6 +74,38 @@ describe('unresolved status diagnostic admission', () => {
     expect(track).toHaveBeenCalledTimes(2)
   })
 
+  it.each([null, 'remote-1'])(
+    'preserves diagnostic cooldown across worktree fallback on host %s',
+    async (host) => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+      const { apply, state, track } = await setup()
+      state.repos = [{ id: 'repo-1', connectionId: host }]
+      state.worktreesByRepo = { 'repo-1': [{ id: 'folder-1', repoId: 'repo-1' }] }
+      const unresolved = { ...event, connectionId: host, worktreeId: 'folder-1' }
+      const runtimeBacked = { ...unresolved, terminalHandle: 'terminal' }
+
+      for (let index = 0; index < 3; index++) {
+        expect(apply(unresolved)).toBe('pending')
+        expect(apply(runtimeBacked)).toBe('applied')
+      }
+      expect(track).toHaveBeenCalledExactlyOnceWith('agent_hook_unattributed', {
+        reason: 'unknown_tab_id'
+      })
+
+      now.mockReturnValue(301_000)
+      expect(apply(unresolved)).toBe('pending')
+      expect(track).toHaveBeenCalledTimes(2)
+
+      state.tabsByWorktree = {
+        'folder-1': [{ id: 'tab-future', worktreeId: 'folder-1', title: 'Codex' }]
+      }
+      expect(apply(unresolved)).toBe('applied')
+      state.tabsByWorktree = {}
+      expect(apply(unresolved)).toBe('pending')
+      expect(track).toHaveBeenCalledTimes(3)
+    }
+  )
+
   it.each([null, 'remote-1'])('retains runtime-backed attribution on host %s', async (host) => {
     const { apply, state, track, enqueue, setAgentStatus } = await setup()
     state.repos = [{ id: 'repo-1', connectionId: host }]

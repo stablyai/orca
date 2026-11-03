@@ -82,6 +82,7 @@ export function createAgentStatusEventApplicator(args: {
       titleUsesTabTitle,
       tabTitle
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
+    const indexedPaneExists = exists
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
         ? options?.batch?.projectedTitlesByTabId.get(ownerTabId)
@@ -169,11 +170,13 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const existingStatus = store.agentStatusByPaneKey[paneKey]
-    attributionDiagnostics.resolved({
-      paneKey,
-      connectionId: data.connectionId,
-      worktreeId: data.worktreeId
-    })
+    if (indexedPaneExists) {
+      attributionDiagnostics.resolved({
+        paneKey,
+        connectionId: data.connectionId,
+        worktreeId: data.worktreeId
+      })
+    }
     if (data.programStatusOnly === true) {
       // Why after ownership but before staleness: the republished row keeps its old receivedAt.
       return applyProgramStatusOnlyUpdate(store, options?.batch, paneKey, programStatus)
