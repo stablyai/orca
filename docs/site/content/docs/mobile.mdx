@@ -53,6 +53,16 @@ For chat-capable agents (Claude, Codex, and others Orca recognizes), mobile can 
 - **Model and session options** — the composer shows a pill row for the current model and session options. Tap it to pick a model or option (including direct Codex model selection) without dropping into the raw terminal.
 - **Desktop still owns the agent** — Chat UI is a view over the paired desktop session, not a separate cloud agent.
 
+### Desktop-created chats and "Update mobile"
+
+Desktop-created structured chats have no raw terminal to switch to. The Chat UI setting and per-session view switch above apply to terminal-backed sessions.
+
+If a desktop-created chat is listed as **Update mobile**, or **Update to view** on an older host, the phone has not advertised the support needed to display that chat. The host can still show **Connected** while selecting the tab leaves an empty pane with disabled terminal controls.
+
+Update Orca on your **phone** from the [App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) on iOS or the [current Android APK](https://www.onorca.dev/download/android), then reconnect to the paired host and reopen the same chat. You do not need to recreate the agent or change the terminal/Chat UI default.
+
+If the current mobile app still shows the label after reconnecting, [report a bug](https://github.com/stablyai/orca/issues) with the desktop/host version, phone app version and OS, agent name, and a screenshot of the tab and empty pane. Include whether reconnecting changed the label. An up-to-date app can still fail to advertise its chat support, so the label alone does not prove the installed phone app is old.
+
 ## Quick Commands
 
 From a worktree session, open **Quick Commands** from the session tab strip (next to new terminal). Commands are the same saved list as desktop and sync both ways.

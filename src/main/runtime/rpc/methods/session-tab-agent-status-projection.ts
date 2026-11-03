@@ -17,7 +17,7 @@ import {
 type SessionTabsPayload = RuntimeMobileSessionTabsResult | RuntimeMobileSessionTabsSnapshot
 
 /** Capped at 128px / one line in every shipped mobile build, so ~15-18 characters render. */
-export const STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE = 'Update to view'
+export const STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE = 'Update mobile'
 export const CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE = 'Open on desktop'
 
 function clientCanRenderStructuredAgentSessionTab(

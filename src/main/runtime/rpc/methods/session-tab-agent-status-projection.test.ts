@@ -232,13 +232,14 @@ describe('projectSessionTabAgentStatus', () => {
     expect(projected.activeTabId).toBe('agent-session:codex')
   })
 
-  it('projects agent-specific fallback titles for a mobile client with no capabilities', () => {
+  it('identifies the mobile update target without replacing an unsupported session', () => {
     const projected = projectSessionTabAgentStatus(claudeSnapshot, 'mobile', [])
 
-    expect(projected.tabs.map((tab) => tab.title)).toEqual([
-      STRUCTURED_CHAT_UPDATE_REQUIRED_TAB_TITLE,
-      CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
-    ])
+    expect(projected.tabs[0]).toEqual({ ...claudeSnapshot.tabs[0], title: 'Update mobile' })
+    expect(projected.tabs[1]).toEqual({
+      ...claudeSnapshot.tabs[1],
+      title: CLAUDE_STRUCTURED_CHAT_DESKTOP_ONLY_TAB_TITLE
+    })
     expect(projected.tabGroupLayout).toEqual(claudeSnapshot.tabGroupLayout)
   })
 
