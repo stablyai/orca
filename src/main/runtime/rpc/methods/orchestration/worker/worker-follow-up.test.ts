@@ -500,30 +500,51 @@ describe('a follow-up to a finished terminal worker', () => {
     ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
   })
 
-  it('a reopen reads the launch recipe recorded from what Orca itself launched (#37693)', async () => {
+  it('a reopen reads the whole launch recipe recorded from what Orca itself launched (#37693)', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
 
     recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentCommand: '/opt/custom/claude',
       agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {}
+      agentEnv: { ORCA_TEST: '1' },
+      ompResumeFilePath: '/tmp/omp-resume.json'
     })
 
+    // Every field a resume replays survives the round trip, not just the flags.
     expect(
       readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
     ).toMatchObject({
       agent: 'claude',
-      launchRecipe: { agentArgs: '--dangerously-skip-permissions' }
+      launchRecipe: {
+        agentCommand: '/opt/custom/claude',
+        agentArgs: '--dangerously-skip-permissions',
+        agentEnv: { ORCA_TEST: '1' },
+        ompResumeFilePath: '/tmp/omp-resume.json'
+      }
     })
 
     // A repeat of the same recipe writes nothing new.
+    const once = h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe
     recordWorkerLaunchRecipe(h.db, dispatchId, {
+      agentCommand: '/opt/custom/claude',
       agentArgs: '--dangerously-skip-permissions',
-      agentEnv: {}
+      agentEnv: { ORCA_TEST: '1' },
+      ompResumeFilePath: '/tmp/omp-resume.json'
     })
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(
-      JSON.stringify({ agentArgs: '--dangerously-skip-permissions', agentEnv: {} })
-    )
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.launch_recipe).toBe(once)
+  })
+
+  it('drops a recorded recipe whose fields are not strings', async () => {
+    h.setup()
+    const { dispatchId } = await h.startSettledWorker()
+    h.db.db
+      .prepare('UPDATE worker_terminal_resources SET launch_recipe = ? WHERE owner_dispatch_id = ?')
+      .run(JSON.stringify({ agentArgs: 42, agentEnv: 'nope', agentCommand: {} }), dispatchId)
+
+    expect(
+      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))?.launchRecipe
+    ).toEqual({ agentArgs: '', agentEnv: {} })
   })
 
   it('saves nothing again when a status change repeats the same conversations', async () => {

@@ -1,6 +1,7 @@
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 export { FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
 import type { SleepingAgentLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { buildSleepingAgentLaunchConfig } from '../../../../../shared/sleeping-agent-launch-config'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
@@ -114,18 +115,31 @@ export function readWorkerLaunchRecipe(
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return null
     }
-    const record = parsed as { agentArgs?: unknown; agentEnv?: unknown }
-    return {
+    const record = parsed as Record<string, unknown>
+    const agentEnv = record.agentEnv
+    // Same normalization the pane's own record uses, so a reopened worker cannot
+    // replay a differently-shaped recipe than the one it launched with.
+    return buildSleepingAgentLaunchConfig({
+      agentCommand: readRecipeString(record.agentCommand),
       // An explicit empty string is a recorded "no arguments", not an absent one.
       agentArgs: typeof record.agentArgs === 'string' ? record.agentArgs : '',
       agentEnv:
-        record.agentEnv && typeof record.agentEnv === 'object' && !Array.isArray(record.agentEnv)
-          ? (record.agentEnv as Record<string, string>)
-          : {}
-    }
+        agentEnv && typeof agentEnv === 'object' && !Array.isArray(agentEnv)
+          ? Object.fromEntries(
+              Object.entries(agentEnv).filter(
+                (entry): entry is [string, string] => typeof entry[1] === 'string'
+              )
+            )
+          : {},
+      ompResumeFilePath: readRecipeString(record.ompResumeFilePath)
+    })
   } catch {
     return null
   }
+}
+
+function readRecipeString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
 }
 
 /** Record what Orca itself launched, so a reopen replays this launch's flags rather than guessing (#37693). */
@@ -137,10 +151,8 @@ export function recordWorkerLaunchRecipe(
   if (!launchConfig) {
     return
   }
-  const value = JSON.stringify({
-    agentArgs: launchConfig.agentArgs ?? '',
-    agentEnv: launchConfig.agentEnv ?? {}
-  })
+  // Every field a resume replays; a partial recipe would reopen with defaults.
+  const value = JSON.stringify(buildSleepingAgentLaunchConfig(launchConfig))
   db.db
     .prepare(
       'UPDATE worker_terminal_resources SET launch_recipe = ? WHERE owner_dispatch_id = ? AND launch_recipe IS NOT ?'
