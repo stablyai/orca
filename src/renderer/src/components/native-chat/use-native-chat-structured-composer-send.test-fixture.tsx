@@ -1,18 +1,28 @@
 import { renderHook } from '@testing-library/react'
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import {
+  useNativeChatStructuredComposerSend,
+  type NativeChatStructuredComposerSend,
+  type UseNativeChatStructuredComposerSendArgs
+} from './use-native-chat-structured-composer-send'
 
 export const ATTACHMENT: NativeChatComposerImageAttachment = { id: 'a1', path: '/tmp/shot.png' }
+
+type NativeChatStructuredComposerSendHarness = {
+  send: NativeChatStructuredComposerSend
+  structuredTransport: NativeChatStructuredComposerTransport
+  setDraft: Mock<UseNativeChatStructuredComposerSendArgs['setDraft']>
+}
 
 export function harness(
   agent: AgentType,
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal'],
   onSubmitted?: () => void
-) {
+): NativeChatStructuredComposerSendHarness {
   const structuredTransport: NativeChatStructuredComposerTransport = {
     capturePresentation: () => () => true,
     steerCapability: 'supported',
@@ -43,7 +53,7 @@ export function harness(
     structuredTransport.threadGoal = threadGoal
   }
   structuredTransport.onSubmitted = onSubmitted
-  const setDraft = vi.fn()
+  const setDraft = vi.fn<UseNativeChatStructuredComposerSendArgs['setDraft']>()
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
