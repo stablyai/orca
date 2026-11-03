@@ -16,7 +16,6 @@ const {
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
   registerSettingsHandlersMock,
-  registerSystemSleepHoldHandlerMock,
   registerKeybindingHandlersMock,
   registerTelemetryHandlersMock,
   registerDiagnosticsHandlersMock,
@@ -89,7 +88,6 @@ const {
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
-  registerSystemSleepHoldHandlerMock: vi.fn(),
   registerKeybindingHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
   registerDiagnosticsHandlersMock: vi.fn(),
@@ -242,10 +240,6 @@ vi.mock('../computer-use-permissions', () => ({
 
 vi.mock('../settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
-}))
-
-vi.mock('../system-sleep-hold-ipc', () => ({
-  registerSystemSleepHoldHandler: registerSystemSleepHoldHandlerMock
 }))
 
 vi.mock('../skills', () => ({
@@ -488,7 +482,6 @@ describe('registerCoreHandlers', () => {
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
-    registerSystemSleepHoldHandlerMock.mockReset()
     registerKeybindingHandlersMock.mockReset()
     registerTelemetryHandlersMock.mockReset()
     registerDiagnosticsHandlersMock.mockReset()

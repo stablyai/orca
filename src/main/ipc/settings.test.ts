@@ -16,7 +16,8 @@ const {
   rebuildAppMenuMock,
   applyBrowserSessionProxiesMock,
   applySessionSearchSettingsChangeMock,
-  listProfilesMock
+  listProfilesMock,
+  registerSystemSleepHoldHandlerMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyAgentStatusHooksEnabledMock: vi.fn(),
@@ -33,7 +34,8 @@ const {
   rebuildAppMenuMock: vi.fn(),
   applyBrowserSessionProxiesMock: vi.fn(),
   applySessionSearchSettingsChangeMock: vi.fn(),
-  listProfilesMock: vi.fn(() => [])
+  listProfilesMock: vi.fn(() => []),
+  registerSystemSleepHoldHandlerMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -94,6 +96,10 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: listEnvironmentsMock
 }))
 
+vi.mock('./system-sleep-hold-ipc', () => ({
+  registerSystemSleepHoldHandler: registerSystemSleepHoldHandlerMock
+}))
+
 import { registerSettingsHandlers } from './settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
@@ -135,6 +141,13 @@ describe('registerSettingsHandlers', () => {
     store.updateSettings.mockReset()
     store.onSettingsChanged.mockClear()
     listEnvironmentsMock.mockReset().mockReturnValue([])
+    registerSystemSleepHoldHandlerMock.mockClear()
+  })
+
+  it('registers the system sleep-hold channel with the keep-awake handlers', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This handler only uses the settings methods supplied by the fixture.
+    registerSettingsHandlers(store as never)
+    expect(registerSystemSleepHoldHandlerMock).toHaveBeenCalledTimes(1)
   })
 
   it('repairs removed Active Server preferences on asynchronous and synchronous reads', () => {
