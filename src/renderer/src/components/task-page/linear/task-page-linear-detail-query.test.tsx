@@ -185,3 +185,24 @@ it.each([
     await (auth ? expect(read).rejects.toThrow('Linear') : expect(read).resolves.toBeNull())
   }
 )
+
+it.each([false, true])(
+  'rejects mixed authentication errors with auth first=%s',
+  async (authFirst) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const auth = {
+      message: 'Authentication required',
+      path: ['issue', 'assignee'],
+      extensions: { type: 'authentication error' }
+    }
+    const optional = { message: 'Project resolver failed', path: ['issue', 'project', 'name'] }
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json({
+        data: { issue: { ...responseIssue, project: null, assignee: null } },
+        errors: authFirst ? [auth, optional] : [optional, auth]
+      })
+    )
+    const read = getIssue(task().id, 'w')
+    await (authFirst ? expect(read).rejects.toThrow('Linear') : expect(read).resolves.toBeNull())
+  }
+)

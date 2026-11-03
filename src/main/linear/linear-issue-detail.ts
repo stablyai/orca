@@ -40,6 +40,7 @@ export async function readLinearIssueDetail(
     if (
       !(error instanceof loadLinearSdk().LinearError) ||
       isAuthError(error) ||
+      error.errors?.some(({ type }) => type === 'AuthenticationError') ||
       error.status !== 200 ||
       !error.errors?.length ||
       !error.errors.every(({ path }) => path?.[0] === 'issue' && isOptionalRelation(path[1]))
