@@ -163,8 +163,13 @@
     }
   },
   "edgeAuth": {
+    "invalidName": "Invalid header name: \"{{name}}\".",
+    "invalidValue": "Invalid value for header \"{{name}}\".",
+    "listRequired": "Headers must be a list.",
+    "pairRequired": "Each header must be a name/value pair.",
     "saved_one": "{{count}} header saved.",
-    "saved_other": "{{count}} headers saved."
+    "saved_other": "{{count}} headers saved.",
+    "tooMany": "At most {{limit}} headers are supported."
   },
   "hostScreen": {
     "hostBottomBar": {

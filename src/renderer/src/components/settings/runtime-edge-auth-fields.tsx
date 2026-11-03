@@ -45,7 +45,7 @@ export function RuntimeEdgeAuthFields({
               value={row.name}
               autoComplete="off"
               spellCheck={false}
-              placeholder="CF-Access-Client-Id"
+              placeholder={translate('settings.edgeAuth.namePlaceholder', 'CF-Access-Client-Id')}
               onChange={(event) =>
                 onChange(
                   rows.map((current) =>

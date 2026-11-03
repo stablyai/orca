@@ -129,7 +129,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       _event,
       args: { selector: string }
     ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const userDataPath = getUserDataPath()
+      const environment = resolveEnvironment(userDataPath, args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
           'This server is the default host for new projects. Choose another one under New projects open on before removing it.'
@@ -145,15 +146,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           serverStop
         }))
       }
-      const removed = removeEnvironment(getUserDataPath(), args.selector)
-      void retireRemovedRuntimeEnvironment(
-        removed.id,
-        invalidateTransport,
-        store,
-        getUserDataPath()
-      )
+      const removed = removeEnvironment(userDataPath, args.selector)
+      void retireRemovedRuntimeEnvironment(removed.id, invalidateTransport, store, userDataPath)
       closeLegacySelectorTransport(args.selector, removed.id)
-      clearRuntimeEdgeAuth(getUserDataPath(), removed.id)
+      clearRuntimeEdgeAuth(userDataPath, removed.id)
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )

@@ -82,11 +82,8 @@ export class MobileDesktopRelay {
   }
 
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
-    return localHostedBrowserPageRequest(
-      request,
-      environmentId,
-      this.options.hosts.hostsBrowserPage
-    )
+    const { hostsBrowserPage } = this.options.hosts
+    return localHostedBrowserPageRequest(request, environmentId, hostsBrowserPage)
   }
 
   forward(

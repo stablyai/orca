@@ -1,5 +1,4 @@
 import { resolveRuntimeEnvironmentConnection } from '../../runtime/runtime-environment-edge-auth'
-import { app } from 'electron'
 import { pairedRuntimeBrowserClientHostsPage } from '../../browser/paired-runtime-browser-client-host-runtime'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
 import {

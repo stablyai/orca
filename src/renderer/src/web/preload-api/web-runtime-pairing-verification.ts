@@ -27,8 +27,10 @@ export const verifyAndAddWebRuntimeEnvironment: NonNullable<
     return {
       ok: false,
       kind: 'access-link-invalid',
-      message:
+      message: translate(
+        'settings.edgeAuth.browserLogin',
         'Use your browser login for this protected tunnel. Service-token headers are available only in the native app.'
+      )
     }
   }
   const parsed = parseHostAccessLink(pairingCode)

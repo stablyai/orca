@@ -1,4 +1,3 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
 import {
   createWebRuntimeSubscriptionApiControl,
   type WebRuntimeSubscriptionRegistration

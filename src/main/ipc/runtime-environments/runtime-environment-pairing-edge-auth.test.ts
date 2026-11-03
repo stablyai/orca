@@ -14,7 +14,9 @@ import {
   verifyAndRepairRuntimeEnvironmentFromPairingCode
 } from './runtime-environment-pairing-verification'
 const mocks = vi.hoisted(() => ({ send: vi.fn(), write: vi.fn(), read: vi.fn() }))
-vi.mock('../../../shared/remote-runtime-client', () => ({ sendRemoteRuntimeRequest: mocks.send }))
+vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
+  sendRemoteRuntimeRequest: mocks.send
+}))
 vi.mock('../../credentials/runtime-edge-auth-store', () => ({
   writeRuntimeEdgeAuth: mocks.write,
   readRuntimeEdgeAuth: mocks.read
