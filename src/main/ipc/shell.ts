@@ -21,6 +21,7 @@ import {
   resolveExternalEditorLaunchSpec
 } from '../external-editors/external-editor-launch'
 import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
+import { resolveOpenInEditorCommand } from '../external-editors/open-in-editor-command'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -56,11 +57,17 @@ async function openInFileManager(
   }
 }
 
+type ShellHandlerStore = Pick<Store, 'getSshTarget' | 'getSettings'>
+
 async function openInExternalEditor(
-  store: Pick<Store, 'getSshTarget'>,
+  store: ShellHandlerStore,
   request: ShellOpenExternalEditorRequest,
   listRuntimeEnvironments: ListRuntimeEnvironments
 ): Promise<ShellOpenExternalEditorResult> {
+  const command = resolveOpenInEditorCommand(request, store.getSettings().openInApplications)
+  if (command === null) {
+    return { ok: false, reason: 'launch-failed' }
+  }
   const connectionId = request.connectionId?.trim()
   if (connectionId) {
     const sshTarget = store.getSshTarget(connectionId)
@@ -78,7 +85,7 @@ async function openInExternalEditor(
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
-    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(request.command, request.path, sshTarget)
+    const remoteLaunch = resolveRemoteSshEditorLaunchSpec(command, request.path, sshTarget)
     if (!remoteLaunch.ok) {
       return remoteLaunch
     }
@@ -96,7 +103,7 @@ async function openInExternalEditor(
   }
   try {
     // VS Code and Cursor derive --remote wsl+<distro> from UNC paths.
-    await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
+    await launchExternalEditor(resolveExternalEditorLaunchSpec(command, target.path))
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -120,7 +127,7 @@ async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): P
 }
 
 export function registerShellHandlers(
-  store: Pick<Store, 'getSshTarget'>,
+  store: ShellHandlerStore,
   listRuntimeEnvironments: ListRuntimeEnvironments = listAppRuntimeEnvironments
 ): void {
   ipcMain.handle(
