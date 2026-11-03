@@ -44,7 +44,7 @@ import {
   expectProjectionMatches
 } from './journal-projection-test-support'
 import { projectStructuredAgentStartItem } from '../../../shared/structured-agent-start-projection'
-import { orchestrationMailFixture } from '../../../shared/agent-session/orchestration-mail.test-fixture'
+import { orchestrationMailFixture } from '../../runtime/orchestration/orchestration-mail.test-fixture'
 import { agentMessageTranscriptText } from '../../../shared/agent-session/agent-message-display-text'
 
 // Admission keeps the in-memory chat within what this build declares on every path a saved value

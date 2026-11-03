@@ -1,32 +1,18 @@
-import { formatMessageBannerWithContent } from '../../main/runtime/orchestration/formatter'
-import type { MessageRow } from '../../main/runtime/orchestration/types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import type { AgentMessageSource } from './agent-session-message-source'
 
-export function orchestrationMailFixture(overrides: Partial<MessageRow> = {}): NativeChatMessage & {
-  from: AgentMessageSource
-} {
-  const row: MessageRow = {
-    id: 'msg_review',
-    run_id: 'run_review',
-    from_handle: 'term_worker',
-    to_handle: 'run:run_review',
-    subject: 'Review complete',
-    body: 'The result is ready.',
-    type: 'question',
-    priority: 'normal',
-    payload: null,
-    thread_id: null,
-    read: 0,
-    sequence: 1,
-    created_at: '2026-11-03T12:00:00Z',
-    delivered_at: null,
-    sender_pane_key: null,
-    ...overrides
-  }
-  const { text, content } = formatMessageBannerWithContent(row)
+// Recorded current mail envelope keeps browser fixtures independent of server imports.
+export function orchestrationMailFixture({
+  body = 'The result is ready.'
+}: { body?: string } = {}): NativeChatMessage & { from: AgentMessageSource } {
+  const text = `──── From: TERM_WORKER (term_worker) (question) ────
+Subject: Review complete
+${body}
+[Reply: orca orchestration reply --id msg_review --body "..."]
+────────────────────────────────────────────────────────────`
+  const content = { subject: [62, 77] as const, body: [78, 78 + body.length] as const }
   return {
-    id: row.id,
+    id: 'msg_review',
     role: 'user',
     source: 'transcript',
     timestamp: 1,
@@ -38,14 +24,14 @@ export function orchestrationMailFixture(overrides: Partial<MessageRow> = {}): N
           name: 'Review worker',
           agent: 'codex',
           relation: 'worker',
-          party: { address: row.from_handle, terminalHandle: row.from_handle, orcaSessionId: null }
+          party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
         }
       ],
       orchestration: {
         message: 'mail-notice',
-        mailbox: row.to_handle,
+        mailbox: 'run:run_review',
         dispatchId: null,
-        messages: [{ messageId: row.id, runId: row.run_id, from: row.from_handle, content }]
+        messages: [{ messageId: 'msg_review', runId: 'run_review', from: 'term_worker', content }]
       }
     }
   }

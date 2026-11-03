@@ -10,7 +10,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
-import { orchestrationMailFixture } from '../../../shared/agent-session/orchestration-mail.test-fixture'
+import { orchestrationMailFixture } from '../../runtime/orchestration/orchestration-mail.test-fixture'
 
 let rig: QueuedMessageTestRig
 

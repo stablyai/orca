@@ -11,6 +11,7 @@ import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
+import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
@@ -43,43 +44,7 @@ describe('MobileNativeChatMessage', () => {
 
   it('shows and copies clean orchestration content on the translated phone card', async () => {
     await activateMobileUiLocale('es')
-    // Recorded formatter output keeps the phone test independent of the desktop runtime.
-    const message: NativeChatMessage = {
-      id: 'msg_review',
-      role: 'user',
-      source: 'transcript',
-      timestamp: 1,
-      blocks: [
-        {
-          type: 'text',
-          text: '──── From: TERM_WORKER (term_worker) (question) ────\nSubject: Review complete\nThe **result** is ready.\n[Reply: orca orchestration reply --id msg_review --body "..."]\n────────────────────────────────────────────────────────────'
-        }
-      ],
-      from: {
-        kind: 'agent',
-        senders: [
-          {
-            name: 'Review worker',
-            agent: 'codex',
-            relation: 'worker',
-            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
-          }
-        ],
-        orchestration: {
-          message: 'mail-notice',
-          mailbox: 'run:run_review',
-          dispatchId: null,
-          messages: [
-            {
-              messageId: 'msg_review',
-              runId: 'run_review',
-              from: 'term_worker',
-              content: { subject: [62, 77], body: [78, 102] }
-            }
-          ]
-        }
-      }
-    }
+    const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
     try {
       const tree = render(message)
       const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
