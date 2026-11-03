@@ -1,4 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../../worktree-review-head-prune'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { retryFailedWorktreeRemoval } from '../../../worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/runtime-interrupted-local-worktree-removal'
@@ -42,7 +44,19 @@ export function retryFailedLocalWorktreeRemoval(
             pushTarget
           )
       },
-      purge: ({ worktreeId, repoId }) => {
+      purge: async ({ worktreeId, repoId }) => {
+        const repo = store.getRepo(repoId)
+        if (repo) {
+          await maybePruneReviewHeadRefsAfterWorktreeDelete({
+            store,
+            repoPath: repo.path,
+            repoId,
+            worktreeId,
+            hostId: LOCAL_EXECUTION_HOST_ID,
+            meta: store.getWorktreeMeta(worktreeId),
+            localGitOptions: getLocalProjectWorktreeGitOptions(store, repo)
+          })
+        }
         runtime.clearOptimisticReconcileToken(worktreeId)
         removeWorktreeMetadataAndTransientState(
           { store, runtime },
