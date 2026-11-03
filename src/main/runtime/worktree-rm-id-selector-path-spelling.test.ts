@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../git/worktree-listing'
 /** Preserve id/path spelling parity, while id remains ambiguous for same-host duplicate rows that path deduplicates. This resolver also deletes workspaces (#16243). */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,6 +15,13 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+vi.mock('../git/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrictMock
+  }
+})
+
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())

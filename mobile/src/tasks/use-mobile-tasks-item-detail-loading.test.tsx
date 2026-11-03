@@ -65,12 +65,10 @@ describe('GitLab task detail hydration', () => {
     expect(fixture.state().items[0]?.source).toMatchObject({ checksSummary })
   })
 
-  it('settles repeated identical replies and keeps the loaded sheet readable', async () => {
+  it('loads details once and keeps the hydrated sheet readable', async () => {
     const fixture = await mount()
-    for (let round = 0; round < 6; round += 1) {
-      await fixture.transport.answer()
-    }
-    expect(fixture.transport.requests).toHaveLength(2)
+    await fixture.transport.answer()
+    expect(fixture.transport.requests).toHaveLength(1)
     expect(fixture.transport.pending()).toHaveLength(0)
     expect(fixture.state()).toMatchObject({
       loading: false,
@@ -110,8 +108,8 @@ describe('GitLab task detail hydration', () => {
       expect(fixture.state().items[1]).toBe(other)
       const selected = fixture.state().actionItem
       const items = fixture.state().items
-      await fixture.transport.answer()
-      expect(fixture.transport.requests).toHaveLength(2)
+      await fixture.rerender()
+      expect(fixture.transport.requests).toHaveLength(1)
       expect(fixture.transport.pending()).toHaveLength(0)
       expect(fixture.state().actionItem).toBe(selected)
       expect(fixture.state().items).toBe(items)
@@ -126,8 +124,7 @@ describe('GitLab task detail hydration', () => {
       reviewDecision: 'approved',
       reviewerCount: 1
     })
-    await fixture.transport.answer()
-    expect(fixture.transport.requests).toHaveLength(2)
+    expect(fixture.transport.requests).toHaveLength(1)
     expect(fixture.transport.pending()).toHaveLength(0)
   })
 
@@ -146,17 +143,31 @@ describe('GitLab task detail hydration', () => {
       reviewDecision: 'review_required',
       reviewerCount: 9
     })
-    await fixture.transport.answer(reply)
-    expect(fixture.transport.requests).toHaveLength(2)
+    expect(fixture.transport.requests).toHaveLength(1)
     expect(fixture.state()).toMatchObject({ loading: false, payload: { body: 'No status fields' } })
   })
 
   it('still reads explicit refreshes and changed details', async () => {
-    const fixture = await mount(hydratedItem())
+    const fixture = await mount()
     await fixture.transport.answer()
     await fixture.refresh()
-    await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Updated body' }))
+    await fixture.transport.answer(
+      success({
+        ...GITLAB_DETAILS,
+        body: 'Updated body',
+        pipelineJobs: [{ ...GITLAB_DETAILS.pipelineJobs[0], status: 'failed' }],
+        item: { ...GITLAB_DETAILS.item, mergeable: 'CONFLICTING' },
+        approvalState: { approvalsRequired: 1, approvalsLeft: 1 }
+      })
+    )
     expect(fixture.transport.requests).toHaveLength(2)
+    const status = {
+      checksSummary: { state: 'failure' },
+      mergeable: 'CONFLICTING',
+      reviewDecision: 'review_required'
+    }
+    expect(fixture.state().actionItem?.source).toMatchObject(status)
+    expect(fixture.state().items[0]?.source).toMatchObject(status)
     expect(fixture.state()).toMatchObject({ loading: false, payload: { body: 'Updated body' } })
   })
 })

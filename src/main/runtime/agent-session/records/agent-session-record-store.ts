@@ -1,3 +1,6 @@
+import { agentSessionRecordPredecessorIds } from '../../agent-session-record-lineage'
+import { clearSuccessor } from '../../agent-session-sender-identity-revision'
+import type Database from '../../../sqlite/sync-database'
 import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../../agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
@@ -90,7 +93,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
-    readonly hostId: string
+    readonly hostId: string,
+    private readonly database: Database.Database
   ) {
     super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
@@ -110,7 +114,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId)
+    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase.db)
   }
 
   private get state(): AgentSessionStoreState {
@@ -130,6 +134,13 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
+  senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  /** Sessions a committed /clear continued into this one, read through the clear-successor index;
+   *  each candidate is checked on its conversation, so unreadable leases still count. */
+  listClearedFrom = (sessionId: string): string[] =>
+    agentSessionRecordPredecessorIds(this.database, sessionId).filter(
+      (id) => clearSuccessor(this.getConversation(id)) === sessionId
+    )
   lineageRevision = (): object => this.transactions.lineageRevision()
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)

@@ -49,11 +49,16 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   let releasePagePort: (() => void) | undefined
 
   const rewrite = options.rewriteToPage ?? ((json: string) => json)
+  const deliverToPage = (json: string) => {
+    const delivered = rewrite(json)
+    options.observation?.receivePage(json, delivered)
+    receiveOnPage?.(delivered)
+  }
   const toPage = createLane(
     (json) => {
-      const delivered = rewrite(json)
-      options.observation?.receivePage(json, delivered)
-      receiveOnPage?.(delivered)
+      if (!options.holdToPage?.(json)) {
+        deliverToPage(json)
+      }
     },
     (json) => options.observation?.capturePost(json, 'page') ?? neutralObservation()
   )
@@ -191,6 +196,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     },
     drainNow: () => toShell.drainNow() + toPage.drainNow(),
     receiveFromShell: (json) => toPage.push(json),
+    deliverToPage,
     readToShell: () => readAll(toShell.sent, readBridgeClientMessage),
     readToPage: () => readAll(toPage.sent, readBridgeHostMessage)
   }

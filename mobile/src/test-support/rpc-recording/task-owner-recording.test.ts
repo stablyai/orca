@@ -115,12 +115,7 @@ describe('committed production task owners in recording adapters', () => {
         expect(effects).toEqual(beforeOld)
         replacement.complete(completion.complete, completion.params, completion.reply)
         await clock.flush()
-        if (id.includes('gitlab')) {
-          // The real selection hydration effect owes exactly one successor read on the new client.
-          expect(replacement.payloads).toHaveLength(2)
-          replacement.complete('gitlab.workItemDetails#2', completion.params, completion.reply)
-          await clock.flush()
-        }
+        expect(replacement.payloads).toHaveLength(1)
         expect(mounted.state()).toMatchObject({ loading: false, error: '' })
         expect(mounted.state()).toHaveProperty(
           id.includes('gitlab') ? 'payload.provider' : 'detail.provider',
@@ -390,9 +385,7 @@ describe('committed production task owners in recording adapters', () => {
     async (id, payloadField, loadingField) => {
       const base = materializeScenario(pilot(id), 'native')
       const completions = base.steps.filter((step) => 'complete' in step)
-      // GitLab hydration commits a changed selected source, then the production effect reads it once more.
-      const hydration = id === 'tk-item-detail-gitlab'
-      const firstWave = hydration ? completions.slice(0, 1) : completions
+      const firstWave = completions
       const counts = new Map<string, number>()
       function next(steps: typeof completions): ScenarioStep[] {
         return steps.map((step) => {

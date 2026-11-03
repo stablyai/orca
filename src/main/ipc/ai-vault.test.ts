@@ -52,7 +52,7 @@ vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
   }
 })
 
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)

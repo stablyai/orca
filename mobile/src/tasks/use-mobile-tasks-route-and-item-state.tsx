@@ -179,7 +179,7 @@ export function useMobileTasksRouteAndItemState() {
   })
   const [error, setError] = useState('')
   const itemState = useMobileTasksItemState()
-  const { actionItem, setActionItem, claimPublication } = useMobileTasksSelection(
+  const itemSelection = useMobileTasksSelection(
     client,
     itemState.detailPayload,
     itemState.reconcilePrFileConnection
@@ -194,7 +194,7 @@ export function useMobileTasksRouteAndItemState() {
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
   return {
-    claimPublication,
+    claimPublication: itemSelection.claimPublication,
     hostId,
     taskSource,
     router,
@@ -348,8 +348,7 @@ export function useMobileTasksRouteAndItemState() {
     setTasksSupportState,
     error,
     setError,
-    actionItem,
-    setActionItem,
+    ...itemSelection,
     mergeMethodTaskItem,
     setMergeMethodTaskItem,
     mergeMethodProjectRow,

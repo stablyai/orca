@@ -13,7 +13,7 @@ import {
 } from '../provider/ownership-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
-import { PtyExitProof } from '../../../pty-exit-proof'
+import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { errorMessage } from '../../../../shared/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 

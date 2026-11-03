@@ -1904,6 +1904,7 @@
       "attachmentAtMost": "{{agent}} accepte au maximum {{limit}} images par message, ce message n'a donc pas été envoyé.",
       "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",
       "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+      "attachmentsExpired": "Expiré : {{names}}.",
       "attachmentLargerThan": "Une image de ce message dépasse {{size}} Mo, le message n'a donc pas été envoyé.",
       "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
       "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
@@ -2490,6 +2491,7 @@
       "queueTooLarge": "Trop de texte est en attente dans la file.",
       "quitTerminalAgent": "Quittez cet agent pour continuer le chat ici.",
       "reattachFile": "Retirez-la et joignez-la à nouveau.",
+      "reattachFiles": "Retirez-les et joignez-les à nouveau.",
       "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
       "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
       "reopenChat": "Rouvrez le chat pour vérifier à nouveau.",
@@ -2720,6 +2722,9 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
+    },
+    "agents": {
+      "permissionOwnAll": "Paramètres propres aux agents"
     }
   },
   "sourceControl": {

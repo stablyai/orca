@@ -41,9 +41,10 @@ const store = vi.hoisted((): StoreStub => ({
   consumePendingPaneAccountRestart: vi.fn()
 }))
 const toastSuccess = vi.hoisted(() => vi.fn())
+const toastWarning = vi.hoisted(() => vi.fn())
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess, warning: toastWarning } }))
 vi.mock('./claude-session-account-move', async (importOriginal) => ({
   ...(await importOriginal<typeof AccountMove>()),
   findClaudeSwitchSessions: vi.fn(),
@@ -164,6 +165,21 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     answerClaudeAccountSwitchPrompt('restart')
     expect(store.queuePaneAccountRestarts).toHaveBeenNthCalledWith(1, ['pty-1'], 'claude')
     expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-2'], 'claude')
+  })
+
+  it('says why shared sessions stayed when nothing else on the account moved', async () => {
+    store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
+    vi.mocked(findClaudeSwitchSessions).mockImplementation(async ({ onShared }) => {
+      onShared?.([candidate(1), candidate(2)])
+      return scan([], {
+        cantMove: [1, 2].map((n) => ({ ...candidate(n), reason: 'shared-session' as const }))
+      })
+    })
+
+    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('show-confirmation')
+
+    expect(store.queuePaneAccountRestarts).not.toHaveBeenCalled()
+    expect(toastWarning.mock.calls[0]?.[0]).toContain('2 Claude sessions stay on')
   })
 
   it('keeps sessions without scanning when the setting is Never restart', async () => {

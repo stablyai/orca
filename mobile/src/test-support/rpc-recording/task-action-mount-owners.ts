@@ -104,8 +104,11 @@ export function useTaskActionMountOwners(
     'mobile/src/tasks/use-mobile-tasks-workspace-and-project-state.tsx'
   )
   const mutation = useMobileTasksMutation()
-  const owners = { ...state, ...mutation, ...selection }
+  const { detailRequestItem, hydrateActionItem, ...actionSelection } = selection
+  const owners = { ...state, ...mutation, ...actionSelection }
   Object.assign(model, owners, {
+    detailRequestItem,
+    hydrateActionItem,
     captureTaskListRefresh: () => () => {
       if (typeof fixture.loadTasks === 'function') {
         void fixture.loadTasks()
@@ -134,7 +137,10 @@ export function useTaskDetailMountOwners(
     detailRefreshSeq: state.detailRefreshSeq,
     setDetailRefreshSeq: state.setDetailRefreshSeq
   }
-  Object.assign(model, owners)
+  Object.assign(model, owners, {
+    detailRequestItem: selection.detailRequestItem,
+    hydrateActionItem: selection.hydrateActionItem
+  })
   useCommittedOwnerProjection(context, owners)
 }
 

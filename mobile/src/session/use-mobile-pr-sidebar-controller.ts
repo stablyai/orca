@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
 import {
   buildMobilePrSidebarIdentity,
@@ -7,6 +7,7 @@ import {
   fetchCurrentPrSidebarDetails,
   prSidebarLoadDeps,
   prSidebarWithFileViewed,
+  retirePrSidebarLoads,
   subscribePrSidebarConnection,
   type PrSidebarControllerInput,
   type PrSidebarSelection
@@ -58,14 +59,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   }
   const { owner, snapshot: state, probe } = selected
   const probeOwner = probe.owner
+  const repoProbeSeqRef = useRef(0)
+  const currentOwnerRef = useRef(owner)
 
   useLayoutEffect(() => {
+    currentOwnerRef.current = owner
     owner.live = true
     return () => {
       owner.live = false
-      owner.loadSeq += 1
-      owner.detailsSeq += 1
-      owner.detailsInFlight = null
+      retirePrSidebarLoads(owner)
     }
   }, [owner])
 
@@ -96,30 +98,45 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const probeReady = client !== null && connState === 'connected'
   const buildDeps = useCallback(() => prSidebarLoadDeps(client), [client])
 
-  useEffect(() => {
-    let cancelled = false
+  const refreshPRSidebarRepoProbe = useCallback(async () => {
     if (!probeReady || !client) {
-      return
+      return false
     }
-    const publishProbe = (isGithubRepo: boolean) => {
-      if (!cancelled) {
-        setSelection((current) =>
-          current.probe.owner === probeOwner
-            ? { ...current, probe: { owner: probeOwner, isGithubRepo, loaded: true } }
-            : current
-        )
-      }
+    const seq = ++repoProbeSeqRef.current
+    const outcome = await fetchGithubRepoSlug(client, worktreeId).catch(() => null)
+    if (seq !== repoProbeSeqRef.current) {
+      return false
     }
-    void fetchGithubRepoSlug(client, worktreeId)
-      .then((outcome) => publishProbe(outcome.ok && outcome.result !== null))
-      .catch(() => {
-        // Contain stray repo-probe rejection even during unmount.
-        publishProbe(false)
-      })
-    return () => {
-      cancelled = true
+    const supported = outcome?.ok ? outcome.result !== null : null
+    const currentOwner = currentOwnerRef.current
+    if (supported === false) {
+      retirePrSidebarLoads(currentOwner)
+      currentOwner.latest = { kind: 'hidden' }
     }
+    setSelection((current) =>
+      current.probe.owner === probeOwner
+        ? {
+            ...current,
+            ...(supported === false && current.owner === currentOwner
+              ? { snapshot: currentOwner.latest }
+              : {}),
+            probe: {
+              owner: probeOwner,
+              isGithubRepo: supported ?? current.probe.isGithubRepo,
+              loaded: true
+            }
+          }
+        : current
+    )
+    return supported === true
   }, [probeReady, client, worktreeId, probeOwner])
+
+  useEffect(() => {
+    void refreshPRSidebarRepoProbe()
+    return () => {
+      repoProbeSeqRef.current += 1
+    }
+  }, [refreshPRSidebarRepoProbe])
 
   const loadOnce = useCallback(
     async (options?: PrSidebarLoadOptions, afterWrite = false) => {
@@ -309,6 +326,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     prSidebarState: state,
     prSidebarIsGithubRepo: probe.isGithubRepo,
     prSidebarRepoProbeLoaded: probe.loaded,
+    refreshPRSidebarRepoProbe,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,

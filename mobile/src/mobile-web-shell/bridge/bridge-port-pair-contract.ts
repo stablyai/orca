@@ -36,6 +36,7 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   // Flush init synchronously only for first-render recording; every other exchange must retain asynchronous lane delivery.
   drainNow: () => number
   receiveFromShell: (json: string) => void
+  deliverToPage: (json: string) => void
   readToShell: () => BridgeClientMessage[]
   readToPage: () => BridgeHostMessage[]
 }
@@ -49,6 +50,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   storage?: Readonly<Record<string, string>>
   storageOversize?: readonly string[]
   // Test-only frame rewrite lets golden replay isolate narrower-reader behavior from payload changes; product transport never rewrites in-flight frames.
+  holdToPage?: (json: string) => boolean
   rewriteToPage?: (json: string) => string
   routeGrants?: readonly string[]
   sessionEstablished?: boolean

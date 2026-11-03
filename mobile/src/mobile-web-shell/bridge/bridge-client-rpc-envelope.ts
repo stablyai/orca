@@ -37,14 +37,18 @@ export function readBridgeRpcEnvelope(
 export function readBridgeRequestFrameOptions(
   requestOptions: SendRequestOptions | undefined,
   hasGrant: HasGrant
-): { options?: Omit<SendRequestOptions, 'envelope' | 'beforeSend'>; envelope?: RpcEnvelopeFields } {
+): {
+  options?: Omit<SendRequestOptions, 'envelope' | 'signal' | 'beforeSend'>
+  envelope?: RpcEnvelopeFields
+} {
   if (requestOptions === undefined) {
     return {}
   }
-  const { envelope: fields, beforeSend: _beforeSend, ...options } = requestOptions
+  const { envelope: fields, signal: _signal, beforeSend: _beforeSend, ...options } = requestOptions
   const envelope = readBridgeRpcEnvelope(fields, hasGrant)
   return {
-    ...(Object.keys(options).length === 0 && (fields !== undefined || _beforeSend !== undefined)
+    ...((fields !== undefined || _signal !== undefined || _beforeSend !== undefined) &&
+    Object.keys(options).length === 0
       ? {}
       : { options }),
     ...(envelope === undefined ? {} : { envelope })

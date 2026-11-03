@@ -19,8 +19,12 @@ import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/pty-provider-contract'
-import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
-import { addWslEnvKeys } from '../wsl-env'
+import {
+  injectHistoryEnv,
+  injectWslFishHistoryEnv,
+  logHistoryInjection
+} from '../pty/history/terminal-history'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { holdPassiveRestoreOfStoppedWslDistro } from './daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {

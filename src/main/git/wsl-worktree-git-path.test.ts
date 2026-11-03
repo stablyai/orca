@@ -7,7 +7,7 @@ const { gitExecFileAsyncMock, readWorktreeGitPathMock } = vi.hoisted(() => ({
 
 vi.mock('./command-runner/git-exec-file', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 vi.mock('./worktree-git-path', () => ({ readWorktreeGitPath: readWorktreeGitPathMock }))
-vi.mock('../wsl/wsl-automount-root', async (importOriginal) => ({
+vi.mock('../wsl/filesystem/wsl-automount-root', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   knownWslAutomountRoots: () => ['/mnt/']
 }))

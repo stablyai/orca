@@ -1,5 +1,5 @@
-import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { excludeShellBackgroundJobs } from '../pty-shell-job-preservation'
+import { killWithDescendantSweep } from '../pty/process-retirement/pty-descendant-termination'
+import { excludeShellBackgroundJobs } from '../pty/process-retirement/pty-shell-job-preservation'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
 import type { Session } from './session'
 

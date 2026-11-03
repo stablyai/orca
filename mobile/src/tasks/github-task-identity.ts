@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState, type SetStateAction } from 'react'
+import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
+import { useCallback, useLayoutEffect, useRef, type SetStateAction } from 'react'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload, GitHubWorkItem } from './mobile-tasks-provider-detail-types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -38,7 +39,12 @@ export function useMobileTasksSelection(
   // The shared file owner's retire/recover step, run from this listener for each real connection change.
   onConnectionChange: (connected: boolean) => void
 ) {
-  const [actionItem, publishItem] = useState<ActionableTaskItem | null>(null)
+  const {
+    actionItem,
+    detailRequestItem,
+    setActionItem: publishItem,
+    hydrateActionItem: publishHydration
+  } = useMobileTasksItemSelection()
   const owner = useRef({ item: actionItem, visit: {}, client, revision: 0, details, live: true })
   useLayoutEffect(() => {
     const current = owner.current
@@ -77,17 +83,29 @@ export function useMobileTasksSelection(
       owner.current.revision += 1
     }
   }, [client, onConnectionChange])
-  const setActionItem = useCallback((update: SetStateAction<ActionableTaskItem | null>) => {
-    const current = owner.current
-    const next = typeof update === 'function' ? update(current.item) : update
-    const key = (item: ActionableTaskItem | null) =>
-      item?.provider === 'github' ? githubTaskKey(item.source) : (item?.key ?? null)
-    if (key(next) !== key(current.item)) {
-      current.visit = {}
-    }
-    current.item = next
-    publishItem(next)
-  }, [])
+  const setActionItem = useCallback(
+    (update: SetStateAction<ActionableTaskItem | null>) => {
+      const current = owner.current
+      const next = typeof update === 'function' ? update(current.item) : update
+      const key = (item: ActionableTaskItem | null) =>
+        item?.provider === 'github' ? githubTaskKey(item.source) : (item?.key ?? null)
+      if (key(next) !== key(current.item)) {
+        current.visit = {}
+      }
+      current.item = next
+      publishItem(next)
+    },
+    [publishItem]
+  )
+  const hydrateActionItem = useCallback(
+    (update: SetStateAction<ActionableTaskItem | null>) => {
+      const current = owner.current
+      const next = typeof update === 'function' ? update(current.item) : update
+      current.item = next
+      publishHydration(next)
+    },
+    [publishHydration]
+  )
   const claimPublication = useCallback((item: TaskItem | null, accepted?: DetailPayload | null) => {
     const current = owner.current
     const { visit, client: selected, revision } = current
@@ -106,5 +124,5 @@ export function useMobileTasksSelection(
           current.details.headSha === accepted.headSha &&
           current.details.baseSha === accepted.baseSha))
   }, [])
-  return { actionItem, setActionItem, claimPublication }
+  return { actionItem, detailRequestItem, setActionItem, hydrateActionItem, claimPublication }
 }

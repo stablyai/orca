@@ -13,7 +13,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeChildProcess>()),
   spawn: spawnMock
 }))
-vi.mock('../../own-chromium-tree-kill-guard', () => ({
+vi.mock('../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
   admitSelfInitiatedTreeKill: admitMock
 }))
 

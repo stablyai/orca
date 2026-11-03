@@ -84,7 +84,9 @@ export function taskMountAdapters(
         client: context.client,
         tasksSupported: true,
         detailRefreshSeq: 0,
-        detailRefreshRequested: { current: false }
+        detailRefreshRequested: { current: false },
+        detailRequestItem: model.detailRequestItem,
+        hydrateActionItem: model.hydrateActionItem
       })
       if (options.reference) {
         model.taskOperations = {

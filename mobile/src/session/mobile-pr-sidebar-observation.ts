@@ -88,6 +88,12 @@ export function createRepoProbe(worktreeId: string): RepoProbeObservation {
   return { owner: { worktreeId }, isGithubRepo: false, loaded: false }
 }
 
+export function retirePrSidebarLoads(owner: PrSidebarObservation): void {
+  owner.loadSeq += 1
+  owner.detailsSeq += 1
+  owner.detailsInFlight = null
+}
+
 // A real state/generation change retires the observation's attempts before the notification returns,
 // and a connected one repeats the query already asked of it; accepted data stays.
 export function subscribePrSidebarConnection(
@@ -108,9 +114,7 @@ export function subscribePrSidebarConnection(
     if (!observed) {
       return
     }
-    owner.loadSeq += 1
-    owner.detailsSeq += 1
-    owner.detailsInFlight = null
+    retirePrSidebarLoads(owner)
     if (state === 'connected') {
       owner.recover?.()
     }

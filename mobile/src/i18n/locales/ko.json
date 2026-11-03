@@ -1835,6 +1835,7 @@
       "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
       "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
       "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+      "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
       "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
       "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
       "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
@@ -2419,6 +2420,7 @@
       "queueTooLarge": "대기열에 쌓인 텍스트가 너무 많습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "reattachFile": "제거한 후 다시 첨부하세요.",
+      "reattachFiles": "제거한 후 다시 첨부하세요.",
       "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
       "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
       "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
@@ -2645,6 +2647,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     }
   },
   "sourceControl": {

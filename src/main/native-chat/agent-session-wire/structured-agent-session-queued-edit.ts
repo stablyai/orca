@@ -62,7 +62,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: true, value: await queued.update(fields) }
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
-          return agentSessionAttachmentExpiredRefusal()
+          return agentSessionAttachmentExpiredRefusal(error)
         }
         throw error
       }

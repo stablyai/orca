@@ -7897,7 +7897,7 @@
             "ok": false,
             "error": {
               "code": "worktree_archive_hook_failed",
-              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 \u2014 exited 1.",
               "data": {
                 "worktreePath": "/repos/marlin/wt-1",
                 "outcome": "exited",
@@ -11757,36 +11757,6 @@
           }
         },
         {
-          "complete": "gitlab.workItemDetails#2",
-          "params": {
-            "iid": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repo": "id:repo-1",
-            "type": "issue"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "body": "body",
-              "comments": [],
-              "item": {
-                "labels": ["bug"],
-                "mergeable": "MERGEABLE"
-              },
-              "assignees": [],
-              "pipelineJobs": [],
-              "reviewers": [],
-              "approvalState": {
-                "approvalsRequired": 1,
-                "approvalsLeft": 0
-              }
-            }
-          }
-        },
-        {
           "checkpoint": "mounted"
         }
       ]
@@ -11804,51 +11774,6 @@
         },
         {
           "complete": "gitlab.workItemDetails#1",
-          "params": {
-            "iid": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repo": "id:repo-1",
-            "type": "issue"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "body": "body",
-              "comments": [
-                {
-                  "id": 901,
-                  "author": "octocat",
-                  "authorAvatarUrl": "",
-                  "body": "a discussion note",
-                  "createdAt": "2020-01-01T00:00:00.000Z",
-                  "url": "https://gitlab.example.com/group/project/-/issues/4#note_901",
-                  "reactions": [
-                    {
-                      "name": "thumbsup",
-                      "count": 2
-                    }
-                  ]
-                }
-              ],
-              "item": {
-                "labels": ["bug"],
-                "mergeable": "MERGEABLE"
-              },
-              "assignees": [],
-              "pipelineJobs": [],
-              "reviewers": [],
-              "approvalState": {
-                "approvalsRequired": 1,
-                "approvalsLeft": 0
-              }
-            }
-          }
-        },
-        {
-          "complete": "gitlab.workItemDetails#2",
           "params": {
             "iid": 4,
             "projectRef": {

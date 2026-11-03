@@ -6,6 +6,7 @@ import type { RpcResponse } from '../transport/types'
 import type { ActionableTaskItem, TaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload, GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import { useMobileTasksItemDetailLoading } from './use-mobile-tasks-item-detail-loading'
+import { useMobileTasksItemSelection } from './use-mobile-tasks-item-selection'
 
 export const GITLAB_DETAILS = {
   body: 'Merge request body',
@@ -30,7 +31,7 @@ export function gitlabItem(
   source: Partial<GitLabWorkItem> = {}
 ): Extract<TaskItem, { provider: 'gitlab' }> {
   return {
-    key: 'gitlab:repo:mr:12',
+    key: `gitlab:${source.repoId ?? 'repo'}:${source.type ?? 'mr'}:${source.number ?? 12}`,
     provider: 'gitlab',
     title: 'A merge request',
     subtitle: 'Repository !12',
@@ -129,7 +130,8 @@ export async function mountDetail(
     rerender: (): void => {}
   }
   function Probe(): null {
-    const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(initial)
+    const selection = useMobileTasksItemSelection()
+    const { actionItem, setActionItem } = selection
     const [items, setItems] = useState(initialItems)
     const [payload, setDetailPayload] = useState<DetailPayload | null>(null)
     const [loading, setDetailLoading] = useState(false)
@@ -143,11 +145,11 @@ export async function mountDetail(
     commands.rerender = () => setUnrelated((value) => value + 1)
     observation.state = { actionItem, items, payload, loading, error }
     useMobileTasksItemDetailLoading({
-      actionItem,
+      detailRequestItem: selection.detailRequestItem,
       client,
       detailRefreshSeq,
       detailRefreshRequested: { current: false },
-      setActionItem,
+      hydrateActionItem: selection.hydrateActionItem,
       setItems,
       setDetailPayload,
       setDetailLoading,
@@ -159,6 +161,7 @@ export async function mountDetail(
   await act(async () => {
     renderer = create(createElement(Probe))
   })
+  await act(async () => commands.select(initial))
   return {
     transport,
     state() {
