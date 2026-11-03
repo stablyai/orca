@@ -19,6 +19,7 @@ import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspa
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   getProjectRuntimePreflightContext,
   getCachedLocalProjectRuntimeWslContext,
@@ -148,6 +149,11 @@ export function getLocalRepoProjectExecutionRuntimeContext(
     wslAvailable: wslContext.wslAvailable,
     availableWslDistros: wslContext.availableWslDistros
   })
+}
+
+/** Runtime whose forge CLIs preflight checks; keep in step with the preflight context's host. */
+export function getLocalPreflightTarget(state: AppState): RuntimeClientTarget {
+  return getActiveWorkspaceOwnerTarget(state) ?? defaultScopeHost(state.settings)
 }
 
 export function getLocalPreflightContext(

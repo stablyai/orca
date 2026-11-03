@@ -129,7 +129,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     [settings?.visibleTaskProviders]
   )
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
-  const taskProviderConnections = useTaskProviderConnections()
+  const taskProviderConnections = useTaskProviderConnections(selectedRepos)
   const visibleTaskProviders = useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(

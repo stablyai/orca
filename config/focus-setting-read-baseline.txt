@@ -228,7 +228,7 @@
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/linear-issue-write.ts
-1 src/renderer/src/lib/local-preflight-context.ts
+2 src/renderer/src/lib/local-preflight-context.ts # preflight checks forge CLIs on the focused owner or default scope host; task sources compare repo runtimes against it
 2 src/renderer/src/lib/provider-runtime-context.ts
 2 src/renderer/src/lib/repo-runtime-owner.ts
 1 src/renderer/src/lib/runtime-session-mirror-owners.ts
@@ -328,7 +328,7 @@
 1 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-actions.ts
 3 src/renderer/src/store/slices/worktrees/metadata/worktree-lineage-host-merge.ts
 3 src/renderer/src/store/slices/worktrees/session/worktree-terminal-reference.ts
-2 src/renderer/src/store/task-provider-connections.ts # provider sign-in checks are keyed by the focused runtime and local preflight context; an older context reads as pending
+3 src/renderer/src/store/task-provider-connections.ts # provider sign-in checks are keyed by the focused runtime and local preflight context; an older context or a repo on another runtime reads as pending
 1 src/renderer/src/store/terminals/terminal-active-workspace-creation.ts
 1 src/renderer/src/store/terminals/terminal-tab-appearance.ts
 1 src/renderer/src/store/terminals/terminal-tab-close-providers.ts
