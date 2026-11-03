@@ -274,10 +274,17 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     })
     expect(screen.getByRole('button', { name: 'Pasted text' })).toBeTruthy()
     await openSource()
+    const dialog = screen.getByRole('dialog', { name: 'Pasted text' })
+    expect(dialog.getAttribute('data-slot')).toBe('dialog-content')
+    expect(document.getElementById(dialog.getAttribute('aria-describedby')!)?.textContent).toBe(
+      `${Buffer.byteLength(text).toLocaleString('en-US')} bytes`
+    )
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
     fireEvent.click(screen.getByRole('button', { name: 'Copy contents' }))
     await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(text))
     expect(mocks.rpc).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     mocks.resolved = true
     await act(async () => upload.resolve(path))
     view.rerender(<Composer />)
@@ -332,6 +339,7 @@ it('opens draft and sent sources, exports exact bytes and scrolls a giant-line p
     fireEvent.keyDown(measured, { key: 'Home' })
     await waitFor(() => expect(measured.scrollTop).toBe(0))
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     const editor = promptEditor(screen.getByRole('textbox'))
     const token = promptValue(screen.getByRole('textbox')).trim()
     act(() => {

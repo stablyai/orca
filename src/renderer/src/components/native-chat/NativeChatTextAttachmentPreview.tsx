@@ -2,12 +2,12 @@ import { useMemo, useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription
-} from '@/components/ui/sheet'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -124,7 +124,7 @@ export function NativeChatTextAttachmentPreview({
 
   const copyTooLarge = (source.size ?? 0) > ATTACHMENT_TEXT_COPY_MAX_BYTES
   return (
-    <Sheet
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open) {
@@ -133,10 +133,10 @@ export function NativeChatTextAttachmentPreview({
         }
       }}
     >
-      <SheetContent className="flex w-full flex-col sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>{name}</SheetTitle>
-          <SheetDescription className="break-all">
+      <DialogContent className="flex h-[88vh] max-h-[calc(100vh-2rem)] min-h-0 w-[calc(100vw-2rem)] max-w-6xl flex-col overflow-hidden sm:max-w-6xl">
+        <DialogHeader className="min-w-0 shrink-0 pr-8 text-left">
+          <DialogTitle className="truncate">{name}</DialogTitle>
+          <DialogDescription className="truncate">
             {source.size === null
               ? translate(
                   'components.native-chat.textAttachmentPreview.textAttachment',
@@ -147,9 +147,9 @@ export function NativeChatTextAttachmentPreview({
                   '{{size}} bytes',
                   { size: source.size.toLocaleString(getIntlLocale()) }
                 )}
-          </SheetDescription>
-        </SheetHeader>
-        <div className="flex flex-wrap gap-2 px-4">
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex shrink-0 flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -183,7 +183,7 @@ export function NativeChatTextAttachmentPreview({
           ) : null}
         </div>
         {copyTooLarge ? (
-          <p className="px-4 text-sm text-muted-foreground">
+          <p className="shrink-0 text-sm text-muted-foreground">
             {translate(
               'components.native-chat.textAttachmentPreview.copyTooLarge',
               'This file is too large to copy. Save it instead.'
@@ -191,7 +191,7 @@ export function NativeChatTextAttachmentPreview({
           </p>
         ) : null}
         {error ? (
-          <div role="alert" className="px-4 text-sm">
+          <div role="alert" className="shrink-0 text-sm">
             <p>{formatAttachmentPreviewError(error)}</p>
             <Button variant="outline" size="sm" disabled={busy} onClick={retry}>
               {translate('common.retry', 'Retry')}
@@ -199,7 +199,7 @@ export function NativeChatTextAttachmentPreview({
           </div>
         ) : null}
         <AttachmentTextScrollView source={source} revision={revision} demand={demand} />
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
