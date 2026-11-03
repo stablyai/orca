@@ -20830,12 +20830,12 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["daemon"],
-      "coverageNotes": "Signed arm64 macOS evidence; other platforms and hosts keep the existing launcher.",
+      "coverageNotes": "Signed arm64 macOS evidence; other platforms and hosts keep the existing launcher. The test-value audit retires the unit check of precedence over supplied daemon permission-status receipts. Its direct status aggregation alarm is lost; remaining launch, packaging and signed validation evidence is not an equivalent replacement. Historical executed commands and results are preserved.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/13921"],
       "invariant": "A packaged macOS daemon runs from the verified signed helper copy for its build, which the updater never touches, and never beside a job that may own the endpoint; the fork fallback still fits the startup gate. A copy is deleted only when lsof proves it unused.",
       "oracle": "Deterministic launch, fallback-deadline, per-build copy, retirement and status tests, plus the signed launcher validation recorded in #25848.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx"
       ],
       "testFiles": [
         "src/main/daemon/macos-daemon-bundle.test.ts",
@@ -20843,7 +20843,6 @@
         "src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts",
         "src/main/daemon/macos-daemon-job-state.test.ts",
         "src/main/daemon/macos-daemon-bundle-retirement.test.ts",
-        "src/main/daemon/daemon-full-disk-access-status.test.ts",
         "config/scripts/macos-folder-usage-descriptions.test.mjs",
         "src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx"
       ],
@@ -20877,7 +20876,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts src/main/daemon/daemon-pty-adapter-full-disk-access.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/DeveloperPermissionsPane.test.tsx",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts src/main/daemon/daemon-full-disk-access-status.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/macos-daemon-bundle.test.ts src/main/daemon/macos-daemon-launchd.test.ts src/main/daemon/daemon-init-macos-stable-launch-fallback.test.ts src/main/daemon/macos-daemon-job-state.test.ts src/main/daemon/macos-daemon-bundle-retirement.test.ts config/scripts/macos-folder-usage-descriptions.test.mjs src/renderer/src/components/settings/developer-permissions/DeveloperPermissionsPane.test.tsx",
           "result": "passed",
           "durationSeconds": 2.38,
           "summary": "All 82 focused launch, fallback-deadline, per-build copy, retirement, status and packaging tests passed."
@@ -20900,7 +20899,8 @@
         "evidence": "Adoption skips copying; each helper build is cloned and verified once, and later daemons reuse that copy with no copy or verify; retirement runs once per launch in the background."
       },
       "knownGaps": [
-        "x64, older macOS, real ShipIt relaunch, notarized release and non-APFS copies are untested."
+        "x64, older macOS, real ShipIt relaunch, notarized release and non-APFS copies are untested.",
+        "The test-value audit retires the unit check of precedence over supplied daemon permission-status receipts. Its direct status aggregation alarm is lost; remaining launch, packaging and signed validation evidence is not an equivalent replacement. Historical executed commands and results are preserved."
       ],
       "promotionCriteria": [
         "Signed release journeys on supported macOS versions with soak history."
