@@ -183,6 +183,57 @@ describe('account RPC methods', () => {
     expect(runtime.refreshAccountsForMobile).not.toHaveBeenCalled()
   })
 
+  it('answers with usage the stale-usage refresh brought in, without forcing a refresh', async () => {
+    let snapshot: { claude: unknown; codex: unknown } = { claude: null, codex: null }
+    const refreshed = { claude: { rateLimits: { fiveHour: 0.4 } }, codex: null }
+    const refreshAccountsForMobile = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: accounts.list reads only these three runtime members.
+    const runtime = {
+      refreshAccountsForMobile,
+      refreshAccountsForMobileSubscriber: async () => {
+        snapshot = refreshed
+      },
+      getAccountsSnapshot: () => snapshot
+    } as unknown as OrcaRuntimeService
+    const list = method('accounts.list')
+    if (isStreamingMethod(list)) {
+      throw new Error('accounts.list must be a request method')
+    }
+
+    await expect(
+      list.handler(list.params?.parse({ refreshUsage: false, refreshStaleUsage: true }), {
+        runtime
+      })
+    ).resolves.toBe(refreshed)
+    expect(refreshAccountsForMobile).not.toHaveBeenCalled()
+  })
+
+  it('answers with the current snapshot when the stale-usage refresh outlasts its wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const snapshot = { claude: null, codex: null }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: accounts.list reads only these two runtime members here.
+      const runtime = {
+        refreshAccountsForMobileSubscriber: vi.fn(() => new Promise<void>(() => {})),
+        getAccountsSnapshot: vi.fn(() => snapshot)
+      } as unknown as OrcaRuntimeService
+      const list = method('accounts.list')
+      if (isStreamingMethod(list)) {
+        throw new Error('accounts.list must be a request method')
+      }
+
+      const answer = list.handler(
+        list.params?.parse({ refreshUsage: false, refreshStaleUsage: true }),
+        { runtime }
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      await expect(answer).resolves.toBe(snapshot)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards a client idempotency key when consuming a Codex reset credit', async () => {
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'
     const expectedScope = {
