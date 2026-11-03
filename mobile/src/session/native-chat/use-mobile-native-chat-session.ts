@@ -13,18 +13,11 @@ import type {
 } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
 import type { NativeChatSubagentActivity } from '../../../../src/shared/native-chat/input/native-chat-activity'
-import {
-  readNativeChatTaskSeedList,
-  type NativeChatTaskSeedList
-} from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
-import { readNativeChatSubagentActivities } from '../../../../src/shared/native-chat/input/native-chat-tool-subagents'
+import type { NativeChatTaskSeedList } from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../../transport/rpc-client'
 import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
-import {
-  applyMobileNativeChatStreamFrame,
-  type MobileNativeChatStreamFrame
-} from './mobile-native-chat-stream-frame'
+import { applyMobileNativeChatSubscriptionFrame } from './apply-mobile-native-chat-subscription-frame'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { useMobileOlderPageLoader, type OlderPagePhase } from '../use-mobile-older-page-loader'
 import {
@@ -191,77 +184,26 @@ export function useMobileNativeChatSession(args: {
         if (cancelled) {
           return
         }
-        const frame = raw as MobileNativeChatStreamFrame
-        if (frame.type === 'task-list') {
-          setTaskSeed({
-            identity,
-            taskList: readNativeChatTaskSeedList(frame.taskList),
-            subagents: readNativeChatSubagentActivities(frame.subagents)
-          })
-          return
-        }
-        if (frame.type === 'replacement') {
-          setTaskSeed(null)
-        }
-        // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
-        if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
-          setRead({ client, identity, status: 'awaiting-transcript' })
-          return
-        }
-        const applied = applyMobileNativeChatStreamFrame({
+        applyMobileNativeChatSubscriptionFrame({
+          raw,
+          identity,
+          client,
+          resumeAfter,
+          holdsCachedRows,
           merger: mergerRef.current,
-          frame,
-          // Bound by retained capacity, not the read page, so busy turns cannot drop rows under a scrolled-up reader.
-          limit: MAX_MESSAGES,
-          replaceSnapshot: !snapshotSeenRef.current
+          snapshotSeenRef,
+          beforeOffsetRef,
+          limitRef,
+          initialLimit: INITIAL_LIMIT,
+          maxMessages: MAX_MESSAGES,
+          setTaskSeed,
+          setRead,
+          setError,
+          setLifecycle,
+          setMessages,
+          setHasMore,
+          supersede
         })
-        if (applied.kind === 'ignored') {
-          return
-        }
-        if (applied.kind === 'error') {
-          setRead({
-            client,
-            identity,
-            status: 'error',
-            rowsUnconfirmed: holdsCachedRows && !snapshotSeenRef.current
-          })
-          setError(applied.error)
-          return
-        }
-        if (frame.type === 'snapshot' && !applied.pending) {
-          // Pending windows establish no transcript base; the next real snapshot must still replace.
-          snapshotSeenRef.current = true
-        }
-        if (
-          applied.windowReplaced ||
-          (frame.type === 'snapshot' && beforeOffsetRef.current === null)
-        ) {
-          // Replacement/replay invalidates cursorless pages; cursor pages survive only while their captured window/cursor still match.
-          supersede()
-        }
-        if (applied.windowReplaced) {
-          // Keep the grown paging limit for overlapping replays; reset only for fresh windows.
-          limitRef.current = INITIAL_LIMIT
-          beforeOffsetRef.current = applied.beforeOffset ?? null
-          setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
-        }
-        // Snapshots and replacements restate the boundary; appends only advance it.
-        if (frame.type === 'appended' ? frame.lifecycle !== undefined : !applied.pending) {
-          setLifecycle({ identity, lifecycle: frame.lifecycle })
-        }
-        setMessages(applied.messages)
-        if (!applied.windowReplaced && applied.hasMore != null) {
-          setHasMore(applied.hasMore)
-        }
-        if (!applied.windowReplaced && applied.beforeOffset != null) {
-          beforeOffsetRef.current = applied.beforeOffset
-        }
-        if (applied.cursorInvalidated) {
-          // After trimming invalidates the cursor, growing-tail reads avoid gaps behind the retained window.
-          supersede()
-          beforeOffsetRef.current = null
-        }
-        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
       }
     )
 
