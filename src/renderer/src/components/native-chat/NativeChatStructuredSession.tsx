@@ -73,6 +73,7 @@ import {
 } from './native-chat-claude-sign-in'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
+  const { tabId: terminalTabId, agent, isVisible } = props
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -121,7 +122,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const hostSendGate = useNativeChatHostSendGate(props.target, props.agent, hostOutage)
   const hostHeld = hostSendGate.sendBlockedReason !== null
   const submits = useStructuredNativeChatSubmitReveal(controller, provisionalLaunch.retry, hostHeld)
-  const promptResponse = useStructuredPromptResponseHold(submits.respond)
+  const promptReply = useStructuredPromptResponseHold(submits.respond)
   const needsFailureFacts =
     submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
     controller.submissions.some(
@@ -339,7 +340,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             statedFailures={startFailures}
             steerHeld={stopControls.stopping || hostHeld}
             focusComposer={focusComposer}
-            editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
+            editAttachTo={{ terminalTabId, agent, isVisible, transport }}
           />
           <NativeChatStructuredSessionStatus
             sessionId={props.sessionId}
@@ -365,10 +366,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             <NativeChatApprovalCard
               key={`${prompt.itemId}:${prompt.revision}`}
               approval={approval}
-              onChoose={(optionId) =>
-                void promptResponse.respond(prompt, { kind: 'option', optionId })
-              }
-              isSubmitting={promptResponse.holds(prompt)}
+              onChoose={(id) => void promptReply.respond(prompt, { kind: 'option', optionId: id })}
+              isSubmitting={promptReply.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               {...fileLinkProps}
@@ -378,8 +377,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             <NativeChatStructuredQuestionCard
               key={`${prompt.itemId}:${prompt.revision}`}
               questions={agentSessionPromptQuestions(questionBody)}
-              onAnswer={(response) => void promptResponse.respond(prompt, response)}
-              isSubmitting={promptResponse.holds(prompt)}
+              onAnswer={(response) => void promptReply.respond(prompt, response)}
+              isSubmitting={promptReply.holds(prompt)}
               onCancel={cancelPrompt}
               shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
               answerInputRef={questionAnswerInputRef}
@@ -390,6 +389,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           {composerShown ? (
             <NativeChatComposer
               ref={composerRef}
+              isVisible={props.isVisible}
               terminalTabId={props.tabId}
               paneKey={paneKey}
               draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}

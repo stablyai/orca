@@ -475,6 +475,8 @@ function useCapturedPrompt(
   const ref = useRef<NativeChatComposerHandle>(null)
   useNativeChatComposerHandle(handle, {
     textareaRef: input,
+    draft: readNativeChatComposerDraft(key).text,
+    addressPreviewsEnabled: true,
     isComposing: () => composing,
     setDraft,
     setCaret: () => {},

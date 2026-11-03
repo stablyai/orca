@@ -41,6 +41,8 @@ import {
 } from '../browser/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
 import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
+import { installChatAddressPreviewProtocolHandler } from '../media/chat-address-preview-protocol'
+import { registerChatAddressPreviewHandlers } from '../media/chat-address-preview'
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
@@ -290,6 +292,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
   // Protocol-scoped preview handlers must exist before webview attachment.
   installMediaPreviewProtocolHandler()
+  installChatAddressPreviewProtocolHandler()
+  registerChatAddressPreviewHandlers(store)
   installJiraImageProtocolHandler()
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()

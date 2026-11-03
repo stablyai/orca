@@ -60,6 +60,8 @@ function Field({
   }, [draft.draft])
   useNativeChatComposerHandle(handle, {
     textareaRef: input,
+    draft: draft.draft,
+    addressPreviewsEnabled: true,
     isComposing,
     setDraft: draft.setDraft,
     setCaret: () => {},
