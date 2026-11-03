@@ -14,6 +14,7 @@ import type { AgentMessageSource } from '../../../../../src/shared/agent-session
 import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
+import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
@@ -52,6 +53,7 @@ describe('MobileNativeChatMessage', () => {
         (node) => node.props.accessibilityState?.expanded === false
       )!
       act(() => toggle.props.onPress())
+      expect(tree.root.findAllByType(MobileNativeChatMessageTime)).toHaveLength(1)
       const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
       expect(markdown.map((node) => node.props.content)).toContain(
         'Review complete\n\nThe **result** is ready.'
@@ -224,6 +226,9 @@ describe('MobileNativeChatMessage', () => {
           (node) => node.props.accessibilityLabel === title
         )
         expect(toggle !== undefined).toBe(task !== '')
+        expect(tree.root.findAllByType(MobileNativeChatMessageTime)).toHaveLength(
+          task === '' ? 1 : 0
+        )
       } finally {
         await activateMobileUiLocale('en')
       }

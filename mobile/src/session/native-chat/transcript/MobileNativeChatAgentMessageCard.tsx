@@ -3,13 +3,11 @@ import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight, Bot, ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import {
-  agentMessageSendersShown,
-  orchestrationMailNotice
-} from '../../../../../src/shared/agent-session/agent-session-message-source'
+import { agentMessageSendersShown } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {
   AGENT_MESSAGE_FOLDED_LINES,
   agentMessageHeading,
+  agentMessageIsCompact,
   agentMessagePrimarySender,
   agentMessageSenderCanOpen,
   agentMessageOverflows,
@@ -40,7 +38,7 @@ import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
 export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAgentMessageCard(
   props: React.ComponentProps<typeof PreviewAgentMessageCard>
 ) {
-  return props.message.agentStart || orchestrationMailNotice(props.from) ? (
+  return agentMessageIsCompact(props.message, props.from) ? (
     <CompactAgentMessageCard {...props} />
   ) : (
     <PreviewAgentMessageCard {...props} />
@@ -99,6 +97,9 @@ function CompactAgentMessageCard({
             accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
           />
         ) : null}
+        {!expandable ? (
+          <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+        ) : null}
         {expandable ? (
           <View pointerEvents="none">
             <Chevron size={14} color={colors.textMuted} />
@@ -116,6 +117,7 @@ function CompactAgentMessageCard({
             onLongPress={onLongPress}
           />
           {status}
+          <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           <Pressable
             style={({ pressed }) => [styles.refold, pressed && pressedStyle]}
             accessibilityRole="button"
@@ -286,7 +288,11 @@ function Senders({ from, compact = false }: { from: AgentMessageSource; compact?
   return (
     <View pointerEvents="box-none" style={[styles.senders, compact && styles.compactSenders]}>
       {shown.length === 0 ? (
-        <Text numberOfLines={compact ? 1 : undefined} style={styles.name}>
+        <Text
+          pointerEvents={compact ? 'none' : undefined}
+          numberOfLines={compact ? 1 : undefined}
+          style={styles.name}
+        >
           {t('session.agentMessageAttribution.unnamedSender', 'an agent')}
         </Text>
       ) : null}
@@ -304,7 +310,11 @@ function Senders({ from, compact = false }: { from: AgentMessageSource; compact?
           />
         )
       })}
-      {more > 0 ? <Text style={styles.meta}>+{more}</Text> : null}
+      {more > 0 ? (
+        <Text pointerEvents={compact ? 'none' : undefined} style={styles.meta}>
+          +{more}
+        </Text>
+      ) : null}
     </View>
   )
 }

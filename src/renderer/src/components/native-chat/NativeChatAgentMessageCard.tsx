@@ -9,12 +9,10 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/Comme
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import {
-  orchestrationMailNotice,
-  type AgentMessageSource
-} from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
+  agentMessageIsCompact,
   agentMessagePrimarySender,
   agentMessageOverflows,
   agentMessageFoldLabel,
@@ -65,7 +63,7 @@ function heading(from: AgentMessageSource, message: NativeChatMessage): string {
 export function NativeChatAgentMessageCard(
   props: React.ComponentProps<typeof PreviewAgentMessageCard>
 ): React.JSX.Element {
-  return props.message.agentStart || orchestrationMailNotice(props.from) ? (
+  return agentMessageIsCompact(props.message, props.from) ? (
     <CompactAgentMessageCard {...props} />
   ) : (
     <PreviewAgentMessageCard {...props} />
@@ -86,6 +84,7 @@ function CompactAgentMessageCard({
   const target = owner?.target ?? runtimeContext?.target
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
   const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
+  const trigger = useRef<HTMLButtonElement>(null)
   const labelId = useId()
   const bodyId = useId()
   const expandable =
@@ -104,6 +103,7 @@ function CompactAgentMessageCard({
       >
         {expandable ? (
           <button
+            ref={trigger}
             type="button"
             aria-labelledby={labelId}
             aria-controls={bodyId}
@@ -142,7 +142,7 @@ function CompactAgentMessageCard({
             className="relative transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
           />
         ) : null}
-        <div className="pointer-events-none hidden shrink-0 @sm:block">
+        <div className={cn('pointer-events-none shrink-0', expandable && 'hidden @sm:block')}>
           <NativeChatMessageTimestamp
             timestamp={message.timestamp}
             className="text-muted-foreground"
@@ -181,13 +181,20 @@ function CompactAgentMessageCard({
               />
             )}
           />
+          <NativeChatMessageTimestamp
+            timestamp={message.timestamp}
+            className="text-muted-foreground @sm:hidden"
+          />
           <Button
             type="button"
             variant="ghost"
             size="xs"
             aria-expanded={disclosure.open}
             aria-controls={bodyId}
-            onClick={toggle}
+            onClick={() => {
+              toggle()
+              trigger.current?.focus({ preventScroll: true })
+            }}
           >
             {translate('components.native-chat.userMessage.showLess', 'Show less')}
           </Button>

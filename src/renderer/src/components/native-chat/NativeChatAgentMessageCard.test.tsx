@@ -116,6 +116,7 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   expect(writeClipboardText).toHaveBeenCalledWith(task)
   expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(task)
   fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
+  expect(screen.getByRole('button', { name: 'Started worker' })).toHaveFocus()
   expect(screen.getByRole('button', { name: 'Started worker' })).toHaveAttribute(
     'aria-expanded',
     'false'
