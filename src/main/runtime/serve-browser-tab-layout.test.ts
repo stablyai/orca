@@ -90,6 +90,27 @@ describe('a browser tab a host with no window saves', () => {
     ])
   })
 
+  it('keeps chromeless mode through headless navigation and session parsing', () => {
+    const opened = withOpenedServeBrowserTab(HOST, sessionWithTerminal(), {
+      worktreeId: WT,
+      pageId: 'page-clean',
+      url: 'https://example.com',
+      title: 'Example',
+      chromeless: true
+    })!
+    const navigated = withServeBrowserPageState(opened, {
+      worktreeId: WT,
+      pageId: 'page-clean',
+      url: 'https://example.com/next',
+      title: 'Next'
+    })!
+    const restored = workspaceSessionStateSchema.parse(navigated)
+    expect(findSavedBrowserPage(restored, WT, 'page-clean')?.page).toMatchObject({
+      chromeless: true,
+      title: 'Next'
+    })
+  })
+
   it('keeps its page last address', () => {
     const saved = withServeBrowserPageState(opened(sessionWithTerminal()), {
       worktreeId: WT,

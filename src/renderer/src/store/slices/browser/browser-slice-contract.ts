@@ -34,6 +34,7 @@ import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contr
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  chromeless?: boolean
   /** Link-only guard, checked before records and again at the unified-tab mutation. */
   validateLinkPlacement?: (state: AppState) => void
   activate?: boolean
@@ -57,6 +58,7 @@ export type CreateBrowserTabOptions = {
 }
 
 export type CreateBrowserPageOptions = {
+  chromeless?: boolean
   activate?: boolean
   title?: string
   browserRuntimeEnvironmentId?: string | null
@@ -200,6 +202,7 @@ export type BrowserSlice = {
     pageId: string,
     remotePageId?: string
   ) => RemoteBrowserPageHandle | null
+  setBrowserPageChromeless: (pageId: string, chromeless: boolean) => void
   setBrowserPageViewportPreset: (
     pageId: string,
     viewportPresetId: BrowserViewportPresetId | null

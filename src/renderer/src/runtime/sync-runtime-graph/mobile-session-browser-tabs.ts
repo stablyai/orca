@@ -21,6 +21,7 @@ export function buildMobileBrowserTab(
     title,
     browserWorkspaceId: workspace.id,
     browserPageId: activePage?.id ?? workspace.activePageId ?? null,
+    ...(activePage?.chromeless !== undefined ? { chromeless: activePage.chromeless } : {}),
     browserProfileId:
       workspace.sessionProfileId === undefined || activePage?.browserRuntimeEnvironmentId
         ? undefined

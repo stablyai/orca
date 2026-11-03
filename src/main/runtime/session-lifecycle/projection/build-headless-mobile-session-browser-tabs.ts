@@ -7,6 +7,7 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { findSavedBrowserPage } from '../../serve-browser-tab-layout'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
@@ -48,6 +49,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             ...this.serveBrowserTabs.listUnstarted(worktreeId)
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
     const publishedServerTabs = serverTabs.map((tab) => {
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
@@ -69,6 +71,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
         ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
+        chromeless: findSavedBrowserPage(session, worktreeId, tab.browserPageId)?.page.chromeless,
         isActive: tab.active === true
       }
     })
@@ -87,6 +90,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: page.loading,
         canGoBack: page.canGoBack,
         canGoForward: page.canGoForward,
+        ...(page.chromeless !== undefined ? { chromeless: page.chromeless } : {}),
         isActive: page.active
       }))
     return [...publishedServerTabs, ...publishedClientTabs]

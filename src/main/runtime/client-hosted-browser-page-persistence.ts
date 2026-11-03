@@ -101,7 +101,8 @@ export function buildPersistedClientHostedBrowserPages(
             url: page.url,
             title: page.title,
             pairedDeviceId: page.pairedDeviceId,
-            savedAt
+            savedAt,
+            ...(page.chromeless !== undefined ? { chromeless: page.chromeless } : {})
           } satisfies PersistedClientHostedBrowserPage
         ]
   )
@@ -148,7 +149,8 @@ export function rehydrateClientHostedBrowserPages(
             // No host can finish an inherited load spinner.
             loading: false,
             // The returning host owns focus; do not deactivate its actual selected sibling.
-            active: false
+            active: false,
+            ...(row.chromeless !== undefined ? { chromeless: row.chromeless } : {})
           })
           restored.push(row.browserPageId)
         } catch (error) {
@@ -187,6 +189,7 @@ function samePersistedClientHostedBrowserPages(
       row.browserProfileId === next.browserProfileId &&
       row.url === next.url &&
       row.title === next.title &&
+      row.chromeless === next.chromeless &&
       row.pairedDeviceId === next.pairedDeviceId
     )
   })

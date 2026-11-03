@@ -258,6 +258,8 @@ orca full-screenshot --worktree active --json
 orca pdf --worktree active --json
 ```
 
+Use `orca tab create --url https://example.com --chromeless` to create a browser page with its toolbar hidden. The preference is saved with the workspace. To restore the toolbar, right-click the workspace browser tab and choose **Show Browser Toolbar**, or use the address-bar shortcut (Cmd+L on macOS, Ctrl+L on Windows/Linux). Existing pages can use **Hide Browser Toolbar** in the browser menu or tab context menu. Mobile keeps its own navigation controls.
+
 Use `orca exec --command "<agent-browser command>" --json` only for browser actions that do not have a typed Orca command yet.
 
 Browser device emulation:

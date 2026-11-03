@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ComponentProps } from 'react'
+import { useAppStore } from '@/store'
+import { findPage } from '@/store/slices/browser-page-records'
 import {
   Crosshair,
   ExternalLink,
@@ -76,7 +78,20 @@ function BrowserChromeActionButton({
 }
 
 /** Use one toolbar for browsing and document previews so tools cannot drift; each surface explicitly omits inapplicable tools. */
-export function BrowserChromeToolbar({
+export function BrowserChromeToolbar(
+  props: ComponentProps<typeof BrowserChromeToolbarContent>
+): React.JSX.Element | null {
+  const chromeless = useAppStore((s) =>
+    props.browserPageId
+      ? findPage(s.browserPagesByWorkspace, props.browserPageId)?.chromeless === true
+      : false
+  )
+  // Remount the measured row when restored so its resize observer and portaled tools restart together.
+  return chromeless ? null : <BrowserChromeToolbarContent {...props} />
+}
+
+function BrowserChromeToolbarContent({
+  browserPageId,
   controls,
   addressSlot,
   reloadControl,
@@ -92,6 +107,7 @@ export function BrowserChromeToolbar({
   showTourAnchors = false,
   pinnedStage
 }: {
+  browserPageId?: string
   controls: BrowserNavigationControls
   addressSlot: React.ReactNode
   reloadControl?: React.ReactNode
@@ -207,6 +223,7 @@ export function BrowserChromeToolbar({
 
   return (
     <BrowserNavigationControlRow
+      browserPageId={browserPageId}
       rowRef={rowRef}
       controls={controls}
       addressSlot={addressSlot}

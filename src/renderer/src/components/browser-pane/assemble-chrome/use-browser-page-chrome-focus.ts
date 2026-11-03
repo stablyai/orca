@@ -8,6 +8,7 @@ import {
   type RefObject
 } from 'react'
 import { useAppStore } from '@/store'
+import { findPage } from '@/store/slices/browser-page-records'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import {
@@ -101,6 +102,11 @@ export function useBrowserPageChromeFocus({
   /** Hold the bar against delayed focus theft; retain a canceller for deactivation and clear the latch on every ending, including panes without local load handlers. */
   const startAddressBarFocusGrab = useCallback(
     (selection?: BrowserAddressBarSelection): (() => void) => {
+      // Read at the request, without changing this callback's identity mid-focus retry.
+      const state = useAppStore.getState()
+      if (findPage(state.browserPagesByWorkspace, browserTabId)?.chromeless) {
+        state.setBrowserPageChromeless(browserTabId, false)
+      }
       cancelAddressBarFocusGrab()
       let cancelled = false
       let frameId = 0
@@ -137,7 +143,7 @@ export function useBrowserPageChromeFocus({
       focusAddressBar()
       return cancel
     },
-    [addressBarInputRef, cancelAddressBarFocusGrab, focusAddressBarNow]
+    [addressBarInputRef, browserTabId, cancelAddressBarFocusGrab, focusAddressBarNow]
   )
 
   useEffect(() => {
@@ -157,10 +163,10 @@ export function useBrowserPageChromeFocus({
     }
     return window.api.ui.onFocusBrowserAddressBar(({ browserPageId }) => {
       if (browserPageId === browserTabId) {
-        focusAddressBarNow()
+        startAddressBarFocusGrab()
       }
     })
-  }, [browserTabId, focusAddressBarNow, isActive])
+  }, [browserTabId, startAddressBarFocusGrab, isActive])
 
   // Guest-focused chords arrive through IPC; capture handles chrome-focused chords before workspace/editor listeners.
   useEffect(() => {
@@ -180,11 +186,11 @@ export function useBrowserPageChromeFocus({
       event.preventDefault()
       // All panes listen on window capture; stopPropagation alone leaves sibling listeners active.
       event.stopImmediatePropagation()
-      focusAddressBarNow()
+      startAddressBarFocusGrab()
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
+  }, [chromeShortcutScope, startAddressBarFocusGrab, keybindings, workspaceId])
 
   /** Wait for guest attachment; cancellation requeues unfinished active requests unless explicitly disabled. */
   const startGuestFocusRetry = useCallback(

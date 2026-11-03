@@ -63,6 +63,9 @@ export function createBrowserTabActions(
       ) {
         admitBrowserPageMount(page.id)
       }
+      if (options?.chromeless) {
+        page.chromeless = true
+      }
       // Why: with no explicit profile, Settings decides, so the profile scope applies to every way a tab opens.
       const { sessionProfileId, sessionPartition } =
         options?.sessionProfileId !== undefined

@@ -311,6 +311,7 @@ export function ClientHostedBrowserPagePane({
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
         <BrowserNavigationControlRow
+          browserPageId={browserTab.id}
           controls={{
             canGoBack: browserTab.canGoBack,
             canGoForward: browserTab.canGoForward,

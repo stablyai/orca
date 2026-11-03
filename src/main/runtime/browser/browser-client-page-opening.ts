@@ -34,6 +34,7 @@ export type BrowserClientPageCreateParams = {
   activate?: boolean
   navigation?: RuntimeNavigationTarget
   targetGroupId?: string
+  chromeless?: boolean
   placement: { kind: 'client'; browserHostClientId: string }
 }
 
@@ -93,7 +94,8 @@ export async function createBrowserClientPage(
     pairedDeviceId: caller.pairedDeviceId,
     url: 'about:blank',
     loading: url !== 'about:blank',
-    active: focus.startsActive
+    active: focus.startsActive,
+    ...(params.chromeless !== undefined ? { chromeless: params.chromeless } : {})
   })
   publishCreatedBrowserSessionTab(host, {
     placementKind: 'client',

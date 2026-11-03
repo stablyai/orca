@@ -67,6 +67,7 @@ export function createBrowserTabFocusActions(
       const [firstPage, ...restPages] = pages
       const restored = get().createBrowserTab(worktreeId, firstPage.url, {
         title: firstPage.title,
+        chromeless: firstPage.chromeless,
         activate: true,
         sessionProfileId,
         sessionPartition,
@@ -96,6 +97,7 @@ export function createBrowserTabFocusActions(
           get().createBrowserPage(restored.id, p.url, {
             activate: false,
             title: p.title,
+            chromeless: p.chromeless,
             browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId,
             ...(p.docLocation ? { docLocation: p.docLocation } : {})
           })

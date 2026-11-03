@@ -36,6 +36,7 @@ import { useBrowserAgentDrivesAnyPage } from '../browser-pane/agent-cursor/brows
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store'
+import { BrowserToolbarVisibilityMenuItem } from '../browser-pane/assemble-chrome/browser-toolbar-visibility-menu-item'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -295,6 +296,7 @@ export default function BrowserTab({
             ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
             : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
         </ContextMenuItem>
+        <BrowserToolbarVisibilityMenuItem browserPageId={tab.activePageId} menuKind="context" />
         {showAudioControl ? (
           <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
             {toggleAudioMutedLabel}

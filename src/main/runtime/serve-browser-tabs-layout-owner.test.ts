@@ -113,12 +113,12 @@ describe('served browser tabs in a layout-owner build', () => {
   it('saves the address a page reached while main was writing its tab', async () => {
     const host = servedHost()
 
-    host.tabs.opened(PAGE)
+    host.tabs.opened({ ...PAGE, chromeless: true })
     host.tabs.navigated({ ...PAGE, url: 'https://example.com/next', title: 'Next' })
     await settle()
 
     expect(host.session().browserPagesByWorkspace?.['page-1']).toEqual([
-      expect.objectContaining({ url: 'https://example.com/next', title: 'Next' })
+      expect.objectContaining({ url: 'https://example.com/next', title: 'Next', chromeless: true })
     ])
     expect(host.session().browserTabsByWorktree?.[WT]?.[0]).toMatchObject({ title: 'Next' })
   })

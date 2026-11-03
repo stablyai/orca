@@ -90,6 +90,7 @@ export type RuntimeMobileSessionBrowserTab = {
   browserWorkspaceId: string
   browserPageId: string | null
   browserProfileId?: string
+  chromeless?: boolean
   executionHostKey?: string
   placement?: RuntimeBrowserPlacement
   url: string

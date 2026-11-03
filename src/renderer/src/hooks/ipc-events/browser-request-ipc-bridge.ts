@@ -94,6 +94,7 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
         const workspace = store.createBrowserTab(worktreeId, data.url, {
           title: data.url,
           browserPageId: data.browserPageId,
+          ...(data.chromeless !== undefined ? { chromeless: data.chromeless } : {}),
           ...(data.split
             ? { split: browserTabSplitTarget(store, worktreeId, data.split, data.splitFromTabId) }
             : { targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId }),

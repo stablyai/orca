@@ -466,6 +466,10 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       }
+    },
+    "toolbar": {
+      "hide": "Hide Browser Toolbar",
+      "show": "Show Browser Toolbar"
     }
   },
   "editor": {

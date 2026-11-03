@@ -135,6 +135,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         placement,
         pairedDeviceId: options.lease.pairedDeviceId,
         url: adoptedPageUrl(page),
+        ...(restored?.chromeless !== undefined ? { chromeless: restored.chromeless } : {}),
         loading: false,
         // Leave focus to client activation reports; adopting active would deactivate a visible sibling.
         active: false

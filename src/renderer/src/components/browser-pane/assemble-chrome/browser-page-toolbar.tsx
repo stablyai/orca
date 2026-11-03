@@ -142,6 +142,7 @@ export function BrowserPageToolbar({
 
   return (
     <BrowserChromeToolbar
+      browserPageId={browserPageId}
       showTourAnchors
       pinnedStage={pinnedStage}
       controls={{

@@ -177,6 +177,7 @@ export function createBrowserPageConversionActions(
 
       return get().createBrowserPage(workspaceId, pageToRestore.url, {
         title: pageToRestore.title,
+        chromeless: pageToRestore.chromeless,
         activate: true,
         browserRuntimeEnvironmentId: pageToRestore.browserRuntimeEnvironmentId,
         ...(pageToRestore.docLocation ? { docLocation: pageToRestore.docLocation } : {})

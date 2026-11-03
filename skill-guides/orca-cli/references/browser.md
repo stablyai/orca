@@ -52,6 +52,7 @@ ORCA viewport --page <browserPageId> --width 390 --height 844 --scale 3 --mobile
 ORCA tab list --json
 ORCA tab create --url <url> --json
 ORCA tab create --url <url> --split right --json
+ORCA tab create --url <url> --chromeless --json
 ORCA tab switch --index <n> --json
 ORCA tab close --index <n> --json
 ORCA cookie get --page <browserPageId> --json
@@ -75,6 +76,7 @@ Browser rules:
 - Browser commands default to the current worktree. `--page` reaches the page in any worktree unless you also pass `--worktree <selector>`. Use `--worktree all` only intentionally.
 - `tab list` shows every tab in the tab bar. After a restart, tabs the user has not opened report `loaded: false`; `tab switch` or any `--page` command loads one in the background without changing the user's visible tab.
 - `tab create --split <right|left|down|up>` opens the page in a new pane beside the calling terminal instead of as another tab; focus stays in the terminal.
+- `tab create --chromeless` hides the browser toolbar for the new page. Restore it from the tab context menu with **Show Browser Toolbar**, or use the configured address-bar shortcut (Cmd+L on macOS, Ctrl+L on Windows/Linux). The choice is saved with the workspace; mobile keeps its own navigation controls.
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Use `ORCA set device` or `ORCA viewport --mobile`, not `ORCA exec --command "set device ..."`, so the page also gets touch input and `pointer: coarse`. Each page load (reload, `goto`, link click) resets it, so run it again after navigating.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts. Avoid `--load networkidle` except on pages known to go quiet: polling, websockets and streaming keep it from ever resolving.

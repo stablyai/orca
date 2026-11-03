@@ -2,6 +2,8 @@ import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { findPage } from '@/store/slices/browser-page-records'
 import {
   BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
@@ -19,6 +21,7 @@ export type BrowserNavigationControls = {
 
 /** Share history/tool layout while the identity slot varies between editable URLs and read-only document paths. */
 export function BrowserNavigationControlRow({
+  browserPageId,
   controls,
   addressSlot,
   reloadControl,
@@ -28,6 +31,7 @@ export function BrowserNavigationControlRow({
   rowRef,
   children
 }: {
+  browserPageId?: string
   controls: BrowserNavigationControls
   /** The surface's identity widget: an editable address bar, or a read-only document chip. */
   addressSlot: React.ReactNode
@@ -40,7 +44,13 @@ export function BrowserNavigationControlRow({
   showTourAnchors?: boolean
   rowRef?: React.Ref<HTMLDivElement>
   children?: React.ReactNode
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  const chromeless = useAppStore((s) =>
+    browserPageId ? findPage(s.browserPagesByWorkspace, browserPageId)?.chromeless === true : false
+  )
+  if (chromeless) {
+    return null
+  }
   return (
     <div
       ref={rowRef}

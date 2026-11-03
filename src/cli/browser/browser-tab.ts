@@ -81,6 +81,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         url,
         worktree,
         profileId,
+        ...(flags.has('chromeless') ? { chromeless: true } : {}),
         ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
       },
       { timeoutMs: 60_000 }

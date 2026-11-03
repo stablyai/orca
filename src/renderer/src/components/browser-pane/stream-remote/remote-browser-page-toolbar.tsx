@@ -50,6 +50,7 @@ export function RemoteBrowserPageToolbar({
 }): React.JSX.Element {
   return (
     <BrowserNavigationControlRow
+      browserPageId={addressBarEditSession.pageId}
       controls={{
         // Hosts report no history depth; keep arrows enabled and let dead-end RPCs no-op.
         canGoBack: true,

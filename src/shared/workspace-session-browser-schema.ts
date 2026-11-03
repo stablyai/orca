@@ -84,6 +84,7 @@ export const browserPageSchema = z.object({
   remoteBrowserPageClientHosted: z.boolean().optional(),
   // Preserve the viewport preset across restart while accepting older sessions.
   viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+  chromeless: z.boolean().optional(),
   // Without docLocation, a workspace document’s blank URL restores as New Tab.
   docLocation: browserPageDocLocationSchema.nullable().optional(),
   // Persist one-level conversion history; reject preview-scheme URLs at this read boundary as at every URL sink.

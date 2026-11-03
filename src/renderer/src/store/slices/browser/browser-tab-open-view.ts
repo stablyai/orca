@@ -42,6 +42,7 @@ export function browserTabOpenView(
     // Why the doc check and not just the url: a document page is blank by construction, and
     // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
     !page.docLocation &&
+    !page.chromeless &&
     (options?.focusAddressBar ??
       (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 

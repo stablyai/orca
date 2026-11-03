@@ -20,6 +20,7 @@ export function createBrowserPageMetadataActions(
   | 'setRemoteBrowserPageHandle'
   | 'removeRemoteBrowserPageHandle'
   | 'setBrowserPageViewportPreset'
+  | 'setBrowserPageChromeless'
   | 'addBrowserPageAnnotation'
   | 'updateBrowserPageAnnotation'
   | 'deleteBrowserPageAnnotation'
@@ -28,6 +29,21 @@ export function createBrowserPageMetadataActions(
   | 'removeDeliveredBrowserPageAnnotations'
 > {
   return {
+    setBrowserPageChromeless: (pageId, chromeless) =>
+      set((s) => {
+        const page = findPage(s.browserPagesByWorkspace, pageId)
+        if (!page || page.chromeless === chromeless) {
+          return s
+        }
+        return {
+          browserPagesByWorkspace: {
+            ...s.browserPagesByWorkspace,
+            [page.workspaceId]: s.browserPagesByWorkspace[page.workspaceId].map((entry) =>
+              entry.id === pageId ? { ...entry, chromeless } : entry
+            )
+          }
+        }
+      }),
     setRemoteBrowserPageHandle: (pageId, handle) => {
       set((s) => ({
         remoteBrowserPageHandlesByPageId: {

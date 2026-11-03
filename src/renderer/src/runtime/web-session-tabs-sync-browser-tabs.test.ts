@@ -32,6 +32,45 @@ vi.mock('../store', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
+  it('takes the initial chromeless hint and preserves a local toolbar restore on later snapshots', () => {
+    const state = makeState()
+    const tab = {
+      type: 'browser' as const,
+      id: 'host-browser-tab',
+      title: 'Example',
+      browserWorkspaceId: 'host-browser-workspace',
+      browserPageId: 'host-browser-page',
+      url: 'https://example.com',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      isActive: true,
+      chromeless: true
+    }
+    const initial = applyWebSessionTabsSnapshot(state, makeSnapshot([tab]), ENV, NOW)!
+    const workspaceId = initial.browserTabsByWorktree![WT][0].id
+    const page = initial.browserPagesByWorkspace![workspaceId][0]
+    expect(page.chromeless).toBe(true)
+    const restored = makeState({
+      ...state,
+      ...initial,
+      browserPagesByWorkspace: {
+        ...initial.browserPagesByWorkspace,
+        [workspaceId]: [{ ...page, chromeless: false }]
+      }
+    })
+    const updated = applyWebSessionTabsSnapshot(
+      restored,
+      makeSnapshot([{ ...tab, title: 'Updated' }], { snapshotVersion: 2 }),
+      ENV,
+      NOW + 1
+    )!
+    expect(updated.browserPagesByWorkspace![workspaceId][0]).toMatchObject({
+      title: 'Updated',
+      chromeless: false
+    })
+  })
+
   it('replays a pre-response browser snapshot after canonical placement and focus are known', () => {
     const editorGroupId = 'client-editor-group'
     const previewGroupId = 'client-preview-group'

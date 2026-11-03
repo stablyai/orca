@@ -60,7 +60,8 @@ export function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
     a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
     a.createdAt === b.createdAt &&
     a.browserRuntimeEnvironmentId === b.browserRuntimeEnvironmentId &&
-    a.viewportPresetId === b.viewportPresetId
+    a.viewportPresetId === b.viewportPresetId &&
+    a.chromeless === b.chromeless
   )
 }
 

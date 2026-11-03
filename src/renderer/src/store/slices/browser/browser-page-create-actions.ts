@@ -36,6 +36,9 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
+      if (options?.chromeless) {
+        page.chromeless = true
+      }
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
@@ -64,6 +67,7 @@ export function createBrowserPageCreateActions(
           const shouldFocusAddressBar =
             shouldUpdateGlobalActiveSurface &&
             !page.docLocation &&
+            !page.chromeless &&
             (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
 
           return {
