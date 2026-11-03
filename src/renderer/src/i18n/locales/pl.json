@@ -565,6 +565,17 @@
   },
   "settings": {
     "chat": {
+      "launch": {
+        "on": "Interfejs czatu jest włączony",
+        "off": "Interfejs czatu jest wyłączony",
+        "agents": "Domyślny tryb uruchamiania poszczególnych agentów",
+        "agentsDescription": "Wybierz dla każdego agenta, czy otwiera się w interfejsie czatu, czy we własnym CLI.",
+        "chatDescription": "Nowi agenci będą domyślnie uruchamiani w trybie czatu.",
+        "cliDescription": "Nowi agenci będą domyślnie uruchamiani w CLI.",
+        "turnOn": "Włącz",
+        "turnOff": "Wyłącz",
+        "toggle": "Domyślnie używaj interfejsu czatu"
+      },
       "permissionsAgentsLink": "Ustawienia → Agenci",
       "permissionsTitle": "Uprawnienia nowych czatów",
       "permissionsDescription": "Tylko nowe czaty. Domyślne ustawienia poszczególnych agentów znajdziesz w Ustawienia → Agenci.",
@@ -711,7 +722,7 @@
         "inheritFont": "Taka sama jak czcionka IDE",
         "fontPreviewLabel": "Podgląd czcionki czatu",
         "fontPreview": "Pchnąć w tę łódź jeża lub ośm skrzyń fig.",
-        "title": "Czat",
+        "title": "Interfejs czatu",
         "textSize": "Rozmiar tekstu",
         "textSizeDescription": "Wiadomości, aktywność narzędzi i pole wiadomości. Skróty {{increase}} / {{decrease}} w czacie również zmieniają ten rozmiar.",
         "codeTextSize": "Rozmiar tekstu kodu",
@@ -1130,6 +1141,25 @@
         "acrylic": "akryl"
       },
       "windowsUnsupported": "Wymaga systemu Windows 11 w wersji 22H2 lub nowszej."
+    },
+    "updateDelay": {
+      "title": "Opóźnienie aktualizacji",
+      "description": "Ile dni po opublikowaniu wydania Orca ma odczekać, zanim je zaproponuje.",
+      "info": "Informacje o opóźnieniu aktualizacji",
+      "none": "Brak",
+      "availableSoon": "Pojawi się u Ciebie {{relative}}",
+      "availableOn": "Pojawi się u Ciebie {{date}} ({{relative}})",
+      "clearedTitle": "Orca {{version}} jest gotowa",
+      "heldTitle": "Orca {{version}} jest wstrzymana",
+      "released": "Wydano {{released}}",
+      "progress": "Czas do udostępnienia Orca {{version}}",
+      "skipDelayOnceHint": "Sprawdź to wydanie już teraz. Ustawienie opóźnienia pozostanie bez zmian.",
+      "skipDelayOnce": "Pomiń opóźnienie jednorazowo",
+      "upToDateWithHeld": "Masz najnowszą wersję. Nowsze wydanie jest wstrzymane do {{date}}.",
+      "heldReleaseReady": "Nowsze wydanie jest gotowe. Sprawdź aktualizacje, aby je pobrać.",
+      "keywordDelay": "opóźnienie",
+      "keywordCooldown": "karencja",
+      "keywordSecurity": "bezpieczeństwo"
     }
   },
   "menu": {
@@ -2762,8 +2792,6 @@
         "25690a3855": "Utwórz przestrzeń roboczą z PR",
         "a459866967": "Wznów przestrzeń roboczą powiązaną z PR",
         "347034903a": "Kopiuj link GitHub",
-        "5a01ca7253": "Nie udało się zsynchronizować stanu przejrzenia z GitHub.",
-        "996a1897d2": "Nie można zsynchronizować stanu przejrzenia tego pull requesta.",
         "e0b15c793f": "Nie udało się skopiować linku GitHub",
         "992e799227": "Skopiowano link GitHub",
         "61bfc81ada": "Nie można otworzyć przestrzeni roboczej powiązanej z tym pull requestem.",
@@ -8434,6 +8462,9 @@
           "browserExtensions": {
             "copy": "Dodaje sekcję Ustawienia › Przeglądarka › Rozszerzenia dla lokalnych profili przeglądarki.",
             "toggleLabel": "Włącz lub wyłącz rozszerzenia przeglądarki"
+          },
+          "orchestrationPanel": {
+            "toggleLabel": "Przełącz panel orkiestracji"
           }
         },
         "FloatingWorkspacePane": {
@@ -8579,7 +8610,6 @@
           "9d3e56ca36": "Zastosuj zmiany",
           "f96688b6bc": "Anuluj",
           "b7ddae600c": "Gotowe",
-          "e4bda7ce6f": "Nie znaleziono konfiguracji Ghostty w tym systemie.",
           "b58d4c9051": "Nieobsługiwane klucze",
           "674b5ccd6b": "Brak nowych ustawień do importu — bieżące ustawienia są już zgodne.",
           "a4c5dec640": "Ustawienia do aktualizacji",
@@ -8588,7 +8618,10 @@
           "2763b0c045": "Sprawdź ustawienia, które zostaną zaimportowane z konfiguracji Ghostty.",
           "d2f33670a9": "Importuj z Ghostty",
           "273e7e81fe": "Konfiguracje",
-          "1f744a72f4": "Konfiguracja"
+          "1f744a72f4": "Konfiguracja",
+          "choose_file": "Wybierz plik konfiguracji",
+          "not_found_choose_file": "Nie znaleziono konfiguracji Ghostty na tym komputerze. Wybierz plik konfiguracji, aby zaimportować ją z innej lokalizacji.",
+          "cleared": "Wyczyszczono"
         },
         "WarpThemeImportModal": {
           "title": "Importuj z Warp",
@@ -9439,7 +9472,9 @@
           "cb330ef7f8": " z {{value0}}",
           "c822571b2e": " pasujących do „{{value0}}”",
           "plugin_themes": "Pluginy",
-          "from_plugin": "Z pluginu {{value0}}"
+          "from_plugin": "Z pluginu {{value0}}",
+          "delete_imported_theme": "Usuń {{value0}}",
+          "delete_theme": "Usuń motyw"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9696,7 +9731,8 @@
           "048aac8a64": "Typografia terminala",
           "4415beb958": "wyłączone",
           "4e7d41a9f0": "włączone",
-          "dimUnfocusedPanes": "Przyciemniaj nieaktywne panele."
+          "dimUnfocusedPanes": "Przyciemniaj nieaktywne panele.",
+          "kitty_import": "Importuj z Kitty"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Grubość pogrubionej czcionki",
@@ -9835,7 +9871,9 @@
           "match_dark_mode": "Dopasuj do trybu ciemnego",
           "match_dark_mode_description": "Używaj ciemnego motywu terminala i koloru separatora w trybie jasnym.",
           "light_preview_description": "Pokazuje wynikowy wygląd terminala w trybie jasnym.",
-          "dark_preview_description": "Pokazuje wynikowy wygląd terminala w trybie ciemnym."
+          "dark_preview_description": "Pokazuje wynikowy wygląd terminala w trybie ciemnym.",
+          "deleted_imported_theme": "Usunięto „{{value0}}”",
+          "undo": "Cofnij"
         },
         "TerminalWindowSection": {
           "1705318506": "Kolor magenta ANSI",
@@ -10651,6 +10689,14 @@
               "extension": "rozszerzenie",
               "chrome": "chrome",
               "password": "menedżer haseł"
+            },
+            "orchestrationPanel": {
+              "title": "Panel orkiestracji",
+              "description": "Pokazuje obok czatu lub terminala agenta, z którymi agentami współpracuje.",
+              "orchestration": "orkiestracja",
+              "agents": "agenci",
+              "workers": "wykonawcy",
+              "manager": "menedżer"
             }
           }
         },
@@ -11701,7 +11747,9 @@
             "454df22a5e": "fish",
             "ddd5efe113": "powłoka",
             "3de504994c": "Powłoka i argumenty dla nowych lokalnych, interaktywnych paneli terminala",
-            "1733ccd3e9": "Powłoka terminala"
+            "1733ccd3e9": "Powłoka terminala",
+            "kitty_import": "Importuj z Kitty",
+            "kitty_import_description": "Jednorazowy import obsługiwanych ustawień z pliku kitty.conf."
           },
           "windows": {
             "search": {
@@ -13531,13 +13579,16 @@
           "browseThemes": "Przeglądaj motywy",
           "moreThemes": "Więcej motywów",
           "moreThemesLoading": "Wczytywanie motywów…",
-          "installingTheme": "Instalowanie {{value0}}…"
+          "installingTheme": "Instalowanie {{value0}}…",
+          "searchThemes": "Szukaj motywów…",
+          "noThemes": "Żaden motyw nie pasuje do wyszukiwania."
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
             "title": "Motyw ikon",
             "description": "Ikony plików i folderów z włączonego pluginu.",
-            "builtIn": "Wbudowany"
+            "builtIn": "Wbudowany",
+            "search": "Szukaj motywów ikon…"
           },
           "lightTheme": "Motyw jasny",
           "darkTheme": "Motyw ciemny",
@@ -13938,6 +13989,17 @@
         "PluginSettingsSection": {
           "reset": "Przywróć domyślne",
           "title": "Ustawienia"
+        },
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "Nie udało się pobrać listy zainstalowanych czcionek. Wpisz nazwę dowolnej zainstalowanej czcionki, aby jej użyć."
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "Importuj z Kitty",
+          "kitty_description": "Sprawdź ustawienia, które zostaną zaimportowane z pliku kitty.conf i dołączanych w nim plików.",
+          "kitty_not_found": "Nie znaleziono pliku kitty.conf na tym komputerze. Wybierz plik konfiguracji, aby zaimportować go z innej lokalizacji."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Brak dopasowań."
         }
       },
       "right": {
@@ -19916,6 +19978,23 @@
       "useKnownId": "Użyj znanego identyfikatora użytkownika „{{value0}}”"
     },
     "native-chat": {
+      "textAttachmentPreview": {
+        "copiedContents": "Skopiowano zawartość",
+        "textAttachment": "Załącznik tekstowy",
+        "byteSize": "{{size}} B",
+        "copyContents": "Kopiuj zawartość",
+        "saveFile": "Zapisz plik",
+        "copyTooLarge": "Ten plik jest za duży, aby go skopiować. Zapisz go zamiast tego.",
+        "exportError": "Nie udało się wyeksportować załącznika. Spróbuj ponownie.",
+        "unreadableReply": "Odpowiedź z załącznikiem jest nieczytelna. Spróbuj ponownie.",
+        "incompleteReply": "Załącznik się zmienił albo odpowiedź z nim była niekompletna. Zamknij go i spróbuj ponownie.",
+        "notText": "Tego pliku nie można wyświetlić jako tekstu. Zapisz go, aby otworzyć go w innej aplikacji.",
+        "openFailed": "Nie udało się otworzyć załącznika. Spróbuj ponownie.",
+        "hostUpdate": "Ten host nie obsługuje jeszcze otwierania załączników tekstowych. Zaktualizuj Orca na tym hoście i spróbuj ponownie.",
+        "hostUnavailable": "Host z tym załącznikiem jest niedostępny. Połącz się ponownie i spróbuj jeszcze raz.",
+        "connectionChanged": "Połączenie się zmieniło. Zamknij ten załącznik i otwórz go ponownie.",
+        "readFailed": "Nie udało się odczytać tego załącznika na jego hoście. Połącz się ponownie i spróbuj jeszcze raz. Plik mógł zostać usunięty lub zmieniony."
+      },
       "install": {
         "checking": "Sprawdzanie gotowości agenta {{agent}} na tym hoście…"
       },
@@ -19978,6 +20057,7 @@
         "attachmentNotAFile": "Obraz w tej wiadomości nie jest plikiem, więc wiadomość nie została wysłana.",
         "attachmentNoSource": "Obraz w tej wiadomości nie ma pliku do wysłania, więc wiadomość nie została wysłana.",
         "attachmentInvalid": "Załącznika w tej wiadomości nie można wysłać do agenta.",
+        "attachmentsExpired": "Wygasło: {{names}}.",
         "attachmentUnreadable": "Nie udało się odczytać załącznika w tej wiadomości, więc wiadomość nie została wysłana.",
         "emptyMessage": "Ta wiadomość jest pusta, więc nie została wysłana.",
         "commandUnavailable": "To polecenie jest niedostępne w czatach agenta {{agent}}, więc nie zostało wysłane.",
@@ -20067,6 +20147,7 @@
         "recordFailed": "Orca nie mogła zapisać tego w historii czatu.",
         "attachmentExpired": "Ten załącznik wygasł.",
         "reattachFile": "Usuń go i załącz ponownie.",
+        "reattachFiles": "Usuń je i załącz ponownie.",
         "conversationCleared": "Ta rozmowa została wyczyszczona.",
         "openCurrentConversation": "Otwórz bieżącą rozmowę, aby kontynuować.",
         "clearUnfinished": "Ostatnie polecenie /clear nie zostało ukończone.",
@@ -20096,6 +20177,7 @@
         "hostReconciling": "Orca po ponownym uruchomieniu wciąż sprawdza stan tego czatu.",
         "waitMoment": "Poczekaj chwilę.",
         "recordUnreadable": "Orca nie mogła odczytać zapisanego stanu tego czatu.",
+        "mailOwnerUnconfirmed": "Orca nie mogła potwierdzić, że ta wiadomość jest nadal przeznaczona dla tego czatu.",
         "chatNotFound": "Orca nie może znaleźć tego czatu.",
         "startNewChat": "Rozpocznij nowy czat, aby kontynuować.",
         "tryAgain": "Spróbuj ponownie.",
@@ -20704,7 +20786,11 @@
         "handedOffToAgent": "Przekazano agentowi",
         "startedAgent": "Uruchomiono agenta",
         "taskFromCoordinator": "Zadanie od koordynatora",
-        "updateFromWorker": "Aktualizacja od wykonawcy"
+        "updateFromWorker": "Aktualizacja od wykonawcy",
+        "senderReplaced": "{{name}} nie działa już w swoim terminalu; działa tam teraz inny agent. W razie potrzeby otwórz ten terminal z panelu bocznego.",
+        "senderAmbiguous": "Orca nie może ustalić, w którym terminalu działa {{name}}. Otwórz go z panelu bocznego.",
+        "senderNotRunning": "{{name}} już nie działa. Uruchom nowego agenta z panelu bocznego, aby kontynuować jego pracę.",
+        "unnamedSenderSubject": "Agent"
       },
       "goal": {
         "placeholder": "Opisz swój cel; najlepsze wyniki dają mierzalne rezultaty",
@@ -20734,6 +20820,7 @@
         "estimated": "Szacunek na podstawie ostatniej odpowiedzi."
       },
       "contextMenu": {
+        "noSessionContext": "Kontekst czatu jest niedostępny.",
         "copyOrcaSessionId": "Kopiuj ID sesji Orca",
         "orcaSessionIdCopied": "Skopiowano ID sesji Orca",
         "orcaSessionIdCopyFailed": "Nie udało się skopiować ID sesji Orca",
@@ -20990,6 +21077,13 @@
         "switchAccount": "Przełącz konto",
         "addAccount": "Dodaj konto…",
         "accountUnavailable": "Tego czatu nie można przenieść na inne konto. Zamiast tego przekaż go innemu agentowi."
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Nie udało się anulować automatycznej kontynuacji. Spróbuj ponownie.",
+        "openSetting": "Kontynuuj automatycznie po odnowieniu limitów",
+        "cancelled": "Orca nie będzie automatycznie kontynuować tego czatu.",
+        "scheduled": "Orca będzie kontynuować ten czat o {{time}}.",
+        "cancel": "Nie kontynuuj"
       }
     },
     "tab": {
@@ -21409,7 +21503,12 @@
         "linkPreviewsTitle": "Podglądy linków",
         "linkPreviewsCopy": "Po najechaniu na link do strony internetowej pojawia się karta podglądu. Aby ją utworzyć, Orca pobiera stronę, więc witryna widzi to żądanie.",
         "linkPreviewsSearchUnfurl": "rozwijanie linków",
-        "linkPreviewsSearchHover": "karta po najechaniu"
+        "linkPreviewsSearchHover": "karta po najechaniu",
+        "usageLimitContinueTitle": "Automatycznie kontynuuj czaty po odnowieniu limitu użycia",
+        "usageLimitContinueCopy": "Gdy limit się odnowi, Orca wysyła wiadomość „Continue where you left off.”. Dotyczy wszystkich czatów ze znanym czasem odnowienia limitu.",
+        "usageLimitContinueSearchLimit": "limit użycia",
+        "usageLimitContinueSearchReset": "odnowienie",
+        "usageLimitContinueToggleLabel": "Przełącz automatyczne kontynuowanie czatów po odnowieniu limitu użycia"
       }
     },
     "agentChildRow": {
@@ -21543,12 +21642,55 @@
       "stepUnpack": "Rozpakowanie",
       "stepCheck": "Sprawdzenie"
     },
+    "orchestrationCrew": {
+      "mentionAll": "Wspomnij wszystkich",
+      "mentionAgent": "Wspomnij agenta {{name}}:",
+      "mentionInMessage": "Wspomnij w wiadomości",
+      "mentionRejected": "Terminal nie przyjął odwołania do agenta. Spróbuj ponownie.",
+      "title": "Orkiestracja",
+      "sendingUnavailable": "Wysyłanie niedostępne",
+      "workers_one": "{{count}} wykonawca",
+      "workers_other": "{{count}} wykonawcy",
+      "workers_few": "{{count}} wykonawców",
+      "workers_many": "{{count}} wykonawców",
+      "managedBy": "Zarządzany przez",
+      "managing": "Zarządza",
+      "talkingWith": "Rozmawia z",
+      "collapse": "Zwiń panel orkiestracji",
+      "show": "Pokaż orkiestrację: {{counts}}",
+      "summary": "Orkiestracja: {{counts}}",
+      "needsYou_one": "{{count}} czeka na Ciebie",
+      "needsYou_other": "{{count}} czeka na Ciebie",
+      "needsYou_few": "{{count}} czekają na Ciebie",
+      "needsYou_many": "{{count}} czeka na Ciebie",
+      "waitingPrefix": "Czeka na Ciebie · ",
+      "noTask": "Brak wspólnego zadania",
+      "open": "Otwórz {{name}}",
+      "more": "Więcej opcji: {{name}}",
+      "openChat": "Otwórz jego czat",
+      "copiedAddress": "Skopiowano adres agenta {{name}}",
+      "copyAddress": "Kopiuj adres",
+      "showDetails": "Pokaż zadanie i najnowszą wiadomość agenta {{name}}",
+      "task": "Zadanie",
+      "asksYou": "Pyta Cię",
+      "openFailed": "{{name}}: {{detail}}",
+      "chatUnavailable": "Ten host nie może otworzyć czatu. Spróbuj ponownie.",
+      "terminalExited": "Ten terminal zakończył działanie.",
+      "openOnHost": "Otwórz tego agenta na hoście {{host}}.",
+      "cannotLocate": "Ten host nie może znaleźć tego agenta. Spróbuj ponownie.",
+      "latest": "Najnowsza",
+      "to": "Do",
+      "from": "Od"
+    },
     "orchestration": {
       "workerAutoClose": {
         "running": "Tymczasowy wykonawca orkiestracji · Zamknie się 2 minuty po zakończeniu",
         "finished": "Tymczasowy wykonawca orkiestracji zakończył pracę · Zamknięcie za {{countdown}}",
         "keepOpen": "Nie zamykaj"
       }
+    },
+    "wslHostMark": {
+      "runsOn": "Działa w WSL: {{distro}} (Linux)"
     }
   },
   "dashboardPopout": {
@@ -22528,6 +22670,9 @@
         "reasonOwnFolder": "Używa własnego folderu Claude",
         "reasonUnknownAccount": "Nieznane konto",
         "reasonNoSession": "Nie można wznowić",
+        "reasonSharedSession": "Otwarta także w innym panelu",
+        "sharedOne": "1 sesja Claude pozostaje na koncie {{previous}}, ponieważ ta sama rozmowa jest otwarta w innym panelu. Ponowne uruchomienie mogłoby otworzyć tu rozmowę z tamtego panelu.",
+        "sharedOther": "Sesje Claude ({{count}}) pozostają na koncie {{previous}}, ponieważ te same rozmowy są otwarte w innych panelach. Ponowne uruchomienie mogłoby otworzyć tu rozmowy z tamtych paneli.",
         "notMovedOne": "Nie przeniesiono 1 innej sesji.",
         "notMovedOther": "Nie przeniesiono {{count}} innych sesji.",
         "review": "Przejrzyj",
@@ -23550,6 +23695,7 @@
     },
     "repairChoice": {
       "sectionStartsEmpty": "{{section}}: brak czytelnej kopii zapasowej, więc ta część będzie pusta.",
+      "sectionKeptCurrent": "{{section}}: bieżące uruchomienia zostaną zachowane",
       "sectionRestored": "{{section}}: ta część zostanie przywrócona z kopii zapasowej zapisanej {{time}}.",
       "projectsForgotten": "Orca zapomni Twoje projekty i szczegóły ich przestrzeni roboczych. Pliki na dysku pozostaną nietknięte.",
       "newerProjectsRemoved": "Projekty dodane po utworzeniu tej kopii zapasowej zostaną usunięte z Orca razem ze szczegółami ich przestrzeni roboczych. Pliki na dysku pozostaną nietknięte.",
@@ -23592,7 +23738,7 @@
       "noneFound": "(nie znaleziono)",
       "sqlitePath": "Ścieżka SQLite: {{path}}",
       "sectionsDamaged": "Część zapisanego stanu tego profilu jest uszkodzona: {{sections}}. Wszystko inne jest nienaruszone.",
-      "repairCommand": "Zatrzymaj Orca, a potem uruchom `{{command}}`, aby zastąpić kopiami zapasowymi tylko uszkodzone części i zachować wszystko inne. Orca zachowa kopię uszkodzonego pliku.",
+      "repairCommand": "Zamknij Orca, a potem uruchom `{{command}}`, aby naprawić tylko uszkodzone części i zachować całą resztę. Orca zachowuje kopię uszkodzonego pliku.",
       "restoreWholeBackup": "Aby zamiast tego przywrócić całą kopię zapasową, uruchom `{{exportsCommand}}`, a potem `{{rollbackCommand}}`.",
       "sqliteUnreadable": "Orca nie może bezpiecznie otworzyć aktywnego profilu, bo jego stanu SQLite nie da się odczytać.",
       "legacyJsonPath": "Starsza ścieżka JSON: {{path}}",
@@ -23726,7 +23872,9 @@
       "importWarpFolder": "Importuj folder motywów Warp",
       "images": "Obrazy",
       "repoIconImages": "Obrazy ikon repozytorium",
-      "audio": "Dźwięk"
+      "audio": "Dźwięk",
+      "importGhosttyConfig": "Importuj konfigurację Ghostty",
+      "importKittyConfig": "Importuj konfigurację Kitty"
     }
   },
   "taskProviders": {
@@ -23883,7 +24031,9 @@
     "toggleArguments": "Pokaż/ukryj argumenty",
     "argumentsTerminalHint": "Dotyczy tylko uruchomień w terminalu (CLI)",
     "searchAgentModels": "Szukaj modeli {{agent}}…",
-    "legacyModelCount": "Modele: {{total}}"
+    "legacyModelCount": "Modele: {{total}}",
+    "promptPlaceholder": "Dodaj prompt (opcjonalnie): / – umiejętności, @ – pliki",
+    "promptPlaceholderFilesOnly": "Dodaj prompt (opcjonalnie): @ – pliki"
   },
   "automations": {
     "runFailures": {

@@ -153,6 +153,9 @@
       "speechModelHeading": "MODEL MOWY",
       "speechModel": "Model mowy",
       "loading": "Wczytywanie ustawień głosu…"
+    },
+    "agents": {
+      "permissionOwnAll": "Własne ustawienia agentów"
     }
   },
   "common": {
@@ -2425,7 +2428,6 @@
       "notesSent": "Wysłano notatki"
     },
     "prActionsEngine": {
-      "refreshFailed": "Nie udało się odświeżyć pull requesta.",
       "mergeFailed": "Nie udało się scalić pull requesta."
     },
     "prAiTriageLaunch": {
@@ -2617,6 +2619,7 @@
       "attachmentNotAFile": "Obraz w tej wiadomości nie jest plikiem, więc wiadomość nie została wysłana.",
       "attachmentNoSource": "Obraz w tej wiadomości nie ma pliku do wysłania, więc wiadomość nie została wysłana.",
       "attachmentInvalid": "Załącznika w tej wiadomości nie można wysłać do agenta.",
+      "attachmentsExpired": "Wygasły: {{names}}.",
       "attachmentUnreadable": "Nie udało się odczytać załącznika w tej wiadomości, więc wiadomość nie została wysłana.",
       "emptyMessage": "Ta wiadomość jest pusta, więc nie została wysłana.",
       "commandUnavailable": "To polecenie jest niedostępne w czatach agenta {{agent}}, więc nie zostało wysłane.",
@@ -2715,6 +2718,7 @@
       "recordFailed": "Orca nie mogła zapisać tego w historii czatu.",
       "attachmentExpired": "Ten załącznik wygasł.",
       "reattachFile": "Usuń go i załącz ponownie.",
+      "reattachFiles": "Usuń je i załącz ponownie.",
       "conversationCleared": "Ta rozmowa została wyczyszczona.",
       "openCurrentConversation": "Otwórz bieżącą rozmowę, aby kontynuować.",
       "clearUnfinished": "Ostatnie polecenie /clear nie zostało ukończone.",
@@ -2754,6 +2758,7 @@
       "hostReconciling": "Orca po ponownym uruchomieniu wciąż sprawdza stan tego czatu.",
       "waitMoment": "Poczekaj chwilę.",
       "recordUnreadable": "Orca nie mogła odczytać zapisanego stanu tego czatu.",
+      "mailOwnerUnconfirmed": "Nie udało się potwierdzić, że ta wiadomość jest nadal przeznaczona dla tego czatu.",
       "chatNotFound": "Orca nie może znaleźć tego czatu.",
       "startNewChat": "Rozpocznij nowy czat, aby kontynuować.",
       "tryAgain": "Spróbuj ponownie."
@@ -3273,6 +3278,24 @@
       "ran_few": "Działało {{count}} subagentów",
       "ran_many": "Działało {{count}} subagentów",
       "tokens": "Tokeny: {{value0}}"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Nieczytelna odpowiedź dotycząca załącznika. Spróbuj ponownie.",
+      "incompleteReply": "Załącznik się zmienił albo odpowiedź była niepełna. Zamknij go i spróbuj ponownie.",
+      "notText": "Tego pliku nie można wyświetlić jako tekstu. Zapisz go, aby otworzyć w innej aplikacji.",
+      "openFailed": "Nie udało się otworzyć załącznika. Spróbuj ponownie.",
+      "hostUpdate": "Ten host nie obsługuje jeszcze otwierania załączników tekstowych. Zaktualizuj Orca na tym hoście i spróbuj ponownie.",
+      "copyTooLarge": "Ten plik jest za duży do skopiowania. Zapisz go.",
+      "connectionChanged": "Połączenie się zmieniło. Dotknij „Ponów”, aby ponownie otworzyć załącznik.",
+      "hostChanged": "Host załącznika się zmienił. Zamknij załącznik i otwórz go ponownie.",
+      "readFailed": "Nie udało się odczytać tego załącznika. Połącz się ponownie i spróbuj jeszcze raz. Plik mógł zostać usunięty lub zmieniony.",
+      "copyFrame": "Skopiowanie całego załącznika wymaga nadchodzącej aktualizacji aplikacji mobilnej.",
+      "copyFailed": "Nie udało się skopiować załącznika. Spróbuj ponownie.",
+      "pastedText": "Wklejony tekst",
+      "textAttachment": "Załącznik tekstowy",
+      "byteSize": "{{size}} B",
+      "saveUpdate": "Zapisywanie będzie dostępne w jednej z kolejnych aktualizacji aplikacji mobilnej.",
+      "fullCopySaveUpdate": "Kopiowanie całego załącznika i zapisywanie będą dostępne w jednej z kolejnych aktualizacji aplikacji mobilnej."
     },
     "agentMessage": {
       "startedWorker": "Uruchomiono wykonawcę",
