@@ -2,6 +2,11 @@ import { notifyTerminalInputNotSent } from './terminal-input-not-sent-notice'
 
 // Endpoint replacement can deliver only a command suffix to a fresh shell; quarantine that interrupted line, including its terminator. Key by tab because recovery destroys the original pane (#10065, STA-2373).
 
+import {
+  TERMINAL_INTERRUPT_ETX,
+  TERMINAL_INTERRUPT_KITTY_CTRL_C
+} from '../../../../shared/terminal-interrupt-bytes'
+
 /** Absolute cap from arming. A safety valve only — input must never wedge,
  *  even if the terminator never arrives and the pane keeps receiving data. */
 const QUARANTINE_MAX_MS = 5_000
@@ -9,7 +14,7 @@ const QUARANTINE_MAX_MS = 5_000
 const QUARANTINE_IDLE_MS = 700
 
 /** Drop CR/LF submit or Ctrl+C abandonment too; forwarding the terminator could submit the mangled line. */
-const LINE_TERMINATORS = ['\r', '\n', '\x03']
+const LINE_TERMINATORS = ['\r', '\n', TERMINAL_INTERRUPT_ETX, TERMINAL_INTERRUPT_KITTY_CTRL_C]
 
 type QuarantineEntry = {
   armedAt: number

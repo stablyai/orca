@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { _setLayoutMapForTests } from '../../lib/keyboard-layout/layout-base-character'
 import {
   shouldHandleTerminalInterruptKeyboardEvent,
+  resolveTerminalInterruptKeyboardInput,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
   type XtermBypassEvent
@@ -25,6 +26,13 @@ function event(overrides: Partial<XtermBypassEvent>): XtermBypassEvent {
 afterEach(() => _setLayoutMapForTests(null))
 
 describe('shouldHandleTerminalInterruptKeyboardEvent', () => {
+  it('uses shared kitty-aware Ctrl+C bytes for the renderer keyboard path', () => {
+    expect(resolveTerminalInterruptKeyboardInput(0)).toBe('\x03')
+    expect(resolveTerminalInterruptKeyboardInput(1)).toBe('\x1b[99;5u')
+    expect(resolveTerminalInterruptKeyboardInput(8)).toBe('\x1b[99;5u')
+    expect(resolveTerminalInterruptKeyboardInput(4)).toBe('\x03')
+  })
+
   it('handles macOS Ctrl+C as terminal interrupt even with a selection', () => {
     expect(
       shouldHandleTerminalInterruptKeyboardEvent(event({ key: 'c', code: 'KeyC', ctrlKey: true }), {

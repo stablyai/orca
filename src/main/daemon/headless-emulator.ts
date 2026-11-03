@@ -13,7 +13,11 @@ import { resizeLikeOwnPty } from './conpty-reflow-viewport'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
-import { readTerminalModes, trackModifyOtherKeys } from './headless-emulator-modes'
+import {
+  readKittyKeyboardFlags,
+  readTerminalModes,
+  trackModifyOtherKeys
+} from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
 import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
@@ -147,6 +151,11 @@ export class HeadlessEmulator {
     this.terminal.options.cursorStyle = attributes.cursorStyle
     this.terminal.options.cursorBlink = attributes.cursorBlink
     this.viewAttributeResponder?.clearColorOverrides()
+  }
+
+  /** Flags the hidden xterm parsed from this PTY's output. `0` means the kitty keyboard protocol is off. */
+  kittyKeyboardFlags(): number {
+    return readKittyKeyboardFlags(this.terminal)
   }
 
   /** Restore kitty flags without allowing query replies. */

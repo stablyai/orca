@@ -82,7 +82,9 @@ export class RuntimeTerminalWriter {
       }
     }
     if (hasSuffix) {
-      const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
+      // The payload already chose the interrupt bytes. Reading the flags again
+      // after the write delay can send a different sequence than the one counted.
+      const suffix = payload.slice(text.length)
       const claimStartedAt = performance.now()
       // A shell at its prompt reads one line as typed; agent TUIs need the paste to settle.
       if (text && !(isSingleLine(text) && (await this.claimIdleShellPrompt(ptyId)))) {
