@@ -5534,6 +5534,7 @@
           "822ff300ad": "닫기",
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
+          "detectedArchiveScript": "아카이브 스크립트",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
           "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
         },

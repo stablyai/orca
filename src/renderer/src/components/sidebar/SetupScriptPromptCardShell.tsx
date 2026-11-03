@@ -9,6 +9,7 @@ import {
   SetupScriptPromptBody
 } from './SetupScriptPromptCardViews'
 import { translate } from '@/i18n/i18n'
+import type { DetectedSetupPreviewContent } from '@/lib/setup-script-prompt'
 
 type SetupScriptPromptCardShellProps = {
   repoBadgeColor: string
@@ -16,10 +17,9 @@ type SetupScriptPromptCardShellProps = {
   isInspectionError: boolean
   sharedSetupIgnored: boolean
   isPackageManagerSuggestion: boolean
-  hasCandidate: boolean
   candidateSource: string | null
   candidateProvenance: string | null
-  detectedSetupDraft: string
+  detectedSetupPreview: DetectedSetupPreviewContent | null
   isImporting: boolean
   renderedStateOk: boolean
   onDismiss: () => void
@@ -35,10 +35,9 @@ export function SetupScriptPromptCardShell({
   isInspectionError,
   sharedSetupIgnored,
   isPackageManagerSuggestion,
-  hasCandidate,
   candidateSource,
   candidateProvenance,
-  detectedSetupDraft,
+  detectedSetupPreview,
   isImporting,
   renderedStateOk,
   onDismiss,
@@ -47,6 +46,7 @@ export function SetupScriptPromptCardShell({
   onImport,
   onSetupDraftChange
 }: SetupScriptPromptCardShellProps): React.JSX.Element {
+  const hasCandidate = detectedSetupPreview !== null
   return (
     <div
       data-setup-script-prompt-layer=""
@@ -77,10 +77,11 @@ export function SetupScriptPromptCardShell({
           />
         </p>
 
-        {!isInspectionError && !sharedSetupIgnored && hasCandidate && isPackageManagerSuggestion ? (
+        {!isInspectionError && !sharedSetupIgnored && detectedSetupPreview ? (
           <DetectedSetupPreview
-            setup={detectedSetupDraft}
-            onSetupChange={onSetupDraftChange}
+            setup={detectedSetupPreview.setup}
+            archive={detectedSetupPreview.archive}
+            onSetupChange={detectedSetupPreview.editable ? onSetupDraftChange : undefined}
             provenance={candidateProvenance}
           />
         ) : null}

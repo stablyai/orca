@@ -6176,6 +6176,7 @@
           "822ff300ad": "Ausblenden",
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "detectedFromSource": "In <source>{{source}}</source> erkannt",
+          "detectedArchiveScript": "Archivierungsskript",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
           "foundSetupCommandIn": "Ein Einrichtungsbefehl wurde in <source>{{source}}</source> gefunden. Speichern, um ihn für neue Worktrees auszuführen."
         },

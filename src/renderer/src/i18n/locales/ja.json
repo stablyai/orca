@@ -5534,6 +5534,7 @@
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
           "detectedFromSource": "<source>{{source}}</source> から検出",
+          "detectedArchiveScript": "アーカイブスクリプト",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
           "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。"
         },

@@ -38,15 +38,25 @@ function DismissButton({ onDismiss }: DismissButtonProps): React.JSX.Element {
 
 export type DetectedSetupPreviewProps = {
   setup: string
-  onSetupChange: (value: string) => void
+  archive?: string | null
+  // Omitted when the candidate is saved verbatim, which renders the command read-only.
+  onSetupChange?: (value: string) => void
   provenance: string | null
 }
 
+const DETECTED_SCRIPT_CLASS_NAME =
+  'setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring'
+
 export function DetectedSetupPreview({
   setup,
+  archive,
   onSetupChange,
   provenance
 }: DetectedSetupPreviewProps): React.JSX.Element {
+  const archiveLabel = translate(
+    'auto.components.sidebar.SetupScriptPromptCardViews.detectedArchiveScript',
+    'Archive script'
+  )
   return (
     <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -62,11 +72,25 @@ export function DetectedSetupPreview({
           'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
           'Detected setup script'
         )}
-        onChange={(event) => onSetupChange(event.target.value)}
+        readOnly={!onSetupChange}
+        onChange={onSetupChange ? (event) => onSetupChange(event.target.value) : undefined}
         spellCheck={false}
         rows={getDetectedSetupScriptTextareaRows(setup)}
-        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className={DETECTED_SCRIPT_CLASS_NAME}
       />
+      {archive ? (
+        <>
+          <p className="mt-1.5 mb-1 text-[11px] text-muted-foreground">{archiveLabel}</p>
+          <textarea
+            value={archive}
+            aria-label={archiveLabel}
+            readOnly
+            spellCheck={false}
+            rows={getDetectedSetupScriptTextareaRows(archive)}
+            className={DETECTED_SCRIPT_CLASS_NAME}
+          />
+        </>
+      ) : null}
       {provenance ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
           <Trans

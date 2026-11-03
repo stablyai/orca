@@ -6019,6 +6019,7 @@
           "822ff300ad": "關閉",
           "5bfd5c8779": "關閉設定指令碼",
           "detectedFromSource": "從 <source>{{source}}</source> 偵測到",
+          "detectedArchiveScript": "封存指令碼",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
           "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。"
         },

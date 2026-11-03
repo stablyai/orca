@@ -5779,6 +5779,7 @@
           "822ff300ad": "Descartar",
           "5bfd5c8779": "Descartar scripts de configuración",
           "detectedFromSource": "Detectado en <source>{{source}}</source>",
+          "detectedArchiveScript": "Script de archivado",
           "ignoresSharedSetup": "Este repositorio ignora los scripts de configuración compartidos de <yaml>orca.yaml</yaml>. Añade un comando local o cambia la fuente en Ajustes.",
           "foundSetupCommandIn": "Se encontró un comando de configuración en <source>{{source}}</source>. Guárdalo para ejecutarlo en los nuevos worktrees."
         },

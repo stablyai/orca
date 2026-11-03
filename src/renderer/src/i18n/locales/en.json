@@ -6445,6 +6445,7 @@
           "822ff300ad": "Dismiss",
           "5bfd5c8779": "Dismiss setup scripts",
           "detectedFromSource": "Detected from <source>{{source}}</source>",
+          "detectedArchiveScript": "Archive script",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
           "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees."
         },

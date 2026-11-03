@@ -6018,6 +6018,7 @@
           "822ff300ad": "Ignorer",
           "5bfd5c8779": "Ignorer les scripts de setup",
           "detectedFromSource": "Détecté dans <source>{{source}}</source>",
+          "detectedArchiveScript": "Script d'archivage",
           "ignoresSharedSetup": "Ce dépôt ignore les scripts de setup partagés de <yaml>orca.yaml</yaml>. Ajoutez une commande locale ou changez la source dans les paramètres.",
           "foundSetupCommandIn": "Une commande de setup a été trouvée dans <source>{{source}}</source>. Enregistrez-la pour l’exécuter pour les nouveaux worktrees."
         },

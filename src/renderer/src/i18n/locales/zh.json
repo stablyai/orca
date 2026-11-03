@@ -5534,6 +5534,7 @@
           "822ff300ad": "关闭",
           "5bfd5c8779": "关闭安装脚本",
           "detectedFromSource": "从 <source>{{source}}</source> 已检测",
+          "detectedArchiveScript": "存档脚本",
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源。",
           "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到设置命令。保存后即可在新工作树中运行。"
         },
