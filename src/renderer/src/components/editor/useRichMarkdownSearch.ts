@@ -15,6 +15,7 @@ import {
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { prepareRichMarkdownSearchClose } from './rich-markdown-search-focus'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export function useRichMarkdownSearch({
@@ -124,10 +125,7 @@ export function useRichMarkdownSearch({
   }, [isSearchOpen])
 
   const closeSearch = useCallback(() => {
-    // Focus the editor before Find unmounts its input; a deferred focus leaves Mod+F landing outside the editor.
-    if (editor && !editor.isDestroyed) {
-      editor.view.focus()
-    }
+    prepareRichMarkdownSearchClose(editor, searchInputRef.current)
     setIsSearchOpen(false)
     setIsReplaceMode(false)
     setSearchQuery('')

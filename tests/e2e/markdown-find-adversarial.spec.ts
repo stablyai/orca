@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { pressShortcut } from './helpers/shortcuts'
@@ -87,6 +88,65 @@ test.beforeEach(async ({ orcaPage, registerPostElectronShutdownCleanup }, testIn
   await editor.locator('p').first().click()
 })
 
+test('toolbar formatting consumes completed forward and backward native drags', async ({
+  orcaPage
+}) => {
+  const editor = orcaPage.locator('.rich-markdown-editor')
+  for (const action of [
+    { label: 'Bold', paragraph: FIRST, from: 6, to: 11, selected: 'alpha', tag: 'strong' },
+    { label: 'Heading 2', paragraph: SECOND, from: 11, to: 7, selected: 'beta', tag: 'h2' }
+  ]) {
+    const paragraph = editor.getByText(action.paragraph, { exact: true })
+    await centered(paragraph)
+    const start = await textPoint(paragraph, action.from)
+    const end = await textPoint(paragraph, action.to)
+    await orcaPage.mouse.move(start.x, start.y)
+    await orcaPage.mouse.down()
+    await editor.evaluate((element, expected) => {
+      element.removeAttribute('data-observed-native-selection')
+      const observe = () => {
+        if (document.getSelection()?.toString() === expected) {
+          element.setAttribute('data-observed-native-selection', expected)
+          document.removeEventListener('selectionchange', observe)
+        }
+      }
+      document.addEventListener('selectionchange', observe)
+    }, action.selected)
+    await orcaPage.mouse.move(end.x, end.y, { steps: 15 })
+    // Deliver the final native notification while held; mouseup must not need another endpoint change.
+    await expect(editor).toHaveAttribute('data-observed-native-selection', action.selected)
+    await orcaPage.mouse.up()
+    expect(await selectedText(orcaPage)).toBe(action.selected)
+    await expect(editor).toBeFocused()
+    // No key, blur or command may rescue publication before passive selection UI appears.
+    await expect(
+      orcaPage.getByRole('button', { name: 'Add review note', exact: true })
+    ).toBeVisible()
+    const published = await editor.evaluate((element) => {
+      const instance = element.closest<HTMLElement & { editor?: Editor }>(
+        '.rich-markdown-editor'
+      )?.editor
+      const native = document.getSelection()
+      if (!instance || !native?.anchorNode || !native.focusNode) {
+        throw new Error('Expected editor/native selection')
+      }
+      return (
+        instance.state.selection.anchor ===
+          instance.view.posAtDOM(native.anchorNode, native.anchorOffset) &&
+        instance.state.selection.head ===
+          instance.view.posAtDOM(native.focusNode, native.focusOffset)
+      )
+    })
+    expect(published).toBe(true)
+    await orcaPage.getByRole('button', { name: action.label, exact: true }).click()
+    await expect(editor.locator(action.tag)).toHaveText(
+      action.label === 'Bold' ? action.selected : action.paragraph
+    )
+  }
+  await expect(editor.locator('p').filter({ hasText: FIRST })).toHaveCount(1)
+  await expect(editor.locator('strong')).toHaveText('alpha')
+})
+
 test('Find preserves Shift-click, double-click, and multi-paragraph copy selection', async ({
   orcaPage
 }, testInfo) => {
@@ -118,6 +178,12 @@ test('Find preserves Shift-click, double-click, and multi-paragraph copy selecti
   await orcaPage.mouse.click(end.x, end.y)
   await orcaPage.keyboard.up('Shift')
   expect(await selectedText(orcaPage)).toBe(`${FIRST.slice(6)}\n\n${SECOND.slice(0, 11)}`)
+  // Complete a native gesture, then leave and immediately extend it before drag reconciliation.
+  await search.focus()
+  await orcaPage.keyboard.down('Shift')
+  await orcaPage.mouse.click(end.x, end.y)
+  await orcaPage.keyboard.up('Shift')
+  expect(await selectedText(orcaPage)).toBe(`${FIRST.slice(6)}\n\n${SECOND.slice(0, 11)}`)
   const copied = await editor.evaluate((element) => {
     const clipboard = new DataTransfer()
     element.dispatchEvent(
@@ -131,6 +197,14 @@ test('Find preserves Shift-click, double-click, and multi-paragraph copy selecti
   await expect(editor.getByText('Needle first match.', { exact: true })).toBeVisible()
   await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeCloseTo(scroll, 0)
   await orcaPage.screenshot({ path: testInfo.outputPath('shift-click-copy-selection.png') })
+  await orcaPage.getByRole('button', { name: 'Toggle replace', exact: true }).click()
+  const replace = orcaPage.getByRole('textbox', { name: 'Replace in rich markdown editor' })
+  await orcaPage.mouse.click(start.x, start.y)
+  await replace.focus()
+  await orcaPage.keyboard.down('Shift')
+  await orcaPage.mouse.click(end.x, end.y)
+  await orcaPage.keyboard.up('Shift')
+  expect(await selectedText(orcaPage)).toBe(`${FIRST.slice(6)}\n\n${SECOND.slice(0, 11)}`)
   await search.focus()
   const word = await textPoint(first, 9)
   await orcaPage.mouse.dblclick(word.x, word.y)
@@ -141,6 +215,76 @@ test('Find preserves Shift-click, double-click, and multi-paragraph copy selecti
   ).toBeVisible()
   await expect(search).toHaveValue('Needle')
   await expect(orcaPage.locator('.rich-markdown-search-status')).toHaveText('1/2')
+  await search.focus()
+  await orcaPage.mouse.click(word.x, word.y, { clickCount: 3 })
+  expect((await selectedText(orcaPage)).trim()).toBe('First xy paragraph for pointer selection.')
+})
+
+test('backward native selection completes before focused copy and an inside-range Find handoff', async ({
+  orcaPage
+}) => {
+  const editor = orcaPage.locator('.rich-markdown-editor')
+  const first = editor.getByText(FIRST, { exact: true })
+  const second = editor.getByText(SECOND, { exact: true })
+  const search = await find(orcaPage)
+  await centered(first)
+  await drag(orcaPage, second, first, 11, 6)
+  await orcaPage.keyboard.press('Escape')
+  await expect(search).toHaveCount(0)
+  const copied = await editor.evaluate((element) => {
+    const instance = document.querySelector<HTMLElement & { editor?: Editor }>(
+      '.rich-markdown-editor'
+    )?.editor
+    if (!instance) {
+      throw new Error('Expected editor instance')
+    }
+    const native = document.getSelection()
+    if (!native?.anchorNode || !native.focusNode) {
+      throw new Error('Expected native range')
+    }
+    const anchor = instance.view.posAtDOM(native.anchorNode, native.anchorOffset)
+    const head = instance.view.posAtDOM(native.focusNode, native.focusOffset)
+    const clipboard = new DataTransfer()
+    element.dispatchEvent(
+      new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: clipboard })
+    )
+    return {
+      plain: clipboard.getData('text/plain'),
+      anchor,
+      head,
+      model: instance.state.selection.toJSON()
+    }
+  })
+  expect(copied.anchor).toBeGreaterThan(copied.head)
+  expect(copied.model).toEqual({ type: 'text', anchor: copied.anchor, head: copied.head })
+  expect(copied.plain).toBe(`${FIRST.slice(6)}\n\n${SECOND.slice(0, 11)}`)
+  await expect(editor).toBeFocused()
+  const inside = await textPoint(first, 12)
+  await orcaPage.mouse.click(inside.x, inside.y)
+  await pressShortcut(orcaPage, 'f')
+  await expect(search).toBeFocused()
+  const caret = await first.evaluate((element) => {
+    const instance = document.querySelector<HTMLElement & { editor?: Editor }>(
+      '.rich-markdown-editor'
+    )?.editor
+    if (!instance || !element.firstChild) {
+      throw new Error('Expected editor paragraph')
+    }
+    return {
+      expected: instance.view.posAtDOM(element.firstChild, 12),
+      model: instance.state.selection.toJSON()
+    }
+  })
+  expect(caret.model).toEqual({ type: 'text', anchor: caret.expected, head: caret.expected })
+  const end = await textPoint(second, 11)
+  await orcaPage.keyboard.down('Shift')
+  await orcaPage.mouse.click(end.x, end.y)
+  await orcaPage.keyboard.up('Shift')
+  expect(await selectedText(orcaPage)).toBe(`${FIRST.slice(12)}\n\n${SECOND.slice(0, 11)}`)
+  await orcaPage.keyboard.type('xy')
+  await expect(
+    editor.getByText(`${FIRST.slice(0, 12)}xy${SECOND.slice(11)}`, { exact: true })
+  ).toBeVisible()
 })
 
 test('Replace input returns to a multi-paragraph drag and explicit next-match navigation', async ({
@@ -217,6 +361,13 @@ test('Find returns focus and copies the intended cells after Shift-clicking a ta
     return clipboard.getData('text/plain')
   })
   expect(copied).toBe('Cell alpha\n\nCell beta\n\nCell gamma\n\nCell delta')
+  await search.focus()
+  await drag(orcaPage, firstCell, lastCell, 0, 10)
+  await expect(editor).toBeFocused()
+  expect((await selectedText(orcaPage)).replace(/\s+/g, ' ').trim()).toBe(
+    'Cell alpha Cell beta Cell gamma Cell delta'
+  )
+  await expect(tab.locator('span.rounded-full')).toHaveCount(0)
 })
 
 test('Find preserves embedded task, details, and code editing', async ({ orcaPage }, testInfo) => {
@@ -244,6 +395,18 @@ test('Find preserves embedded task, details, and code editing', async ({ orcaPag
   const code = editor.getByText('const codeMarker = "clean";', { exact: true })
   await centered(code)
   const codePoint = await textPoint(code, 6)
+  const language = editor.locator('.rich-markdown-code-block-lang')
+  await search.focus()
+  await language.focus()
+  await language.selectOption('typescript')
+  await expect(language).toHaveValue('typescript')
+  await search.focus()
+  const copy = editor.getByRole('button', { name: 'Copy code', exact: true })
+  await copy.hover()
+  await orcaPage.mouse.down()
+  await expect(copy).toBeFocused()
+  await orcaPage.mouse.move(codePoint.x, codePoint.y)
+  await orcaPage.mouse.up()
   await search.focus()
   await orcaPage.mouse.click(codePoint.x, codePoint.y)
   await orcaPage.keyboard.type('xy', { delay: 100 })

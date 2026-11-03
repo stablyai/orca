@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { Editor, type JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
@@ -22,9 +23,9 @@ function createEditor(content: JSONContent): Editor {
 }
 
 /** Mixed task/bullet nesting and code indentation require the production extensions. */
-function createMarkdownEditor(markdown: string): Editor {
+function createMarkdownEditor(markdown: string, element: HTMLElement | null = null): Editor {
   return new Editor({
-    element: null,
+    element,
     extensions: createRichMarkdownExtensions({
       codec: createRichMarkdownEditorCodec()
     }),
@@ -33,7 +34,7 @@ function createMarkdownEditor(markdown: string): Editor {
   })
 }
 
-/** Use the node shapes HTML paste produces because this DOM-less fixture cannot parse the reported pasted HTML. */
+/** Use the node shapes HTML paste produces without relying on DOM parsing. */
 function createNodeEditor(content: JSONContent): Editor {
   return new Editor({
     element: null,
@@ -252,32 +253,33 @@ function taskListDocument(): JSONContent {
 
 describe('rich markdown Tab key handler', () => {
   it('flushes pending ProseMirror DOM selection before indenting lists', () => {
-    const calls: string[] = []
-    const editor = {
-      view: {
-        composing: false,
-        domObserver: {
-          currentSelection: {
-            set: vi.fn(() => calls.push('reset-selection'))
-          },
-          flush: vi.fn(() => calls.push('flush'))
-        }
-      },
-      state: { selection: { $from: { depth: 0 } } },
-      commands: {
-        sinkListItem: vi.fn((type) => {
-          calls.push(`sink:${String(type)}`)
-          return true
-        }),
-        liftListItem: vi.fn(),
-        insertContent: vi.fn()
-      },
-      isActive: vi.fn(() => false)
-    } as unknown as Editor
-    const event = keyEvent('Tab')
-
-    expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-    expect(calls).toEqual(['reset-selection', 'flush', 'sink:listItem'])
+    vi.useFakeTimers()
+    const element = document.createElement('div')
+    document.body.append(element)
+    const editor = createMarkdownEditor('- Parent\n- FixA\n- FixB', element)
+    try {
+      editor.view.focus()
+      const text = editor.view.dom.querySelectorAll('li p')[1]?.firstChild
+      if (!text) {
+        throw new Error('Expected second list item')
+      }
+      // Hold setup's synchronous DOM-emulator notification so Tab receives pending native input.
+      const holdNotification = (event: Event) => event.stopImmediatePropagation()
+      document.addEventListener('selectionchange', holdNotification, true)
+      try {
+        document.getSelection()?.setBaseAndExtent(text, 2, text, 2)
+      } finally {
+        document.removeEventListener('selectionchange', holdNotification, true)
+      }
+      expect(editor.state.selection.from).not.toBe(editor.view.posAtDOM(text, 2))
+      const event = keyEvent('Tab')
+      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
+      expect(editor.getMarkdown()).toBe('- Parent\n  - FixA\n- FixB')
+    } finally {
+      editor.destroy()
+      element.remove()
+      vi.useRealTimers()
+    }
   })
 
   it('indents FixA under a preceding parent item on Tab', () => {
@@ -549,6 +551,18 @@ describe('rich markdown Tab key handler', () => {
 
       expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
       expect(editor.getMarkdown()).toBe('```js\nconst x = 1\n```')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('inserts spaces for Tab in code blocks', () => {
+    const editor = createMarkdownEditor('```js\nconst x = 1\n```')
+    try {
+      editor.commands.setTextSelection(codeBlockPosition(editor, 'const'))
+      const event = keyEvent('Tab')
+      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
+      expect(editor.getMarkdown()).toBe('```js\n  const x = 1\n```')
     } finally {
       editor.destroy()
     }
