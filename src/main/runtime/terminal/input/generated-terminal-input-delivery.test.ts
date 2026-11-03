@@ -9,12 +9,17 @@ import { deliverGeneratedTerminalInput } from './generated-terminal-input-delive
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { finalReplayFrame, readRuntimeFixture } from '../../agent-transcript-replay-test-harness'
 
-vi.mock('../../../git/worktree', () => ({
+// The terminal's worktree as the catalog lists it; the rest of each module is real.
+vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   listWorktrees: vi
     .fn()
     .mockResolvedValue([
       { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
-    ]),
+    ])
+}))
+vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: vi
     .fn()
     .mockResolvedValue([

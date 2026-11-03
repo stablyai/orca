@@ -53,7 +53,9 @@ vi.mock('electron', async () => {
   }
 })
 vi.mock('../browser-manager', () => ({ browserManager: {} }))
-vi.mock('../../ipc/browser-tab-registration-wait', () => ({ waitForTabRegistration: vi.fn() }))
+vi.mock('../../ipc/browser/browser-tab-registration-wait', () => ({
+  waitForTabRegistration: vi.fn()
+}))
 vi.mock('../../runtime/browser/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: vi.fn()
 }))

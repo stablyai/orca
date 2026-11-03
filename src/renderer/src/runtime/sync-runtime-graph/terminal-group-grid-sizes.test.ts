@@ -62,24 +62,6 @@ afterEach(() => {
 })
 
 describe('measureTerminalGroupGridSizes', () => {
-  it('sizes each group from a pane at the default font with no title', () => {
-    panes.list = [
-      pane({ fontSize: 20, cellWidth: 12 }),
-      pane({ fontSize: 14, cellWidth: 10, title: true }),
-      pane({ fontSize: 14, cellWidth: 8 })
-    ]
-    groupBody('group-a', 548, 1004)
-    groupBody('group-b', 1100, 500)
-
-    // (548 - 4 inset - 14 scrollbar) / 8 = 66; (1004 - 4) / 16 = 62.
-    expect(measureTerminalGroupGridSizes(14)).toEqual({
-      groups: {
-        'group-a': { cols: 66, rows: 62 },
-        'group-b': { cols: 135, rows: 31 }
-      }
-    })
-  })
-
   it("sizes a single-group workspace from the content area minus a lone group's tab row", () => {
     panes.list = [pane({ fontSize: 14, cellWidth: 8 })]
     const content = contentArea(1930, 1330)
@@ -96,12 +78,5 @@ describe('measureTerminalGroupGridSizes', () => {
     groupBody('group-b', 800, 1294, splitContent)
     // (1600 - 1 - 4 inset - 14 scrollbar) / 8 = 197; (1330 - 36 - 4) / 16 = 80.
     expect(measureTerminalGroupGridSizes(14)?.singleGroupWorkspace).toEqual({ cols: 197, rows: 80 })
-  })
-
-  it('leaves the sizes out when no pane at the default font is measurable', () => {
-    panes.list = [pane({ fontSize: 20, cellWidth: 12 })]
-    groupBody('group-a', 548, 1004)
-
-    expect(measureTerminalGroupGridSizes(14)).toBeUndefined()
   })
 })

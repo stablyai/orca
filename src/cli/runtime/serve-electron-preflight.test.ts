@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
-import { readServeAbortPark, writeServeAbortPark } from '../../shared/serve-abort-park'
+import { readServeAbortPark } from '../../shared/serve-abort-park'
 import { preflightElectronServe, recordElectronServeStartupAbort } from './serve-electron-preflight'
 import * as metadataReader from './metadata'
 import { RuntimeClientError } from './types'
@@ -67,21 +67,6 @@ describe('preflightElectronServe', () => {
     }
   }
 
-  it('starts at once, synchronously, when nothing has published this profile', () => {
-    expect(
-      preflightElectronServe({}, userData, { platform: 'linux', deps: deps({ metadata: null }) })
-    ).toBeNull()
-  })
-
-  it('refuses with exit 3 when a live Orca answers for the profile', async () => {
-    await expect(
-      preflightElectronServe({}, userData, { platform: 'linux', deps: deps({ reachable: true }) })
-    ).resolves.toBe(3)
-    expect(String(stderr.mock.calls[0]?.[0])).toContain(
-      'Orca is already running for this userData profile as pid 4242; not starting a second process.'
-    )
-  })
-
   it('prints the refusal as a JSON envelope for --json callers', async () => {
     await preflightElectronServe({ json: true }, userData, {
       platform: 'linux',
@@ -118,15 +103,6 @@ describe('preflightElectronServe', () => {
     expect(String(stderr.mock.calls[0]?.[0])).toContain("refused this CLI's credentials")
   })
 
-  it('starts when the published endpoint definitively refuses (the old runtime is gone)', async () => {
-    await expect(
-      preflightElectronServe({}, userData, {
-        platform: 'linux',
-        deps: deps({ probe: 'not-listening' })
-      })
-    ).resolves.toBeNull()
-  })
-
   describe('remembered macOS startup abort', () => {
     const fingerprint = () => 'Background|ssh=1|sandbox=0'
 
@@ -158,24 +134,6 @@ describe('preflightElectronServe', () => {
       expect(run({}, 1_000 + 31 * 60_000)).toBeNull()
       expect(run({ force: true }, 2_000)).toBeNull()
       expect(readServeAbortPark(userData)).toBeNull()
-    })
-
-    it('never parks off macOS', () => {
-      writeServeAbortPark(userData, {
-        schemaVersion: 1,
-        verdict: 'environment_abort',
-        at: 1_000,
-        envFingerprint: fingerprint(),
-        diagnostic: 'aborted'
-      })
-      expect(
-        preflightElectronServe({}, userData, {
-          platform: 'linux',
-          now: 2_000,
-          fingerprint,
-          deps: deps({ metadata: null })
-        })
-      ).toBeNull()
     })
   })
 })

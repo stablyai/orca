@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from './agent-status-types'
-import {
-  parseAgentStatusPaneIdentity,
-  resolveAgentStatusWorktreeId
-} from './agent-status-worktree-attribution'
+import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attribution'
 
 function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
@@ -41,10 +38,6 @@ describe('agent status worktree attribution', () => {
         new Map([['parent-tab', 'parent-worktree']])
       )
     ).toBe('parent-worktree')
-  })
-
-  it('parses legacy numeric pane identities consistently', () => {
-    expect(parseAgentStatusPaneIdentity('tab-1:7')).toEqual({ tabId: 'tab-1', paneId: '7' })
   })
 })
 

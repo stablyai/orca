@@ -39,6 +39,7 @@ import { sayMobileNativeChatSessionOption } from './native-chat-session-option-c
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   optionPickerRequest?: { id: string; sequence: number } | null
   snapshot: SessionOptionDescriptor[]
   pendingId: string | null

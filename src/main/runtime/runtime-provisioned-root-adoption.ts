@@ -10,7 +10,7 @@ import {
   verifyProvisionedRootCheckout,
   type ProvisionedRootMetaStore,
   type ProvisionedRootRequest
-} from '../provisioned-root-checkout'
+} from '../workspaces/catalog/provisioned-root-checkout'
 import { gitExecFileAsync } from '../git/runner'
 import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'

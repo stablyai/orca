@@ -1,5 +1,5 @@
-import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
-import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
+import { createAiVaultAssociationObserver } from '../ai-vault/ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault/ai-vault-host-leg-cache'
 import {
   registerRuntimeEnvironmentSubscriptionHandlers,
   type RetainedRemoteRuntimeSubscription,
@@ -47,8 +47,8 @@ import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-enviro
 import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
 import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
-import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot

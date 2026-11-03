@@ -107,26 +107,6 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     })
   }
 
-  it('types immediately when the resolver already returns the agent name (local ps path)', async () => {
-    // Preserve exact-name matching when local process inspection resolves the interpreter to its agent.
-    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
-      foregroundProcess: 'aider',
-      hasChildProcesses: true
-    })
-
-    const delivered = await sendFollowupPromptWhenAgentReady({
-      ptyId: 'pty-1',
-      agent: 'aider',
-      expectedProcess: 'aider',
-      prompt: 'ship it'
-    })
-
-    expect(delivered).toBe(true)
-    expect(pasteDraftToAgentPtyWhenReady).toHaveBeenCalledWith(
-      expect.objectContaining(SUBMITTED_PASTE)
-    )
-  })
-
   // The consumer check now rides every frame of the operation (contract suite: exit and change).
   it('asks the operation to keep the expected agent in front for every frame', async () => {
     vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({

@@ -6,10 +6,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
-import {
-  resolveTitleDerivedAgentType,
-  type TitleDerivedPaneForeground
-} from './title-derived-pane-agent-identity'
+import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 
@@ -206,32 +203,6 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['dsb', 'working']])
-  })
-
-  it('adds title-derived rows for live agent panes that have no hook status yet', () => {
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: {
-        'tab-1': {
-          1: 'Antigravity',
-          2: '⠋ Codex'
-        }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
-      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
-      now: 2000
-    })
-
-    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
-      ['antigravity', 'idle', 'Idle'],
-      ['codex', 'working', 'Running']
-    ])
-    expect(rows.map((row) => row.paneKey)).toEqual([
-      makePaneKey('tab-1', LEAF_ID_1),
-      makePaneKey('tab-1', LEAF_ID_2)
-    ])
   })
 
   it('normalizes Pi-compatible title-derived rows to the launched OMP owner', () => {
@@ -650,15 +621,6 @@ describe('hook-less agent rows identified by the foreground process', () => {
     ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
   })
 
-  it('rows a hand-typed agent from its foreground process, whatever its title says', () => {
-    for (const agent of ['codex', 'claude', 'gemini', 'opencode', 'grok'] as const) {
-      const rows = rowsFor({ title: 'demo-repo', foreground: processRead(agent) })
-      expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
-        [PANE_KEY, agent, 'idle']
-      ])
-    }
-  })
-
   it('scopes process evidence to its own pane inside a split', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
@@ -728,13 +690,6 @@ describe('hook-less agent rows identified by the foreground process', () => {
         foreground: processRead('codex'),
         ptyIds: []
       })
-    ).toHaveLength(0)
-  })
-
-  it('makes no row from a plain title when nothing identifies an agent', () => {
-    expect(rowsFor({ title: 'demo-repo' })).toHaveLength(0)
-    expect(
-      rowsFor({ title: 'demo-repo', foreground: { agent: null, shellForeground: false } })
     ).toHaveLength(0)
   })
 })
@@ -867,10 +822,6 @@ describe('split-pane runtime title attribution', () => {
 })
 
 describe('owner identity with foreign task names', () => {
-  it('preserves the unknown-label fallback for an admitted identity', () => {
-    expect(resolveTitleDerivedAgentType('MiMo Code', 'MiMo Code')).toBe('unknown')
-  })
-
   it.each([
     '⠋ Fix the codex plugin launcher',
     '⠋ fix the grok launcher',

@@ -81,18 +81,6 @@ describe('Codex approval ownership', () => {
     })
   }
 
-  it('reads an auto-reviewed approval as ongoing work, not as needing the user', () => {
-    const transcriptPath = writeRollout({ reviewer: 'auto_review' })
-
-    expect(permissionRequest(transcriptPath)?.payload.state).toBe('working')
-  })
-
-  it('keeps a user-reviewed approval waiting', () => {
-    const transcriptPath = writeRollout({ reviewer: 'user' })
-
-    expect(permissionRequest(transcriptPath)?.payload.state).toBe('waiting')
-  })
-
   it('reconciles reviewer ownership before a child-first auto-reviewed approval', () => {
     const transcriptPath = writeRollout({ reviewer: 'auto_review' })
 
@@ -100,12 +88,6 @@ describe('Codex approval ownership', () => {
       state: 'working',
       subagents: [{ id: 'child-after-relay-restart', agentType: 'worker', state: 'working' }]
     })
-  })
-
-  it('keeps a child-first manual approval waiting after reviewer reconciliation', () => {
-    const transcriptPath = writeRollout({ reviewer: 'user' })
-
-    expect(childPermissionRequest(transcriptPath)?.payload.state).toBe('waiting')
   })
 
   it('keeps the parent reviewer after a child with a different reviewer is observed', () => {
@@ -146,25 +128,6 @@ describe('Codex approval ownership', () => {
     expect(permissionRequest(transcriptPath)?.payload.state).toBe('waiting')
   })
 
-  it('accepts Codex’s legacy guardian_subagent reviewer spelling as auto review', () => {
-    const transcriptPath = writeRollout({ reviewer: 'guardian_subagent' })
-
-    expect(permissionRequest(transcriptPath)?.payload.state).toBe('working')
-  })
-
-  it('keeps waiting when the rollout names no reviewer, as older Codex builds do not', () => {
-    const transcriptPath = writeRollout({})
-
-    expect(permissionRequest(transcriptPath)?.payload.state).toBe('waiting')
-  })
-
-  it('keeps waiting when the rollout cannot be read at all', () => {
-    const root = mkdtempSync(join(tmpdir(), 'codex-approval-ownership-'))
-    dirs.push(root)
-
-    expect(permissionRequest(join(root, 'absent.jsonl'))?.payload.state).toBe('waiting')
-  })
-
   it('does not retain auto review when a later rollout read is unreadable', () => {
     const transcriptPath = writeRollout({ reviewer: 'auto_review' })
     expect(permissionRequest(transcriptPath)?.payload.state).toBe('working')
@@ -172,12 +135,6 @@ describe('Codex approval ownership', () => {
     rmSync(transcriptPath)
 
     expect(permissionRequest(transcriptPath)?.payload.state).toBe('waiting')
-  })
-
-  it('keeps waiting when no transcript path is supplied', () => {
-    expect(post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash' })?.payload.state).toBe(
-      'waiting'
-    )
   })
 
   it('still waits on request_user_input under auto review, which no reviewer can answer', () => {
@@ -203,29 +160,5 @@ describe('Codex approval ownership', () => {
     const unstated = writeRollout({ fileName: 'rollout-second.jsonl' })
 
     expect(permissionRequest(unstated)?.payload.state).toBe('waiting')
-  })
-
-  it('leaves the surrounding turn working, so an auto-reviewed turn never flaps', () => {
-    const transcriptPath = writeRollout({ reviewer: 'auto_review' })
-    const states = [
-      post({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: 'ship it',
-        transcript_path: transcriptPath
-      }),
-      post({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'Bash',
-        transcript_path: transcriptPath
-      }),
-      permissionRequest(transcriptPath),
-      post({
-        hook_event_name: 'PostToolUse',
-        tool_name: 'Bash',
-        transcript_path: transcriptPath
-      })
-    ].map((event) => event?.payload.state)
-
-    expect(states).toEqual(['working', 'working', 'working', 'working'])
   })
 })

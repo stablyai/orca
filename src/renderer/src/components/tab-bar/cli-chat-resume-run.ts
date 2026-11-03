@@ -205,6 +205,8 @@ export async function runCliChatResume(
             },
             // The chat takes the terminal's place, shown before the terminal goes.
             afterTabId: source.tabId,
+            // Asked before the close, leaving out the panes it stops.
+            resumeWritersChecked: true,
             onTabOpenSettled: (tabId) => {
               if (finished && tabId && !closed) {
                 // Its create was abandoned when the run ended without closing the terminal.

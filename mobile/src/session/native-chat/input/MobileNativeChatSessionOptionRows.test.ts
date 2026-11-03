@@ -1,3 +1,7 @@
+import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
+import { structuredAgentSessionPermissionDescriptor } from '../../../../../src/shared/agent-session/options/structured-agent-session-permission-option'
+import { createStructuredAgentSessionOptionState } from '../../../../../src/shared/agent-session/options/structured-agent-session-options'
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
@@ -98,4 +102,22 @@ describe('DescriptorRows boolean', () => {
     })
     expect(findByHostType(renderer.root, 'Switch').props.value).toBe(true)
   })
+})
+
+it('shows saved Own on the phone independently of reports, including translated output', async () => {
+  const descriptor = structuredAgentSessionPermissionDescriptor({
+    ...createStructuredAgentSessionOptionState('codex', null),
+    permissionMode: 'own',
+    permissionOwnSupported: true,
+    reportedPermissionMode: 'full-access'
+  })!
+  expect(mobileSessionOptionSummaryValue(descriptor)).toBe("Agents' own settings")
+  try {
+    await activateMobileUiLocale('es')
+    const label = mobileSessionOptionSummaryValue(descriptor)
+    expect(label).not.toBe("Agents' own settings")
+    expect(label).not.toBe('own')
+  } finally {
+    await activateMobileUiLocale('en')
+  }
 })

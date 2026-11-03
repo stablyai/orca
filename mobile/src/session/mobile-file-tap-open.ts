@@ -8,7 +8,10 @@ import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { mapWithConcurrency } from '../../../src/shared/map-with-concurrency'
-import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
+import {
+  shouldActivateOpenedMobileSessionTab,
+  type OpenedMobileSessionTabActivationState
+} from './opened-mobile-session-tab'
 import { isRendererUnavailableReply } from '../transport/renderer-unavailable-reply'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcResponse } from '../transport/types'
@@ -19,6 +22,12 @@ const FILE_TAP_RESOLVE_CONCURRENCY = 8
 export type FileTapSessionTab = {
   id: string
   relativePath?: string
+}
+
+export type MobileFileTapFailure = {
+  kind: 'unresolved' | 'failed'
+  pathText: string
+  message?: string
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
@@ -37,20 +46,11 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   fetchSessionTabs: () => Promise<void>
   getSessionTabs: () => readonly T[]
   getActiveSessionTabId: () => string | null
-  getActivationState: (activated: boolean) => {
-    activated: boolean
-    activationSeq: number
-    latestActivationSeq: number
-    sourceTerminalHandle: string | null
-    activeTerminalHandle: string | null
-    sourceSessionTabId?: string | null
-    activeSessionTabId?: string | null
-    activeTabType: string | null
-  }
+  getActivationState: (activated: boolean) => OpenedMobileSessionTabActivationState
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  // Optional feedback; callers without it retain silent best-effort misses.
-  onOpenFailed?: () => void
+  // Callers choose whether unresolved guesses need feedback.
+  onOpenFailed?: (failure: MobileFileTapFailure) => void
 }
 
 export function openMobileFileTap<T extends FileTapSessionTab>(
@@ -97,13 +97,17 @@ function existingFileTapResolution(
 }
 
 function reportOpenFailure<T extends FileTapSessionTab>(
-  options: OpenMobileFileTapOptions<T>
+  options: OpenMobileFileTapOptions<T>,
+  failure: MobileFileTapFailure = {
+    kind: 'failed',
+    pathText: options.candidates[0]?.pathText ?? ''
+  }
 ): void {
   if (
     options.onOpenFailed &&
     shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
   ) {
-    options.onOpenFailed()
+    options.onOpenFailed(failure)
   }
 }
 
@@ -113,13 +117,11 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   const readings = await mapWithConcurrency(
     options.candidates,
     FILE_TAP_RESOLVE_CONCURRENCY,
-    async (target) => ({
-      target,
+    async (target) => {
       // Why: a reading the host cannot answer must not hide a sibling.
-      resolved: existingFileTapResolution(
-        await requestFileTapResolution(options, target.pathText).catch(() => null)
-      )
-    })
+      const response = await requestFileTapResolution(options, target.pathText).catch(() => null)
+      return { target, response, resolved: existingFileTapResolution(response) }
+    }
   )
   const found = readings.reduce<(typeof readings)[number] | undefined>(
     (best, reading) =>
@@ -129,11 +131,24 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     undefined
   )
   if (!found?.resolved) {
-    reportOpenFailure(options)
+    const refused = readings.find((reading) => reading.response && !reading.response.ok)
+    reportOpenFailure(options, {
+      kind: refused ? 'failed' : 'unresolved',
+      pathText: (refused?.target ?? options.candidates[0])?.pathText ?? '',
+      message: refused?.response?.ok === false ? refused.response.error.message : undefined
+    })
     return
   }
-  const { target } = found
-  const resolved = found.resolved
+  await openResolvedMobileFileTap(options, found.target, found.resolved).catch(() =>
+    reportOpenFailure(options, { kind: 'failed', pathText: found.target.pathText })
+  )
+}
+
+async function openResolvedMobileFileTap<T extends FileTapSessionTab>(
+  options: OpenMobileFileTapOptions<T>,
+  target: ParsedFileLinkLocation,
+  resolved: RuntimeTerminalPathResolution
+): Promise<void> {
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
@@ -177,7 +192,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
       ? resolved.openTarget.relativePath
       : resolved.relativePath
   if (!openedPath) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, { kind: 'failed', pathText: target.pathText })
     return
   }
   options.triggerOpenFeedback()
@@ -222,11 +237,15 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   }
   const opened = fileTapOpenRun.interpret(openResponse)
   if (!opened.accepted) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, {
+      kind: 'failed',
+      pathText: target.pathText,
+      message: openResponse.ok ? undefined : openResponse.error.message
+    })
     return
   }
   if (!opened.value.opened) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, { kind: 'failed', pathText: target.pathText })
     return
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)

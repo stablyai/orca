@@ -15,8 +15,16 @@ type MetricFixture = {
   memory: { workingSetSize: number; peakWorkingSetSize?: number; privateBytes?: number }
 }
 
-const { appMetricsMock } = vi.hoisted(() => ({
-  appMetricsMock: vi.fn<() => MetricFixture[]>(() => [])
+const { appMetricsMock, rtTimeLimitMock, rtPrioOutcomeMock } = vi.hoisted(() => ({
+  appMetricsMock: vi.fn<() => MetricFixture[]>(() => []),
+  rtTimeLimitMock: vi.fn<() => { soft: string; hard: string } | null>(() => null),
+  rtPrioOutcomeMock: vi.fn<() => string | null>(() => null)
+}))
+
+// Keep fixtures independent of the test host's own RLIMIT_RTTIME.
+vi.mock('../startup/linux-rttime-limit', () => ({
+  readZeroRtTimeLimit: rtTimeLimitMock,
+  getStartupRtPrioOutcome: rtPrioOutcomeMock
 }))
 
 vi.mock('electron', () => ({
@@ -29,6 +37,32 @@ describe('process gone diagnostics', () => {
   beforeEach(() => {
     resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
+    rtTimeLimitMock.mockReturnValue(null)
+    rtPrioOutcomeMock.mockReturnValue(null)
+  })
+
+  it('names an inherited zero RLIMIT_RTTIME and the startup RTPRIO outcome', () => {
+    appMetricsMock.mockReturnValue([])
+    rtTimeLimitMock.mockReturnValue({ soft: '0', hard: '0' })
+    expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
+      rlimitRtTimeSoftUs: '0',
+      rlimitRtTimeHardUs: '0'
+    })
+    expect(buildProcessGoneCrashDetails({}, 'renderer')).not.toHaveProperty('rlimitRtPrioStartup')
+
+    // The startup breadcrumb rotates out of the ring, so the outcome must ride on the report.
+    rtPrioOutcomeMock.mockReturnValue('not-needed')
+    expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
+      rlimitRtPrioStartup: 'not-needed'
+    })
+  })
+
+  it('adds no rttime fields when RLIMIT_RTTIME is not zero', () => {
+    appMetricsMock.mockReturnValue([])
+    rtPrioOutcomeMock.mockReturnValue('lowered')
+    const details = buildProcessGoneCrashDetails({}, 'renderer')
+    expect(details).not.toHaveProperty('rlimitRtTimeSoftUs')
+    expect(details).not.toHaveProperty('rlimitRtPrioStartup')
   })
 
   afterEach(() => {

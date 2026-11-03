@@ -324,6 +324,7 @@ describe('a helper whose creator settles between it and the Run', () => {
 
     restartRuntime()
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(turnText(chat.turns[0]!)).toMatch(/orchestration message/)
+    // Oldest first, whole: the handed-back question is the Run coordinator's first turn.
+    expect(turnText(chat.turns[0]!)).toMatch(/Subject: Question\nWhich parser\?/)
   })
 })

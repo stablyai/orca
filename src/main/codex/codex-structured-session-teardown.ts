@@ -24,6 +24,7 @@ export class CodexStructuredSessionTeardown {
   constructor(private readonly deps: CodexStructuredSessionTeardownDeps) {}
 
   close = async (sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean> => {
+    this.deps.acquisitions.endings.retire(sessionId)
     const connection =
       this.deps.sessions.get(sessionId)?.connection ??
       this.deps.acquisitions.get(sessionId)?.window.connection

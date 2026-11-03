@@ -156,3 +156,37 @@ describe('image sends with a parked multi-line draft', () => {
     )
   })
 })
+
+it('replaces an ordinary terminal draft on both sides of the cursor before the desktop body', async () => {
+  const { resolveNativeChatLaunchDraftSend } = await import('./native-chat-launch-draft-send')
+  const { sendOptions } = resolveNativeChatLaunchDraftSend({
+    launchDraft: null,
+    launchDraftResolved: false,
+    agent: 'codex',
+    readInputLine: () => 'desktop first\ndesktop middle\ndesktop last'
+  })
+  sendNativeChatMessage(PTY, 'phone-equivalent message', sendOptions)
+  await vi.runAllTimersAsync()
+  expect(writes()).toEqual([
+    '\x15'.repeat(21) + '\x0b'.repeat(21),
+    'phone-equivalent message',
+    NATIVE_CHAT_SUBMIT
+  ])
+})
+
+it('refuses a known oversized terminal draft without clearing, pasting, or locking the queue', async () => {
+  const { resolveNativeChatLaunchDraftSend } = await import('./native-chat-launch-draft-send')
+  const { sendOptions } = resolveNativeChatLaunchDraftSend({
+    launchDraft: null,
+    launchDraftResolved: false,
+    agent: 'codex',
+    readInputLine: () => Array(16).fill('draft').join('\n')
+  })
+  const onWriteRejected = vi.fn()
+  const handle = sendNativeChatMessage(PTY, 'new body', { ...sendOptions, onWriteRejected })
+  await vi.runAllTimersAsync()
+  await handle.settled
+  expect(onWriteRejected).toHaveBeenCalledOnce()
+  expect(writes()).toEqual([])
+  expect(sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+})

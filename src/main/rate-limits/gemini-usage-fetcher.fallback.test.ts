@@ -23,7 +23,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 // Refresh must never write the developer's real ~/.gemini.
-vi.mock('../integration-credential-file', () => ({
+vi.mock('../credentials/integration-credential-file', () => ({
   writeCredentialFileAtomic: vi.fn().mockReturnValue(true)
 }))
 

@@ -98,8 +98,8 @@ const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await v
     confirm: () => Promise<boolean>
   ): Promise<void>
 }>('../../renderer/src/lib/browser-google-cookie-clear')
-import { registerBrowserHandlers } from '../ipc/browser'
-import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser-renderer-trust'
+import { registerBrowserHandlers } from '../ipc/browser/browser'
+import { setTrustedBrowserRendererWebContentsId } from '../ipc/browser/browser-renderer-trust'
 import {
   bindRoutePartition,
   importCookiesIntoClientRoutePartition

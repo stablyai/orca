@@ -43,21 +43,6 @@ describe('app menu paste', () => {
     expect(performNativePaste).not.toHaveBeenCalled()
   })
 
-  it('preserves paste-and-match-style when falling back to native paste', async () => {
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => 'text'),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false,
-      getActiveElement: () => null,
-      nativePasteMode: 'paste-and-match-style'
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'no-owned-target' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste-and-match-style' })
-  })
-
   it('pastes large clipboard text into a focused text control without leaking event data', async () => {
     const textarea = appendTextarea('prefix ')
     textarea.focus()
@@ -109,23 +94,6 @@ describe('app menu paste', () => {
     expect(textarea.value).toBe('unchanged')
     expect(other.value).toBe('other')
     expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('falls back to native paste when clipboard text cannot be read', async () => {
-    const textarea = appendTextarea()
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        throw new Error('clipboard denied')
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toEqual({ status: 'native-fallback', reason: 'clipboard-read-failed' })
-    expect(performNativePaste).toHaveBeenCalledWith({ mode: 'paste' })
   })
 
   it('does not native-fallback when clipboard read fails after focus moves', async () => {

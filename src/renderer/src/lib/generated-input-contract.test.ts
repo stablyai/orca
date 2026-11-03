@@ -57,15 +57,23 @@ const f = vi.hoisted((): Facts => ({
   afterWrite: null
 }))
 
-vi.mock('../../../main/git/worktree', () => {
-  const rows = [
-    { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
-  ]
-  return {
-    listWorktrees: vi.fn().mockResolvedValue(rows),
-    listWorktreesStrict: vi.fn().mockResolvedValue(rows)
-  }
-})
+// The terminal's worktree as the catalog lists it; the rest of each module is real.
+vi.mock('../../../main/git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktrees: vi
+    .fn()
+    .mockResolvedValue([
+      { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+    ])
+}))
+vi.mock('../../../main/git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: vi
+    .fn()
+    .mockResolvedValue([
+      { path: '/tmp/worktree-a', head: 'abc', branch: 'b', isBare: false, isMainWorktree: false }
+    ])
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}), subscribe: () => () => {} } }))
 vi.mock('./launch-agent-paste-timeout-notice', () => ({ showGeneratedInputNotice: vi.fn() }))
 vi.mock('@/components/terminal-pane/pty-buffer-serializer', () => ({

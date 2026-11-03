@@ -195,7 +195,11 @@ describe('ACP child published before its handshake', () => {
         acquisitionGeneration: acquired.acquisitionGeneration,
         signal: new AbortController().signal
       })
-    ).rejects.toMatchObject({ reason: 'notSignedIn' })
+    ).rejects.toMatchObject({
+      retry: 'never',
+      fact: { kind: 'notSignedIn' },
+      cause: { reason: 'notSignedIn' }
+    })
     expect(rig.ended).toEqual([])
     await rig.adapter.closeSession(SESSION)
     expect(rig.child().exited).toBe(true)

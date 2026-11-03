@@ -35,6 +35,8 @@ import type { JournalHostDatabase } from '../agent-session-journal/journal-host-
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../agent-session-journal/queued-message-pause'
+import type { QueuedMessageOwed } from '../agent-session-journal/queued-message-consume-error'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionChildEndCause,
@@ -185,6 +187,13 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
+  queuedAgentMessageOwed?: (
+    sessionId: string,
+    from: AgentMessageSource,
+    /** Only read, as the queue does choosing its next card; a handover also settles a stale send. */
+    peek?: boolean
+  ) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */

@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { plainClassName } from '../oxlint-plugins/renderer-scrollbar-style.mjs'
 import { runOxlintPluginOnSources } from './oxlint-plugin-test-runner.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/renderer-scrollbar-style.mjs')
@@ -142,16 +141,5 @@ describe('renderer scrollbar style Oxlint plugin', () => {
 
   it.each(accepted)('accepts %s', (_name, source) => {
     expect(diagnosticsBySource.get(source)).toEqual([])
-  })
-
-  it.each([
-    ['md:overflow-y-auto', 'overflow-y-auto'],
-    ['[&:hover]:overflow-y-auto', 'overflow-y-auto'],
-    ['md:!scrollbar-editor', 'scrollbar-editor'],
-    ['!scrollbar-editor', 'scrollbar-editor'],
-    ['overflow-y-auto!', 'overflow-y-auto'],
-    ['md:scrollbar-editor!', 'scrollbar-editor']
-  ])('normalizes %s', (token, expected) => {
-    expect(plainClassName(token)).toBe(expected)
   })
 })

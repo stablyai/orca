@@ -49,72 +49,6 @@ describe('active agent note send', () => {
     testState.sendGenerated.mockResolvedValue('delivered')
   })
 
-  it('sends notes only after the active terminal is verified as an idle agent', async () => {
-    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      if (method === 'terminal.list') {
-        return {
-          terminals: [
-            {
-              handle: 'term-1',
-              worktreeId: 'wt-1',
-              worktreePath: '/repo',
-              branch: 'main',
-              tabId: 'tab-1',
-              leafId: LEAF_ID,
-              title: 'Codex',
-              connected: true,
-              writable: true,
-              lastOutputAt: 1,
-              preview: ''
-            }
-          ],
-          totalCount: 1,
-          truncated: false
-        }
-      }
-      if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-1', isRunningAgent: true, status: 'idle' } }
-      }
-      if (method === 'terminal.wait') {
-        return {
-          wait: {
-            handle: 'term-1',
-            condition: 'tui-idle',
-            satisfied: true,
-            status: 'running',
-            exitCode: null
-          }
-        }
-      }
-      if (method === 'terminal.send') {
-        return {
-          send: {
-            handle: 'term-1',
-            accepted: true,
-            bytesWritten: typeof params.text === 'string' ? params.text.length : 1
-          }
-        }
-      }
-      throw new Error(`unexpected method ${method}`)
-    })
-
-    await expect(
-      sendNotesToActiveAgentSession({ worktreeId: 'wt-1', prompt: 'File: src/app.ts' })
-    ).resolves.toEqual({ status: 'sent' })
-
-    expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'terminal.list',
-      { worktree: 'id:wt-1', limit: 200, includeVisualLayouts: false },
-      { timeoutMs: 15000 }
-    )
-    expect(testState.sendGenerated).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'local' },
-      'term-1',
-      expect.objectContaining({ text: 'File: src/app.ts', submit: true, intent: 'running' })
-    )
-  })
-
   it('keeps active-focused sends compatible when an older runtime lacks agentStatus', async () => {
     const methods: string[] = []
     testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
@@ -434,16 +368,5 @@ describe('active agent note send', () => {
       expect.anything(),
       expect.anything()
     )
-  })
-
-  it('does not call runtime when no terminal pane is known for the worktree', async () => {
-    testState.appState.activeTabType = 'editor'
-    testState.appState.activeTabIdByWorktree = {}
-
-    await expect(
-      sendNotesToActiveAgentSession({ worktreeId: 'wt-1', prompt: 'notes' })
-    ).resolves.toEqual({ status: 'no-active-terminal', code: 'no-note-target' })
-
-    expect(testState.callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

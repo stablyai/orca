@@ -220,6 +220,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       const result = await prepareModuleCache(identity, {
         restoreHit: process.env.ORCA_UNIT_CACHE_RESTORE_HIT === 'true'
       })
+      if (
+        !result.available &&
+        process.env.ORCA_UNIT_CACHE_MODE === 'warm' &&
+        process.env.GITHUB_ENV
+      ) {
+        appendFileSync(process.env.GITHUB_ENV, 'ORCA_UNIT_MODULE_CACHE_PATH=\n')
+      }
       writeAssignment(CACHE_REPORT, { key: identity.key, mode: 'restore', ...result })
       console.log(JSON.stringify(result))
     } else if (phase === 'seal') {

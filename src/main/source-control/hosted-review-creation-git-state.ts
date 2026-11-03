@@ -8,10 +8,13 @@ import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import { gitExecFileAsync } from '../github/gh-utils'
 import { isShowRefNoMatchError, probeExactRefsViaForEachRef } from '../git/exact-ref-probe'
 import { gitOptionalLocksDisabledEnv } from '../git/runner'
-import { parsePorcelainV1Records, type PorcelainV1Record } from '../git/porcelain-v1-records'
+import {
+  parsePorcelainV1Records,
+  type PorcelainV1Record
+} from '../git/source-control/porcelain-v1-records'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
-import { getUpstreamStatus } from '../git/upstream'
-import { findExistingWorktreeSymlinkPaths } from '../git/worktree-symlink-detection'
+import { getUpstreamStatus } from '../git/source-control/upstream'
+import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {

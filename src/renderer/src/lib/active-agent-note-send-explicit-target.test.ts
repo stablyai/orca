@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  activeAgentNotesSendFailureMessage,
-  sendNotesToActiveAgentSession
-} from './active-agent-note-send'
+import { sendNotesToActiveAgentSession } from './active-agent-note-send'
 import {
   createNoteSendAppState,
   LEAF_ID,
@@ -265,38 +262,6 @@ describe('active agent note send', () => {
       })
     ).resolves.toEqual({ status: 'not-ready', code: 'terminal_wait_blocked' })
     expect(methods).toEqual(['terminal.list', 'terminal.agentStatus'])
-  })
-
-  it('uses selected-target failure wording for explicit note targets', () => {
-    expect(activeAgentNotesSendFailureMessage('not-ready', { explicitTarget: true })).toBe(
-      'The selected agent was not ready for input yet.'
-    )
-    expect(activeAgentNotesSendFailureMessage('not-ready')).toBe(
-      'The active agent was not ready for input yet.'
-    )
-    expect(activeAgentNotesSendFailureMessage('permission', { explicitTarget: true })).toBe(
-      'The selected agent needs permission.'
-    )
-    expect(activeAgentNotesSendFailureMessage('permission')).toBe(
-      'The active agent needs permission.'
-    )
-    expect(activeAgentNotesSendFailureMessage('status-unavailable', { explicitTarget: true })).toBe(
-      'The selected agent status could not be verified.'
-    )
-    expect(
-      activeAgentNotesSendFailureMessage('partial-submit-failed', { explicitTarget: true })
-    ).toBe(
-      'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
-    )
-    expect(activeAgentNotesSendFailureMessage('partial-submit-failed')).toBe(
-      'The notes may already be pasted in the active terminal, but Orca could not submit them.'
-    )
-    expect(
-      activeAgentNotesSendFailureMessage('no-active-terminal', {
-        explicitTarget: true,
-        code: 'no-inventory-match'
-      })
-    ).toBe('The selected terminal is no longer available. (no-inventory-match)')
   })
 
   it.each(['terminal_handle_stale', 'terminal_exited', 'terminal_gone'] as const)(

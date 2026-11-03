@@ -1,5 +1,5 @@
 import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
-import { runClaudeBackgroundAttempts } from '../../shared/claude-background-run-isolation'
+import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
 import {
   cleanGeneratedCommitMessage,
   stripPrefilledReasoningPreamble,
@@ -12,6 +12,7 @@ import {
 } from '../../shared/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
+import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
 import { runLocalPlanForAgent } from './source-control-local-generation'
 import { emptyResultFailure } from './source-control-agent-failure'
 import { runRemoteSourceControlPlan } from './source-control-remote-generation'
@@ -63,15 +64,13 @@ export async function runGenerationRequest(input: {
           spawnAgent: input.spawnAgent,
           shouldExecute: input.shouldExecute
         })
-  let result = await runClaudeBackgroundAttempts({
+  let result = await runClaudeGenerationAttempts({
     agentId: input.params.agentId,
-    run: (strictMcp): Promise<InternalTextGenerationResult> => {
-      if (strictMcp) {
+    run: (attempt): Promise<InternalTextGenerationResult> => {
+      if (attempt.strictMcp && !attempt.legacyToolPolicy) {
         return execute(plan)
       }
-      const retry = planCommitMessageGeneration(params, input.prompt, {
-        strictMcp
-      })
+      const retry = planCommitMessageGeneration(params, input.prompt, attempt)
       return retry.ok
         ? execute(retry.plan)
         : Promise.resolve({
@@ -88,6 +87,12 @@ export async function runGenerationRequest(input: {
     input.params.agentId === 'opencode'
   ) {
     const retry = openCodeVariantRetryPlan(plan, result.failureOutput?.stderr ?? '')
+    if (retry) {
+      result = await execute(retry)
+    }
+  }
+  if (!result.success && input.params.agentId === 'copilot') {
+    const retry = copilotUnavailableModelRetryPlan(plan, result.failureOutput)
     if (retry) {
       result = await execute(retry)
     }

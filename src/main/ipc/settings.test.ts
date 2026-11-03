@@ -63,7 +63,7 @@ vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: listProfilesMock }
 }))
 
-vi.mock('../app-icon', () => ({
+vi.mock('../window/desktop-integration/app-icon', () => ({
   applyAppIcon: applyAppIconMock
 }))
 
@@ -81,7 +81,7 @@ vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: reconcileClaudeAgentViewMock })
 }))
 
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: prepareLocalWorktreeRootsForReposMock
 }))
 

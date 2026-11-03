@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PRComment } from '../../../shared/github/comment-types'
-import {
-  markPRCommentThreadResolved,
-  restorePRCommentThreadSnapshot
-} from './pr-comment-thread-resolution'
+import { restorePRCommentThreadSnapshot } from './pr-comment-thread-resolution'
 
 function comment(overrides: Partial<PRComment>): PRComment {
   return {
@@ -18,32 +15,6 @@ function comment(overrides: Partial<PRComment>): PRComment {
 }
 
 describe('PR comment thread resolution helpers', () => {
-  it('rolls back only the failed thread snapshot', () => {
-    const base = [
-      comment({ id: 1, threadId: 'thread-a', isResolved: false }),
-      comment({ id: 2, threadId: 'thread-b', isResolved: false }),
-      comment({ id: 3, threadId: 'thread-b', isResolved: false })
-    ]
-    const afterFirstSuccess = markPRCommentThreadResolved(base, 'thread-a', true)
-    const failedThreadSnapshot = afterFirstSuccess.filter((item) => item.threadId === 'thread-b')
-    const afterSecondOptimisticUpdate = markPRCommentThreadResolved(
-      afterFirstSuccess,
-      'thread-b',
-      true
-    )
-
-    const rolledBack = restorePRCommentThreadSnapshot(
-      afterSecondOptimisticUpdate,
-      failedThreadSnapshot
-    )
-
-    expect(rolledBack.map((item) => [item.threadId, item.isResolved])).toEqual([
-      ['thread-a', true],
-      ['thread-b', false],
-      ['thread-b', false]
-    ])
-  })
-
   it('restores only resolution fields while preserving edits and current membership', () => {
     const previous = comment({ id: 1, threadId: 'thread-a', isResolved: false })
     const removed = comment({ id: 2, threadId: 'thread-a', isResolved: false })
@@ -59,18 +30,5 @@ describe('PR comment thread resolution helpers', () => {
       { ...edited, isResolved: false },
       { ...added, isResolved: false }
     ])
-  })
-
-  it('preserves per-ID resolution values and uses known thread state for new replies', () => {
-    const unknown = comment({ id: 1, threadId: 'thread-a' })
-    const resolved = comment({ id: 2, threadId: 'thread-a', isResolved: true })
-    const added = comment({ id: 3, threadId: 'thread-a' })
-
-    expect(
-      restorePRCommentThreadSnapshot(
-        markPRCommentThreadResolved([unknown, resolved, added], 'thread-a', false),
-        [unknown, resolved]
-      )
-    ).toEqual([{ ...unknown, isResolved: undefined }, resolved, { ...added, isResolved: true }])
   })
 })

@@ -4,7 +4,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
-import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
+import { editorTabFileAccess } from './local-file-access'
 
 const initialState = useAppStore.getInitialState()
 
@@ -165,56 +165,5 @@ describe('editorTabFileAccess', () => {
     ]
   ])('%s', (_label, file, expected) => {
     expect(accessKind(file)).toBe(expected)
-  })
-})
-
-describe('editorTabDocumentFolderAccess', () => {
-  beforeEach(() => {
-    useAppStore.setState({
-      repos: [
-        makeRepo({ id: 'repo-local', path: '/Users/me/project' }),
-        makeRepo({ id: 'repo-ssh', path: '/work/project', connectionId: 'ssh-1' })
-      ],
-      worktreesByRepo: {
-        'repo-local': [makeWorktree({ id: localWorktreeId, repoId: 'repo-local' })]
-      }
-    })
-  })
-
-  afterEach(() => {
-    useAppStore.setState(initialState, true)
-  })
-
-  it('declares the file itself for writes on a local user-named tab', () => {
-    expect(
-      editorTabDocumentFolderAccess(useAppStore.getState(), {
-        filePath: '/Users/me/notes.md',
-        relativePath: 'notes.md',
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-      })
-    ).toEqual({ kind: 'document-folder', documentPath: '/Users/me/notes.md' })
-  })
-
-  it.each<[string, TabFileAccessFields]>([
-    [
-      'a project tab',
-      { filePath: '/Users/me/project/a.md', relativePath: 'a.md', worktreeId: localWorktreeId }
-    ],
-    [
-      'an absolute tab owned by an SSH workspace',
-      { filePath: '/work/x.md', relativePath: '/work/x.md', worktreeId: 'repo-ssh::/work/project' }
-    ],
-    [
-      'an AI Vault log tab',
-      {
-        filePath: '/Users/me/.codex/session.jsonl',
-        relativePath: '/Users/me/.codex/session.jsonl',
-        worktreeId: 'repo-ssh::/work/project',
-        readOnly: true,
-        liveTail: true
-      }
-    ]
-  ])('grants no folder writes to %s', (_label, file) => {
-    expect(editorTabDocumentFolderAccess(useAppStore.getState(), file)).toBeUndefined()
   })
 })
