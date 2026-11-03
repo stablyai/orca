@@ -85,8 +85,8 @@ src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
 src/main/ports/port-scan-command-execution.ts
 src/main/providers/macos-login-session-pty-probe.ts
 src/main/providers/process-cwd.ts
-src/main/pty-descendant-fresh-table.ts
-src/main/pty/windows-environment-path.ts
+src/main/pty/process-retirement/pty-descendant-fresh-table.ts
+src/main/pty/environment/windows-environment-path.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
 src/main/runtime/windows-default-route-interfaces.ts
 src/main/runtime/windows-mobile-firewall.ts
@@ -97,8 +97,8 @@ src/main/ssh/system-transport/system-ssh-dynamic-forward-process.ts
 src/main/ssh/system-transport/system-ssh-file-transfer.ts
 src/main/ssh/system-transport/system-ssh-operation-lifecycle.ts
 src/main/startup/ensure-virtual-display.ts
-src/main/windows-process-tree-kill.ts
-src/main/zsh-startup-hook-pty-harness.ts
+src/main/pty/process-retirement/windows-process-tree-kill.ts
+src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts

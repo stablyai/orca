@@ -40,7 +40,7 @@ vi.mock('../../src/main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../src/main/pwsh', () =>
+vi.mock('../../src/main/pty/shell-startup/pwsh', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
 vi.mock('../../src/main/wsl', async (importOriginal) =>

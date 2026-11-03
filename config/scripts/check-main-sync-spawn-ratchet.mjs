@@ -48,8 +48,14 @@ const GATED_FAMILIES = [
     modules: ['src/main/wsl-availability', 'src/main/wsl'],
     advice: { isWslAvailable: 'use isWslAvailableAsync' }
   },
-  { modules: ['src/main/pwsh'], advice: { isPwshAvailable: 'use isPwshAvailableAsync' } },
-  { modules: ['src/main/win32-utils'], advice: { grantDirAcl: 'use grantDirAclAsync' } }
+  {
+    modules: ['src/main/pty/shell-startup/pwsh'],
+    advice: { isPwshAvailable: 'use isPwshAvailableAsync' }
+  },
+  {
+    modules: ['src/main/windows/windows-directory-acl'],
+    advice: { grantDirAcl: 'use grantDirAclAsync' }
+  }
 ]
 const collector = createGatedCallCollector(GATED_FAMILIES, 'sync-spawn')
 const BASELINE_HEADER = [

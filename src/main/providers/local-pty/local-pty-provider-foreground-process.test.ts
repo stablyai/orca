@@ -1,3 +1,4 @@
+import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl-availability'
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
@@ -46,6 +47,12 @@ const {
   createShellPromptReadinessProbeMock: vi.fn()
 }))
 
+vi.mock('../../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPathOwner>()),
+  toLinuxPath: (await vi.importMock<Pick<typeof WslPathOwner, 'toLinuxPath'>>('../../wsl'))
+    .toLinuxPath
+}))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
@@ -73,7 +80,7 @@ vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
 
-vi.mock('../../pty-descendant-termination', () => ({
+vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -137,7 +144,7 @@ vi.mock('../../wsl-availability', async (importOriginal) => ({
   isWslAvailableAsync: () => isWslAvailableAsyncMock()
 }))
 
-vi.mock('../../shell-prompt-readiness-probe', () => ({
+vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 

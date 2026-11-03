@@ -129,7 +129,7 @@ vi.mock('./single-instance-lock', () => ({
 }))
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
-vi.mock('../own-chromium-tree-kill-guard')
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard')
 vi.mock('../../shared/secret-store', () => ({
   setSecretStore: () => {
     mocks.events.push('continued-after-browser-identity')

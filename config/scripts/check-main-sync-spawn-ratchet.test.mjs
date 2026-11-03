@@ -151,7 +151,10 @@ describe('main sync-spawn ratchet', () => {
       "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(p, true)",
       'restrictWindowsPathSync'
     ],
-    ["import { grantDirAcl } from './win32-utils'\ngrantDirAcl(dir)", 'grantDirAcl'],
+    [
+      "import { grantDirAcl } from './windows/windows-directory-acl'\ngrantDirAcl(dir)",
+      'grantDirAcl'
+    ],
     ["import { getWslHome } from './wsl'\ngetWslHome(distro)", 'getWslHome'],
     ["import { listWslDistros } from './wsl'\nlistWslDistros()", 'listWslDistros'],
     [
@@ -160,7 +163,10 @@ describe('main sync-spawn ratchet', () => {
     ],
     ["import { isWslAvailable } from './wsl'\nisWslAvailable()", 'isWslAvailable'],
     ["import { isWslAvailable } from './wsl-availability'\nisWslAvailable()", 'isWslAvailable'],
-    ["import { isPwshAvailable } from './pwsh'\nisPwshAvailable()", 'isPwshAvailable']
+    [
+      "import { isPwshAvailable } from './pty/shell-startup/pwsh'\nisPwshAvailable()",
+      'isPwshAvailable'
+    ]
   ])('gates the repo sync wrapper in %s', (source, symbol) => {
     expect(uses(source)).toEqual({ count: 1, symbols: [symbol] })
   })
