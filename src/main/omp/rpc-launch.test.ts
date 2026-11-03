@@ -27,6 +27,35 @@ it('preserves command prefix arguments before selecting RPC UI mode', () => {
   ])
 })
 
+it('keeps native model selection when the startup attempt has no explicit model', () => {
+  const options = {
+    command: 'omp',
+    cwd: process.cwd(),
+    fullAccess: true,
+    sessionFile: 'saved.jsonl',
+    extraArgs: ['--model=original/model']
+  }
+  expect(buildOmpRpcLaunch(options, { options: {} })).toEqual(buildOmpRpcLaunch(options))
+  expect(buildOmpRpcLaunch(options).args).toEqual([
+    '--mode',
+    'rpc-ui',
+    '--model=original/model',
+    '--session',
+    'saved.jsonl'
+  ])
+})
+
+it('rejects an invalid startup model before starting OMP', () => {
+  expect(() =>
+    buildOmpRpcLaunch(
+      { command: 'omp', cwd: process.cwd(), fullAccess: true },
+      {
+        options: { model: 'missing-provider' }
+      }
+    )
+  ).toThrow('explicit provider and model ID')
+})
+
 it('resolves a legacy ACP OMP handle to its JSONL session for RPC resume', async () => {
   const root = await mkdtemp(join(tmpdir(), 'omp-rpc-resume-'))
   const cwd = join(root, 'workspace')

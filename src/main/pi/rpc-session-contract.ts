@@ -79,7 +79,10 @@ export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
 }
 
 export type PiRpcSessionAdapterDeps = PiRpcSessionDeps & {
-  buildLaunch?: typeof buildPiRpcLaunch
+  buildLaunch?: (
+    launch: PiRpcResolvedLaunch,
+    input: StructuredAgentSessionAcquireInput
+  ) => ReturnType<typeof buildPiRpcLaunch>
   resolveLaunch: (input: {
     [K in 'identity' | 'spawnToken']: StructuredAgentSessionAcquireInput[K]
   }) => Promise<PiRpcResolvedLaunch>

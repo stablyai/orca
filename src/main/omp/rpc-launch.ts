@@ -33,6 +33,8 @@ import {
 } from '../pi/rpc-launch'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import { findOmpSessionByCwd } from './omp-session-cwd-lookup'
+import { parsePiModelOptionId } from '../pi/rpc-options'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 export const OMP_RPC_MINIMUM_VERSIONS = ['18.4.5'] as const
 
@@ -83,9 +85,20 @@ export const ompRpcProviderLink: typeof piRpcProviderLink = (launch, ...args) =>
 }
 
 export function buildOmpRpcLaunch(
-  options: PiRpcLaunchOptions
+  options: PiRpcLaunchOptions,
+  input?: Pick<StructuredAgentSessionAcquireInput, 'options'>
 ): ReturnType<typeof buildPiRpcLaunch> {
-  const launch = buildPiRpcLaunch({ ...options, fullAccess: true })
+  const model = input?.options?.model
+  const selected = model ? parsePiModelOptionId(model) : undefined
+  // OMP restores the saved model before accepting set_model RPC requests.
+  const launch = buildPiRpcLaunch({
+    ...options,
+    fullAccess: true,
+    extraArgs: [
+      ...(options.extraArgs ?? []),
+      ...(selected ? ['--provider', selected.provider, '--model', selected.modelId] : [])
+    ]
+  })
   const modeIndex = (options.prefixArgs?.length ?? 0) + 1
   return {
     ...launch,
