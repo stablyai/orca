@@ -39,6 +39,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Hosts:',
   '  host list                 List targetable machines and how to name each one',
+  '  host rm                   Remove a saved SSH target',
   '',
   'Environments:',
   '  environment add           Save a remote Orca runtime from a pairing code',

@@ -67,6 +67,14 @@ The result includes this machine, its registered [SSH targets](/docs/ssh), and p
 
 `--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
 
+Remove a saved SSH target with the id `orca host list` prints:
+
+```bash
+orca host rm --host ssh:<target-id> --json
+```
+
+It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
+
 ## Runtime commands
 
 ```bash
