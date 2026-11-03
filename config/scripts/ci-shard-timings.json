@@ -11543,7 +11543,6 @@
       "src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts": 65,
       "src/shared/abort-signal-reason-memory.test.ts": 80,
       "src/shared/abort-signal-reason.test.ts": 81,
-      "src/shared/absolute-dir-override.test.ts": 54,
       "src/shared/agent-chat-permission-host-support.test.ts": 195,
       "src/shared/agent-chat-permission-mode.test.ts": 199,
       "src/shared/agent-child-row-model.test.ts": 84,
