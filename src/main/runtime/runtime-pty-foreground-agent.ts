@@ -23,7 +23,10 @@ export class RuntimePtyForegroundAgent {
   private readonly refreshes = new Map<string, PtyForegroundAgentRefresh>()
   private readonly reads = new Map<string, PtyForegroundProcessReadEntry>()
   private readonly delayedTitles = new Map<string, number>()
-  private readonly identifies = new Map<string, Promise<TerminalAgent | null>>()
+  private readonly identifies = new Map<
+    string,
+    { settled: boolean; promise: Promise<TerminalAgent | null> }
+  >()
   // A scan's recognized agent for a version name holds while that name stays in the foreground.
   private readonly confirmedByPtyId = new Map<
     string,
@@ -117,13 +120,27 @@ export class RuntimePtyForegroundAgent {
     ) {
       return null
     }
-    let pending = this.identifies.get(ptyId)
-    if (!pending) {
-      pending = this.identifyForeground(ptyId).finally(() => this.identifies.delete(ptyId))
-      this.identifies.set(ptyId, pending)
+    let entry = this.identifies.get(ptyId)
+    if (!entry) {
+      const fresh = { settled: false, promise: this.identifyForeground(ptyId) }
+      void fresh.promise.finally(() => (fresh.settled = true))
+      entry = fresh
+      this.identifies.set(ptyId, entry)
+    } else if (entry.settled) {
+      // An answer that outlasted its caller's timeout serves the retry once instead of a fresh read.
+      this.identifies.delete(ptyId)
     }
-    return withTimeoutResult(pending, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then((result) =>
-      result.ok ? result.value : undefined
+    const current = entry
+    return withTimeoutResult(current.promise, TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS).then(
+      (result) => {
+        if (!result.ok) {
+          return undefined
+        }
+        if (this.identifies.get(ptyId) === current) {
+          this.identifies.delete(ptyId)
+        }
+        return result.value
+      }
     )
   }
 
@@ -152,6 +169,7 @@ export class RuntimePtyForegroundAgent {
 
   forget(ptyId: string): void {
     this.delayedTitles.delete(ptyId)
+    this.identifies.delete(ptyId)
     this.confirmedByPtyId.delete(ptyId)
   }
 
