@@ -35,10 +35,34 @@ export function startMobileEndpointLifecycle(
   initialHost: HostProfile,
   onLog: ConnectionLogSink
 ): EndpointLifecycle {
-  void loadRelayBackgroundExtended().catch(() => {})
+  let preferenceSettled = false
+  const preferenceReady = loadRelayBackgroundExtended().then(
+    () => {
+      preferenceSettled = true
+    },
+    () => {
+      preferenceSettled = true
+    }
+  )
   let stopped = false
   let foreground = true
   let owner: EndpointOwner
+
+  const publishForeground = () => {
+    if (foreground) {
+      owner.setForeground(true)
+      return
+    }
+    if (preferenceSettled) {
+      owner.setForeground(false)
+      return
+    }
+    void preferenceReady.then(() => {
+      if (!stopped && !foreground) {
+        owner.setForeground(false)
+      }
+    })
+  }
 
   const startSupervisor = async (relay: MobileRelayEndpoint): Promise<void> => {
     if (stopped) {
@@ -47,7 +71,7 @@ export function startMobileEndpointLifecycle(
     const supervisor = createSupervisor(logical, initialHost, relay, onLog)
     owner.stop()
     owner = supervisor
-    supervisor.setForeground(foreground)
+    publishForeground()
     await supervisor.start()
   }
 
@@ -70,7 +94,7 @@ export function startMobileEndpointLifecycle(
   return {
     setForeground(next) {
       foreground = next
-      owner.setForeground(next)
+      publishForeground()
     },
     nudge(reason) {
       // Why: a focus nudge can precede the AppState listener; keep the closure in

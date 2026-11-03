@@ -3,7 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ConnectionSettingsScreen from './connection-settings-screen'
 import { MobileSwitch } from '../components/MobileSwitch'
+import { SettingsNote } from './settings-screen-frame'
 import {
+  isRelayBackgroundExtended,
   loadRelayBackgroundExtended,
   saveRelayBackgroundExtended
 } from '../storage/relay-background-preference'
@@ -23,6 +25,7 @@ vi.mock('../i18n/use-mobile-translation', () => ({
   useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
 vi.mock('../storage/relay-background-preference', () => ({
+  isRelayBackgroundExtended: vi.fn(),
   loadRelayBackgroundExtended: vi.fn(),
   saveRelayBackgroundExtended: vi.fn()
 }))
@@ -62,6 +65,28 @@ describe('Connections settings', () => {
     await act(async () => renderer.root.findByType(MobileSwitch).props.onValueChange(true))
     expect(renderer.root.findByType(MobileSwitch).props.value).toBe(false)
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not save connection preferences')
+    expect(renderer.root.findByType(SettingsNote).props.error).toBe(true)
+  })
+
+  it('keeps the live opt-in when a later load fails', async () => {
+    vi.mocked(loadRelayBackgroundExtended).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(isRelayBackgroundExtended).mockReturnValue(true)
+    await act(async () => {
+      renderer = create(createElement(ConnectionSettingsScreen))
+    })
+    expect(renderer.root.findByType(MobileSwitch).props.value).toBe(true)
+    expect(renderer.root.findByType(SettingsNote).props.error).toBe(true)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Could not load connection preferences')
+  })
+
+  it('does not show an opt-in when a failed load has no saved choice', async () => {
+    vi.mocked(loadRelayBackgroundExtended).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(isRelayBackgroundExtended).mockReturnValue(false)
+    await act(async () => {
+      renderer = create(createElement(ConnectionSettingsScreen))
+    })
+    expect(renderer.root.findByType(MobileSwitch).props.value).toBe(false)
+    expect(renderer.root.findByType(SettingsNote).props.error).toBe(true)
   })
 
   it('disables changes while loading the saved choice', async () => {

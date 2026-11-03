@@ -38,6 +38,26 @@ describe('Relay background preference', () => {
     expect(preference.isRelayBackgroundExtended()).toBe(false)
   })
 
+  it('publishes a saved choice before storage finishes', async () => {
+    let finishWrite: () => void = () => {}
+    storage.setItem.mockImplementationOnce(
+      (key: string, value: string) =>
+        new Promise<void>((resolve) => {
+          finishWrite = () => {
+            stored.set(key, value)
+            resolve()
+          }
+        })
+    )
+    const preference = await import('./relay-background-preference')
+    const saving = preference.saveRelayBackgroundExtended(true)
+    await Promise.resolve()
+    expect(preference.isRelayBackgroundExtended()).toBe(true)
+    finishWrite()
+    await saving
+    expect(preference.isRelayBackgroundExtended()).toBe(true)
+  })
+
   it('preserves the last saved policy when a save fails', async () => {
     const preference = await import('./relay-background-preference')
     await preference.saveRelayBackgroundExtended(true)

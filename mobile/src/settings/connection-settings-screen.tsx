@@ -4,6 +4,7 @@ import { ListRow } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
+  isRelayBackgroundExtended,
   loadRelayBackgroundExtended,
   saveRelayBackgroundExtended
 } from '../storage/relay-background-preference'
@@ -28,7 +29,7 @@ export default function ConnectionSettingsScreen({ onBack }: { onBack?: () => vo
       },
       () => {
         if (active) {
-          setExtended(false)
+          setExtended(isRelayBackgroundExtended())
           setError('load')
         }
       }
@@ -83,7 +84,7 @@ export default function ConnectionSettingsScreen({ onBack }: { onBack?: () => vo
         />
       </SettingsSection>
       {error ? (
-        <SettingsNote>
+        <SettingsNote error>
           {error === 'load'
             ? t(
                 'settings.connectionSettingsScreen.loadError',
