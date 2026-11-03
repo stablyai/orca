@@ -1,6 +1,9 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { resolveQualifiedIndexedFolderWorkspace } from '@/store/workspace-record-selectors'
+import {
+  resolveQualifiedIndexedFolderWorkspace,
+  selectWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import {
   findIndexedProjectGroupOwner,
   findIndexedWorktreeOwner
@@ -96,7 +99,7 @@ function startFolderRepoWorkspace(repo: Repo): void {
   runBackgroundWorktreeCreation({
     repoId: repo.id,
     executionHostId: getRepoExecutionHostId(repo),
-    name: getSuggestedCreatureName(state.worktreesByRepo),
+    name: getSuggestedCreatureName(selectWorktreesByRepo(state)),
     nameWasGenerated: true,
     setupDecision: 'skip',
     agent: null,
@@ -164,7 +167,7 @@ export function startCreateFromCurrentWorkspace(): CurrentWorkspaceCreate {
   if (!worktreeId) {
     return { kind: 'unavailable' }
   }
-  const worktree = findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const worktree = findIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
   if (!worktree) {
     return { kind: 'unavailable' }
   }
