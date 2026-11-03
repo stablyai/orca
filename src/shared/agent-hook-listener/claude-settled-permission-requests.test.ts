@@ -3,6 +3,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import {
   isClaudePermissionSettledByReplay,
   MAX_CLAUDE_SETTLED_REQUESTS,
+  readClaudeBatchToolUseIds,
   readClaudeSettledRequests,
   retainClaudeSettledRequests
 } from './claude-settled-permission-requests'
@@ -30,6 +31,32 @@ describe('retained Claude request settlements', () => {
     expect(retainClaudeSettledRequests(afterEnd, ended('tool-1'), next)).toEqual([
       { toolUseId: 'tool-1' }
     ])
+  })
+
+  it('records every call a batch resolved, so a replay settles a denied wait', () => {
+    const batch = {
+      ...base,
+      hookEventName: 'PostToolBatch',
+      batchToolUseIds: readClaudeBatchToolUseIds([
+        { tool_use_id: 'tool-denied' },
+        { tool_use_id: 'tool-sibling' }
+      ])
+    }
+    const retained = retainClaudeSettledRequests(undefined, base, batch)
+    const replayed = {
+      ...base,
+      hookEventName: 'PreToolUse',
+      toolUseId: 'tool-next',
+      isReplay: true,
+      claudeSettledRequests: retained
+    }
+    const waiting = {
+      ...base,
+      hookEventName: 'PermissionRequest',
+      toolUseId: 'tool-denied',
+      payload: { ...base.payload, state: 'waiting' as const }
+    }
+    expect(isClaudePermissionSettledByReplay(waiting, replayed)).toBe(true)
   })
 
   it.each([

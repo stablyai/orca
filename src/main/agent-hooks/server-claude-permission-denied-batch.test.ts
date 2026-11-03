@@ -80,19 +80,34 @@ describe('Claude permission wait denied without a tool result hook', () => {
     })
   })
 
-  it("keeps a lead's wait when only a subagent's batch resolves", async () => {
-    await withClaudeHookServer(async (post, server) => {
-      await postDeniedPermission(post)
-      await post({
-        hook_event_name: 'PostToolBatch',
-        agent_id: 'agent-child',
-        agent_type: 'general-purpose',
-        tool_calls: [{ tool_name: 'Read', tool_input: {}, tool_use_id: 'toolu-child' }]
-      })
+  it.each([
+    {
+      hook_event_name: 'PostToolBatch',
+      tool_calls: [{ tool_name: 'Read', tool_input: {}, tool_use_id: 'toolu-child' }]
+    },
+    {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Read',
+      tool_input: {},
+      tool_use_id: 'toolu-child'
+    }
+  ])(
+    "keeps a lead's wait through a subagent's $hook_event_name and a later sibling",
+    async (childEvent) => {
+      await withClaudeHookServer(async (post, server) => {
+        await postDeniedPermission(post)
+        await post({ ...childEvent, agent_id: 'agent-child', agent_type: 'general-purpose' })
+        await post({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Read',
+          tool_input: { file_path: '/tmp/sibling.txt' },
+          tool_use_id: 'toolu-sibling'
+        })
 
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({ paneKey: PANE, state: 'waiting', toolName: 'Bash' })
-      ])
-    })
-  })
+        expect(server.getStatusSnapshot()).toEqual([
+          expect.objectContaining({ paneKey: PANE, state: 'waiting', toolName: 'Bash' })
+        ])
+      })
+    }
+  )
 })

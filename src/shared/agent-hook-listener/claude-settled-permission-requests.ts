@@ -49,24 +49,42 @@ export function readClaudeSettledRequests(value: unknown): ClaudeSettledRequest[
   return requests
 }
 
-function settledRequestOf(event: AgentHookEventPayload): ClaudeSettledRequest | undefined {
-  if (
-    event.payload.agentType !== 'claude' ||
-    (event.hookEventName !== 'PostToolUse' && event.hookEventName !== 'PostToolUseFailure')
-  ) {
+/** Reads PostToolBatch `tool_calls` IDs, keeping the newest that fit one replay's settlement list. */
+export function readClaudeBatchToolUseIds(toolCalls: unknown): string[] | undefined {
+  if (!Array.isArray(toolCalls)) {
     return undefined
   }
-  const toolUseId = readId(event.toolUseId)
-  if (!toolUseId) {
-    return undefined
+  const ids = toolCalls.flatMap((call) => {
+    const id = isRecord(call) ? readId(call.tool_use_id) : undefined
+    return id ? [id] : []
+  })
+  return ids.length > 0 ? ids.slice(-MAX_CLAUDE_SETTLED_REQUESTS) : undefined
+}
+
+function settledRequestsOf(event: AgentHookEventPayload): ClaudeSettledRequest[] {
+  if (event.payload.agentType !== 'claude') {
+    return []
   }
+  const toolUseIds =
+    event.hookEventName === 'PostToolUse' || event.hookEventName === 'PostToolUseFailure'
+      ? [event.toolUseId]
+      : event.hookEventName === 'PostToolBatch'
+        ? (event.batchToolUseIds ?? [])
+        : []
   const toolAgentId = readId(event.toolAgentId)
   const toolAgentType = readId(event.toolAgentType)
-  return {
-    toolUseId,
-    ...(toolAgentId ? { toolAgentId } : {}),
-    ...(toolAgentType ? { toolAgentType } : {})
-  }
+  return toolUseIds.flatMap((value) => {
+    const toolUseId = readId(value)
+    return toolUseId
+      ? [
+          {
+            toolUseId,
+            ...(toolAgentId ? { toolAgentId } : {}),
+            ...(toolAgentType ? { toolAgentType } : {})
+          }
+        ]
+      : []
+  })
 }
 
 function sameClaudeRun(previous: AgentHookEventPayload, next: AgentHookEventPayload): boolean {
@@ -87,8 +105,7 @@ export function retainClaudeSettledRequests(
     return undefined
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
-  const settled = settledRequestOf(next)
-  if (settled) {
+  for (const settled of settledRequestsOf(next)) {
     const existing = kept.findIndex((request) => sameRequest(request, settled))
     if (existing !== -1) {
       kept.splice(existing, 1)

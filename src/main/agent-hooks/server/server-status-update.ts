@@ -269,6 +269,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const {
       claudeRunningNonAgentTask: _unpaired,
       claudeSettledRequests: _settled,
+      batchToolUseIds: _batchToolUseIds,
       ...unpairedPayload
     } = effectivePayload
     const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)

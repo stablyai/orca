@@ -65,9 +65,14 @@ export function shouldKeepClaudePermissionVisible(
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'waiting' ||
     previous.hookEventName !== 'PermissionRequest' ||
-    next.payload.agentType !== 'claude' ||
-    next.payload.state !== 'working'
+    next.payload.agentType !== 'claude'
   ) {
+    return false
+  }
+  if (isOtherAgentProgressEchoingWait(previous, next)) {
+    return true
+  }
+  if (next.payload.state !== 'working') {
     return false
   }
   if (next.hasExplicitPrompt === true) {
@@ -90,6 +95,29 @@ export function shouldKeepClaudePermissionVisible(
     return false
   }
   return true
+}
+
+const CLAUDE_TOOL_PROGRESS_EVENTS: ReadonlySet<string> = new Set([
+  'PreToolUse',
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PostToolBatch'
+])
+
+// Another agent's progress restates the cached wait; replacing the row would drop the PermissionRequest identity.
+function isOtherAgentProgressEchoingWait(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): boolean {
+  const nextAgentId = next.toolAgentId?.trim() || undefined
+  return (
+    next.payload.state === 'waiting' &&
+    nextAgentId !== undefined &&
+    nextAgentId !== (previous.toolAgentId?.trim() || undefined) &&
+    next.hookEventName !== undefined &&
+    CLAUDE_TOOL_PROGRESS_EVENTS.has(next.hookEventName) &&
+    !isAskUserQuestionTool(next.payload.toolName)
+  )
 }
 
 // A batch resolves only after each call's prompt ends, including denials that emit no PostToolUse.
