@@ -1,6 +1,6 @@
 import { type posix, win32 } from 'node:path'
 import { isDefinitiveAbsence } from '../shared/definitive-filesystem-absence'
-import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
+import type { WorktreeProofAccess } from './workspaces/removal/worktree-orphan-gitdir-proof'
 
 type PathOps = typeof posix
 

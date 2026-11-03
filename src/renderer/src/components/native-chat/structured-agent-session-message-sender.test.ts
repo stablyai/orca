@@ -291,13 +291,17 @@ describe('structured agent session message sender', () => {
 
   // Expired paired-server attachments require removal/reattachment, so return the whole message even without a mounted view.
   it('gives back a message refused for an expired attachment, with its file and why', async () => {
-    const STORED = '/srv/agent-session-attachments/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01/shot.png'
+    const uploadId = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
+    const STORED = `/srv/agent-session-attachments/${uploadId}/shot.png`
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: {
         code: 'agent_session_operation_invalid',
         message: 'not stored',
-        details: { reason: 'attachmentExpired' }
+        details: {
+          reason: 'attachmentExpired',
+          expiredAttachments: [{ uploadId, name: 'shot.png' }]
+        }
       }
     })
     const a = send('look at this', { attachments: [{ path: STORED, previewUri: STORED }] })
@@ -313,10 +317,11 @@ describe('structured agent session message sender', () => {
           { type: 'image-ref', path: STORED }
         ]
       },
-      undefined
+      undefined,
+      new Set([uploadId])
     )
     expect(getStructuredAgentSessionSendNotice(SESSION)).toBe(
-      'This attachment expired. Your message was not sent. Remove it and attach it again.'
+      'shot.png expired. Your message was not sent. Remove it and attach it again.'
     )
     expect(sendCalls()).toBe(1)
   })
@@ -427,7 +432,8 @@ describe('structured agent session message sender', () => {
       SESSION,
       a.clientMessageId,
       expect.objectContaining({ blocks: expect.any(Array) }),
-      ['ssh-1']
+      ['ssh-1'],
+      undefined
     )
     expect(JSON.stringify(mocks.call.mock.calls[0][2])).not.toContain('ssh-1')
   })

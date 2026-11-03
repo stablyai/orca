@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
-import { writeFileDurableSync } from './durable-file-write'
+import { writeFileDurableSync } from './filesystem/durable-file-write'
 import {
   getTerminalScrollbackSnapshotPath,
   readTerminalScrollbackStoredBytesSync,

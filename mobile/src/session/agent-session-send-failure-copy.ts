@@ -115,6 +115,8 @@ export const SEND_FAILURE_COPY = {
       "An attachment on this message can't be sent to the agent.",
       values
     ),
+  attachmentsExpired: (values) =>
+    translate('session.failure.attachmentsExpired', '{{names}} expired.', values),
   attachmentUnreadable: (values) =>
     translate(
       'session.failure.attachmentUnreadable',

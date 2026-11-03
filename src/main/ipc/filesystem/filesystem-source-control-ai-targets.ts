@@ -9,7 +9,7 @@ import type { CommitMessageGenerationTarget } from '../../text-generation/commit
 import { resolve } from 'node:path'
 import { listRepoWorktreeGraph } from '../../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 
 function comparableLocalPath(value: string): string {

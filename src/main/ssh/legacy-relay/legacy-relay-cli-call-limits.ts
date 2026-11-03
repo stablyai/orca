@@ -12,7 +12,7 @@ import {
   readPromptBasePayloadHash,
   replayStableCallerParams
 } from '../../runtime/rpc/orchestration-mutation-receipt'
-import { getCompiledSchema } from '../../zod-schema-compilation'
+import { getCompiledSchema } from '../../schema-validation/zod-schema-compilation'
 import type { LegacyRelayCliCall } from './legacy-relay-cli-caller'
 
 /** Enough for a coordinator and its workers' waits; past it a host is flooding this desktop. */

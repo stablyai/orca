@@ -17,7 +17,7 @@ import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
-import type { AgentAwakeService } from '../agent-awake-service'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'

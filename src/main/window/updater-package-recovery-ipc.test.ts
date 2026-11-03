@@ -40,7 +40,7 @@ vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: vi.fn()
 }))
 vi.mock('../browser/browser-manager', () => ({ browserManager: { unregisterAll: vi.fn() } }))
-vi.mock('../macos-tcc-prompt-notice', () => ({
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: vi.fn(),
   consumePendingTccPromptNotice: vi.fn(),
   dismissTccPromptNotice: vi.fn(),

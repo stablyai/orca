@@ -11,7 +11,7 @@ import {
   listPreparations,
   startPreparation,
   takePreparation
-} from '../worktree-create-preparation-pool'
+} from '../workspaces/creation/preparation/worktree-create-preparation-pool'
 import {
   acquireGitAdmission,
   GitAdmissionScheduler,

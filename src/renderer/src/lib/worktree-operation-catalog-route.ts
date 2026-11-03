@@ -5,10 +5,15 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspace-record-selectors'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  findIndexedWorktrees,
   findIndexedRepoOwnerForHost,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -23,16 +28,52 @@ import type {
 
 const repoOperationRouteIndexCache = new WeakMap<
   NonNullable<WorktreeOperationRouteState['repos']>,
-  ReadonlyMap<string, WorktreeOperationRouteResolution>
+  {
+    routes: ReadonlyMap<string, WorktreeOperationRouteResolution>
+    sharedLocalProjects: ReadonlySet<string>
+  }
+>()
+const explicitRouteIndexes = new WeakMap<
+  readonly WorktreeOperationOwnerRecord[],
+  {
+    known: readonly WorktreeOperationOwnerRecord[]
+    detected: readonly WorktreeOperationOwnerRecord[]
+    repos: WorktreeOperationRouteState['repos']
+    result: WorktreeOperationRouteResolution
+  }
 >()
 
 export function resolveExplicitWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const known = findIndexedWorktrees(selectWorktreesByRepo(state), worktreeId)
+  const detected = findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId)
+  const rows = known.length ? known : detected
+  const cached = rows.length ? explicitRouteIndexes.get(rows) : undefined
+  if (
+    cached &&
+    cached.known === known &&
+    cached.detected === detected &&
+    cached.repos === state.repos
+  ) {
+    return cached.result
+  }
+  const result = resolveCatalogRoute(state, worktreeId, detected)
+  if (rows.length) {
+    explicitRouteIndexes.set(rows, { known, detected, repos: state.repos, result })
+  }
+  return result
+}
+
+function resolveCatalogRoute(
+  state: WorktreeOperationRouteState,
+  worktreeId: string,
+  detected: readonly WorktreeOperationOwnerRecord[]
+): WorktreeOperationRouteResolution {
   const exactRoutes = new Map<string, WorktreeOperationRoute>()
   const exactRepoIds = new Set<string>()
-  const indexedWorktree = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const indexedWorktree = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
   if (indexedWorktree.kind === 'ambiguous') {
     return { kind: 'ambiguous' }
   }
@@ -46,7 +87,7 @@ export function resolveExplicitWorktreeOperationRouteResult(
       addRoute(exactRoutes, resolution.route)
     }
   }
-  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+  for (const worktree of detected) {
     exactRepoIds.add(worktree.repoId)
     const resolution = resolveRowRoute(state, worktree)
     if (resolution.kind === 'ambiguous') {
@@ -111,42 +152,7 @@ function isUnstampedRowOfSharedLocalProject(
   ) {
     return false
   }
-  return sharedLocalProjectRepoIds(state.repos).has(owner.repoId)
-}
-
-const sharedLocalProjectIndexCache = new WeakMap<
-  NonNullable<WorktreeOperationRouteState['repos']>,
-  ReadonlySet<string>
->()
-
-/** Repo ids with local and server setups and no SSH sibling (an SSH sibling keeps connection-owned routing); one pass per repo catalog. */
-function sharedLocalProjectRepoIds(
-  repos: WorktreeOperationRouteState['repos']
-): ReadonlySet<string> {
-  if (!repos) {
-    return new Set()
-  }
-  let index = sharedLocalProjectIndexCache.get(repos)
-  if (!index) {
-    const kinds = new Map<string, Set<'local' | 'runtime' | 'other'>>()
-    for (const repo of repos) {
-      const hostId = getRepoExecutionHostId(repo)
-      const kind =
-        hostId === LOCAL_EXECUTION_HOST_ID
-          ? 'local'
-          : parseExecutionHostId(hostId)?.kind === 'runtime'
-            ? 'runtime'
-            : 'other'
-      kinds.set(repo.id, (kinds.get(repo.id) ?? new Set()).add(kind))
-    }
-    index = new Set(
-      [...kinds]
-        .filter(([, seen]) => seen.has('local') && seen.has('runtime') && !seen.has('other'))
-        .map(([repoId]) => repoId)
-    )
-    sharedLocalProjectIndexCache.set(repos, index)
-  }
-  return index
+  return repoOperationIndex(state.repos)?.sharedLocalProjects.has(owner.repoId) ?? false
 }
 
 /** An unstamped record's host by the rules above: a shared local project's row is local, else its repo setup; with no setup, or one this app also has, the row was listed here (paired listings stamp ownership). */
@@ -171,18 +177,31 @@ function resolveIndexedRepoOperationRoute(
   repos: WorktreeOperationRouteState['repos'],
   repoId: string
 ): WorktreeOperationRouteResolution {
+  return repoOperationIndex(repos)?.routes.get(repoId) ?? { kind: 'missing' }
+}
+
+function repoOperationIndex(repos: WorktreeOperationRouteState['repos']) {
   if (!repos) {
-    return { kind: 'missing' }
+    return undefined
   }
   let index = repoOperationRouteIndexCache.get(repos)
   if (!index) {
     const next = new Map<string, WorktreeOperationRouteResolution>()
+    const hostKinds = new Map<string, number>()
     for (const repo of repos) {
       const repoId = repo.id
+      const hostId = getRepoExecutionHostId(repo)
+      const kind =
+        hostId === LOCAL_EXECUTION_HOST_ID
+          ? 1
+          : parseExecutionHostId(hostId)?.kind === 'runtime'
+            ? 2
+            : 4
+      hostKinds.set(repoId, (hostKinds.get(repoId) ?? 0) | kind)
       if (!repo.executionHostId?.trim() && !repo.connectionId?.trim()) {
         continue
       }
-      const route = routeForOwner({ hostId: getRepoExecutionHostId(repo) })
+      const route = routeForOwner({ hostId })
       if (!route) {
         continue
       }
@@ -196,8 +215,13 @@ function resolveIndexedRepoOperationRoute(
         next.set(repoId, { kind: 'ambiguous' })
       }
     }
-    index = next
+    index = {
+      routes: next,
+      sharedLocalProjects: new Set(
+        [...hostKinds].filter(([, kinds]) => kinds === 3).map(([id]) => id)
+      )
+    }
     repoOperationRouteIndexCache.set(repos, index)
   }
-  return index.get(repoId) ?? { kind: 'missing' }
+  return index
 }

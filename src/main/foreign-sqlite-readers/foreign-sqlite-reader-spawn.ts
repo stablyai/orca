@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { Worker } from 'node:worker_threads'
-import { currentWorkerEntryLayout } from '../worker-thread-entry-path'
+import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import type { CursorDesktopProfileReadResult } from './cursor-profile-result'
 import { ForeignSqliteReaderClient } from './foreign-sqlite-reader-client'
 import { resolveForeignSqliteReaderEntryPath } from './foreign-sqlite-reader-entry-path'

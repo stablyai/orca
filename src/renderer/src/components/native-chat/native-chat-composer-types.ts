@@ -41,6 +41,7 @@ export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendReques
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   send: (
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[],

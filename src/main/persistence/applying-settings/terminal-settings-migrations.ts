@@ -11,7 +11,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
-import { expandLeadingHomePath } from '../../home-path-expansion'
+import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
 
 /** Unexpanded, a leading ~ resolves inside each repo and worktrees land in <repo>/~ (#34944). */
 export function expandWorkspaceDirHome(settings: Partial<GlobalSettings>): Partial<GlobalSettings> {

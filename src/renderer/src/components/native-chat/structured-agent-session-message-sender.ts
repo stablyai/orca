@@ -32,7 +32,7 @@ import {
   beginSend,
   finish,
   handBack,
-  refusedSendParts,
+  handBackRefused,
   retainUnconfirmed,
   runtimes,
   settleRecorded,
@@ -74,7 +74,7 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   } else if (outcome.evidence.kind === 'recorded') {
     settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
   } else if (outcome.evidence.kind === 'not-recorded') {
-    handBack(current, refusedSendParts(outcome.evidence.failure))
+    handBackRefused(current, outcome.evidence.failure)
   } else {
     retainUnconfirmed(current)
   }
@@ -197,13 +197,10 @@ export function reserveStructuredAgentSessionSend(
             settleRecorded(pending, result.submission, 'reply', result.cursor)
           } else if (result.kind === 'unconfirmed') {
             retainUnconfirmed(pending)
+          } else if (result.failure) {
+            handBackRefused(pending, result.failure)
           } else {
-            handBack(
-              pending,
-              result.failure
-                ? refusedSendParts(result.failure)
-                : agentSessionWriteNotDoneParts('composer-send')
-            )
+            handBack(pending, agentSessionWriteNotDoneParts('composer-send'))
           }
         }
       }
