@@ -39,6 +39,22 @@ test('collapsing a browser split moves Find to its sibling and preserves the dra
     expect(await readDraft()).toBe(draft)
 
     const strip = page.locator(`[data-tab-group-strip-id="${split.secondBrowserGroupId}"]`)
+    const siblingStrip = page.locator(`[data-tab-group-strip-id="${split.firstBrowserGroupId}"]`)
+    const siblingRight = await siblingStrip.evaluate((el) => el.getBoundingClientRect().right)
+    const { left, top, height, width } = await strip.evaluate((el) => {
+      const { left, top, height, width } = el.getBoundingClientRect()
+      return { left, top, height, width }
+    })
+    const dividerX = (siblingRight + left) / 2
+    const dividerY = top + height / 2
+    await page.mouse.move(dividerX, dividerY)
+    await page.mouse.down()
+    await page.mouse.move(dividerX - width / 4, dividerY, { steps: 5 })
+    await page.mouse.up()
+    const paneWidth = () => strip.evaluate((el) => el.getBoundingClientRect().width)
+    const resizedWidth = await paneWidth()
+    expect(resizedWidth).toBeGreaterThan(width + 1)
+
     await strip.getByRole('button', { name: 'Collapse webpage' }).click()
     const expand = page.getByRole('button', { name: 'Expand webpage' })
     await expect(expand).toBeVisible()
@@ -51,6 +67,7 @@ test('collapsing a browser split moves Find to its sibling and preserves the dra
 
     await expand.click()
     await expect(strip.getByRole('button', { name: 'Collapse webpage' })).toBeVisible()
+    await expect.poll(paneWidth).toBeCloseTo(resizedWidth, 1)
     expect(await guest.evaluate((webview: Electron.WebviewTag) => webview.getWebContentsId())).toBe(
       guestId
     )
