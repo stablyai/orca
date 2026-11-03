@@ -142,7 +142,7 @@ export function WorktreeCardIdentityHover({
           if (
             !open ||
             !identityRef.current?.querySelector(
-              '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus'
+              '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus-visible'
             )
           ) {
             hoverControl.handleHoverOpenChange(open)
