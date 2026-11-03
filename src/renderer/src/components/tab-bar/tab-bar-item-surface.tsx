@@ -28,6 +28,7 @@ export type TabBarItemSurfaceRuntime = Pick<
   TabBarRuntimeModel,
   | 'resolvedGroupId'
   | 'generatedTabTitlesEnabled'
+  | 'pinnedTabsIconOnly'
   | 'unifiedTabByVisibleId'
   | 'tabAgentTypesByTabId'
   | 'nativeChatTabWideFallbackUnsafeTabsById'
@@ -65,6 +66,7 @@ export function renderTabBarItems({
   const {
     resolvedGroupId,
     generatedTabTitlesEnabled,
+    pinnedTabsIconOnly,
     unifiedTabByVisibleId,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
@@ -134,6 +136,7 @@ export function renderTabBarItems({
         hasTabsToLeft={index > 0}
         hasTabsToRight={index < items.length - 1}
         isActive={isActiveItem(item)}
+        pinnedIconOnly={pinnedTabsIconOnly}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
         includeTopTabBorder={includeTopTabBorder}

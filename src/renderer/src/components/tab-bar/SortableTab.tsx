@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Pin } from 'lucide-react'
+import { Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
@@ -24,11 +24,12 @@ import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { translate } from '@/i18n/i18n'
-import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_ICON_ONLY_ROOT_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
+import { TerminalTabCloseButton } from './TerminalTabCloseButton'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -57,6 +58,7 @@ export type SortableTabProps = {
   hasTabsToLeft: boolean
   isActive: boolean
   isPinned: boolean
+  pinnedIconOnly?: boolean
   isExpanded: boolean
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
@@ -91,6 +93,7 @@ export default function SortableTab({
   hasTabsToLeft,
   isActive,
   isPinned,
+  pinnedIconOnly = false,
   isExpanded,
   onActivate,
   onClose,
@@ -197,7 +200,9 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  // Why: an open rename editor needs the label slot back, so it outranks the collapse.
+  const iconOnly = isPinned && pinnedIconOnly && !isEditing
+  const slotProps = useTabStripSlotProps(tab.id, isActive, iconOnly)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -211,7 +216,9 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      // Why: collapsed to an icon there is no text to name the tab, and dnd-kit's role="button" needs one.
+      aria-label={iconOnly ? tabTitle : undefined}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)} ${iconOnly ? TAB_ICON_ONLY_ROOT_CLASSES : ''}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -255,10 +262,10 @@ export default function SortableTab({
         isActive={isActive}
         progress={programProgress}
       />
-      {isPinned && !isEditing && (
+      {isPinned && !isEditing && !iconOnly && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
-      {isEditing ? (
+      {iconOnly ? null : isEditing ? (
         <Input
           ref={setRenameInputElement}
           density="compact"
@@ -315,38 +322,11 @@ export default function SortableTab({
         </button>
       )}
       {!isEditing && !isPinned && (
-        <button
-          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
-              ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
-              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
-          }`}
-          // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
-          aria-label={translate(
-            'auto.components.tab.bar.SortableTab.6df69d9388',
-            'Close tab {{value0}}',
-            { value0: tabTitle }
-          )}
-          type="button"
-          data-tab-close-button="true"
-          onPointerDown={(e) => {
-            if (e.button === 0) {
-              e.stopPropagation()
-            }
-          }}
-          onMouseDown={(e) => {
-            if (e.button === 0) {
-              e.stopPropagation()
-            }
-          }}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onClose(tab.id)
-          }}
-        >
-          <X className="w-3 h-3" />
-        </button>
+        <TerminalTabCloseButton
+          tabTitle={tabTitle}
+          isActive={isActive}
+          onClose={() => onClose(tab.id)}
+        />
       )}
     </div>
   )

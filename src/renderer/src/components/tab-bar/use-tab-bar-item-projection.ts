@@ -27,6 +27,7 @@ export function useTabBarItemProjection({
   unifiedTabs,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
+  pinnedTabsIconOnly,
   statusByRelativePath
 }: {
   props: TabBarProps
@@ -34,6 +35,7 @@ export function useTabBarItemProjection({
   unifiedTabs: readonly Tab[]
   unifiedTabByVisibleId: Map<string, Tab>
   generatedTabTitlesEnabled: boolean
+  pinnedTabsIconOnly: boolean
   statusByRelativePath: Map<string, GitFileStatus>
 }): TabBarItemProjection {
   const {
@@ -147,9 +149,17 @@ export function useTabBarItemProjection({
         generatedTabTitlesEnabled,
         expandedPaneByTabId,
         statusByRelativePath,
-        chatNames
+        chatNames,
+        pinnedTabsIconOnly
       ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath, chatNames]
+    [
+      expandedPaneByTabId,
+      generatedTabTitlesEnabled,
+      orderedItems,
+      statusByRelativePath,
+      chatNames,
+      pinnedTabsIconOnly
+    ]
   )
 
   return {

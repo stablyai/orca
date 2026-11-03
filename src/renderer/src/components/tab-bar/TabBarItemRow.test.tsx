@@ -177,6 +177,7 @@ function Strip({
   const runtime: TabBarItemSurfaceRuntime = {
     resolvedGroupId: 'group-1',
     generatedTabTitlesEnabled,
+    pinnedTabsIconOnly: false,
     unifiedTabByVisibleId: new Map(),
     tabAgentTypesByTabId: {},
     nativeChatTabWideFallbackUnsafeTabsById: {},
