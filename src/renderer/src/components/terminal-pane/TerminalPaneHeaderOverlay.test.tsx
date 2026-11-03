@@ -215,6 +215,11 @@ describe('TerminalPaneHeaderOverlay', () => {
 
     expect(container.querySelector('button[aria-label="Show terminal"]')).not.toBeNull()
     expect(container.querySelectorAll('button[aria-label="Chat settings"]')).toHaveLength(1)
+    expect(
+      container.querySelector(
+        '.pane-title-bar[data-active-pane] button[aria-label="Chat settings"]'
+      )
+    ).not.toBeNull()
     expect(container.textContent).not.toContain('Continue in Chat UI')
   })
 

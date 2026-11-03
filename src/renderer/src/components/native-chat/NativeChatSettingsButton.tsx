@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { getChatWidthOptions } from '../settings/chat-appearance-search'
+import { getChatWidthOptions } from '../settings/appearance/chat/chat-appearance-search'
 import { writeNativeChatAppearance } from './native-chat-appearance-write'
 
 export function NativeChatSettingsButton(): React.JSX.Element {
