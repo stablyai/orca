@@ -29,7 +29,7 @@ export async function readGenerationSelections(
   const names = entries
     .map((entry) => entry.name)
     .filter((name) => /^\d{16}\.json$/.test(name))
-    .toSorted((left, right) => right.localeCompare(left))
+    .sort((left, right) => right.localeCompare(left))
   const records: GenerationSelection[] = []
   for (const name of names) {
     const text = await fs.readText(joinUri(directory(root), name))
