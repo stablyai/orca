@@ -2,7 +2,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree

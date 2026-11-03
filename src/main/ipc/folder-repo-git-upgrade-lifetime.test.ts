@@ -20,7 +20,7 @@ vi.mock('../git/repo', () => ({ isGitRepoAsync: fake.git, getGitRepoRootAsync: f
 vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: fake.prepare
 }))
-vi.mock('./registered-worktree-roots-cache', () => ({
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: fake.invalidate
 }))
 vi.mock('./repos/repos-changed-notification', () => ({ notifyReposChanged: fake.reposChanged }))

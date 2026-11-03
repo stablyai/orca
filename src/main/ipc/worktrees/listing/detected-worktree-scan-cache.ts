@@ -8,7 +8,7 @@ import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
-} from '../../registered-worktree-roots-cache'
+} from '../removal/registered-worktree-roots-cache'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import {
   bumpLocalWorktreeScanGeneration,

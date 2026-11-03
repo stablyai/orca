@@ -73,7 +73,7 @@ import { registerFilesystemHandlers } from './filesystem'
 import {
   registerWorktreeRootsForRepo,
   invalidateAuthorizedRootsCache
-} from '../registered-worktree-roots-cache'
+} from '../worktrees/removal/registered-worktree-roots-cache'
 
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {

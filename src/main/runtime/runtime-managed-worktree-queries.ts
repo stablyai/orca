@@ -47,7 +47,7 @@ import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/config
 import {
   getRetiredNameRegistryForRepo,
   hasRetiredNameRegistryStore
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 
 export class RuntimeManagedWorktreeQueries {
   constructor(private readonly deps: RuntimeManagedWorktreeQueryDependencies) {}

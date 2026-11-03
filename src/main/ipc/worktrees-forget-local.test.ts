@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import {
   registerWorktreeRootsForRepo,
   resolveRegisteredWorktreePath
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   listWorktreesMock,
   removeWorktreeMock,
@@ -25,6 +25,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )

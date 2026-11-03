@@ -4,7 +4,7 @@ import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-o
 import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../../ipc/worktree-logic'
 import { usesNativeWindowsRemoval } from '../../git/windows-worktree-removal'
-import { isPrunableGitFileWorktree } from '../../worktree-prunable-git-file'
+import { isPrunableGitFileWorktree } from '../../workspaces/removal/worktree-prunable-git-file'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { isLocalRuntimeWorktreePathMissing } from '../runtime-worktree-filesystem'
 

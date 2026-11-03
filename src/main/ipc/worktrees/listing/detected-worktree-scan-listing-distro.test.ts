@@ -17,7 +17,7 @@ vi.mock('../../../repo-worktrees', () => ({ listRepoWorktreesForDetectedScan: mo
 vi.mock('../../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: mocks.registerRoots
 }))

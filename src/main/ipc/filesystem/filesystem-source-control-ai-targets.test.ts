@@ -8,7 +8,7 @@ vi.mock('../../repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph }))
 vi.mock('../../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.gitOptions
 }))
-vi.mock('../registered-worktree-roots-cache', () => ({
+vi.mock('../worktrees/removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: async (path: string) => path
 }))
 vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: vi.fn() }))

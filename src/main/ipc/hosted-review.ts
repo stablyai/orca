@@ -16,7 +16,7 @@ import {
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { hostedReviewForBranchReply } from '../../shared/hosted-review'
 import { readHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
   getLocalProjectGhExecOptions,

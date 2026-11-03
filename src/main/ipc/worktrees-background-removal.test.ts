@@ -12,7 +12,7 @@ import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import {
   _resetPendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval
-} from '../worktree-background-removal'
+} from '../workspaces/removal/worktree-background-removal'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
@@ -21,6 +21,10 @@ vi.mock('electron', async () =>
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+vi.mock('../git/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: (await import('./worktrees-test-module-mocks')).listWorktreesMock
+}))
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )

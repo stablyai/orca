@@ -21,7 +21,7 @@ import {
 } from '../../shared/execution-host'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { resolveImportedFolderProjectLink } from '../../shared/imported-folder-project-identity'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'

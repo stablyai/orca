@@ -16,7 +16,7 @@ import { createNestedRepoImportTargetResolver } from '../../project-groups/neste
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { ProjectGroupImportNestedArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'

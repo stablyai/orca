@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { lstat, readdir } from '../filesystem/asar-transparent-fs'
 import { removeHostCheckout } from '../filesystem/host-tree-removal'
 import { parseWslPath } from '../wsl'
-import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
+import { CLIENT_REMOVAL_HOME } from '../workspaces/removal/worktree-removal-home-guard'
 import {
   assertWorktreeUnlockedForRemoval,
   unregisteredFolderRefusal
@@ -14,7 +14,7 @@ import {
   findRegisteredDeletableWorktree,
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
-} from '../worktree-removal-safety'
+} from '../workspaces/removal/worktree-removal-safety'
 import { readTranslatedWorktreeGraph } from './worktree-list-reader'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { getErrorCode, type RemoveWorktreeOptions } from './worktree-operation-options'

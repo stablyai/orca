@@ -21,17 +21,17 @@ import * as nativeFs from '../filesystem/asar-transparent-fs'
 import * as diskFs from 'node:fs/promises'
 import * as nativeRemoval from '../git/windows-worktree-removal'
 import * as graphReader from '../git/worktree-list-reader'
-import { cleanupLocalOrphanedWorktreeDirectory } from '../local-orphaned-worktree-cleanup'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../workspaces/removal/local-orphaned-worktree-cleanup'
 import * as removalOwnership from '../ipc/worktrees/removal/worktree-removal-ownership'
 import { executeWorktreeRemoval } from '../ipc/worktrees/removal/execute-worktree-removal'
 import { RuntimeWorktreeRemovalInFlight } from './runtime-worktree-removal-in-flight'
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from './workspaces/workspace-removal-target'
 import type { WorktreeIpcContext } from '../ipc/worktrees/worktree-ipc-context'
-import * as backgroundRemoval from '../worktree-background-removal'
-import * as worktreeGit from '../git/worktree'
+import * as backgroundRemoval from '../workspaces/removal/worktree-background-removal'
+import * as worktreeGit from '../git/worktree-listing'
 import * as worktreeRemote from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
-import * as removalTable from '../worktree-removal-table'
+import * as removalTable from '../workspaces/removal/worktree-removal-table'
 import { listWorktreesStrict } from '../git/worktree'
 import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
 import {
@@ -45,13 +45,13 @@ import {
   loadWorktreeRemovalRecords,
   resumeInterruptedWorktreeRemovals,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
+} from '../workspaces/removal/worktree-background-removal'
+import { withUnregisteredRemovalCheckouts } from '../workspaces/removal/worktree-removal-listing'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
-} from '../worktree-removal-records'
+} from '../workspaces/removal/worktree-removal-records'
 import { queueWorkspaceDelete } from './workspaces/workspace-lifecycle-commands'
 import { WorkspaceLifecycleQueue } from './workspaces/workspace-lifecycle-queue'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'

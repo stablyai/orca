@@ -6,7 +6,7 @@ import {
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from './workspaces/creation/preparation/worktree-create-preparation'
-import { hasPendingWorktreeRemovals } from './worktree-removal-table'
+import { hasPendingWorktreeRemovals } from './workspaces/removal/worktree-removal-table'
 
 // pack-refs shares a ref lock with worktree deletion; defer while user work is active.
 export type RepoMaintenanceIdleInputs = {

@@ -15,7 +15,7 @@ vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
-vi.mock('./registered-worktree-roots-cache', () =>
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
 vi.mock('../workspaces/creation/worktree-root-preparation', () =>

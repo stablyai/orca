@@ -78,7 +78,7 @@ vi.mock('../workspaces/creation/preparation/worktree-create-preparation', () => 
 vi.mock('../git/worktree', () => ({ addWorktree: mocks.add, addSparseWorktree: mocks.addSparse }))
 vi.mock('../ipc/worktree-remote', () => ({ configureCreatedWorktreePushTarget: mocks.pushTarget }))
 vi.mock('../ipc/created-worktree-reconciliation', () => ({ resolveCreatedWorktree: mocks.listing }))
-vi.mock('../worktree-name-retirement', () => ({
+vi.mock('../workspaces/removal/retirement/worktree-name-retirement', () => ({
   failedWorktreeCreationNeedsRetirement: vi.fn(),
   retireGeneratedWorktreeName: vi.fn()
 }))
