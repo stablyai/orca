@@ -2,19 +2,32 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useStatusBarDensity } from './status-bar-density'
+import { STATUS_BAR_DENSITY_LEVELS, useStatusBarDensity } from './status-bar-density'
 
+// Layout model: 5 calm chips (70px roomy, 40px compact), 12px gaps, a 20px "+N" chip,
+// segments 80px (30px icon-only), 16px bar gap. Level 3 at 220px collapses gemini, grok, kimi:
+// claude + codex + "+N" = 40 + 40 + 20 + 2 * 12 = 124, plus 16 + 80 = 220.
 const PROVIDERS = ['claude', 'codex', 'gemini', 'grok', 'kimi']
 const CHIP_GAP = 12
 const MORE_CHIP = 20
+const TIGHTEST = STATUS_BAR_DENSITY_LEVELS.length - 1
 
 const layout = {
   barWidth: 0,
-  collapsedChipDrift: (_collapsedCount: number) => 0
+  chipWidth: (compact: boolean) => (compact ? 40 : 70),
+  /** Extra width a collapsed (out-of-flow) chip measures compared with its in-row width. */
+  collapsedChipDrift: (_collapsedCount: number) => 0,
+  segmentsWidth: (iconOnly: boolean) => (iconOnly ? 30 : 80)
+}
+
+function resetLayout(): void {
+  layout.chipWidth = (compact) => (compact ? 40 : 70)
+  layout.collapsedChipDrift = () => 0
+  layout.segmentsWidth = (iconOnly) => (iconOnly ? 30 : 80)
 }
 
 function chipWidth(element: HTMLElement): number {
-  const base = element.closest('[data-compact="true"]') ? 40 : 70
+  const base = layout.chipWidth(element.closest('[data-compact="true"]') !== null)
   if (element.dataset.usageCollapsed !== 'true') {
     return base
   }
@@ -32,7 +45,7 @@ function measure(element: HTMLElement): number {
     return MORE_CHIP
   }
   if (element.dataset.segments !== undefined) {
-    return element.dataset.iconOnly === 'true' ? 30 : 80
+    return layout.segmentsWidth(element.dataset.iconOnly === 'true')
   }
   if (element.dataset.usage !== undefined) {
     const row = [...element.querySelectorAll<HTMLElement>('[data-usage-chip],[data-usage-more]')]
@@ -48,6 +61,7 @@ function Harness(): React.JSX.Element {
     <div
       ref={barRef}
       data-bar
+      data-level={STATUS_BAR_DENSITY_LEVELS.indexOf(density)}
       style={{ columnGap: '16px', paddingLeft: '0px', paddingRight: '0px' }}
     >
       <div ref={usageRef} data-usage data-compact={density.compact}>
@@ -75,7 +89,23 @@ describe('useStatusBarDensity layout settling', () => {
   let container: HTMLDivElement
   let root: Root
 
+  const settledLevel = (): number =>
+    Number(container.querySelector<HTMLElement>('[data-bar]')!.dataset.level)
+  const collapsed = (): string[] =>
+    [
+      ...container.querySelectorAll<HTMLElement>('[data-usage-chip][data-usage-collapsed="true"]')
+    ].map((chip) => chip.dataset.usageChip!)
+  const renderedWidth = (): number =>
+    measure(container.querySelector<HTMLElement>('[data-usage]')!) +
+    16 +
+    measure(container.querySelector<HTMLElement>('[data-segments]')!)
+  const renderAt = (width: number): void => {
+    layout.barWidth = width
+    act(() => root.render(<Harness />))
+  }
+
   beforeEach(() => {
+    resetLayout()
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     vi.stubGlobal(
       'ResizeObserver',
@@ -107,17 +137,66 @@ describe('useStatusBarDensity layout settling', () => {
     vi.unstubAllGlobals()
   })
 
-  it('settles when collapsed chips measure a few pixels off their in-row width', () => {
-    // A collapsed (out-of-flow) chip measuring 2px off its in-row width restarted probing from level 0 forever.
-    layout.barWidth = 220
-    layout.collapsedChipDrift = () => 2
-    expect(() => act(() => root.render(<Harness />))).not.toThrow()
-    expect(container.querySelectorAll('[data-usage-collapsed="true"]').length).toBeGreaterThan(0)
+  describe('without measurement drift', () => {
+    it('collapses exactly the chips that need to go on a first render at a narrow width', () => {
+      renderAt(220)
+      expect(settledLevel()).toBe(3)
+      expect(collapsed()).toEqual(['gemini', 'grok', 'kimi'])
+      expect(renderedWidth()).toBeLessThanOrEqual(220)
+    })
+
+    it('lands on the same state when the bar narrows from wide', () => {
+      renderAt(1000)
+      expect(settledLevel()).toBe(0)
+      expect(collapsed()).toEqual([])
+      renderAt(220)
+      expect(settledLevel()).toBe(3)
+      expect(collapsed()).toEqual(['gemini', 'grok', 'kimi'])
+    })
   })
 
-  it('stops re-collapsing when each collapse makes the next one measure differently', () => {
-    layout.barWidth = 220
+  it('settles on the drift-free result when collapsed chips measure a few pixels off', () => {
+    // An out-of-flow chip measuring 2px off its in-row width used to restart probing from level 0 forever.
+    layout.collapsedChipDrift = () => 2
+    renderAt(220)
+    expect(settledLevel()).toBe(3)
+    expect(collapsed()).toEqual(['gemini', 'grok', 'kimi'])
+  })
+
+  it('still re-probes roomier levels when content shrinks in the same render as a collapse', () => {
+    let shrunk = false
+    layout.chipWidth = (compact) => {
+      // The labels get shorter right as the first chips collapse.
+      shrunk ||= container.querySelector('[data-usage-chip][data-usage-collapsed="true"]') !== null
+      return shrunk ? 10 : compact ? 40 : 70
+    }
+    renderAt(220)
+    expect(shrunk).toBe(true)
+    // 5 * 10 + 4 * 12 + 16 + 80 = 194 fits the roomiest level once its stale width is dropped.
+    expect(settledLevel()).toBe(0)
+    expect(collapsed()).toEqual([])
+  })
+
+  it('falls back to the tightest fitting layout when measurements never settle', () => {
+    // Synthetic drift: the roomier levels re-measure differently every time, so probing never ends.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let flip = false
+    layout.segmentsWidth = (iconOnly) => {
+      flip = !flip
+      return iconOnly ? 30 : flip ? 80 : 90
+    }
+    expect(() => renderAt(220)).not.toThrow()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('did not settle'))
+    expect(settledLevel()).toBe(TIGHTEST)
+    expect(collapsed()).toEqual(PROVIDERS)
+    expect(renderedWidth()).toBeLessThanOrEqual(220)
+  })
+
+  it('ends in a fitting state when each collapse changes how the other collapsed chips measure', () => {
+    // Synthetic worst case: a large drift that depends on how many chips are collapsed defeats the remembered widths.
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     layout.collapsedChipDrift = (collapsedCount) => (collapsedCount >= 3 ? -60 : 0)
-    expect(() => act(() => root.render(<Harness />))).not.toThrow()
+    expect(() => renderAt(220)).not.toThrow()
+    expect(renderedWidth()).toBeLessThanOrEqual(220)
   })
 })
