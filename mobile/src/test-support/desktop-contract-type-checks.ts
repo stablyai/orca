@@ -1,6 +1,8 @@
-/** Keys the two types share whose desktop value the phone's type would not accept. */
+/** Keys the two types share whose desktop value, null included, the phone's type would not accept. */
 export type FieldsRetypedByPhone<Desktop, Phone> = {
-  [K in keyof Desktop & keyof Phone]-?: [NonNullable<Desktop[K]>] extends [NonNullable<Phone[K]>]
+  [K in keyof Desktop & keyof Phone]-?: [Exclude<Desktop[K], undefined>] extends [
+    Exclude<Phone[K], undefined>
+  ]
     ? never
     : K
 }[keyof Desktop & keyof Phone]
