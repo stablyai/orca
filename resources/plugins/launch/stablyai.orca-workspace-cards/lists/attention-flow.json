@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "facts": 1,
+  "sections": [
+    { "id": "pinned", "title": "Pinned", "when": "ws.isPinned" },
+    {
+      "id": "needs-you",
+      "title": "Needs you",
+      "when": "activity.tier == 'needs-you' || ws.isUnread"
+    },
+    { "id": "working", "title": "Working", "when": "activity.tier == 'working'" },
+    { "id": "in-review", "title": "In review", "when": "review.lane == 'in-review'" },
+    {
+      "id": "done",
+      "title": "Done",
+      "when": "activity.tier == 'done' || review.lane == 'done' || review.lane == 'closed'",
+      "collapsed": true
+    },
+    { "id": "rest", "title": "Everything else" }
+  ],
+  "sort": [{ "by": "ws.lastActivityAt", "dir": "desc" }]
+}

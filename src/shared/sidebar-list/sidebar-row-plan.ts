@@ -50,6 +50,7 @@ import type {
 import { orderMainWorktreeFirst, getRenderedNaturalAnchorRepoIds } from './section-order'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { buildArrangedGroups, type SidebarListArrangement } from './arranged-groups'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
@@ -79,6 +80,8 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** A plugin list arrangement; when set it replaces `groupBy` sections. */
+  arrangement?: SidebarListArrangement
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -105,7 +108,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    arrangement
   } = inputs
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
@@ -131,8 +135,15 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
-      const groups: OrderedGroupEntry[] =
-        groupBy === 'none'
+      const groups: OrderedGroupEntry[] = arrangement
+        ? buildArrangedGroups({
+            arrangement,
+            naturalWorktrees: natural,
+            repoOf,
+            prGroupOf,
+            folderWorkspaces: renderableFolderWorkspaces
+          })
+        : groupBy === 'none'
           ? [[ALL_GROUP_KEY, { label: '', items: [...natural], repoIds: new Set() }]]
           : buildOrderedGroups({
               groupBy,
@@ -155,7 +166,10 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       }
       return groups.map(([key, group]): SidebarOccurrenceSection => {
         const revealPath =
-          groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
+          groupBy === 'repo' &&
+          !arrangement &&
+          key !== PINNED_GROUP_KEY &&
+          group.repo?.projectGroupId
             ? projectGroupPaths.get(group.repo.projectGroupId)
             : undefined
         return {
@@ -163,7 +177,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           group,
           placement: key === PINNED_GROUP_KEY ? 'pinned' : 'natural',
           items:
-            groupBy === 'repo' && key !== PINNED_GROUP_KEY
+            groupBy === 'repo' && !arrangement && key !== PINNED_GROUP_KEY
               ? orderMainWorktreeFirst(group.items)
               : group.items,
           revealPath: { key, parent: revealPath }
@@ -200,7 +214,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       hostLabelById
     )
     const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
-      groupBy,
+      // Arranged sections render every repo they hold, as project sections do.
+      groupBy: arrangement ? 'repo' : groupBy,
       worktrees: naturalWorktrees,
       repoMap,
       prGroupOf,
@@ -221,7 +236,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       noticeHostContextLabelByRepoId,
       mixedWorktreeHostContextLabels
     )
-    if (groupBy === 'none') {
+    if (groupBy === 'none' && !arrangement) {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
         result.push({
@@ -278,10 +293,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       occurrencePlan
     }
 
-    if (groupBy !== 'repo' || projectGroups.length === 0) {
+    if (arrangement || groupBy !== 'repo' || projectGroups.length === 0) {
       appendOrderedGroups(
         sectionContext,
-        groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
+        groupBy === 'repo' && !arrangement
+          ? withRepoSectionDisplayLabels(orderedGroups)
+          : orderedGroups
       )
       return result
     }

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     settingsSearchQuery: 'automations',
     statusBarItems: [],
     sidebarCards: [],
+    workspaceLists: [],
     toggleStatusBarItem: vi.fn(),
     usagePercentageDisplay: 'used' as 'used' | 'remaining',
     setUsagePercentageDisplay: vi.fn(),

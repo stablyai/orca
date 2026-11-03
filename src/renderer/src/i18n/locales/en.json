@@ -13283,7 +13283,8 @@
           "retry": "Retry",
           "noAccessReach": "Nothing outside its own files",
           "customEditor": "Editor",
-          "typeSidebarCard": "Workspace card"
+          "typeSidebarCard": "Workspace card",
+          "typeWorkspaceList": "Workspace list arrangement"
         },
         "PluginManagerRows": {
           "reinstall": "Reinstall",
@@ -19206,6 +19207,10 @@
         "sidebarCard": {
           "useOrcaCard": "Use Orca's card",
           "useCard": "Use for workspaces"
+        },
+        "workspaceList": {
+          "useOrca": "Use Orca's grouping",
+          "use": "Use for the list"
         }
       },
       "cardStudio": {
@@ -19240,7 +19245,10 @@
         "states": "States",
         "yourWorkspaces": "Your workspaces",
         "previewing": "Previewing {{card}} from {{plugin}}. Nothing is installed yet.",
-        "previewCard": "Preview"
+        "previewCard": "Preview",
+        "list": "List",
+        "orcaList": "Orca's grouping",
+        "orcaListDescription": "Group by and Sort by from the sidebar options."
       }
     },
     "i18n": {

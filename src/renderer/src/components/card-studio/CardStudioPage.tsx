@@ -5,8 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { ensurePluginSidebarCardsLoaded } from '@/store/plugin-sidebar-cards'
+import { ensurePluginWorkspaceListsLoaded } from '@/store/plugin-workspace-lists'
 import { CardStudioCardPicker } from './CardStudioCardPicker'
 import { CardStudioGallery } from './CardStudioGallery'
+import { CardStudioListPicker } from './CardStudioListPicker'
 import { CardStudioMarketplace } from './CardStudioMarketplace'
 import { CardStudioStateGallery } from './CardStudioStateGallery'
 import type { CatalogCard } from './use-catalog-cards'
@@ -19,7 +21,10 @@ export default function CardStudioPage(): React.JSX.Element {
   const closeCardStudio = useAppStore((s) => s.closeCardStudio)
   const cardId = useAppStore((s) => s.settings?.workspaceCardId)
   const [previewCard, setPreviewCard] = useState<CatalogCard | null>(null)
-  useEffect(() => ensurePluginSidebarCardsLoaded(), [])
+  useEffect(() => {
+    ensurePluginSidebarCardsLoaded()
+    ensurePluginWorkspaceListsLoaded()
+  }, [])
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !event.defaultPrevented) {
@@ -63,6 +68,7 @@ export default function CardStudioPage(): React.JSX.Element {
             <CardStudioCardPicker />
           </CardStudioSection>
           {cardId ? <CardStudioPluginOptions cardId={cardId} /> : null}
+          <CardStudioListPicker />
           <CardStudioOrcaOptions />
           <CardStudioMarketplace previewKey={previewCard?.key ?? null} onPreview={setPreviewCard} />
         </aside>

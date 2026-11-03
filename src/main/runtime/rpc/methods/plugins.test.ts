@@ -52,7 +52,8 @@ describe('plugin approval over RPC', () => {
         customEditors: [],
         newFiles: [],
         statusBarItems: [],
-        sidebarCards: []
+        sidebarCards: [],
+        workspaceLists: []
       }
     }
   }

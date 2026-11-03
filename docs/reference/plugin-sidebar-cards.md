@@ -158,3 +158,55 @@ only the state its facts say: a template chooses where a part goes, never what i
 
 Orca keeps what surrounds the content: selection, drag, click and double-click, the context menu,
 the delete overlay, sleeping dim, and where child workspaces nest.
+
+## Workspace lists (`contributes.workspaceLists`)
+
+A list plugin arranges the sidebar's workspace list into its own sections. Like a card, it is data,
+so it uses the `data` profile and runs no code:
+
+```json
+"workspaceLists": [{ "id": "flow", "title": "Attention flow", "arrangement": "lists/flow.json" }]
+```
+
+```json
+{
+  "version": 1,
+  "facts": 1,
+  "sections": [
+    {
+      "id": "needs-you",
+      "title": "Needs you",
+      "when": "activity.tier == 'needs-you' || ws.isUnread"
+    },
+    { "id": "working", "title": "Working", "when": "activity.tier == 'working'" },
+    { "id": "done", "title": "Done", "when": "activity.tier == 'done'", "collapsed": true },
+    { "id": "rest", "title": "Everything else" }
+  ],
+  "sort": [{ "by": "ws.lastActivityAt", "dir": "desc" }]
+}
+```
+
+- A workspace lands in the first section whose `when` is true. A section with no `when` takes
+  everything that reaches it. `fallback` names where unmatched workspaces go (by default, the last
+  section). Empty sections are hidden.
+- `collapsed` sections start collapsed when the list is picked; after that, the person's own
+  toggles win.
+- `sort` keys are fact paths, with `asc` or `desc`. Missing values sort last. Ties keep the
+  person's own Sort by order.
+- Pinned workspaces, child workspaces nested under their parent, and host sections stay Orca's.
+  Folder workspaces join the last section.
+- Pick a list in the Card Studio under **List**, or on the plugin's page with **Use for the list**.
+  **Orca's grouping** goes back to Group by and Sort by.
+
+List rules read row facts the list already holds, so arranging stays cheap with hundreds of
+workspaces:
+
+| Path                                                       | Meaning                                                                    |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `ws.id`, `ws.name`, `ws.branch`, `ws.kind`                 | Identity; `kind` is `git` or `folder`.                                     |
+| `ws.isPinned`, `ws.isUnread`, `ws.isMain`, `ws.hasComment` | Flags.                                                                     |
+| `ws.status`                                                | The workspace status lane, such as `in-progress`.                          |
+| `ws.lastActivityAt`, `ws.createdAt`                        | Times in milliseconds.                                                     |
+| `repo.id`, `repo.name`, `repo.ssh`                         | The project, or `null`.                                                    |
+| `review.lane`                                              | `in-progress`, `in-review`, `done` or `closed`, as Group by PR names them. |
+| `activity.tier`                                            | `needs-you`, `working` or `done`; `null` when no agent ran.                |

@@ -345,6 +345,16 @@
             "$ref": "#/$defs/SidebarCardContribution"
           }
         },
+        "workspaceLists": {
+          "default": [],
+          "description": "Arrangements of the left sidebar's workspace list into sections, each rules Orca evaluates; people pick one in the Card Studio. At most 8.",
+          "x-orca-since": "1.4.248",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkspaceListContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -1536,6 +1546,55 @@
       ],
       "additionalProperties": false,
       "description": "A workspace card for the left sidebar, drawn by Orca from a template; it runs no code."
+    },
+    "WorkspaceListContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Arrangement id, unique among this plugin's lists.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "review-flow"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Name shown where people pick how the list is arranged.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "Review flow"
+          ]
+        },
+        "description": {
+          "description": "One line on how it arranges workspaces.",
+          "x-orca-since": "1.4.248",
+          "type": "string",
+          "maxLength": 512
+        },
+        "arrangement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+          "description": "JSON list arrangement (sections, rules and sort), at most 32 KiB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.248",
+          "examples": [
+            "lists/review-flow.json"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "arrangement"
+      ],
+      "additionalProperties": false,
+      "description": "An arrangement of the left sidebar's workspace list into sections, drawn by Orca from rules; it runs no code."
     },
     "Capability": {
       "type": "object",

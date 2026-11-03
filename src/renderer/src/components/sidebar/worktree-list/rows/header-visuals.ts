@@ -1,4 +1,4 @@
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { CircleX, FolderTree, LayoutList, List, Pin } from 'lucide-react'
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
@@ -62,6 +62,9 @@ const PINNED_GROUP_META = {
   icon: Pin
 } as const
 
+// A plugin section's label is its own; the glyph only marks it as a section.
+const LIST_SECTION_META = { tone: 'text-muted-foreground', icon: LayoutList } as const
+
 const ALL_GROUP_META = {
   get label() {
     return translate('auto.components.sidebar.worktree.list.groups.0ed04075b8', 'All')
@@ -91,6 +94,8 @@ export function getSidebarHeaderVisual(
       return PROJECT_GROUP_META
     case 'pr-status':
       return PR_GROUP_META[icon.prGroup]
+    case 'list-section':
+      return LIST_SECTION_META
     case 'workspace-status': {
       const { icon: statusIcon, tone } = getWorkspaceStatusVisualMeta(
         workspaceStatuses.find((status) => status.id === icon.status) ?? icon.status

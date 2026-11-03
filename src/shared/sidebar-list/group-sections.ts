@@ -13,6 +13,7 @@ import {
   getProjectHeaderHostRepos
 } from './host-labels'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import { isListSectionKey } from './arranged-groups'
 import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
   appendWorktreeRows,
@@ -104,8 +105,23 @@ export function appendOrderedGroups(
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
-    const header =
-      groupBy === 'repo'
+    const header = isListSectionKey(key)
+      ? {
+          type: 'header' as const,
+          key,
+          label: group.label,
+          count: group.items.length + folderPairs.length,
+          icon: { kind: 'list-section' as const },
+          hostWorktreeCounts: getLaneHostWorktreeCounts(
+            group.items,
+            folderPairs,
+            repoOf,
+            defaultHostId
+          ),
+          hostWorktreeIds: getLaneHostWorktreeIds(group.items, folderPairs, repoOf, defaultHostId),
+          worktreeIds: group.items.map((worktree) => worktree.id)
+        }
+      : groupBy === 'repo'
         ? {
             type: 'header' as const,
             key,
@@ -169,7 +185,7 @@ export function appendOrderedGroups(
 
     result.push(header)
     if (!isCollapsed) {
-      if (groupBy === 'repo') {
+      if (groupBy === 'repo' && !isListSectionKey(key)) {
         const repoIds =
           group.repoIds.size > 0
             ? [...group.repoIds]
@@ -209,7 +225,7 @@ export function appendOrderedGroups(
         }
       }
       const hostContextLabelByRepoId =
-        groupBy === 'repo'
+        groupBy === 'repo' && !isListSectionKey(key)
           ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
           : undefined
       appendWorktreeRows(result, repoOf, occurrencePlan, {

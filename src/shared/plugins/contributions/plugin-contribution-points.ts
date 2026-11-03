@@ -1,3 +1,7 @@
+import {
+  PLUGIN_WORKSPACE_LIST_LIMIT,
+  pluginWorkspaceListContributionSchema
+} from './plugin-workspace-list-contribution'
 import { z } from 'zod'
 import type { PluginCatalogType } from '../catalog/plugin-catalog-types'
 import {
@@ -72,7 +76,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'newFiles',
   'settings',
   'statusBarItems',
-  'sidebarCards'
+  'sidebarCards',
+  'workspaceLists'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -232,6 +237,12 @@ export const pluginContributesFields = {
     PLUGIN_SIDEBAR_CARD_LIMIT,
     "Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page.",
     PLUGIN_SIDEBAR_CARDS_SINCE
+  ),
+  workspaceLists: contributionList(
+    pluginWorkspaceListContributionSchema,
+    PLUGIN_WORKSPACE_LIST_LIMIT,
+    "Arrangements of the left sidebar's workspace list into sections, each rules Orca evaluates; people pick one in the Card Studio.",
+    PLUGIN_SIDEBAR_CARDS_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -280,5 +291,6 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why declarative: a static item only names its own command; updating it needs a worker.
   statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
   // Why data: Orca draws the template from facts the person already sees; it runs no code.
-  sidebarCards: { execution: 'data', catalogType: 'card', bindsContent: false }
+  sidebarCards: { execution: 'data', catalogType: 'card', bindsContent: false },
+  workspaceLists: { execution: 'data', catalogType: 'card', bindsContent: false }
 }

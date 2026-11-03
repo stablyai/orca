@@ -734,7 +734,8 @@
             "newFiles",
             "settings",
             "statusBarItems",
-            "sidebarCards"
+            "sidebarCards",
+            "workspaceLists"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

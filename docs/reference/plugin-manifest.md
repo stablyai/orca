@@ -46,6 +46,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
 | `contributes.sidebarCards` | [SidebarCardContribution](#sidebarcardcontribution)[] | no | 1.4.248 | Workspace cards for the left sidebar, each a template Orca draws; people pick one on the plugin's page. At most 16. |
+| `contributes.workspaceLists` | [WorkspaceListContribution](#workspacelistcontribution)[] | no | 1.4.248 | Arrangements of the left sidebar's workspace list into sections, each rules Orca evaluates; people pick one in the Card Studio. At most 8. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -222,6 +223,17 @@ A workspace card for the left sidebar, drawn by Orca from a template; it runs no
 | `description` | string | no | 1.4.248 | One line on what the card emphasizes. |
 | `template` | string | yes | 1.4.248 | JSON card template, at most 64 KiB. See the workspace card reference. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"cards/review-first.json"` |
 | `options` | [SettingContribution](#settingcontribution)[] | no | 1.4.248 | Options people set for this card in the Card Studio, in the settings format; the template reads them as `cardOptions.<key>`. At most 24. |
+
+## WorkspaceListContribution
+
+An arrangement of the left sidebar's workspace list into sections, drawn by Orca from rules; it runs no code.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes | 1.4.248 | Arrangement id, unique among this plugin's lists. Example: `"review-flow"` |
+| `title` | string | yes | 1.4.248 | Name shown where people pick how the list is arranged. Example: `"Review flow"` |
+| `description` | string | no | 1.4.248 | One line on how it arranges workspaces. |
+| `arrangement` | string | yes | 1.4.248 | JSON list arrangement (sections, rules and sort), at most 32 KiB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"lists/review-flow.json"` |
 
 ## Capability
 

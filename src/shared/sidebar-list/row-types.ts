@@ -24,6 +24,8 @@ export type SidebarHeaderIcon =
   | { kind: 'project' }
   | { kind: 'pr-status'; prGroup: PRGroupKey }
   | { kind: 'workspace-status'; status: WorkspaceStatus }
+  /** A section a plugin list arrangement declares; its label names it. */
+  | { kind: 'list-section' }
 
 /** A worktree's PR lane, read by each client from its own PR facts. */
 export type SidebarPRGroupReader = (worktree: Worktree) => PRGroupKey

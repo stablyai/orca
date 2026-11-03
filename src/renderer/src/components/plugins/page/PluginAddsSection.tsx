@@ -1,3 +1,4 @@
+import { usePluginWorkspaceLists } from '@/store/plugin-workspace-lists'
 import { usePluginSidebarCards } from '@/store/plugin-sidebar-cards'
 import { Fragment } from 'react'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
@@ -11,12 +12,14 @@ import {
   Palette,
   PanelBottom,
   PanelRight,
+  LayoutList,
   PanelLeft,
   PenTool,
   Server,
   SquareTerminal
 } from 'lucide-react'
 import { PluginSidebarCardUseButton } from './PluginSidebarCardUseButton'
+import { PluginWorkspaceListUseButton } from './PluginWorkspaceListUseButton'
 import type {
   PluginHostListEntry,
   PluginMarketplaceHostInstallPreview
@@ -110,6 +113,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   terminalThemes: <SquareTerminal />,
   iconThemes: <Blocks />,
   sidebarCards: <PanelLeft />,
+  workspaceLists: <LayoutList />,
   syntaxes: <Highlighter />,
   languagePacks: <Languages />,
   panels: <PanelRight />,
@@ -212,6 +216,7 @@ function useContributionRowActions(
   const languagePacks = usePluginLanguagePackStore((state) => state.entries)
   const iconThemes = usePluginIconThemes()
   const sidebarCards = usePluginSidebarCards()
+  const workspaceLists = usePluginWorkspaceLists()
   if (!isPluginContributionLive(plugin)) {
     return () => null
   }
@@ -267,6 +272,12 @@ function useContributionRowActions(
           (entry) => entry.id === id && entry.pluginKey === plugin.pluginKey
         )
         return card ? <PluginSidebarCardUseButton cardId={card.id} /> : null
+      }
+      case 'workspaceLists': {
+        const list = workspaceLists.find(
+          (entry) => entry.id === id && entry.pluginKey === plugin.pluginKey
+        )
+        return list ? <PluginWorkspaceListUseButton listId={list.id} /> : null
       }
       case 'themes':
       case 'terminalThemes':

@@ -36,6 +36,7 @@ export type PluginContributionSource = {
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
   sidebarCards: readonly { id: string; label: string }[]
+  workspaceLists: readonly { id: string; label: string }[]
   syntaxes: readonly {
     id: string
     label: string
@@ -63,6 +64,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   terminalThemes: [],
   iconThemes: [],
   sidebarCards: [],
+  workspaceLists: [],
   syntaxes: [],
   languagePacks: [],
   panels: [],
@@ -102,6 +104,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
     sidebarCards: contributes.sidebarCards.map(titled),
+    workspaceLists: contributes.workspaceLists.map(titled),
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
@@ -196,6 +199,18 @@ export function describePluginContributions(
       detail: translate(
         'auto.components.settings.PluginDetailSections.typeSidebarCard',
         'Workspace card'
+      ),
+      tone: 'default'
+    })
+  }
+  for (const list of source.workspaceLists) {
+    rows.push({
+      key: `workspaceLists:${list.id}`,
+      kind: 'workspaceLists',
+      title: list.label,
+      detail: translate(
+        'auto.components.settings.PluginDetailSections.typeWorkspaceList',
+        'Workspace list arrangement'
       ),
       tone: 'default'
     })
