@@ -1,6 +1,7 @@
 import type {
   AgentJournalApprovalItem,
-  AgentJournalQuestionItem
+  AgentJournalQuestionItem,
+  AgentJournalResolution
 } from '../agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptQuestions,
@@ -17,6 +18,20 @@ export const NATIVE_CHAT_RECEIPT_COPY = {
   resolver: 'Answered on {{device}}',
   cancelledBy: 'Cancelled on {{device}}'
 } as const
+
+export function nativeChatReceiptDevice(
+  resolution: AgentJournalResolution,
+  labels: { current: string; computer: string; unknown: string }
+): string {
+  const device = resolution.resolvedByDevice
+  if (device?.kind === 'current') {
+    return labels.current
+  }
+  if (device?.kind === 'named' && typeof device.name === 'string' && device.name.trim()) {
+    return device.name
+  }
+  return resolution.resolvedBy?.startsWith('trusted-local:') ? labels.computer : labels.unknown
+}
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
 /** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
