@@ -62,6 +62,23 @@ it('clears a client-hosted page using the partition of its retained guest', asyn
     cache: false
   })
 })
+it('submits with Enter from a checkbox only after a choice is selected', async () => {
+  seedGuest()
+  const clearBrowsingData = vi.fn().mockResolvedValue('persist:test')
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { browser: { clearBrowsingData } }
+  })
+  const close = vi.fn()
+  render(<ClearBrowsingDataForm pageId="page" onClearHistory={vi.fn()} onClose={close} />)
+  const cookies = screen.getByRole('checkbox', { name: 'Cookies and site data' })
+  fireEvent.keyDown(cookies, { key: 'Enter' })
+  expect(clearBrowsingData).not.toHaveBeenCalled()
+  fireEvent.click(cookies)
+  fireEvent.keyDown(cookies, { key: 'Enter' })
+  await waitFor(() => expect(close).toHaveBeenCalledOnce())
+  expect(clearBrowsingData).toHaveBeenCalledOnce()
+})
 it('keeps the form open on failure and does not clear history', async () => {
   seedGuest()
   const clearBrowsingData = vi.fn().mockRejectedValue(new Error('unavailable'))

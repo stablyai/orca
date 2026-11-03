@@ -242,43 +242,45 @@ function BrowserHistoryDialogContent({
         // Keep footer keys away from cmdk row navigation; Tab still reaches the dialog focus loop.
         onKeyDown={(event) => event.key !== 'Tab' && event.stopPropagation()}
       >
-        {cleared ? (
-          <div className="flex items-center gap-2">
-            <span>{translate('browser.history.cleared', 'Cleared browsing history')}</span>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => {
-                restoreBrowserHistory(cleared)
-                setCleared(null)
-              }}
-            >
-              {translate('browser.newTab.undo', 'Undo')}
-            </Button>
-          </div>
-        ) : (
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="xs" disabled={!hasHistory}>
-                <Trash2 />
-                {translate('browser.history.clear', 'Clear browsing history')}
+        <div className="flex items-center gap-1">
+          {cleared ? (
+            <div className="flex items-center gap-2">
+              <span>{translate('browser.history.cleared', 'Cleared browsing history')}</span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  restoreBrowserHistory(cleared)
+                  setCleared(null)
+                }}
+              >
+                {translate('browser.newTab.undo', 'Undo')}
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top">
-              <DropdownMenuLabel>
-                {translate('browser.history.clearRange', 'Clear history from')}
-              </DropdownMenuLabel>
-              {CLEAR_RANGES.map((range) => (
-                <DropdownMenuItem key={range} onSelect={() => clear(range)}>
-                  {clearRangeLabel(range)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        <Button variant="ghost" size="xs" onClick={() => setClearDataOpen(true)}>
-          {translate('browser.clearData.title', 'Clear browsing data')}
-        </Button>
+            </div>
+          ) : (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="xs" disabled={!hasHistory}>
+                  <Trash2 />
+                  {translate('browser.history.clear', 'Clear browsing history')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top">
+                <DropdownMenuLabel>
+                  {translate('browser.history.clearRange', 'Clear history from')}
+                </DropdownMenuLabel>
+                {CLEAR_RANGES.map((range) => (
+                  <DropdownMenuItem key={range} onSelect={() => clear(range)}>
+                    {clearRangeLabel(range)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button variant="ghost" size="xs" onClick={() => setClearDataOpen(true)}>
+            {translate('browser.clearData.title', 'Clear browsing data')}
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <FooterKey>{translate('browser.history.enterKey', 'Enter')}</FooterKey>
           <span>{translate('browser.history.open', 'Open')}</span>

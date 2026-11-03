@@ -468,7 +468,7 @@
       "cookiesDescription": "Signs you out of sites in this profile.",
       "cache": "Cached images and files",
       "history": "Browsing history",
-      "legacyHistory": "Older history entries are managed separately in History.",
+      "legacyHistory": "Older entries are managed in History.",
       "error": "Could not finish clearing data. Reopen this browser page and try again. Some data may already be cleared.",
       "clearing": "Clearing…",
       "clear": "Clear data"

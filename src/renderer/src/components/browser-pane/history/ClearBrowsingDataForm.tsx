@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { getVisibleBrowserClientPagePartition } from '../browser-client-page-renderer-installation'
 import { webviewRegistry } from '../host-guest/webview-registry'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,18 @@ export function ClearBrowsingDataForm({
   const [history, setHistory] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
+  const [showClearing, setShowClearing] = useState(false)
   const optionIdPrefix = useId()
+  const canClear = !busy && (cookies || cache || history)
+  useEffect(() => {
+    if (!busy) {
+      setShowClearing(false)
+      return
+    }
+    // Fast local clears stay quiet; slower ones get the label swap.
+    const timer = setTimeout(() => setShowClearing(true), 200)
+    return () => clearTimeout(timer)
+  }, [busy])
   const clear = async (): Promise<void> => {
     setBusy(true)
     setError(false)
@@ -70,7 +81,7 @@ export function ClearBrowsingDataForm({
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-1 text-xs">
+        <div className="space-y-3 text-xs">
           {[
             {
               id: 'cookies',
@@ -92,21 +103,26 @@ export function ClearBrowsingDataForm({
               id: 'history',
               checked: history,
               set: setHistory,
-              label: translate('browser.clearData.history', 'Browsing history')
+              label: translate('browser.clearData.history', 'Browsing history'),
+              description: translate(
+                'browser.clearData.legacyHistory',
+                'Older entries are managed in History.'
+              )
             }
           ].map((option) => {
             const optionId = `${optionIdPrefix}-${option.id}`
             return (
-              <div
-                key={option.id}
-                className="flex w-full items-start gap-2 rounded-sm px-1 py-1 text-foreground/85"
-              >
+              <div key={option.id} className="flex w-full items-start gap-2">
                 <Checkbox
                   id={optionId}
-                  className="mt-0.5"
                   checked={option.checked}
                   disabled={busy}
                   onCheckedChange={(value) => option.set(value === true)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && canClear) {
+                      void clear()
+                    }
+                  }}
                   aria-describedby={option.description ? `${optionId}-description` : undefined}
                 />
                 <span className="min-w-0 flex-1">
@@ -129,14 +145,6 @@ export function ClearBrowsingDataForm({
             )
           })}
         </div>
-        {history && (
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'browser.clearData.legacyHistory',
-              'Older history entries are managed separately in History.'
-            )}
-          </p>
-        )}
         {error && (
           <p role="alert" className="text-xs text-destructive">
             {translate(
@@ -146,17 +154,17 @@ export function ClearBrowsingDataForm({
           </p>
         )}
         <DialogFooter>
-          <Button variant="outline" size="sm" className="text-xs" disabled={busy} onClick={onClose}>
+          <Button variant="ghost" size="sm" className="text-xs" disabled={busy} onClick={onClose}>
             {translate('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="destructive"
             size="sm"
             className="w-24 text-xs"
-            disabled={busy || (!cookies && !cache && !history)}
+            disabled={!canClear}
             onClick={() => void clear()}
           >
-            {busy
+            {showClearing
               ? translate('browser.clearData.clearing', 'Clearing…')
               : translate('browser.clearData.clear', 'Clear data')}
           </Button>
