@@ -2525,7 +2525,7 @@
         "https://github.com/stablyai/orca/blob/main/src/shared/agent-status-osc.ts"
       ],
       "invariant": "Terminal status parsing preserves ordinary UTF-16 output, every valid payload in order, the last valid payload's clean-output offset, earliest BEL/ST termination, and incomplete-frame caps while searching each complete burst only forward.",
-      "oracle": "Two 5,000-frame bursts using exclusively BEL or ST produce every expected payload and ordinary output byte with at most twice the input length in native search ranges. Mixed terminators, every split through prefixes/JSON/ST, independent parser interleaving, malformed payloads, exact pending-cap boundaries and oversized complete frames retain their previous behavior. A one-character echo performs no terminator search. Parsed output chunks are not retained in legacy regular-expression state.",
+      "oracle": "Two 5,000-frame bursts using exclusively BEL or ST produce every expected payload and ordinary output byte with at most twice the input length in the counted indexOf, charCodeAt and RegExp.exec search ranges. This is a deterministic primitive-search regression alarm, not a total CPU or memory cost model. Mixed terminators, every split through prefixes/JSON/ST, independent parser interleaving, malformed payloads, exact pending-cap boundaries and oversized complete frames retain bounded parser checks. Parsed output chunks are not retained in legacy regular-expression state.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-scan-budget.test.ts src/shared/agent-status-types.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts src/renderer/src/components/terminal-pane/terminal-title-tracker-parity.test.ts src/renderer/src/components/terminal-pane/pty-connection-completion-and-notification.test.ts src/renderer/src/components/terminal-pane/pty-transport-eager-buffer-replay.test.ts"
       ],
@@ -2540,7 +2540,6 @@
           "file": "src/shared/agent-status-osc-scan-budget.test.ts",
           "assertions": [
             "reads each burst only forward with terminator %j",
-            "keeps a one-character input echo on the ordinary-output path",
             "does not retain the output chunk in legacy regular-expression state"
           ]
         },
@@ -2548,7 +2547,6 @@
           "file": "src/shared/agent-status-osc.test.ts",
           "assertions": [
             "uses the earliest mixed terminator and counts only parsed payload offsets",
-            "keeps a distant ST usable after many intervening BEL frames",
             "preserves every split of prefixes, JSON, and both terminators across independent streams",
             "applies the pending cap only to incomplete frames"
           ]
@@ -2584,7 +2582,8 @@
       },
       "knownGaps": [
         "Live Electron input latency and Linux/Windows/WSL/SSH execution have not been measured for this parser-only change.",
-        "Fragmented unterminated payload accumulation and downstream processing of large status arrays remain outside this complete-burst search budget."
+        "Fragmented unterminated payload accumulation and downstream processing of large status arrays remain outside this complete-burst search budget.",
+        "The one-character echo search-count fixture, the 200-BEL-frames-before-distant-ST fixture and the split-frame indexOf growth suite were removed during the test audit. Their dedicated search-count, distant-terminator and fragmented-growth alarms are relinquished; no replacement equivalence or obligation closure is claimed."
       ],
       "promotionCriteria": [
         "Complete CI soak while preserving byte fidelity and deterministic search budgets."
@@ -2841,12 +2840,12 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh", "remote-runtime"],
-      "coverageNotes": "Shared primitive and status/title parser tests cover provider-independent string behavior on macOS. The removed terminal normalizer suite has no replacement-equivalence claim. Native execution, process ownership, wire formats and mobile UI were not validated by this audit.",
+      "coverageNotes": "Shared primitive and status/title parser tests cover provider-independent string behavior on macOS. The status pending-storage suite now retains only its raw UTF-16 parser fixture; its site ownership spy, large-chunk replay and segmented pending-cap fixture were removed. The removed terminal normalizer suite has no replacement-equivalence claim. Native execution, process ownership, wire formats and mobile UI were not validated by this audit.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/shared/agent-status-osc.test.ts"
       ],
       "invariant": "Small incomplete status, ANSI and title controls must not retain the larger consumed output strings they were sliced from. Every retained control fragment is routed through ownRetainedString, which preserves exact UTF-16, current caps and trimming, payload order and clean-output offsets on both the Buffer and the code-unit fallback copier.",
-      "oracle": "The primitive forced-GC fixture measures retained backing storage. Remaining status/title site spies and UTF-16 parser fidelity checks do not establish terminal normalizer memory retention. The normalizer per-site spy and fidelity suite was removed as low-value during the test audit.",
+      "oracle": "The primitive forced-GC fixture measures retained backing storage. The remaining title-site spy and raw UTF-16 status/title parser fidelity checks do not establish status-site or terminal-normalizer backing-storage retention. The status ownership spy, large-chunk replay and segmented pending-cap fixture, along with the earlier normalizer per-site spy and fidelity suite, were removed as low-value during the test audit. The retained status UTF-16 fixture checks exact prompt bytes and offsets across BEL/ST completion; it does not measure retained memory.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-pending-retention.test.ts src/shared/agent-status-types.test.ts src/shared/osc-title-scan-tail-retention.test.ts src/shared/osc-title-scan-tail.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/terminal-tail-whitespace.test.ts"
       ],
@@ -2872,12 +2871,7 @@
         },
         {
           "file": "src/shared/agent-status-osc-pending-retention.test.ts",
-          "assertions": [
-            "routes every retained pending frame through ownRetainedString",
-            "keeps %i-character chunks with %i incomplete statuses byte-exact",
-            "preserves raw UTF-16 across an owned suffix and %j",
-            "drops an owned frame that grows past the pending cap"
-          ]
+          "assertions": ["preserves raw UTF-16 across an owned suffix and %j"]
         },
         {
           "file": "src/shared/osc-title-scan-tail-retention.test.ts",
@@ -2922,7 +2916,8 @@
         "The primitive's GC fixture is experimental with no CI soak. A provider input already sliced from an unseen larger ancestor can retain that ancestor; no universal heap cap or whole-process memory reduction is claimed.",
         "The renderer and mobile fallback copier is covered by a Buffer-free equivalence test, not by a real renderer bundle run.",
         "The terminal normalizer per-site ownership spy and ANSI fidelity suite was removed; historical evidence runs and red-green observations below remain historical only.",
-        "Tail-buffer row retention is a larger instance of the same pattern and is not covered by this gate."
+        "Tail-buffer row retention is a larger instance of the same pattern and is not covered by this gate.",
+        "The status-site ownRetainedString spy, large-chunk byte-exact replay and segmented at-cap/over-cap fixture were removed during the test audit. The old assertion reference drops an owned frame that grows past the pending cap was already stale and is removed too. Status-site retention and these dedicated large-replay/cap alarms are no longer established by this suite; raw UTF-16 fidelity and primitive memory checks are not equivalent replacements. No obligation closure or waiver of historical budgets is claimed."
       ],
       "promotionCriteria": [
         "Complete CI soak with zero unexplained flakes and preserve the observable oracle."
