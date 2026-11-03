@@ -49,6 +49,27 @@ export function preloadRuntimeImports(source) {
   return [...imports].sort()
 }
 
+const SANDBOX_PRELOAD_IMPORTS = new Set([
+  'electron',
+  'electron/common',
+  'electron/renderer',
+  'events',
+  'node:events',
+  'timers',
+  'node:timers',
+  'url',
+  'node:url'
+])
+
+export function verifySandboxPreloadImports(source) {
+  const imports = preloadRuntimeImports(source)
+  const unsupported = imports.filter((name) => !SANDBOX_PRELOAD_IMPORTS.has(name))
+  if (unsupported.length) {
+    throw new Error(`Unsupported sandbox preload imports: ${unsupported.join(', ')}`)
+  }
+  return imports
+}
+
 export async function verifyPreloadSource(source) {
   const exposed = new Map()
   const calls = []
@@ -79,11 +100,7 @@ export async function verifyPreloadSource(source) {
     ['url', url],
     ['node:url', url]
   ])
-  const imports = preloadRuntimeImports(source)
-  const unsupported = imports.filter((name) => !modules.has(name))
-  if (unsupported.length) {
-    throw new Error(`Unsupported sandbox preload imports: ${unsupported.join(', ')}`)
-  }
+  const imports = verifySandboxPreloadImports(source)
   const sandbox = {
     process: { contextIsolated: true, platform: process.platform, versions: {}, env: {}, argv: [] },
     require: (name) => {

@@ -1,11 +1,17 @@
 import { resolve } from 'node:path'
 import { build, type Plugin } from 'vite'
+import { verifySandboxPreloadImports } from '../scripts/preload-output-contract.mjs'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
 } from '../../src/shared/browser-extension-worker-api'
 
 type BundledScript = { code: string; moduleIds: string[] }
+
+const GUEST_PRELOADS = [
+  { entry: 'src/preload/browser-window-close.ts', fileName: 'browser-window-close-preload.js' },
+  { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' }
+]
 
 const WORKER_SHIM = {
   entry: 'src/preload/browser-extension-worker-shim.ts',
@@ -21,7 +27,11 @@ const CONTENT_SCRIPT = {
  * content script. Why a separate build: as a second Rollup entry its modules would land in a chunk
  * shared with the sandboxed preload, which cannot load chunks.
  */
-async function bundleScript(entry: string, fileName: string): Promise<BundledScript> {
+async function bundleScript(
+  entry: string,
+  fileName: string,
+  format: 'iife' | 'cjs' = 'iife'
+): Promise<BundledScript> {
   const result = await build({
     configFile: false,
     logLevel: 'silent',
@@ -31,10 +41,11 @@ async function bundleScript(entry: string, fileName: string): Promise<BundledScr
       target: 'es2022',
       lib: {
         entry: resolve(entry),
-        formats: ['iife'],
+        formats: [format],
         name: 'orcaBrowserExtensionScript',
         fileName: () => fileName
-      }
+      },
+      rollupOptions: { external: ['electron'] }
     }
   })
   for (const output of Array.isArray(result) ? result : [result]) {
@@ -43,6 +54,9 @@ async function bundleScript(entry: string, fileName: string): Promise<BundledScr
     }
     for (const chunk of output.output) {
       if (chunk.type === 'chunk' && chunk.isEntry) {
+        if (format === 'cjs') {
+          verifySandboxPreloadImports(chunk.code)
+        }
         return { code: chunk.code, moduleIds: chunk.moduleIds }
       }
     }
@@ -58,13 +72,15 @@ export function bundleBrowserExtensionContentScript(): Promise<BundledScript> {
   return bundleScript(CONTENT_SCRIPT.entry, CONTENT_SCRIPT.fileName)
 }
 
-/** Emits the worker shim and content script next to the main bundle, where the loader copies them from. */
-export function createBrowserExtensionWorkerShimPlugin(): Plugin {
+/** Independent builds prevent sandboxed scripts from acquiring shared main-process chunks. */
+export function createSandboxedScriptBundlesPlugin(): Plugin {
   return {
-    name: 'orca-browser-extension-worker-shim',
+    name: 'orca-sandboxed-script-bundles',
     async buildStart() {
-      for (const { entry, fileName } of [WORKER_SHIM, CONTENT_SCRIPT]) {
-        const { code, moduleIds } = await bundleScript(entry, fileName)
+      for (const script of [WORKER_SHIM, CONTENT_SCRIPT, ...GUEST_PRELOADS]) {
+        const { entry, fileName } = script
+        const format = GUEST_PRELOADS.includes(script) ? 'cjs' : 'iife'
+        const { code, moduleIds } = await bundleScript(entry, fileName, format)
         for (const id of moduleIds) {
           this.addWatchFile(id)
         }

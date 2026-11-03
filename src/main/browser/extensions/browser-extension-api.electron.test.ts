@@ -8,7 +8,7 @@ import { build as buildVite } from 'vite'
 import {
   bundleBrowserExtensionContentScript,
   bundleBrowserExtensionWorkerShim
-} from '../../../../config/build-plugins/browser-extension-worker-shim'
+} from '../../../../config/build-plugins/sandboxed-script-bundles'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE

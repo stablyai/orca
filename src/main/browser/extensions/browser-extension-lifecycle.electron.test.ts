@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { build as buildVite } from 'vite'
-import { bundleBrowserExtensionWorkerShim } from '../../../../config/build-plugins/browser-extension-worker-shim'
+import { bundleBrowserExtensionWorkerShim } from '../../../../config/build-plugins/sandboxed-script-bundles'
 import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../shared/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../electron-probe-display-launch'
 
