@@ -162,27 +162,11 @@ async function continueThroughOptionalSetupToNotifications(page: Page): Promise<
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
-async function continueFromNotificationsToAddProject(page: Page): Promise<void> {
+async function completeOnboardingIntoHome(page: Page): Promise<void> {
   await continueOnboarding(page)
-  const taskSourcesVisible = await page
-    .getByRole('heading', { name: TASK_SOURCES_HEADING })
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false)
-  if (taskSourcesVisible) {
-    await continueOnboarding(page)
-  }
-  const windowsTerminalVisible = await page
-    .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
-    .waitFor({ state: 'visible', timeout: 1_000 })
-    .then(() => true)
-    .catch(() => false)
-  if (windowsTerminalVisible) {
-    await continueOnboarding(page)
-  }
-  await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible({
-    timeout: 15_000
-  })
+  await expect(page.locator('[data-onboarding-overlay]')).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: /Add a project/i })).toHaveCount(0)
+  await expect(page.getByText('Home', { exact: true }).first()).toBeVisible()
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
@@ -444,7 +428,9 @@ test.describe('New-user golden core flow', () => {
     await continueThroughOptionalSetupToNotifications(orcaPage)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
-    await continueFromNotificationsToAddProject(orcaPage)
+    await completeOnboardingIntoHome(orcaPage)
+    await orcaPage.getByRole('button', { name: 'Add project', exact: true }).click()
+    await expect(orcaPage.getByRole('dialog', { name: /Add a project/i })).toBeVisible()
 
     const repoPath = await createGitRepo('orca-e2e-golden-new-', 'golden-new-project')
     await chooseFolderInNativeDialog(electronApp, repoPath)

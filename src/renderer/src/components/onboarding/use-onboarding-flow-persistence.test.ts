@@ -23,7 +23,7 @@ import type { StepNumber } from './use-onboarding-flow-types'
 type CloseWithCallback = (
   outcome: 'completed' | 'dismissed',
   lastStepReached: StepNumber,
-  completedPath?: 'add_project_modal',
+  completedPath?: 'add_project_modal' | 'workspace',
   dismissedExtras?: DismissedExtras
 ) => Promise<boolean>
 

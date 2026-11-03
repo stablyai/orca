@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { selectKnownWorktreeById } from '@/store/selectors'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { track } from '@/lib/telemetry'
@@ -40,6 +41,9 @@ export function useOnboardingFlow(
   const pathSource = useAppStore((s) => s.pathSource)
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const openModal = useAppStore((s) => s.openModal)
+  const hasSelectedWorkspace = useAppStore(
+    (s) => selectKnownWorktreeById(s, s.activeWorktreeId) !== null
+  )
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
@@ -279,6 +283,7 @@ export function useOnboardingFlow(
     trackTaskSourcesSnapshot,
     settings,
     persistCurrentStep,
+    hasSelectedWorkspace,
     closeWith,
     openModal,
     getNextStepIndex,
@@ -306,6 +311,7 @@ export function useOnboardingFlow(
     theme,
     setTheme: setThemeInteractive,
     busyLabel,
+    hasSelectedWorkspace,
     detectedSet,
     isDetectingAgents,
     next,
