@@ -200,6 +200,7 @@ if (probe && name === 'opencode2' && mode.lifecycle) {
   }
 }
 
+// Three serial CLI subprocesses each have a 15-second deadline, plus fixture cleanup.
 it('real CLI rejects every missing repeated answer before runtime lookup without disclosing values', async () => {
   const fixture = await accountFixture()
   try {
@@ -224,6 +225,7 @@ it('real CLI rejects every missing repeated answer before runtime lookup without
   }
 }, 60_000)
 
+// Allows the real CLI's 15-second subprocess deadline plus fixture cleanup.
 it('real CLI forwards form text through a spaced launcher path and imports only after success', async () => {
   const fixture = await accountFixture('bin tools & 100%')
   const answers = ['instance URL=https://example.test/a%20b?x="quoted"&y=a=b!', 'note=']

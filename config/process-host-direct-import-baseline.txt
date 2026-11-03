@@ -1,7 +1,6 @@
 
 # Existing production source files importing child_process outside @orca/process-host.
 # Migration debt: this list may only shrink; new callers use the package public API.
-src/cli/handlers/account.ts
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
 src/cli/runtime/launch.ts

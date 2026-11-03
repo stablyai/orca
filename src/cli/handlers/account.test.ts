@@ -269,6 +269,9 @@ describe('account CLI handlers', () => {
         (error: unknown) => error
       )
       expect(failure).toBeInstanceOf(RuntimeClientError)
+      if (!(failure instanceof RuntimeClientError)) {
+        throw new Error('Expected account-add failure')
+      }
       expect(probeMock).toHaveBeenCalledTimes(2)
       expect(spawnMock).not.toHaveBeenCalled()
       expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
