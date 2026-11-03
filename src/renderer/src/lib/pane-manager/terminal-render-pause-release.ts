@@ -69,11 +69,19 @@ type RenderObservableTerminal = {
   onRender?: (listener: () => void) => { dispose: () => void }
 }
 
-// Terminals whose WebGL canvas was emptied while paused; cleared by their next paint.
-const unpaintedCanvasTerminals = new WeakSet<object>()
+// Terminals whose WebGL canvas was emptied while paused, mapped to the render listener that clears the mark.
+const unpaintedCanvasTerminals = new WeakMap<object, { dispose: () => void }>()
 
 function hasUnpaintedCanvas(terminal: unknown): terminal is object {
   return typeof terminal === 'object' && terminal !== null && unpaintedCanvasTerminals.has(terminal)
+}
+
+function forgetUnpaintedCanvas(terminal: unknown): void {
+  if (typeof terminal !== 'object' || terminal === null) {
+    return
+  }
+  unpaintedCanvasTerminals.get(terminal)?.dispose()
+  unpaintedCanvasTerminals.delete(terminal)
 }
 
 function rememberUnpaintedCanvas(terminal: unknown): void {
@@ -84,23 +92,17 @@ function rememberUnpaintedCanvas(terminal: unknown): void {
   if (typeof observable.onRender !== 'function') {
     return
   }
-  unpaintedCanvasTerminals.add(terminal)
-  const subscription = observable.onRender(() => {
-    unpaintedCanvasTerminals.delete(terminal)
-    subscription.dispose()
-  })
+  unpaintedCanvasTerminals.set(
+    terminal,
+    observable.onRender(() => forgetUnpaintedCanvas(terminal))
+  )
 }
 
 /** Preserve the coherent canvas through DEC 2026; RenderService waits for frame close with xterm’s bounded safety timeout. */
 export function requestFullViewportPresent(terminal: unknown): boolean {
   if (hasUnpaintedCanvas(terminal)) {
     // Nothing coherent to preserve: the canvas was emptied while paused and has not painted since.
-    const presented = forceFullViewportPresent(terminal)
-    if (presented) {
-      // renderRows skips onRender; clear here so only this one paint can land mid-frame.
-      unpaintedCanvasTerminals.delete(terminal)
-    }
-    return presented
+    return forceFullViewportPresent(terminal)
   }
   const service = getRenderService(terminal)
   if (!service) {
@@ -190,6 +192,8 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
     // New tabs can still be observer-paused; use refreshRows for its dimension clamp to avoid a 1px gutter. Only DEC 2026 requires direct renderRows.
     if (syncHeld && typeof renderer?.renderRows === 'function') {
       renderer.renderRows(0, rows - 1)
+      // renderRows skips onRender; any forced paint fills the canvas, so only one may land mid-frame.
+      forgetUnpaintedCanvas(terminal)
       return true
     }
     service.refreshRows(0, rows - 1, true)
