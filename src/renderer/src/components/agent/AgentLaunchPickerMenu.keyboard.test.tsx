@@ -14,6 +14,7 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 afterEach(cleanup)
+afterEach(() => vi.restoreAllMocks())
 
 const entries: AgentPickerEntry[] = (['codex', 'claude'] as const).map((agent) => ({
   agent: agent,
@@ -179,4 +180,70 @@ it('only opens setup from the chevron segment, never from hovering the agent nam
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('keeps wheel highlighting on the agent under the resting pointer without opening setup', () => {
+  const { launched } = show()
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  const claude = screen.getByRole('menuitem', { name: /^Claude/ })
+  const menu = screen.getByRole('menu', { name: 'New tab' })
+  const frames: FrameRequestCallback[] = []
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback))
+  vi.spyOn(document, 'elementFromPoint').mockReturnValue(claude)
+  codex.focus()
+  const wheel = new WheelEvent('wheel', { bubbles: true })
+  Object.defineProperties(wheel, { clientX: { value: 10 }, clientY: { value: 40 } })
+  fireEvent(menu, wheel)
+  fireEvent.pointerMove(screen.getByText('Codex'), {
+    pointerType: 'mouse',
+    clientX: 10,
+    clientY: 40
+  })
+  fireEvent.scroll(menu)
+  act(() => frames.splice(0).forEach((callback) => callback(0)))
+  expect(document.activeElement).toBe(claude)
+  expect(screen.queryByRole('menu', { name: /^Configure/ })).toBeNull()
+  expect(launched).not.toHaveBeenCalled()
+})
+
+it('does not launch when a row press is released over the submenu trigger', async () => {
+  const { launched } = show()
+  const configure = screen.getByRole('button', { name: 'Configure Codex' })
+  const row = screen.getByRole('menuitem', { name: /^Codex/ })
+  const user = userEvent.setup()
+  await user.pointer([
+    { target: screen.getByText('Codex'), keys: '[MouseLeft>]' },
+    { target: configure, keys: '[/MouseLeft]' }
+  ])
+  expect(launched).not.toHaveBeenCalled()
+  await user.click(row.querySelector('span')!)
+  expect(launched).toHaveBeenCalledOnce()
+})
+
+it('preserves search focus while crossing another row toward a left-opening submenu', async () => {
+  const { launched } = show()
+  await userEvent.setup().hover(screen.getByRole('button', { name: 'Configure Codex' }))
+  const panel = screen.getByRole('menu', { name: 'Configure Codex' })
+  const search = screen.getByPlaceholderText('Search Codex models…')
+  const codex = screen.getByRole('menuitem', { name: /^Codex/ })
+  const claude = screen.getByRole('menuitem', { name: /^Claude/ })
+  const menu = screen.getByRole('menu', { name: 'New tab' })
+  panel.dataset.side = 'left'
+  vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 20, 300, 180))
+  for (const clientX of [500, 460]) {
+    fireEvent.pointerMove(menu, { pointerType: 'mouse', clientX, clientY: 45 })
+  }
+  fireEvent.pointerOut(codex, {
+    pointerType: 'mouse',
+    clientX: 450,
+    clientY: 50,
+    relatedTarget: claude
+  })
+  fireEvent.pointerMove(claude, { pointerType: 'mouse', clientX: 440, clientY: 60 })
+  expect(document.activeElement).toBe(search)
+  expect(panel.dataset.state).toBe('open')
+  fireEvent.pointerMove(claude, { pointerType: 'mouse', clientX: 460, clientY: 230 })
+  expect(document.activeElement).toBe(claude)
+  expect(screen.queryByRole('menu', { name: /^Configure/ })).toBeNull()
+  expect(launched).not.toHaveBeenCalled()
 })

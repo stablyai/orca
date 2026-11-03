@@ -814,9 +814,3 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
   showButton({ ...own, ownerKey: 'replacement-claude' })
   assertDraft()
 })
-
-it('does not launch when a menu drag is released over the submenu trigger', () => {
-  const configure = getByRole(document.body, 'button', { name: 'Configure Codex' })
-  fireEvent.pointerUp(configure, { pointerType: 'mouse', button: 0 })
-  expect(launch).not.toHaveBeenCalled()
-})

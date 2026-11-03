@@ -24,6 +24,7 @@ export function AgentLaunchSetupSubmenu({
 }) {
   const trigger = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const segmentRelease = useRef(false)
   const focusSearch = () =>
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
       preventScroll: true
@@ -37,7 +38,15 @@ export function AgentLaunchSetupSubmenu({
     target?.focus()
   }
   return (
-    <DropdownMenuSub open={open} onOpenChange={onOpenChange}>
+    <DropdownMenuSub
+      open={open}
+      onOpenChange={(next) => {
+        // Opening is explicit; Radix still owns pointer grace, focus, and dismissal.
+        if (!next) {
+          onOpenChange(false)
+        }
+      }}
+    >
       <DropdownMenuSubTrigger
         asChild
         hideChevron
@@ -45,16 +54,34 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
-          event.preventDefault()
           const segment = event.currentTarget.querySelector('button')
-          if (
-            !disabled &&
-            event.pointerType === 'mouse' &&
+          if (event.target instanceof Node && segment?.contains(event.target)) {
+            event.preventDefault()
+          }
+        }}
+        onPointerDownCapture={() => {
+          segmentRelease.current = false
+        }}
+        onPointerUpCapture={(event) => {
+          segmentRelease.current =
             event.target instanceof Node &&
-            event.currentTarget.contains(event.target) &&
-            !segment?.contains(event.target)
-          ) {
-            event.currentTarget.focus({ preventScroll: true })
+            !!event.currentTarget.querySelector('button')?.contains(event.target)
+        }}
+        onClickCapture={(event) => {
+          if (segmentRelease.current && event.target === event.currentTarget) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+          segmentRelease.current = false
+        }}
+        onKeyDownCapture={() => {
+          segmentRelease.current = false
+        }}
+        onKeyDown={(event) => {
+          if (!disabled && event.target === event.currentTarget && event.key === 'ArrowRight') {
+            event.preventDefault()
+            onOpenChange(true)
+            focusSearch()
           }
         }}
       >
