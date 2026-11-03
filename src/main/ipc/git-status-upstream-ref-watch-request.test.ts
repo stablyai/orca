@@ -23,7 +23,7 @@ vi.mock('./local-worktree-runtime-options', () => ({
   getLocalRepoForRegisteredWorktree: mocks.getLocalRepo,
   getLocalGitOptionsForRepo: mocks.getLocalOptions
 }))
-vi.mock('./worktree-base-directory-watcher', () => ({
+vi.mock('./worktrees/creation/worktree-base-directory-watcher', () => ({
   setWorktreeGitStatusRefWatch: mocks.setWatch
 }))
 

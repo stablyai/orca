@@ -2,7 +2,7 @@ import {
   generatedNameCreateRequest,
   renameCreatedWorktreeOnFirstWork,
   typedLabelCreateRequests
-} from '../worktree-create-first-work-test-harness'
+} from '../workspaces/creation/worktree-create-first-work-test-harness'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { describeCreatedWorktreeMock, gitExecFileAsyncMock } from './worktrees-test-module-mocks'
@@ -32,6 +32,10 @@ vi.mock('../git/runner', async () =>
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+vi.mock('../git/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getBaseRefDefault: (await import('./worktrees-test-module-mocks')).getBaseRefDefaultMock
+}))
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))

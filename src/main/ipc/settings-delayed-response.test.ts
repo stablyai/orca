@@ -50,7 +50,7 @@ vi.mock('../ai-vault-search/session-search-enablement', () => ({
 vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
-vi.mock('../worktree-root-preparation', () => ({
+vi.mock('../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootsForRepos: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('../menu/register-app-menu', () => ({ rebuildAppMenu: vi.fn() }))

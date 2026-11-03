@@ -32,12 +32,12 @@ import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -132,7 +132,7 @@ import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -142,9 +142,9 @@ import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
@@ -155,7 +155,7 @@ import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
-} from '../worktree-create-in-flight'
+} from '../workspaces/creation/worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,
