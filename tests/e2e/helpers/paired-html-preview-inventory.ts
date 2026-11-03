@@ -11,6 +11,7 @@ export type PairedHtmlPreviewInventory = {
   clientBrowserWorkspaceCount: number
   // Count all workspaces because routed links can open under whichever workspace is active.
   clientBrowserWorkspaceCountAllWorktrees: number
+  clientBrowserPageUrls: string[]
   /** The client rows this document is open in — the preview, in browser-tab terms. */
   docWorkspaces: DocPreviewWorkspaceRow[]
   /** Editor rows for the retired preview species; a restore that resurrects one shows up here. */
@@ -98,6 +99,9 @@ export async function readPairedHtmlPreviewInventory(
       clientBrowserWorkspaceCountAllWorktrees: Object.values(
         state?.browserTabsByWorktree ?? {}
       ).reduce((total, tabs) => total + tabs.length, 0),
+      clientBrowserPageUrls: Object.values(state?.browserPagesByWorkspace ?? {})
+        .flat()
+        .map((browserPage) => browserPage.url),
       docWorkspaces,
       htmlPreviewEditorFileIds: (state?.openFiles ?? [])
         .filter((file) => file.id.startsWith('html-preview::'))
@@ -184,37 +188,6 @@ export async function readDocPreviewElementCenter(
       return null
     }
   }, selector)
-}
-
-type RoutedPreviewLink = { url: string; opened: boolean }
-
-// Record routed links so swallowed guest clicks can be distinguished from refused tab creation.
-export async function armPairedHtmlPreviewLinkRouting(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('paired client exposed no store to observe link routing')
-    }
-    const routed: RoutedPreviewLink[] = []
-    ;(window as unknown as { __routedPreviewLinks: RoutedPreviewLink[] }).__routedPreviewLinks =
-      routed
-    const original = store.getState().openBrowserProfileTabInActiveWorkspace
-    store.setState({
-      openBrowserProfileTabInActiveWorkspace: async (url: string, profileId: string | null) => {
-        const opened = await original(url, profileId)
-        routed.push({ url, opened })
-        return opened
-      }
-    } as never)
-  })
-}
-
-export async function readPairedHtmlPreviewLinkRouting(page: Page): Promise<RoutedPreviewLink[]> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __routedPreviewLinks?: RoutedPreviewLink[] }).__routedPreviewLinks ??
-      []
-  )
 }
 
 export async function readDocPreviewGuestRects(

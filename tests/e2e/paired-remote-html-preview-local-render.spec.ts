@@ -12,13 +12,11 @@ import {
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import { startClientHostedMarkerFixture } from './helpers/client-hosted-browser-fixture'
 import {
-  armPairedHtmlPreviewLinkRouting,
   readDocPreviewElementCenter,
   readDocPreviewGuestRects,
   readDocPreviewGuestUrl,
   readDocPreviewRenderedText,
   readPairedHtmlPreviewInventory,
-  readPairedHtmlPreviewLinkRouting,
   requireSingleDocWorkspace
 } from './helpers/paired-html-preview-inventory'
 import { focusPairedClientWindow } from './helpers/paired-client-window-reveal'
@@ -176,6 +174,9 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     prepared = await preparePairedClient(offer, testInfo, 'Remote HTML preview', testRepoPath)
     const { client, worktreeId, worktreePath } = prepared
     const page = client.page
+    await page.evaluate(() =>
+      window.__store!.getState().updateSettingsOrThrow({ openLinksInApp: true })
+    )
     const docFilePath = path.join(worktreePath, FIXTURE_NAME)
     const inventoryArgs = { environmentId: client.environmentId, docFilePath, worktreeId }
 
@@ -480,8 +481,6 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         message: 'the external link never settled at a clickable point in the preview guest'
       })
       .not.toBeNull()
-    // Record routing calls to distinguish swallowed guest clicks from refused tab creation.
-    await armPairedHtmlPreviewLinkRouting(page)
     // Trusted routing checks the reader’s front contents; preserve the fixture’s guarded activation policy.
     expect(await focusPairedClientWindow(client)).toMatchObject({
       isFocused: true,
@@ -514,12 +513,14 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect({
       clientBrowserWorkspaceCountAllWorktrees:
         afterGenuineInput.clientBrowserWorkspaceCountAllWorktrees,
+      hostResponseOk: afterGenuineInput.hostResponseOk,
       hostBrowserPages: afterGenuineInput.hostBrowserPages.length,
-      routedCalls: await readPairedHtmlPreviewLinkRouting(page)
+      clientBrowserPageUrls: afterGenuineInput.clientBrowserPageUrls
     }).toEqual({
       clientBrowserWorkspaceCountAllWorktrees: linkBaseline.clientBrowserWorkspaceCountAllWorktrees,
+      hostResponseOk: true,
       hostBrowserPages: linkBaseline.hostBrowserPages.length,
-      routedCalls: []
+      clientBrowserPageUrls: linkBaseline.clientBrowserPageUrls
     })
     const guestFocus = await page.evaluate(() => {
       const active = document.activeElement
@@ -556,11 +557,15 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     await expect(confirmationTitle).not.toBeVisible()
     const afterCancel = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     expect({
-      routedCalls: await readPairedHtmlPreviewLinkRouting(page),
-      browserCount: afterCancel.clientBrowserWorkspaceCountAllWorktrees
+      browserCount: afterCancel.clientBrowserWorkspaceCountAllWorktrees,
+      hostResponseOk: afterCancel.hostResponseOk,
+      hostBrowserPages: afterCancel.hostBrowserPages.length,
+      clientBrowserPageUrls: afterCancel.clientBrowserPageUrls
     }).toEqual({
-      routedCalls: [],
-      browserCount: linkBaseline.clientBrowserWorkspaceCountAllWorktrees
+      browserCount: linkBaseline.clientBrowserWorkspaceCountAllWorktrees,
+      hostResponseOk: true,
+      hostBrowserPages: linkBaseline.hostBrowserPages.length,
+      clientBrowserPageUrls: linkBaseline.clientBrowserPageUrls
     })
 
     try {
@@ -576,8 +581,17 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           async () => {
             const opened = await readPairedHtmlPreviewInventory(page, inventoryArgs)
             return {
-              routedCalls: await readPairedHtmlPreviewLinkRouting(page),
               docWorkspaces: opened.docWorkspaces.length,
+              hostResponseOk: opened.hostResponseOk,
+              hostBrowserPages: opened.hostBrowserPages.length,
+              hostUrls: opened.hostBrowserPages.map((hostPage) => hostPage.url),
+              hostPreviewLeaks: opened.hostBrowserPages.filter(
+                (hostPage) =>
+                  hostPage.url.includes('orca-preview:') ||
+                  hostPage.url.includes(FIXTURE_NAME) ||
+                  hostPage.title === FIXTURE_TITLE
+              ).length,
+              clientBrowserPageUrls: opened.clientBrowserPageUrls,
               linkClicks: await readDocPreviewRenderedText(page, '#link-clicks'),
               openedTab:
                 opened.clientBrowserWorkspaceCountAllWorktrees >
@@ -594,7 +608,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           openedTab: true,
           // Opening an external link must leave the preview document intact.
           docWorkspaces: 1,
-          routedCalls: [{ url: EXTERNAL_LINK_URL, opened: true }]
+          hostResponseOk: true,
+          hostBrowserPages: linkBaseline.hostBrowserPages.length + 1,
+          hostUrls: expect.arrayContaining([EXTERNAL_LINK_URL]),
+          hostPreviewLeaks: 0,
+          clientBrowserPageUrls: expect.arrayContaining([EXTERNAL_LINK_URL])
         })
     } catch (error) {
       throw new Error(
