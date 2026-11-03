@@ -22,6 +22,11 @@ import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatSession } from './native-chat/use-mobile-native-chat-session'
 import type { MobileNativeChatResolution } from './native-chat/mobile-native-chat-eligibility'
 
+import {
+  pendingSendsAsMessages,
+  type NativeChatPendingSend
+} from '../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+
 const NO_MESSAGES: NativeChatMessage[] = []
 
 export type MobileNativeChatTerminalTurn = NativeChatTerminalTurn & {
@@ -41,6 +46,7 @@ export function useMobileNativeChatTerminalTurn(args: {
   session: Pick<MobileNativeChatSession, 'messages' | 'transcriptLifecycle'> | null
   /** The newest pending echo; a new one is a new send, which ends Stop's suppression like desktop. */
   latestPendingId: string | null
+  pending?: NativeChatPendingSend[]
   hasPromptCard: boolean
   scopeKey: string
   stop: () => Promise<boolean>
@@ -61,11 +67,18 @@ export function useMobileNativeChatTerminalTurn(args: {
     hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(status)
   })
   const liveWorking = live.status === 'working'
+  const turnStartedAt = nativeChatHookTurnStartedAt(status ?? undefined)
+  const messagesWithPending = useMemo(
+    () => [
+      ...messages,
+      ...pendingSendsAsMessages(args.pending ?? [], [], liveWorking ? turnStartedAt : undefined)
+    ],
+    [messages, args.pending, liveWorking, turnStartedAt]
+  )
   // Throttle status-part previews to avoid reparsing the whole accumulated markdown per part.
   const streamingText = useThrottledLatestValue(
     deriveNativeChatStreamingText({
-      // A pending echo is the transcript's tail on desktop, so no earlier reply can hide the preview.
-      messages: hasPending ? NO_MESSAGES : messages,
+      messages: messagesWithPending,
       previewText: status?.lastAssistantMessage,
       working: liveWorking,
       previewIsToolOutput: status?.lastAssistantMessageIsToolOutput === true
@@ -114,7 +127,6 @@ export function useMobileNativeChatTerminalTurn(args: {
     hasPromptCard
   })
 
-  const turnStartedAt = nativeChatHookTurnStartedAt(status ?? undefined)
   const latestWorkedSeconds = nativeChatHookLatestTurnWorkedSeconds(
     status ?? undefined,
     hookState === null

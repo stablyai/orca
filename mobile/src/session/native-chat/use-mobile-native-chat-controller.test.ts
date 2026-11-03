@@ -14,7 +14,12 @@ const restoreRejectedDraft = vi.fn()
 const holdUnconfirmedSend = vi.fn()
 
 const viewMode = { isTabChatView: (_tabId: string) => true }
-let draftPending: { id: string }[] = []
+let draftPending: {
+  id: string
+  text?: string
+  sentAt?: number
+  queuedDuringWorkingEpoch?: number | null
+}[] = []
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
@@ -653,6 +658,46 @@ describe('useMobileNativeChatController terminal turn', () => {
     vi.useRealTimers()
   })
 
+  it('uses the send-time turn epoch for a queued echo, even when the active prompt has landed', () => {
+    const originalMessages = sessionState.messages
+    sessionState.messages = [
+      {
+        id: 'active-prompt',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Run tests' }],
+        source: 'transcript',
+        timestamp: null
+      }
+    ]
+    draftPending = [
+      { id: 'follow-up', text: 'Then docs', sentAt: 1, queuedDuringWorkingEpoch: turnStartedAt }
+    ]
+    try {
+      rerender()
+      expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
+      workingTab.agentStatus.stateStartedAt += 1000
+      rerender()
+      expect(controller?.chatPending[0]).toMatchObject({ pendingSend: 'queued' })
+    } finally {
+      draftPending = []
+      sessionState.messages = originalMessages
+    }
+  })
+
+  it('captures the turn epoch when sending a follow-up before its acknowledgement', async () => {
+    captureSendOrigin.mockReturnValue(ORIGIN)
+    clientStub.sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+    sendWithOutcome.mockResolvedValueOnce('accepted')
+    await act(async () => {
+      await controller?.handleNativeChatSend('Then docs')
+    })
+    expect(acceptSend).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queuedDuringWorkingEpoch: turnStartedAt }),
+      'Then docs',
+      undefined
+    )
+  })
+
   it('treats passive monitoring as outside the foreground turn', () => {
     workingTab.agentStatus.workingMode = 'monitoring'
     rerender()
@@ -685,7 +730,7 @@ describe('useMobileNativeChatController terminal turn', () => {
     act(() => controller?.handleNativeChatStop())
     expect(controller?.nativeChatCanStop).toBe(false)
 
-    draftPending = [{ id: 'pending-1' }]
+    draftPending = [{ id: 'pending-1', text: 'New prompt', sentAt: turnStartedAt }]
     try {
       rerender()
       expect(controller?.nativeChatCanStop).toBe(true)

@@ -16,12 +16,12 @@ function msg(
 }
 
 describe('orderNativeChatMessages', () => {
-  it('sorts the streaming preview after real content but before optimistic echoes', () => {
+  it('sorts the streaming preview after the prompt that caused it', () => {
     const ordered = orderNativeChatMessages([
       msg({ id: 'pending:abc', role: 'user', timestamp: 20, source: 'scrape' }),
       msg({ id: NATIVE_CHAT_STREAMING_ID, timestamp: null }),
       msg({ id: 'real-user', role: 'user', timestamp: 10 })
     ])
-    expect(ordered.map((m) => m.id)).toEqual(['real-user', 'streaming', 'pending:abc'])
+    expect(ordered.map((m) => m.id)).toEqual(['real-user', 'pending:abc', 'streaming'])
   })
 })

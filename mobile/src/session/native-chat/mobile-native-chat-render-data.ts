@@ -18,6 +18,7 @@ import {
 } from '../../../../src/shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../src/shared/agent-status-types'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { orderNativeChatDisplayMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-order'
 import { translate } from '../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(
@@ -91,6 +92,7 @@ export type MobileNativeChatPendingItem = {
   text: string
   images?: string[]
   sentAt?: number
+  pendingSend?: NativeChatMessage['pendingSend']
 }
 
 export function foldMobileNativeChatMessages(
@@ -146,7 +148,6 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Desktop order: transcript rows, then the streaming preview, then unmatched echoes in send order.
   const data: NativeChatMessage[] = [...renderedFolded]
   if (streaming) {
     data.push(nativeChatStreamingMessage(streaming))
@@ -160,8 +161,13 @@ export function buildMobileNativeChatTransientData({
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
       ],
       timestamp: item.sentAt ?? null,
+      pendingSend: item.pendingSend ?? 'active',
       source: 'transcript'
     })
   }
-  return { folded: renderedFolded, streaming, data }
+  return {
+    folded: renderedFolded,
+    streaming,
+    data: orderNativeChatDisplayMessages(data, { preserveTranscriptOrder: true })
+  }
 }
