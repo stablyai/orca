@@ -6,7 +6,9 @@ import { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-comman
 
 const mocks = vi.hoisted(() => ({ localCheck: vi.fn() }))
 
-vi.mock('../git/check-ignored-paths', () => ({ checkIgnoredPaths: mocks.localCheck }))
+vi.mock('../git/source-control/check-ignored-paths', () => ({
+  checkIgnoredPaths: mocks.localCheck
+}))
 
 describe('local issue command runtime routing', () => {
   it.each(['command', ' '])(

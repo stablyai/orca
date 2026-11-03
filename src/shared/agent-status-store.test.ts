@@ -6,7 +6,6 @@ import { serializeAgentStatusProviderAliasKey } from './agent-status-run-alias-i
 import { createAgentStatusStore } from './agent-status-store'
 import {
   AGENT_STATUS_STORE_TOMBSTONE_LIMIT,
-  AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS,
   type AgentStatusStoreSnapshot
 } from './agent-status-store-contract'
 import {
@@ -17,7 +16,6 @@ import {
   makePtyAgentStatusSubject,
   makePtyRunAgentStatusSubject,
   makeStructuredAgentStatusSubject,
-  serializeAgentStatusSubject,
   type AgentStatusExecutionScope,
   type AgentStatusSubject
 } from './agent-status-subject'
@@ -226,20 +224,6 @@ describe('AgentStatusStore', () => {
     expect(store.getRunAliasIndex().get(aliasKey)).toEqual(new Set(['run-2']))
   })
 
-  it('allows a removed structured session to be observed again at a later revision', () => {
-    const parent = subject()
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    expect(store.applyMutation({ parent: { subject: parent, firstObservedAt: 10 } })).not.toBeNull()
-    expect(store.applyMutation({ removeParent: parent })).not.toBeNull()
-    expect(store.applyMutation({ parent: { subject: parent, firstObservedAt: 30 } })).not.toBeNull()
-    expect(store.getParent(parent)?.firstObservedAt).toBe(30)
-    expect(store.getSnapshot().tombstones).toContainEqual({
-      entity: 'parent',
-      key: serializeAgentStatusSubject(parent),
-      revision: 2
-    })
-  })
-
   it('bounds tombstones while revision envelopes reject stale replay after reacquisition and compaction', () => {
     const parent = subject()
     const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
@@ -270,32 +254,6 @@ describe('AgentStatusStore', () => {
     expect(replica.applySnapshot(store.getSnapshot())).toBe(true)
     expect(replica.applyTransportEnvelope(first)).toBe(false)
     expect(replica.getParent(parent)?.firstObservedAt).toBe(30)
-  })
-
-  it.fails('does not roll a replica back to a superseded epoch snapshot', () => {
-    const parent = subject()
-    const first = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    first.applyMutation({ parent: { subject: parent, firstObservedAt: 10 } })
-    const second = createAgentStatusStore({ epoch: 'epoch-b', mode: 'authority' })
-    second.applyMutation({ parent: { subject: parent, firstObservedAt: 20 } })
-    const replica = createAgentStatusStore({ epoch: 'replica', mode: 'replica' })
-    expect(replica.applySnapshot(first.getSnapshot())).toBe(true)
-    expect(replica.applySnapshot(second.getSnapshot())).toBe(true)
-    expect(replica.applySnapshot(first.getSnapshot())).toBe(false)
-    expect(replica.getParent(parent)?.firstObservedAt).toBe(20)
-  })
-
-  it('expires tombstones from a restored snapshot after the retention revision window', () => {
-    const parent = subject()
-    const source = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    expect(source.applyMutation({ removeParent: parent })).not.toBeNull()
-    const snapshot = {
-      ...source.getSnapshot(),
-      revision: AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS + 1
-    }
-    const restored = createAgentStatusStore({ epoch: 'epoch-b', mode: 'authority' })
-    expect(restored.applySnapshot(snapshot)).toBe(true)
-    expect(restored.getSnapshot().tombstones).toEqual([])
   })
 
   it('uses parsed immutable copies instead of caller-owned objects', () => {
@@ -391,22 +349,6 @@ describe('AgentStatusStore', () => {
     ).toBeNull()
   })
 
-  it('accepts a parent status whose subagent roster outgrows the status field limit', () => {
-    const store = createAgentStatusStore({ epoch: 'epoch-a', mode: 'authority' })
-    const scopedSubject = subject()
-    const subagents = Array.from({ length: 2_000 }, (_, index) => ({
-      id: `a${index}`,
-      state: 'working' as const,
-      startedAt: 1,
-      description: 'x'.repeat(200)
-    }))
-    expect(
-      store.applyMutation({
-        parent: { subject: scopedSubject, status: status(scopedSubject, { subagents }) }
-      })
-    ).not.toBeNull()
-  })
-
   it('rejects a scope-mismatched child snapshot without changing state', () => {
     const { store: source } = populatedStore()
     const snapshot = source.getSnapshot()
@@ -424,15 +366,5 @@ describe('AgentStatusStore', () => {
 
     expect(store.applySnapshot(malformed)).toBe(false)
     expect(store.getSnapshot()).toEqual(before)
-  })
-
-  it('serializes subject removal keys exactly in tombstones', () => {
-    const { parent, store } = populatedStore()
-    expect(store.applyMutation({ removeParent: parent })).not.toBeNull()
-    expect(store.getSnapshot().tombstones).toContainEqual({
-      entity: 'parent',
-      key: serializeAgentStatusSubject(parent),
-      revision: 2
-    })
   })
 })

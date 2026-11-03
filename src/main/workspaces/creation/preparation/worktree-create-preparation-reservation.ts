@@ -1,7 +1,7 @@
 import type { PreparedCheckoutMissReason } from '../../../../shared/worktree/create-timing-vocabulary'
-import type { AddWorktreeOptions } from '../../../git/worktree-operation-options'
-import { measureRetargetDivergence } from '../../../git/worktree-base-divergence'
-import { resolveLocalWorktreeBaseRef } from '../../../git/worktree-base-ref-probe'
+import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import { measureRetargetDivergence } from '../../../git/worktrees/creation/worktree-base-divergence'
+import { resolveLocalWorktreeBaseRef } from '../../../git/worktrees/creation/worktree-base-ref-probe'
 import { preparationPathKey, selectPreparationForCreate } from './worktree-create-preparation-claim'
 import {
   listPreparations,

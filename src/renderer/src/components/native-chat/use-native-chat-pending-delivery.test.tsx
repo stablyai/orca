@@ -42,6 +42,18 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
+  it('records the host working epoch before delivery can change the live status', () => {
+    const { result } = renderHook(() =>
+      useNativeChatPendingDelivery({
+        ...args,
+        session: { messages: [boundary] },
+        workingEpoch: 500
+      })
+    )
+    act(() => result.current.record('follow up'))
+    expect(result.current.pending[0]?.queuedDuringWorkingEpoch).toBe(500)
+  })
+
   it('records a send into a read empty transcript as after every row of that session', () => {
     const { result } = renderHook(() =>
       useNativeChatPendingDelivery({

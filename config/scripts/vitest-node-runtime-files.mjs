@@ -19,7 +19,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
-  'src/main/ai-vault/parse-cache/session-parse-cache-devin-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-metadata-checkpoint.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
@@ -131,10 +130,10 @@ const NODE_RUNTIME_INCLUDE = [
   // Asserts Node's spawn-failure close signal and that a dead worker closes its children's pipes.
   'src/main/worker-thread-child-process/worker-thread-child-process.test.ts',
   'src/main/git/command-runner/worker-exec-file.test.ts',
-  'src/main/git/worktree-removal-real-git.test.ts',
-  'src/main/git/worktree-list-paths.test.ts',
-  'src/main/git/worktree-sparse-checkout.test.ts',
-  'src/main/git/worktree-removal-large-tree.bench.test.ts',
+  'src/main/git/worktrees/removal/worktree-removal-real-git.test.ts',
+  'src/main/git/worktrees/catalog/worktree-list-paths.test.ts',
+  'src/main/git/worktrees/sparse-checkout/worktree-sparse-checkout.test.ts',
+  'src/main/git/worktrees/removal/worktree-removal-large-tree.bench.test.ts',
   'src/main/runtime/runtime-failed-local-worktree-removal.test.ts',
   'src/main/runtime/runtime-interrupted-local-worktree-removal.test.ts',
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',

@@ -10,7 +10,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { forceDeleteLocalBranch } from '../git/worktree'
+import { forceDeleteLocalBranch } from '../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../git/runner'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'

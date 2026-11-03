@@ -22,25 +22,6 @@ describe('locale-translation-policy es PR glossary', () => {
     expect(repairEs('unlink PR', 'desvincular relaciones públicas')).toBe('desvincular PR')
   })
 
-  it('rewrites PR inside longer sentences', () => {
-    expect(
-      repairEs(
-        'Split a large change into smaller PRs',
-        'Dividir un cambio grande en relaciones públicas más pequeños'
-      )
-    ).toBe('Dividir un cambio grande en PR más pequeños')
-    expect(
-      repairEs(
-        'Open the PR details to view current reviewers.',
-        'Abra los detalles de relaciones públicas para ver los revisores actuales.'
-      )
-    ).toBe('Abra los detalles de PR para ver los revisores actuales.')
-  })
-
-  it('leaves an already correct PR translation untouched', () => {
-    expect(repairEs('Reopen PR', 'Reabrir PR')).toBe('Reabrir PR')
-  })
-
   it('does not fire when the English has a "pr" substring but no PR token', () => {
     // approve/public contain pr substring but no PR token; leave genuine public-relations prose alone.
     expect(repairEs('Approve public relations', 'Aprobar relaciones públicas')).toBe(

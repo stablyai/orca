@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import { getBranchDiff, getCommitDiff } from '../../git/status'
+import { getBranchDiff } from '../../git/source-control/branch-diff'
+import { getCommitDiff } from '../../git/source-control/commit-diff'
 import { validateFullGitObjectId, validateGitRelativeFilePath } from './filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
