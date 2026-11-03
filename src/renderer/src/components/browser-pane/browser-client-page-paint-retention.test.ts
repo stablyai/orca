@@ -23,6 +23,12 @@ it('keeps a streamed retained guest invisible and inert across desktop attach an
   expect(host.inert).toBe(true)
   expect(host.style.pointerEvents).toBe('none')
 
+  const observer = new MutationObserver(() => {})
+  observer.observe(host, { attributes: true })
+  setRemoteViewersForBrowserPage('page-a', true)
+  expect(observer.takeRecords()).toHaveLength(0)
+  observer.disconnect()
+
   const attachment = rig.attach()
   expect(host.style.opacity).toBe('')
   expect(host.inert).toBe(false)

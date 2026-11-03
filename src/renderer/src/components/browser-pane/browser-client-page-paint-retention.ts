@@ -36,10 +36,14 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
       page.host.style.setProperty(property, value)
     }
   }
-  page.host.inert = !interactive
+  if (page.host.inert !== !interactive) {
+    page.host.inert = !interactive
+  }
   if (interactive) {
-    page.host.removeAttribute('aria-hidden')
-  } else {
+    if (page.host.hasAttribute('aria-hidden')) {
+      page.host.removeAttribute('aria-hidden')
+    }
+  } else if (page.host.getAttribute('aria-hidden') !== 'true') {
     page.host.setAttribute('aria-hidden', 'true')
   }
 }
