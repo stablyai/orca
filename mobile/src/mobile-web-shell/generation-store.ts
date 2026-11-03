@@ -216,7 +216,7 @@ export function createGenerationStore(options: {
       if ((await fs.list(root)).length === 0) {
         await fs.delete(root)
       }
-      await activation.cleanGenerations(host.name)
+      await activation.cleanGenerations(host.name).catch(() => undefined)
     }
   }
 

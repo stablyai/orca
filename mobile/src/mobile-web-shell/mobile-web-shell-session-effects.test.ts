@@ -457,4 +457,22 @@ describe('a download that reuses the cached generation', () => {
       fileSystem.moveDirectory = moveDirectory
     }
   })
+  it('opens its confirmed cache when another host has an unreadable cleanup journal', async () => {
+    const { fileSystem, store } = await cachedStore()
+    const otherHost = deriveHostCacheKey('unreadable-host')
+    const other = await store.commitGeneration(await store.stageGeneration(otherHost, CACHED))
+    await store.confirmGeneration(other, () => true)
+    store.releaseGeneration(other)
+    const record = fileSystem
+      .paths()
+      .find((path) => path.startsWith(`${otherHost}/activation/`) && path.endsWith('.json'))
+    if (record === undefined) {
+      throw new Error('missing other host journal')
+    }
+    fileSystem.failReadsAt(record)
+    expect((await openCache(store, HOST))?.buildId).toBe(CACHED.manifest.buildId)
+    expect(
+      fileSystem.bytes(`${otherHost}/generations/${CACHED.manifest.buildId}/index.html`)
+    ).not.toBeNull()
+  })
 })

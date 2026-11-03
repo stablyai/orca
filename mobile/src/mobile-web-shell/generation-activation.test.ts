@@ -444,4 +444,32 @@ describe('generation activation recovery', () => {
     expect(hosts).toHaveLength(MAX_CACHED_HOSTS)
     expect(fileSystem.paths()).not.toContain(HOST)
   })
+  it('does not poison a previously confirmed cache after a later launch faults', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    const old = await confirmed(store, 4)
+    store.releaseGeneration(old)
+    const restarted = createGenerationStore({ fileSystem })
+    const opened = await restarted.acquireGeneration(HOST, old.generation)
+    if (opened === null) {
+      throw new Error('missing confirmed cache')
+    }
+    await restarted.rejectGeneration(opened)
+    restarted.releaseGeneration(opened)
+    expect((await restarted.readActiveGeneration(HOST))?.buildId).toBe(old.generation.buildId)
+    const retry = await install(restarted, 4)
+    expect(retry.generation.buildId).toBe(old.generation.buildId)
+  })
+
+  it('does not let a superseded boot reject a later confirmed attempt of the same build', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    await confirmed(store, 4)
+    const retired = await install(store, 8)
+    await install(store, 16)
+    const current = await install(store, 8)
+    await store.confirmGeneration(current, () => true)
+    await store.rejectGeneration(retired)
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(current.generation.buildId)
+  })
 })

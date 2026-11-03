@@ -254,7 +254,13 @@ export function createGenerationActivation(fs: GenerationFileSystem) {
     }
     const buildId = lease.generation.buildId
     const pending = selection.pending === buildId && selection.revision === owner.activationRevision
-    const confirmed = selection.confirmed === buildId && selection.pending === null
+    const attempt = log.records[1]
+    // Only the boot attempt that earned confirmation may revoke it.
+    const confirmed =
+      selection.confirmed === buildId &&
+      selection.pending === null &&
+      attempt?.pending === buildId &&
+      attempt.revision === owner.activationRevision
     if (!pending && !confirmed) {
       return
     }
