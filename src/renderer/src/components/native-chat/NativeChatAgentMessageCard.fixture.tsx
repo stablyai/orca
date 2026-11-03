@@ -148,6 +148,7 @@ const store = {
 
 export const wide = defineFixture({ width: 720, store, render: cards })
 export const narrow = defineFixture({ width: 340, store, render: cards })
+export const medium = defineFixture({ width: 440, store, render: cards })
 export const mail = defineFixture({
   width: 720,
   render: () => {

@@ -106,6 +106,10 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
     />
   )
   expect(screen.getByText('Started worker')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Build cards' })).toHaveAttribute(
+    'title',
+    'Build cards'
+  )
   expect(screen.queryByRole('link', { name: 'a link' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Started worker' }))
   expect(screen.getByRole('link', { name: 'a link' })).toHaveAttribute(
