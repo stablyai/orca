@@ -3,8 +3,10 @@ import type {
   WorktreeCreateTiming,
   WorktreeCreateTimingPhase
 } from '../../../shared/worktree/create-types'
-import type { WorktreeCreateExecutionHost } from '../../../shared/worktree/create-timing-vocabulary'
-import type { WorktreeCreatePhase } from '../../../shared/worktree/create-timing-vocabulary'
+import type {
+  WorktreeCreateExecutionHost,
+  WorktreeCreatePhase
+} from '../../../shared/worktree/create-timing-vocabulary'
 import type { PreparationWork, WorktreeCreateInFlightHandle } from './worktree-create-concurrency'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
 

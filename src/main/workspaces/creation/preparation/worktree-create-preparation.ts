@@ -8,9 +8,9 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
-  PreparedCheckoutReset
+  PreparedCheckoutReset,
+  WorktreeCreatePhase
 } from '../../../../shared/worktree/create-timing-vocabulary'
-import type { WorktreeCreatePhase } from '../../../../shared/worktree/create-timing-vocabulary'
 import type { AddWorktreeOptions, AddWorktreeResult } from '../../../git/worktree-operation-options'
 import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
 import {
