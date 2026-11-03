@@ -11,6 +11,7 @@ import { AcpAgentError, AcpAuthRequiredError, AcpRpcError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
+const ACP_INTERNAL_ERROR = -32603
 
 /** Only the agent's not-found answer to the load or resume addressed to this saved session. */
 export function isAcpSavedSessionMissing(
@@ -19,10 +20,23 @@ export function isAcpSavedSessionMissing(
 ): error is AcpAgentError {
   return (
     error instanceof AcpAgentError &&
-    error.code === ACP_RESOURCE_NOT_FOUND &&
     (error.request?.method === 'session/load' || error.request?.method === 'session/resume') &&
-    error.request.sessionId === sessionId
+    error.request.sessionId === sessionId &&
+    (error.code === ACP_RESOURCE_NOT_FOUND ||
+      (error.code === ACP_INTERNAL_ERROR && sessionNotFoundDetail(error.data) === sessionId))
   )
+}
+
+// Some agents wrap a missing session in an internal error that names it exactly.
+function sessionNotFoundDetail(data: unknown): string | null {
+  const prefix = 'ACP session not found: '
+  if (typeof data !== 'object' || data === null || !('details' in data)) {
+    return null
+  }
+  const { details } = data
+  return typeof details === 'string' && details.startsWith(prefix)
+    ? details.slice(prefix.length)
+    : null
 }
 
 export function acpReopenTakeover(
