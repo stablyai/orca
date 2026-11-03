@@ -144,6 +144,88 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
+    it.each([
+      { path: '/repo', nestedPath: '/repo/nested', nestedId: 'wt-nested' },
+      { path: '/repo', nestedPath: '/repo/nested', nestedId: 'folder:nested' },
+      { path: 'C:\\repo', nestedPath: 'C:\\repo\\nested', nestedId: 'wt-nested' }
+    ])(
+      'resolves a registered nested workspace root: $nestedPath ($nestedId)',
+      async ({ path, nestedPath, nestedId }) => {
+        const resolveKnownWorkspaceFileTarget = vi.fn(async () => ({
+          worktree: { id: nestedId, repoId: 'repo-nested', path: nestedPath },
+          executionHostId: 'local',
+          relativePath: ''
+        }))
+        const { commands } = createRuntimeFileCommands({ path, resolveKnownWorkspaceFileTarget })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+        statMock.mockResolvedValue({ isDirectory: () => true })
+
+        const result = await resolveTerminalArtifactPath(
+          commands,
+          nestedPath,
+          null,
+          'client-a',
+          true
+        )
+
+        expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledExactlyOnceWith(nestedPath, 'local')
+        expect(result).toEqual({
+          worktree: nestedId,
+          relativePath: '',
+          absolutePath: nestedPath,
+          exists: true,
+          isDirectory: true,
+          openTarget: undefined
+        })
+        expect(statMock).toHaveBeenCalledTimes(1)
+      }
+    )
+
+    it.each([
+      { crossWorkspace: false, directory: true, ownerPath: '' },
+      { crossWorkspace: true, directory: false, ownerPath: '' },
+      { crossWorkspace: true, directory: true, ownerPath: 'nested' },
+      { crossWorkspace: true, directory: true, ownerPath: null }
+    ])(
+      'preserves contained paths without an opted-in exact directory owner: %j',
+      async ({ crossWorkspace, directory, ownerPath }) => {
+        const resolveKnownWorkspaceFileTarget = vi.fn(async () =>
+          ownerPath === null
+            ? null
+            : {
+                worktree: { id: 'wt-other', repoId: 'repo-other', path: '/repo' },
+                executionHostId: 'local',
+                relativePath: ownerPath
+              }
+        )
+        const { commands } = createRuntimeFileCommands({
+          path: '/repo',
+          resolveKnownWorkspaceFileTarget
+        })
+        statAsFile()
+        statMock.mockResolvedValue({ isDirectory: () => directory })
+
+        const result = await resolveTerminalArtifactPath(
+          commands,
+          '/repo/nested',
+          null,
+          'client-a',
+          crossWorkspace
+        )
+
+        expect(result).toMatchObject({
+          worktree: 'wt-1',
+          relativePath: 'nested',
+          exists: true,
+          isDirectory: directory
+        })
+        expect(resolveKnownWorkspaceFileTarget).toHaveBeenCalledTimes(
+          crossWorkspace && directory ? 1 : 0
+        )
+        expect(statMock).toHaveBeenCalledTimes(1)
+      }
+    )
+
     it('refuses an SSH workspace path instead of stating this machine', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
@@ -306,7 +388,13 @@ describe('RuntimeFileCommands', () => {
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
       statMock.mockResolvedValue({ isDirectory: () => true })
 
-      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/nested')
+      const result = await resolveTerminalArtifactPath(
+        commands,
+        '/repo/nested',
+        null,
+        'client-a',
+        true
+      )
 
       expect(resolveKnownWorkspaceFileTarget).not.toHaveBeenCalled()
       expect(result).toMatchObject({
