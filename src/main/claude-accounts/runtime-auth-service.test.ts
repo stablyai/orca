@@ -21,7 +21,7 @@ const fakes = vi.hoisted(() => ({
     })
   }
 }))
-vi.mock('../wsl/wsl-guest-environment', () => ({
+vi.mock('../wsl/execution/wsl-guest-environment', () => ({
   getWslGuestEnvironment: async () => ({ claudeConfigDir: '/home/ada/.claude-custom' })
 }))
 vi.mock('../../shared/app-environment', () => ({
