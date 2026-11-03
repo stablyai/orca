@@ -27,14 +27,14 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
       // setsid creates the detached process group a dying shell’s SIGHUP cannot reach.
       "const child = spawn('sleep', ['31337'], { detached: true, stdio: 'ignore' })",
       'child.unref()',
-      "require('node:fs').writeFileSync(process.argv[2], String(child.pid))",
+      `require('node:fs').writeFileSync(${JSON.stringify(markerPath)}, String(child.pid))`,
       // Keep the parent alive until kill so this tests descendants, not a child already orphaned by a crash.
       'setInterval(() => {}, 1000)',
       ''
     ].join('\n')
   )
   const fakeAgentPath = join(stage, 'claude')
-  writeFileSync(fakeAgentPath, `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}" "$1"\n`)
+  writeFileSync(fakeAgentPath, `#!/bin/sh\nexec "${process.execPath}" "${spawnerPath}"\n`)
   chmodSync(fakeAgentPath, 0o755)
 
   let detachedChildPid = 0
@@ -54,7 +54,7 @@ test('killing an agent PTY terminates its detached-pgid descendants', async ({ o
         })
         return result.id
       },
-      { command: `'${fakeAgentPath}' '${markerPath}'`, cwd: stage, worktreeId }
+      { command: `'${fakeAgentPath}'`, cwd: stage, worktreeId }
     )
     expect(ptyId).toBeTruthy()
 

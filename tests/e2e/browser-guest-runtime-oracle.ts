@@ -12,7 +12,7 @@ export type BrowserGuestState = {
 
 type RuntimeResponse = {
   ok: boolean
-  result?: { tabs?: { browserPageId: string; url: string }[] }
+  result?: { tabs?: { browserPageId: string; url: string; loaded: boolean }[] }
 }
 
 export async function readGuestProcessId(
@@ -142,7 +142,7 @@ export async function verifyBrowserWorktreeRetentionAndRecovery({
         ),
       { timeout: 10_000 }
     )
-    .toMatchObject({ browserPageId: browserTab.activePageId, url: fixtureUrl })
+    .toMatchObject({ browserPageId: browserTab.activePageId, url: fixtureUrl, loaded: true })
   expect(await readGuestProcessId(electronApp, parkedBefore.webContentsId!)).toBe(parkedProcessId)
 
   await switchToWorktree(page, worktreeId)
