@@ -34,6 +34,8 @@ import {
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
+import { parseSessionCandidate } from './session-scanner-candidate-parse'
+import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
 
 const hooks = vi.hoisted(() => {
@@ -246,6 +248,58 @@ describe('session parse cache persistence', () => {
     await utimes(transcript, pinnedMtime, pinnedMtime)
     const second = await scanAiVaultSessions(roots)
     expect(second.sessions[0]).toEqual(first.sessions[0])
+  })
+
+  it('reconstructs unreadable diagnostics from a version 8 row before reusing it', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const transcript = join(root, 'unreadable.jsonl')
+    await writeFile(
+      transcript,
+      `${userRecord(0, 'x'.repeat(MAX_SESSION_TRANSCRIPT_RECORD_BYTES))}\n`
+    )
+    const candidate = await claudeCandidate(transcript)
+    const session = await parseAgentSessionFileCached(candidate, process.platform)
+    const oldDatabase = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+    oldDatabase.exec(`
+      CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO meta VALUES ('schema_version', '8');
+      CREATE TABLE rows(path TEXT PRIMARY KEY, mtime_ms REAL NOT NULL, size_bytes INTEGER,
+        platform TEXT NOT NULL, sidecar TEXT, session TEXT NOT NULL, seen_at INTEGER NOT NULL);
+    `)
+    oldDatabase
+      .prepare('INSERT INTO rows VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(
+        transcript,
+        candidate.file.mtimeMs,
+        candidate.file.sizeBytes,
+        process.platform,
+        null,
+        JSON.stringify(session),
+        Date.now()
+      )
+    oldDatabase.close()
+
+    simulateRestart(cacheFile)
+    const parseStats = createSessionParseStats()
+    const context = {
+      platform: process.platform,
+      executionHostId: 'local' as const,
+      listed: true,
+      parseStats
+    }
+    expect((await parseSessionCandidate(candidate, context)).issue).toMatchObject({
+      messageCode: 'transcriptTooLarge'
+    })
+    expect(parseStats).toMatchObject({ fullParses: 1, reused: 0 })
+    await flushSessionParseCachePersist()
+
+    simulateRestart(cacheFile)
+    const reusedStats = createSessionParseStats()
+    expect(
+      (await parseSessionCandidate(candidate, { ...context, parseStats: reusedStats })).issue
+    ).toMatchObject({ messageCode: 'transcriptTooLarge' })
+    expect(reusedStats).toMatchObject({ reused: 1, fullParses: 0, bytesRead: 0 })
   })
 
   it('falls through to a full parse when a file changed while the app was closed', async () => {

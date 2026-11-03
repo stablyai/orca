@@ -30,6 +30,7 @@ import { parseHermesSessionFile } from './session-scanner-hermes-parser'
 import { parseOpenCodeSessionFile } from './session-scanner-opencode-parser'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
+import type { SkippedTranscriptRecord } from './session-transcript-record-budget'
 
 /** Listing needs only a preview; active message sinks require the full transcript. */
 async function readOpenCodeSqliteCandidate(
@@ -71,7 +72,8 @@ export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   messages?: TranscriptMessageSink,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onSkippedRecords?: (records: SkippedTranscriptRecord[]) => void
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
     case 'qoder':
@@ -144,6 +146,6 @@ export async function parseAgentSessionFile(
     case 'jcode':
       return parseJcodeSessionFile(candidate.file, platform, messages)
     case 'kiro':
-      return parseKiroSessionFile(candidate.file, platform, messages)
+      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
   }
 }
