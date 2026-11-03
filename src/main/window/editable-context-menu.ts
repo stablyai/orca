@@ -10,7 +10,7 @@ import { editableContextMenuLabels } from './editable-context-menu-labels'
 
 type EditableContextMenuWebContents = Pick<
   Electron.WebContents,
-  'replaceMisspelling' | 'send' | 'session'
+  'paste' | 'pasteAndMatchStyle' | 'replaceMisspelling' | 'send' | 'session'
 >
 
 function markdownCommandItem(
@@ -41,7 +41,6 @@ function editableContextPasteItem(
   return {
     label,
     click: () => {
-      // Use renderer paste ownership for chunked text controls and to avoid duplicate native terminal paste.
       webContents.send('ui:editableContextPaste', {
         plainTextOnly: options?.plainTextOnly === true
       })
@@ -188,10 +187,15 @@ function buildNativeEditMenuTemplate(
   return [
     { role: 'cut' },
     { role: 'copy' },
-    editableContextPasteItem(labels.paste, webContents),
+    { label: labels.paste, click: () => webContents.paste() },
     // Plain-text contenteditable composers already paste literally; omit redundant text-only mode.
     ...(params.formControlType !== 'none'
-      ? [editableContextPasteItem(labels.pasteAsPlainText, webContents, { plainTextOnly: true })]
+      ? [
+          {
+            label: labels.pasteAsPlainText,
+            click: () => webContents.pasteAndMatchStyle()
+          }
+        ]
       : []),
     { role: 'selectAll' }
   ]

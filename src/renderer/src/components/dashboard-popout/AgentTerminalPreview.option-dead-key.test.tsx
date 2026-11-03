@@ -104,7 +104,6 @@ describe('AgentTerminalPreview Option dead-key ownership', () => {
           readClipboardText: vi.fn(async () => ''),
           writeClipboardText: vi.fn(async () => undefined),
           writeTerminalClipboardText: vi.fn(async () => undefined),
-          onAppMenuPaste: () => vi.fn(),
           onAppMenuSelectionAction: () => vi.fn(),
           performNativeSelectionAction: vi.fn()
         }

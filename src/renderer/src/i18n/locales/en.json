@@ -2145,9 +2145,6 @@
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
         "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "Paste is too large."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Paste is too large."
       },

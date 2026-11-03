@@ -2081,9 +2081,6 @@
         "shareSkillsDescription": "Делитесь навыками по скрытой из общего списка ссылке. Любой, у кого она есть, сможет установить их.",
         "floatingWorkspaceWebDescription": "Глобальные вкладки терминала и Markdown."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "Вставляемый текст слишком большой."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Вставляемый текст слишком большой."
       },

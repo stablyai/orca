@@ -2009,9 +2009,6 @@
         "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir.",
         "floatingWorkspaceWebDescription": "Genel terminal ve markdown sekmeleri."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "Yapıştırılan içerik çok büyük."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Yapıştırılan içerik çok büyük."
       },

@@ -56,7 +56,7 @@ export function getNativeClipboardChordCommand(
   return null
 }
 
-// Only native paste chords can use ClipboardEvent on insecure web; consume remapped chords to avoid sending control characters.
+// Remapped chords need an explicit clipboard read; native chords deliver their own paste event.
 export function firesNativePasteEvent(event: ClipboardChordEvent, isMac: boolean): boolean {
   return getNativeClipboardChordCommand(event, isMac) === 'paste'
 }

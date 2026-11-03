@@ -15,8 +15,9 @@ import {
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
 import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
+import { firesNativePasteEvent } from '@/components/terminal-pane/terminal-clipboard-event-paste'
 
-/** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
+/** Compose IME, clipboard and pane policy while leaving native paste to its ClipboardEvent. */
 export function installPreviewTerminalKeyHandler(args: {
   terminal: Terminal
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
@@ -46,6 +47,7 @@ export function installPreviewTerminalKeyHandler(args: {
     optionKeyLocations.keyUp(event)
   }
   const onWindowBlur = (): void => {
+    consumedClipboardKeys.clear()
     optionKeyLocations.clear()
     optionKittyReleases.clear()
     nativeOnlyShortcutTracker.clear()
@@ -129,32 +131,29 @@ export function installPreviewTerminalKeyHandler(args: {
       }
       return consumeEvent(event)
     }
-    // Only macOS has the native Cmd+V accelerator; deferred Ctrl+V on Windows/Linux would never return.
-    const isMenuPasteChord =
-      platform === 'darwin' &&
-      event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.key.toLowerCase() === 'v'
-    if (
-      !isMenuPasteChord &&
-      keybindingMatchesAction('terminal.paste', event, platform, keybindings)
-    ) {
+    const nativePaste = firesNativePasteEvent(event, platform === 'darwin')
+    if (keybindingMatchesAction('terminal.paste', event, platform, keybindings)) {
       const keyIdentity = event.code || event.key
-      if (!consumedClipboardKeys.has(keyIdentity)) {
-        consumedClipboardKeys.add(keyIdentity)
+      const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
+      consumedClipboardKeys.add(keyIdentity)
+      if (nativePaste) {
+        return false
+      }
+      if (firstKeydown) {
         args.pasteClipboardText(document.activeElement, 'keyboard')
       }
       return consumeEvent(event)
     }
 
+    if (nativePaste) {
+      consumedClipboardKeys.add(event.code || event.key)
+    }
     const action = resolvePreviewShortcutAction(event, {
       ...args.getShortcutContext(),
       optionKeyLocations: optionKeyLocations.get()
     })
     if (!action) {
-      return true
+      return nativePaste ? consumeEvent(event) : true
     }
     switch (action.type) {
       case 'sendInput':

@@ -20,7 +20,6 @@ import type { Store } from '../persistence/loading-store/store'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
-import { isMacAppPasteInput } from './mac-app-paste-input'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -122,13 +121,6 @@ export function installMainWindowShortcutRouting(args: {
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
-      return
-    }
-
-    if (isMacAppPasteInput(input)) {
-      // Chat/terminal panes are not native editable controls; route Cmd+V through Orca paste ownership.
-      event.preventDefault()
-      mainWindow.webContents.send('ui:appMenuPaste')
       return
     }
 

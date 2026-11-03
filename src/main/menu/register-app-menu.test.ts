@@ -265,27 +265,12 @@ describe('registerAppMenu', () => {
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
-    'routes Edit > Paste through Orca coordinated paste ownership on %s',
+    'leaves Edit > Paste and its accelerator to Electron on %s',
     (platform) => {
       vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      const send = vi.fn()
-      const hostContents = { send }
-      getFocusedWindowMock.mockReturnValue({ webContents: hostContents })
-      getFocusedWebContentsMock.mockReturnValue(hostContents)
       registerAppMenu(buildMenuOptions())
-
-      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-      const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
-
-      expect(pasteItem).toBeDefined()
-      expect(pasteItem?.role).toBeUndefined()
-      expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
-
-      pasteItem?.click?.({} as never, {} as never, {} as never)
-
-      expect(send).toHaveBeenCalledOnce()
-      expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
-      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+      const paste = getSubmenu(getTemplate(), 'Edit').find((item) => item.role === 'paste')
+      expect(paste).toEqual({ label: 'Paste', role: 'paste' })
     }
   )
 
@@ -326,21 +311,6 @@ describe('registerAppMenu', () => {
 
     expect(guestContents.copy).toHaveBeenCalledOnce()
     expect(guestContents.selectAll).toHaveBeenCalledOnce()
-    expect(send).not.toHaveBeenCalled()
-  })
-
-  it('pastes into DevTools instead of the Orca pane when DevTools holds focus (#16285)', () => {
-    const send = vi.fn()
-    const devToolsContents = { paste: vi.fn() }
-    getFocusedWindowMock.mockReturnValue({ webContents: { send } })
-    getFocusedWebContentsMock.mockReturnValue(devToolsContents)
-    registerAppMenu(buildMenuOptions())
-
-    getSubmenu(getTemplate(), 'Edit')
-      .find((item) => item.label === 'Paste')
-      ?.click?.({} as never, {} as never, {} as never)
-
-    expect(devToolsContents.paste).toHaveBeenCalledOnce()
     expect(send).not.toHaveBeenCalled()
   })
 
@@ -387,18 +357,6 @@ describe('registerAppMenu', () => {
     expect(sendActionToFirstResponderMock.mock.calls).toEqual([['copy:'], ['selectAll:']])
   })
 
-  it('routes Edit > Paste to the native first responder once on macOS without a focused window', () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    getFocusedWindowMock.mockReturnValue(null)
-    registerAppMenu(buildMenuOptions())
-
-    const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
-    pasteItem?.click?.({} as never, {} as never, {} as never)
-
-    expect(sendActionToFirstResponderMock).toHaveBeenCalledOnce()
-    expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
-  })
-
   it.each(
     (['darwin', 'linux', 'win32'] as const).flatMap((platform) =>
       ['popup', 'child', 'unavailable'].map((focus) => ({ platform, focus }))
@@ -419,7 +377,7 @@ describe('registerAppMenu', () => {
       registerAppMenu(buildMenuOptions())
 
       const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-      for (const label of ['Paste', 'Copy', 'Select All']) {
+      for (const label of ['Copy', 'Select All']) {
         const click: unknown = editSubmenu.find((item) => item.label === label)?.click
         expect(click).toBeTypeOf('function')
         if (typeof click === 'function') {
@@ -429,30 +387,12 @@ describe('registerAppMenu', () => {
 
       const target = focus === 'child' ? childContents : popupContents
       const other = focus === 'child' ? popupContents : childContents
-      expect(target.paste).toHaveBeenCalledOnce()
       expect(target.copy).toHaveBeenCalledOnce()
       expect(target.selectAll).toHaveBeenCalledOnce()
-      expect(other.paste).not.toHaveBeenCalled()
       expect(other.copy).not.toHaveBeenCalled()
       expect(other.selectAll).not.toHaveBeenCalled()
       expect(popupContents.send).not.toHaveBeenCalled()
       expect(childContents.send).not.toHaveBeenCalled()
-      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['linux', 'win32'] as const)(
-    'does not invoke the native paste responder on %s without a focused window',
-    (platform) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      getFocusedWindowMock.mockReturnValue(null)
-      registerAppMenu(buildMenuOptions())
-
-      const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
-      // Negative-only assertions must not pass when the item itself vanished.
-      expect(pasteItem).toBeDefined()
-      pasteItem?.click?.({} as never, {} as never, {} as never)
-
       expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
     }
   )

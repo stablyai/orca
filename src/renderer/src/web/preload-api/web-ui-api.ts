@@ -196,7 +196,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
     },
     onExportPdfRequested: () => noopUnsubscribe,
-    onAppMenuPaste: () => noopUnsubscribe,
     onAppMenuSelectionAction: () => noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,

@@ -2276,9 +2276,6 @@
         "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
         "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "A colagem é muito grande."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "A colagem é muito grande."
       },

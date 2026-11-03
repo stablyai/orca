@@ -59,7 +59,6 @@ export async function verifyPopoutDefaultLinkPath({
     agentStatus: { onSet: subscribe, onClear: subscribe },
     ui: {
       ...window.api.ui,
-      onAppMenuPaste: subscribe,
       onEditableContextPaste: subscribe,
       onAppMenuSelectionAction: subscribe
     },
@@ -74,7 +73,7 @@ export async function verifyPopoutDefaultLinkPath({
   const census = observePreviewListeners([])
   const popout = renderWithoutApp(<DashboardPopoutRoot />)
   act(() => snapshot?.({ generatedAt: 3, cards: [card] }))
-  expect(bridges.size).toBe(6)
+  expect(bridges.size).toBe(5)
   const rootOwners = Array.from(census.active)
   fireEvent.click(popout.getByRole('button', { name: /Workspace 0/ }))
   expect(window.api.dashboard.ackAgent).toHaveBeenCalledExactlyOnceWith('pane-0', 'explicit')

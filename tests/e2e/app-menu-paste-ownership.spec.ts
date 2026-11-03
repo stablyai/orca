@@ -53,17 +53,16 @@ function countOccurrences(value: string, needle: string): number {
   return count
 }
 
-async function dispatchAppMenuPasteFromMain(app: ElectronApplication): Promise<void> {
-  const sentCount = await app.evaluate(({ BrowserWindow }) => {
-    // Headless Electron can have DOM focus without BrowserWindow focus; the
-    // production menu sends this same IPC event to the focused app window.
-    const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
-    for (const window of windows) {
-      window.webContents.send('ui:appMenuPaste')
-    }
-    return windows.length
+async function dispatchAppMenuPasteFromMain(app: ElectronApplication, page: Page): Promise<void> {
+  const nativeRole = await app.evaluate(({ Menu }) => {
+    return Menu.getApplicationMenu()?.items.some((item) =>
+      item.submenu?.items.some((entry) => entry.role === 'paste')
+    )
   })
-  expect(sentCount).toBeGreaterThan(0)
+  expect(nativeRole).toBe(true)
+  // Execute the native role's command on the hidden CDP window without OS activation.
+  const window = await app.browserWindow(page)
+  await window.evaluate((window) => window.webContents.paste())
 }
 
 async function getActiveTabTitle(page: Page, worktreeId: string): Promise<string> {
@@ -111,7 +110,7 @@ test.describe('app menu paste ownership', () => {
       await clearTerminalPtyWriteLog(electronApp)
       await focusActiveTerminalInput(orcaPage)
 
-      await dispatchAppMenuPasteFromMain(electronApp)
+      await dispatchAppMenuPasteFromMain(electronApp, orcaPage)
       await waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
@@ -144,7 +143,7 @@ test.describe('app menu paste ownership', () => {
     await clearTerminalPtyWriteLog(electronApp)
     await expect(renameInput).toBeFocused()
 
-    await dispatchAppMenuPasteFromMain(electronApp)
+    await dispatchAppMenuPasteFromMain(electronApp, orcaPage)
 
     await expect(renameInput).toHaveValue(payload)
     expect(countOccurrences(await renameInput.inputValue(), payload)).toBe(1)
@@ -152,5 +151,24 @@ test.describe('app menu paste ownership', () => {
 
     await renameInput.press('Escape')
     await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
+  })
+
+  test('native paste fills the new-tab search box without writing to the terminal', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    await orcaPage.getByRole('button', { name: 'New tab', exact: true }).first().click()
+    const input = orcaPage.getByPlaceholder('Search open tabs, history, files, URLs, agents…', {
+      exact: true
+    })
+    await expect(input).toBeFocused()
+    const url = 'https://example.com/paste-test'
+    await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), url)
+    await clearTerminalPtyWriteLog(electronApp)
+    await dispatchAppMenuPasteFromMain(electronApp, orcaPage)
+    await expect(input).toHaveValue(url)
+    expect((await readTerminalPtyWrites(electronApp)).join('')).not.toContain(url)
+    await input.press('Escape')
+    await expect(input).not.toBeVisible()
   })
 })

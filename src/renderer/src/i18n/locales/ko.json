@@ -1576,9 +1576,6 @@
         "shareSkillsDescription": "비공개 링크로 기술을 공유하세요. 가지고 있는 사람이라면 누구나 설치할 수 있습니다.",
         "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
       },

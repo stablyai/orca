@@ -20,9 +20,22 @@ export function installPreviewTerminalAppMenuClipboard({
   getTerminal: () => PreviewTerminalSelection | null
   pasteClipboardText: (
     activeElementAtDispatch: Element | null,
-    source: PreviewTerminalPasteSource
+    source: PreviewTerminalPasteSource,
+    eventText?: string
   ) => void
 }): () => void {
+  const onPaste = (event: ClipboardEvent): void => {
+    if (event.defaultPrevented || isEditableTarget(event.target)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    pasteClipboardText(
+      document.activeElement,
+      'paste-event',
+      event.clipboardData?.getData('text/plain') ?? ''
+    )
+  }
   const onAppMenuPaste = (event: Event): void => {
     const active = document.activeElement
     if (!active || !container.contains(active)) {
@@ -54,9 +67,11 @@ export function installPreviewTerminalAppMenuClipboard({
     }).catch(() => undefined)
   }
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+  container.addEventListener('paste', onPaste, { capture: true })
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   return () => {
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    container.removeEventListener('paste', onPaste, { capture: true })
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
   }
 }

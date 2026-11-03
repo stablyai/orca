@@ -1,126 +1,148 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { APP_MENU_PASTE_EVENT, handleAppMenuPasteRequest } from './app-menu-paste'
+import { addLargeTextControlPasteListener } from './large-text-control-paste'
+import type { TextControlPasteResult } from './text-control-paste'
+
+let removePasteListener: (() => void) | undefined
 
 function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+  textarea.focus()
   return textarea
 }
 
-function captureInputEvents(target: HTMLElement): InputEvent[] {
-  const events: InputEvent[] = []
-  target.addEventListener('input', (event) => {
-    events.push(event as InputEvent)
-  })
-  return events
-}
-
 afterEach(() => {
+  removePasteListener?.()
+  removePasteListener = undefined
   document.body.replaceChildren()
   vi.restoreAllMocks()
 })
 
 describe('app menu paste', () => {
-  it('lets an owned terminal paste event claim the menu action synchronously', async () => {
-    const readClipboardText = vi.fn(async () => 'secret')
+  it('lets an owned terminal paste event claim the menu action synchronously', () => {
     const performNativePaste = vi.fn()
-    const onPaste = (event: Event): void => {
-      event.preventDefault()
-    }
+    const onPaste = (event: Event): void => event.preventDefault()
     window.addEventListener(APP_MENU_PASTE_EVENT, onPaste)
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText,
-      performNativePaste
-    })
-
-    window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
+    let result: ReturnType<typeof handleAppMenuPasteRequest>
+    try {
+      result = handleAppMenuPasteRequest({ performNativePaste })
+    } finally {
+      window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
+    }
     expect(result).toEqual({ status: 'handled', target: 'terminal' })
-    expect(readClipboardText).not.toHaveBeenCalled()
     expect(performNativePaste).not.toHaveBeenCalled()
   })
 
-  it('pastes large clipboard text into a focused text control without leaking event data', async () => {
+  it.each(['paste', 'paste-and-match-style'] as const)(
+    'requests native %s synchronously and preserves the text selection',
+    async (mode) => {
+      const textarea = appendTextarea('before old after')
+      textarea.setSelectionRange(7, 10)
+      const user = userEvent.setup()
+      const url = 'https://linear.app/acme/issue/STA-1234'
+      let delivery: Promise<void> | undefined
+      const performNativePaste = vi.fn(() => {
+        delivery = user.paste(url)
+      })
+
+      const result = handleAppMenuPasteRequest({ performNativePaste, nativePasteMode: mode })
+
+      expect(delivery).toBeDefined()
+      expect(result).toEqual({ status: 'native-fallback', reason: 'no-owned-target' })
+      expect(performNativePaste).toHaveBeenCalledExactlyOnceWith({ mode })
+      await delivery
+      expect(textarea.value).toBe(`before ${url} after`)
+      expect(textarea.selectionStart).toBe(7 + url.length)
+      expect(textarea.selectionEnd).toBe(7 + url.length)
+    }
+  )
+
+  it('keeps native paste events available to image handlers', async () => {
+    const textarea = appendTextarea('unchanged')
+    const image = new File(['image'], 'pasted.png', { type: 'image/png' })
+    const clipboard = new DataTransfer()
+    clipboard.items.add(image)
+    const images: File[] = []
+    textarea.addEventListener('paste', (event) => {
+      images.push(...(event.clipboardData?.files ?? []))
+      event.preventDefault()
+    })
+    const user = userEvent.setup()
+    let delivery: Promise<void> | undefined
+
+    handleAppMenuPasteRequest({
+      performNativePaste: () => {
+        delivery = user.paste(clipboard)
+      }
+    })
+    await delivery
+
+    expect(images).toEqual([image])
+    expect(textarea.value).toBe('unchanged')
+  })
+
+  it('chunks large text delivered by native paste and emits one redacted input event', async () => {
     const textarea = appendTextarea('prefix ')
-    textarea.focus()
     textarea.setSelectionRange(textarea.value.length, textarea.value.length)
-    const events = captureInputEvents(textarea)
-    const text = 'secret-token '.repeat(6_000)
-
-    const readClipboardText = vi.fn(async () => text)
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText,
-      performNativePaste: vi.fn(),
-      dispatchOwnedPasteEvent: () => false
+    const inputEvents: InputEvent[] = []
+    textarea.addEventListener('input', (event) => {
+      if (event instanceof InputEvent) {
+        inputEvents.push(event)
+      }
     })
+    const finished = Promise.withResolvers<TextControlPasteResult>()
+    removePasteListener = addLargeTextControlPasteListener(document, {
+      directMaxBytes: 8,
+      chunkMaxBytes: 6,
+      yieldToEventLoop: async () => {},
+      onPasteResult: finished.resolve
+    })
+    const text = 'secret-token '.repeat(10)
+    const user = userEvent.setup()
+    let delivery: Promise<void> | undefined
 
-    expect(result).toEqual({ status: 'handled', target: 'text-control' })
+    handleAppMenuPasteRequest({
+      performNativePaste: () => {
+        delivery = user.paste(text)
+      }
+    })
+    await delivery
+    const result = await finished.promise
+
+    expect(result).toMatchObject({ status: 'pasted', mode: 'chunked' })
     expect(textarea.value).toBe(`prefix ${text}`)
-    expect(events).toHaveLength(1)
-    expect(events[0].inputType).toBe('insertFromPaste')
-    expect(events[0].data ?? '').toBe('')
-    expect(readClipboardText).toHaveBeenCalledWith({ maxBytes: 16 * 1024 * 1024 })
+    expect(inputEvents).toHaveLength(1)
+    expect(inputEvents[0].inputType).toBe('insertFromPaste')
+    expect(inputEvents[0].data ?? '').toBe('')
   })
 
-  it('does not native-fallback after resolving a text control that loses focus', async () => {
+  it('rejects oversized native paste before changing the input', async () => {
     const textarea = appendTextarea('unchanged')
-    const other = appendTextarea('other')
-    textarea.focus()
-    const performNativePaste = vi.fn()
-    const text = 'secret-menu-token'
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        other.focus()
-        return text
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
+    const finished = Promise.withResolvers<TextControlPasteResult>()
+    removePasteListener = addLargeTextControlPasteListener(document, {
+      directMaxBytes: 2,
+      maxBytes: 5,
+      onPasteResult: finished.resolve
     })
+    const user = userEvent.setup()
+    let delivery: Promise<void> | undefined
 
-    expect(result).toMatchObject({
-      status: 'rejected',
-      target: 'text-control',
-      reason: 'target-unavailable'
+    handleAppMenuPasteRequest({
+      performNativePaste: () => {
+        delivery = user.paste('secret-token')
+      }
     })
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'content=redacted'
-    )
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').not.toContain(text)
+    await delivery
+    const result = await finished.promise
+
+    expect(result).toMatchObject({ status: 'rejected', reason: 'too-large' })
+    expect(result.redactedDiagnostic).toContain('content=redacted')
+    expect(result.redactedDiagnostic).not.toContain('secret-token')
     expect(textarea.value).toBe('unchanged')
-    expect(other.value).toBe('other')
-    expect(performNativePaste).not.toHaveBeenCalled()
-  })
-
-  it('does not native-fallback when clipboard read fails after focus moves', async () => {
-    const textarea = appendTextarea('unchanged')
-    const other = appendTextarea('other')
-    textarea.focus()
-    const performNativePaste = vi.fn()
-
-    const result = await handleAppMenuPasteRequest({
-      readClipboardText: vi.fn(async () => {
-        other.focus()
-        throw new Error('clipboard denied')
-      }),
-      performNativePaste,
-      dispatchOwnedPasteEvent: () => false
-    })
-
-    expect(result).toMatchObject({
-      status: 'rejected',
-      target: 'text-control',
-      reason: 'target-unavailable'
-    })
-    expect(result.status === 'rejected' ? result.redactedDiagnostic : '').toContain(
-      'content=redacted'
-    )
-    expect(textarea.value).toBe('unchanged')
-    expect(other.value).toBe('other')
-    expect(performNativePaste).not.toHaveBeenCalled()
   })
 })

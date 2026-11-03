@@ -2031,9 +2031,6 @@
         "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
         "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."
       },

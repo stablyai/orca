@@ -172,6 +172,9 @@ describe('AgentTerminalPreview clipboard routes', () => {
   const focusInsidePreview = (container: HTMLElement, tagName = 'input'): HTMLElement => {
     const host = container.querySelector<HTMLElement>('.origin-bottom-left')!
     const focusTarget = document.createElement(tagName)
+    if (tagName === 'textarea') {
+      focusTarget.className = 'xterm-helper-textarea'
+    }
     host.appendChild(focusTarget)
     focusTarget.focus()
     return focusTarget
@@ -339,54 +342,63 @@ describe('AgentTerminalPreview clipboard routes', () => {
     expect(dispatchAppMenuSelectionAction('select-all')).toBe(false)
   })
 
-  it('pastes on plain Ctrl+V on Windows, where no Edit-menu accelerator ever fires', async () => {
-    platformState.value = 'win32'
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    focusInsidePreview(view.container)
-
-    const plain = new KeyboardEvent('keydown', {
-      key: 'v',
-      code: 'KeyV',
-      ctrlKey: true,
-      cancelable: true
-    })
-    expect(terminal.customKeyHandler!(plain)).toBe(false)
-    expect(plain.defaultPrevented).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-
-    // The repeat is swallowed without a second clipboard read, and so is the keyup.
-    expect(
-      terminal.customKeyHandler!(
-        new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', ctrlKey: true, repeat: true })
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'pastes once from a native event on %s without reading the clipboard',
+    async (platform) => {
+      platformState.value = platform
+      const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+      await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+      const terminal = terminalHarness.instances[0]!
+      await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+      const target = focusInsidePreview(view.container, 'textarea')
+      const keydown = new KeyboardEvent('keydown', {
+        key: 'v',
+        code: 'KeyV',
+        metaKey: platform === 'darwin',
+        ctrlKey: platform !== 'darwin',
+        cancelable: true
+      })
+      expect(terminal.customKeyHandler!(keydown)).toBe(false)
+      expect(keydown.defaultPrevented).toBe(false)
+      expect(terminal.paste).not.toHaveBeenCalled()
+      const clipboard = new DataTransfer()
+      clipboard.setData('text/plain', 'native clipboard text')
+      const event = new ClipboardEvent('paste', {
+        clipboardData: clipboard,
+        bubbles: true,
+        cancelable: true
+      })
+      act(() => {
+        target.dispatchEvent(event)
+      })
+      expect(event.defaultPrevented).toBe(true)
+      await waitFor(() =>
+        expect(input).toHaveBeenCalledExactlyOnceWith('pty-1', 'native clipboard text')
       )
-    ).toBe(false)
-    expect(terminal.customKeyHandler!(new KeyboardEvent('keyup', { key: 'v', code: 'KeyV' }))).toBe(
-      false
-    )
-    expect(readClipboardText).toHaveBeenCalledTimes(1)
-  })
+      expect(terminal.paste).toHaveBeenCalledTimes(1)
+      expect(readClipboardText).not.toHaveBeenCalled()
+    }
+  )
 
-  it('handles the shifted paste chord on Linux', async () => {
+  it('leaves paste in a preview text field to that field, not the pty', async () => {
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    const terminal = terminalHarness.instances[0]!
-    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
-    focusInsidePreview(view.container)
-
-    const shifted = new KeyboardEvent('keydown', {
-      key: 'V',
-      code: 'KeyV',
-      ctrlKey: true,
-      shiftKey: true,
+    const field = focusInsidePreview(view.container)
+    const clipboard = new DataTransfer()
+    clipboard.setData('text/plain', 'field text')
+    const event = new ClipboardEvent('paste', {
+      clipboardData: clipboard,
+      bubbles: true,
       cancelable: true
     })
-    expect(terminal.customKeyHandler!(shifted)).toBe(false)
-    expect(shifted.defaultPrevented).toBe(true)
-    await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
-    expect(readClipboardText).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      field.dispatchEvent(event)
+    })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(input).not.toHaveBeenCalled()
+    expect(readClipboardText).not.toHaveBeenCalled()
   })
 
   it('leaves plain Cmd+V to the macOS Edit-menu accelerator', async () => {
@@ -401,7 +413,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
     const plain = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true })
     )
-    expect(plain).toBe(true)
+    expect(plain).toBe(false)
     expect(readClipboardText).not.toHaveBeenCalled()
   })
 

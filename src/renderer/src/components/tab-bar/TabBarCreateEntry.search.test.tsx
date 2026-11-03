@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -29,6 +30,7 @@ vi.mock('./use-open-tab-search', () => ({
 }))
 
 import TabBarCreateEntry from './TabBarCreateEntry'
+import { TabBarCreateMenuContent } from './TabBarCreateMenuContent'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -111,6 +113,50 @@ afterEach(() => {
 })
 
 describe('TabBarCreateEntry search behavior', () => {
+  it('pastes and submits a URL without rerendering the tab strip or waiting for files', async () => {
+    fileListMock.current = { files: [], loading: true, loadError: null }
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    const entries: never[] = []
+    const inventory = { getSnapshot: () => entries, subscribe: () => () => {} }
+    let tabStripRenders = 0
+    function TabStrip(): React.JSX.Element {
+      tabStripRenders += 1
+      return (
+        <TooltipProvider>
+          <TabBarCreateMenuContent
+            entryProps={{ inventory, worktreeId: 'wt', groupId: 'g', menuOpen: true, onOpenEntry }}
+          >
+            <button type="button" data-static-action>
+              New Terminal
+            </button>
+          </TabBarCreateMenuContent>
+        </TooltipProvider>
+      )
+    }
+    act(() => root.render(<TabStrip />))
+    const rendersBeforePaste = tabStripRenders
+    expect(container.querySelector('[data-static-action]')).not.toBeNull()
+    const input = container.querySelector('input')!
+    input.focus()
+    const url = 'https://linear.app/acme/issue/STA-1234'
+    await act(async () => {
+      await userEvent.setup().paste(url)
+    })
+
+    expect(input.value).toBe(url)
+    expect(container.querySelector('[data-static-action]')).toBeNull()
+    expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain(url)
+    expect(tabStripRenders).toBe(rendersBeforePaste)
+    setQuery('another query')
+    setQuery('')
+    expect(container.querySelector('[data-static-action]')).not.toBeNull()
+    expect(tabStripRenders).toBe(rendersBeforePaste)
+    setQuery(url)
+    submit()
+    expect(onOpenEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ classification: { kind: 'explicit-url', url } })
+    )
+  })
   it.each([false, true])('searches weak file matches on Enter (delayed listing: %s)', (delayed) => {
     const readyListing = {
       files: [

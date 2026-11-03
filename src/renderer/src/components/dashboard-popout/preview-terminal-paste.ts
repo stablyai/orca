@@ -7,7 +7,7 @@ import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/terminal-pa
 import { pasteTerminalText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 
-export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
+export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click' | 'paste-event'
 
 /** Stream bounded paste chunks through the pane coordinator, rechecking focus ownership between chunks. */
 export function createPreviewClipboardPaster(deps: {
@@ -19,11 +19,16 @@ export function createPreviewClipboardPaster(deps: {
   getTerminal: () => Terminal | null
   getTerminalInput: () => DashboardCardTerminalInput | null
   isDisposed: () => boolean
-}): (activeElementAtDispatch: Element | null, source: PreviewTerminalPasteSource) => Promise<void> {
-  return async (activeElementAtDispatch, source) => {
+}): (
+  activeElementAtDispatch: Element | null,
+  source: PreviewTerminalPasteSource,
+  eventText?: string
+) => Promise<void> {
+  return async (activeElementAtDispatch, source, eventText) => {
     let text: string
     try {
-      text = await window.api.ui.readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
+      text =
+        eventText ?? (await window.api.ui.readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES }))
     } catch {
       return
     }

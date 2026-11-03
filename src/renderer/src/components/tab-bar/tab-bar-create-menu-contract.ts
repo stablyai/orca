@@ -14,7 +14,6 @@ export type TabBarCreateMenuController = {
   launchAgentRow: ReturnType<typeof useTabAgentMenuLaunch>
   newTabMenuOpen: boolean
   setNewTabMenuOpen: (open: boolean) => void
-  setCreateMenuQuery: (query: string) => void
   createMenuOptions: TabCreateMenuOption[]
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
   handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
@@ -24,5 +23,4 @@ export type TabBarCreateMenuController = {
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
   queueTerminalTabFocusAfterNewTabMenuClose: (tabId: string) => void
   queueFocusAfterNewTabMenuClose: (focus: () => void) => void
-  showStaticCreateMenuItems: boolean
 }

@@ -35,6 +35,8 @@ function openMainWindowForContextMenu() {
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
+    paste: vi.fn(),
+    pasteAndMatchStyle: vi.fn(),
     isDevToolsOpened: vi.fn(),
     openDevTools: vi.fn(),
     closeDevTools: vi.fn(),
@@ -585,6 +587,34 @@ describe('createMainWindow', () => {
     )
   })
 
+  it.each([
+    ['Paste', 'paste'],
+    ['Paste as plain text', 'pasteAndMatchStyle']
+  ] as const)('executes %s directly in a normal text control', (label, method) => {
+    const { webContents, windowHandlers } = openMainWindowForContextMenu()
+    windowHandlers['context-menu'](
+      {},
+      {
+        x: 1,
+        y: 2,
+        isEditable: true,
+        formControlType: 'input',
+        dictionarySuggestions: [],
+        misspelledWord: ''
+      }
+    )
+    const template = buildFromTemplateMock.mock.calls.at(-1)?.[0]
+    const item = Array.isArray(template)
+      ? template.find((item: Electron.MenuItemConstructorOptions) => item.label === label)
+      : undefined
+    expect(item?.click).toBeTypeOf('function')
+    if (!item || typeof item.click !== 'function') {
+      throw new Error('Missing native paste action')
+    }
+    item.click()
+    expect(webContents[method]).toHaveBeenCalledTimes(1)
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:editableContextPaste', expect.anything())
+  })
   it('retires the edit menu with its document but not on same-document navigation', () => {
     const { webContents } = openMainWindowForContextMenu()
     const emit = (event: string, ...args: unknown[]): void => {
@@ -634,6 +664,7 @@ describe('createMainWindow', () => {
     emit('did-frame-navigate', {}, nextDocument, 200, 'OK', true)
     expect(pending.closePopup).toHaveBeenCalledTimes(1)
     pending.paste.click()
+    expect(webContents.paste).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:editableContextPaste', expect.anything())
   })
 })

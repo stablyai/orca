@@ -170,11 +170,6 @@ export const uiTabAndBrowserCommandsApi = {
     ipcRenderer.on('export:requestPdf', listener)
     return () => ipcRenderer.removeListener('export:requestPdf', listener)
   },
-  onAppMenuPaste: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
-    ipcRenderer.on('ui:appMenuPaste', listener)
-    return () => ipcRenderer.removeListener('ui:appMenuPaste', listener)
-  },
   onAppMenuSelectionAction: (callback: (action: 'copy' | 'select-all') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, action: 'copy' | 'select-all'): void =>
       callback(action)

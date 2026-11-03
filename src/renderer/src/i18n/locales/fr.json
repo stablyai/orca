@@ -1806,9 +1806,6 @@
         "shareSkillsDescription": "Partagez vos skills avec un lien non répertorié. Toute personne qui l'a peut les installer.",
         "floatingWorkspaceWebDescription": "Onglets globaux de terminal et de markdown."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "Le collage est trop volumineux."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Le collage est trop volumineux."
       },

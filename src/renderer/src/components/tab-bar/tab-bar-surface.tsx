@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProjectedAgentMenuItems } from './QuickLaunchButton'
-import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
+import { TabBarCreateMenuContent } from './TabBarCreateMenuContent'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -80,15 +80,13 @@ export function renderTabBarSurface({
     launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
-    setCreateMenuQuery,
     createMenuOptions,
     windowsShellEntries,
     handleSelectCreateMenuOption,
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
-    queueFocusAfterNewTabMenuClose,
-    showStaticCreateMenuItems
+    queueFocusAfterNewTabMenuClose
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
@@ -234,29 +232,29 @@ export function renderTabBarSurface({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry ? (
-            <>
-              <TabBarAgentPickerEntry
-                inventory={agentPickerInventory}
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                onLaunchAgentOption={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
-              />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
-            </>
-          ) : null}
-          {showStaticCreateMenuItems ? (
+          <TabBarCreateMenuContent
+            key={String(newTabMenuOpen)}
+            entryProps={
+              !terminalOnly && onOpenEntry
+                ? {
+                    inventory: agentPickerInventory,
+                    worktreeId,
+                    groupId: resolvedGroupId,
+                    menuOpen: newTabMenuOpen,
+                    menuOptions: createMenuOptions,
+                    onLaunchAgentOption: launchAgentFromNewTabEntry,
+                    onOpenDefaultTerminal: () => {
+                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                      onNewTerminalTab()
+                    },
+                    onOpenEntry,
+                    onQueueSwitchFocus: queueFocusAfterNewTabMenuClose,
+                    onSelectMenuOption: handleSelectCreateMenuOption,
+                    onDidOpenEntry: () => setNewTabMenuOpen(false)
+                  }
+                : undefined
+            }
+          >
             <TabBarStaticCreateMenu
               props={props}
               groupId={resolvedGroupId}
@@ -278,19 +276,19 @@ export function renderTabBarSurface({
                 queueNewActiveTerminalFocusAfterNewTabMenuClose
               }
             />
-          ) : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
-            <>
-              <DropdownMenuSeparator />
-              <ProjectedAgentMenuItems
-                model={agentMenu}
-                pickerInventory={agentPickerInventory}
-                onSelectPickerAgent={selectPickerAgent}
-                hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
-                runLaunch={launchAgentRow}
-              />
-            </>
-          ) : null}
+            {showAgentLaunchItems ? (
+              <>
+                <DropdownMenuSeparator />
+                <ProjectedAgentMenuItems
+                  model={agentMenu}
+                  pickerInventory={agentPickerInventory}
+                  onSelectPickerAgent={selectPickerAgent}
+                  hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
+                  runLaunch={launchAgentRow}
+                />
+              </>
+            ) : null}
+          </TabBarCreateMenuContent>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

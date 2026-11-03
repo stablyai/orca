@@ -1981,9 +1981,6 @@
         "shareSkillsDescription": "透過未公開列出的連結分享技能。任何取得連結的人都能安裝。",
         "floatingWorkspaceWebDescription": "全域終端機和 Markdown 分頁。"
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "貼上內容過大。"
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "貼上內容過大。"
       },

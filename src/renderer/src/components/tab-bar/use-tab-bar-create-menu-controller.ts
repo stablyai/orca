@@ -67,7 +67,6 @@ export function useTabBarCreateMenuController({
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
-  const [createMenuQuery, setCreateMenuQuery] = useState('')
   const agentMenu = useNewTabAgentMenuRows(
     worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
@@ -267,11 +266,6 @@ export function useTabBarCreateMenuController({
     window.addEventListener('blur', dismiss)
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
-  useEffect(() => {
-    if (!newTabMenuOpen) {
-      setCreateMenuQuery('')
-    }
-  }, [newTabMenuOpen])
   return {
     agentMenu,
     agentPickerInventory,
@@ -279,7 +273,6 @@ export function useTabBarCreateMenuController({
     launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,
-    setCreateMenuQuery,
     createMenuOptions,
     windowsShellEntries,
     handleSelectCreateMenuOption,
@@ -288,7 +281,6 @@ export function useTabBarCreateMenuController({
     clearPendingNewTabMenuFocusOnUnmount: menuFocusUnmountRef.current,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
     queueTerminalTabFocusAfterNewTabMenuClose,
-    queueFocusAfterNewTabMenuClose,
-    showStaticCreateMenuItems: createMenuQuery.trim().length === 0
+    queueFocusAfterNewTabMenuClose
   }
 }

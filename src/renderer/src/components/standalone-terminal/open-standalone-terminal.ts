@@ -109,7 +109,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   const disposeAppMenuClipboard = installPreviewTerminalAppMenuClipboard({
     container,
     getTerminal: () => (disposed ? null : terminal),
-    pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
+    pasteClipboardText: (activeElement, source, eventText) =>
+      void pasteClipboardText(activeElement, source, eventText)
   })
   const disposeRightClickPaste = installPreviewTerminalRightClickPaste({
     container,

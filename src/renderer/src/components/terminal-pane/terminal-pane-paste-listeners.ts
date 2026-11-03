@@ -62,6 +62,7 @@ export function registerTerminalPanePasteListeners({
   const onKeyPaste = (event: KeyboardEvent): void => {
     const target = event.target
     if (
+      isEditableTarget(target) ||
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
       isInsideNativeChatCover(target)
     ) {
@@ -87,7 +88,7 @@ export function registerTerminalPanePasteListeners({
       }
       return
     }
-    if (isClipboardEventPasteRequired() && firesNativePasteEvent(event, isMac)) {
+    if (firesNativePasteEvent(event, isMac)) {
       return
     }
     event.preventDefault()
@@ -114,6 +115,7 @@ export function registerTerminalPanePasteListeners({
   const onPaste = (event: ClipboardEvent): void => {
     const target = event.target
     if (
+      isEditableTarget(target) ||
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
       isInsideNativeChatCover(target)
     ) {
@@ -139,8 +141,8 @@ export function registerTerminalPanePasteListeners({
     if (!pane) {
       return
     }
-    if (isClipboardEventPasteRequired()) {
-      const eventText = getClipboardEventText(event)
+    const eventText = getClipboardEventText(event)
+    if (eventText || isClipboardEventPasteRequired()) {
       pasteFromClipboard(pane, 'paste-event', (options) =>
         assertClipboardTextWithinLimitWithYield(eventText, options)
       )

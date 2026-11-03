@@ -1586,9 +1586,6 @@
         "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos.",
         "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown."
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "El contenido pegado es demasiado grande."
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
       },

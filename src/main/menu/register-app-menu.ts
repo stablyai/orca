@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, app } from 'electron'
+import { Menu, app } from 'electron'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -7,7 +7,7 @@ import {
 } from '../../shared/keybindings'
 import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
-import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
+import { createAppMenuSelectionItem } from './app-menu-selection-item'
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'
 import { createAppMenuReloadAndDevToolsItems } from './app-menu-reload-devtools-items'
 import { createAppWindowMenu } from './app-menu-window'
@@ -166,25 +166,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       }),
       {
         label: translateMain('menu.paste', 'Paste'),
-        accelerator: 'CmdOrCtrl+V',
-        click: () => {
-          // Electron paste cannot resolve ownership among Orca terminal/chat surfaces.
-          const focusedWindow = BrowserWindow.getFocusedWindow()
-          if (focusedWindow) {
-            // Focused DevTools must own paste over the renderer's last-focused terminal (#16285).
-            const nativeTarget = resolveNativeEditTarget(focusedWindow)
-            if (nativeTarget) {
-              return nativeTarget.paste()
-            }
-            focusedWindow.webContents.send('ui:appMenuPaste')
-            return
-          }
-
-          // Native macOS panels leave no focused BrowserWindow; preserve first-responder Cmd+V.
-          if (isMac) {
-            Menu.sendActionToFirstResponder('paste:')
-          }
-        }
+        role: 'paste'
       },
       createAppMenuSelectionItem({
         action: 'select-all',

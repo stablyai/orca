@@ -1576,9 +1576,6 @@
         "shareSkillsDescription": "通过未列出的链接分享您的技能。任何拥有它的人都可以安装它们。",
         "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。"
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "粘贴内容过大。"
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "粘贴内容过大。"
       },

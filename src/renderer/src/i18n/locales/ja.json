@@ -1576,9 +1576,6 @@
         "shareSkillsDescription": "非公開リンクを使用してスキルを共有してください。持っている人なら誰でもインストールできます。",
         "floatingWorkspaceWebDescription": "グローバルターミナルと markdown タブ。"
       },
-      "useAppMenuPaste": {
-        "pasteTooLarge": "貼り付け内容が大きすぎます。"
-      },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
       },
