@@ -12,7 +12,9 @@ vi.mock('./daemon-provider-state', () => ({
   getDaemonProvider: () => (state.installed ? (state.degraded ? new DegradedProvider() : {}) : null)
 }))
 vi.mock('./degraded-daemon-pty-provider', () => ({ DegradedDaemonPtyProvider: DegradedProvider }))
-vi.mock('../macos-full-disk-access-status', () => ({ getMacosFullDiskAccessStatus: localStatus }))
+vi.mock('../macos-permissions/macos-full-disk-access-status', () => ({
+  getMacosFullDiskAccessStatus: localStatus
+}))
 vi.mock('./daemon-provider-routing', () => ({
   getCurrentDaemonAdapter: () => current,
   getLegacyDaemonAdapters: () => [legacy]

@@ -12,7 +12,7 @@ import {
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
 } from '../shared/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../shared/agent-session/agent-session-host-authority'
 import type { RuntimeStatus } from '../shared/runtime-types'
 import type { TuiAgent } from '../shared/tui-agent'
 import { isTuiAgent } from '../shared/tui-agent-config'

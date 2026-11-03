@@ -1,5 +1,5 @@
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
 
@@ -14,7 +14,7 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
@@ -24,7 +24,7 @@ import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-se
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
-} from '../../../../shared/structured-agent-session-create'
+} from '../../../../shared/agent-session/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
 import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'

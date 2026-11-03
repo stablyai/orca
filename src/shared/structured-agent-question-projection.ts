@@ -7,7 +7,7 @@ import { parseAskFromToolInput } from './native-chat/input/native-chat-ask'
 import { agentJournalItemRowOrigin } from './agent-session/journal/agent-session-journal-position'
 import { agentJournalLinkageFields } from './agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
-import { projectStructuredItemToNativeChat } from './structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from './agent-session/view/structured-agent-session-projection'
 import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
 import type { NativeChatResolvedPrompt } from './native-chat/native-chat-resolution-receipt'
 

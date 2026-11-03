@@ -2,7 +2,7 @@
 
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute } from 'node:path'
-import type { AgentSessionAgentAvailability } from '../../shared/agent-session-agent-availability'
+import type { AgentSessionAgentAvailability } from '../../shared/agent-session/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { GlobalSettings } from '../../shared/global-settings-types'

@@ -11,7 +11,7 @@ const { removeHostTreeMock, deleteWslFishHistoryFileMock } = vi.hoisted(() => ({
   deleteWslFishHistoryFileMock: vi.fn<(distro: string, session: string) => Promise<string | void>>()
 }))
 
-vi.mock('./host-tree-removal', () => ({
+vi.mock('./filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 

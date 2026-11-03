@@ -2,8 +2,11 @@ import { hostAtom, hydrateAtoms } from './declarative-atoms'
 import { readHostMessage, readStoredValues } from './declarative-host-messages'
 import type { OrcaPanelContext } from './declarative-runtime-types'
 
-/** The `setup(ctx)` context, and hydration: panel id, visibility and persisted atoms from Orca. */
-export function createPanelContext() {
+/**
+ * The `setup(ctx)` context, and hydration: panel id, visibility and persisted atoms from Orca.
+ * `onRetain` runs when Orca asks for keyed memory atoms, to hand them to a dev hot reload.
+ */
+export function createPanelContext(onRetain?: () => void) {
   const visibility = hostAtom(true)
   const lifetime = new AbortController()
   const context: OrcaPanelContext = {
@@ -41,11 +44,14 @@ export function createPanelContext() {
         context.panel = { id: message.panelId }
       }
       setVisibility(payload)
-      for (const scope of ['plugin', 'workspace'] as const) {
+      for (const scope of ['plugin', 'workspace', 'memory'] as const) {
         const values = readStoredValues(message[scope])
         if (values) {
           hydrateAtoms(scope, values)
         }
+      }
+      if (message.retain === true) {
+        onRetain?.()
       }
       resolve()
     },

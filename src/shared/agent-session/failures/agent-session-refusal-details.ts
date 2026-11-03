@@ -1,6 +1,6 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentSessionAccountKind } from '../agent-session-availability'
 import type { AgentJournalResolution } from '../journal/agent-session-journal-types'
 import {
   readAgentCliInstallationProblem,
@@ -14,11 +14,12 @@ import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
 } from '../agent-session-argument-problem'
-import { isAgentJournalResolution } from '../journal/agent-session-journal-schemas'
+import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
+import { readAgentSessionLegacyRefusalFacts } from './agent-session-legacy-refusal-fields'
 import {
-  AGENT_SESSION_REWIND_REASONS,
-  type AgentSessionRewindReason
-} from '../lifecycle/agent-session-rewind'
+  readAgentSessionExpiredAttachments,
+  type AgentSessionExpiredAttachment
+} from './agent-session-expired-attachments'
 import type { TuiAgent } from '../../tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 import type {
@@ -67,6 +68,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'goalsUnsupported',
     'providerRejected',
     'providerStartFailed',
+    'savedConversationMissing',
     'notSignedIn',
     /** The agent's CLI is not installed on the host that would run it. */
     'cliMissing',
@@ -124,7 +126,12 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'conversationHeldElsewhere',
     'tabIdTaken'
   ],
-  execution_owner_reconciling: ['hostReconciling', 'recordUnreadable'],
+  execution_owner_reconciling: [
+    'hostReconciling',
+    'recordUnreadable',
+    /** A queued mail card whose mailbox Orca cannot yet confirm still owes it to this chat. */
+    'mailOwnerUnconfirmed'
+  ],
   agent_session_checkpoint_stale: ['fenceStale', 'leaseMoved', 'recordMissing'],
   agent_session_identity_required: ['recordMissing', 'transcriptNotFound', 'transcriptUnreadable'],
   agent_session_operation_conflict: ['fingerprintMismatch', 'operationIdReused', 'handoffInFlight'],
@@ -189,6 +196,8 @@ type AgentSessionRefusalFactsByCode = {
     agentInstallation?: AgentCliInstallationProblem
     /** Codex's binary problem as builds before `agentInstallation` send and read it. */
     codexInstallation?: CodexInstallationProblem
+    /** On `attachmentExpired`: which uploads, so a client can name them and mark their chips. */
+    expiredAttachments?: readonly AgentSessionExpiredAttachment[]
   }
   agent_session_operation_unknown: RewindFacts
   agent_session_checkpoint_stale: {
@@ -230,53 +239,8 @@ export type AgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode> = 
 /** Details under whichever code, for a store that keeps them beside a code it reads as a string. */
 export type AgentSessionAnyRefusalDetails = AgentSessionRefusalDetails<AgentSessionWireRefusalCode>
 
-/** The loose top-level fields released clients read; the host writes them only from details. */
-export type AgentSessionLegacyRefusalFields = {
-  currentFence?: number
-  currentRevision?: number
-  resolution?: AgentJournalResolution
-  ownerVerdict?: AgentSessionOwnerVerdict
-  rewindReason?: AgentSessionRewindReason
-}
-
-const FACT_KEYS_BY_CODE: Partial<
-  Record<AgentSessionWireRefusalCode, readonly (keyof AgentSessionLegacyRefusalFields)[]>
-> = {
-  agent_session_operation_invalid: ['rewindReason'],
-  agent_session_operation_unknown: ['rewindReason'],
-  agent_session_checkpoint_stale: ['currentFence'],
-  agent_session_item_revision_stale: ['currentRevision', 'resolution'],
-  agent_session_already_resolved: ['currentRevision', 'resolution']
-}
-
-const OWNER_VERDICTS: readonly AgentSessionOwnerVerdict[] = ['live', 'unverifiable', 'exited']
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function readFact(
-  key: keyof AgentSessionLegacyRefusalFields,
-  value: unknown
-): AgentSessionLegacyRefusalFields {
-  switch (key) {
-    case 'currentFence':
-      return Number.isSafeInteger(value) && typeof value === 'number' ? { currentFence: value } : {}
-    case 'currentRevision':
-      return Number.isSafeInteger(value) && typeof value === 'number'
-        ? { currentRevision: value }
-        : {}
-    case 'resolution':
-      return isAgentJournalResolution(value) ? { resolution: value } : {}
-    case 'ownerVerdict': {
-      const ownerVerdict = OWNER_VERDICTS.find((verdict) => verdict === value)
-      return ownerVerdict ? { ownerVerdict } : {}
-    }
-    case 'rewindReason': {
-      const rewindReason = AGENT_SESSION_REWIND_REASONS.find((reason) => reason === value)
-      return rewindReason ? { rewindReason } : {}
-    }
-  }
 }
 
 /** An agent this build can name; a newer host's agent reads as none. */
@@ -300,11 +264,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
   if (!isRecord(value)) {
     return undefined
   }
-  const keys = [...(FACT_KEYS_BY_CODE[code] ?? []), 'ownerVerdict' as const]
-  const facts = keys.reduce<AgentSessionLegacyRefusalFields>(
-    (kept, key) => ({ ...kept, ...readFact(key, value[key]) }),
-    {}
-  )
+  const facts = readAgentSessionLegacyRefusalFacts(code, value)
   const argumentProblem =
     code === 'agent_session_operation_invalid'
       ? readAgentSessionArgumentProblem(value.argumentProblem)
@@ -316,6 +276,10 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
   const codexInstallation =
     code === 'agent_session_operation_invalid'
       ? readCodexInstallationProblem(value.codexInstallation)
+      : undefined
+  const expiredAttachments =
+    code === 'agent_session_operation_invalid' && value.reason === 'attachmentExpired'
+      ? readAgentSessionExpiredAttachments(value.expiredAttachments)
       : undefined
   const owner =
     (code === 'agent_session_conflict' || code === 'agent_session_ownership_unknown') &&
@@ -343,25 +307,9 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
       ? { agent: value.agent }
       : {}),
     ...(agentInstallation ? { agentInstallation } : {}),
-    ...(codexInstallation ? { codexInstallation } : {})
+    ...(codexInstallation ? { codexInstallation } : {}),
+    ...(expiredAttachments ? { expiredAttachments } : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
   return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined
-}
-
-/** The loose fields released clients read, taken from details; the one place they are written. */
-export function agentSessionLegacyRefusalFields(
-  details: AgentSessionLegacyRefusalFields | undefined
-): AgentSessionLegacyRefusalFields {
-  if (!details) {
-    return {}
-  }
-  const { currentFence, currentRevision, resolution, ownerVerdict, rewindReason } = details
-  return {
-    ...(rewindReason !== undefined ? { rewindReason } : {}),
-    ...(currentFence !== undefined ? { currentFence } : {}),
-    ...(resolution !== undefined ? { resolution } : {}),
-    ...(currentRevision !== undefined ? { currentRevision } : {}),
-    ...(ownerVerdict !== undefined ? { ownerVerdict } : {})
-  }
 }

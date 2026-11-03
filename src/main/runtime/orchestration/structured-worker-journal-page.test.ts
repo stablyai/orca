@@ -2,13 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   type AgentJournalItemBody,
   type AgentJournalProducerLinkage,
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionHistoryRequest } from '../../../shared/agent-session-wire'
+import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/agent-session-history-page'

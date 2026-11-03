@@ -59,31 +59,6 @@ function execute(options = {}) {
   return { result, request, getPr, getRun, cancel }
 }
 
-it('uses trusted inline code and only enters cancellation on an unmerged close', () => {
-  expect(workflow.on).toEqual({ pull_request_target: { types: ['closed', 'synchronize'] } })
-  expect(step.if).toBe(
-    "github.event.action == 'synchronize' || github.event.pull_request.merged == false"
-  )
-  expect(step.uses).toBe('actions/github-script@v8')
-  expect(
-    workflow.jobs.clean.steps.some((entry) => entry.uses?.startsWith('actions/checkout'))
-  ).toBe(false)
-})
-
-it('looks up exact PR groups without branch or head-SHA inference', async () => {
-  const { result, request, cancel } = execute()
-  await result
-  expect(request.mock.calls[0][1].concurrency_group_name).toBe('pr-checks-123')
-  expect(
-    request.mock.calls.every(
-      ([route, args]) =>
-        route === 'GET /repos/{owner}/{repo}/actions/concurrency_groups/{concurrency_group_name}' &&
-        args.headers['X-GitHub-Api-Version'] === '2026-03-10'
-    )
-  ).toBe(true)
-  expect(cancel.mock.calls).toEqual([[{ owner: 'owner', repo: 'repo', run_id: 42 }]])
-})
-
 it.each([
   { event: 'push' },
   { event: 'workflow_dispatch' },

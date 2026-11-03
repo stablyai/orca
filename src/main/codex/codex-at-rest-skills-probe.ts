@@ -15,7 +15,10 @@ import {
   AtRestCommandCatalog,
   type AtRestCommandScan
 } from '../native-chat/agent-session-wire/at-rest-command-catalog'
-import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
+import {
+  runCodexAppServerSession,
+  type CodexAppServerRpc
+} from './app-server/codex-app-server-session'
 import {
   CODEX_SKILLS_LIST_METHOD,
   codexFolderSkillReport,

@@ -1,4 +1,4 @@
-import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session/agent-session-host-authority'
 import {
   agentSessionLedgerRefusal,
   refuseUnlessWriterAdmitted
@@ -8,7 +8,7 @@ import {
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session/agent-session-wire'
 import {
   commandReceiptScope,
   type CommandReceipt

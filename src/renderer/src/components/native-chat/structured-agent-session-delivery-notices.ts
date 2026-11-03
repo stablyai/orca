@@ -8,7 +8,7 @@ import { classifyDispatchRejection } from '../../../../shared/agent-session/requ
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
-import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
+import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
@@ -17,7 +17,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Show sending until host rows arrive and host-worded rejections afterward; unconfirmed sends explain their return in the composer instead. */
+/** Published delivery decides notices; an echo keeps sending until its host row arrives. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -30,20 +30,21 @@ export function structuredAgentSessionDeliveryNotices(args: {
   // A row under the id is the host's to describe, before the sender settles from it.
   const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
   for (const entry of args.pending) {
-    if (entry.phase === 'sending' && !recorded.has(entry.clientMessageId)) {
+    if (!recorded.has(entry.clientMessageId)) {
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
   }
-  const shown = structuredAgentSessionRejectedShownInPlace(
-    submissions,
-    args.commandItemIds ?? NO_COMMANDS
-  )
+  const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
+    ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
+    : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    if (submission.dispatchState === 'pending') {
+      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
+    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
       const detail =

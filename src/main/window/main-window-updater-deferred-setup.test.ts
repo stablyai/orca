@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { UpdaterSetupOptions } from '../updater'
 
 const { setupMock, milestoneMock, getMainWindowMock } = vi.hoisted(() => ({
@@ -408,6 +408,7 @@ describe('completed deferred updater setup ownership', () => {
       'setPendingUpdateNudgeId',
       'setDismissedUpdateNudgeId',
       'getReleaseChannelOverride',
+      'getUpdateDelayDays',
       'onBeforeQuitFailure',
       'installMode'
     ])
@@ -415,6 +416,9 @@ describe('completed deferred updater setup ownership', () => {
     expect(options.getPendingUpdateNudgeId?.()).toBe('pending')
     expect(options.getDismissedUpdateNudgeId?.()).toBe('dismissed')
     expect(options.getReleaseChannelOverride?.()).toBe('rc')
+    expect(options.getUpdateDelayDays?.()).toBe(0)
+    owner.store.getSettings.mockReturnValue({ updateDelayDays: 7 })
+    expect(options.getUpdateDelayDays?.()).toBe(7)
     owner.store.getUI.mockReturnValue({ ...owner.store.getUI(), lastUpdateCheckAt: 456 })
     expect(options.getLastUpdateCheckAt?.()).toBe(456)
     options.setLastUpdateCheckAt?.(789)

@@ -11,7 +11,8 @@ import {
   agentMessageSenderCanOpen,
   agentMessageOverflows,
   agentMessageFoldLabel,
-  agentMessageCanCopy
+  agentMessageCanCopy,
+  type AgentMessageHeading
 } from '../../../../../src/shared/agent-session/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
@@ -65,13 +66,16 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const height = measured ? measurement.height : 0
   const lineHeight = markdownStyles.paragraph.lineHeight * CHAT_PROSE_SCALE * fontScale
   const overflows = agentMessageOverflows(height, lineHeight)
-  const heading = {
+  const headings: Record<AgentMessageHeading, string> = {
     started: t('chat.agentMessage.startedWorker', 'Started worker'),
+    'handed-off': t('chat.agentMessage.handedOffToAgent', 'Handed off to agent'),
+    'started-agent': t('chat.agentMessage.startedAgent', 'Started agent'),
     task: t('chat.agentMessage.taskFromCoordinator', 'Task from coordinator'),
     coordinator: t('chat.agentMessage.messageFromCoordinator', 'Message from coordinator'),
     worker: t('chat.agentMessage.updateFromWorker', 'Update from worker'),
     generic: t('chat.agentMessage.messageFrom', 'Message from')
-  }[agentMessageHeading(from, message.agentStart === true)]
+  }
+  const heading = headings[agentMessageHeading(from, message)]
   return (
     <View style={styles.card} testID="agent-message-card">
       <SenderAvatar sender={agentMessagePrimarySender(from)} />

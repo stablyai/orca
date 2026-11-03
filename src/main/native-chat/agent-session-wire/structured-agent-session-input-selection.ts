@@ -2,7 +2,7 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/agent-session-approval-subject'
 
 export type StructuredInputSelection =
   | { kind: 'card'; card: QueuedMessageRow }
@@ -22,9 +22,13 @@ export function selectStructuredAgentSessionInput(
     (!queued || current.submittedSequence! < queued.submittedSequence!)
       ? current
       : queued
-  const nextCard = journal.queuedMessages.nextInputCard()
+  // Read only where a card can be chosen: the queue's rule may ask mail authority.
+  const nextCard = (): StructuredInputSelection => {
+    const card = journal.queuedMessages.nextInputCard()
+    return card ? { kind: 'card', card } : { kind: 'none' }
+  }
   if (!selected) {
-    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
+    return nextCard()
   }
   // Explicit card Send intentionally overrides the automatic queue place.
   const override = journal.inputOrder.explicitSend()
@@ -46,7 +50,7 @@ export function selectStructuredAgentSessionInput(
     }
   }
   if (predecessors.head) {
-    return nextCard ? { kind: 'card', card: nextCard } : { kind: 'none' }
+    return nextCard()
   }
   return { kind: 'submission', submission: selected }
 }

@@ -3,7 +3,7 @@ import {
   nativeChatSemanticRowId,
   type NativeChatMessage
 } from '../../../../shared/native-chat/native-chat-types'
-import { agentSessionHostStatusBody } from '../../../../shared/agent-session-host-status-rows'
+import { agentSessionHostStatusBody } from '../../../../shared/agent-session/view/agent-session-host-status-rows'
 import { boundJournalKeyComponent } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../native-chat/agent-session-wire/agent-session-history-page-bounds'
 

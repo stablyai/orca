@@ -3,8 +3,8 @@ import {
   selectWritableAgentSessionRecord,
   requireWritableAgentSessionRecord,
   type AgentSessionStoreState
-} from '../../agent-session-store-state'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+} from '../records/agent-session-store-state'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionOperationKey,
   agentSessionOperationExpiry,
@@ -24,7 +24,7 @@ import {
   agentSessionLedgerRefusal,
   type AgentSessionMutationAdmission
 } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type AgentSessionOperationAdmission = {

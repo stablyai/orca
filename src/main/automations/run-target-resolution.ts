@@ -1,6 +1,6 @@
 import { findAutomationRepo } from '../../shared/automation-repo-target'
 import { findProjectHostSetup } from '../../shared/project-host-setup-target'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { Automation } from '../../shared/automations-types'
 import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
 import {

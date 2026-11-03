@@ -9,7 +9,7 @@ import {
 } from '../agent-model-catalog/agent-model-catalog-fingerprint'
 import { agentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 import { closeTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { readPersistedTestAgentSessionStore } from '../../runtime/agent-session-record-store-test-harness'
+import { readPersistedTestAgentSessionStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import { createTestParams } from './structured-agent-session-create-test-fixture'
 import {

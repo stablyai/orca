@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
-import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY as RECOVERY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY as RECOVERY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),

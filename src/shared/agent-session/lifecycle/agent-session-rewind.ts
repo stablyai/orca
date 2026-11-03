@@ -13,7 +13,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../agent-session-wire'
 
 export const AGENT_SESSION_REWIND_REASONS = [
   'unsupported',

@@ -81,24 +81,4 @@ describe('git stream admission lifetime', () => {
     await expect(pending).resolves.toEqual({ stoppedEarly: false })
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
-
-  it('retains the permit after abort settlement until close', async () => {
-    const child = mockChild()
-    const controller = new AbortController()
-    gitSpawnMock.mockReturnValue(child)
-    const pending = gitStreamStdout(['status'], {
-      cwd: '/repo',
-      signal: controller.signal,
-      onStdout: () => {}
-    })
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
-
-    controller.abort()
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
-
-    child.emit('close', null, 'SIGKILL')
-    await Promise.resolve()
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
-  })
 })

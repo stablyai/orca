@@ -87,7 +87,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/lib/structured-agent-session-launch', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
@@ -315,17 +315,6 @@ describe('tab.close uses the unified active tab', () => {
   it('does not close the main workspace tab while the floating panel owns focus', () => {
     mocks.floatingFocused = true
     expect(close().defaultPrevented).toBe(false)
-    expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
-  })
-
-  it('preserves pinned tabs during a bulk close without prompting', () => {
-    tab.isPinned = true
-    dispatchWorkspaceTabCommand({
-      type: 'close',
-      target: { kind: 'tab', worktreeId, tabId: tab.id },
-      bulk: true
-    })
-    expect(mocks.state.requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
     expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
   })
 

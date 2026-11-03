@@ -19,7 +19,8 @@ describe('guest preload render lane', () => {
     const { render } = PRELOAD_PLUGIN_FRAME_LANES
     expect(render.events).toEqual([
       PLUGIN_DECLARATIVE_MESSAGES.render,
-      PLUGIN_DECLARATIVE_MESSAGES.persist
+      PLUGIN_DECLARATIVE_MESSAGES.persist,
+      PLUGIN_DECLARATIVE_MESSAGES.retain
     ])
     expect(render.maxBytes).toBe(PLUGIN_DECLARATIVE_RENDER_LANE.maxBytes)
     expect(render.maxNodes).toBe(PLUGIN_DECLARATIVE_RENDER_LANE.maxObjects)

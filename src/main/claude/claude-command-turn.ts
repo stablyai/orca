@@ -1,7 +1,7 @@
 // Command output stays off the reply timeline; only the command's result ends its turn.
 
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   providerDiagnostic,
@@ -11,12 +11,13 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredCompactionOutcome } from '../native-chat/agent-session-wire/structured-conversation-command-outcome'
-import { claudeText } from './claude-structured-item-translation'
-import { claudeResultFailure } from './claude-structured-provider-fallback'
+import { claudeText } from './structured/journal/claude-structured-item-translation'
+import { claudeResultFailure } from './structured/launch/claude-structured-provider-fallback'
 import type { ClaudeCurrentTurn, ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { ClaudeUsageLimits } from './claude-usage-limits'
+import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
@@ -25,6 +26,10 @@ export type ClaudeCommandTurn = {
   compacted: boolean
   interruptRequested: boolean
   failed: { detail?: ProviderDiagnostic } | null
+  /** Limits that rejected this command while it ran; older account rejections cannot explain it. */
+  rejections: Set<string>
+  /** The hidden reply's sign-in notice, written only if the command's failure selects it. */
+  notice: AgentJournalItemBody | null
 }
 
 export type ClaudeCommandStart = StructuredAgentSessionCommandRun & {
@@ -46,7 +51,9 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
       sentUuid: start.sentUuid,
       compacted: false,
       interruptRequested: false,
-      failed: null
+      failed: null,
+      rejections: new Set(),
+      notice: null
     }
   }
 }
@@ -76,13 +83,45 @@ export function observeClaudeCommandFrame(
   )
 }
 
+/** Hidden command replies still carry this attempt's provider failure cause. */
+export function absorbClaudeCommandFrame(
+  {
+    turn,
+    usageLimits,
+    assistantFailures
+  }: {
+    turn: ClaudeOpenTurn
+    usageLimits: Pick<ClaudeUsageLimits, 'assistant'>
+    assistantFailures: Pick<ClaudeAssistantFailures, 'notice'>
+  },
+  message: Record<string, unknown>
+): boolean {
+  const { command } = turn
+  if (!observeClaudeCommandFrame(command, message)) {
+    return false
+  }
+  if (command && claudeCommandAnswers(command, message)) {
+    usageLimits.assistant(message, turn)
+    command.notice ??= assistantFailures.notice(message)
+  }
+  return true
+}
+
+/** Frames without an input UUID predate correlation; one naming another input is not this command's. */
+function claudeCommandAnswers(
+  command: ClaudeCommandTurn,
+  message: Record<string, unknown>
+): boolean {
+  const answers = claudeText(message.user_message_uuid)
+  return answers === null || answers === command.sentUuid
+}
+
 export function claudeCommandEnd(
   command: ClaudeCommandTurn,
   message: Record<string, unknown>,
   completedAt: number
 ): { end: ClaudeTurnEnd; row: AgentJournalItemBody | null } | null {
-  const answers = claudeText(message.user_message_uuid)
-  if (answers !== null && answers !== command.sentUuid) {
+  if (!claudeCommandAnswers(command, message)) {
     return null
   }
   // Stopped and finished compactions can both return success; use compaction evidence.
@@ -118,25 +157,4 @@ export function claudeCommandEnd(
         }
       }
     : { end, row: null }
-}
-
-/** Write the command result row before returning its turn end. */
-export function claudeCommandResultEnd(
-  turn: Pick<ClaudeOpenTurn, 'command' | 'turnScope'>,
-  sink: Pick<StructuredAgentSessionEventSink, 'appendItem'>,
-  message: Record<string, unknown>,
-  completedAt: number
-): ClaudeTurnEnd | 'another-input' | null {
-  const { command } = turn
-  if (!command) {
-    return null
-  }
-  const ended = claudeCommandEnd(command, message, completedAt)
-  if (!ended) {
-    return 'another-input'
-  }
-  if (ended.row) {
-    sink.appendItem(command.resultIdentity, ended.row, { turnScope: turn.turnScope })
-  }
-  return ended.end
 }

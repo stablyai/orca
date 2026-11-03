@@ -1,10 +1,10 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { isTerminalLeafId, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import { sealedChildEnv } from './structured-session-child-env.test-support'
 import {

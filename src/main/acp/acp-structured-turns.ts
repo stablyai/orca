@@ -9,12 +9,12 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { ACP_COMPACT_PROMPT } from './acp-compaction-turn'
+import { acpCompactPrompt } from './acp-compaction-turn'
 import { AcpAgentError, AcpAuthRequiredError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
@@ -117,7 +117,7 @@ export class AcpStructuredTurns {
     const { lane } = this.deps
     const send: Send = {
       clientMessageId: command.clientMessageId,
-      prompt: [...ACP_COMPACT_PROMPT],
+      prompt: acpCompactPrompt(command.instructions),
       requestedAt: this.deps.now()
     }
     lane.beginCommand(command)

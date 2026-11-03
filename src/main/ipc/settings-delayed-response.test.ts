@@ -43,7 +43,7 @@ vi.mock('../browser/browser-session-proxy', () => ({
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: vi.fn(() => []) }
 }))
-vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
+vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
   applySessionSearchSettingsChange: vi.fn()
 }))
@@ -105,6 +105,6 @@ it('returns current settings when a language change finishes after a newer theme
   expect(reply.theme).toBe('light')
 })
 
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

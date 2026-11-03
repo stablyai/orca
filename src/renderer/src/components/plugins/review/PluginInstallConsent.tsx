@@ -16,7 +16,8 @@ import { pluginTrustLabel, pluginTrustWarnings } from '../presentation/plugin-co
 import { PluginConsentProvenance, type PluginConsentSource } from './PluginConsentProvenance'
 import { shadowedKeybindingTitles } from '../presentation/plugin-keybinding-conflicts'
 import { PluginVmRecipeConsentPreview } from './PluginVmRecipeConsentPreview'
-import type { PluginPageShortcut } from '../state/use-plugin-page-model'
+import type { PluginPageReplacement, PluginPageShortcut } from '../state/use-plugin-page-model'
+import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
 
 type PluginInstallConsentProps = {
   trust: PluginTrust
@@ -24,6 +25,8 @@ type PluginInstallConsentProps = {
   capabilities: readonly { kind: string; description: string }[] | null
   /** Shortcuts it binds; any that replace one of yours are named before consent. */
   shortcuts: readonly PluginPageShortcut[] | null
+  /** Commands that run in place of Orca's own actions. */
+  replacements?: readonly PluginPageReplacement[] | null
   /** Dotted file suffixes its custom editors open and edit. */
   editorFileTypes?: readonly string[] | null
   /** Its files are still being read; says so beside the disabled button. */
@@ -57,6 +60,7 @@ export function PluginInstallConsent({
   trust,
   capabilities: requested,
   shortcuts,
+  replacements,
   editorFileTypes,
   reading = false,
   failed = false,
@@ -137,6 +141,18 @@ export function PluginInstallConsent({
                     value1: conflict.command,
                     value2: conflict.replaced.join(', ')
                   }
+                )}
+              </span>
+            </p>
+          ))}
+          {(replacements ?? []).map((replacement) => (
+            <p key={replacement.action} className="flex items-start gap-2 text-status-warning-text">
+              <AlertTriangle className="mt-1 size-4 shrink-0" />
+              <span>
+                {translate(
+                  'auto.components.settings.PluginInstallConsent.replacesAction',
+                  '{{value0}} runs instead of Orca’s {{value1}}. You can switch it back in its plugin page.',
+                  { value0: replacement.command, value1: builtInActionTitle(replacement.action) }
                 )}
               </span>
             </p>

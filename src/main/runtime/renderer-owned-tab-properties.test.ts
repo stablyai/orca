@@ -13,12 +13,12 @@ import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-sess
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+} from './agent-session/structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { OrcaRuntimeService, electronMocks } from './orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_ID,

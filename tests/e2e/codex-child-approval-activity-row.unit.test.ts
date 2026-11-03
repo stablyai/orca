@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../src/shared/agent-session-wire'
+} from '../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody

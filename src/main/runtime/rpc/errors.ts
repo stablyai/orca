@@ -15,7 +15,7 @@ import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcom
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../shared/sharing-unavailable-on-host'
@@ -296,18 +296,6 @@ function agentSessionRefusalErrorResponse(
 }
 
 export const computerErrorData = computerUseErrorRecoveryData
-
-// BrowserError.code uses the browser namespace, separate from the runtime message-code allowlist.
-export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
-  }
-  return mapRuntimeError(id, meta, error)
-}
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

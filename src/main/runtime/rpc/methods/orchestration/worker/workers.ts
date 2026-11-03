@@ -10,7 +10,11 @@ import {
   readWorkerStartModeSettings
 } from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
-import { assertHelperStartScope, resolveWorkerStartRun } from './worker-start-authority'
+import {
+  assertHelperStartScope,
+  resolveWorkerStartRun,
+  qualifyLiveWorkerFollowUp
+} from './worker-start-authority'
 import { parseTaskDeps } from './task-deps-argument'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {
@@ -75,20 +79,32 @@ export async function startWorker(
     await assertWorkerStartTaskSpecWithinPromptBudget(params.spec)
   }
   const taskDeps = parseTaskDeps(params.deps)
-  const { bindRun, helperCreator } = resolveWorkerStartRun(runtime, {
-    coordinator,
-    from: params.from,
-    callerSession: orchestrationCaller,
-    runId: params.run,
-    // The Run takes the title its first Task gets.
-    objective: params.spec
-      ? buildOrchestrationTaskDisplayMetadata({
-          spec: params.spec,
-          taskTitle: params.taskTitle
-        }).taskTitle
-      : undefined,
-    taskReferences: [...(params.parent ? [params.parent] : []), ...(taskDeps ?? [])]
-  })
+  const qualified = followUp
+    ? qualifyLiveWorkerFollowUp(
+        runtime,
+        coordinator,
+        params.from,
+        orchestrationCaller,
+        params.run!,
+        followUp
+      )
+    : undefined
+  const { bindRun, helperCreator } = qualified
+    ? { bindRun: () => ({ run: qualified.run, created: false }), helperCreator: qualified.creator }
+    : resolveWorkerStartRun(runtime, {
+        coordinator,
+        from: params.from,
+        callerSession: orchestrationCaller,
+        runId: params.run,
+        // The Run takes the title its first Task gets.
+        objective: params.spec
+          ? buildOrchestrationTaskDisplayMetadata({
+              spec: params.spec,
+              taskTitle: params.taskTitle
+            }).taskTitle
+          : undefined,
+        taskReferences: [...(params.parent ? [params.parent] : []), ...(taskDeps ?? [])]
+      })
   // Name the Run in every receipt so a reused, stale binding is visible.
   const withRun = (receipt: unknown): unknown => {
     if (!receipt || typeof receipt !== 'object') {
@@ -105,7 +121,7 @@ export async function startWorker(
       `Task ${params.task} was not found in Run ${bindRun().run.id}.`
     )
   }
-  if (helperCreator) {
+  if (helperCreator && !followUp) {
     assertHelperStartScope(db, helperCreator, {
       task: existingTask,
       params,
@@ -116,11 +132,6 @@ export async function startWorker(
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
   }
   if (followUp) {
-    // Acceptance checks depth again; checking it here keeps an already refused start from closing a shell first.
-    db.resolveChildDispatchDepth(
-      resolveDispatchCreator(runtime, params.from, orchestrationCaller),
-      runtime.getNestedWorkerMaxDepth()
-    )
     const placement = await followUp.place(() => {
       if (
         helperCreator &&

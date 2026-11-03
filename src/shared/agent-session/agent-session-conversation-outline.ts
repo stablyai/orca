@@ -1,6 +1,6 @@
 // Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
-import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -13,7 +13,7 @@ import {
 import { iterateProcessOutputLines } from '../process-output-field-scanner'
 import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatTurnMembership } from '../native-chat/transcript/native-chat-turn-membership'
 

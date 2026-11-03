@@ -167,7 +167,9 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
-      focus: false
+      focus: false,
+      // Replacing a pane its relay lost is no new work in the workspace.
+      reopensPane: true
     }).then((terminal) => ({
       ...terminalLaunchFacts(terminal),
       handle: terminal.handle,

@@ -26,7 +26,7 @@ import { structuredSendResultFixture } from '../../structured-agent-send-result.
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
-import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
@@ -53,6 +53,10 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -94,10 +98,10 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('../../../components/mounted-bottom-drawer', () => ({
+vi.mock('../../../components/bottom-drawer/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'BottomDrawer'
 }))
-vi.mock('../../../components/bottom-drawer-modal-host-scope', () => ({
+vi.mock('../../../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
 
@@ -175,6 +179,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -273,6 +278,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
       function Conversation() {
         const session = useMobileStructuredAgentSession({
           client,
+          pairedHostClient: client,
           sessionId: SESSION_ID,
           sourceIdentity: 'host',
           enabled: true,
@@ -500,6 +506,7 @@ describe('MobileNativeChatComposer on a structured chat', () => {
     function Conversation() {
       const session = useMobileStructuredAgentSession({
         client,
+        pairedHostClient: client,
         sessionId: SESSION_ID,
         sourceIdentity: 'host',
         enabled: true,

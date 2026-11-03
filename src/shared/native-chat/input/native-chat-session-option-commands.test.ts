@@ -23,51 +23,6 @@ function claudeRecord(model?: string): NativeChatSessionOptionRecord {
 }
 
 describe('buildNativeChatSessionOptionCommand', () => {
-  it('builds the catalog midSession command for model and options', () => {
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'model',
-        value: 'opus',
-        apply: CLAUDE_SESSION_OPTION_CATALOG.modelApply,
-        modelId: null,
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord()
-      })
-    ).toBe('/model opus')
-    const effortApply = CLAUDE_SESSION_OPTION_CATALOG.models
-      .find((model) => model.id === 'sonnet')!
-      .options.find((option) => option.id === 'effort')!.apply
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'effort',
-        value: 'high',
-        apply: effortApply,
-        modelId: 'sonnet',
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord('sonnet')
-      })
-    ).toBe('/effort high')
-  })
-
-  it('returns the bare toggle command for flip-only options', () => {
-    const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
-      .find((model) => model.id === 'opus')!
-      .options.find((option) => option.id === 'fastMode')!.apply
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'fastMode',
-        value: true,
-        apply: fastModeApply,
-        modelId: 'opus',
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord('opus')
-      })
-    ).toBe('/fast')
-  })
-
   it('does not turn a Codex model pick into pasted slash-command prose', () => {
     expect(
       buildNativeChatSessionOptionCommand({

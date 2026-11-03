@@ -11,7 +11,7 @@ import {
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming
-} from './structured-agent-session-turn-timing'
+} from './agent-session/view/structured-agent-session-turn-timing'
 
 // Separate host/client clocks by an hour so mixed-clock anchors fail visibly.
 const HOST_START = 3_600_000_000

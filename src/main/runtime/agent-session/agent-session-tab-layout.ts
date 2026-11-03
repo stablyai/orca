@@ -11,8 +11,8 @@ import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import { isReopenedChatTabId } from './agent-session-tab-identity'
+import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string }

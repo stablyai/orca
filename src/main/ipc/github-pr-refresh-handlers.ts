@@ -16,7 +16,7 @@ import {
   setPRRefreshOutcomeObserver,
   setPRRefreshRegistrationCheck
 } from '../github/pr-refresh-coordinator'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import {
   applyRegisteredRepoToPRRefreshCandidate,

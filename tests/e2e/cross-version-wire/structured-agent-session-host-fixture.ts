@@ -1,9 +1,9 @@
 import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
@@ -11,7 +11,7 @@ import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 
 // Use per-method spies so every skew can prove which call reached the host.
 export function structuredHostStub(
@@ -60,6 +60,8 @@ export function structuredHostStub(
     restartResumeAll: vi.fn(async () => []),
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
+    // Flat like restart-resume; installableHost rebuilds the nested usageLimitContinue member.
+    cancelUsageLimitContinue: vi.fn(async () => {}),
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
@@ -179,7 +181,8 @@ export function installableHost(
       resume: hostCalls.restartResumeAll,
       continueAfterRestart: hostCalls.restartContinueAll,
       continueInterrupted: hostCalls.continueInterrupted
-    }
+    },
+    usageLimitContinue: { cancel: hostCalls.cancelUsageLimitContinue }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a spy map standing in for the host; the dispatcher reaches only the members stubbed above, and a missing one fails the call rather than type-checking.
   return host as unknown as StructuredAgentSessionHost

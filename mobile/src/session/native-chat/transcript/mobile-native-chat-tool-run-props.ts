@@ -24,4 +24,6 @@ export type MobileNativeChatToolRunProps = {
   awaitingAnswer?: boolean
   fontScale?: number
   onOpenFile?: (path: string) => void
+  /** Thumbnails of the images the run's reads returned, drawn under its header. */
+  viewedImages?: React.ReactNode
 }

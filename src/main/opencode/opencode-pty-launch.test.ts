@@ -14,8 +14,8 @@ import {
 import {
   buildLocalPtySpawnEnvironment,
   enforceLocalPtySpawnEnvironmentOverrides
-} from '../providers/local-pty-spawn-environment'
-import type { LocalPtyLaunchPlan } from '../providers/local-pty-launch-plan'
+} from '../providers/local-pty/local-pty-spawn-environment'
+import type { LocalPtyLaunchPlan } from '../providers/local-pty/local-pty-launch-plan'
 
 const plan: LocalPtyLaunchPlan = {
   startupAgentRecognition: null,

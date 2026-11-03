@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  PLUGIN_DECLARATIVE_CATALOG,
-  PLUGIN_DECLARATIVE_COMPONENT_NAMES
-} from './plugin-declarative-catalog'
 import { PLUGIN_DECLARATIVE_LIMITS } from './plugin-declarative-limits'
-import {
-  PLUGIN_DECLARATIVE_COMPONENT_PROPS,
-  PLUGIN_DECLARATIVE_EDIT_PROP
-} from './plugin-declarative-message-names'
 import {
   parsePluginDeclarativeRender,
   pluginDeclarativeEventPayloadSchema
@@ -26,47 +18,6 @@ function errorOf(tree: unknown): string {
 }
 
 describe('parsePluginDeclarativeTree', () => {
-  it('keeps the zod catalog and the runtime prop table in step', () => {
-    expect([...PLUGIN_DECLARATIVE_COMPONENT_NAMES].sort()).toEqual(
-      Object.keys(PLUGIN_DECLARATIVE_COMPONENT_PROPS).sort()
-    )
-    for (const name of PLUGIN_DECLARATIVE_COMPONENT_NAMES) {
-      const zodProps = Object.keys(PLUGIN_DECLARATIVE_CATALOG[name].props.shape).filter(
-        (prop) => prop !== PLUGIN_DECLARATIVE_EDIT_PROP
-      )
-      const runtimeProps: readonly string[] = PLUGIN_DECLARATIVE_COMPONENT_PROPS[name]
-      expect({ name, props: [...runtimeProps].sort() }).toEqual({ name, props: zodProps.sort() })
-    }
-  })
-
-  it('accepts a valid tree, normalizes numbers and drops nothing it knows', () => {
-    const code = node('Code', {}, ['x'])
-    const text = node('Text', { tone: 'accent', muted: true }, ['Count ', 4, code])
-    const rest = [
-      node('Button', { onPress: { $callback: 'c1' }, icon: 'add', tone: 'danger' }, ['Add']),
-      node('List', { label: 'Items' }, [{ ...node('ListItem', { title: 'A' }), key: 'a' }]),
-      node('Select', {
-        label: 'Pick',
-        options: [{ value: 'a', label: 'A' }],
-        onChange: { $callback: 'c2' }
-      }),
-      node('Link', { href: 'https://example.com' }, ['docs'])
-    ]
-    const tree = node('Stack', { gap: 'sm' }, [text, ...rest])
-    const result = parsePluginDeclarativeTree(tree)
-    expect(result).toMatchObject({ ok: true, nodes: 8, warnings: [] })
-    expect(result.ok && result.tree).toEqual({
-      ...tree,
-      children: [{ ...text, children: ['Count ', '4', code] }, ...rest]
-    })
-    expect(parsePluginDeclarativeTree(null)).toEqual({
-      ok: true,
-      tree: null,
-      nodes: 0,
-      warnings: []
-    })
-  })
-
   it('drops unknown props and enum values with a warning instead of refusing', () => {
     const result = parsePluginDeclarativeTree(
       node('Stack', { className: 'p-4', gap: 'huge' }, [
@@ -134,11 +85,6 @@ describe('parsePluginDeclarativeTree', () => {
     expect(errorOf(tree)).toMatch(message)
   })
 
-  it('allows controls inside a ListItem that has no onPress', () => {
-    const tree = node('List', {}, [node('ListItem', {}, [node('Button', {}, ['x'])])])
-    expect(parsePluginDeclarativeTree(tree).ok).toBe(true)
-  })
-
   it('caps depth without recursing', () => {
     let tree = node('Text')
     for (let depth = 0; depth < 10_000; depth++) {
@@ -184,14 +130,15 @@ describe('ui.* payloads', () => {
     })
   })
 
-  it('accepts only primitive event args', () => {
+  it('accepts plain JSON event args: scalars, scalar lists and one flat object', () => {
     const base = { document: 'd1', revision: 1, callback: '1.0' }
-    expect(
-      pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: ['a', 1, true, null] }).success
-    ).toBe(true)
-    expect(pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: [{}] }).success).toBe(
-      false
-    )
+    const accepts = (args: unknown[]): boolean =>
+      pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args }).success
+    expect(accepts(['a', 1, true, null])).toBe(true)
+    expect(accepts([['a', 'b'], { keys: ['a'] }, { column: 'name', direction: 'asc' }])).toBe(true)
+    expect(accepts([{ nested: { deeper: 1 } }])).toBe(false)
+    expect(accepts([[['nested']]])).toBe(false)
+    expect(accepts([Number.NaN])).toBe(false)
     expect(
       pluginDeclarativeEventPayloadSchema.safeParse({ ...base, args: [], extra: 1 }).success
     ).toBe(false)

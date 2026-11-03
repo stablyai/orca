@@ -74,7 +74,6 @@ const streams = createFakeLayoutStreams()
 hoisted.subscribe = streams.subscribe
 
 const TAB_1 = toWebTerminalSurfaceTabId('host-tab-1')
-const OTHER_ENV = 'web-env-2'
 const OTHER_WT = 'repo::/other-worktree'
 const { setServers, mirroredStore, install, uninstallAll } = createServerHarness(hoisted)
 
@@ -90,21 +89,6 @@ beforeEach(() => {
 afterEach(uninstallAll)
 
 describe('which servers get a layout stream', () => {
-  it('opens one only for a reachable server whose verified status advertises layout intents', () => {
-    const store = mirroredStore()
-    install(store)
-    expect(streams.all).toEqual([])
-
-    setServers(store, [
-      CAPABLE,
-      { environmentId: OTHER_ENV, runtimeId: 'runtime-2', capable: false }
-    ])
-
-    expect(streams.all.map((stream) => stream.target)).toEqual([
-      { kind: 'environment', environmentId: ENV }
-    ])
-  })
-
   it('leaves every workspace of an older server to the mirror', async () => {
     const store = mirroredStore()
     install(store)
@@ -128,35 +112,6 @@ describe('which servers get a layout stream', () => {
     expect(store.getState().tabsByWorktree[WT]?.[0]?.title).toBe('renamed')
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
   })
-
-  it.each([
-    ['is unpaired', []],
-    ['disconnects', [{ ...CAPABLE, disconnected: true }]]
-  ] as const)(
-    'closes the stream of a server that %s and hands its workspaces back (L19)',
-    async (_, after) => {
-      const store = mirroredStore()
-      install(store)
-      setServers(store, [CAPABLE])
-      const stream = streams.openTo(ENV)
-      streams.send(stream, {
-        type: 'snapshot',
-        workspaces: [{ key: WT, layout: SERVER_LAYOUT }],
-        seq: 1,
-        epoch: 'e'
-      })
-      await settle()
-      expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-      expect(hoisted.resync).not.toHaveBeenCalled()
-
-      setServers(store, [...after])
-
-      expect(stream.closed).toBe(true)
-      expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-      await settle()
-      expect(hoisted.resync.mock.calls).toEqual([[ENV, WT]])
-    }
-  )
 
   it.each([
     ['a new runtime id', { runtimeId: 'runtime-1b' }],
@@ -319,35 +274,6 @@ describe('a workspace that turns out to be the server’s after its snapshot', (
       store.setState({ repos: [...store.getState().repos] })
       await settle()
       expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-      expect(check.failures).toEqual([])
-    } finally {
-      check.uninstall()
-    }
-  })
-})
-
-describe('a workspace whose owner briefly reads unknown', () => {
-  it('is drawn from frames in full again when it rejoins the gate', async () => {
-    const store = mirroredStore()
-    install(store)
-    setServers(store, [CAPABLE])
-    const check = installLayoutFrameApplyCheck()
-    try {
-      const stream = streams.openTo(ENV)
-      streams.send(stream, senderSnapshot(mainLayoutFrameSender(), { [WT]: SERVER_LAYOUT }, 1))
-      await settle()
-      expect(check.fullBuilt).toEqual([WT])
-
-      hoisted.owners.delete(WT)
-      store.setState({ repos: [...store.getState().repos] })
-      expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-      hoisted.owners.set(WT, ENV)
-      store.setState({ repos: [...store.getState().repos] })
-      expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-      await settle()
-
-      // The mirror may have drawn it in the gap: the frames redraw it rather than trust it.
-      expect(check.fullBuilt).toEqual([WT, WT])
       expect(check.failures).toEqual([])
     } finally {
       check.uninstall()

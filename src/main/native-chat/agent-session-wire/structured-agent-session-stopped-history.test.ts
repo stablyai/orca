@@ -4,7 +4,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { STOPPED_MESSAGE_INTERRUPTED_MARKER } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createQueuedMessageTestRig,

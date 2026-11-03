@@ -10,7 +10,7 @@ import {
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'

@@ -13,7 +13,7 @@ export const PRELOAD_PLUGIN_FRAME_LANES = {
   edit: { method: 'editor.applyEdit', maxBytes: 64 * 1024 * 1024 + 4096 },
   /** A components panel's tree and persisted state: the host's render lane and its walk caps. */
   render: {
-    events: ['ui.render', 'ui.persist'],
+    events: ['ui.render', 'ui.persist', 'ui.retain'],
     maxBytes: 640 * 1024,
     maxNodes: 5000 * 8 + 1024,
     maxDepth: 64 * 2 + 24

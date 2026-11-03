@@ -28,8 +28,9 @@ import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/lib/window-backdrop'
+import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
 
-export function hexToRgba(hex: string, alpha: number): string {
+function hexToRgb(hex: string): Rgba {
   let clean = hex.replace('#', '')
   if (clean.length === 3) {
     clean = clean
@@ -40,11 +41,42 @@ export function hexToRgba(hex: string, alpha: number): string {
   const r = Number.parseInt(clean.slice(0, 2), 16)
   const g = Number.parseInt(clean.slice(2, 4), 16)
   const b = Number.parseInt(clean.slice(4, 6), 16)
+  return [r, g, b, 1]
+}
+
+export function hexToRgba(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 export function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)
+}
+
+const LEGACY_SLIDER_GREY: Rgba = [180, 180, 185, 1]
+
+// Why: muted foregrounds (Solarized Dark, One Dark) rise to the old fixed grey's contrast, capped at opaque.
+function sliderAlpha(foreground: Rgba, background: Rgba, alpha: number, greyAlpha: number): number {
+  const contrastAt = ([r, g, b]: Rgba, a: number): number =>
+    contrastRatio(over([r, g, b, a], background), background)
+  const floor = contrastAt(LEGACY_SLIDER_GREY, greyAlpha)
+  let next = alpha
+  while (next < 1 && contrastAt(foreground, next) < floor) {
+    next = Math.round(next * 100 + 1) / 100
+  }
+  return next
+}
+
+function foregroundSliderColors(foreground: string, background: string | undefined): ITheme {
+  const fg = hexToRgb(foreground)
+  const bg = background && isHexColor(background) ? hexToRgb(background) : null
+  const tint = (alpha: number, greyAlpha: number): string =>
+    hexToRgba(foreground, bg ? sliderAlpha(fg, bg, alpha, greyAlpha) : alpha)
+  return {
+    scrollbarSliderBackground: tint(0.35, 0.4),
+    scrollbarSliderHoverBackground: tint(0.55, 0.6),
+    scrollbarSliderActiveBackground: tint(0.7, 0.8)
+  }
 }
 
 // Keep pure so settings preview can compose the same theme without PaneManager. baseTheme is the resolved palette
@@ -57,12 +89,13 @@ export function composeActiveTerminalTheme(
     return null
   }
   // Why transparent ruler border: scrollbar.width enables xterm's overview ruler, whose border would paint a bright line.
-  // Why raised slider alpha: xterm's default (~0.2) is nearly invisible on dark bg. Before the spread so explicit theme wins.
+  // Why foreground-tinted thumb: a fixed grey vanished on light themes (#12635); xterm derives non-hex ones. Theme wins.
+  const foreground = baseTheme.foreground
   let theme: ITheme = {
     overviewRulerBorder: 'transparent',
-    scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
-    scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
-    scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+    ...(foreground && isHexColor(foreground)
+      ? foregroundSliderColors(foreground, baseTheme.background)
+      : {}),
     ...baseTheme
   }
   // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
@@ -204,10 +237,12 @@ export function applyTerminalAppearance(
       resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
     )
     const transport = paneTransports.get(pane.id)
+    if (transport) {
+      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+    }
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()
     if (transport?.isConnected() && (!appearancePtyId || !getFitOverrideForPty(appearancePtyId))) {
-      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
       safeFitAndThen(pane, 'appearance-pty-resize', () => {
         const currentTransport = paneTransports.get(pane.id)
         if (

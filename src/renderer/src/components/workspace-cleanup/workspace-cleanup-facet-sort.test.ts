@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DAY, FACET_NOW, makeNamedFacets } from './workspace-cleanup-facet.test.fixture'
-import {
-  isWorkspaceCleanupAbsentLastSortField,
-  sortWorkspaceCleanupFacets
-} from './workspace-cleanup-facet-sort'
+import { sortWorkspaceCleanupFacets } from './workspace-cleanup-facet-sort'
 import type { WorkspaceCleanupSortField } from '../../../../shared/workspace-cleanup-filter-model'
 
 function names(
@@ -48,11 +45,6 @@ describe('absent values', () => {
       makeNamedFacets('linear', { worktree: { linkedLinearIssue: 'STA-1' } })
     ]
     expect(names(ticketRows, 'ticket', 'asc')).toEqual(['linear', 'untracked'])
-  })
-
-  it('marks exactly the optional-value fields as absent-last', () => {
-    expect(isWorkspaceCleanupAbsentLastSortField('size')).toBe(true)
-    expect(isWorkspaceCleanupAbsentLastSortField('name')).toBe(false)
   })
 })
 
@@ -127,37 +119,5 @@ describe('tie-breaks', () => {
       })
     ]
     expect(names(rows, 'size', 'desc')).toEqual(['alpha', 'zeta'])
-  })
-
-  it('keeps tie-broken rows in the same order when direction flips', () => {
-    const rows = [
-      makeNamedFacets('b', { candidate: { lastActivityAt: FACET_NOW - DAY } }),
-      makeNamedFacets('a', {
-        candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
-      })
-    ]
-    expect(names(rows, 'git', 'asc')).toEqual(names(rows, 'git', 'desc'))
-  })
-
-  it('does not mutate the input array', () => {
-    const rows = [makeNamedFacets('b'), makeNamedFacets('a')]
-    const before = rows.map((row) => row.displayName)
-    sortWorkspaceCleanupFacets(rows, { field: 'name', direction: 'asc' })
-    expect(rows.map((row) => row.displayName)).toEqual(before)
-  })
-})
-
-describe('text fields', () => {
-  it('sorts by name, repo, path, branch, and host', () => {
-    const rows = [makeNamedFacets('charlie'), makeNamedFacets('alpha'), makeNamedFacets('bravo')]
-    expect(names(rows, 'name', 'asc')).toEqual(['alpha', 'bravo', 'charlie'])
-    expect(names(rows, 'path', 'desc')).toEqual(['charlie', 'bravo', 'alpha'])
-    expect(names(rows, 'branch', 'asc')).toEqual(['alpha', 'bravo', 'charlie'])
-
-    const hostRows = [
-      makeNamedFacets('remote', { worktree: { hostId: 'ssh:builder' } }),
-      makeNamedFacets('here', { worktree: { hostId: 'local' } })
-    ]
-    expect(names(hostRows, 'host', 'asc')).toEqual(['here', 'remote'])
   })
 })

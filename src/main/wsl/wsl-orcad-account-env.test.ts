@@ -7,7 +7,7 @@ import {
   type WslOrcadAccountEnvDependencies
 } from './wsl-orcad-account-env'
 import type { WslOrcadHostCapabilityVerdict } from './wsl-orcad-host-environments'
-import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../shared/agent-session-create-capabilities'
+import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 
 const POINTER = '~/.orca-claude-profile-pointer-test'
 const CLAUDE_HOME = '/home/u/.orca/claude-accounts/acct-a/config'

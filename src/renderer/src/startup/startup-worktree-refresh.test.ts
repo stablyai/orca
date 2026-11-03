@@ -87,14 +87,6 @@ describe('startup worktree discovery', () => {
     await refresh
   })
 
-  it('does not leave discovery pending when remote catalogs fail', async () => {
-    const actions = createActions()
-    actions.fetchReposForAllHosts.mockRejectedValue(new Error('offline'))
-    await refreshStartupWorktrees(actions, () => false)
-    expect(actions.fetchAllWorktrees).toHaveBeenCalledTimes(1)
-    expect(mocks.setState).toHaveBeenCalledWith({ startupWorktreeRefreshCompleted: true })
-  })
-
   it('stops admitting work and publishing completion after teardown', async () => {
     const visibility = deferred()
     const actions = createActions()

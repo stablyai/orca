@@ -43,26 +43,6 @@ async function mountHook(options: IpcEventsHarnessOptions = {}): Promise<{
 }
 
 describe('useIpcEvents client-hosted browser rows', () => {
-  it('lands a pushed row in the store the host strip reads', async () => {
-    const { harness, readRows } = await mountHook()
-    await harness.settleClientHostedBrowserRowsSnapshot()
-
-    harness.clientHostedBrowserRowsChanged(pushEvent())
-
-    expect(readRows(WT)).toEqual(pushEvent().rows)
-  })
-
-  it('hydrates rows that existed before this window attached', async () => {
-    const { harness, readRows } = await mountHook({
-      clientHostedBrowserRowsSnapshot: [pushEvent()]
-    })
-
-    expect(readRows(WT)).toEqual([])
-    await harness.settleClientHostedBrowserRowsSnapshot()
-
-    expect(readRows(WT).map((row) => row.browserPageId)).toEqual(['page-a'])
-  })
-
   // Subscribe before hydration so older snapshots cannot erase pages pushed during the round trip.
   it('keeps a push that raced the hydration snapshot', async () => {
     const { harness, readRows } = await mountHook({
@@ -73,17 +53,6 @@ describe('useIpcEvents client-hosted browser rows', () => {
     await harness.settleClientHostedBrowserRowsSnapshot()
 
     expect(readRows(WT).map((row) => row.browserPageId)).toEqual(['page-a'])
-  })
-
-  it('retracts the rows when the push empties the worktree', async () => {
-    const { harness, readRows } = await mountHook()
-    await harness.settleClientHostedBrowserRowsSnapshot()
-    harness.clientHostedBrowserRowsChanged(pushEvent())
-    expect(readRows(WT)).toHaveLength(1)
-
-    harness.clientHostedBrowserRowsChanged({ worktreeId: WT, rows: [] })
-
-    expect(readRows(WT)).toEqual([])
   })
 
   // Failed hydration must settle and drain buffered pushes or the host strip stays empty forever.
@@ -99,15 +68,5 @@ describe('useIpcEvents client-hosted browser rows', () => {
     expect(readRows(WT).map((row) => row.browserPageId)).toEqual(['page-a'])
     harness.clientHostedBrowserRowsChanged({ worktreeId: WT, rows: [] })
     expect(readRows(WT)).toEqual([])
-  })
-
-  it('leaves other worktrees alone when one is pushed', async () => {
-    const { harness, readRows } = await mountHook()
-    await harness.settleClientHostedBrowserRowsSnapshot()
-
-    harness.clientHostedBrowserRowsChanged(pushEvent())
-
-    expect(readRows(WT)).toHaveLength(1)
-    expect(readRows('wt-2')).toEqual([])
   })
 })

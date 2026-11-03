@@ -1,6 +1,6 @@
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
@@ -16,7 +16,7 @@ import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-
 import {
   cliMissingSentence,
   notSignedInSentence
-} from '../../../../shared/agent-session-availability-sentences'
+} from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
