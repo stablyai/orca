@@ -1,4 +1,5 @@
 import React from 'react'
+import { useComposedRefs } from 'radix-ui/internal'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { WorktreeCardDetailsHover, WorktreeCardMetaBadges } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
@@ -110,9 +111,12 @@ export function WorktreeCardIdentityHover({
   card: WorktreeCardController
   branchName: string | undefined
   workspaceTitle: string | undefined
-  children: React.ReactElement
+  children: React.ReactElement<React.RefAttributes<HTMLElement>>
 }): React.JSX.Element {
   const { worktree, repo, affiliateListMode, hoverIssue, hoverReview, workspacePorts } = card
+  const identityRef = React.useRef<HTMLElement>(null)
+  const ref = useComposedRefs(children.props.ref, identityRef)
+  const hoverControl = card.detailsHoverControl
   return (
     <WorktreeCardDetailsHover
       workspace={worktree}
@@ -132,7 +136,19 @@ export function WorktreeCardIdentityHover({
         workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
       }
       openDelay={100}
-      hoverControl={card.detailsHoverControl}
+      hoverControl={{
+        ...hoverControl,
+        handleHoverOpenChange: (open) => {
+          if (
+            !open ||
+            !identityRef.current?.querySelector(
+              '[data-worktree-card-identity-indicator]:hover, [data-worktree-card-identity-indicator]:focus'
+            )
+          ) {
+            hoverControl.handleHoverOpenChange(open)
+          }
+        }
+      }}
       onRenameWorkspaceTitle={affiliateListMode ? undefined : card.handleRenameTitle}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
       onEditComment={affiliateListMode ? undefined : card.handleEditComment}
@@ -153,7 +169,7 @@ export function WorktreeCardIdentityHover({
       onOpenAutomationRun={affiliateListMode ? undefined : card.handleOpenAutomationRun}
       onUnlinkReview={canUnlink(card) ? card.handleUnlinkReview : undefined}
     >
-      {children}
+      {React.cloneElement(children, { ref })}
     </WorktreeCardDetailsHover>
   )
 }

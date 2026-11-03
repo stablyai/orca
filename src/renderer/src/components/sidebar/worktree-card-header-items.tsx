@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { AlertCircle, FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-react'
 
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import { resolveRepoHeaderColor } from './project-header-color'
+import type { WorktreeCardController } from './use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from './worktree-card-model'
 
 export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Element {
@@ -135,18 +136,75 @@ function primaryWorktreeTooltip(): string {
   )
 }
 
-export function WorktreeCardPrimaryBadge(): React.JSX.Element {
+type IdentityBadgeProps = {
+  card: Pick<WorktreeCardController, 'newCardStyle' | 'detailsHoverControl'>
+  hasHoverDetails: boolean
+}
+
+function renderIdentityIcon(
+  { card, hasHoverDetails }: IdentityBadgeProps,
+  label: string,
+  icon: React.ReactNode
+): React.JSX.Element {
+  const { detailsHoverControl } = card
+  const closeDetails = (): void => detailsHoverControl.handleHoverOpenChange(false)
+  const resumeDetails = (event: React.PointerEvent<HTMLSpanElement>): void => {
+    const root = event.currentTarget.closest('[data-worktree-card-hover-trigger]')
+    const next = event.relatedTarget
+    if (
+      hasHoverDetails &&
+      root &&
+      next instanceof Element &&
+      root.contains(next) &&
+      !next.closest('[data-worktree-card-identity-indicator]') &&
+      !root.querySelector('[data-worktree-card-identity-indicator]:focus')
+    ) {
+      detailsHoverControl.handleHoverOpenChange(true)
+    }
+  }
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      tabIndex={0}
+      data-worktree-card-identity-indicator=""
+      onPointerEnter={closeDetails}
+      onPointerLeave={resumeDetails}
+      onFocus={closeDetails}
+      className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {icon}
+    </span>
+  )
+}
+
+export function WorktreeCardPrimaryBadge(props: IdentityBadgeProps): React.JSX.Element {
+  const { card, hasHoverDetails } = props
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge
-          variant="outline"
-          className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
-        >
-          {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
-        </Badge>
+        {card.newCardStyle ? (
+          renderIdentityIcon(
+            props,
+            translate('auto.components.sidebar.WorktreeCard.0d224eff10', 'Primary worktree'),
+            <House className="size-3" aria-hidden="true" />
+          )
+        ) : (
+          <Badge
+            variant="outline"
+            className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
+          >
+            {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
+          </Badge>
+        )}
       </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
+      <TooltipContent
+        side="right"
+        sideOffset={8}
+        className={cn(
+          card.newCardStyle && hasHoverDetails && card.detailsHoverControl.hoverOpen && 'hidden'
+        )}
+      >
         {primaryWorktreeTooltip()}
       </TooltipContent>
     </Tooltip>
@@ -175,22 +233,42 @@ export function WorktreeCardPrimaryStar(): React.JSX.Element {
 }
 
 export function WorktreeCardSparseBadge({
+  card,
+  hasHoverDetails,
   directories
-}: {
+}: IdentityBadgeProps & {
   directories: readonly string[] | undefined
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge
-          variant="outline"
-          className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
-        >
-          {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
-        </Badge>
+        {card.newCardStyle ? (
+          renderIdentityIcon(
+            { card, hasHoverDetails },
+            translate('fileExplorer.root.sparseStatus', 'Sparse checkout'),
+            <FolderMinus className="size-3.5" aria-hidden="true" />
+          )
+        ) : (
+          <Badge
+            variant="outline"
+            className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
+          >
+            {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
+          </Badge>
+        )}
       </TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8} className="max-w-72">
+      <TooltipContent
+        side="right"
+        sideOffset={8}
+        className={cn(
+          'max-w-72',
+          card.newCardStyle && hasHoverDetails && card.detailsHoverControl.hoverOpen && 'hidden'
+        )}
+      >
         <div className="space-y-1">
+          {card.newCardStyle && (
+            <div>{translate('fileExplorer.root.sparseStatus', 'Sparse checkout')}</div>
+          )}
           <div>
             {translate(
               'auto.components.sidebar.WorktreeCard.0f33af979b',
@@ -198,7 +276,9 @@ export function WorktreeCardSparseBadge({
             )}
           </div>
           {directories && directories.length > 0 ? (
-            <div className="font-mono text-[11px] opacity-80">
+            <div
+              className={cn('font-mono opacity-80', card.newCardStyle ? 'text-2xs' : 'text-[11px]')}
+            >
               {formatSparseDirectoryPreview([...directories])}
             </div>
           ) : null}

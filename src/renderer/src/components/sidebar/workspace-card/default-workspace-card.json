@@ -63,8 +63,16 @@
                   "props": { "dimWhenRead": "=vars.newStyle", "tooltip": "=!vars.hoverDetails" }
                 },
                 { "el": "RenameError", "when": "ws.hasRenameError && !ws.isRenaming" },
-                { "el": "PrimaryBadge", "when": "!vars.compact && ws.isMain && !vars.folder" },
-                { "el": "SparseBadge", "when": "ws.isSparse" },
+                {
+                  "el": "PrimaryBadge",
+                  "when": "!vars.compact && ws.isMain && !vars.folder",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "SparseBadge",
+                  "when": "ws.isSparse",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
                 {
                   "el": "Row",
                   "when": "vars.titleIndicators",

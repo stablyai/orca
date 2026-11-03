@@ -107,10 +107,16 @@ export const CARD_IDENTITY_PARTS = {
       onOpen={card.handleOpenRenameErrorDialog}
     />
   )),
-  PrimaryBadge: part([], () => <WorktreeCardPrimaryBadge />),
+  PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
+    <WorktreeCardPrimaryBadge card={card} hasHoverDetails={props.hasHoverDetails === true} />
+  )),
   PrimaryStar: part([], () => <WorktreeCardPrimaryStar />),
-  SparseBadge: part([], (_props, _children, { worktree }) => (
-    <WorktreeCardSparseBadge directories={worktree.sparseDirectories} />
+  SparseBadge: part(['hasHoverDetails'], (props, _children, card) => (
+    <WorktreeCardSparseBadge
+      card={card}
+      hasHoverDetails={props.hasHoverDetails === true}
+      directories={card.worktree.sparseDirectories}
+    />
   )),
   DeleteQuickAction: part([], (_props, _children, card) => (
     <WorktreeCardDeleteQuickAction

@@ -59,6 +59,7 @@ export function WorktreeCardHeader({
     titleRowIndicators,
     titleWrapper
   } = presentation
+  const hasHoverDetails = presentation.hasHoverDetails && !titleRenaming
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2">
@@ -111,9 +112,17 @@ export function WorktreeCardHeader({
             onOpen={handleOpenRenameErrorDialog}
           />
         ) : null}
-        {!compactCards && worktree.isMainWorktree && !isFolder && <WorktreeCardPrimaryBadge />}
+        {!compactCards && worktree.isMainWorktree && !isFolder && (
+          <WorktreeCardPrimaryBadge card={card} hasHoverDetails={hasHoverDetails} />
+        )}
 
-        {worktree.isSparse && <WorktreeCardSparseBadge directories={worktree.sparseDirectories} />}
+        {worktree.isSparse && (
+          <WorktreeCardSparseBadge
+            card={card}
+            hasHoverDetails={hasHoverDetails}
+            directories={worktree.sparseDirectories}
+          />
+        )}
 
         {showTitleRowIndicators && titleRowIndicators}
       </div>

@@ -2,7 +2,8 @@
 
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -15,8 +16,14 @@ type Mocks = {
   state: Record<string, unknown>
   cacheStartedAt: number | null
   deleteModifier: boolean
+  hoverOpenChange: ((open: boolean) => void) | undefined
 }
-const mocks = vi.hoisted((): Mocks => ({ state: {}, cacheStartedAt: null, deleteModifier: false }))
+const mocks = vi.hoisted((): Mocks => ({
+  state: {},
+  cacheStartedAt: null,
+  deleteModifier: false,
+  hoverOpenChange: undefined
+}))
 
 vi.mock('@/store', () => {
   const getState = () => mocks.state
@@ -27,7 +34,22 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/components/ui/hover-card', () => ({
-  HoverCard: ({ children }: { children: ReactNode }) => <div data-hover-card="">{children}</div>,
+  HoverCard: ({
+    children,
+    open,
+    onOpenChange
+  }: {
+    children: ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+  }) => {
+    mocks.hoverOpenChange = onOpenChange
+    return (
+      <div data-hover-card="" data-hover-open={Boolean(open)}>
+        {children}
+      </div>
+    )
+  },
   HoverCardContent: ({ children }: { children: ReactNode }) => (
     <div data-hover-card-content="">{children}</div>
   ),
@@ -140,6 +162,9 @@ const CASES: Record<string, Case> = {
   unread: { worktree: { isUnread: true } },
   main: { worktree: { isMainWorktree: true, branch: 'refs/heads/main' } },
   sparse: { worktree: { isSparse: true, sparseDirectories: ['src', 'docs'] } },
+  mainSparse: {
+    worktree: { isMainWorktree: true, isSparse: true, sparseDirectories: ['src', 'docs'] }
+  },
   renameFailed: { worktree: { firstAgentMessageRenameError: 'agent said no' } },
   removalError: { worktree: { removalError: '/repo/worktrees/feature: busy' } },
   detached: { worktree: { branch: '', head: 'deadbeef' } },
@@ -233,6 +258,32 @@ const STYLES: Record<string, Partial<GlobalSettings>> = {
   classic: { compactWorktreeCards: false },
   compact: { compactWorktreeCards: true },
   new: { experimentalNewWorktreeCardStyle: true }
+}
+
+function stateFor(style: Partial<GlobalSettings>, testCase: Case): Record<string, unknown> {
+  return {
+    agentActivityDisplayMode: 'full',
+    deleteStateByWorktreeId: {},
+    gitConflictOperationByWorktree: {},
+    hostedReviewCache: {},
+    issueCache: {},
+    linearIssueCache: {},
+    prCache: {},
+    projectGroups: [],
+    remoteBranchConflictByWorktreeId: {},
+    runtimeEnvironments: [],
+    settings: { ...style },
+    sshConnectionStates: new Map(),
+    removedSshTargetLabels: new Map(),
+    runtimeStatusByEnvironmentId: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    agentStatusByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    workspacePortScan: null,
+    worktreeCardProperties: testCase.cardProps ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    ...testCase.state
+  }
 }
 
 function Harness({ props, variant }: { props: WorktreeCardProps; variant: 'legacy' | 'template' }) {
@@ -335,36 +386,16 @@ describe('default workspace card template parity with the original card', () => 
   beforeEach(() => {
     mocks.cacheStartedAt = null
     mocks.deleteModifier = false
+    mocks.hoverOpenChange = undefined
   })
+  afterEach(cleanup)
 
   for (const [styleName, style] of Object.entries(STYLES)) {
     for (const [caseName, testCase] of Object.entries(CASES)) {
       it(`${styleName}: ${caseName}`, () => {
         mocks.cacheStartedAt = testCase.cacheStartedAt ?? null
         mocks.deleteModifier = testCase.deleteModifier ?? false
-        mocks.state = {
-          agentActivityDisplayMode: 'full',
-          deleteStateByWorktreeId: {},
-          gitConflictOperationByWorktree: {},
-          hostedReviewCache: {},
-          issueCache: {},
-          linearIssueCache: {},
-          prCache: {},
-          projectGroups: [],
-          remoteBranchConflictByWorktreeId: {},
-          runtimeEnvironments: [],
-          settings: { ...style },
-          sshConnectionStates: new Map(),
-          removedSshTargetLabels: new Map(),
-          runtimeStatusByEnvironmentId: new Map(),
-          sshTargetLabels: new Map(),
-          tabsByWorktree: {},
-          agentStatusByPaneKey: {},
-          retainedAgentsByPaneKey: {},
-          workspacePortScan: null,
-          worktreeCardProperties: testCase.cardProps ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
-          ...testCase.state
-        }
+        mocks.state = stateFor(style, testCase)
         const props: WorktreeCardProps = {
           worktree: makeWorktree(testCase.worktree),
           repo: testCase.repo === null ? undefined : { ...repo, ...testCase.repo },
@@ -375,7 +406,8 @@ describe('default workspace card template parity with the original card', () => 
         const template = canonical(
           renderToStaticMarkup(<Harness props={props} variant="template" />)
         )
-        const shows = SHOWS[caseName]
+        const shows =
+          caseName === 'sparse' && styleName === 'new' ? 'Sparse checkout' : SHOWS[caseName]
         if (shows) {
           expect(legacy).toContain(shows)
         }
@@ -384,4 +416,30 @@ describe('default workspace card template parity with the original card', () => 
       })
     }
   }
+
+  it('suppresses a delayed details hover while a template identity icon is focused', () => {
+    mocks.state = stateFor(STYLES.new, {})
+    const { container } = render(
+      <Harness
+        props={{
+          worktree: makeWorktree({ isSparse: true, sparseDirectories: ['src'] }),
+          repo,
+          isActive: false
+        }}
+        variant="template"
+      />
+    )
+    const icon = screen.getByRole('img', { name: 'Sparse checkout' })
+    const hover = container.querySelector('[data-hover-card]')
+    expect(hover).not.toBeNull()
+    expect(mocks.hoverOpenChange).toBeTypeOf('function')
+
+    act(() => icon.focus())
+    act(() => mocks.hoverOpenChange?.(true))
+    expect(hover?.getAttribute('data-hover-open')).toBe('false')
+
+    act(() => icon.blur())
+    act(() => mocks.hoverOpenChange?.(true))
+    expect(hover?.getAttribute('data-hover-open')).toBe('true')
+  })
 })

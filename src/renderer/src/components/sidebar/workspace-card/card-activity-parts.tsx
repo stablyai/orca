@@ -28,7 +28,10 @@ function detailsHover(
   children: React.ReactNode[],
   card: Card
 ): React.ReactNode {
-  const child = children.find(React.isValidElement)
+  const child = children.find(
+    (node): node is React.ReactElement<React.RefAttributes<HTMLElement>> =>
+      React.isValidElement(node)
+  )
   if (!child) {
     return null
   }
