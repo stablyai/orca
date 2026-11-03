@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import WorktreeCard from '../sidebar/WorktreeCard'
 import { pickCardStudioGallery } from './card-studio-gallery-states'
 
@@ -12,7 +13,7 @@ export function CardStudioGallery(): React.JSX.Element {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const inputs = useAppStore(
     useShallow((s) => ({
-      worktreesByRepo: s.worktreesByRepo,
+      worktreesByRepo: selectWorktreesByRepo(s),
       repos: s.repos,
       agentStatusByPaneKey: s.agentStatusByPaneKey
     }))

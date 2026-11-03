@@ -1,4 +1,6 @@
 import type { AppState } from '@/store/types'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
@@ -40,7 +42,7 @@ const STATE_RULES: readonly StateRule[] = [
   {
     key: 'ssh',
     label: () => translate('auto.components.cardStudio.state.ssh', 'Remote (SSH)'),
-    matches: (_w, repo) => Boolean(repo?.connectionId)
+    matches: (_w, repo) => Boolean(repo && getRepoRoutingConnectionId(repo))
   },
   {
     key: 'folder',
@@ -65,7 +67,7 @@ export function pickCardStudioGallery(
   focusedWorktreeId: string | null
 ): CardStudioGalleryEntry[] {
   const repos = new Map(state.repos.map((repo) => [repo.id, repo]))
-  const worktrees = Object.values(state.worktreesByRepo)
+  const worktrees = Object.values(selectWorktreesByRepo(state))
     .flat()
     .filter((worktree) => !worktree.isArchived)
   const agentStates = new Map<string, Set<string>>()
