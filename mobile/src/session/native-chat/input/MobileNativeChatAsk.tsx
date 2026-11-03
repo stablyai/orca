@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
-  nativeChatAnswerOperationPending,
+  nativeChatAnswerOperationEvidence,
   type NativeChatAnswerOperation,
   type NativeChatAnswerSource,
   type AskAnswerSelection
@@ -72,12 +72,19 @@ export function MobileNativeChatAsk({
   )
   const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
   const operationRef = useRef<NativeChatAnswerOperation | null>(null)
+  const operationId = operation?.clientMessageId
+  const evidence = useMemo(
+    () =>
+      nativeChatAnswerOperationEvidence(
+        operationId,
+        answerSendSource?.messages ?? [],
+        answerSendSource?.submissions
+      ),
+    [operationId, answerSendSource?.messages, answerSendSource?.submissions]
+  )
   const isLocalPending = (current: NativeChatAnswerOperation | null): boolean =>
-    nativeChatAnswerOperationPending(
-      current,
-      answerSendSource?.messages ?? [],
-      answerSendSource?.submissions
-    )
+    current !== null &&
+    ((current.clientMessageId === operationId ? evidence : undefined) ?? current.inFlight)
   const sending = operation?.inFlight === true && isLocalPending(operation)
   const submitting = isLocalPending(operation) || answerPending
   const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)

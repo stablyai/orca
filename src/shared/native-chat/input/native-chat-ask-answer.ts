@@ -48,9 +48,13 @@ export function withoutPendingQueuedAnswers(
   if (!message.queuedMessageId || message.deliveryState !== 'pending') {
     return contributors
   }
-  const texts = [
-    message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
-  ]
+  const text = message.blocks
+    .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+    .join('')
+  if (!text.startsWith('> ') && !text.includes('\n\n> ')) {
+    return contributors
+  }
+  const texts = [text]
   return contributors.filter(
     (contributor) =>
       !contributor.questions.some((question) => quotedByQueuedAnswer(question, texts))
@@ -221,24 +225,35 @@ export function hasAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]
 export type NativeChatAnswerOperation = { clientMessageId?: string; inFlight: boolean }
 
 /** Canonical evidence supersedes the form's local operation, even before its RPC returns. */
+export function nativeChatAnswerOperationEvidence(
+  clientMessageId: string | undefined,
+  messages: readonly NativeChatMessage[],
+  submissions: readonly AgentJournalSubmission[] = []
+): boolean | undefined {
+  if (!clientMessageId) {
+    return undefined
+  }
+  const key = agentJournalSubmissionKey(clientMessageId)
+  const message = messages.find((row) => row.id === key)
+  if (
+    message?.journalPosition ||
+    submissions.some((row) => row.clientMessageId === clientMessageId)
+  ) {
+    return false
+  }
+  return message?.deliveryState === 'pending' && !message.journalPosition ? true : undefined
+}
+
 export function nativeChatAnswerOperationPending(
   operation: NativeChatAnswerOperation | null,
   messages: readonly NativeChatMessage[],
   submissions: readonly AgentJournalSubmission[] = []
 ): boolean {
-  if (!operation) {
-    return false
-  }
-  const id = operation.clientMessageId
-  if (!id) {
-    return operation.inFlight
-  }
-  const key = agentJournalSubmissionKey(id)
-  const message = messages.find((row) => row.id === key)
-  if (message?.journalPosition || submissions.some((row) => row.clientMessageId === id)) {
-    return false
-  }
-  return (message?.deliveryState === 'pending' && !message.journalPosition) || operation.inFlight
+  return (
+    operation !== null &&
+    (nativeChatAnswerOperationEvidence(operation.clientMessageId, messages, submissions) ??
+      operation.inFlight)
+  )
 }
 
 export type NativeChatAnswerSource = {

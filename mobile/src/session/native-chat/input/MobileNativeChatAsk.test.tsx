@@ -80,6 +80,123 @@ afterEach(() => {
 })
 
 describe('MobileNativeChatAsk single-select auto-advance', () => {
+  it.each([1000, 10000])(
+    'does not revisit unchanged delivery history while editing after failure (%i rows)',
+    async (count) => {
+      const prompt = { questions: [indent], replyAsMessage: true }
+      let messageReads = 0
+      let submissionReads = 0
+      const messages: NativeChatAnswerSource['messages'] = Array.from(
+        { length: count },
+        (_, index) => ({
+          get id() {
+            messageReads++
+            return `history-${index}`
+          },
+          role: 'assistant',
+          source: 'transcript',
+          timestamp: index,
+          blocks: []
+        })
+      )
+      const submissions: NativeChatAnswerSource['submissions'] = Array.from(
+        { length: count },
+        (_, index) => ({
+          get clientMessageId() {
+            submissionReads++
+            return `old-${index}`
+          },
+          fence: 1,
+          payloadFingerprint: String(index),
+          dispatchState: 'unknown',
+          providerItemId: null,
+          reason: null,
+          submittedAt: index,
+          resolvedAt: null
+        })
+      )
+      let source: NativeChatAnswerSource = { messages, submissions }
+      const onAnswer = vi.fn(
+        async (_selections: AskAnswerSelection[], onCreated?: (id: string) => void) => {
+          onCreated?.('answer')
+          return false
+        }
+      )
+      vi.useFakeTimers()
+      const update = () =>
+        act(() =>
+          tree.update(
+            createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
+          )
+        )
+      act(() => {
+        tree = create(
+          createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
+        )
+      })
+      press('Spaces')
+      await passAutoAdvanceBeat()
+      expect(messageReads).toBe(count)
+      expect(submissionReads).toBe(count)
+      messageReads = submissionReads = 0
+      press('Other…')
+      for (let index = 0; index < 10; index++) {
+        act(() =>
+          tree.root
+            .find((node) => isHost(node, 'TextInput'))
+            .props.onChangeText(`More detail ${index}`)
+        )
+      }
+      expect(messageReads).toBe(0)
+      expect(submissionReads).toBe(0)
+      const disabled = () =>
+        tree.root.find(
+          (node) =>
+            isHost(node, 'Pressable') &&
+            node.findAll((n) => n.props.children === 'Submit').length > 0
+        ).props.disabled
+      source = {
+        messages: [
+          ...messages,
+          {
+            id: agentJournalSubmissionKey('answer'),
+            role: 'user',
+            source: 'transcript',
+            timestamp: 1,
+            blocks: [],
+            deliveryState: 'pending'
+          }
+        ],
+        submissions
+      }
+      update()
+      expect(disabled()).toBe(true)
+      expect(messageReads).toBeGreaterThan(0)
+      source = {
+        ...source,
+        submissions: [
+          ...submissions,
+          {
+            clientMessageId: 'answer',
+            fence: 1,
+            payloadFingerprint: 'answer',
+            dispatchState: 'unknown',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: null
+          }
+        ]
+      }
+      update()
+      expect(disabled()).toBe(false)
+      source = { messages, submissions }
+      update()
+      expect(disabled()).toBe(false)
+      expect(tree.root.find((node) => isHost(node, 'TextInput')).props.value).toBe('More detail 9')
+    }
+  )
+
   it('owns the RPC-first echo and releases canonical uncertainty before an old reply can clear a retry', async () => {
     const prompt = { questions: [indent], replyAsMessage: true }
     let source: NativeChatAnswerSource = { messages: [], submissions: [] }
