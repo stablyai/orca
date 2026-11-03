@@ -30,7 +30,7 @@ import {
 import {
   clearBrowserRoutePartitionPolicies,
   installBrowserRoutePartitionPolicies
-} from './browser-session-route-policies'
+} from './routing/sessions/browser-session-route-policies'
 import {
   retireDeletedBrowserSessionProfile,
   retireFailedBrowserSessionProfile

@@ -13,8 +13,8 @@ import type {
   BrowserGrabResult,
   BrowserGrabScreenshot
 } from '../../shared/browser-grab-types'
-import type { BrowserClientDownloadRoute } from './browser-client-download-relay'
-import type { PageInitiatedTabBudget } from './browser-page-initiated-tab-budget'
+import type { BrowserClientDownloadRoute } from './client-hosts/file-transfers/browser-client-download-relay'
+import type { PageInitiatedTabBudget } from './guest-lifecycle/popups/browser-page-initiated-tab-budget'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError,

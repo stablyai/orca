@@ -4,11 +4,11 @@ import type { BrowserSiteDisplayController } from './browser-site-display-contro
 import {
   createPageInitiatedTabBudget,
   type PageInitiatedTabBudget
-} from './browser-page-initiated-tab-budget'
+} from './guest-lifecycle/popups/browser-page-initiated-tab-budget'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserLoadError } from '../../shared/browser-workspace-types'
-import { resolveBrowserRouteGuestPopupOpener } from './browser-route-guest-popup-ownership'
-import type { BrowserPagePromptTarget } from './browser-page-prompts'
+import { resolveBrowserRouteGuestPopupOpener } from './routing/guest-authority/browser-route-guest-popup-ownership'
+import type { BrowserPagePromptTarget } from './guest-lifecycle/prompts/browser-page-prompts'
 import type {
   ActiveDownload,
   CdpUserAgentOverrideState,
@@ -25,7 +25,7 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
-import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
+import { BrowserGuestDevToolsDock } from './guest-lifecycle/browser-guest-devtools-dock'
 
 /** A link a headless serve page asked to open as an Orca tab beside it. */
 export type OffscreenBrowserTabOpenRequest = {

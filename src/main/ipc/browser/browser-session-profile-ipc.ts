@@ -1,10 +1,10 @@
-import { retainLocalGoogleCookieClearTarget } from '../../browser/browser-google-cookie-clear-target'
+import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browser-google-cookie-clear-target'
 import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../../browser/browser-session-registry'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/paired-runtime-browser-client-host-runtime'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   pickCookieFile,

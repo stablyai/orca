@@ -10,7 +10,9 @@ vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }) },
   webContents: { fromId: (id: number) => mocks.contents.get(id) ?? null }
 }))
-vi.mock('./popup-origin-bar-window', () => ({ openPopupWithOriginBar: vi.fn() }))
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
+  openPopupWithOriginBar: vi.fn()
+}))
 
 import {
   DestroyedGuestTestContents,

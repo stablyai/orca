@@ -7,7 +7,7 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser/agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
-import { installBrowserJavaScriptDialogs } from './browser-javascript-dialogs'
+import { installBrowserJavaScriptDialogs } from './guest-lifecycle/prompts/browser-javascript-dialogs'
 import type { ServeBrowserPageState } from '../runtime/serve-browser-tab-layout'
 
 // orca serve has no renderer for webviews; hidden BrowserWindows host its pages.

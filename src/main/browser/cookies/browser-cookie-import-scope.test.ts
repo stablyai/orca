@@ -53,7 +53,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { importCookiesFromBrowser } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 

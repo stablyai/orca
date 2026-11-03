@@ -36,12 +36,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
 import { browserManager } from './browser-manager'
-import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { browserDownloadDestinationReservations } from './downloads/browser-download-destination'
 import {
   createDownloadItem,
   getDownloadItemEventHandler,

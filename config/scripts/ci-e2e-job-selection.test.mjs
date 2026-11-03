@@ -72,7 +72,7 @@ it('retains allocations when selection evidence is incomplete', () => {
 
 it('preserves the requested specs across source-routed and mixed selections', () => {
   for (const files of [
-    ['src/main/browser/ssh-browser-network-execution-route.ts'],
+    ['src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts'],
     ['src/shared/terminal-unicode-provider.ts'],
     [NODE_NETWORK_E2E_SPEC, 'tests/e2e/future-unclassified.spec.ts']
   ]) {

@@ -25,7 +25,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: browserMocks.webContentsFromIdMock }
 }))
 
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
@@ -37,19 +37,19 @@ import {
   BrowserClientDownloadRelay,
   type BrowserClientDownloadRoute,
   type BrowserClientDownloadRouteOutcome
-} from './browser-client-download-relay'
-import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
+} from './client-hosts/file-transfers/browser-client-download-relay'
+import { BrowserClientFileChannelTransport } from './client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 import {
   registerBrowserClientDownloadRouter,
   resetBrowserClientDownloadRouting,
   setBrowserClientRouteWebContentsProbe
-} from './browser-client-download-routing'
-import { createBrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
+} from './client-hosts/file-transfers/browser-client-download-routing'
+import { createBrowserClientPageGuestBinding } from './client-pages/lifecycle/browser-client-page-guest-binding'
 import {
   registerBrowserRouteGuestPopup,
   resetBrowserRouteGuestPopupOwnership
-} from './browser-route-guest-popup-ownership'
+} from './routing/guest-authority/browser-route-guest-popup-ownership'
 import {
   createDownloadItem,
   getDownloadItemEventHandler,

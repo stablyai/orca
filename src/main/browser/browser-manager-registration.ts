@@ -1,12 +1,12 @@
 import { webContents } from 'electron'
-import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { browserDownloadDestinationReservations } from './downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from './doc-preview-guest-policy'
 import type { BrowserGuestRegistration } from './browser-manager-types'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
 import {
   cancelBrowserPagePrompts,
   showBrowserPagePromptsAwaitingRegistration
-} from './browser-page-prompts'
+} from './guest-lifecycle/prompts/browser-page-prompts'
 
 export abstract class BrowserManagerRegistration extends BrowserManagerGuestPolicy {
   registerGuest(

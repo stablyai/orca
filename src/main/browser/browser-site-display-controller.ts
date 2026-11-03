@@ -1,4 +1,7 @@
-import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
+import {
+  acquireElectronDebugger,
+  type ElectronDebuggerLease
+} from './cdp/debugger/electron-debugger-lease'
 import { getBrowserSiteDisplay, updateBrowserSiteDisplay } from './browser-site-display-store'
 import {
   browserSiteDisplayKey,

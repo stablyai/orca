@@ -37,13 +37,13 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./popup-origin-bar-window', () => ({
+vi.mock('./guest-lifecycle/popups/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
 import { browserManager } from './browser-manager'
-import { respondToBrowserPagePrompt } from './browser-page-prompts'
-import { handleBrowserGuestLogin } from './browser-http-auth-prompt'
+import { respondToBrowserPagePrompt } from './guest-lifecycle/prompts/browser-page-prompts'
+import { handleBrowserGuestLogin } from './guest-lifecycle/prompts/browser-http-auth-prompt'
 import {
   rendererWebContentsId,
   resetBrowserManagerMocks,

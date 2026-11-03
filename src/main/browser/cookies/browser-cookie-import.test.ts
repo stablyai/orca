@@ -73,7 +73,7 @@ import {
   importCookiesFromBrowser,
   detectInstalledBrowsers
 } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { summarizeCookieImportError } from './browser-cookie-import-diagnostics'
 

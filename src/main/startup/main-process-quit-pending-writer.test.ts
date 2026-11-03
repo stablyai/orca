@@ -33,7 +33,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
   '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
-  '../browser/paired-runtime-browser-client-host-runtime': {
+  '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
   '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
@@ -42,7 +42,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
   '../browser/browser-session-registry': { browserSessionRegistry: {} },
-  '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
+  '../browser/routing/local-host-partitions/local-ssh-browser-route': {
+    closeAllLocalSshBrowserRoutes: settled()
+  },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
   '../git/refs/maintenance/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },

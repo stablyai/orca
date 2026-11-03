@@ -1,11 +1,11 @@
 import { browserSessionRegistry } from './browser-session-registry'
 import type { BrowserSessionRegistryProfileOptions } from './browser-session-registry'
-import { collectOrphanedBrowserRoutePartitionStorage } from './browser-route-partition-storage-runtime'
-import { configureRouteSessionsForOrcaProfile } from './browser-route-session-runtime'
+import { collectOrphanedBrowserRoutePartitionStorage } from './routing/partitions/browser-route-partition-storage-runtime'
+import { configureRouteSessionsForOrcaProfile } from './routing/sessions/browser-route-session-runtime'
 import { configureBrowserSitePermissionStore } from './browser-site-permission-store'
 import { configureBrowserSiteDisplayStore } from './browser-site-display-store'
 import { configureBrowserExtensionProfileDataDirectory } from './extensions/browser-extension-profile-data-directory'
-import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from './paired-runtime-browser-client-host-runtime'
+import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from './client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 
 let initialized = false
 

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { BrowserError } from './browser-error'
-import { browserDownloadDestinationReservations } from './browser-download-destination'
-import { routeBrowserClientDownload } from './browser-client-download-routing'
+import { browserDownloadDestinationReservations } from './downloads/browser-download-destination'
+import { routeBrowserClientDownload } from './client-hosts/file-transfers/browser-client-download-routing'
 import {
   safeOrigin,
   type ActiveDownload,

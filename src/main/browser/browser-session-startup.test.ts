@@ -22,13 +22,13 @@ function installRegistryMock(): {
       initializeBrowserSessionsFromPersistedState: initializeBrowserSessionsFromPersistedStateMock
     }
   }))
-  vi.doMock('./browser-route-session-runtime', () => ({
+  vi.doMock('./routing/sessions/browser-route-session-runtime', () => ({
     configureRouteSessionsForOrcaProfile: configureRouteSessionsForOrcaProfileMock
   }))
-  vi.doMock('./browser-route-partition-storage-runtime', () => ({
+  vi.doMock('./routing/partitions/browser-route-partition-storage-runtime', () => ({
     collectOrphanedBrowserRoutePartitionStorage: collectOrphanedBrowserRoutePartitionStorageMock
   }))
-  vi.doMock('./paired-runtime-browser-client-host-runtime', () => ({
+  vi.doMock('./client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
     configurePairedRuntimeBrowserClientHostsForOrcaProfile:
       configurePairedRuntimeBrowserClientHostsForOrcaProfileMock
   }))

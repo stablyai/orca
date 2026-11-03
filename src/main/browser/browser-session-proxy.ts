@@ -8,7 +8,7 @@ import type { NetworkProxySettings } from '../../shared/network-proxy'
 import {
   readNetworkProxySettings,
   setNetworkProxySettingsSource
-} from './browser-network-proxy-settings-source'
+} from './network/execution-routes/browser-network-proxy-settings-source'
 
 let proxyPolicyGeneration = 0
 // Stop stale readiness loops before a removed partition's queued proxy release.

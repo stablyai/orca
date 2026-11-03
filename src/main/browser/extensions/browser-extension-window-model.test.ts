@@ -35,7 +35,7 @@ vi.mock('./browser-extension-api-host', () => ({
     mocks.emitted.push({ session: target.session, event })
 }))
 vi.mock('./browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => false }))
-vi.mock('../browser-main-window-readiness', () => ({
+vi.mock('../guest-lifecycle/browser-main-window-readiness', () => ({
   watchBrowserMainWindowReadiness: () => {}
 }))
 

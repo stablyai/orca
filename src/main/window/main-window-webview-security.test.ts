@@ -24,18 +24,18 @@ vi.mock('./host-frame-navigation-guard', () => ({
 vi.mock('./privileged-window-navigation', () => ({
   installPrivilegedWindowNavigationPolicy: mocks.installNavigationPolicy
 }))
-vi.mock('../browser/browser-route-session-runtime', () => ({
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
   browserRouteSessionRegistry: { isAllowedPartition: () => false },
   browserRouteWebContentsRegistry: { attachGuest: mocks.attachRouteGuest }
 }))
-vi.mock('../browser/local-ssh-browser-partitions', () => ({
+vi.mock('../browser/routing/local-host-partitions/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
 }))
 vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
   getBrowserExtensionSessionForProfile: () => null
 }))
-vi.mock('../browser/browser-javascript-dialogs', () => ({
+vi.mock('../browser/guest-lifecycle/prompts/browser-javascript-dialogs', () => ({
   installBrowserJavaScriptDialogs: mocks.installJavaScriptDialogs
 }))
 vi.mock(import('../plugins/panels/plugin-frame-guest-registry'), async (importOriginal) => ({
