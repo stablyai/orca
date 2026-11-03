@@ -44,11 +44,16 @@ const PARTY_NAMING_FIELDS = [
   'terminal',
   'callerTerminalHandle',
   'sessionId',
+  'partnerSessionId',
   'address',
   'party'
 ] as const
 // These identity-adjacent fields must never resolve as parties.
 const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
+  'orchestration.linkCandidates sessionId': 'owner-selected source; declares no caller',
+  'orchestration.linkCreate sessionId': 'owner-selected source; declares no caller',
+  'orchestration.linkCreate partnerSessionId': 'owner-selected partner; declares no caller',
+  'orchestration.linkCurrent sessionId': 'selected membership; handler checks the resolved caller',
   'orchestration.crewSubscribe party': 'queries the selected party; declares no caller',
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
@@ -109,9 +114,9 @@ describe('orchestration session callers at the dispatch entry', () => {
       })
       .sort()
 
-    // The population: 50 registered methods carrying 36 party-naming fields.
-    expect(registry.size).toBe(50)
-    expect(partyNaming).toHaveLength(36)
+    // The population: 57 registered methods carrying 40 party-naming fields.
+    expect(registry.size).toBe(57)
+    expect(partyNaming).toHaveLength(40)
     expect(partyNaming).toEqual(
       [
         ...Object.entries(ORCHESTRATION_CALLER_PARAM).map(
