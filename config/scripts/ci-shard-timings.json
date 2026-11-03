@@ -8916,7 +8916,6 @@
       "src/renderer/src/components/settings/repository/execution/RepositoryWorktreeDefaultsSection.test.tsx": 495,
       "src/renderer/src/components/settings/repository/execution/repository-hook-settings-draft.test.ts": 367,
       "src/renderer/src/components/settings/repository/execution/repository-host-setup-options.test.ts": 210,
-      "src/renderer/src/components/settings/repository/execution/RepositoryForkSyncSection.test.tsx": 780,
       "src/renderer/src/components/settings/repository/identity/RepositoryIconPicker.github-avatar-refresh.test.tsx": 615,
       "src/renderer/src/components/settings/repository/source-control/RepositorySourceControlAiSection.test.ts": 9922,
       "src/renderer/src/components/settings/repository/source-control/repository-source-control-ai-global-ux.test.ts": 889,

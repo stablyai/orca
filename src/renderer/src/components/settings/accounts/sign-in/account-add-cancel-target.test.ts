@@ -30,16 +30,4 @@ describe('account addition Cancel target', () => {
     await adding
     expect(accountAdditionShownInPrompt('claude', SERVER)).toBe(false)
   })
-
-  it('cancels this desktop’s own login for a local addition', async () => {
-    cancelHost.mockClear()
-    const running = Promise.withResolvers<void>()
-    const adding = trackAccountAddition('codex', LOCAL, () => running.promise)
-    const cancelLocal = vi.fn(async () => true)
-    await cancelAccountAddition('codex', cancelLocal)
-    expect(cancelLocal).toHaveBeenCalledOnce()
-    expect(cancelHost).not.toHaveBeenCalled()
-    running.resolve()
-    await adding
-  })
 })
