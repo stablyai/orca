@@ -47,7 +47,7 @@ export async function readLinearIssueDetail(
     ) {
       throw error
     }
-    // SAFETY: SDK partial data uses the same provider schema as this request's successful response.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SDK partial data uses this request's selected provider schema.
     const data = error.data as LinearIssueDetailResponse | undefined
     issue = data?.issue && { ...data.issue }
     if (issue) {
