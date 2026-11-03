@@ -168,6 +168,10 @@ function itemKind(kind: string): string | null {
   return kind.startsWith('item:') ? kind.slice('item:'.length) : null
 }
 
+export function isClaudePluginUiFrame(kind: string): boolean {
+  return kind.startsWith('message:system:ui_')
+}
+
 export function isDeltaProviderFrameKind(kind: string): boolean {
   return notificationKind(kind).toLowerCase().endsWith('delta')
 }
@@ -212,6 +216,10 @@ const PROVIDER_FRAME_CATALOGS: ReadonlyMap<
         return isProviderRecord(payload) && payload.outcome === 'error'
           ? 'error-surface'
           : 'suppressed-benign'
+      }
+      // Terminal UI commands are not conversation content.
+      if (isClaudePluginUiFrame(kind)) {
+        return 'suppressed-benign'
       }
       if (kind === 'message:auth_status') {
         const error = isProviderRecord(payload) ? payload.error : undefined

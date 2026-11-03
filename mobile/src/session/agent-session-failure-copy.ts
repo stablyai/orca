@@ -4,11 +4,18 @@ import type {
   AgentSessionFailureSay
 } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
+import { AGENT_SESSION_FAILURE_COPY } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { START_FAILURE_COPY } from './agent-session-start-failure-copy'
 import { SEND_FAILURE_COPY } from './agent-session-send-failure-copy'
 
 const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> = {
   ...START_FAILURE_COPY,
+  pluginInputRequired: (values) =>
+    translate(
+      'session.failure.pluginInputRequired',
+      AGENT_SESSION_FAILURE_COPY.pluginInputRequired,
+      values
+    ),
   ...SEND_FAILURE_COPY,
   backgroundTasksRunning: (values) =>
     translate(

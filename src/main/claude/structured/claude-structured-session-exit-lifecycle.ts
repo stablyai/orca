@@ -14,6 +14,7 @@ import {
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
+import { ClaudePluginInputError } from '../claude-plugin-ui'
 import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
@@ -122,15 +123,17 @@ export function settleClaudeUnexpectedExit(
       reason: exit.error.message,
       // A typed startup refusal or a spawn ENOENT keeps its next step; else provider exit vs host fault.
       failure:
-        startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
-          ? providerStartupFailureFact(exit.error)
-          : startupFailure
-            ? providerStartupFailureFact(startupFailure)
-            : providerExitObserved(exit.error)
-              ? agentSessionFailureFact('providerExited', {
-                  detail: providerDiagnosticOf(exit.error)
-                })
-              : agentSessionFailureFact('hostFault'),
+        exit.error instanceof ClaudePluginInputError
+          ? exit.error.failure
+          : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+            ? providerStartupFailureFact(exit.error)
+            : startupFailure
+              ? providerStartupFailureFact(startupFailure)
+              : providerExitObserved(exit.error)
+                ? agentSessionFailureFact('providerExited', {
+                    detail: providerDiagnosticOf(exit.error)
+                  })
+                : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'

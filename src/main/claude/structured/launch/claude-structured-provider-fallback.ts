@@ -15,6 +15,8 @@ import {
   type ClaudeMessageEnvelope
 } from '../journal/claude-structured-item-translation'
 import { claudeResultOutcome } from '../../claude-result-outcome'
+import { isClaudePluginUiFrame } from '../../../native-chat/agent-session-wire/provider-frame-disposition'
+import { claudeFocusedPlugin } from '../../claude-plugin-ui'
 import type { ClaudeRowStamp } from '../../claude-provisional-row-corrections'
 import {
   CLAUDE_API_RETRY_FRAME_KIND,
@@ -42,7 +44,11 @@ const PROGRESS_FRAME_KINDS: ReadonlySet<string> = new Set([
 
 /** No row to write, so buffered output need not flush ahead of this frame. */
 export function isClaudeProgressFrame(message: Record<string, unknown>): boolean {
-  return PROGRESS_FRAME_KINDS.has(claudeProviderFrameKind(message))
+  const kind = claudeProviderFrameKind(message)
+  return (
+    PROGRESS_FRAME_KINDS.has(kind) ||
+    (isClaudePluginUiFrame(kind) && claudeFocusedPlugin(message) === null)
+  )
 }
 
 const SETTLED_RESULT_KINDS: ReadonlySet<string> = new Set(

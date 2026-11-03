@@ -20,7 +20,8 @@ import { observeClaudeExecutionModel } from './claude-structured-execution-obser
 import { observeClaudeFastModeFacts } from './launch/claude-structured-session-options'
 import {
   createClaudeSessionPublication,
-  reportClaudeOptions
+  reportClaudeOptions,
+  publishClaudeSessionAttempt
 } from './claude-structured-session-publication'
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
@@ -36,6 +37,7 @@ import {
 import { isRootClaudeFrame } from '../claude-turn-opening'
 import { createClaudeStartupOutcome, endsClaudeStartup } from './claude-structured-startup-outcome'
 import { claudeStartupResultError } from '../claude-stream-json-exit-error'
+import { claudePluginUiRecovery } from './claude-structured-plugin-ui-recovery'
 
 export async function acquireClaudeSession({
   input,
@@ -67,21 +69,18 @@ export async function acquireClaudeSession({
     void (ended ? ended.then(startup.fail) : endsClaudeStartup(error) && startup.fail(error))
     initProof.reject(error)
   }
+  const delivery = { attempt, initProof, callbacks, sessionId, sessions }
   const translator = createClaudeSessionJournalTranslator(
     input.events,
     String(input.fence),
-    {
-      attempt,
-      initProof,
-      callbacks,
-      sessionId
-    },
+    delivery,
     () => (liveSession && sessions.get(sessionId) === liveSession ? liveSession : null),
     (message) => startup.accept(claudeStartupResultError(message))
   )
   const contextActivity = translator?.contextActivity ?? 0
   const recordTurnEnd = claudeTurnResumePointWriter(sessionId, sessions, deps)
   const observedOptions: sessionState.ClaudeSession['reportedOptions'] = {}
+  const handlePluginUi = claudePluginUiRecovery(delivery, () => liveSession)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -91,8 +90,13 @@ export async function acquireClaudeSession({
       }
       return
     }
+    if (handlePluginUi(message)) {
+      return
+    }
     if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
-      firstRootInit ??= { permissionMode: readClaudeFrameString(message, 'permissionMode') }
+      firstRootInit ??= {
+        permissionMode: readClaudeFrameString(message, 'permissionMode')
+      }
       if (liveSession) {
         liveSession.firstRootInit = firstRootInit
       }
@@ -197,9 +201,8 @@ export async function acquireClaudeSession({
     naming?.launch(launch)
     attempt.account = launch.account
     observedLeafUuid = launch.resumeLeafUuid
-    const open = deps.openConnection ?? openClaudeStreamJsonConnection
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      open(
+      (deps.openConnection ?? openClaudeStreamJsonConnection)(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
@@ -282,19 +285,15 @@ export async function acquireClaudeSession({
       sdkOptions: launch.options
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
-    await withAgentSessionCreatePhase('publish', input.recordPhase, async () => {
-      callbacks.publish(session)
-      attempt.published = true
-      for (const event of attempt.buffered.splice(0)) {
-        event()
-      }
+    await publishClaudeSessionAttempt({
+      sessionId,
+      session,
+      attempt,
+      callbacks,
+      sessions,
+      exits,
+      recordPhase: input.recordPhase
     })
-    // Buffered exit delivery can remove the session during publication.
-    if (sessions.get(sessionId) !== session) {
-      throw (
-        exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
-      )
-    }
     return acquisition
   } catch (error) {
     unbindReadingControl?.()

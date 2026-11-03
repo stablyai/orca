@@ -2458,6 +2458,7 @@
       "backgroundTaskNotStopped": "The background task wasn't stopped.",
       "backgroundTasksNotStopped": "The background tasks weren't stopped.",
       "answerUnconfirmed": "Your answer was recorded but the agent did not confirm it.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "hostFault": "Orca ran into a problem, so this didn't go through.",
       "hostFaultTryAgain": "Orca ran into a problem, so this didn't go through. Try again.",
       "hostStopped": "{{agent}} never finished starting, so Orca stopped it.",

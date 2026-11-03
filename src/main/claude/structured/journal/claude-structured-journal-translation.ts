@@ -169,7 +169,11 @@ export function createClaudeJournalTranslator(
         corrections.abandon()
         backgroundTasks.settleSession()
         // Child exit proves the turn ended; the journal's Stop event determines whether a person ended it.
-        turn.settle({ state: 'interrupted', completedAt: event.observedAt ?? Date.now() })
+        turn.settle({
+          state: 'interrupted',
+          ...(event.failure?.kind === 'pluginInputRequired' ? { outcome: 'failure' as const } : {}),
+          completedAt: event.observedAt ?? Date.now()
+        })
         // Prevent late frames from opening a turn after the child can no longer close it.
         turn.suppressReopen()
         return

@@ -88,6 +88,17 @@ describe('provider frame classification catalog', () => {
     ).toBe('status-chrome')
   })
 
+  it('suppresses every Claude plugin UI subtype, including ones not yet seen', () => {
+    for (const subtype of ['ui_status', 'ui_toast', 'ui_future_surface']) {
+      expect(
+        classifyProviderFrame('claude', `message:system:${subtype}`, { plugin: 'p', text: 'x' })
+      ).toBe('suppressed-benign')
+    }
+    expect(classifyProviderFrame('claude', 'message:system:uinotify', {})).toBe(
+      'timeline-substantive'
+    )
+  })
+
   it('keeps unknown future frames on the substantive bounded fallback path', () => {
     expect(classifyProviderFrame('codex', 'notification:future/event', {})).toBe(
       'timeline-substantive'

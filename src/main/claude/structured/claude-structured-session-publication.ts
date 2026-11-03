@@ -1,3 +1,4 @@
+import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
 import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +12,7 @@ import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type {
   ClaudeSession,
+  ClaudeSessionExit,
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks,
   ClaudeStructuredSessionEvent,
@@ -184,4 +186,36 @@ export function reportClaudeOptions(
         })
       )
   ).catch(() => {})
+}
+
+export async function publishClaudeSessionAttempt({
+  sessionId,
+  session,
+  attempt,
+  callbacks,
+  sessions,
+  exits,
+  recordPhase
+}: {
+  sessionId: string
+  session: ClaudeSession
+  attempt: ClaudeAcquisitionAttempt
+  callbacks: ClaudeAcquireCallbacks
+  sessions: ReadonlyMap<string, ClaudeSession>
+  exits: ReadonlyMap<string, ClaudeSessionExit>
+  recordPhase: StructuredAgentSessionAcquireInput['recordPhase']
+}): Promise<void> {
+  await withAgentSessionCreatePhase('publish', recordPhase, async () => {
+    callbacks.publish(session)
+    attempt.published = true
+    for (const event of attempt.buffered.splice(0)) {
+      event()
+    }
+  })
+  // Buffered exit delivery can remove the session during publication.
+  if (sessions.get(sessionId) !== session) {
+    throw (
+      exits.get(sessionId)?.error ?? new Error('claude session ended before acquisition returned')
+    )
+  }
 }

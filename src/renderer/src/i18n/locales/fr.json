@@ -19153,6 +19153,7 @@
         "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
         "argumentsPositionalPrompt": "Les arguments enregistrés contiennent un message.",
         "argumentsUnsupportedOption": "Les arguments enregistrés contiennent une option non prise en charge ({{option}}).",
+        "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
         "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
         "hostFaultTryAgain": "Orca a rencontré un problème, l'opération n'a donc pas abouti. Réessayez.",
         "hostStopped": "{{agent}} n'a jamais fini de démarrer, Orca l'a donc arrêté.",

@@ -62,3 +62,18 @@ describe('the words written beside a failure fact', () => {
     expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
   })
 })
+
+it('names the terminal-input plugin literally and supplies both recovery paths', () => {
+  const plugin = 'plugin-{{agent}}-$&'
+  const fact = {
+    kind: 'pluginInputRequired',
+    detail: { text: plugin, audience: 'person' }
+  } as const
+  expect(agentSessionFailureSentence(fact, 'row', { agentName: 'Claude' })).toBe(
+    'Claude stopped because the "plugin-{{agent}}-$&" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a Claude terminal.'
+  )
+  expect(classifyDispatchRejection({ reason: 'not delivered', rejection: fact })).toMatchObject({
+    category: 'undelivered',
+    verdict: 'failure'
+  })
+})

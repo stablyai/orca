@@ -207,6 +207,11 @@ const FAILURE_SENTENCES = {
       fact.detail,
       agent(say, context)
     ),
+  pluginInputRequired: (context, fact, _surface, say) =>
+    say('pluginInputRequired', {
+      ...agent(say, context),
+      plugin: fact.detail?.text ?? 'unnamed'
+    }),
   attachmentInvalid: (context, fact, _surface, say) =>
     fact.attachment
       ? attachmentProblemSentence(say, context, fact.attachment)
