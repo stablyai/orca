@@ -45,6 +45,7 @@ vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
 
+vi.mock('./kiro-usage-fetcher', () => ({ fetchKiroRateLimits: vi.fn() }))
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 
 vi.mock('./antigravity-usage-fetcher', () => ({

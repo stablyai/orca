@@ -181,6 +181,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_inlineAgentsDefaultedForExperiment',
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',
+  '_kiroStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',
   '_sortBySmartMigrated',

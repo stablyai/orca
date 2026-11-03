@@ -140,6 +140,16 @@ vi.mock('./zcode-usage-fetcher', () => ({
     status: 'unavailable'
   })
 }))
+vi.mock('./kiro-usage-fetcher', () => ({
+  fetchKiroRateLimits: async () => ({
+    provider: 'kiro',
+    session: null,
+    weekly: null,
+    updatedAt: fixture.now,
+    error: null,
+    status: 'unavailable'
+  })
+}))
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: async () => ({
     provider: 'antigravity',

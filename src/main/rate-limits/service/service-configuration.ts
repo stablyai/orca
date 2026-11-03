@@ -12,6 +12,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type KiroUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
@@ -65,6 +66,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
     this.antigravityUsageEnabledResolver = resolver
+  }
+
+  setKiroUsageEnabledResolver(resolver: KiroUsageEnabledResolver): void {
+    this.kiroUsageEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

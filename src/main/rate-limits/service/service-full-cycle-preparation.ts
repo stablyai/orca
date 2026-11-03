@@ -12,7 +12,7 @@ import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/zcode-plan-sites'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
-import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
+import { RateLimitServiceFetchPolicy, type KiroUsageFetch } from './service-fetch-policy'
 import type { SettledProviderResult } from './service-sibling-provider-result'
 import type {
   ClaudeRuntimeAuthPreparation,
@@ -53,6 +53,7 @@ export type FetchAllCyclePrepared = {
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
+  kiroFetch: KiroUsageFetch
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -145,6 +146,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
         }
       : null
+    const kiroFetch = this.startKiroUsageFetch(signal, previousState.kiro)
 
     this.updateState({
       ...previousState,
@@ -168,7 +170,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      kiro: kiroFetch.pending
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
@@ -311,7 +314,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
-      antigravityResultPromise
+      antigravityResultPromise,
+      kiroFetch
     }
   }
 }
