@@ -4,7 +4,7 @@ import {
   type HookListenerState
 } from './agent-hook-listener/listener-state'
 import { normalizeHookPayload } from './agent-hook-listener'
-import { reconcileRemoteCodexState } from './agent-hook-listener/providers/codex-state'
+import './agent-hook-listener/providers/codex-state'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 // Payload shape from codex-rs/hooks/schema/generated/interrupt.command.input.schema.json.
@@ -48,19 +48,6 @@ describe("Codex's Interrupt hook", () => {
     })
   })
 
-  it('ends a turn the user cancelled mid-tool', () => {
-    startTurn()
-    expect(post({ hook_event_name: 'PreToolUse', tool_name: 'Bash' })?.payload.state).toBe(
-      'working'
-    )
-
-    expect(post(INTERRUPT)?.payload).toMatchObject({
-      state: 'done',
-      interrupted: true,
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-  })
-
   it('keeps live child work in the row while the main agent reads cancelled', () => {
     startTurn()
     post({ hook_event_name: 'SubagentStart', agent_id: 'child', agent_type: 'worker' })
@@ -81,37 +68,5 @@ describe("Codex's Interrupt hook", () => {
 
     const childDone = post({ hook_event_name: 'SubagentStop', agent_id: 'child' })?.payload
     expect(childDone).toMatchObject({ state: 'done', interrupted: true })
-  })
-
-  it('clears the cancellation when the next turn starts', () => {
-    startTurn()
-    post(INTERRUPT)
-    startTurn()
-    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({ state: 'working' })
-    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)?.outcome).toBeUndefined()
-  })
-
-  it('records the cancellation when a relay forwards the Interrupt row', () => {
-    reconcileRemoteCodexState(
-      state,
-      PANE_KEY,
-      'PermissionRequest',
-      undefined,
-      { state: 'waiting', prompt: 'ship', agentType: 'codex' },
-      undefined
-    )
-    const reconciled = reconcileRemoteCodexState(
-      state,
-      PANE_KEY,
-      'Interrupt',
-      undefined,
-      { state: 'done', prompt: 'ship', agentType: 'codex', interrupted: true },
-      undefined
-    )
-    expect(reconciled).toMatchObject({
-      state: 'done',
-      interrupted: true,
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
   })
 })

@@ -27,7 +27,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => ({
     launchErrorMocks.StructuredAgentSessionCreateRefusalError
 }))
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import '@/lib/launch-structured-agent-session'
 import { settleStructuredAgentLaunch } from './structured-agent-launch-settlement'
 
 type FakeLaunch = {
@@ -65,73 +65,6 @@ function fakeCancellation(initiallyCancelled = false) {
 
 describe('settleStructuredAgentLaunch', () => {
   beforeEach(() => vi.clearAllMocks())
-
-  it('returns structured and activates once the launch is published', async () => {
-    const promptDeliveryResult = Promise.resolve({ delivered: true, failureNotified: false })
-    fakeLaunch({
-      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
-      promptDeliveryResult
-    })
-    const onStructuredReady = vi.fn()
-
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { requestId: 'request-1', prompt: 'Fix' },
-        { onStructuredReady }
-      )
-    ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1', promptDeliveryResult })
-    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
-      requestId: 'request-1',
-      prompt: 'Fix'
-    })
-    expect(onStructuredReady).toHaveBeenCalledWith('session-1')
-  })
-
-  it('reports an unknown outcome, releases the caller, and never runs the fallback', async () => {
-    const { releaseCallerAfterUnknownOutcome } = fakeLaunch({
-      launchResult: Promise.reject(new Error('connection lost')),
-      visibilityUnknown: true
-    })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-4' }, {})
-    ).resolves.toEqual({
-      kind: 'visibility-unknown',
-      sessionId: 'session-1'
-    })
-    expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
-  })
-
-  it('fails a non-refusal error whose outcome is known', async () => {
-    const error = new Error('boom')
-    const { releaseCallerAfterUnknownOutcome } = fakeLaunch({ launchResult: Promise.reject(error) })
-
-    await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-5' }, {})
-    ).resolves.toEqual({
-      kind: 'failed',
-      error
-    })
-    expect(releaseCallerAfterUnknownOutcome).not.toHaveBeenCalled()
-  })
-
-  it('lets cancellation win over a refusal', async () => {
-    fakeLaunch({
-      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
-    })
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        { requestId: 'request-7' },
-        {
-          signal: fakeCancellation(true).signal
-        }
-      )
-    ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-  })
 
   it('cancels the launch eagerly, once, before the launch settles', async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void

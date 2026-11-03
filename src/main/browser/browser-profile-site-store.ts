@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../filesystem/durable-file-write'
 
 export type BrowserProfileSiteStore<Entry> = {
   configure: (profileDirectory: string) => void

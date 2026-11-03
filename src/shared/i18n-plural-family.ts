@@ -1,5 +1,5 @@
 import type { TOptions } from 'i18next'
-import { isCatalogObject } from './plugins/artifacts/plugin-language-pack-artifact'
+import { isCatalogObject } from './i18n-catalog-object'
 
 const PLURAL_SUFFIX_RE = /_(zero|one|two|few|many|other)$/
 

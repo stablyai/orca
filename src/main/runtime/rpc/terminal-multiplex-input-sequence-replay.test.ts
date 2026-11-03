@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../../git/worktree-listing'
 import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
@@ -17,6 +18,14 @@ import {
   type TerminalInputAckKind
 } from '../../../shared/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
+
+vi.mock('../../git/worktree-listing', async (importOriginal) => {
+  const facade = await vi.importMock<typeof WorktreeListingModule>('../../git/worktree')
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
 
 vi.mock('../../git/worktree', () => ({
   listWorktreesStrict: async () => [

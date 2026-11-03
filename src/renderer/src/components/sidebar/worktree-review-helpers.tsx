@@ -39,7 +39,7 @@ export function getReviewChecksTone(status: WorktreeCardPrDisplay['status']): st
   return null
 }
 
-function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+function getCheckTone(review: Pick<WorktreeCardPrDisplay, 'state' | 'status'>): string | null {
   if ((review.state && review.state !== 'open') || (!review.state && review.status === 'success')) {
     return null
   }
@@ -68,7 +68,8 @@ export function ReviewIcon({
   variant = 'provider',
   showChecks = true
 }: {
-  review: WorktreeCardPrDisplay
+  review: Pick<WorktreeCardPrDisplay, 'state' | 'status'> &
+    Partial<Pick<WorktreeCardPrDisplay, 'provider'>>
   className?: string
   variant?: 'provider' | 'generic'
   showChecks?: boolean

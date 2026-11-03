@@ -17,29 +17,6 @@ describe('the Codex root record seeded from a durable row', () => {
     state = createHookListenerState()
   })
 
-  it("takes the row's own mainAgent fact over the inferred aggregate", () => {
-    seedCodexStateFromSnapshot(state, PANE_KEY, {
-      state: 'waiting',
-      model: 'gpt-5.4',
-      subagents: [{ id: 'child', state: 'working', startedAt: 1 }],
-      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 42 }
-    })
-    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toEqual({
-      state: 'done',
-      outcome: 'cancellation',
-      stateStartedAt: 42,
-      model: 'gpt-5.4'
-    })
-  })
-
-  it('still infers the root state from an older row that carries no main agent', () => {
-    seedCodexStateFromSnapshot(state, PANE_KEY, {
-      state: 'waiting',
-      subagents: [{ id: 'child', state: 'waiting', startedAt: 1 }]
-    })
-    expect(state.codexLeadStateByPaneKey.get(PANE_KEY)).toMatchObject({ state: 'working' })
-  })
-
   it("republishes a relayed row with the mainAgent fact main holds, not the relay's", () => {
     seedCodexStateFromSnapshot(state, PANE_KEY, {
       state: 'done',

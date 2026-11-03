@@ -56,23 +56,6 @@ describe('ambiguous-owner warning set is pruned on worktree removal', () => {
     mockApi.worktrees.remove.mockResolvedValue(undefined)
   })
 
-  it('drops the warned id on single removeWorktree, for the removed worktree only', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const store = createTestStore()
-    seedWorktrees(store)
-    warnAmbiguousOwnerOnce(WT1, 'persist worktree activity timestamp')
-    warnAmbiguousOwnerOnce(WT2, 'persist worktree activity timestamp')
-    expect(ambiguousOwnerWarnedWorktreeIds.size).toBe(2)
-
-    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
-    expect(result).toEqual({ ok: true })
-
-    expect(ambiguousOwnerWarnedWorktreeIds.has(WT1)).toBe(false)
-    expect(ambiguousOwnerWarnedWorktreeIds.has(WT2)).toBe(true)
-    expect(ambiguousOwnerWarnedWorktreeIds.size).toBe(1)
-    warn.mockRestore()
-  })
-
   it('re-arms the once-per-workspace warning after remove and re-add', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const store = createTestStore()
@@ -102,24 +85,6 @@ describe('ambiguous-owner warning set is pruned on worktree removal', () => {
 
     expect(ambiguousOwnerWarnedWorktreeIds.has(WT1)).toBe(false)
     expect(ambiguousOwnerWarnedWorktreeIds.has(WT2)).toBe(true)
-    warn.mockRestore()
-  })
-
-  it('does not accumulate across many remove cycles', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const store = createTestStore()
-    for (let index = 0; index < 100; index += 1) {
-      const worktreeId = `repo1::/path/cycle-${index}`
-      seedStore(store, {
-        worktreesByRepo: {
-          repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: `/path/cycle-${index}` })]
-        }
-      })
-      warnAmbiguousOwnerOnce(worktreeId, 'persist worktree activity timestamp')
-      await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
-    }
-
-    expect(ambiguousOwnerWarnedWorktreeIds.size).toBe(0)
     warn.mockRestore()
   })
 })

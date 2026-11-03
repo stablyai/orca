@@ -33,6 +33,8 @@ export type PrTabConfirm = 'close' | 'reopen' | 'unlink'
 type Input = {
   state: PrSidebarState
   refetch: (options?: PrSidebarLoadOptions) => Promise<PrSidebarLoadResult> | void
+  /** A write's follow-up read: never skipped behind another read, and a failed one keeps the shown PR. */
+  rereadAfterWrite: () => Promise<void>
   /** What is on screen, so the PR keeps itself fresh only while someone is looking. */
   live?: PrTabLive
   client: RpcClient | null
@@ -68,15 +70,20 @@ export type MobilePrCreated = {
 
 // One owner for the PR tab's mutations, sheets and openers, so the hub bar and the tab body drive the same state.
 export function useMobilePrTab(input: Input) {
-  const { state, refetch, client, connState, worktreeId, gitBranch, onOpenScreen } = input
+  const {
+    state,
+    refetch,
+    rereadAfterWrite,
+    client,
+    connState,
+    worktreeId,
+    gitBranch,
+    onOpenScreen
+  } = input
   const launchWorkspaceLabel = input.workspaceLabel || gitBranch
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
-  // Mutations refetch and wait; they do not care whether the read landed.
-  const refetchAfterMutation = useCallback(async (): Promise<void> => {
-    await refetch()
-  }, [refetch])
   const ownActions = useMobilePrActions({
     client,
     connState,
@@ -84,7 +91,7 @@ export function useMobilePrTab(input: Input) {
     prNumber,
     headSha: input.headSha,
     prRepo,
-    refetch: refetchAfterMutation
+    refetch: rereadAfterWrite
   })
   const commentActions = useMobilePrCommentActions({
     client,
@@ -92,7 +99,7 @@ export function useMobilePrTab(input: Input) {
     worktreeId,
     prNumber,
     prRepo,
-    refetch: refetchAfterMutation
+    refetch: rereadAfterWrite
   })
   const textAction = useMobilePrTextAction({
     client,
@@ -100,7 +107,7 @@ export function useMobilePrTab(input: Input) {
     worktreeId,
     prNumber,
     prRepo,
-    refetch: refetchAfterMutation
+    refetch: rereadAfterWrite
   })
   const clearTextError = textAction.clearError
   const { polling } = useMobilePrPolling({

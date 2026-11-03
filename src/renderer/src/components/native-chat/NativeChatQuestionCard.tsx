@@ -4,21 +4,21 @@ import { useRef, useState } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
 import type { NativeChatQuestionCardProps } from './native-chat-question-card-props'
-import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../shared/native-chat-ask-card-rules'
+} from '../../../../shared/native-chat/input/native-chat-ask-card-rules'
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1

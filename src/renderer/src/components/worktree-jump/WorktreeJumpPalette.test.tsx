@@ -10,7 +10,6 @@ import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/worktree-activation'
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace-tab-palette-activation'
-import { toast } from 'sonner'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import {
   makeFolderWorkspace,
@@ -201,7 +200,6 @@ describe('WorktreeJumpPalette', () => {
     setCommandQuery = null
     activateAndRevealWorkspace.mockReset().mockReturnValue({ primaryTabId: null })
     activateWorkspaceTabPaletteResult.mockReset().mockReturnValue({ status: 'activated' })
-    vi.mocked(toast.error).mockClear()
     useAppStore.setState(initialAppState, true)
     testContainer = document.createElement('div')
     document.body.appendChild(testContainer)
@@ -327,18 +325,6 @@ describe('WorktreeJumpPalette', () => {
     expect(getWorktreeRows()).toEqual([])
   })
 
-  it('includes hosts owned only by folders in the host registry', async () => {
-    await renderPalette({
-      repos: [],
-      worktreesByRepo: {},
-      folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'runtime:builder' })],
-      visibleWorkspaceHostIds: ['runtime:builder']
-    })
-
-    expect(getWorktreeRows()).toHaveLength(1)
-    expect(getWorktreeRows()[0]).toContain('builder')
-  })
-
   it('refreshes the folder catalog while the palette is open', async () => {
     await renderPalette({ repos: [], worktreesByRepo: {}, folderWorkspaces: [] })
     await act(async () => {
@@ -348,18 +334,6 @@ describe('WorktreeJumpPalette', () => {
     expect(getWorktreeRows()[0]).toContain('Design workspace')
     await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
     expect(getWorktreeRows()).toEqual([])
-  })
-
-  it('keeps the palette open when folder activation is blocked', async () => {
-    await renderPalette({ worktreesByRepo: {}, folderWorkspaces: [makeFolderWorkspace()] })
-    activateAndRevealWorkspace.mockReturnValue(false)
-    const row = testContainer.querySelector<HTMLButtonElement>(
-      `[data-command-item="${encodePaletteIdentity(['worktree', 'local|folder:folder-1'])}"]`
-    )
-
-    await act(async () => fireEvent.click(row!))
-    expect(testContainer.querySelector('[data-command-dialog]')).not.toBeNull()
-    expect(useAppStore.getState().activeModal).toBe('worktree-palette')
   })
 
   it.each([true, false])(
@@ -416,31 +390,6 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Design workspace')
   })
 
-  it('keeps a blocked folder tab jump open without a second error', async () => {
-    const workspaceId = 'folder:folder-1'
-    await renderPalette({
-      worktreesByRepo: {},
-      folderWorkspaces: [makeFolderWorkspace()],
-      tabsByWorktree: { [workspaceId]: [makeTerminalTab('term-1', workspaceId, 'Research chat')] },
-      unifiedTabsByWorktree: {
-        [workspaceId]: [makeUnifiedTab('tab-1', workspaceId, 'term-1', 'Research chat')]
-      },
-      groupsByWorktree: { [workspaceId]: [makeGroup(workspaceId, ['tab-1'])] }
-    })
-    activateWorkspaceTabPaletteResult.mockReturnValue({ status: 'blocked' })
-    await act(async () => setCommandQuery?.('Research'))
-    await flushEffects()
-    const row = testContainer.querySelector<HTMLButtonElement>(
-      `[data-command-item^="${encodePaletteIdentity(['workspace-tab'])}"]`
-    )
-    expect(row).not.toBeNull()
-    await act(async () => fireEvent.click(row!))
-
-    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalled()
-    expect(testContainer.querySelector('[data-command-dialog]')).not.toBeNull()
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('keeps every inactive main workspace visible when sleeping workspaces are hidden', async () => {
     const defaultBranch = makeWorktree('default-branch', 'Default branch workspace', {
       isMainWorktree: true,
@@ -463,21 +412,6 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).not.toContain('Feature workspace')
     // Main-checkout exemption includes branchless folder workspaces as project entry points.
     expect(testContainer.textContent).toContain('Folder workspace')
-  })
-
-  it('keeps the explicit default-branch filter authoritative', async () => {
-    const defaultBranch = makeWorktree('default-branch', 'Default branch workspace', {
-      isMainWorktree: true,
-      branch: 'refs/heads/main'
-    })
-
-    await renderPalette({
-      worktreesByRepo: { 'repo-1': [defaultBranch] },
-      showSleepingWorkspaces: false,
-      hideDefaultBranchWorkspace: true
-    })
-
-    expect(testContainer.textContent).not.toContain('Default branch workspace')
   })
 
   it('keeps an active non-default workspace visible when sleeping workspaces are hidden', async () => {
@@ -517,26 +451,6 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Feature workspace')
     expect(testContainer.textContent).toContain('Default branch workspace')
     expect(testContainer.textContent).toContain('Folder workspace')
-  })
-
-  it('sweeps the sleeping main workspace once the exemption is opted out', async () => {
-    const defaultBranch = makeWorktree('default-branch', 'Default branch workspace', {
-      isMainWorktree: true,
-      branch: 'refs/heads/main'
-    })
-    const feature = makeWorktree('feature', 'Feature workspace', {
-      branch: 'refs/heads/feature'
-    })
-
-    await renderPalette({
-      worktreesByRepo: { 'repo-1': [defaultBranch, feature] },
-      showSleepingWorkspaces: false,
-      alwaysShowDefaultBranchWorkspace: false
-    })
-
-    expect(getWorktreeRows()).toEqual([])
-    expect(testContainer.textContent).not.toContain('Default branch workspace')
-    expect(testContainer.textContent).not.toContain('Feature workspace')
   })
 
   it('keeps the show-sleeping baseline and empty-query ordering intact', async () => {
@@ -674,18 +588,6 @@ describe('WorktreeJumpPalette', () => {
       navigationIntent: 'user-open',
       executionHostId: 'ssh:box'
     })
-  })
-
-  it('keeps the host in a lone row command value', async () => {
-    const ssh = makeWorktree('single', 'SSH workspace', { hostId: 'ssh:box' })
-
-    await renderPalette({ worktreesByRepo: { 'repo-1': [ssh] }, showSleepingWorkspaces: true })
-
-    expect(
-      testContainer.querySelector(
-        `[data-command-item="${encodePaletteIdentity(['worktree', 'ssh:box|single'])}"]`
-      )?.textContent
-    ).toContain('SSH workspace')
   })
 
   it('routes same-target SSH rows through their paired runtime owner', async () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { TranscriptMessageChannel } from '../ai-vault/session-transcript-channel'
+import { TranscriptMessageChannel } from '../ai-vault/transcripts/session-transcript-channel'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import {

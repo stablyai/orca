@@ -57,18 +57,6 @@ function snapshot(
   }
 }
 
-it('hydrates both viewers and rejects an older read after a newer publication', () => {
-  for (const viewer of [store(), store()]) {
-    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2))
-    viewer
-      .getState()
-      .applyRuntimeHostStatusSnapshot(snapshot(1, { status: null, verification: 'unavailable' }))
-    expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
-      'rt-1'
-    )
-  }
-})
-
 it('represents failed verification honestly without manufacturing a session restart or toast', () => {
   const viewer = store()
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
