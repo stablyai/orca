@@ -6,7 +6,6 @@ import {
   type WebPairingOffer
 } from './web-pairing'
 import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
-import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 
 describe('web pairing input', () => {
   const offer: WebPairingOffer = {
@@ -58,7 +57,7 @@ describe('web pairing input', () => {
       id: 'web-1',
       name: 'Home',
       endpoints: [{ endpoint: offer.endpoint, publicKeyB64: offer.publicKeyB64 }]
-    } as StoredWebRuntimeEnvironment
+    }
     const samePairing = encodeOffer({ scope: 'runtime', deviceToken: 'fresh-token' })
     const otherPairing = encodeOffer({ scope: 'runtime', endpoint: 'wss://attacker.example' })
 

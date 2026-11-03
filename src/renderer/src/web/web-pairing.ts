@@ -8,6 +8,13 @@ import type { DeviceScope } from '../../../shared/runtime-types'
 import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-status/runtime-host-pairing-identity'
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 
+type SavedServerIdentity = Pick<StoredWebRuntimeEnvironment, 'hostDescriptor'> & {
+  endpoints: readonly Pick<
+    StoredWebRuntimeEnvironment['endpoints'][number],
+    'endpoint' | 'publicKeyB64'
+  >[]
+}
+
 const PAIRING_OFFER_VERSION = 2
 
 export type WebPairingOffer = {
@@ -79,7 +86,7 @@ export function readPairingInputFromLocation(
 
 export function decideWebPairingStartup(args: {
   initialPairingInput: string | null
-  storedEnvironment: StoredWebRuntimeEnvironment | null
+  storedEnvironment: SavedServerIdentity | null
 }): WebPairingStartupDecision {
   const { initialPairingInput, storedEnvironment } = args
   const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
@@ -103,10 +110,7 @@ export function decideWebPairingStartup(args: {
     : { kind: 'show-connect', initialPairingInput: null }
 }
 
-function isSameSavedServer(
-  environment: StoredWebRuntimeEnvironment,
-  offer: WebPairingOffer
-): boolean {
+function isSameSavedServer(environment: SavedServerIdentity, offer: WebPairingOffer): boolean {
   return (
     environment.endpoints.some((entry) => entry.endpoint === offer.endpoint) &&
     classifyRuntimeHostRePair(
