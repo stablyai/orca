@@ -36,12 +36,12 @@ describe('card template compiler', () => {
         props: { gap: 'sm', align: '=vars.wide ? "center" : "start"' },
         children: [
           { el: 'Echo', props: { text: '=ws.name' } },
-          { el: 'Echo', when: 'ws.hidden', props: { text: 'never' } }
+          { el: 'Echo', when: 'ws.isPinned', props: { text: 'never' } }
         ]
       },
       { vars: { wide: 'len(ws.name) > 3' } }
     )
-    expect(draw(t, { ws: { name: 'card plugins', hidden: false } })).toBe(
+    expect(draw(t, { ws: { name: 'card plugins', isPinned: false } })).toBe(
       '<div class="flex min-w-0 gap-1 items-center"><i>card plugins</i></div>'
     )
     expect(draw(t, { ws: { name: 'abc' } })).toContain('items-start')
@@ -75,12 +75,12 @@ describe('card template compiler', () => {
   })
 
   it('passes frame attributes through a def used as the root, and honours its when', () => {
-    const t = template({ el: 'Body', when: 'ws.show' }, { defs: { Body: { el: 'Row' } } })
+    const t = template({ el: 'Body', when: 'ws.isPinned' }, { defs: { Body: { el: 'Row' } } })
     const compiled = compileCardTemplate(t, registry)
     const attrs = (): Record<string, unknown> => ({ style: { marginLeft: '-4px' } })
-    const shown = compiled.render({ ws: { show: true } }, '', attrs).content
+    const shown = compiled.render({ ws: { isPinned: true } }, '', attrs).content
     expect(renderToStaticMarkup(<>{shown}</>)).toContain('margin-left:-4px')
-    expect(compiled.render({ ws: { show: false } }, '', attrs).content).toBeNull()
+    expect(compiled.render({ ws: { isPinned: false } }, '', attrs).content).toBeNull()
   })
 
   it('bounds the tree defs expand to', () => {
@@ -151,5 +151,60 @@ describe('card template compiler', () => {
     for (const bad of cases) {
       expect(() => compileCardTemplate(bad, registry)).toThrow(CardTemplateCompileError)
     }
+  })
+})
+
+describe('card template compiler: facts, lists and strings', () => {
+  it('refuses a fact the model does not have, instead of drawing nothing', () => {
+    expect(() =>
+      compileCardTemplate(template({ el: 'Echo', when: 'ws.brnach' }), registry)
+    ).toThrow(/unknown fact ws\.brnach/)
+  })
+
+  it('draws Each once per agent, reading item.*', () => {
+    const t = template({
+      el: 'Row',
+      children: [
+        {
+          el: 'Each',
+          props: { items: '=activity.agents', limit: 2 },
+          children: [{ el: 'Echo', props: { text: "=item.title + ':' + item.state" } }]
+        }
+      ]
+    })
+    const facts = {
+      activity: {
+        agents: [
+          { title: 'Claude', state: 'working' },
+          { title: 'Codex', state: 'blocked' },
+          { title: 'Third', state: 'done' }
+        ]
+      }
+    }
+    expect(draw(t, facts)).toBe(
+      '<div class="flex min-w-0"><i>Claude:working</i><i>Codex:blocked</i></div>'
+    )
+    expect(() =>
+      compileCardTemplate(
+        template({ el: 'Each', props: { items: '=ws.name' }, children: [] }),
+        registry
+      )
+    ).toThrow(/Each needs items naming a list fact/)
+    expect(() =>
+      compileCardTemplate(template({ el: 'Echo', props: { text: '=item.title' } }), registry)
+    ).toThrow(/unknown fact item\.title/)
+  })
+
+  it("reads the template's own strings in the person's language, falling back to en", () => {
+    const t = template(
+      { el: 'Echo', props: { text: "=t('none')" } },
+      { strings: { en: { none: 'No pull request' }, fr: { none: 'Aucune pull request' } } }
+    )
+    const drawIn = (locale: string) => {
+      const { content } = compileCardTemplate(t, registry, { locale }).render({}, '')
+      return renderToStaticMarkup(<>{content}</>)
+    }
+    expect(drawIn('fr-FR')).toBe('<i>Aucune pull request</i>')
+    expect(drawIn('de')).toBe('<i>No pull request</i>')
   })
 })

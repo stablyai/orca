@@ -3,27 +3,70 @@
   "facts": 1,
   "vars": {
     "reviewTone": "review.status == 'failure' ? 'danger' : review.state == 'merged' ? 'accent' : 'neutral'",
-    "reviewLabel": "review.state == 'merged' ? 'merged' : '#' + review.number"
+    "reviewLabel": "review.state == 'merged' ? t('merged') : '#' + review.number"
   },
-  "frame": { "singleLine": true, "statusLane": false },
+  "frame": {
+    "singleLine": true,
+    "statusLane": false
+  },
   "root": {
     "el": "Row",
-    "props": { "fill": true, "gap": "xs", "align": "center", "marker": "parent-content" },
+    "props": {
+      "fill": true,
+      "gap": "xs",
+      "align": "center",
+      "marker": "parent-content"
+    },
     "children": [
-      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "StatusLane",
+        "props": {
+          "unreadAction": true
+        }
+      },
       {
         "el": "Row",
-        "props": { "grow": true, "align": "center", "gap": "md", "inset": "end" },
+        "props": {
+          "grow": true,
+          "align": "center",
+          "gap": "md",
+          "inset": "end"
+        },
         "children": [
-          { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
-          { "el": "Title" },
+          {
+            "el": "SshControl",
+            "when": "host.kind == 'ssh'",
+            "props": {
+              "iconOnly": true
+            }
+          },
+          {
+            "el": "Title"
+          },
           {
             "el": "Badge",
             "when": "review != null",
-            "props": { "text": "=vars.reviewLabel", "tone": "=vars.reviewTone" }
+            "props": {
+              "text": "=vars.reviewLabel",
+              "tone": "=vars.reviewTone"
+            }
           }
         ]
       }
     ]
+  },
+  "strings": {
+    "en": {
+      "merged": "merged"
+    },
+    "ja": {
+      "merged": "\u30de\u30fc\u30b8\u6e08\u307f"
+    },
+    "es": {
+      "merged": "fusionada"
+    },
+    "zh": {
+      "merged": "\u5df2\u5408\u5e76"
+    }
   }
 }

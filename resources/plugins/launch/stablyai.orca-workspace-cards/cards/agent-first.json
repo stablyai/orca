@@ -6,35 +6,135 @@
   },
   "root": {
     "el": "Row",
-    "props": { "fill": true, "gap": "xs", "align": "start", "marker": "parent-content" },
+    "props": {
+      "fill": true,
+      "gap": "xs",
+      "align": "start",
+      "marker": "parent-content"
+    },
     "children": [
-      { "el": "StatusLane", "props": { "unreadAction": true } },
+      {
+        "el": "StatusLane",
+        "props": {
+          "unreadAction": true
+        }
+      },
       {
         "el": "Stack",
-        "props": { "grow": true, "gap": "sm", "overflow": "visible" },
+        "props": {
+          "grow": true,
+          "gap": "sm",
+          "overflow": "visible"
+        },
         "children": [
           {
             "el": "Row",
-            "props": { "align": "center", "gap": "md", "inset": "end" },
+            "props": {
+              "align": "center",
+              "gap": "md",
+              "inset": "end"
+            },
             "children": [
-              { "el": "SshControl", "when": "host.kind == 'ssh'", "props": { "iconOnly": true } },
-              { "el": "Title" },
-              { "el": "Badge", "when": "review != null", "props": { "text": "='#' + review.number", "tone": "=vars.checkTone" } }
+              {
+                "el": "SshControl",
+                "when": "host.kind == 'ssh'",
+                "props": {
+                  "iconOnly": true
+                }
+              },
+              {
+                "el": "Title"
+              },
+              {
+                "el": "Badge",
+                "when": "review != null",
+                "props": {
+                  "text": "='#' + review.number",
+                  "tone": "=vars.checkTone"
+                }
+              }
             ]
           },
-          { "el": "Agents" },
+          {
+            "el": "Each",
+            "props": {
+              "items": "=activity.agents",
+              "limit": 4
+            },
+            "children": [
+              {
+                "el": "Row",
+                "props": {
+                  "gap": "md",
+                  "align": "center",
+                  "inset": "end"
+                },
+                "children": [
+                  {
+                    "el": "Icon",
+                    "props": {
+                      "name": "=item.state == 'blocked' ? 'bell' : item.state == 'working' ? 'activity' : 'check'",
+                      "tone": "=item.state == 'blocked' ? 'warning' : item.state == 'working' ? 'accent' : 'neutral'"
+                    }
+                  },
+                  {
+                    "el": "Text",
+                    "props": {
+                      "text": "=item.title",
+                      "size": "meta",
+                      "weight": "medium"
+                    }
+                  },
+                  {
+                    "el": "Text",
+                    "props": {
+                      "text": "=item.message",
+                      "size": "meta",
+                      "muted": true,
+                      "truncate": true
+                    }
+                  },
+                  {
+                    "el": "RelativeTime",
+                    "props": {
+                      "at": "=item.since",
+                      "format": "short"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
           {
             "el": "Row",
             "when": "cardOptions.showBranch && ws.kind == 'git'",
-            "props": { "align": "center", "gap": "md", "overflow": "clip" },
+            "props": {
+              "align": "center",
+              "gap": "md",
+              "overflow": "clip"
+            },
             "children": [
-              { "el": "Branch" },
-              { "el": "ConflictBadge", "when": "git.conflictOperation != null" }
+              {
+                "el": "Branch"
+              },
+              {
+                "el": "ConflictBadge",
+                "when": "git.conflictOperation != null"
+              }
             ]
           },
-          { "el": "FolderPath", "when": "ws.kind == 'folder'" },
-          { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
-          { "el": "ChildToggle", "when": "lineage.toggleable" }
+          {
+            "el": "FolderPath",
+            "when": "ws.kind == 'folder'"
+          },
+          {
+            "el": "RemoteBranchConflict",
+            "when": "git.remoteBranchConflict != null"
+          },
+          {
+            "el": "ChildToggle",
+            "when": "lineage.toggleable"
+          }
         ]
       }
     ]

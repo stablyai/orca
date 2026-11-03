@@ -10,6 +10,8 @@ export type CardPreviewAgent = {
   state: 'working' | 'blocked' | 'done' | 'idle'
   message: string
   ago: string
+  /** How long ago it entered this state, in milliseconds. */
+  agoMs: number
 }
 
 /** A made-up workspace in one state. Previews draw it from these values alone and never read or
@@ -29,8 +31,13 @@ export type CardPreviewScenario = {
 }
 
 type Overrides = {
-  [K in Exclude<keyof WorkspaceCardFacts, 'cardOptions'>]?: Partial<WorkspaceCardFacts[K]>
-} & { cardOptions?: WorkspaceCardFacts['cardOptions'] }
+  [K in Exclude<keyof WorkspaceCardFacts, 'cardOptions' | 'fields'>]?: Partial<
+    WorkspaceCardFacts[K]
+  >
+} & {
+  cardOptions?: WorkspaceCardFacts['cardOptions']
+  fields?: WorkspaceCardFacts['fields']
+}
 
 /** Fills a scenario's facts from a plain workspace, so each scenario names only what differs. */
 export function previewFacts(overrides: Overrides): WorkspaceCardFacts {
@@ -92,6 +99,13 @@ export function previewFacts(overrides: Overrides): WorkspaceCardFacts {
       agentRows: 'compact'
     },
     env: { projectGroups: false },
+    activity: {
+      status: 'inactive',
+      needsInput: false,
+      counts: { working: 0, blocked: 0, done: 0, idle: 0 },
+      agents: []
+    },
+    fields: {},
     cardOptions: {}
   }
   return {
@@ -108,6 +122,8 @@ export function previewFacts(overrides: Overrides): WorkspaceCardFacts {
     place: { ...base.place, ...overrides.place },
     options: { ...base.options, ...overrides.options },
     env: { ...base.env, ...overrides.env },
+    activity: { ...base.activity, ...overrides.activity },
+    fields: { ...base.fields, ...overrides.fields },
     cardOptions: { ...base.cardOptions, ...overrides.cardOptions }
   }
 }

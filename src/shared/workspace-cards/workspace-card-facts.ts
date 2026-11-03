@@ -21,6 +21,19 @@ export type WorkspaceCardShowOptions = {
   host: boolean
 }
 
+export type WorkspaceCardAgentFacts = {
+  /** The agent's tab title, such as `Claude`. */
+  title: string
+  /** The agent product, such as `claude` or `codex`. */
+  agent: string
+  /** `working`, `blocked`, `done` or `idle`. */
+  state: string
+  /** The agent's latest prompt or message, when it reported one. */
+  message: string
+  /** When the agent entered this state, in epoch milliseconds. */
+  since: number
+}
+
 /** What a card template can read about one workspace. Host-neutral: SSH and server workspaces
  *  report through `host`, and folder workspaces have `kind: 'folder'` with git facts empty. */
 export type WorkspaceCardFacts = {
@@ -98,6 +111,17 @@ export type WorkspaceCardFacts = {
     agentRows: 'full' | 'compact'
   }
   env: { projectGroups: boolean }
+  /** The workspace's agents; read only by cards that use them, so others pay nothing. */
+  activity: {
+    /** Orca's rolled-up status: `working`, `permission` (needs input), `done`, `active` and so on. */
+    status: string
+    needsInput: boolean
+    counts: { working: number; blocked: number; done: number; idle: number }
+    /** At most 20, newest first. */
+    agents: WorkspaceCardAgentFacts[]
+  }
+  /** Values the card's own plugin worker set for this workspace with `cards.setFields`. */
+  fields: Readonly<Record<string, string | number | boolean | null>>
   /** The person's values for the card's own declared options, defaults filled in. */
   cardOptions: Readonly<Record<string, string | number | boolean>>
 }

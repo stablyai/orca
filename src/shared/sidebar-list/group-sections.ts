@@ -184,6 +184,16 @@ export function appendOrderedGroups(
             })()
 
     result.push(header)
+    if (isCollapsed && isListSectionKey(key)) {
+      // A plugin's section may be collapsed, but workspaces that need the person stay in view.
+      appendWorktreeRows(result, repoOf, occurrencePlan, {
+        collapsedGroups,
+        groupDepth: projectGroupDepth,
+        sectionKey: key,
+        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+        onlyRows: (worktree) => worktree.smartTier === 'needs-you'
+      })
+    }
     if (!isCollapsed) {
       if (groupBy === 'repo' && !isListSectionKey(key)) {
         const repoIds =

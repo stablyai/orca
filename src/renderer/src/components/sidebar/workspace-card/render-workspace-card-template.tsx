@@ -1,13 +1,13 @@
 import type React from 'react'
+import { getIntlLocale } from '@/i18n/i18n'
 import type { PluginSidebarCardRegistration } from '../../../../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
 import { withCardEvaluationBudget } from '../../../../../shared/workspace-cards/card-expression'
 import {
   PLUGIN_CARD_TEMPLATE_LIMITS,
   type CardTemplate
 } from '../../../../../shared/workspace-cards/card-template-schema'
-import type { WorkspaceCardFacts } from '../../../../../shared/workspace-cards/workspace-card-facts'
 import type { WorktreeCardController } from '../use-worktree-card-controller'
-import { buildWorkspaceCardFacts } from './build-workspace-card-facts'
+import { buildWorkspaceCardFacts, type WorkspaceCardFactExtras } from './build-workspace-card-facts'
 import { WORKSPACE_CARD_ELEMENTS } from './card-element-registry'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from './default-workspace-card'
 import {
@@ -36,10 +36,10 @@ export function renderWorkspaceCardTemplate(
   card: WorktreeCardController,
   template: CardTemplate,
   rootAttrs?: CardRootAttrs,
-  cardOptions?: WorkspaceCardFacts['cardOptions']
+  extras?: WorkspaceCardFactExtras
 ): DrawnWorkspaceCard {
   return getCompiledWorkspaceCard(template).render(
-    buildWorkspaceCardFacts(card, cardOptions),
+    buildWorkspaceCardFacts(card, extras),
     card,
     rootAttrs
   )
@@ -62,13 +62,20 @@ function reportOnce(key: string, reason: unknown): void {
   }
 }
 
-function compiledPluginCard(entry: PluginSidebarCardRegistration): CompiledWorkspaceCard | null {
-  const key = pluginCardRevisionKey(entry)
+export function compiledPluginCard(
+  entry: PluginSidebarCardRegistration
+): CompiledWorkspaceCard | null {
+  const locale = getIntlLocale()
+  // The template's own strings are resolved at compile time, so the language is part of the key.
+  const key = `${pluginCardRevisionKey(entry)}@${locale}`
   if (!compiledPluginCards.has(key)) {
     try {
       compiledPluginCards.set(
         key,
-        compileCardTemplate(entry.template, WORKSPACE_CARD_ELEMENTS, PLUGIN_CARD_TEMPLATE_LIMITS)
+        compileCardTemplate(entry.template, WORKSPACE_CARD_ELEMENTS, {
+          caps: PLUGIN_CARD_TEMPLATE_LIMITS,
+          locale
+        })
       )
     } catch (error) {
       reportOnce(key, error)
@@ -84,7 +91,7 @@ export function renderPluginWorkspaceCard(
   card: WorktreeCardController,
   entry: PluginSidebarCardRegistration,
   rootAttrs?: CardRootAttrs,
-  cardOptions?: WorkspaceCardFacts['cardOptions']
+  extras?: WorkspaceCardFactExtras
 ): DrawnWorkspaceCard | null {
   const compiled = compiledPluginCard(entry)
   if (!compiled) {
@@ -92,7 +99,7 @@ export function renderPluginWorkspaceCard(
   }
   try {
     return withCardEvaluationBudget(PLUGIN_CARD_TEMPLATE_LIMITS.maxEvaluationSteps, () =>
-      compiled.render(buildWorkspaceCardFacts(card, cardOptions), card, rootAttrs)
+      compiled.render(buildWorkspaceCardFacts(card, extras), card, rootAttrs)
     )
   } catch (error) {
     reportOnce(pluginCardRevisionKey(entry), error)

@@ -1,3 +1,4 @@
+import type { PluginCardFieldsSnapshot } from '../../shared/plugins/contributions/plugin-card-fields-state'
 import type { PluginWorkspaceListRegistration } from '../../shared/plugins/artifacts/plugin-workspace-list-artifact'
 import type { PluginSidebarCardRegistration } from '../../shared/plugins/artifacts/plugin-sidebar-card-artifact'
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
@@ -270,6 +271,9 @@ export type PluginsApi = {
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
   /** What workers set with `statusBar.update`. Desktop only; older hosts reject. */
   statusBarState?: () => Promise<PluginStatusBarOverrides>
+  /** What workers set with `cards.setFields`. Desktop only; older hosts lack it. */
+  cardFields?: () => Promise<PluginCardFieldsSnapshot>
+  onCardFieldsChanged?: (callback: (fields: PluginCardFieldsSnapshot) => void) => () => void
   /** Runs plugins' `editor.save.before` on a buffer about to be saved. Older hosts lack it. */
   editorSaveHook?: (event: {
     workspaceId: string | null

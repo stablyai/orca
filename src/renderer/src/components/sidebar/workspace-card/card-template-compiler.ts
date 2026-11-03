@@ -4,7 +4,7 @@ import type { CardTemplate } from '../../../../../shared/workspace-cards/card-te
 import {
   CardTemplateCompileError,
   expandCardTemplate,
-  type CardExpansionCaps,
+  type CardExpansionOptions,
   type ExpandedCardNode
 } from '../../../../../shared/workspace-cards/card-template-expansion'
 
@@ -44,6 +44,8 @@ export function cardElement<Context>(
 export type CardFrame = { singleLine: boolean; statusLane: boolean }
 
 export type CompiledCardTemplate<Context> = {
+  /** Fact domains the template reads, such as `activity`. */
+  roots: ReadonlySet<string>
   /** `context` reaches parts only; `rootAttrs` lets the frame style the root from the
    *  template's own frame answers. */
   render: (
@@ -62,10 +64,41 @@ type CompiledNode<Context> = (
   rootAttrs?: Readonly<Record<string, unknown>>
 ) => React.ReactNode
 
+function compileEach<Context>(
+  node: ExpandedCardNode,
+  each: NonNullable<ExpandedCardNode['each']>,
+  registry: CardElementRegistry<Context>
+): CompiledNode<Context> {
+  const { when } = node
+  const children = node.children.map((child) => compileNode(child, registry))
+  return (scope, context) => {
+    if (when && !when(scope)) {
+      return null
+    }
+    const items = each.items(scope)
+    if (!Array.isArray(items)) {
+      return null
+    }
+    // Each item renders as a keyed fragment so reordered lists keep their elements.
+    return items
+      .slice(0, each.limit)
+      .map((item: unknown, index) =>
+        React.createElement(
+          React.Fragment,
+          { key: index },
+          ...children.map((child, childIndex) => child({ ...scope, item }, context, childIndex))
+        )
+      )
+  }
+}
+
 function compileNode<Context>(
   node: ExpandedCardNode,
   registry: CardElementRegistry<Context>
 ): CompiledNode<Context> {
+  if (node.each) {
+    return compileEach(node, node.each, registry)
+  }
   // Expansion already refused unknown elements, so this lookup always finds one.
   const element = registry[node.el]
   if (!element) {
@@ -111,16 +144,17 @@ function compileNode<Context>(
 export function compileCardTemplate<Context>(
   template: CardTemplate,
   registry: CardElementRegistry<Context>,
-  caps?: CardExpansionCaps
+  options?: CardExpansionOptions
 ): CompiledCardTemplate<Context> {
   const expanded = expandCardTemplate(
     template,
     (el) => (Object.hasOwn(registry, el) ? registry[el]?.props : undefined),
-    caps
+    options
   )
   const root = compileNode(expanded.root, registry)
   const { vars, frame: flags } = expanded
   return {
+    roots: expanded.roots,
     render: (facts, context, rootAttrs) => {
       const values: Record<string, unknown> = {}
       const scope: CardExpressionScope = { ...facts, vars: values }

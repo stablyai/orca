@@ -14,6 +14,13 @@ export type CompiledCardExpression = {
   evaluate: CardExpressionValue
   /** First path segment of every fact the expression reads, e.g. `ws` for `ws.branch`. */
   roots: ReadonlySet<string>
+  /** Every fact path the expression reads, split on dots. */
+  paths: readonly (readonly string[])[]
+}
+
+export type CardExpressionOptions = {
+  /** The template's own strings for the person's language; `t(name)` reads them. */
+  strings?: Readonly<Record<string, string>>
 }
 
 export const CARD_EXPRESSION_LIMITS = { maxLength: 2048, maxDepth: 32 } as const
@@ -153,10 +160,12 @@ class Parser {
   private pos = 0
   private depth = 0
   readonly roots = new Set<string>()
+  readonly paths: string[][] = []
 
   constructor(
     private readonly tokens: CardExpressionToken[],
-    private readonly source: string
+    private readonly source: string,
+    private readonly strings: Readonly<Record<string, string>>
   ) {}
 
   parse(): CardExpressionValue {
@@ -266,10 +275,30 @@ class Parser {
     }
     const segments = token.value.split('.')
     this.roots.add(segments[0] ?? token.value)
+    this.paths.push(segments)
     return metered((s) => readCardFactPath(s, segments))
   }
 
+  /** `t(name)`: the template's own string for the person's language, else the key itself. */
+  private translation(): CardExpressionValue {
+    this.pos++
+    const key = this.tokens[this.pos++]
+    if (key?.kind !== 'string') {
+      throw new CardExpressionError(
+        "t() takes one quoted name of the template's strings",
+        this.source
+      )
+    }
+    this.expectOp(')')
+    const text = Object.hasOwn(this.strings, key.value) ? this.strings[key.value] : undefined
+    const value = text ?? key.value
+    return () => value
+  }
+
   private call(name: string): CardExpressionValue {
+    if (name === 't') {
+      return this.translation()
+    }
     const fn = Object.hasOwn(FUNCTIONS, name) ? FUNCTIONS[name] : undefined
     if (!fn) {
       throw new CardExpressionError(`Unknown function ${name}`, this.source)
@@ -291,11 +320,16 @@ class Parser {
 }
 
 /** Compiles once; evaluation is pure, allocation-light and never throws on missing facts. */
-export function compileCardExpression(source: string): CompiledCardExpression {
+const NO_STRINGS: Readonly<Record<string, string>> = {}
+
+export function compileCardExpression(
+  source: string,
+  options: CardExpressionOptions = {}
+): CompiledCardExpression {
   if (source.length > CARD_EXPRESSION_LIMITS.maxLength) {
     throw new CardExpressionError('Expression too long', source.slice(0, 40))
   }
-  const parser = new Parser(tokenizeCardExpression(source), source)
+  const parser = new Parser(tokenizeCardExpression(source), source, options.strings ?? NO_STRINGS)
   const evaluate = parser.parse()
-  return { evaluate, roots: parser.roots }
+  return { evaluate, roots: parser.roots, paths: parser.paths }
 }

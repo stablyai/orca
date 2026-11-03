@@ -1,3 +1,7 @@
+import {
+  PLUGIN_CARD_FIELDS_CHANGED_CHANNEL,
+  type PluginCardFieldsSnapshot
+} from '../../shared/plugins/contributions/plugin-card-fields-state'
 import { ipcRenderer } from 'electron'
 import { subscribePluginPanelPush } from './plugin-panel-push-bridge'
 import type {
@@ -119,6 +123,15 @@ export const pluginsApi = {
     }
   },
   statusBarState: () => ipcRenderer.invoke('plugins:statusBarState'),
+  cardFields: () => ipcRenderer.invoke('plugins:cardFields'),
+  onCardFieldsChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, fields: PluginCardFieldsSnapshot) =>
+      callback(fields)
+    ipcRenderer.on(PLUGIN_CARD_FIELDS_CHANGED_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_CARD_FIELDS_CHANGED_CHANNEL, listener)
+    }
+  },
   editorSaveHook: (event) => ipcRenderer.invoke('plugins:editorSaveHook', event),
   onStatusBarChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, overrides: PluginStatusBarOverrides) =>

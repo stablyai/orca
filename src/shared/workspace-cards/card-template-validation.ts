@@ -9,7 +9,7 @@ export function cardTemplateIssues(template: CardTemplate): string[] {
     expandCardTemplate(
       template,
       (el) => (isCardElementName(el) ? CARD_ELEMENT_PROPS[el] : undefined),
-      PLUGIN_CARD_TEMPLATE_LIMITS
+      { caps: PLUGIN_CARD_TEMPLATE_LIMITS }
     )
     return []
   } catch (error) {

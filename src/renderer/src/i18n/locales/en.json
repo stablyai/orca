@@ -6552,7 +6552,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "frameNeedsInput": "Needs input"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",

@@ -3,6 +3,7 @@ import type { KeybindingOverrides } from '../../shared/keybindings'
 import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
 import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'
+import type { PluginCardFieldsState } from './cards/plugin-card-fields-state'
 
 export type PluginServiceOptions = {
   userDataPath: string
@@ -23,4 +24,6 @@ export type PluginServiceOptions = {
   getDesktopFrameServices?: () => PluginDesktopFrameServices | null
   /** Desktop main only: what `statusBar.update` writes for the windows' status bars. */
   statusBar?: PluginStatusBarState
+  /** Desktop main only: what `cards.setFields` writes for the windows' workspace cards. */
+  cardFields?: PluginCardFieldsState
 }

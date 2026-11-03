@@ -1,3 +1,4 @@
+import { registerPluginCardFieldsHandlers } from './plugin-card-fields-ipc'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
@@ -160,6 +161,7 @@ export function registerPluginHandlers(
   registerPluginFrameEntryHandlers(store, pluginService)
   registerPluginPanelPushHandlers(pluginService)
   registerPluginStatusBarHandlers(pluginService)
+  registerPluginCardFieldsHandlers(pluginService)
   registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
 

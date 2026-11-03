@@ -14,7 +14,9 @@ export const CARD_TEMPLATE_LIMITS = {
   maxDefDepth: 8,
   maxVars: 100,
   maxPropsPerNode: 32,
-  maxStringLength: 1024
+  maxStringLength: 1024,
+  /** Items one `Each` draws. */
+  maxEachItems: 20
 } as const
 
 /** Plugin cards draw at Orca's own card's scale (about 65 elements and a few hundred expression
@@ -81,6 +83,14 @@ export const cardTemplateSchema = z
       .optional(),
     /** Named subtrees an element can use by name. */
     defs: z.record(elementName, cardTemplateNodeSchema).optional(),
+    /** The template's own text by language (`en`, `ja`, `pt-BR` …), read with `t(name)`;
+     *  `en` is the fallback. */
+    strings: z
+      .record(
+        z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/, 'must be a language tag'),
+        z.record(identifier, z.string().max(CARD_TEMPLATE_LIMITS.maxStringLength))
+      )
+      .optional(),
     /** What Orca's card frame needs from the template. */
     frame: z
       .object({

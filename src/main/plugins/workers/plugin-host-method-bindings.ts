@@ -20,6 +20,10 @@ import {
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import {
+  PLUGIN_CARDS_HANDLERS,
+  type PluginCardFieldsServices
+} from './plugin-host-cards-method-bindings'
+import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
 } from './plugin-host-status-bar-method-bindings'
@@ -88,6 +92,8 @@ export type PluginHostServices = {
   panels?: PluginPanelBridgeServices | null
   /** Absent where no Orca window draws a status bar. */
   statusBar?: PluginStatusBarServices | null
+  /** Absent where no Orca window draws workspace cards. */
+  cardFields?: PluginCardFieldsServices | null
   /** The runtime methods the `orca` CLI calls, for workspace actions; absent without a runtime. */
   runtimeRpc?: PluginRuntimeRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
@@ -208,6 +214,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
+  ...PLUGIN_CARDS_HANDLERS,
   ...PLUGIN_WORKSPACE_ACTION_HANDLERS
 }
 

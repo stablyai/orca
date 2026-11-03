@@ -75,9 +75,15 @@ export function appendWorktreeRows(
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+    /** Draws only these top-level rows, for a collapsed section that keeps some visible. */
+    onlyRows?: (worktree: Worktree) => boolean
   }
 ): void {
-  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  const onlyRows = options.onlyRows
+  const allOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  const sectionOccurrences = onlyRows
+    ? allOccurrences.filter((occurrence) => !occurrence.parent && onlyRows(occurrence.row))
+    : allOccurrences
   const childIdsByParent = new Map<string, string[]>()
   for (const occurrence of sectionOccurrences) {
     if (occurrence.parent) {

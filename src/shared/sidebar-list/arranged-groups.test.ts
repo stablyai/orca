@@ -119,6 +119,35 @@ describe('arranged workspace list', () => {
     ])
   })
 
+  it('keeps workspaces that need the person visible in a collapsed plugin section', () => {
+    const plan = planSidebarRows({
+      groupBy: 'none',
+      worktrees,
+      repoMap: new Map([[repo.id, repo]]),
+      prGroupOf: () => 'in-progress',
+      workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+      projectOrderBy: 'manual',
+      lineageById: {},
+      worktreeMap: new Map(worktrees.map((w) => [w.id, w])),
+      nestLineage: false,
+      projectGroups: [],
+      placeholderRepoIds: new Set(),
+      importedWorktreesByRepo: new Map(),
+      newExternalWorktreesInboxByRepo: new Map(),
+      pendingCreations: [],
+      folderWorkspaces: [],
+      defaultHostId: LOCAL_EXECUTION_HOST_ID,
+      pinnedDisplayPolicy: 'single-location',
+      filterRepoIds: [],
+      arrangement
+    })
+    const rows = plan.render(new Set([getListSectionKey(arrangement.listId, 'needs-you')]))
+    const ids = rows.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))
+    // d needs the person; b is only unread, so the collapse hides it.
+    expect(ids).toContain('d')
+    expect(ids).not.toContain('b')
+  })
+
   it('arranges 300 workspaces well inside a frame', () => {
     const many = Array.from({ length: 300 }, (_, i) =>
       wt(`w${i}`, {
