@@ -8,7 +8,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../../shared/workspace-status-defaults'
-import { makeFolderWorkspace, makeWorktree } from '../../../worktree-jump-palette-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeWorktree
+} from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { buildWorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'

@@ -17,7 +17,7 @@ import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WslHostBrowserRouteStorage,
   WslHostBrowserRouteStorageResult
-} from '../../browser/wsl-host-browser-route-partition'
+} from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
 import type { WslMoveDesktopRewriteContext } from './wsl-move-desktop-rewrite-stores'
 

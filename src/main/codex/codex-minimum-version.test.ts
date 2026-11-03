@@ -4,8 +4,8 @@ import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readWholeAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
-import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import type { AgentCliVersionReader } from '../agent-cli-version-probe'
+import { resolveAgentLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   failedAcquisitionRefusal,

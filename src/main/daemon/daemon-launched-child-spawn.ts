@@ -2,7 +2,7 @@ import { forkProcess, type ForkSpec } from '@orca/process-host/fork-process'
 import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { removeChromiumDisabledSessionBus } from '../pty/chromium-session-bus-env'
+import { removeChromiumDisabledSessionBus } from '../pty/shell-startup/chromium-session-bus-env'
 import { hostMallocTunablesDaemonEnv } from '../memory/host-malloc-tunables'
 import {
   appImageDaemonIdentityPath,

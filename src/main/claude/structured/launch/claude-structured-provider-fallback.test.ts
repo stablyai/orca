@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session-journal-identity'
+import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { openAgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from '../journal/claude-structured-journal-translation'
@@ -75,6 +75,55 @@ describe('Claude provider fallback', () => {
 
     expect(() => translator.handle(initEvent)).not.toThrow()
     expect(items).toEqual([])
+  })
+
+  it('journals the captured model fallback as a notice and continues the same turn', () => {
+    const items: AgentJournalItemBody[] = []
+    const translator = createClaudeJournalTranslator({
+      sink: {
+        appendItem: (_identity, body) => {
+          items.push(body)
+        },
+        appendTombstone: vi.fn(),
+        publish: vi.fn()
+      }
+    })
+    translator.handle(
+      message('assistant', 'fallback-1', [
+        { type: 'fallback', from: { model: 'claude-opus-5-5' }, to: { model: 'claude-opus-4-8' } }
+      ])
+    )
+    translator.handle(
+      message('assistant', 'answer-1', [{ type: 'text', text: 'Continuing the answer.' }])
+    )
+    translator.handle({
+      type: 'message',
+      sessionId: 'orca-session',
+      message: {
+        type: 'result',
+        subtype: 'success',
+        session_id: 'provider-1',
+        uuid: 'result-1',
+        result: 'Continuing the answer.'
+      }
+    })
+
+    const notices = items.filter((body) => body.kind === 'status')
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatchObject({
+      text: 'Claude switched models: Claude Opus 5.5 → Claude Opus 4.8.',
+      tone: 'notice',
+      presentation: 'turn-notice',
+      providerFrame: { provider: 'claude', kind: 'message:assistant:content:fallback' }
+    })
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Continuing the answer.' }]
+      })
+    )
+    expect(items).toContainEqual(expect.objectContaining({ kind: 'turn', state: 'completed' }))
   })
 
   it('keeps provider-fallback rows distinct across acquisitions', async () => {

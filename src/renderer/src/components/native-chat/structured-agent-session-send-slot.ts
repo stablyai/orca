@@ -29,12 +29,13 @@ export type StructuredAgentSessionSendInput = {
   skills?: readonly AgentJournalSkillRef[]
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
+  onCreated?: (clientMessageId: string) => void
   now?: number
 }
 
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
-  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
+  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills' | 'onCreated'
 > & {
   onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
   /** Do the other thing than the follow-up setting: Cmd/Ctrl+Enter, or the phone's hold menu. */

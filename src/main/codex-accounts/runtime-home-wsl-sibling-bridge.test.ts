@@ -31,7 +31,7 @@ vi.mock('../codex/wsl-codex-session-bridge', () => ({
 }))
 
 let wslHome = ''
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => 'Ubuntu',
   getWslHome: () => wslHome
 }))

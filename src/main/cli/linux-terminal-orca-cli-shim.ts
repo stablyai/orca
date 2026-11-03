@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path'
 import {
   hasAppImagePathEnvironment,
   resolveAppImageRuntimeIdentity
-} from '../appimage-runtime-identity'
+} from '../updater/linux-package/appimage-runtime-identity'
 import {
   getAppImageCacheRootPath,
   isAppImageInstalledLauncherCurrent

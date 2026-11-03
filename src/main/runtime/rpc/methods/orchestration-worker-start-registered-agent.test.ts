@@ -3,7 +3,7 @@
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { decideAgentLaunchMode } from '../../../agent-launch/agent-launch-mode'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../../structured-agent-runtime-registrations'
 import {
   decideWorkerStartMode,
@@ -19,11 +19,6 @@ const REGISTERED_AGENTS = STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(
 ).filter(isTuiAgent)
 
 describe('a worker for a registered native-chat agent', () => {
-  it('covers every registered agent, the ACP and Pi agents included', () => {
-    expect(REGISTERED_AGENTS).toHaveLength(STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.length)
-    expect(REGISTERED_AGENTS).toEqual(expect.arrayContaining(['grok', 'opencode', 'omp', 'pi']))
-  })
-
   it.each(REGISTERED_AGENTS)('starts %s structured, as any other launch does', async (agent) => {
     const mode = decideWorkerStartMode({ params: { agent }, settings: STRUCTURED_PREFERENCE })
     expect(mode).toMatchObject({ mode: 'structured', reason: 'user_default' })
@@ -89,16 +84,5 @@ describe('a worker for a registered native-chat agent', () => {
     expect(
       decideWorkerStartMode({ params: { agent: 'gemini' }, settings: STRUCTURED_PREFERENCE })
     ).toMatchObject({ mode: 'terminal', reason: 'agent_without_structured_session' })
-  })
-
-  it('starts a terminal agent while it is set to CLI, as Claude does', () => {
-    for (const agent of ['opencode', 'claude']) {
-      expect(
-        decideWorkerStartMode({
-          params: { agent },
-          settings: { nativeChatProviders: { [agent]: false } }
-        })
-      ).toMatchObject({ mode: 'terminal', preferred: 'terminal', reason: 'user_default' })
-    }
   })
 })

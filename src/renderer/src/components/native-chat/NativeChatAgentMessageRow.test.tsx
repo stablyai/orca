@@ -57,9 +57,14 @@ describe("another agent's message in the transcript", () => {
     const source = from([{ address: CODER.address, name: 'Coder' }])
     renderUserMessage(source)
     fireEvent.click(screen.getByRole('button', { name: 'Coder' }))
-    expect(openAgentMessageSender).toHaveBeenCalledWith(source, source.senders[0], 'wt-chat', {
-      kind: 'local'
-    })
+    expect(openAgentMessageSender).toHaveBeenCalledWith(
+      source,
+      source.senders[0],
+      'wt-chat',
+      { kind: 'local' },
+      undefined,
+      'Coder'
+    )
   })
 })
 
@@ -93,6 +98,13 @@ describe("another agent's queued card", () => {
     const { container } = renderCard(source)
     expect(container.textContent).toContain('FromCoder,an agent')
     fireEvent.click(screen.getByRole('button', { name: 'Coder' }))
-    expect(openAgentMessageSender).toHaveBeenCalledWith(source, source.senders[0], 'wt-chat')
+    expect(openAgentMessageSender).toHaveBeenCalledWith(
+      source,
+      source.senders[0],
+      'wt-chat',
+      undefined,
+      undefined,
+      'Coder'
+    )
   })
 })

@@ -1,3 +1,4 @@
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -181,9 +182,13 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(h.connections).toHaveLength(2)
   })
 
-  it('persists final events after exit while journal writes are blocked', async () => {
+  it('persists a large final message and interrupts its turn after exit while journal writes are blocked', async () => {
     const h = await setup()
     const gate = Promise.withResolvers<void>()
+    const content = Array.from({ length: 1_025 }, (_, index) => ({
+      type: 'text',
+      text: `final block ${index}`
+    }))
     try {
       const blocked = h.rig.journal.readInOrder(() => {
         expect(
@@ -196,6 +201,8 @@ describe('Pi RPC session ownership and delivery', () => {
         return gate.promise
       })
       vi.useFakeTimers()
+      h.connection.receive({ type: 'agent_start' })
+      h.connection.receive({ type: 'message_end', message: { role: 'assistant', content } })
       h.connection.receive({
         type: 'extension_ui_request',
         id: 'last-dialog',
@@ -221,6 +228,16 @@ describe('Pi RPC session ownership and delivery', () => {
           (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
         )
       ).toBe(true)
+      const reopened = await h.rig.reopenJournal()
+      const texts = reopened
+        .snapshot()
+        .items.flatMap(({ body }) =>
+          body.kind === 'message' && body.role === 'assistant'
+            ? body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            : []
+        )
+      expect(texts).toEqual(content.map((block) => block.text))
+      expect(await h.rig.turns()).toMatchObject([{ state: 'interrupted' }])
     } finally {
       gate.resolve()
       vi.useRealTimers()
@@ -534,6 +551,22 @@ describe('Pi RPC session ownership and delivery', () => {
     await expect(h.adapter.closeSession(sessionId)).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
+  })
+
+  it('passes /compact instructions as Pi custom instructions', async () => {
+    const h = await setup()
+    const command = {
+      clientMessageId: 'compact-1',
+      ...structuredAgentSessionCommandTurn('compact-1'),
+      running: { kind: 'turn' as const, turnId: 'compact:compact-1', state: 'running' as const }
+    }
+    await h.adapter.compact({ sessionId, fence: 7, command })
+    await h.adapter.compact({
+      sessionId,
+      fence: 7,
+      command: { ...command, instructions: 'keep the plan' }
+    })
+    expect(h.connection.compactParams).toEqual([{}, { customInstructions: 'keep the plan' }])
   })
 
   it('ends the host command row under its original identity after a no-op compaction', async () => {

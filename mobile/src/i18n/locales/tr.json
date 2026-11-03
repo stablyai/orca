@@ -803,7 +803,8 @@
     },
     "prSidebar": {
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
+      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -1525,21 +1526,6 @@
       "showMore": "{{count}} tane daha göster",
       "title": "Yorumlar"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commit geride (temel commit: {{baseCommit}})",
-      "copyCommands": "Komutları kopyala",
-      "copyFailed": "Metin kopyalanamadı",
-      "copyRefreshCommands": "Merge edilebilirlik yenileme komutlarını kopyala",
-      "detailsUnavailable": "Conflict'li dosyaların ayrıntıları kullanılamıyor",
-      "filesHeading": "Conflict'li dosyalar",
-      "localMergeClean": "GitHub conflict bildiriyor ama yerel Git bunları yeniden oluşturamadı. Merge edilebilirliği yeniden hesaplamak için PR görünümünü yenileyin veya branch'i push edin.",
-      "mustResolve": "Bu branch'in çözülmesi gereken conflict'leri var",
-      "refreshing": "Conflict ayrıntıları yenileniyor…",
-      "resolveWithAi": "Conflict'leri AI ile çöz",
-      "runFromWorktree": "Bu worktree'den çalıştır",
-      "title": "Conflict'ler"
-    },
     "linkPrForm": {
       "linkButton": "Pull request'i bağla",
       "linkNumber": "Bağla: #{{number}}",
@@ -1658,7 +1644,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
-      "providerUnavailable": "Bu sağlayıcı için barındırılan inceleme paneli kullanılamıyor."
+      "githubRemoteRequired": "Bu sekmede çekme isteği ayrıntılarını görmek için bir GitHub uzak deposu gerekir. Desteklenen diğer platformlarda Değişiklikler bölümünden bir inceleme oluşturup tarayıcınızda açın."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",
@@ -1853,6 +1839,7 @@
       "attachmentAtMost": "{{agent}} tek mesajda en fazla {{limit}} görsel kabul ettiği için bu mesaj gönderilmedi.",
       "attachmentEmpty": "Bu mesajdaki bir görsel boş olduğu için mesaj gönderilmedi.",
       "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+      "attachmentsExpired": "Süresi doldu: {{names}}.",
       "attachmentLargerThan": "Bu mesajdaki bir görsel {{size}} MB sınırını aştığı için mesaj gönderilmedi.",
       "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
       "attachmentNotAFile": "Bu mesajdaki görsellerden biri dosya olmadığı için mesaj gönderilmedi.",
@@ -1926,6 +1913,7 @@
       "providerRetrying": "{{agent}} geçici bir sorunla karşılaştı ve yeniden deniyor.",
       "providerRetryingQuoted": "{{agent}} yeniden deniyor: {{detail}}.",
       "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+      "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
       "queueFull": "Ajana iletilmeyi bekleyen çok fazla mesaj olduğu için bu mesaj gönderilmedi.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
@@ -2055,8 +2043,7 @@
       "promptUnconfirmed": "Ajan başlatıldı, ancak istemin gönderildiği doğrulanamadı."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull request merge edilemedi.",
-      "refreshFailed": "Pull request yenilenemedi."
+      "mergeFailed": "Pull request merge edilemedi."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Ajan başlatıldı",
@@ -2437,6 +2424,7 @@
       "queueTooLarge": "Kuyrukta çok fazla metin bekliyor.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "reattachFile": "Kaldırıp yeniden ekleyin.",
+      "reattachFiles": "Kaldırıp yeniden ekleyin.",
       "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
       "recordUnreadable": "Orca'da bu sohbetin kayıtlı durumu okunamadı.",
       "reopenChat": "Yeniden kontrol etmek için sohbeti tekrar açın.",
@@ -2512,6 +2500,10 @@
       "terminal": "Terminal",
       "tapToFocusPane": "{{title}}, odaklamak için dokunun",
       "inputPane": "{{title}} · Girdi"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "Çalışma ağacı silindi.",
+      "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
     }
   },
   "settings": {
@@ -2659,6 +2651,9 @@
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi"
+    },
+    "agents": {
+      "permissionOwnAll": "Ajanların kendi ayarları"
     }
   },
   "sourceControl": {

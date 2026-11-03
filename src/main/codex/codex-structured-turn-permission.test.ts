@@ -9,7 +9,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { expect, it, vi } from 'vitest'
-import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   acquiredCodexAdapter,
   CODEX_TEST_THREAD_ID,
@@ -145,7 +145,7 @@ it.each([null])('omits own policy on fresh input after opening %s', async (resum
     expect((await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current).toMatchObject(
       { reportedPermissionMode: 'ask' }
     )
-    for (const [index, choice] of ['own', 'full-access', 'own'].entries()) {
+    for (const [index, choice] of ['own', 'full-access'].entries()) {
       mode = choice === 'own' ? 'own' : 'full-access'
       codex.routes['turn/start'] = answerWithOpenedTurn(codex, `own-${index}`)
       expect(await send(`original-${index}`)).toMatchObject({ state: 'admitted' })
@@ -174,8 +174,33 @@ it.each([null])('omits own policy on fresh input after opening %s', async (resum
     expect(opened).not.toHaveProperty('approvalPolicy')
     expect(opened).not.toHaveProperty('approvalsReviewer')
     expect(opened).not.toHaveProperty('sandbox')
-    expect(connection.calls.filter((call) => call.method === 'turn/start')).toHaveLength(3)
+    expect(connection.calls.filter((call) => call.method === 'turn/start')).toHaveLength(2)
     expect(codex.connections).toHaveLength(1)
+    mode = 'own'
+    await expect(send('delegated-after-explicit')).rejects.toMatchObject({ reason: 'permission' })
+    expect(adapter.permissionModeRequiresAcquisition('session-1', 'own')).toBe(true)
+    await adapter.closeSession('session-1')
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 8,
+      spawnToken: 'delegated-child',
+      permissionMode: 'own'
+    })
+    codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'delegated-resume')
+    expect(
+      await adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'delegated-resume',
+        fence: 8,
+        body: USER_MESSAGE,
+        admitFreshInput: async (enqueue) => enqueue('own', false)
+      })
+    ).toMatchObject({ state: 'admitted' })
+    const resumed = codex.connections
+      .at(-1)!
+      .calls.findLast((call) => call.method === 'turn/start')!.params!
+    expect(resumed).not.toHaveProperty('approvalPolicy')
+    expect(resumed).not.toHaveProperty('sandboxPolicy')
   } finally {
     await adapter.closeAll()
   }

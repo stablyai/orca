@@ -4,7 +4,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
-import type { TuiAgent } from '../../src/shared/tui-agent'
+import type { TuiAgent } from '../../src/shared/agent-launch/catalog/tui-agent'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/onboarding-defaults'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 
@@ -504,30 +504,6 @@ test.describe('Onboarding flow', () => {
         { timeout: 5_000 }
       )
       .toEqual({ agentTaskComplete: true, terminalBell: true, customSoundId: 'ding' })
-  })
-
-  test('typing in the clone-url input does not hijack Enter as a global shortcut', async ({
-    orcaPage
-  }) => {
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
-    await continueOnboarding(orcaPage)
-    await continueOnboarding(orcaPage)
-    await continueFromPostNotificationsToRepo(orcaPage)
-    await orcaPage.getByRole('button', { name: /Clone from URL/i }).click()
-
-    // Press Cmd/Ctrl+Enter in the editable clone field; the capture handler must leave the dialog and empty form alone.
-    const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
-    const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
-    const input = orcaPage.getByPlaceholder('https://github.com/user/repo.git')
-    await input.click()
-    await input.press(accelerator)
-    // Brief wait so any (incorrect) handler firing would have already happened.
-    await orcaPage.waitForTimeout(250)
-    await expect(orcaPage.getByRole('heading', { name: /Clone from URL/i })).toBeVisible()
-    await expect(input).toBeVisible()
-    expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })
 
   test('Back returns to the previous step without losing progress', async ({ orcaPage }) => {

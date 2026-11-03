@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch-tab-publication'
+import type { AgentLaunchTabPublishRequest } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 

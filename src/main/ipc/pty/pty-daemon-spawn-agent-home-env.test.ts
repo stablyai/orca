@@ -6,8 +6,8 @@ import {
   createDaemonActiveProviderFixtures
 } from './pty-ipc-daemon-provider-fixtures'
 import { delimiter, join } from 'node:path'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-shim-dir'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers } from './register-handlers'
 
@@ -29,8 +29,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>

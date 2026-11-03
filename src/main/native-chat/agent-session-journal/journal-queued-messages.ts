@@ -1,4 +1,5 @@
 import { journalInputOrder } from './journal-input-order'
+import { nextEligibleQueuedCard } from './journal-queue-mail-eligibility'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -90,17 +91,20 @@ export class JournalQueuedMessages {
     return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
   }
 
+  /** Mail the orchestration owner cannot confirm now; the host installs it once, so every reader of
+   *  the next card (drain, consume, publication, scheduling) applies one rule. */
+  mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
+
   /** Selection reads identity summaries; current values are resolved after edits. */
   nextInputCard(automatic = true): QueuedMessageRow | null {
-    const state = this.inputState()
-    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
-    const card = identity ? this.get(identity.messageId) : null
-    return !card ||
-      card.state === 'returned' ||
-      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
-      (automatic && this.editLeases.isHeld(card.messageId))
-      ? null
-      : card
+    return nextEligibleQueuedCard({
+      state: this.inputState(),
+      floor: this.deps.reopenFloor(),
+      get: (messageId) => this.get(messageId),
+      editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
+      revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
+      unavailable: this.mailUnavailable
+    })
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -294,6 +298,7 @@ export class JournalQueuedMessages {
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      failedAt: journalInputOrder(state).newestTurn.failure(),
       cards,
       reopenFloor: this.deps.reopenFloor()
     })

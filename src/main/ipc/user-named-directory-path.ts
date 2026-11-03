@@ -1,11 +1,11 @@
 import { isAbsolute, resolve } from 'node:path'
-import { PATH_ACCESS_DENIED_MESSAGE } from './filesystem/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE } from './filesystem/access/filesystem-auth'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,
   isWindowsReservedDeviceName
 } from './automatic-load-path-text'
-import { realpathAcrossWslDriveMount } from '../wsl/wsl-unc-drive-fs-path'
+import { realpathAcrossWslDriveMount } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 
 const USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a directory opened by name needs an absolute path.'

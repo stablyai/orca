@@ -56,6 +56,9 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -180,10 +183,6 @@
       "monthsAgo_other": "{{count}}mo ago",
       "yearsAgo_one": "{{count}}y ago",
       "yearsAgo_other": "{{count}}y ago"
-    },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})"
     },
     "emptyState": {
       "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",

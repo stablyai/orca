@@ -1,7 +1,7 @@
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../agent-model-catalog/agent-model-catalog-listing-waiters'
-import { independentAgentModelCatalog } from '../agent-model-catalog/agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   IN_PROCESS_OPTIONS_READER,
@@ -151,6 +151,12 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
+  const reportedModel = live
+    ? (options.current.reportedModel ??
+      (agent === 'claude' && options.current.confirmed?.includes('model')
+        ? options.current.model
+        : undefined))
+    : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -163,7 +169,7 @@ export async function readStructuredAgentSessionOptions(
         ? selected.current.serviceTier
         : (options.current.serviceTier ?? selected.current.serviceTier)
   }
-  // Defaults cover unsaved choices only; first send pins them.
+  // Only the unsaved model default is pinned on first send.
   const defaultedBy = (key: 'model' | 'effort') =>
     key === 'model' && !options.current.model
       ? displayDefault !== undefined || selected.current.defaulted?.includes(key) === true
@@ -173,7 +179,7 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const pinsDefaults = neverSent && (agent !== 'codex' || !live || !!options.current.model)
-  const defaulted = pinsDefaults ? [] : defaultKeys
+  const defaulted = defaultKeys.filter((key) => key === 'effort' || !pinsDefaults)
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
   for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
@@ -181,7 +187,7 @@ export async function readStructuredAgentSessionOptions(
     }
   }
   for (const key of defaultKeys) {
-    if (pinsDefaults && current[key] !== undefined) {
+    if (key === 'model' && pinsDefaults && current[key] !== undefined) {
       acceptedInputSources[key] = 'policy'
     }
   }
@@ -239,6 +245,7 @@ export async function readStructuredAgentSessionOptions(
     current: {
       ...current,
       acceptedInputSources,
+      ...(reportedModel ? { reportedModel } : {}),
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,
@@ -257,6 +264,9 @@ export async function readStructuredAgentSessionOptions(
             reason: 'unsupported'
           }),
     conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    ...(capabilities?.compact && capabilities.compactInstructions
+      ? { compactInstructions: true }
+      : {}),
     // Live children may narrow declared capabilities, never expand them.
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(

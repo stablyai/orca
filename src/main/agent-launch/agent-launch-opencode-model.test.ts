@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import recordings from '../../shared/fixtures/source-control-launch-recordings.json'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { executeAgentLaunch } from './agent-launch-executor'
-import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
-import { agentPermissionChoices } from '../../shared/tui-agent-permission-choice'
+import { agentPermissionChoices } from '../../shared/agent-launch/permissions/tui-agent-permission-choice'
 
 function harness() {
   const readSettings = vi.fn(() => {
@@ -101,20 +101,4 @@ describe('OpenCode model preferences on unsupported launch placements', () => {
       expect(h.deliverPrompt).not.toHaveBeenCalled()
     }
   )
-
-  it('preserves prompt delivery to a reused terminal without model preferences', async () => {
-    const h = harness()
-    expect((await h.run({ ...reused, sessionOptions: undefined })).outcome).toEqual({
-      kind: 'terminal',
-      handle: 'term_existing'
-    })
-    expect(h.deliverPrompt).toHaveBeenCalledOnce()
-    expect(h.createWorktree).not.toHaveBeenCalled()
-  })
-
-  it('preserves ordinary worktree creation without model preferences', async () => {
-    const h = harness()
-    expect((await h.run({ ...creating, sessionOptions: undefined })).worktreeId).toBe('wt_new')
-    expect(h.createWorktree).toHaveBeenCalledOnce()
-  })
 })

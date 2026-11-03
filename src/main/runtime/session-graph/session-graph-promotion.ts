@@ -19,6 +19,10 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
+  protected abstract agentSenderGraphReply(
+    ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+  ): ReturnType<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
+
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
 
   /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */

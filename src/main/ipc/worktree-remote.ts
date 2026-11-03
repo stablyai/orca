@@ -2,8 +2,8 @@ import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
-import { worktreeCreateGit } from '../git/worktree-create-git-executor'
-import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { worktreeCreateGit } from '../git/worktrees/creation/worktree-create-git-executor'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
 import type { BrowserWindow } from 'electron'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -27,17 +27,21 @@ import type {
   WorktreeHeadIdentity
 } from '../../shared/worktree/types'
 import { getPRForBranch } from '../github/client'
-import { addWorktree, addSparseWorktree } from '../git/worktree'
-import type { AddWorktreeOptions, AddWorktreeResult } from '../git/worktree'
+import { addWorktree } from '../git/worktrees/creation/worktree-add'
+import { addSparseWorktree } from '../git/worktrees/creation/worktree-sparse-add'
+import type {
+  AddWorktreeOptions,
+  AddWorktreeResult
+} from '../git/worktrees/worktree-operation-options'
 import {
   consumePreparedWorktreeCreate,
   type PreparationRearmHolder
-} from '../worktree-create-preparation'
+} from '../workspaces/creation/preparation/worktree-create-preparation'
 import { getBranchConflictKind, resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../git/git-username'
-import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
-import { resolveWorktreeCreateBase } from '../worktree-create-base'
+import { hasLocalWorktreeBaseRef } from '../git/worktrees/creation/worktree-base-ref-probe'
+import { resolveWorktreeCreateBase } from '../workspaces/creation/worktree-create-base'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -48,15 +52,18 @@ import type {
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
-import { getEffectiveHooks, loadHooks } from '../hooks'
-import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
+import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
+import {
+  createSetupRunnerScript,
+  resolveSetupRunnerShell
+} from '../workspace-hooks/worktree-runner-script'
 import {
   getDefaultTabsLaunch,
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
-} from '../effective-hook-config'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
+} from '../workspace-hooks/effective-hook-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -77,7 +84,7 @@ import {
 import { computeValidatedBranchName } from './worktree-branch-name'
 import { mergeWorktree } from './worktree-metadata-merge'
 import { resolveCreatedWorktree } from './created-worktree-reconciliation'
-import { notifyLineageRepos } from '../worktree-lineage-change-notification'
+import { notifyLineageRepos } from '../workspaces/catalog/worktree-lineage-change-notification'
 import { composeWorktreeId, getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import {
   getConnectionExecutionHostId,
@@ -92,32 +99,32 @@ import {
   sameGitHubRemoteUrl,
   type GitRemoteExec,
   type WorktreePushTargetStore
-} from './worktree-push-target-cleanup'
-import { reconcileOrphanedPrRemotes } from './worktree-push-target-reconciliation'
+} from '../git/remotes/worktree-push-target-cleanup'
+import { reconcileOrphanedPrRemotes } from '../git/remotes/worktree-push-target-reconciliation'
 import {
   configureCreatedWorktreePushTargetWithExec,
   prepareWorktreePushTargetWithExec,
   remoteAlreadyMatchesUrl,
   restoreUpstreamAfterMaterialize
-} from './worktree-push-target-setup'
+} from '../git/remotes/worktree-push-target-setup'
 import {
   buildNarrowForkFetchRefspec,
   ensureRemoteTracksBranchNarrowly,
   forkRemoteTrackingRefExists
-} from '../git/fork-remote-refspec'
-import { migrateForkRemoteRefspecs } from './worktree-push-target-refspec-migration'
+} from '../git/refs/fork-remotes/fork-remote-refspec'
+import { migrateForkRemoteRefspecs } from '../git/remotes/worktree-push-target-refspec-migration'
 import {
   registerCreatedWorktreeRoot,
   registerWorktreeRootsForRepo
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
-import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
+import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/worktree-include-file'
+import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
 import {
@@ -129,30 +136,30 @@ import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
   type WorktreeCreateTimingRecorder
-} from '../worktree-create-timing'
+} from '../workspaces/creation/worktree-create-timing'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
-} from '../project-runtime-git-options'
+} from '../workspaces/execution-host/project-runtime-git-options'
 import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
-} from '../worktree-name-retirement'
+} from '../workspaces/removal/retirement/worktree-name-retirement'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
 import {
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
-} from '../worktree-create-in-flight'
+} from '../workspaces/creation/worktree-create-in-flight'
 import { isWslMoveWorktreeBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import {
   hostWorktreeTarget,

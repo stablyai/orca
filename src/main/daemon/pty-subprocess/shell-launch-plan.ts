@@ -1,12 +1,18 @@
 import { win32 as pathWin32 } from 'node:path'
-import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
-import { isPwshAvailable } from '../../pwsh'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
-import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
+import {
+  isWindowsGitBashShellPath,
+  resolveWindowsGitBashShellPath
+} from '../../pty/shell-startup/git-bash'
+import { isPwshAvailable } from '../../pty/shell-startup/pwsh'
+import {
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost
+} from '../../pty/shell-startup/codex-home-wsl-env'
+import { addOrcaWslInteropEnv } from '../../pty/shell-startup/wsl-orca-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
-} from '../../pty/powerlevel10k-wizard-env'
+} from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import {
   resolveSafePtyDefaultCwd,
   assertSafeAgentStartupCwd
@@ -24,15 +30,15 @@ import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from '../../providers/windows-shell-args'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
-import { selectShellStartupFeatures } from '../../shell-startup-features'
-import { parseWslPath } from '../../wsl'
-import { addWslEnvKeys } from '../../wsl-env'
+import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
+import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
-import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/agent-launch/startup/hermes-startup-query'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV

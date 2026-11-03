@@ -10,7 +10,7 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -57,6 +57,17 @@ function fold(rows: JournalRow[]): JournalReducerState {
     ).toEqual(
       [...state.submissions.values()]
         .filter((entry) => entry.dispatchState === 'pending' || entry.dispatchState === 'unknown')
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    )
+    expect(
+      journalInputOrder(state)
+        .sendingSubmissions()
+        .map((entry) => entry.clientMessageId)
+        .sort()
+    ).toEqual(
+      [...state.submissions.values()]
+        .filter((entry) => entry.dispatchState === 'pending')
         .map((entry) => entry.clientMessageId)
         .sort()
     )

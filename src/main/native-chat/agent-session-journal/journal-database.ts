@@ -5,7 +5,6 @@ import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import {
   createAgentSessionRecordTablesSql,
-  AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL,
   createJournalTablesSql,
   JOURNAL_DB_OLDEST_RELEASED_VERSION,
   JOURNAL_DB_SCHEMA_VERSION
@@ -75,7 +74,10 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     ensureQueuedMessagesTable(probe)
     ensureCommandReceiptsTable(probe)
     ensureJournalOutcomeTables(probe)
-    probe.exec(AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL)
+    // Sender identity follows clear predecessors without scanning saved conversations.
+    probe.exec(`CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+      ON agent_session_records (CASE WHEN json_valid(record_json)
+        THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END)`)
     ensureAgentSessionAttachmentClaimTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true

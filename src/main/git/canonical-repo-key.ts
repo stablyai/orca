@@ -2,7 +2,7 @@ import type { LocalGitExecOptions } from './repo-default-base-ref'
 import type { GitExecOptions } from './command-runner/git-exec-options'
 import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import { gitExecFileAsync } from './runner'
-import { resolveRevParsePath } from './worktree-path-comparison'
+import { resolveRevParsePath } from './worktrees/catalog/worktree-path-comparison'
 
 /** Fetch serialization and ref maintenance share a host-scoped Git common-dir identity across worktrees. */
 

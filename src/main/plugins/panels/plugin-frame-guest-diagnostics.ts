@@ -4,6 +4,13 @@ import {
   PLUGIN_FRAME_RESERVED_SEGMENT,
   pluginFrameOrigin
 } from '../../../shared/plugins/frames/plugin-frame-guest'
+import {
+  createPluginFrameBlockedTally,
+  isPluginFrameCancelledRequestEcho,
+  pluginFrameCspBlock,
+  pluginFrameRequestBlock,
+  type PluginFrameBlockedTally
+} from './plugin-frame-blocked-requests'
 
 /**
  * Author diagnostics for plugin `<webview>` guests: console errors, warnings and uncaught
@@ -31,6 +38,8 @@ export const PLUGIN_FRAME_CONSOLE_WINDOW_MS = 10_000
 let logSink: PluginFrameLogSink | null = null
 const guestsByPlugin = new Map<string, Set<WebContents>>()
 const limiters = new Map<string, () => 'log' | 'notice' | 'drop'>()
+const blockedTallies = new Map<string, PluginFrameBlockedTally>()
+const pluginKeyByFrameKey = new Map<string, string>()
 
 export function setPluginFrameGuestLogSink(next: PluginFrameLogSink | null): void {
   logSink = next
@@ -126,6 +135,31 @@ function limiterFor(pluginKey: string): () => 'log' | 'notice' | 'drop' {
   return limiter
 }
 
+function blockedTallyFor(pluginKey: string): PluginFrameBlockedTally | null {
+  let tally = blockedTallies.get(pluginKey)
+  if (!tally) {
+    const log = logSink?.(pluginKey)
+    if (!log) {
+      return null
+    }
+    tally = createPluginFrameBlockedTally({ log: (line) => log('warn', line) })
+    blockedTallies.set(pluginKey, tally)
+  }
+  return tally
+}
+
+/** The guest session cancelled a request off the plugin's origin. */
+export function notePluginFrameBlockedRequest(
+  frameKey: string,
+  url: string,
+  resourceType: string
+): void {
+  const pluginKey = pluginKeyByFrameKey.get(frameKey)
+  if (pluginKey) {
+    blockedTallyFor(pluginKey)?.note(pluginFrameRequestBlock(url, resourceType))
+  }
+}
+
 /** `did-attach-webview`, after the guest policies: routes its console and tracks it for inspect. */
 export function installPluginFrameGuestDiagnostics(
   guest: WebContents,
@@ -138,11 +172,15 @@ export function installPluginFrameGuestDiagnostics(
     guestsByPlugin.set(pluginKey, guests)
   }
   guests.add(guest)
+  pluginKeyByFrameKey.set(frameKey, pluginKey)
   guest.once('destroyed', () => {
+    blockedTallies.get(pluginKey)?.flush()
     const live = guestsByPlugin.get(pluginKey)
     live?.delete(guest)
     if (live?.size === 0) {
       guestsByPlugin.delete(pluginKey)
+      blockedTallies.delete(pluginKey)
+      pluginKeyByFrameKey.delete(frameKey)
     }
   })
   const log = logSink?.(pluginKey)
@@ -151,6 +189,15 @@ export function installPluginFrameGuestDiagnostics(
   }
   // Uncaught exceptions and unhandled rejections arrive here too, as `Uncaught …` errors.
   guest.on('console-message', (details) => {
+    // Refusals are counted per origin, outside the line budget, so real errors still get logged.
+    const block = pluginFrameCspBlock(details.message)
+    if (block) {
+      blockedTallyFor(pluginKey)?.note(block)
+      return
+    }
+    if (isPluginFrameCancelledRequestEcho(details.message)) {
+      return
+    }
     const formatted = formatPluginFrameConsoleLine(details, frameKey)
     if (!formatted) {
       return

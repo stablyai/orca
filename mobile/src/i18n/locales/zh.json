@@ -799,7 +799,8 @@
     },
     "prSidebar": {
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
+      "retryLoading": "重试加载 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
@@ -1521,21 +1522,6 @@
       "showMore": "再显示 {{count}} 条",
       "title": "评论"
     },
-    "conflictingFilesSection": {
-      "commitsBehind_one": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "commitsBehind_other": "落后 {{count}} 个提交（基础提交：{{baseCommit}}）",
-      "copyCommands": "复制命令",
-      "copyFailed": "复制文本失败",
-      "copyRefreshCommands": "复制可合并性刷新命令",
-      "detailsUnavailable": "冲突文件详细信息不可用",
-      "filesHeading": "冲突的文件",
-      "localMergeClean": "GitHub 提示存在冲突，但本地 Git 未能复现。请刷新 PR 或推送分支，以重新计算可合并性。",
-      "mustResolve": "该分支存在必须解决的冲突",
-      "refreshing": "刷新冲突细节…",
-      "resolveWithAi": "使用 AI 解决冲突",
-      "runFromWorktree": "从此工作树运行",
-      "title": "冲突"
-    },
     "linkPrForm": {
       "linkButton": "关联 PR",
       "linkNumber": "关联 #{{number}}",
@@ -1654,7 +1640,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "当前分支不可用。",
-      "providerUnavailable": "此提供商的托管评审面板不可用。"
+      "githubRemoteRequired": "此标签页需要 GitHub 远程仓库才能显示拉取请求详情。对于其他受支持的平台，请在“更改”中创建审查，然后在浏览器中打开。"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "加载人员失败",
@@ -1849,6 +1835,7 @@
       "attachmentAtMost": "{{agent}} 每条消息最多接受 {{limit}} 张图片，因此此消息未发送。",
       "attachmentEmpty": "此消息中的一张图片为空，因此消息未发送。",
       "attachmentInvalid": "此消息中的附件无法发送给智能体。",
+      "attachmentsExpired": "{{names}} 已过期。",
       "attachmentLargerThan": "此消息中的一张图片超过 {{size}} MB，因此消息未发送。",
       "attachmentNoSource": "此消息中的一张图片没有可发送的文件，因此消息未发送。",
       "attachmentNotAFile": "此消息中的一张图片不是文件，因此消息未发送。",
@@ -1922,6 +1909,7 @@
       "providerRetrying": "{{agent}} 遇到临时问题，正在重试。",
       "providerRetryingQuoted": "{{agent}} 正在重试：{{detail}}。",
       "providerStartFailed": "{{agent}} 在完成启动前已停止。",
+      "savedConversationMissing": "{{agent}} 找不到此聊天已保存的对话。",
       "queueFull": "等待智能体处理的消息过多，因此此消息未发送。",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天。",
       "runCommandAgain": "请重新运行 /{{command}}。",
@@ -2051,8 +2039,7 @@
       "promptUnconfirmed": "智能体已启动，但无法确认提示词是否已发送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合并 PR 失败。",
-      "refreshFailed": "刷新 PR 失败。"
+      "mergeFailed": "合并 PR 失败。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "智能体已启动",
@@ -2433,6 +2420,7 @@
       "queueTooLarge": "队列中等待的文本过多。",
       "quitTerminalAgent": "请退出该智能体，以便在此处继续聊天。",
       "reattachFile": "请将其移除后重新附加。",
+      "reattachFiles": "请将它们移除后重新附加。",
       "recordFailed": "Orca 无法将此内容保存到聊天历史记录中。",
       "recordUnreadable": "Orca 无法读取此聊天的已保存状态。",
       "reopenChat": "请重新打开聊天以再次检查。",
@@ -2508,6 +2496,10 @@
       "terminal": "终端",
       "tapToFocusPane": "{{title}}，点按以聚焦",
       "inputPane": "{{title}} · 输入"
+    },
+    "structuredOpen": {
+      "worktreeDeleted": "工作树已删除。",
+      "folderWorkspaceRemoved": "文件夹工作区已移除。"
     }
   },
   "settings": {
@@ -2655,6 +2647,9 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
+    },
+    "agents": {
+      "permissionOwnAll": "各智能体自己的设置"
     }
   },
   "sourceControl": {

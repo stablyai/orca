@@ -1,0 +1,29 @@
+# The phone must check desktop data it types; `z.custom<T>()` with no check admits anything as T.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: mobile-no-unchecked-zod-custom
+language: typescript
+severity: error
+message: '`z.custom<T>()` without a check admits any value as T. Pass a type guard, use a real schema, or keep the value `unknown`.'
+files:
+  - '**/mobile/src/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixture.*'
+rule:
+  any:
+    - pattern: z.custom<$T>()
+    - pattern: z.custom()
+---
+id: mobile-no-unchecked-zod-custom-tsx
+language: tsx
+severity: error
+message: '`z.custom<T>()` without a check admits any value as T. Pass a type guard, use a real schema, or keep the value `unknown`.'
+files:
+  - '**/mobile/src/**'
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixture.*'
+rule:
+  any:
+    - pattern: z.custom<$T>()
+    - pattern: z.custom()

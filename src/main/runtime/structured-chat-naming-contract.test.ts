@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { getCommitMessageAgentSpec } from '../../shared/commit-message-agent-spec'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {

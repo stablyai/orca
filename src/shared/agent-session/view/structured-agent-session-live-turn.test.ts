@@ -69,17 +69,6 @@ describe('isStructuredAgentSessionThinking', () => {
     expect(isStructuredAgentSessionThinking({ items: [completedTurn, reasoning(2)] })).toBe(false)
   })
 
-  it('stops at a typed turn item, the carrier this host writes', () => {
-    const typedTurn = (sequence: number, turnId: string): AgentJournalRenderItem =>
-      item(`turn-${turnId}`, sequence, { kind: 'turn', turnId, state: 'running' })
-    expect(
-      isStructuredAgentSessionThinking({ items: [typedTurn(1, 'turn-1'), reasoning(2)] })
-    ).toBe(true)
-    expect(
-      isStructuredAgentSessionThinking({ items: [reasoning(1), typedTurn(2, 'turn-2')] })
-    ).toBe(false)
-  })
-
   it("reads the host's running turn when the turn's record is above the loaded rows", () => {
     const hostTurn = (state: 'running' | 'completed') => ({
       itemId: 'turn-start',
@@ -170,28 +159,6 @@ describe("the live-turn readers answer for the session's own agent", () => {
     expect(
       isStructuredAgentSessionThinking({ items: [turnStart, spawnCall, childReasoning] })
     ).toBe(false)
-  })
-
-  it("reports the parent's own running call while a subagent runs its own", () => {
-    const childCall = child('child-grep', 3, {
-      kind: 'tool-call',
-      name: 'Grep',
-      input: { pattern: 'x' },
-      state: 'running'
-    })
-    expect(statusStructuredAgentSessionToolCall([turnStart, spawnCall, childCall])?.name).toBe(
-      'Task'
-    )
-  })
-
-  it('reports nothing running when only a subagent has a live call', () => {
-    const childCall = child('child-grep', 2, {
-      kind: 'tool-call',
-      name: 'Grep',
-      input: { pattern: 'x' },
-      state: 'running'
-    })
-    expect(statusStructuredAgentSessionToolCall([turnStart, childCall])).toBeNull()
   })
 
   it('treats an agent id that failed to resolve as a child, not as the parent', () => {

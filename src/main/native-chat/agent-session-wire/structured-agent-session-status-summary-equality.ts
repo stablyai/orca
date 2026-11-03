@@ -11,6 +11,9 @@ export function structuredStatusSummariesEqual(
 ): boolean {
   return (
     a.workspaceId === b.workspaceId &&
+    a.usageLimitContinue?.turnItemId === b.usageLimitContinue?.turnItemId &&
+    a.usageLimitContinue?.resetsAt === b.usageLimitContinue?.resetsAt &&
+    a.usageLimitContinue?.state === b.usageLimitContinue?.state &&
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
@@ -24,6 +27,7 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.reportedModel === b.reportedModel &&
     a.permissionMode === b.permissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&

@@ -13,6 +13,7 @@ import type { TerminalViewAttributes } from '../../../../shared/terminal-view-at
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   isConnected: () => boolean
+  getPtyId: () => string
   sendInput: ReturnType<typeof vi.fn<(data: string) => boolean>>
   sendInputImmediate: ReturnType<typeof vi.fn<(data: string) => boolean>>
 } {
@@ -20,6 +21,7 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
   const sendOk = overrides?.sendOk ?? true
   return {
     isConnected: () => connected,
+    getPtyId: () => 'pty-1',
     sendInput: vi.fn<(data: string) => boolean>(() => sendOk),
     sendInputImmediate: vi.fn<(data: string) => boolean>(() => sendOk)
   }
@@ -183,6 +185,17 @@ describe('applyTerminalAppearance theme assignment', () => {
     // Identity-stable theme means xterm never re-runs _setTheme, so a TUI's modifyColors mutation survives the font tweak.
     expect(pane.terminal.options.theme).toBe(firstTheme)
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
+  })
+
+  it('applies scroll-on-input from settings', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, settings)
+    expect(pane.terminal.options.scrollOnUserInput).toBe(true)
+
+    apply(pane, { ...settings, terminalScrollOnUserInput: false })
+    expect(pane.terminal.options.scrollOnUserInput).toBe(false)
   })
 
   it('applies regular and bold font weights independently', () => {

@@ -101,9 +101,11 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
     borderLeftWidth: 1,
     borderLeftColor: colors.borderSubtle
   },
+  // Opaque like the chrome behind it: see the chat page scroll (#36553).
   tabScroll: {
     flex: 1,
-    maxHeight: 44
+    maxHeight: 44,
+    backgroundColor: colors.bgPanel
   },
   tabScrollInTopBar: {
     alignSelf: 'stretch',

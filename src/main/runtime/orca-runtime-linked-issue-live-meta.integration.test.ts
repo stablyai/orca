@@ -1,11 +1,13 @@
+import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
-import type * as GitStatusModule from '../git/status'
+
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
-import type * as WorktreeModule from '../git/worktree'
+
 import { OrcaRuntimeService } from './orca-runtime'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
@@ -16,14 +18,22 @@ const mocks = vi.hoisted(() => ({
   resolveCommitMessageSettings: vi.fn()
 }))
 
-vi.mock('../git/worktree', async () => ({
-  ...(await vi.importActual<typeof WorktreeModule>('../git/worktree')),
-  listWorktrees: mocks.listWorktrees,
-  listWorktreesStrict: mocks.listWorktrees
-}))
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: mocks.listWorktrees
+  }
+})
 
-vi.mock('../git/status', async () => ({
-  ...(await vi.importActual<typeof GitStatusModule>('../git/status')),
+vi.mock('../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: mocks.listWorktrees
+  }
+})
+
+vi.mock('../git/source-control/staged-commit-context', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getStagedCommitContext: mocks.getStagedCommitContext
 }))
 

@@ -168,6 +168,8 @@ function mountTerminalInputSend(
     actions = useSendActions(
       mountFixture<Parameters<typeof useSendActions>[0]>({
         sendTerminalUserInput: terminalInputSend.request,
+        sendTerminalOrderedInput: terminalInputSend.request,
+        terminalRefs: { current: new Map() },
         client,
         activeHandle: HANDLE,
         activeSessionTab,

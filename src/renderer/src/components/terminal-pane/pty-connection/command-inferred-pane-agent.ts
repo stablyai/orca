@@ -9,9 +9,9 @@ import { registerAgentHookTerminalLifecycleHandler } from '../agent-hook-termina
 import type { AgentCompletionStatusSnapshot } from '../agent-completion-coordinator-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-command-line-intent'
+import { recognizeAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/agent-command-line-intent'
 import type { TerminalAgent } from '../../../../../shared/terminal-agent'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 import { MANUAL_AGENT_COMMAND_MAX_CHARS } from './pty-connect-limits'
 

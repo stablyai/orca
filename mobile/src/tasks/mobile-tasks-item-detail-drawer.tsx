@@ -2,7 +2,6 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   ActionSheetModal,
-  BottomDrawer,
   View,
   TaskProviderLogo,
   colors,
@@ -11,6 +10,7 @@ import {
   RefreshCw,
   useState
 } from './mobile-tasks-dependencies'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { styles } from './mobile-tasks-legacy-styles'
 import { taskKindLabel } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
@@ -21,7 +21,7 @@ import {
 import { pressedStyle } from '../theme/mobile-theme'
 
 export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresentationModel }) {
-  const { actionItem, detailLoading, taskDetailHandoff, setDetailRefreshSeq, taskUiReady } = model
+  const { actionItem, detailLoading, taskDetailHandoff, requestDetailRefresh, taskUiReady } = model
   const t = useMobileTranslation()
   // Keyed by item so a menu left open cannot reappear over the next item's sheet.
   const [menuItemKey, setMenuItemKey] = useState<string | null>(null)
@@ -45,7 +45,7 @@ export function MobileTasksItemDetailDrawer({ model }: { model: ConnectionPresen
                   disabled={detailLoading}
                   accessibilityRole="button"
                   accessibilityLabel={t('tasks.itemDetailDrawer.refreshDetails', 'Refresh details')}
-                  onPress={() => setDetailRefreshSeq((current) => current + 1)}
+                  onPress={requestDetailRefresh}
                 >
                   <RefreshCw
                     size={16}

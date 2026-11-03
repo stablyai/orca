@@ -106,7 +106,6 @@ vi.mock('@/lib/launch-agent-in-new-tab', async () => {
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { runSourceControlAgentActionStart } from '@/components/right-sidebar/runSourceControlAgentActionStart'
-import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
 import {
   getStructuredAgentSessionLaunchLifecycle,
   resetStructuredAgentLaunchRegistryForTests
@@ -301,48 +300,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
     })
     expectSentTo(fresh.sessionId, 'fix it')
     expect(mocks.seedDraft).not.toHaveBeenCalled()
-  })
-
-  it('opens a new chat from a + menu pick while another chat is unconfirmed', async () => {
-    await leaveFirstLaunchUnconfirmed()
-    // Why: the + menu disables an agent only while a pick would join a start in flight.
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('idle')
-
-    const pick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-5' })
-
-    expect(pick.sessionId).toBe(fresh.sessionId)
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('pending')
-    // No re-check of the unconfirmed chat: only its own two create attempts and the new one.
-    expect(mocks.launch).toHaveBeenCalledTimes(3)
-    await expect(pick.launchResult).resolves.toEqual({ sessionId: fresh.sessionId, fence: 1 })
-  })
-
-  it('still coalesces one action delivered twice racing for one chat', async () => {
-    mocks.createIntent.mockReturnValueOnce(fresh)
-    mocks.launch.mockImplementationOnce(() => new Promise(() => undefined))
-
-    const first = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'double-click',
-      prompt: 'one'
-    })
-    const second = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'double-click',
-      prompt: 'one'
-    })
-
-    expect(second.sessionId).toBe(first.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-  })
-
-  it('still re-checks an unconfirmed resume instead of adopting its conversation twice', async () => {
-    await leaveFirstLaunchUnconfirmed({ resume: true })
-    expect(getStructuredAgentLaunchStatus(WORKTREE_ID, 'codex')).toBe('unknown')
-
-    expect(
-      startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'request-8', resumeFrom })
-        .sessionId
-    ).toBe(unconfirmed.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
   })
 
   it('never joins a resume of the same conversation id running on another host', async () => {

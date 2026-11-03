@@ -12,7 +12,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('./components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./components/bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 
 vi.mock('lucide-react-native', () => ({
   Activity: vi.fn(),

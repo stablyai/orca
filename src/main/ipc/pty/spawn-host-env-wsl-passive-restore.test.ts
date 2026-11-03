@@ -23,22 +23,22 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   runProcess: mocks.regQuery
 }))
 // wsl.exe's own list is unavailable, so the default comes from the registry alone.
-vi.mock('../../wsl', async (importOriginal) => ({
+vi.mock('../../wsl/discovery/distro-catalog', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWslDistrosAsync: async () => []
 }))
 vi.mock('../../codex/codex-state-db-backfill-recovery', () => ({
   ensureCodexStateDbBackfillRecoveryStarted: mocks.ensureBackfill
 }))
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => ({
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   blockedWslDistroForPath: mocks.blockedPath
 }))
 
 import { resolvePtySpawnHostEnv } from './spawn-host-env'
 import { noCodexResumeLaunch, stripSequencedStartupResumeArgv } from './host-env/codex-resume'
-import { isWslUserActFor } from '../../wsl/wsl-user-act-scope'
-import { resetWslDefaultDistroForTests } from '../../wsl/wsl-default-distro'
+import { isWslUserActFor } from '../../wsl/discovery/wsl-user-act-scope'
+import { resetWslDefaultDistroForTests } from '../../wsl/discovery/wsl-default-distro'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 

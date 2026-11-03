@@ -21,7 +21,7 @@ import {
 } from '@/lib/agent-session-continuation'
 import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
@@ -32,7 +32,7 @@ import {
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
-import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
 type UsageLimitActions = {
   account: ReactNode
@@ -94,6 +94,7 @@ export function NativeChatUsageLimitActionsProvider({
   const [prepared, setPrepared] = useState<{
     key: string
     request: AgentSessionContinuationRequest
+    onStarted?: () => void
   } | null>(null)
   const request = prepared?.key === intentKey ? prepared.request : null
   const canHandOff =
@@ -143,6 +144,7 @@ export function NativeChatUsageLimitActionsProvider({
     }
     current.pending = true
     setPreparing(current.key)
+    const onStarted = view.onUsageLimitHandOffStarted
     const options = await callStructuredAgentSession<AgentSessionOptionsResult>(
       pane.target,
       'agentSession.options',
@@ -171,6 +173,7 @@ export function NativeChatUsageLimitActionsProvider({
     if (buildAgentSessionContinuationPrompt(source, 'focused')) {
       setPrepared({
         key: current.key,
+        onStarted,
         request: {
           source,
           worktreeId: directory.worktreeId,
@@ -193,7 +196,8 @@ export function NativeChatUsageLimitActionsProvider({
     pane.target,
     chatTab,
     conversationName,
-    messages
+    messages,
+    view.onUsageLimitHandOffStarted
   ])
   const actions = useMemo<UsageLimitActions>(
     () => ({
@@ -230,6 +234,7 @@ export function NativeChatUsageLimitActionsProvider({
         <AgentSessionContinuationDialog
           open
           request={request}
+          onStarted={prepared?.onStarted}
           onOpenChange={(open) => {
             if (!open) {
               intent.current = { key: intentKey, pending: false }

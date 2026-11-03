@@ -6,7 +6,7 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
-import { addFanoutListener, addFanoutListeners } from '../event-listener-fanout'
+import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 
