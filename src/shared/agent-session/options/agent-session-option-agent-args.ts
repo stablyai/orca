@@ -103,7 +103,7 @@ export function removeAgentArgOption(
   tokens: readonly string[],
   aliases: readonly string[],
   matchesValue: (value: string | undefined) => boolean = () => true,
-  takesValue = true
+  takesValue: boolean | 'required' = true
 ): string[] {
   const kept: string[] = []
   const required = agentRequiredValueOptions(agent)
@@ -132,16 +132,30 @@ export function normalizePiExtraAgentArgs(tokens: readonly string[]): string[] {
   })
 }
 
-/** Pi provider-qualified models override a different default provider. */
-export function removePiProviderForModel(
+/** Reconcile a Pi model override without forwarding an inline key to another provider. */
+export function reconcilePiModelDefaults(
   tokens: readonly string[],
   model: string | undefined
-): string[] {
+): string[] | null {
+  const options = agentRequiredValueOptions('pi')
+  const apiKey = findOptionOccurrence(tokens, ['--api-key'], true, options, 0, 'required')
+  if (apiKey) {
+    const previous = findOptionOccurrence(tokens, ['--provider'], true, options, 0, 'required')
+    if (
+      !previous?.value ||
+      tokens[previous.index] !== '--provider' ||
+      previous.value.startsWith('-') ||
+      !apiKey.value ||
+      apiKey.value.startsWith('-')
+    ) {
+      return null
+    }
+  }
   const provider = /^([^/]+)\/(.+)$/
     .exec(model?.trim() ?? '')?.[1]
     .trim()
     .toLowerCase()
-  return provider
+  const kept = provider
     ? removeAgentArgOption(
         'pi',
         tokens,
@@ -149,6 +163,9 @@ export function removePiProviderForModel(
         (value) => value?.trim().toLowerCase() !== provider
       )
     : [...tokens]
+  return apiKey && kept.length !== tokens.length
+    ? removeAgentArgOption('pi', kept, ['--api-key'], () => true, 'required')
+    : kept
 }
 
 /** Shared required-operand facts for terminal parsing, including CLI-sharing teams. */

@@ -12,7 +12,11 @@ import {
 import type { AgentLaunchProfileSettings } from './tui-agent-launch-defaults'
 import { readLaunchPermissionChoice } from './tui-agent-permission-choice'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
-import { agentArgTerminatorIndex } from './agent-session/options/agent-session-option-agent-args'
+import {
+  agentArgTerminatorIndex,
+  agentRequiredValueOptions
+} from './agent-session/options/agent-session-option-agent-args'
+import { findOptionOccurrence } from './command-option-occurrence'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   quoteStartupArg,
@@ -235,6 +239,17 @@ export function terminalSessionOptionInputs(args: {
     throw new Error(extras.error)
   }
   if (extras?.ok) {
+    if (args.agent === 'pi' && extras.kinds.has('model') && args.command) {
+      const command = tokenizeStartupCommand(args.command, args.shell)
+      if (!command.ok) {
+        throw new Error('Pi model overrides require a valid custom command.')
+      }
+      if (
+        findOptionOccurrence(command.tokens, ['--api-key'], false, agentRequiredValueOptions('pi'))
+      ) {
+        throw new Error('Pi model overrides cannot use --api-key in a custom command.')
+      }
+    }
     const merged = mergeParsedExtraAgentArgs({
       agent: args.agent,
       defaultArgs: raw,

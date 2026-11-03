@@ -189,6 +189,102 @@ describe('mergeExtraAgentArgs', () => {
     expect(merged(agent, defaults, extras)).toEqual(expected)
   })
 
+  it.each(['posix', 'powershell', 'cmd'] as const)(
+    'does not forward a Pi API key to a different provider on %s',
+    (shell) => {
+      expect(
+        merged(
+          'pi',
+          '--provider anthropic --api-key "host secret" --model old',
+          '--model openai/gpt-5',
+          shell
+        )
+      ).toEqual(['--model', 'openai/gpt-5'])
+    }
+  )
+
+  it('keeps the Pi API key when the explicit provider remains in effect', () => {
+    for (const model of ['new-model', 'anthropic/new-model']) {
+      expect(
+        merged('pi', '--provider anthropic --api-key secret --model old', `--model ${model}`)
+      ).toEqual(['--provider', 'anthropic', '--api-key', 'secret', '--model', model])
+    }
+  })
+
+  it('rejects Pi model overrides when the inline key provider is unknown', () => {
+    const result = mergeExtraAgentArgs({
+      agent: 'pi',
+      defaultArgs: '--api-key host-secret --model anthropic/old',
+      extraAgentArgs: '--model openai/gpt-5',
+      shell: 'posix'
+    })
+    expect(result).toEqual({ ok: false, error: expect.stringContaining('--api-key') })
+    if (!result.ok) {
+      expect(result.error).not.toContain('host-secret')
+    }
+  })
+
+  it.each(['--provider=anthropic --api-key secret', '--provider anthropic --api-key -secret'])(
+    'rejects a Pi model override with ambiguous credentials: %s',
+    (defaultArgs) => {
+      expect(
+        mergeExtraAgentArgs({
+          agent: 'pi',
+          defaultArgs,
+          extraAgentArgs: '--model openai/gpt-5',
+          shell: 'posix'
+        })
+      ).toMatchObject({ ok: false, error: expect.stringContaining('--api-key') })
+    }
+  )
+
+  it('removes every Pi API key and dash-leading value on a provider change', () => {
+    expect(
+      merged(
+        'pi',
+        '--provider anthropic --api-key first --api-key -second --model old',
+        '--model openai/gpt-5'
+      )
+    ).toEqual(['--model', 'openai/gpt-5'])
+  })
+
+  it('keeps a Pi API key when only thinking changes', () => {
+    expect(merged('pi', '--api-key secret --thinking low', '--thinking high')).toEqual([
+      '--api-key',
+      'secret',
+      '--thinking',
+      'high'
+    ])
+  })
+
+  it('removes a Pi API key when the effective provider changes among duplicates', () => {
+    expect(
+      merged(
+        'pi',
+        '--provider openai --provider anthropic --api-key secret --model old',
+        '--model openai/gpt-5'
+      )
+    ).toEqual(['--provider', 'openai', '--model', 'openai/gpt-5'])
+  })
+
+  it('does not treat Pi API-key-like positional text as a credential', () => {
+    expect(
+      merged(
+        'pi',
+        '--system-prompt --api-key --provider old --model old -- --api-key literal',
+        '--model new/model'
+      )
+    ).toEqual([
+      '--system-prompt',
+      '--api-key',
+      '--model',
+      'new/model',
+      '--',
+      '--api-key',
+      'literal'
+    ])
+  })
+
   it('keeps flag-like values of other default options', () => {
     expect(
       merged('claude', '--append-system-prompt "--model=haiku" --model sonnet', '--model opus')
@@ -221,7 +317,10 @@ describe('mergeExtraAgentArgs', () => {
 describe('parseExtraAgentArgs rejections', () => {
   it.each([
     ['claude', 'bad\u0007', 'control characters'],
+    ['claude', '--model\u007fopus', 'control characters'],
+    ['claude', '--model\u009fopus', 'control characters'],
     ['claude', '--model\u2028opus', 'control characters'],
+    ['claude', '--model\u2029opus', 'control characters'],
     ['claude', '--model "opus', 'Unclosed quote'],
     ['claude', '--model opus; rm -rf /', 'shell syntax'],
     ['claude', '--model $(whoami)', 'shell syntax'],

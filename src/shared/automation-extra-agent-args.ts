@@ -1,8 +1,8 @@
 import {
   agentArgTerminatorIndex,
   normalizePiExtraAgentArgs,
-  removeAgentArgOption,
-  removePiProviderForModel
+  reconcilePiModelDefaults,
+  removeAgentArgOption
 } from './agent-session/options/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { findOptionOccurrence } from './command-option-occurrence'
@@ -72,16 +72,7 @@ export function getExtraAgentArgsPlaceholder(agent: TuiAgent): string {
     .join(' ')
 }
 
-// C0, DEL, C1, and the Unicode line/paragraph separators.
-function hasControlCharacter(value: string): boolean {
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029) {
-      return true
-    }
-  }
-  return false
-}
+const CONTROL_CHARACTERS = new RegExp(String.raw`[\u0000-\u001f\u007f-\u009f\u2028\u2029]`, 'u')
 
 // One English table: `error` stays English for older readers; the renderer translates by code.
 export const EXTRA_AGENT_ARGS_FAILURE_COPY = {
@@ -174,7 +165,7 @@ export function parseExtraAgentArgs(args: {
   if (new TextEncoder().encode(args.extraAgentArgs).length > EXTRA_AGENT_ARGS_MAX_BYTES) {
     return extraAgentArgsFailure('tooLarge')
   }
-  if (hasControlCharacter(args.extraAgentArgs)) {
+  if (CONTROL_CHARACTERS.test(args.extraAgentArgs)) {
     return extraAgentArgsFailure('controlCharacters')
   }
   const text = args.extraAgentArgs.trim()
@@ -246,14 +237,17 @@ function removeDefaultsFor(
   agent: TuiAgent,
   extras: Extract<ParsedExtraAgentArgs, { ok: true }>,
   tokens: readonly string[]
-): string[] {
+): string[] | null {
   const { kinds } = extras
   if (agent === 'pi') {
-    let result = [...tokens]
+    let result: string[] | null = [...tokens]
     if (kinds.has('model')) {
       result = removeAgentArgOption(agent, result, ['--model'])
       const model = findOptionOccurrence(extras.tokens, ['--model'], false)?.value
-      result = removePiProviderForModel(result, model)
+      result = reconcilePiModelDefaults(result, model)
+      if (!result) {
+        return null
+      }
     }
     if (kinds.has('effort')) {
       result = removeAgentArgOption(agent, result, ['--thinking'])
@@ -315,6 +309,12 @@ export function mergeParsedExtraAgentArgs(args: {
     return { ok: false, error: `Default agent arguments are invalid: ${defaults.error}` }
   }
   const kept = removeDefaultsFor(args.agent, extras, defaults.tokens)
+  if (!kept) {
+    return {
+      ok: false,
+      error: 'Pi model overrides require an explicit --provider and valid --api-key value.'
+    }
+  }
   const terminator = agentArgTerminatorIndex(args.agent, kept)
   const merged = [...kept.slice(0, terminator), ...extras.tokens, ...kept.slice(terminator)]
   const agentArgs = merged.map((token) => quoteStartupArg(token, args.shell)).join(' ')

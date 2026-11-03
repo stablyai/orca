@@ -47,6 +47,48 @@ describe('resolveAgentStartupPlanInputs with extra agent args', () => {
     expect(command).not.toContain("'low'")
   })
 
+  it.each(['pi --provider old --api-key host-secret', 'env -- pi --api-key host-secret'])(
+    'refuses a Pi inline API key in a custom command: %s',
+    (command) => {
+      expect(() =>
+        resolveAgentStartupPlanInputs({
+          agent: 'pi',
+          settings: { agentCmdOverrides: { pi: command } },
+          platform: 'linux',
+          isRemote: false,
+          shell: undefined,
+          extraAgentArgs: '--model new/model'
+        })
+      ).toThrow(/--api-key/)
+    }
+  )
+
+  it('does not confuse a custom command operand with an inline API key', () => {
+    expect(() =>
+      resolveAgentStartupPlanInputs({
+        agent: 'pi',
+        settings: { agentCmdOverrides: { pi: 'pi --system-prompt --api-key' } },
+        platform: 'linux',
+        isRemote: false,
+        shell: undefined,
+        extraAgentArgs: '--model new/model'
+      })
+    ).not.toThrow()
+  })
+
+  it('keeps an inline API key in a custom command when only thinking changes', () => {
+    expect(() =>
+      resolveAgentStartupPlanInputs({
+        agent: 'pi',
+        settings: { agentCmdOverrides: { pi: 'pi --provider old --api-key secret' } },
+        platform: 'linux',
+        isRemote: false,
+        shell: undefined,
+        extraAgentArgs: '--thinking high'
+      })
+    ).not.toThrow()
+  })
+
   it('matches explicitly composed launch defaults and extras', () => {
     const headless = resolveAgentStartupPlanInputs({
       agent: 'claude',
