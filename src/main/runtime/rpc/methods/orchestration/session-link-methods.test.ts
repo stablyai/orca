@@ -312,6 +312,13 @@ describe('session link caller authority', () => {
         { runtime, caller: { kind: 'desktop' } }
       )
     ).toThrow('changed')
+    await expect(
+      call(
+        'orchestration.linkControl',
+        { id: 'link-1', version: input.version, operationId: 'premature-resume', action: 'resume' },
+        { runtime, caller: { kind: 'desktop' } }
+      )
+    ).rejects.toThrow('Review the unconfirmed delivery')
     call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
     call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
     expect(store.get('link-1').state).toBe('paused')
@@ -326,5 +333,16 @@ describe('session link caller authority', () => {
         { runtime, caller: { kind: 'desktop' } }
       )
     ).toThrow('unconfirmed')
+    await call(
+      'orchestration.linkControl',
+      {
+        id: 'link-1',
+        version: store.get('link-1').version,
+        operationId: 'resume-reviewed',
+        action: 'resume'
+      },
+      { runtime, caller: { kind: 'desktop' } }
+    )
+    expect(store.get('link-1').state).toBe('active')
   })
 })

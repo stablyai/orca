@@ -21073,7 +21073,8 @@
       "reviewDeliveryHelp": "This message may already have reached the agent. Check the recipient chat. Marking it reviewed keeps the link paused and allows later messages after you continue; this message will never be resent.",
       "checkedRecipient": "I checked the recipient chat",
       "resolveDelivery": "Mark reviewed; do not resend",
-      "deliveryReviewed": "Delivery reviewed by the owner; automatic resend is disabled."
+      "deliveryReviewed": "Delivery reviewed by the owner; automatic resend is disabled.",
+      "reviewBeforeContinue": "Review the unconfirmed delivery before continuing"
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

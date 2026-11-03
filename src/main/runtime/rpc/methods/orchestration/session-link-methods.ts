@@ -240,6 +240,13 @@ export const SESSION_LINK_METHODS = [
       }
       if (!replay && params.action === 'resume') {
         const events = store.events(link.id)
+        if (events.some((event) => event.state === 'blocked' && event.retryable === false)) {
+          throw new OrchestrationError(
+            'session_link_refused',
+            'Review the unconfirmed delivery before resuming.',
+            { effectsApplied: false }
+          )
+        }
         const requestIndex = events.findLastIndex((e) => e.kind === 'owner-request')
         if (
           requestIndex !== -1 &&

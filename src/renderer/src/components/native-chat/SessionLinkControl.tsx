@@ -37,6 +37,9 @@ export function SessionLinkControl({
     link?.state === 'active' &&
     snapshot &&
     link.participants.some((p) => sessionLinkWaitingFor(snapshot.events, p.sessionId))
+  const unresolvedDelivery =
+    snapshot?.events.some((event) => event.state === 'blocked' && event.retryable === false) ??
+    false
   const status =
     link?.state === 'paused'
       ? t('components.sessionLink.paused', 'Paused')
@@ -102,7 +105,20 @@ export function SessionLinkControl({
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={state.busy || state.uncertain || link?.state === 'ended'}
+                  disabled={
+                    state.busy ||
+                    state.uncertain ||
+                    link?.state === 'ended' ||
+                    (link?.state === 'paused' && unresolvedDelivery)
+                  }
+                  title={
+                    link?.state === 'paused' && unresolvedDelivery
+                      ? t(
+                          'components.sessionLink.reviewBeforeContinue',
+                          'Review the unconfirmed delivery before continuing'
+                        )
+                      : undefined
+                  }
                   onClick={() => control(link?.state === 'paused' ? 'resume' : 'pause')}
                 >
                   {link?.state === 'paused'
