@@ -1,5 +1,5 @@
 import { statSync } from 'node:fs'
-import { fileStatSignature } from './file-stat-signature'
+import { fileStatSignature } from '../filesystem/file-stat-signature'
 
 export type IntegrationStateFileCache<T> = {
   get(): T

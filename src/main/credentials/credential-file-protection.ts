@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import {
   classifyUnenvelopedCredential,
   type SecretAtRestProtection
-} from '../shared/secret-at-rest-protection'
+} from '../../shared/secret-at-rest-protection'
 
 /** Classify unenveloped token/ciphertext bytes without decrypting or prompting for the keychain. */
 export function readCredentialFileProtection(path: string): SecretAtRestProtection | null {

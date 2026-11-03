@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
 import {
   ProtectedSecretPersistence,
   type ProtectedSecretRetentionUpdate

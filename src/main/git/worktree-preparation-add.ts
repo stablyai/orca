@@ -2,7 +2,7 @@ import { lstat } from 'node:fs/promises'
 import { isUnsupportedWorktreeAddLockReasonError } from '../../shared/git-worktree-command-capabilities'
 import { resolveWorktreeHostPath } from '../../shared/git-metadata-path'
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
-import { toHostFilesystemPath } from '../host-tree-removal'
+import { toHostFilesystemPath } from '../filesystem/host-tree-removal'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync } from './runner'
 import {

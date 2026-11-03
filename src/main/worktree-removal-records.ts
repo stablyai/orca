@@ -4,7 +4,7 @@ import {
   sidecarSnapshotFile,
   withSidecarSnapshotQueue,
   writeSidecarSnapshot
-} from './sidecar-snapshot-file'
+} from './filesystem/sidecar-snapshot-file'
 
 const RECORDS_FILE_NAME = 'orca-worktree-removals.json'
 const RECORDS_VERSION = 1

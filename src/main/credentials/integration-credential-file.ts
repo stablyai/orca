@@ -9,13 +9,13 @@ import {
   unlinkSync,
   writeSync
 } from 'node:fs'
-import { getSecretStore } from '../shared/secret-store'
-import { fsyncFileSync } from '../shared/secure-file'
-import { writeRestrictedWindowsFile } from '../shared/secure-path-windows-acl'
+import { getSecretStore } from '../../shared/secret-store'
+import { fsyncFileSync } from '../../shared/secure-file'
+import { writeRestrictedWindowsFile } from '../../shared/secure-path-windows-acl'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
-} from '../shared/integration-credential-errors'
+} from '../../shared/integration-credential-errors'
 
 // Empty files mean no saved credential; keep status consistent with token reads.
 export function credentialFileHasContent(path: string): boolean {

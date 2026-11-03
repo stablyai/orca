@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 
 /** Plain-Node entries import this module; the build guard rejects literal Electron requires. */
 export function resolveForkedChildEntryPath(
