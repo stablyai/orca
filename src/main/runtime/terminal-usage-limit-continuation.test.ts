@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { seedLegacyAgentStatusForTests } from '../../shared/agent-hook-listener/listener-state'
 import { terminalUsageLimitGuard } from '../../shared/agent-hook-listener/terminal-usage-limit-guard'
 import { reduceHostTurnEnd } from '../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
