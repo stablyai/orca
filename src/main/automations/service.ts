@@ -1,3 +1,5 @@
+import { getAutomationRunOperations } from '../persistence/loading-store/automation-persistence'
+import type { AutomationRunsChanged } from '../persistence/scheduling-automations/automation-run-operations'
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
@@ -42,10 +44,7 @@ import type {
   PublishAutomationsChanged
 } from '../../shared/runtime-client-events'
 
-const DEFAULT_TICK_MS = 60 * 1000
-
 export class AutomationService {
-  private readonly store: Store
   private readonly tickMs: number
   private timer: ReturnType<typeof setInterval> | null = null
   private webContents: AutomationRendererChannel | null = null
@@ -68,7 +67,7 @@ export class AutomationService {
   externalProbePriority: (<T>(run: () => T) => T) | null = null
 
   constructor(
-    store: Store,
+    private readonly store: Store,
     opts: {
       tickMs?: number
       claudeUsage?: ClaudeUsageStore
@@ -80,17 +79,14 @@ export class AutomationService {
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
   ) {
-    this.store = store
-    this.tickMs = opts.tickMs ?? DEFAULT_TICK_MS
+    this.tickMs = opts.tickMs ?? 60 * 1000
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
     this.headlessDispatcher = opts.headlessDispatcher ?? null
     this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
-    this.runs = createAutomationRunWriter(store, this.publish, () =>
-      this.completionWatcher?.retain(store.listAutomationRuns())
-    )
+    this.runs = createAutomationRunWriter(store, this.publish, this.retainRuns)
     this.completionWatcher = opts.terminalObserver
       ? new AutomationRunCompletionWatcher({
           observer: opts.terminalObserver,
@@ -101,8 +97,13 @@ export class AutomationService {
       : null
   }
 
+  private readonly retainRuns: AutomationRunsChanged = (mutation) => {
+    const runs = getAutomationRunOperations(this.store).state.automationRuns ?? []
+    this.completionWatcher?.retain(runs, mutation)
+  }
+
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
-    this.completionWatcher?.retain(this.store.listAutomationRuns())
+    this.retainRuns()
     this.publish?.(payload)
   }
 
@@ -177,11 +178,14 @@ export class AutomationService {
     )
   }
 
-  async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+  async markDispatchResult(
+    result: AutomationDispatchResult,
+    changed?: AutomationRunsChanged
+  ): Promise<AutomationRun> {
     if (isFinalAutomationRunStatus(result.status)) {
       this.completionWatcher?.forget(result.runId)
     }
-    const run = await this.runs.updateRun(result)
+    const run = await this.runs.updateRun(result, changed)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched' && run.sessionKind === 'chat') {
@@ -199,7 +203,8 @@ export class AutomationService {
       runs: this.runs,
       run,
       claudeUsage: this.claudeUsage,
-      codexUsage: this.codexUsage
+      codexUsage: this.codexUsage,
+      changed
     })
   }
 
@@ -287,8 +292,7 @@ export class AutomationService {
   }
 
   private canDispatchToRenderer(): boolean {
-    const webContents = this.webContents
-    return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
+    return Boolean(this.webContents && !this.webContents.isDestroyed() && this.rendererReady)
   }
 
   /** Serialize dispatch and retention per automation until launch, without holding the lane during agent work. */
@@ -323,6 +327,6 @@ export class AutomationService {
         run,
         target
       )
-    ).finally(() => this.completionWatcher?.retain(this.store.listAutomationRuns()))
+    ).finally(() => this.retainRuns())
   }
 }

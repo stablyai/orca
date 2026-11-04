@@ -1,3 +1,4 @@
+import type { AutomationRunMutation } from '../persistence/scheduling-automations/automation-run-operations'
 import {
   describeStrandedAutomationRun,
   describeObservationError,
@@ -27,6 +28,7 @@ export class AutomationRunCompletionWatcher {
   private readonly markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
   private readonly watching = new Map<string, AutomationRunWatchEntry>()
   private readonly reconciler: RetainedRunReconciler
+  private retainedSource: readonly AutomationRun[] | undefined
   private disposed = false
 
   constructor(opts: {
@@ -134,17 +136,36 @@ export class AutomationRunCompletionWatcher {
   }
 
   /** Called by existing Store publication: eviction/finality revokes before an acknowledgement. */
-  retain(runs: readonly AutomationRun[]): void {
-    const current = new Map(runs.map((run) => [run.id, run]))
-    for (const [id, entry] of this.watching) {
-      const run = current.get(id)
+  retain(runs: readonly AutomationRun[], mutation?: AutomationRunMutation): void {
+    if (this.disposed) {
+      return
+    }
+    const keyed = mutation && mutation.before === this.retainedSource && mutation.after === runs
+    // Abort listeners can reenter; never overwrite a newer nested reconciliation stamp.
+    this.retainedSource = runs
+    if (this.watching.size === 0) {
+      return
+    }
+    const reconcile = (id: string, run: AutomationRun | undefined): void => {
+      const entry = this.watching.get(id)
       if (
-        !run ||
-        isFinalAutomationRunStatus(run.status) ||
-        (entry.adopted && !sameTerminal(entry.run, run))
+        entry &&
+        (!run ||
+          isFinalAutomationRunStatus(run.status) ||
+          (entry.adopted && !sameTerminal(entry.run, run)))
       ) {
         this.forget(id)
       }
+    }
+    if (keyed) {
+      return reconcile(mutation.updated.id, mutation.updated)
+    }
+    const current = new Map(runs.map((run) => [run.id, run]))
+    for (const [id] of this.watching) {
+      if (this.retainedSource !== runs) {
+        return
+      }
+      reconcile(id, current.get(id))
     }
   }
 
@@ -266,11 +287,10 @@ export class AutomationRunCompletionWatcher {
   }
 
   dispose(): void {
+    this.retainedSource = undefined
     this.disposed = true
     this.reconciler.dispose()
-    for (const id of this.watching.keys()) {
-      this.forget(id)
-    }
+    this.watching.forEach((_, id) => this.forget(id))
   }
 
   private async finalize(

@@ -27,10 +27,21 @@ import {
   normalizeAutomationRunWorkspaceDisplayName
 } from './automation-context-migration'
 
+export type AutomationRunMutation = {
+  before: readonly AutomationRun[]
+  after: readonly AutomationRun[]
+  previous: AutomationRun
+  updated: AutomationRun
+}
+export type AutomationRunsChanged = (mutation?: AutomationRunMutation) => void
+
 export type AutomationRunOperations = {
   state: PersistedState
   flush: () => void
-  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
+  recordAutomationRunsMutation?: (
+    runs: readonly AutomationRun[],
+    mutation?: AutomationRunMutation
+  ) => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
@@ -230,10 +241,22 @@ export function updateAutomationRun(
       result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt
   }
   // Replace the array to invalidate identity-keyed list projections.
-  operations.state.automationRuns = operations.state.automationRuns.map((run) =>
-    run.id === result.runId ? updated : run
+  const before = operations.state.automationRuns
+  let replacements = 0
+  let replaced = previous
+  const after = before.map((run) => {
+    if (run.id !== result.runId) {
+      return run
+    }
+    replacements += 1
+    replaced = run
+    return updated
+  })
+  operations.state.automationRuns = after
+  operations.recordAutomationRunsMutation?.(
+    after,
+    replacements === 1 ? { before, after, previous: replaced, updated } : undefined
   )
-  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   if (!isAutomationRunHistory(current) && isAutomationRunHistory(updated)) {
     // Delivery-only terminal history also releases its metadata ownership.
     invalidateLocalWorktreeMetadataPruneInputs()

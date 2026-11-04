@@ -1,3 +1,7 @@
+import type {
+  AutomationRunMutation,
+  AutomationRunsChanged
+} from '../persistence/scheduling-automations/automation-run-operations'
 import type { Store } from '../persistence/loading-store/store'
 import type { PublishAutomationsChanged } from '../../shared/runtime-client-events'
 import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
@@ -25,7 +29,7 @@ export function createAutomationRunWriter(
     | 'flushPendingOrThrowAsync'
   >,
   publish: PublishAutomationsChanged | null,
-  onRunsChanged?: () => void
+  onRunsChanged?: AutomationRunsChanged
 ): AutomationRunWriter {
   // Scope to the run’s host; missing records fall back to an authority-wide event.
   const announce = (automationId: string, reason: 'run' | 'usage'): void => {
@@ -48,9 +52,16 @@ export function createAutomationRunWriter(
       announce(automation.id, 'run')
       return run
     },
-    updateRun: async (result: AutomationDispatchResult): Promise<AutomationRun> => {
-      const run = store.updateAutomationRun(result)
-      onRunsChanged?.()
+    updateRun: async (
+      result: AutomationDispatchResult,
+      changed?: AutomationRunsChanged
+    ): Promise<AutomationRun> => {
+      let mutation: AutomationRunMutation | undefined
+      const run = store.updateAutomationRun(result, (captured) => {
+        mutation = captured
+      })
+      onRunsChanged?.(mutation)
+      changed?.(mutation)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       announce(run.automationId, result.usage ? 'usage' : 'run')
       return run

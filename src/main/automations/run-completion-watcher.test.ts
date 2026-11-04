@@ -1,3 +1,5 @@
+import { getAutomationRunOperations } from '../persistence/loading-store/automation-persistence'
+import { createAutomationRunWriter } from './automation-run-writer'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -454,4 +456,76 @@ describe('automationsChanged publication', () => {
     expect(mark).not.toHaveBeenCalled()
     watcher.dispose()
   })
+})
+
+it('reconciles certified watched IDs, source gaps and abort reentry without hiding a newer source', async () => {
+  testState.dir = mkdtempSync(join(tmpdir(), 'orca-watcher-source-'))
+  const store = await createStore()
+  const automation = createAutomation(store)
+  const a = store.createAutomationRun(automation, 1, 'manual')
+  const b = store.createAutomationRun(automation, 2, 'manual')
+  const c = store.createAutomationRun(automation, 3, 'manual')
+  const observed: AbortSignal[] = []
+  const watcher = new AutomationRunCompletionWatcher({
+    observer: createObserver((signal) => {
+      observed.push(signal)
+      return new Promise(() => {})
+    }),
+    readRun: (automationId, runId) =>
+      store.listAutomationRuns(automationId).find((run) => run.id === runId) ?? null,
+    markDispatchResult: async () => {}
+  })
+  const source = () => getAutomationRunOperations(store).state.automationRuns!
+  const writer = createAutomationRunWriter(store, null, (mutation) =>
+    watcher.retain(source(), mutation)
+  )
+  const ar = watcher.reserve(a),
+    br = watcher.reserve(b),
+    cr = watcher.reserve(c)
+  watcher.retain(source())
+  try {
+    await writer.updateRun({ runId: a.id, status: 'dispatching' })
+    expect(ar.signal.aborted).toBe(false)
+    expect(br.signal.aborted).toBe(false)
+    // A direct unnotified write must be reconciled at the next ordinary update.
+    store.updateAutomationRun({ runId: b.id, status: 'completed' })
+    let nested: Promise<unknown> | undefined
+    br.signal.addEventListener('abort', () => {
+      nested = writer.updateRun({ runId: c.id, status: 'completed' })
+    })
+    await writer.updateRun({ runId: a.id, status: 'dispatching' })
+    await nested
+    expect(br.signal.aborted).toBe(true)
+    expect(cr.signal.aborted).toBe(true)
+    expect(ar.signal.aborted).toBe(false)
+    // A nested newer stamp cannot be overwritten by the outer reconciliation.
+    const d = store.createAutomationRun(automation, 4, 'manual')
+    const dr = watcher.reserve(d)
+    watcher.retain(source())
+    await writer.updateRun({ runId: d.id, status: 'completed' })
+    expect(dr.signal.aborted).toBe(true)
+    const erow = store.createAutomationRun(automation, 5, 'manual')
+    const e = store.updateAutomationRun({ runId: erow.id, status: 'dispatched', ...LAUNCH_TARGET })
+    watcher.retain(source())
+    watcher.watch(e)
+    const signal = observed.at(-1)!
+    expect(signal.aborted).toBe(false)
+    await writer.updateRun({
+      runId: e.id,
+      status: 'dispatched',
+      ...LAUNCH_TARGET,
+      terminalPtyId: 'replacement-pty'
+    })
+    expect(signal.aborted).toBe(true)
+    expect(ar.signal.aborted).toBe(false)
+    getAutomationRunOperations(store).state.automationRuns = source().filter(
+      (run) => run.id !== a.id
+    )
+    watcher.retain(source())
+    expect(ar.signal.aborted).toBe(true)
+  } finally {
+    watcher.dispose()
+    await closeTestStores()
+    rmSync(testState.dir, { recursive: true, force: true })
+  }
 })

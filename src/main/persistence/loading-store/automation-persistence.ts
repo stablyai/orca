@@ -38,7 +38,8 @@ import {
   recordRepeatedAutomationSkip as recordRepeatedAutomationSkipOperation,
   snapshotAutomationRunWorkspaceDisplayName as snapshotAutomationRunWorkspaceDisplayNameOperation,
   updateAutomationRun as updateAutomationRunOperation,
-  type AutomationRunOperations
+  type AutomationRunOperations,
+  type AutomationRunsChanged
 } from '../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
@@ -198,8 +199,11 @@ export class AutomationPersistence {
     )
   }
 
-  updateAutomationRun(result: AutomationDispatchResult): AutomationRun {
-    return updateAutomationRunOperation(getAutomationRunOperations(this), result)
+  updateAutomationRun(
+    result: AutomationDispatchResult,
+    capture?: AutomationRunsChanged
+  ): AutomationRun {
+    return updateAutomationRunOperation(getAutomationRunOperations(this, capture), result)
   }
 
   snapshotAutomationRunWorkspaceDisplayName(
@@ -262,15 +266,19 @@ export function getAutomationDefinitionOperations(
   }
 }
 
-export function getAutomationRunOperations(owner: AutomationPersistence): AutomationRunOperations {
+export function getAutomationRunOperations(
+  owner: AutomationPersistence,
+  capture?: AutomationRunsChanged
+): AutomationRunOperations {
   return {
     state: owner[automationPersistenceContext].runtime.state,
     flush: () => {
       markAutomationDomains(owner)
       owner[automationPersistenceContext].flushBarriers.flush()
     },
-    recordAutomationRunsMutation: (runs) => {
+    recordAutomationRunsMutation: (runs, mutation) => {
       owner[automationPersistenceContext].runtime.pendingAutomationRunsAfter = runs
+      capture?.(mutation)
     },
     recordManualRun: () =>
       owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-run'),

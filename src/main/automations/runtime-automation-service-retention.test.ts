@@ -126,7 +126,8 @@ describe('headless automation service run terminal retention', () => {
     expect(runtime.closeTerminal.mock.calls.map(([handle]) => handle)).toEqual(['handle:tab-0:1'])
     expect(runtime.closeTerminalTab).not.toHaveBeenCalled()
     expect(service.markDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'r0', status: 'completed', terminalPaneKey: null })
+      expect.objectContaining({ runId: 'r0', status: 'completed', terminalPaneKey: null }),
+      expect.any(Function)
     )
 
     service.stop()
@@ -146,7 +147,8 @@ describe('headless automation service run terminal retention', () => {
 
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
     expect(service.markDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'r0', terminalPaneKey: null, terminalPtyId: null })
+      expect.objectContaining({ runId: 'r0', terminalPaneKey: null, terminalPtyId: null }),
+      expect.any(Function)
     )
     service.stop()
   })
@@ -165,7 +167,8 @@ describe('headless automation service run terminal retention', () => {
     await expect(drain()).resolves.toBe(1)
     expect(runtime.confirmTerminalShellAlone).toHaveBeenCalledWith('pty-0')
     expect(service.markDispatchResult).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'r0', status: 'dispatched', terminalPtyId: null })
+      expect.objectContaining({ runId: 'r0', status: 'dispatched', terminalPtyId: null }),
+      expect.any(Function)
     )
   })
 
@@ -194,11 +197,10 @@ describe('headless automation service run terminal retention', () => {
       beforeAction: expect.any(Function)
     })
     expect(runtime.sleepTerminalsForWorktree).toHaveBeenCalledTimes(1)
-    expect(service.markDispatchResult).toHaveBeenCalledWith({
-      runId: 'r0',
-      status: 'completed',
-      terminalPtyId: null
-    })
+    expect(service.markDispatchResult).toHaveBeenCalledWith(
+      { runId: 'r0', status: 'completed', terminalPtyId: null },
+      expect.any(Function)
+    )
     expect(runtime.closeTerminal.mock.calls.map(([handle]) => handle).toSorted()).toEqual([
       'handle:tab-2:1',
       'handle:tab-3:1',

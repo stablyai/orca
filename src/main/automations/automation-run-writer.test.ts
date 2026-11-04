@@ -51,5 +51,17 @@ describe('automation run writer publications', () => {
       'disk full'
     )
     expect(publish).not.toHaveBeenCalled()
+    const changed = vi.fn(),
+      retained = vi.fn()
+    const failing = createAutomationRunWriter(store, publish, retained)
+    store.updateAutomationRun.mockImplementation(() => {
+      throw new Error('Store flush threw')
+    })
+    await expect(
+      failing.updateRun({ runId: 'run-1', status: 'completed' }, changed)
+    ).rejects.toThrow('Store flush threw')
+    expect(changed).not.toHaveBeenCalled()
+    expect(retained).not.toHaveBeenCalled()
+    expect(publish).not.toHaveBeenCalled()
   })
 })

@@ -23,26 +23,29 @@ export function bindHeadlessRunTerminalRetention(
           try {
             const records = runtime.openedAgentSessionRecordStore()
             const handle = runOwnHandle(runtime, run)
-            return Boolean(
-              records &&
-              ancestors.some((creator) => {
-                const operation = readAutomationRunLaunch(records, creator, 'fresh-launch')
-                const launch = operation?.launch
-                return (
-                  operation &&
-                  operation.expiresAt > Date.now() &&
-                  launch?.outcome.kind === 'terminal' &&
-                  launch.worktreeId === run.workspaceId &&
-                  (launch.outcome.paneKey
-                    ? launch.outcome.paneKey === run.terminalPaneKey
-                    : handle === launch.outcome.handle) &&
-                  (!handle ||
-                    (handle === launch.outcome.handle &&
-                      runtime.getTerminalWorktreeIdForHandle(launch.outcome.handle) ===
-                        run.workspaceId))
-                )
-              })
-            )
+            if (!records) {
+              return false
+            }
+            for (const creator of ancestors) {
+              const operation = readAutomationRunLaunch(records, creator, 'fresh-launch')
+              const launch = operation?.launch
+              if (
+                operation &&
+                operation.expiresAt > Date.now() &&
+                launch?.outcome.kind === 'terminal' &&
+                launch.worktreeId === run.workspaceId &&
+                (launch.outcome.paneKey
+                  ? launch.outcome.paneKey === run.terminalPaneKey
+                  : handle === launch.outcome.handle) &&
+                (!handle ||
+                  (handle === launch.outcome.handle &&
+                    runtime.getTerminalWorktreeIdForHandle(launch.outcome.handle) ===
+                      run.workspaceId))
+              ) {
+                return creator.id
+              }
+            }
+            return false
           } catch {
             return false
           }
@@ -112,7 +115,7 @@ export function bindHeadlessRunTerminalRetention(
         : undefined
       return provenance?.origin !== 'client' && provenance?.automationRunId === run.id
     },
-    sleepRunWorkspace: async (run, assertSafe, assertOwned) => {
+    sleepRunWorkspace: async (run, assertSafe, assertOwned, changed) => {
       const ptyId = run.terminalPtyId
       if (!run.workspaceId || !ptyId) {
         return false
@@ -136,21 +139,27 @@ export function bindHeadlessRunTerminalRetention(
       }
       assertOwned()
       // Preserve tab and pane keys for resuming the slept agent.
-      await service.markDispatchResult({ runId: run.id, status: run.status, terminalPtyId: null })
+      await service.markDispatchResult(
+        { runId: run.id, status: run.status, terminalPtyId: null },
+        changed
+      )
       return true
     },
     inAutomationLane: (automationId, operation) =>
       service.runInAutomationLane(automationId, operation),
-    forgetRunTerminal: async (run, assertOwned) => {
+    forgetRunTerminal: async (run, assertOwned, changed) => {
       assertOwned()
-      await service.markDispatchResult({
-        runId: run.id,
-        status: run.status,
-        error: run.error,
-        terminalSessionId: null,
-        terminalPaneKey: null,
-        terminalPtyId: null
-      })
+      await service.markDispatchResult(
+        {
+          runId: run.id,
+          status: run.status,
+          error: run.error,
+          terminalSessionId: null,
+          terminalPaneKey: null,
+          terminalPtyId: null
+        },
+        changed
+      )
     }
   })
   service.releaseFinishedRunTerminals = () => retention.drain()

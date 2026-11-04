@@ -1,7 +1,11 @@
 import { isAutomationRunHistory } from '../../shared/automation-run-retention'
 import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
-import { compareAutomationRunsNewestFirst } from '../../shared/automation-run-cursor'
-import { automationRunRecency } from '../../shared/automation-session-reuse'
+import type { AutomationRunsChanged } from '../persistence/scheduling-automations/automation-run-operations'
+import {
+  RunTerminalRetentionIndex,
+  compareRetainedRuns,
+  resourceKey
+} from './run-terminal-retention-index'
 
 export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
 export const RUN_TERMINALS_KEPT_PER_AUTOMATION = 3
@@ -10,7 +14,7 @@ const SWEEP_INTERVAL_MS = 60_000
 export type HeadlessRunTerminalRetentionDeps = {
   listRuns: () => readonly AutomationRun[]
   /** Creation authority; delivery alone never acquires another owner's terminal. */
-  ownsRunTerminal?: (run: AutomationRun, ancestors: readonly AutomationRun[]) => boolean
+  ownsRunTerminal?: (run: AutomationRun, ancestors: Iterable<AutomationRun>) => boolean | string
   /** Used, viewed, or unknown-use terminals belong to the user and must stay open. */
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
   /** True only while the pane holds this run's PTY. */
@@ -26,10 +30,15 @@ export type HeadlessRunTerminalRetentionDeps = {
   sleepRunWorkspace: (
     run: AutomationRun,
     assertSafe: () => void,
-    assertOwned: () => void
+    assertOwned: () => void,
+    changed: AutomationRunsChanged
   ) => Promise<boolean>
   /** Clear terminal references while preserving status, error and output. */
-  forgetRunTerminal: (run: AutomationRun, assertOwned: () => void) => Promise<void>
+  forgetRunTerminal: (
+    run: AutomationRun,
+    assertOwned: () => void,
+    changed: AutomationRunsChanged
+  ) => Promise<void>
   /** Serialize retention with dispatch to protect reused panes. */
   inAutomationLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   now?: () => number
@@ -50,10 +59,15 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
   let timer: ReturnType<typeof setInterval> | null = null
   let sweeping: Promise<void> | null = null
   let generation = 0
+  let discardSweep: (() => void) | undefined
 
-  const forget = async (run: AutomationRun, assertOwned: () => void): Promise<void> => {
+  const forget = async (
+    run: AutomationRun,
+    assertOwned: () => void,
+    changed: AutomationRunsChanged
+  ): Promise<void> => {
     assertOwned()
-    await deps.forgetRunTerminal(run, assertOwned)
+    await deps.forgetRunTerminal(run, assertOwned, changed)
     firstSeenAt.delete(run.id)
   }
 
@@ -61,20 +75,42 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
     automationId: string,
     policy: { keep: number; graceMs: number },
     expectedGeneration: number,
-    readSnapshot: () => ReturnType<typeof indexRuns>
+    readSnapshot: () => RunTerminalRetentionIndex,
+    changed: AutomationRunsChanged
   ): Promise<number> => {
+    if (generation !== expectedGeneration) {
+      return 0
+    }
     let releasedCount = 0
     let kept = 0
     const ownedPaneKeys = new Set<string>()
-    const runs = (readSnapshot().byAutomation.get(automationId) ?? [])
+    const snapshot = readSnapshot()
+    const runs = Array.from(snapshot.byAutomation.get(automationId) ?? [], (id) =>
+      snapshot.byId.get(id)!
+    )
       .filter(
         (run): run is PanedRun =>
           Boolean(run.terminalPaneKey && run.terminalPtyId) && !STARTING.has(run.status)
       )
       .toSorted(compareRetainedRuns)
-    const owns = (run: AutomationRun): boolean =>
-      deps.ownsRunTerminal?.(run, readSnapshot().byResource.get(resourceKey(run)) ?? []) ?? true
-    for (const run of runs) {
+    const owns = (run: AutomationRun): boolean => {
+      const current = readSnapshot()
+      const authority = deps.ownsRunTerminal?.(run, current.ancestors(run)) ?? true
+      if (typeof authority === 'string') {
+        current.creator(run, authority)
+      }
+      return Boolean(authority)
+    }
+    let negativeSource: readonly AutomationRun[] | undefined
+    const missingAuthority = new Set<string>()
+    for (const candidate of runs) {
+      if (generation !== expectedGeneration) {
+        break
+      }
+      const run = readSnapshot().byId.get(candidate.id)
+      if (!run?.terminalPaneKey || !run.terminalPtyId || STARTING.has(run.status)) {
+        continue
+      }
       if (!firstSeenAt.has(run.id)) {
         firstSeenAt.set(run.id, now())
       }
@@ -94,8 +130,24 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
       }
       try {
         if (!deps.runTerminalAlive(run)) {
-          if (generation === expectedGeneration && isAutomationRunHistory(run) && owns(run)) {
-            await forget(run, assertOwned)
+          const source = deps.listRuns()
+          if (source !== negativeSource) {
+            missingAuthority.clear()
+            negativeSource = source
+          }
+          const key = resourceKey(run)
+          if (
+            generation === expectedGeneration &&
+            isAutomationRunHistory(run) &&
+            !missingAuthority.has(key)
+          ) {
+            if (owns(run)) {
+              missingAuthority.clear()
+              negativeSource = undefined
+              await forget(run, assertOwned, changed)
+            } else {
+              missingAuthority.add(key)
+            }
           }
           continue
         }
@@ -117,9 +169,11 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         ) {
           continue
         }
+        missingAuthority.clear()
+        negativeSource = undefined
         const shell = await deps.shellAloneAtPrompt(run)
         const assertSafe = (): void => {
-          const latest = readSnapshot().latestByPane.get(run.terminalPaneKey)
+          const latest = readSnapshot().latest(run.terminalPaneKey)
           if (
             generation !== expectedGeneration ||
             !latest ||
@@ -142,7 +196,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         assertSafe()
         // Closing a completed run's own workspace would lose its resumable session.
         if (run.status === 'completed' && deps.runOwnsWorkspace(run)) {
-          if (await deps.sleepRunWorkspace(run, assertSafe, assertOwned)) {
+          if (await deps.sleepRunWorkspace(run, assertSafe, assertOwned, changed)) {
             firstSeenAt.delete(run.id)
             releasedCount += 1
           }
@@ -150,7 +204,7 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
         }
         if (await deps.closeRunTerminal(run, assertSafe)) {
           releasedCount += 1
-          await forget(run, assertOwned)
+          await forget(run, assertOwned, changed)
         }
       } catch (error) {
         console.error('[automations] could not close a run terminal:', error)
@@ -161,33 +215,70 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
 
   const sweepOnce = async (policy: { keep: number; graceMs: number }): Promise<number> => {
     const expectedGeneration = generation
-    let snapshot: ReturnType<typeof indexRuns> | undefined
+    let snapshot: RunTerminalRetentionIndex | undefined
     let source: readonly AutomationRun[] | undefined
     const readSnapshot = () => {
+      if (generation !== expectedGeneration) {
+        throw new Error('automation_terminal_retention_revoked')
+      }
       const current = deps.listRuns()
       if (!snapshot || current !== source) {
         source = current
-        snapshot = indexRuns(current)
+        snapshot = new RunTerminalRetentionIndex(current)
       }
       return snapshot
     }
-    let releasedCount = 0
-    const retained = new Set(
-      readSnapshot()
-        .runs.filter((run) => run.terminalPaneKey && run.terminalPtyId)
-        .map((run) => run.id)
-    )
-    for (const id of firstSeenAt.keys()) {
-      if (!retained.has(id)) {
-        firstSeenAt.delete(id)
+    let active = true
+    const changed: AutomationRunsChanged = (mutation) => {
+      if (!active || generation !== expectedGeneration) {
+        return
+      }
+      if (
+        mutation &&
+        snapshot &&
+        source === mutation.before &&
+        deps.listRuns() === mutation.after
+      ) {
+        snapshot.apply(mutation)
+        source = mutation.after
+      } else {
+        snapshot = undefined
+        source = undefined
       }
     }
-    for (const automationId of readSnapshot().byAutomation.keys()) {
-      releasedCount += await deps.inAutomationLane(automationId, () =>
-        sweepAutomation(automationId, policy, expectedGeneration, readSnapshot)
-      )
+    const discard = () => {
+      active = false
+      snapshot = undefined
+      source = undefined
     }
-    return releasedCount
+    discardSweep = discard
+    try {
+      let releasedCount = 0
+      const retained = new Set(
+        Array.from(readSnapshot().byId.values())
+          .filter((run) => run.terminalPaneKey && run.terminalPtyId)
+          .map((run) => run.id)
+      )
+      for (const id of firstSeenAt.keys()) {
+        if (!retained.has(id)) {
+          firstSeenAt.delete(id)
+        }
+      }
+      for (const automationId of Array.from(readSnapshot().byAutomation.keys())) {
+        if (generation !== expectedGeneration) {
+          break
+        }
+        releasedCount += await deps.inAutomationLane(automationId, () =>
+          sweepAutomation(automationId, policy, expectedGeneration, readSnapshot, changed)
+        )
+      }
+      return releasedCount
+    } finally {
+      discard()
+      if (discardSweep === discard) {
+        discardSweep = undefined
+      }
+    }
   }
 
   const sweep = (): Promise<void> => {
@@ -217,6 +308,8 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
     },
     stop: () => {
       generation += 1
+      discardSweep?.()
+      discardSweep = undefined
       if (timer) {
         clearInterval(timer)
         timer = null
@@ -226,35 +319,3 @@ export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRete
 }
 
 type PanedRun = AutomationRun & { terminalPaneKey: string }
-
-function resourceKey(run: AutomationRun): string {
-  return JSON.stringify([run.automationId, run.workspaceId, run.terminalPaneKey, run.terminalPtyId])
-}
-
-function indexRuns(runs: readonly AutomationRun[]) {
-  const byId = new Map<string, AutomationRun>()
-  const byAutomation = new Map<string, AutomationRun[]>()
-  const byResource = new Map<string, AutomationRun[]>()
-  const latestByPane = new Map<string, AutomationRun>()
-  for (const run of runs) {
-    byId.set(run.id, run)
-    const automation = byAutomation.get(run.automationId) ?? []
-    automation.push(run)
-    byAutomation.set(run.automationId, automation)
-    const key = resourceKey(run)
-    const ancestors = byResource.get(key) ?? []
-    ancestors.push(run)
-    byResource.set(key, ancestors)
-    if (run.terminalPaneKey) {
-      const latest = latestByPane.get(run.terminalPaneKey)
-      if (!latest || compareRetainedRuns(run, latest) < 0) {
-        latestByPane.set(run.terminalPaneKey, run)
-      }
-    }
-  }
-  return { runs, byId, byAutomation, byResource, latestByPane }
-}
-
-function compareRetainedRuns(a: AutomationRun, b: AutomationRun): number {
-  return automationRunRecency(b) - automationRunRecency(a) || compareAutomationRunsNewestFirst(a, b)
-}

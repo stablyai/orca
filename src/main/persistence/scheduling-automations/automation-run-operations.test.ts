@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { automationRunFailure } from '../../../shared/automation-run-failure-copy'
 import {
+  snapshotAutomationRunWorkspaceDisplayName,
+  type AutomationRunMutation,
   listAutomationRunsPage,
   recordRepeatedAutomationSkip,
   updateAutomationRun,
@@ -127,4 +129,57 @@ describe('automation run failure codes', () => {
     expect(state.automationRuns[0]).not.toHaveProperty('errorCode')
     expect(state.automationRuns[0]).not.toHaveProperty('errorParams')
   })
+})
+
+it('certifies only the actual unique canonical replacement before flush reentry, never bulk or duplicate IDs', () => {
+  const state = stateWithRuns([
+    { id: 'r1', createdAt: 1 },
+    { id: 'r2', createdAt: 2 }
+  ])
+  state.automations = []
+  const mutations: (AutomationRunMutation | undefined)[] = []
+  const operations: AutomationRunOperations = {
+    state,
+    recordManualRun: () => {},
+    getWorkspaceDisplayName: () => null,
+    recordAutomationRunsMutation: (_runs, mutation) => {
+      mutations.push(mutation)
+    },
+    flush: () => {
+      expect(mutations.at(-1)?.after).toBe(state.automationRuns)
+      if (state.automationRuns[0].error !== 'nested') {
+        updateAutomationRun(operations, { runId: 'r1', status: 'dispatched', error: 'nested' })
+      }
+    }
+  }
+  const before = state.automationRuns
+  const run = updateAutomationRun(operations, { runId: 'r2', status: 'dispatched' })
+  expect(mutations[0]).toEqual({
+    before,
+    after: mutations[1]!.before,
+    previous: before[1],
+    updated: run
+  })
+  expect(mutations[0]!.previous).toBe(before[1])
+  expect(mutations[1]!.after).toBe(state.automationRuns)
+  expect(mutations[0]!.after).not.toBe(state.automationRuns)
+  operations.flush = () => {}
+  let reenter = true
+  operations.getWorkspaceDisplayName = () => {
+    if (reenter) {
+      reenter = false
+      updateAutomationRun(operations, { runId: 'r1', status: 'pending' })
+    }
+    return null
+  }
+  updateAutomationRun(operations, { runId: 'r2', status: 'dispatched' })
+  expect(mutations.at(-1)!.before).toBe(mutations.at(-2)!.after)
+  expect(mutations.at(-1)!.previous).toBe(run)
+  state.automationRuns = [run, run]
+  updateAutomationRun(operations, { runId: 'r2', status: 'completed' })
+  expect(mutations.at(-1)).toBeUndefined()
+  expect(state.automationRuns.every((row) => row.status === 'completed')).toBe(true)
+  state.automationRuns = state.automationRuns.map((row) => ({ ...row, workspaceId: 'wt' }))
+  snapshotAutomationRunWorkspaceDisplayName(operations, { id: 'wt', hostId: 'local' }, 'renamed')
+  expect(mutations.at(-1)).toBeUndefined()
 })
