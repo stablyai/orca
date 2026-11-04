@@ -331,14 +331,14 @@
     },
     "receipt": {
       "cancelled": "Cancelado",
-      "cancelledBy": "Cancelado em: {{device}}",
+      "cancelledBy": "Cancelado {{device}}",
       "emptyAnswer": "Resposta vazia",
       "resolved": "Resolvido",
-      "resolver": "Respondido em: {{device}}",
+      "resolver": "Respondido {{device}}",
       "unavailable": "Resposta selecionada indisponível",
-      "thisPhone": "este celular",
-      "computer": "o computador",
-      "otherDevice": "outro dispositivo"
+      "thisPhone": "neste celular",
+      "computer": "no computador",
+      "otherDevice": "em outro dispositivo"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponível após a sessão começar.",
