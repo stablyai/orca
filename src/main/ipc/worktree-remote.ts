@@ -94,6 +94,7 @@ import {
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/cross-store-parent-params'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -228,6 +229,7 @@ export function assertAttachableParentWorkspace(
 type CreatedWorktreeLineageRecords = {
   lineage: CreateWorktreeResult['lineage']
   workspaceLineage: CreateWorktreeResult['workspaceLineage']
+  crossStoreLineage?: CreateWorktreeResult['crossStoreLineage']
 }
 
 const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
@@ -241,6 +243,14 @@ export function recordWorkspaceLineageForCreatedWorktree(
   worktree: Worktree,
   createdAt: number
 ): CreatedWorktreeLineageRecords {
+  if (args.crossStoreParent && worktree.instanceId) {
+    return recordCrossStoreLineageForCreatedWorktree(
+      store,
+      args.crossStoreParent,
+      { ...worktree, instanceId: worktree.instanceId },
+      createdAt
+    )
+  }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
   }
@@ -319,6 +329,32 @@ export function recordWorkspaceLineageForCreatedWorktree(
     createdAt
   })
   return { lineage, workspaceLineage }
+}
+
+/** A parent on another machine that its own store named; the renderer refused the create when it couldn't. */
+function recordCrossStoreLineageForCreatedWorktree(
+  store: Store,
+  parent: NonNullable<CreateWorktreeArgs['crossStoreParent']>,
+  worktree: Pick<Worktree, 'id' | 'hostId'> & { instanceId: string },
+  createdAt: number
+): CreatedWorktreeLineageRecords {
+  const target = worktreeRowTarget(store, worktree)
+  // IPC args are unchecked: only a well-formed ref may be saved.
+  const crossStoreLineage =
+    target && CrossStoreParentRefSchema.safeParse(parent).success
+      ? store.setCrossStoreWorkspaceLineage(
+          {
+            childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+            childInstanceId: worktree.instanceId,
+            parent,
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt
+          },
+          target.hostId
+        )
+      : undefined
+  return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -1622,12 +1658,11 @@ async function performLocalWorktreeCreate(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   onWorkspaceCreated?.(worktreeId)
-  const { lineage: worktreeLineage, workspaceLineage } = recordWorkspaceLineageForCreatedWorktree(
-    store,
-    args,
-    worktree,
-    now
-  )
+  const {
+    lineage: worktreeLineage,
+    workspaceLineage,
+    crossStoreLineage
+  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(
@@ -1772,6 +1807,7 @@ async function performLocalWorktreeCreate(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
+    ...(crossStoreLineage ? { crossStoreLineage } : {}),
     ...(provisionedByHost
       ? {}
       : {

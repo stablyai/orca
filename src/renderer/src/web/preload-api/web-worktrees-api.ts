@@ -98,6 +98,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         parentWorkspace: args.parentWorkspace,
         // Why: every create through this API is an in-app action, never the CLI's parent flag.
         ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+        ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest,
@@ -249,6 +250,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         lineage: Record<string, WorktreeLineage>
         workspaceLineage?: Record<string, WorkspaceLineage>
         crossStoreLineage?: Record<string, unknown>
+        installationId?: string
       }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()

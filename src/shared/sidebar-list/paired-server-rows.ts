@@ -12,20 +12,13 @@ import {
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
 import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
-import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
 import type { Worktree } from '../worktree/types'
 import { getWorkspaceRowKindFacts } from '../worktree/workspace-kinds'
 import { openEnum } from '../zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../workspace-statuses'
 import { SMART_TIERS } from './sort-stamps'
-import { WorkspaceRowSchema } from './workspace-rows'
+import { CrossStoreParentRecordSchema, WorkspaceRowSchema } from './workspace-rows'
 import { HostReportedActivitySchema, type HostReportedActivity } from './workspace-activity-facts'
-
-/** The row's parent in another Orca store; a missing or unreadable record leaves the row standalone. */
-const CrossStoreParentRecordSchema = z
-  .custom<CrossStoreWorkspaceLineage>(isCrossStoreWorkspaceLineage)
-  .optional()
-  .catch(undefined)
 
 /** One paired-server workspace as the sidebar lists it, keyed by its host-qualified id. */
 const PairedServerWorkspaceRowSchema = z
@@ -72,7 +65,9 @@ const PairedServerHostFactsSchema = z.object({
   label: z.string(),
   health: z.string(),
   compatibility: z.string().nullable(),
-  pairedDeviceId: z.string().nullable()
+  pairedDeviceId: z.string().nullable(),
+  /** The server's verified store identity, which cross-store records name; older desktops omit it. */
+  installationId: z.string().nullable().optional().catch(undefined)
 })
 
 /** Every configured server main lists rows for. Unverifiable: its last rows, not confirmed current. */

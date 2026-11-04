@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-type
 import { projectGroupIdFromRepoId } from '../folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../workspace-scope'
 import { getExecutionHostIdFromWorktreeHostIdentity } from '../worktree/host-qualified-identity'
-import type { WorktreeLineage } from '../worktree/lineage-types'
+import type { CrossStoreWorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import type { PairedServerWorkspaceRow } from './paired-server-rows'
 import type { WorkspaceRow } from './workspace-rows'
@@ -28,6 +28,8 @@ export type SidebarFeedWorkspace = {
   facts: SidebarFeedRowFacts
   /** Set on a folder row: the builder lists folder workspaces apart from worktrees. */
   folderWorkspace: FolderWorkspace | null
+  /** The row's saved parent in another Orca store, resolved over every store (sidebar-feed-rows.ts). */
+  crossStoreParent?: CrossStoreWorkspaceLineage
 }
 
 /** The fields both a host's own rows and a paired server's rows carry for the list. */
@@ -42,6 +44,7 @@ type FeedRowFields = Pick<
       | 'isUnread'
       | 'instanceId'
       | 'lineage'
+      | 'crossStoreParent'
       | 'workspaceStatus'
       | 'sortOrder'
       | 'manualOrder'
@@ -118,7 +121,8 @@ function readFeedRow(
     identity,
     worktree,
     facts: { defaultBranch, automationCreated, cliCreated, detachedHead, creatorProvenance },
-    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null
+    folderWorkspace: row.kind === 'folder' ? folderWorkspaceOf(worktree, ownerHostId) : null,
+    ...(row.crossStoreParent ? { crossStoreParent: row.crossStoreParent } : {})
   }
 }
 

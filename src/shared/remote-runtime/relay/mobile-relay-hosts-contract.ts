@@ -17,6 +17,8 @@ export type MobileRelayHost = {
   stoppedOnDesktop?: true
   /** This desktop's own WSL host, not connected there and not known stopped; older phones show "Connecting". */
   unavailableOnDesktop?: true
+  /** The server's store identity as the desktop verified it; cross-store records name it. */
+  installationId?: string
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }

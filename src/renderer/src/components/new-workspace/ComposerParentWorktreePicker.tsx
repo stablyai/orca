@@ -45,6 +45,11 @@ import {
 } from '../../../../shared/execution-host'
 import { useRepoMap } from '@/store/selectors'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
+import {
+  getWorktreeHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 
 /** 20px text leading plus py-2 matches the explicit row height. */
 const NO_PARENT_ROW_HEIGHT = 36
@@ -91,7 +96,12 @@ function ComposerParentWorktreePickerImpl({
     if (!value) {
       return null
     }
-    const parent = getIndexedWorktreeById(selectWorktreesByRepo(s), value)
+    // A parent on another machine is picked by host identity; ids can repeat across stores.
+    const parent = isWorktreeHostIdentity(value)
+      ? getIndexedAllWorktrees(selectWorktreesByRepo(s)).find(
+          (row) => getWorktreeHostIdentity(row) === value
+        )
+      : getIndexedWorktreeById(selectWorktreesByRepo(s), value)
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
@@ -216,12 +226,14 @@ function ParentWorktreeCandidateList({
   const [search, setSearch] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
-  const candidates = useMemo(() => {
+  const { candidates, valueOf } = useMemo(() => {
     // Legacy rows inherit their real repo host, including candidates from another project.
     const childRepo = repoMap.get(repoId)
     const childBoundary: WorktreeLineageBoundary = {
       hostId: executionHostId ?? (childRepo ? getRepoExecutionHostId(childRepo) : undefined)
     }
+    const isCrossStoreCandidate = (candidate: Worktree): boolean =>
+      isCrossStoreCreateParent(childBoundary.hostId, candidate)
     const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
     const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
     const folderSubtreeIds = activeFolderWorkspaceId
@@ -232,18 +244,24 @@ function ParentWorktreeCandidateList({
           worktreeMap
         )
       : null
-    return getIndexedAllWorktrees(worktreesByRepo)
+    const listed = getIndexedAllWorktrees(worktreesByRepo)
       .filter(
         (candidate) =>
           !candidate.isArchived &&
-          sharesWorktreeLineageBoundary(childBoundary, {
-            ...candidate,
-            hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
-          }) &&
-          !cyclicLineageIds.has(candidate.id) &&
-          (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))
+          ((folderSubtreeIds === null && isCrossStoreCandidate(candidate)) ||
+            (sharesWorktreeLineageBoundary(childBoundary, {
+              ...candidate,
+              hostId: getWorktreeExecutionHostId(candidate, repoMap.get(candidate.repoId))
+            }) &&
+              !cyclicLineageIds.has(candidate.id) &&
+              (folderSubtreeIds === null || folderSubtreeIds.has(candidate.id))))
       )
       .sort(compareWorktreeDisplayName)
+    return {
+      candidates: listed,
+      valueOf: (candidate: Worktree): string =>
+        isCrossStoreCandidate(candidate) ? getWorktreeHostIdentity(candidate) : candidate.id
+    }
   }, [
     activeFolderWorkspaceId,
     executionHostId,
@@ -266,7 +284,12 @@ function ParentWorktreeCandidateList({
     getScrollElement: () => listRef.current,
     estimateSize: (index) => (index === 0 ? NO_PARENT_ROW_HEIGHT : PICKER_ROW_HEIGHT),
     overscan: PICKER_ROW_OVERSCAN,
-    getItemKey: (index) => (index === 0 ? NO_PARENT_ROW_KEY : (filtered[index - 1]?.id ?? index)),
+    getItemKey: (index) =>
+      index === 0
+        ? NO_PARENT_ROW_KEY
+        : filtered[index - 1]
+          ? getWorktreeHostIdentity(filtered[index - 1])
+          : index,
     // Seed the viewport until the popover measures next frame to avoid blank first paint.
     initialRect: { width: 0, height: PICKER_LIST_MAX_HEIGHT }
   })
@@ -310,11 +333,11 @@ function ParentWorktreeCandidateList({
         if (activeIndex === 0 || candidate) {
           event.preventDefault()
           event.stopPropagation()
-          onSelect(candidate?.id ?? null)
+          onSelect(candidate ? valueOf(candidate) : null)
         }
       }
     },
-    [activeIndex, filtered, moveHighlight, onSelect]
+    [activeIndex, filtered, moveHighlight, onSelect, valueOf]
   )
 
   // cmdk points aria-activedescendant at its empty registry; restore our virtual selection after each commit.
@@ -351,7 +374,7 @@ function ParentWorktreeCandidateList({
                 key={virtualRow.key}
                 id={`${optionIdPrefix}-${rowIndex}`}
                 role="option"
-                aria-selected={(candidate?.id ?? null) === value}
+                aria-selected={(candidate ? valueOf(candidate) : null) === value}
                 data-selected={isHighlighted || undefined}
                 // Why `jump-palette-item`: selection chrome lives in main.css — flat accent is invisible on light popovers.
                 className="jump-palette-item absolute left-0 top-0 flex w-full cursor-default select-none items-center gap-2 overflow-hidden rounded-sm px-2 py-2 text-sm outline-none"
@@ -360,12 +383,12 @@ function ParentWorktreeCandidateList({
                   transform: `translateY(${virtualRow.start}px)`
                 }}
                 onPointerMove={() => setHighlightedIndex(rowIndex)}
-                onClick={() => onSelect(candidate?.id ?? null)}
+                onClick={() => onSelect(candidate ? valueOf(candidate) : null)}
               >
                 <Check
                   className={cn(
                     'size-3.5 shrink-0',
-                    (candidate?.id ?? null) !== value && 'opacity-0'
+                    (candidate ? valueOf(candidate) : null) !== value && 'opacity-0'
                   )}
                 />
                 {candidate ? (

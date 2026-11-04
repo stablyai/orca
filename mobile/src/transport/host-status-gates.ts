@@ -18,6 +18,8 @@ export type HostStatusGates = {
   statusPending: boolean
   // Distinguish readable old-host status from no usable answer; only the former may justify a terminal compatibility wall.
   statusReadable: boolean
+  /** The host's store identity, which cross-store parent records name; absent when unknown. */
+  hostInstallationId?: string
 }
 
 // statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
@@ -63,7 +65,10 @@ export function hostStatusGatesFromStatus(
       protocolVersion: status.protocolVersion,
       minCompatibleMobileVersion: status.minCompatibleMobileVersion
     },
-    statusReadable: true
+    statusReadable: true,
+    ...(status.hostDescriptor?.installationId
+      ? { hostInstallationId: status.hostDescriptor.installationId }
+      : {})
   }
 }
 
@@ -118,7 +123,8 @@ export function useHostStatusGates(args: {
     compatVerdict: proven.compatVerdict,
     hostProtocolWindow: proven.hostProtocolWindow,
     statusReadable: proven.statusReadable,
-    statusPending: connState === 'connected' && unverified
+    statusPending: connState === 'connected' && unverified,
+    ...(proven.hostInstallationId ? { hostInstallationId: proven.hostInstallationId } : {})
   }
 }
 

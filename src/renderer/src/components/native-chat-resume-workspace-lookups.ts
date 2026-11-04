@@ -16,6 +16,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 
 /** The store's row for a workspace on its own host; folder workspaces included. Stable per row. */
 export function useWorkspaceWorktree(workspaceId: string, hostId: ExecutionHostId | undefined) {
@@ -45,6 +46,7 @@ export function useLineageAncestors(
 ): (group: ResumeWorkspaceGroup) => readonly string[] {
   const worktreesByRepo = useAppStore((store) => selectWorktreesByRepo(store))
   const worktreeLineageById = useAppStore((store) => store.worktreeLineageById)
+  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const ancestors = useMemo(() => {
     const state = { worktreesByRepo }
     // Why: archived rows never render in the sidebar, so nothing nests under them.
@@ -67,11 +69,11 @@ export function useLineageAncestors(
             group.candidates[0]?.executionHostId
           ) ?? rows.get(composeWorktreeHostIdentity(undefined, group.workspaceId))
         const parents = target
-          ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic)
+          ? getSidebarLineageAncestors(target, worktreeLineageById, rows, cyclic, parentIdentities)
           : []
         return [group, parents.map((parent) => parent.id)]
       })
     )
-  }, [workspaces, worktreesByRepo, worktreeLineageById])
+  }, [workspaces, worktreesByRepo, worktreeLineageById, parentIdentities])
   return (group) => ancestors.get(group) ?? []
 }

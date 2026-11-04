@@ -179,6 +179,8 @@ export type RuntimeWorktreeRecord = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store (worktree.show); older hosts omit it. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   git: GitWorktreeInfo
 }
 

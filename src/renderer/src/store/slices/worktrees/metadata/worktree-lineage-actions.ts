@@ -9,6 +9,9 @@ import {
   setWorktreeLineageForRuntime
 } from './worktree-lineage-refresh'
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
+import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { mintCrossStoreParentRef } from './cross-store-parent-ref'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -92,6 +95,33 @@ export function createAssignWorktreeParent(
       // Unlike the update path this rethrows, so the recovery refresh must not mask the original cause.
       await refreshWorktreeLineageBestEffort(ownerRoute.target, set, get)
       throw err
+    }
+  }
+}
+
+/** Set Parent to a workspace on another machine: the parent's store names it, the child's store saves it. */
+export function createAssignCrossStoreWorktreeParent(
+  set: WorktreeSliceSet,
+  get: WorktreeSliceGet
+): WorktreeSlice['assignCrossStoreWorktreeParent'] {
+  return async (child, parent) => {
+    const ownerRoute = hostRouteForWorktreeOwner(get(), child.id, child.hostId)
+    try {
+      const crossStoreParent = await mintCrossStoreParentRef(get(), ownerRoute.target, parent, {
+        reparent: true
+      })
+      await callRuntimeRpc(
+        ownerRoute.target,
+        'worktree.set',
+        { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
+        { timeoutMs: 15_000 }
+      )
+    } catch (err) {
+      console.error('Failed to assign a parent on another machine:', err)
+      throw err
+    } finally {
+      // The child's store owns its records; its list replaces both same-store and cross-store links.
+      await refreshWorktreeLineageBestEffort(ownerRoute.target, set, get)
     }
   }
 }

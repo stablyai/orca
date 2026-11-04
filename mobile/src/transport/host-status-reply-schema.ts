@@ -12,7 +12,11 @@ export const hostStatusSchema = z.looseObject({
   floatingWorkspaceEnabled: salvagedOptional('floatingWorkspaceEnabled', z.boolean()),
   capabilities: salvagedOptional('capabilities', z.array(z.string())),
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
-  machineName: salvagedOptional('machineName', z.string())
+  machineName: salvagedOptional('machineName', z.string()),
+  hostDescriptor: salvagedOptional(
+    'hostDescriptor',
+    z.looseObject({ installationId: salvagedOptional('installationId', z.string()) })
+  )
 })
 
 export type HostStatusReply = z.output<typeof hostStatusSchema>

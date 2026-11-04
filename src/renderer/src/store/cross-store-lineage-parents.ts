@@ -37,6 +37,14 @@ function storeIdentityKey(view: CrossStoreLineageView): string {
   return JSON.stringify([...view].map(([key, store]) => [key, store.installationId ?? null]))
 }
 
+/** A store's identity as the viewer verified it: its own lineage list, or a paired server's descriptor. */
+export function selectLineageStoreInstallationId(
+  state: CrossStoreLineageInputs,
+  storeKey: string
+): string | undefined {
+  return buildView(state).get(storeKey)?.installationId
+}
+
 let cached: {
   rowsByRepo: AppState['worktreesByRepo']
   worktreeLineageById: AppState['worktreeLineageById']

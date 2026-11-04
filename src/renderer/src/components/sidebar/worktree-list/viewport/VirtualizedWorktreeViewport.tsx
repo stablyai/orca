@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -64,6 +65,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
+  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const projectHeaderHostContexts = useProjectHeaderHostContexts({
     rows,
     visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
@@ -198,6 +200,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
+    lineageParentIdentities,
     collapsedGroups,
     toggleGroup,
     groupBy,

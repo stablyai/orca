@@ -174,9 +174,15 @@ export class PairedServerRowsProducer implements ServerWorktreeRows {
             hostLabelOverrides: this.options.hostLabelOverrides()
           })
         : []
-      ).map(({ environmentId, label, health, compatibility, pairedDeviceId }) => [
+      ).map(({ environmentId, label, health, compatibility, pairedDeviceId, installationId }) => [
         environmentId,
-        { label, health, compatibility, pairedDeviceId }
+        {
+          label,
+          health,
+          compatibility,
+          pairedDeviceId,
+          ...(installationId ? { installationId } : {})
+        }
       ])
     )
     return {

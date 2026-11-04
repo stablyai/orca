@@ -23,7 +23,7 @@ import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
 
 type WorktreeAgentLaunchResult = Pick<
   RuntimeWorktreeCreateResult,
-  'lineage' | 'workspaceLineage'
+  'lineage' | 'workspaceLineage' | 'crossStoreLineage'
 > & {
   /** Absent only when the host could not show the worktree it just created. */
   worktree?: RuntimeWorktreeRecord
@@ -98,7 +98,8 @@ export async function createWorktreeWithAgent(args: {
       ? {
           worktree,
           lineage: worktree.lineage,
-          workspaceLineage: worktree.workspaceLineage ?? null
+          workspaceLineage: worktree.workspaceLineage ?? null,
+          crossStoreLineage: worktree.crossStoreLineage ?? null
         }
       : { lineage: null }),
     launch: launched.result

@@ -6,6 +6,7 @@ import type {
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type {
   ClientAutomationWorkspaceProvenance,
@@ -59,6 +60,8 @@ export type WorktreeCreateAttempt = {
   name: string
   branchNameOverride?: string
   parentWorkspace?: WorkspaceKey
+  /** A parent on another machine, named by its own store before the first attempt. */
+  crossStoreParent?: CrossStoreParentRef
   manualOrder?: number
 }
 
@@ -103,6 +106,7 @@ function sharedCreateFields(
       : {}),
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
+    ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined

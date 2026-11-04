@@ -15,6 +15,8 @@ import type { WorkspaceRowsProducer } from './workspace-rows-producer'
 import type { RepoIconDataUrls } from './repo-icon-data-urls'
 import type { SidebarInputsFeedDomain } from './sidebar-inputs-feed'
 import { readDesktopSidebarFacts } from './desktop-sidebar-facts'
+import { peekStoreInstallationId } from '../host-descriptor'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { readSidebarProjectCatalog } from './sidebar-project-catalog'
 import {
   buildPairedServerReviewFacts,
@@ -30,7 +32,8 @@ export function readRuntimeDesktopSidebarFacts(store: RuntimeStore): DesktopSide
     store,
     sshTargets: listRegisteredSshTargets(),
     sshStateOf: getRegisteredSshState,
-    wslStatuses: getWslHostService()?.getStatuses() ?? []
+    wslStatuses: getWslHostService()?.getStatuses() ?? [],
+    installationId: peekStoreInstallationId(getCanonicalUserDataPath())
   })
 }
 

@@ -203,6 +203,8 @@ export function addHostSectionRows(args: {
     pendingRows = kept
   }
 
+  // A nested child stays in its lineage root's section, even when it runs on another machine.
+  let lineageRootHostId: ExecutionHostId | null = null
   for (const row of args.rows) {
     if (row.type === 'header' && row.repo) {
       retainPendingAncestors(row.projectGroupDepth ?? 0)
@@ -214,7 +216,12 @@ export function addHostSectionRows(args: {
       }
       continue
     }
-    const rowHostId = getRowHostId(row, args.defaultHostId)
+    const ownHostId = getRowHostId(row, args.defaultHostId)
+    if ((row.type === 'item' || row.type === 'folder-workspace') && row.depth === 0) {
+      lineageRootHostId = ownHostId
+    }
+    const rowHostId =
+      row.type === 'item' && row.depth > 0 && lineageRootHostId ? lineageRootHostId : ownHostId
     if (rowHostId) {
       pushHostRow(row, rowHostId)
       continue
@@ -284,8 +291,10 @@ export function addHostSectionRows(args: {
             }
             return { ...row, hostId: row.hostId ?? hostId, ...(repeated ? { repeated: true } : {}) }
           }
-          // The enclosing host header already names the owner of cards and notices.
-          return 'hostContextLabel' in row && row.hostContextLabel
+          // The enclosing host header already names the owner, unless a nested child runs elsewhere.
+          return 'hostContextLabel' in row &&
+            row.hostContextLabel &&
+            getRowHostId(row, args.defaultHostId) === hostId
             ? { ...row, hostContextLabel: undefined }
             : row
         })

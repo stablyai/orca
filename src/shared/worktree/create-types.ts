@@ -15,6 +15,7 @@ import type {
   Worktree
 } from './types'
 import type {
+  CrossStoreParentRef,
   CrossStoreWorkspaceLineage,
   WorkspaceLineage,
   WorktreeLineage,
@@ -126,6 +127,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** A parent in another Orca store, as that store named it (worktree.crossStoreParentRef). */
+  crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Await a first-agent-message branch/title rename for this generated branch. */

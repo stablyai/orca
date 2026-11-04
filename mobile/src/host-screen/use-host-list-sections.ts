@@ -9,6 +9,7 @@ import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
 import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import type { MobileLineageStores } from '../worktree/mobile-workspace-lineage'
 import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
@@ -27,6 +28,8 @@ export type HostListSectionsInputs = {
   hostContextOf: WorktreeHostContextOf
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
+  /** The host's own store identity (status.get), for parents on another machine. */
+  hostInstallationId: string | undefined
   state: HostScreenState
 }
 
@@ -56,6 +59,7 @@ function useFilterRepos(
 function useLegacyHostListSections({
   displayWorktrees,
   hostContextOf,
+  hostInstallationId,
   state
 }: HostListSectionsInputs): HostListSections {
   const projectCatalog = useMemo(
@@ -75,6 +79,10 @@ function useLegacyHostListSections({
   )
   const collapsedGroups = useCollapsedGroups(state)
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
+  const lineageStores = useMemo<MobileLineageStores>(
+    () => ({ ownInstallationId: hostInstallationId, servers: state.serverWorkspaces.hosts }),
+    [hostInstallationId, state.serverWorkspaces.hosts]
+  )
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
     hostContextOf,
@@ -88,7 +96,8 @@ function useLegacyHostListSections({
     filterCatalogRepos: state.servedProjectSections?.repos ?? state.desktopRepos,
     collapsedGroups,
     workspaceStatuses: state.view.workspaceStatuses,
-    repoHostIdByRepoId: state.repoHostIdByRepoId
+    repoHostIdByRepoId: state.repoHostIdByRepoId,
+    lineageStores
   })
   return { ...sectionsResult, collapsedGroups, projectOrderBy: projectCatalog.projectOrderBy }
 }

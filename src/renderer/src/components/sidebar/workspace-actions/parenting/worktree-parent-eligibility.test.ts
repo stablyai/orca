@@ -189,7 +189,7 @@ describe('canAssignWorktreeParent', () => {
     ).toEqual([sameRepo.id, otherRepo.id])
   })
 
-  it('excludes same-repo candidates owned by a different runtime host', () => {
+  it('offers a same-repo candidate on another machine, which its own store names', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
     const otherHost = makeWorktree('other-host', 'repo-a')
@@ -208,7 +208,7 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameHost.id])
+    ).toEqual(['same-host', 'other-host'])
   })
 
   it('allows another project for picker and direct drop checks', () => {

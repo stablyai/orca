@@ -91,9 +91,20 @@ export function readWindowPairedServerHosts(
     hostLabelOverrides: getHostDisplayLabelOverrides(state.settings)
   })
   return new Map(
-    hosts.flatMap(({ hostId, label, health, compatibility, pairedDeviceId }) =>
+    hosts.flatMap(({ hostId, label, health, compatibility, pairedDeviceId, installationId }) =>
       hostIds.has(hostId)
-        ? [[hostId, { label, health, compatibility, pairedDeviceId }] as const]
+        ? [
+            [
+              hostId,
+              {
+                label,
+                health,
+                compatibility,
+                pairedDeviceId,
+                ...(installationId ? { installationId } : {})
+              }
+            ] as const
+          ]
         : []
     )
   )

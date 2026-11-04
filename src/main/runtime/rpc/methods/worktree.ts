@@ -57,7 +57,9 @@ export const WORKTREE_METHODS = [
       lineage: await runtime.listWorktreeLineage(),
       workspaceLineage: await runtime.listWorkspaceLineage(),
       // Older desktops ignore it, so these children stay standalone there.
-      crossStoreLineage: runtime.listCrossStoreLineage()
+      crossStoreLineage: runtime.listCrossStoreLineage(),
+      // Read only by this host's own paired web windows; a desktop takes a server's from its descriptor.
+      installationId: await runtime.readStoreInstallationId()
     })
   }),
   defineMethod({

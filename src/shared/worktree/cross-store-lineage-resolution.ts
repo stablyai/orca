@@ -5,7 +5,7 @@ import {
   type RuntimeEnvironmentStatus
 } from '../remote-runtime/host-status/runtime-host-status'
 import { worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
-import { validCrossStoreLineage } from './cross-store-lineage-records'
+import { isCrossStoreWorkspaceLineage, validCrossStoreLineage } from './cross-store-lineage-records'
 import type { Worktree } from './types'
 
 /** The viewer's own store; other stores are keyed by their paired runtime environment id. */
@@ -21,6 +21,7 @@ export type LineageStoreView = {
 export type CrossStoreLineageView = ReadonlyMap<string, LineageStoreView>
 
 type LineageStoreRow = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+type LineageResolutionRow = LineageStoreRow & Pick<Worktree, 'instanceId'>
 
 /** Paired-runtime rows live in that runtime's store; local, SSH and WSL rows live in ours.
  * Undefined when the row names no owner (legacy rows): unknown is never evidence of our store. */
@@ -61,6 +62,32 @@ export function buildCrossStoreLineageView(args: {
   return view
 }
 
+/** A view from the record each child row carries (worktree.ps and feed rows) and each store's
+ * verified identity; every listed store counts, so one holding only parents is still found. */
+export function buildCrossStoreLineageViewOfRows<Row extends LineageStoreRow>(
+  rows: Iterable<Row>,
+  recordOf: (row: Row) => unknown,
+  installationIdByStoreKey: ReadonlyMap<string, string | undefined>
+): CrossStoreLineageView {
+  const recordsByStoreKey = new Map<string, Record<string, unknown>>()
+  for (const row of rows) {
+    const record = recordOf(row)
+    const storeKey = lineageStoreKeyOfRow(row)
+    if (storeKey === undefined || !isCrossStoreWorkspaceLineage(record)) {
+      continue
+    }
+    const records = recordsByStoreKey.get(storeKey) ?? {}
+    records[record.childWorkspaceKey] = record
+    recordsByStoreKey.set(storeKey, records)
+  }
+  return new Map(
+    [...installationIdByStoreKey].map(([storeKey, installationId]) => [
+      storeKey,
+      { installationId, crossStoreLineageByChildKey: recordsByStoreKey.get(storeKey) }
+    ])
+  )
+}
+
 function pushTo<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value): void {
   const values = map.get(key)
   if (values) {
@@ -75,7 +102,7 @@ function soleRow<Row>(rows: readonly Row[] | undefined): Row | undefined {
 }
 
 /** Child identity → parent row for every cross-store record that resolves to exactly one visible parent. */
-export function resolveCrossStoreLineageParents<Row extends Worktree>(
+export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow>(
   rowsByIdentity: ReadonlyMap<string, Row>,
   view: CrossStoreLineageView
 ): Map<string, Row> {
