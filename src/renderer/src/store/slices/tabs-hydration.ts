@@ -1,7 +1,7 @@
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { resolveTabGroupOwners } from '../../../../shared/workspace-layout/tab-group-owners'
 import {
   adoptGrouplessTabs,

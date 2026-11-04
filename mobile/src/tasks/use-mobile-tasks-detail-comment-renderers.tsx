@@ -22,6 +22,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
   const t = useMobileTranslation()
@@ -85,7 +86,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
             <>
               {actionItem.source.type === 'pr' && comment.threadId ? (
                 <Pressable
-                  style={styles.inlineSaveButtonCompact}
+                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                   disabled={mutatingStatus}
                   onPress={() => void toggleGitHubReviewThread(actionItem, comment)}
                 >
@@ -131,7 +132,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       return (
         <Pressable
           key={id}
-          style={styles.resolvedCommentSummary}
+          style={({ pressed }) => [styles.resolvedCommentSummary, pressed && pressedStyle]}
           onPress={() =>
             setExpandedResolvedCommentGroups((current) => {
               const next = new Set(current)

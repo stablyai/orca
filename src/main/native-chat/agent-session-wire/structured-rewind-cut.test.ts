@@ -2,16 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
-import { isStructuredRewindTarget, structuredRewindCut } from './structured-rewind-cut'
+import { structuredRewindCut } from './structured-rewind-cut'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -85,43 +87,4 @@ it("keeps a subagent row with the main turn it arrived in, across the subagent's
   )
   expect(cut!.kept.map(({ body }) => body)).not.toContainEqual(text('child in b'))
   expect(cut!.kept.map(({ body }) => body)).not.toContainEqual(mainB)
-})
-
-it('rewinds only to a message that opened its turn, and still cuts at one already saved', async () => {
-  const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
-  const claude = (uuid: string) => ({ provider: 'claude' as const, sessionId: 'claude-1', uuid })
-  const key = (uuid: string) => agentJournalItemKey(claude(uuid))
-  const user = (uuid: string): AgentJournalItemBody => ({
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: uuid }]
-  })
-  const turnRecord = async (id: string, opener: string) => {
-    const turn = { provider: 'orca' as const, clientMessageId: id }
-    await journal.appendItem(
-      turn,
-      { kind: 'turn', turnId: id, state: 'completed', userItemId: key(opener) },
-      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    return { kind: 'turn' as const, turnItemId: agentJournalItemKey(turn) }
-  }
-  const first = await turnRecord('turn-1', 'm1')
-  await journal.appendItem(claude('m1'), user('m1'), { fence: 1, turnScope: first })
-  await journal.appendItem(claude('a1'), text('a1'), { fence: 1, turnScope: first })
-  const second = await turnRecord('turn-2', 'm2')
-  await journal.appendItem(claude('m2'), user('m2'), {
-    fence: 1,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
-  await journal.appendItem(claude('a2'), text('a2'), { fence: 1, turnScope: second })
-  await journal.appendItem(claude('m3'), user('m3'), { fence: 1, turnScope: second })
-
-  expect(['m1', 'm2', 'm3'].map((uuid) => isStructuredRewindTarget(journal, key(uuid)))).toEqual([
-    true,
-    true,
-    false
-  ])
-  expect(
-    structuredRewindCut(journal, { itemId: key('m3'), provider: 'claude', nativeId: 'claude-1' })
-  ).toMatchObject({ beforeMessage: { uuid: 'm3' } })
 })

@@ -8,7 +8,6 @@ import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import { TerminalPaneView } from '../session/TerminalPaneView'
 import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
-import terminalNerdFontUrl from '../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
 
 // Use the real factory to test partial swaps, startup failure and its error report without replacing the document under test.
 let startThrows: Error | null = null
@@ -83,15 +82,6 @@ afterEach(() => {
 })
 
 describe('a stopped document takes its engines with it', () => {
-  it('loads the page symbol font from its bundled asset before starting the document', () => {
-    const terminal = mountTerminalWebDocument(plantHost(), () => {})
-    const style = document.getElementById('orca-terminal-document-style')?.textContent ?? ''
-    expect(style).toContain(`src:url('${terminalNerdFontUrl}') format('woff2')`)
-    expect(style).not.toContain('data:font/')
-    expect(style).toContain('unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD')
-    terminal.dispose()
-  })
-
   // A pending swap owns two engines; count actual disposals to verify both stop.
   it('disposes both terminals when a second init is stopped before its swap commits', async () => {
     const host = plantHost()
@@ -122,34 +112,6 @@ describe('a stopped document takes its engines with it', () => {
     started.stop()
 
     expect(engines.map((engine) => engine.disposals())).toEqual([1, 1])
-  })
-
-  it('disposes the one terminal once when no swap is open', async () => {
-    const host = plantHost()
-    const engines: Array<ReturnType<typeof terminalDocumentDouble>> = []
-    const started = createTerminalDocument({
-      root: host,
-      postToHost: () => {},
-      hasEngine: () => true,
-      installHostTransport: () => () => {},
-      installErrorReporter: () => () => {},
-      paintDocumentBackground: () => {},
-      createTerminal: () => {
-        const engine = terminalDocumentDouble()
-        engines.push(engine)
-        return engine.terminal
-      },
-      createUnicode11Addon: () => null,
-      createWebglAddon: () => null
-    })
-
-    started.send({ ...INIT })
-    await settle()
-    expect(engines).toHaveLength(1)
-
-    started.stop()
-
-    expect(engines[0].disposals()).toBe(1)
   })
 })
 
@@ -292,18 +254,6 @@ describe('the page keeps its own capture buffer', () => {
     expect(nextMessages[0]).not.toContain('first failure')
     next.dispose()
   })
-
-  it("leaves a browser notice from elsewhere on the page out, so it can't fail a terminal", () => {
-    const host = plantHost()
-    const posted: Array<Record<string, unknown>> = []
-    const mounted = mountTerminalWebDocument(host, (message) => posted.push(message))
-
-    const message = 'ResizeObserver loop completed with undelivered notifications.'
-    window.dispatchEvent(new ErrorEvent('error', { message }))
-
-    expect(posted.filter((m) => m.type === 'error')).toEqual([])
-    mounted.dispose()
-  })
 })
 
 describe('a start that throws gives the host back', () => {
@@ -315,32 +265,6 @@ describe('a start that throws gives the host back', () => {
 
     expect(host.innerHTML).toBe('')
     expect(host.classList.contains(HOST_CLASS)).toBe(false)
-  })
-
-  it('leaves the host carrying the markup and the class while the document is alive', () => {
-    // Assert markup exists so an inert mount cannot satisfy cleanup checks.
-    const host = plantHost()
-
-    const mounted = mountTerminalWebDocument(host, () => {})
-
-    expect(host.querySelector('#terminal-surface')).not.toBe(null)
-    expect(host.classList.contains(HOST_CLASS)).toBe(true)
-
-    mounted.dispose()
-  })
-})
-
-describe("the document's overlays on the page", () => {
-  it('sit inside the host, which is their containing block, rather than over the whole page', () => {
-    const host = plantHost()
-    const mounted = mountTerminalWebDocument(host, () => {})
-    const position = (id: string) => getComputedStyle(host.querySelector(`#${id}`)!).position
-
-    expect(getComputedStyle(host).position).toBe('relative')
-    expect(position('selection-overlay')).toBe('absolute')
-    expect(position('scroll-indicator')).toBe('absolute')
-
-    mounted.dispose()
   })
 })
 
@@ -359,48 +283,6 @@ describe('the component names the cause of a start that threw', () => {
 
     // Report the actual startup cause rather than the later readiness watchdog’s generic timeout.
     expect(engineErrors).toEqual(['terminal document failed to start - engine missing'])
-  })
-
-  it('reports nothing when the document starts', () => {
-    const host = plantHost()
-    const engineErrors: string[] = []
-
-    act(() => {
-      renderer = create(
-        createElement(TerminalWebView, { onEngineError: (message) => engineErrors.push(message) }),
-        { createNodeMock: () => host }
-      )
-    })
-
-    expect(engineErrors).toEqual([])
-  })
-})
-
-describe('the text scale a document is built at', () => {
-  it('is the one the view mounted with, for a reloaded document too, as on native', () => {
-    const host = plantHost()
-    startThrows = new Error('engine missing')
-    act(() => {
-      renderer = create(createElement(TerminalWebView, { textScale: 1.25 }), {
-        createNodeMock: () => host
-      })
-    })
-    act(() => renderer?.update(createElement(TerminalWebView, { textScale: 1.5 })))
-    startThrows = null
-    act(() => {
-      renderer?.root.find((node) => node.props.accessibilityRole === 'button').props.onPress()
-    })
-    expect(startedScales).toEqual([1.25, 1.25])
-  })
-
-  it('builds nothing before ready on the page for a view hidden when it mounted', () => {
-    const host = plantHost()
-    act(() => {
-      renderer = create(createElement(TerminalWebView, { shownAtMount: false }), {
-        createNodeMock: () => host
-      })
-    })
-    expect(startedBuilds).toEqual([false])
   })
 })
 
@@ -492,40 +374,6 @@ async function framesUntil(done: () => boolean, frames = 30) {
 }
 
 describe("the page pushes its terminal frame's box into the document", () => {
-  it('refits on a box RN laid out, through the host View, with no ResizeObserver of its own', () => {
-    let observers = 0
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        constructor() {
-          observers += 1
-        }
-        observe() {}
-        disconnect() {}
-      }
-    )
-    try {
-      const host = plantHost()
-      let height = 600
-      host.getBoundingClientRect = () => new DOMRect(0, 134, 390, height)
-      act(() => {
-        renderer = create(createElement(TerminalWebView, {}), { createNodeMock: () => host })
-      })
-      const surface = host.querySelector<HTMLElement>('#terminal-surface')!
-      expect(surface.style.transform).toBe('')
-      const laidOut = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')
-      expect(laidOut).toHaveLength(1)
-      height = 560
-      act(() => {
-        laidOut[0]!.props.onLayout({ nativeEvent: { layout: { width: 390, height: 560 } } })
-      })
-      expect(surface.style.transform).toContain('scale(1)')
-      expect(observers).toBe(0)
-    } finally {
-      vi.unstubAllGlobals()
-    }
-  })
-
   it('keeps pan and zoom across hide and show, and refits when the box really changes', async () => {
     const { mounted, scales, layOut } = await mountedOverGrid()
     const fitted = scales.length

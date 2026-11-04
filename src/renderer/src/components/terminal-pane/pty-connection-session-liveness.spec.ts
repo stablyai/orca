@@ -12,7 +12,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
@@ -86,6 +90,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
     describe('reconcileIfSessionMissing', () => {
       it('closes a split pane when targeted liveness says its local session is missing', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -102,7 +108,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         })
         const hasPty = vi.fn(async () => false)
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(createPane(2), manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+        )
         capturedDataCallback.current?.('shell prompt')
 
         binding.reconcileIfSessionMissing(hasPty)
@@ -119,6 +127,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('does not close when targeted liveness is live or unknown', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks2 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -127,7 +137,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+          )
+        )
 
         binding.reconcileIfSessionMissing(vi.fn(async () => true))
         binding.reconcileIfSessionMissing(vi.fn(async () => null))
@@ -139,6 +155,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('does not apply a stale targeted liveness result after reattach', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks3 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         let resolveHasPty: (value: boolean) => void = () => {
           throw new Error('hasPty promise resolver was not initialized')
         }
@@ -156,7 +174,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks3)
+          )
+        )
         binding.reconcileIfSessionMissing(hasPty)
         transport.getPtyId.mockReturnValue('pty-pane-2-reattached')
         resolveHasPty(false)
@@ -169,6 +193,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       it('does NOT tear down a newborn pane when liveness was requested before it bound', async () => {
         // Liveness requested before binding cannot prove the fresh PTY dead.
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks4 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -184,7 +210,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks4)
+          )
+        )
         // Why: clear the freshly-split early-return guard so the only remaining protection is the freshness guard under test.
         capturedDataCallback.current?.('shell prompt')
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
@@ -206,6 +238,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('tears down the pane when liveness was requested after it bound', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks5 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -221,7 +255,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks5)
+          )
+        )
         // Why: clear the freshly-split early-return guard so onExit reaches close.
         capturedDataCallback.current?.('shell prompt')
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
@@ -245,12 +285,20 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('routes the last pane through onPtyExitRef when its session is dead', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks6 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-1')
         transportFactoryQueue.push(transport)
         const manager = createManager(1)
         const deps = createDeps()
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(1), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(1),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks6)
+          )
+        )
 
         // The last pane reattaches to the tab's persisted ptyId ('tab-pty'); let that bind first.
         await flushAsyncTicks()
@@ -263,6 +311,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('is a no-op for remote: web-runtime ids', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks7 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         enableActiveRuntimeEnvironment('env-1')
         const transport = createMockTransport('remote:env-1:pane-2')
         transport.getConnectionId.mockReturnValue(null)
@@ -273,7 +323,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks7)
+          )
+        )
 
         binding.reconcileIfSessionMissing(async () => false)
         await flushAsyncTicks()
@@ -284,6 +340,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('is a no-op for SSH/non-local ids (non-null connectionId)', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         transport.getConnectionId.mockReturnValue('ssh-target-1')
         transportFactoryQueue.push(transport)
@@ -293,7 +351,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks8)
+          )
+        )
 
         binding.reconcileIfSessionMissing(async () => false)
         await flushAsyncTicks()
@@ -304,6 +368,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('respects suppression: a suppressed dead session keeps the pane mounted', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -313,7 +379,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks9)
+          )
+        )
 
         binding.reconcileIfSessionMissing(async () => false)
         await flushAsyncTicks()
@@ -326,6 +398,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       it('still closes the replacement PTY after a suppressed restart rebinds the pane', async () => {
         // Scope exit guards by PTY ID so a rebound replacement’s later exit still tears down.
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -346,7 +420,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks10)
+          )
+        )
         capturedDataCallback.current?.('shell prompt')
         const onPtyExit = createdTransportOptions[0]?.onPtyExit as
           | ((ptyId: string) => void)
@@ -369,6 +449,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('closes a split pane exactly once across reconcile + a racing real exit', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -384,7 +466,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks11)
+          )
+        )
         capturedDataCallback.current?.('shell prompt')
         const onPtyExit = createdTransportOptions[0]?.onPtyExit as
           | ((ptyId: string) => void)
@@ -407,6 +495,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('closes a genuinely-dead non-suppressed pane once (not misread as suppressed)', async () => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -423,7 +513,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
 
-        const binding = connectPanePty(...mockPanePtyArgs(createPane(2), manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            manager,
+            bindPaneAgentTitleMocks(deps, agentTitleMocks12)
+          )
+        )
         capturedDataCallback.current?.('shell prompt')
         const onPtyExit = createdTransportOptions[0]?.onPtyExit as
           | ((ptyId: string) => void)
@@ -445,6 +541,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
     it('preserves an owner-unverified restored pane after an empty reattach result', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
         opts.callbacks?.onError?.('terminal_pane_owner_unverified')
@@ -453,7 +551,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       transportFactoryQueue.push(transport)
       const deps = seedUnverifiableRestoredPane()
 
-      connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(2),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks13)
+        )
+      )
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -470,12 +574,20 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
     it('preserves an owner-unverified restored pane after a rejected reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transport.connect.mockRejectedValueOnce(new Error('terminal_pane_owner_unverified'))
       transportFactoryQueue.push(transport)
       const deps = seedUnverifiableRestoredPane()
 
-      connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(2),
+          createManager(2),
+          bindPaneAgentTitleMocks(deps, agentTitleMocks14)
+        )
+      )
       await flushAsyncTicks()
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -492,6 +604,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       'preserves an exhausted pane until explicit Retry and clears only the current owner error (fresh: %s)',
       async (fresh) => {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks15 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
           opts.callbacks?.onError?.('terminal_pane_owner_changed')
@@ -502,7 +616,13 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         const cleared = vi.fn()
         deps.onPtyErrorClearedRef = { current: cleared }
 
-        connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            createManager(2),
+            bindPaneAgentTitleMocks(deps, agentTitleMocks15)
+          )
+        )
         await flushAsyncTicks()
 
         expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -545,6 +665,8 @@ export function registerPtyConnectionSessionLivenessTests(): void {
         typeKeystroke: (data?: string) => void
       }> {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks16 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -553,7 +675,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
         const pane = createPane(2)
-        const binding = connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        const binding = connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks16))
+        )
         return {
           binding,
           transport,

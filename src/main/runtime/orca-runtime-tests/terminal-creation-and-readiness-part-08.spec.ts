@@ -6,12 +6,14 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_START,
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   OrcaRuntimeService,
-  TERMINAL_INPUT_CHUNK_MAX_BYTES,
-  TERMINAL_INPUT_MAX_BYTES,
-  TERMINAL_INPUT_TOO_LARGE_ERROR,
   acknowledgeAgentPromptSubmit,
   buildAgentPromptPasteBytes
 } from '../orca-runtime-test-mocks.spec'
+import {
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../../shared/terminal/input/terminal-input'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,

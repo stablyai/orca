@@ -24,6 +24,8 @@ export class JournalHostDatabase {
   private stranded = false
   private readonly checkpoint: JournalCheckpointOwner | undefined
   private closing: Promise<void> | undefined
+  /** Identifies the open transaction; drafts staged in a rolled-back one must not be built on. */
+  transactionNumber = 0
 
   private constructor(
     opened: OpenJournalDatabase,
@@ -60,12 +62,18 @@ export class JournalHostDatabase {
   }
 
   /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */
-  transaction<T>(run: (db: Database.Database) => T, streamed = false): T {
+  transaction<T>(
+    run: (db: Database.Database) => T,
+    streamed = false,
+    committed?: (result: T) => void
+  ): T {
     const db = this.db
+    this.transactionNumber += 1
     if (!streamed) {
       const result = runJournalTransaction(db, run, () => {
         this.stranded = true
       })
+      committed?.(result)
       this.checkpoint?.afterCommit()
       return result
     }
@@ -76,6 +84,7 @@ export class JournalHostDatabase {
       result = runJournalTransaction(db, run, () => {
         this.stranded = true
       })
+      committed?.(result)
     } finally {
       if (!db.isTransaction) {
         db.pragma('synchronous = FULL')

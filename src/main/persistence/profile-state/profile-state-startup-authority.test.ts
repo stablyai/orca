@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import type * as WorkerEntryPath from '../../worker-thread-entry-path'
+import type * as WorkerEntryPath from '../../worker-threads/worker-thread-entry-path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +13,7 @@ import {
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
 
 const bundle = vi.hoisted(() => ({ directory: '' }))
-vi.mock('../../worker-thread-entry-path', async (importOriginal) => {
+vi.mock('../../worker-threads/worker-thread-entry-path', async (importOriginal) => {
   const original = await importOriginal<typeof WorkerEntryPath>()
   return {
     ...original,

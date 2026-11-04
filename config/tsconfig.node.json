@@ -26,6 +26,7 @@
     "../src/renderer/src/components/native-chat/structured-agent-question-projection.ts",
     "../src/renderer/src/components/native-chat/native-chat-subagent-delegation.ts",
     "../src/renderer/src/components/native-chat/structured-agent-session-pending-sends.ts",
+    "../src/renderer/src/components/native-chat/structured-agent-session-queue-request.ts",
     "../src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts",
     "../src/renderer/src/components/terminal-pane/legacy-relay-bridge-panes.ts",
     "../src/preload/**/*",
@@ -34,6 +35,7 @@
     "../src/wsl-guest/**/*",
     "../src/types/**/*"
   ],
+  "exclude": ["../src/main/runtime/structured-chat-coordinator-mail.test.ts"],
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]

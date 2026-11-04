@@ -1,7 +1,7 @@
-import { classifyTerminalCreationFailure } from '../../../../shared/terminal-start-failure'
+import { classifyTerminalCreationFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import {
@@ -13,7 +13,7 @@ import {
 } from '../provider/ownership-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
-import { PtyExitProof } from '../../../pty-exit-proof'
+import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { errorMessage } from '../../../../shared/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 

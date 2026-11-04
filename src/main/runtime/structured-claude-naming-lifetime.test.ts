@@ -1,3 +1,4 @@
+import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -6,16 +7,25 @@ import * as transcriptNaming from '../claude/claude-provider-session-rename'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { stopCreatedChat } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 import {
   createClaudeNamingRuntime,
   nativeNamingTitle,
   writeNativeNamingConversation
 } from './structured-claude-naming-test-support'
 
-vi.mock('./structured-agent-model-catalog-wiring', () => ({
-  modelCatalogHostDeps: async () => ({})
-}))
+vi.mock('./structured-agent-model-catalog-wiring', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelCatalogWiring>()
+  return {
+    ...actual,
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => ({
+      ...(await actual.ensureStructuredAgentModelCatalogOwner(...args)),
+      modelCatalog: undefined
+    })
+  }
+})
 
 it('settles fresh input while the actual outside append is held, then corrects only the overlapping chat', async ({
   onTestFinished

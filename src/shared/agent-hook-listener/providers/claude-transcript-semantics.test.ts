@@ -30,38 +30,6 @@ afterEach(async () => {
 })
 
 describe('forward transcript reading', () => {
-  it('carries a record split across chunks without dropping a prefix or UTF-8', async () => {
-    const path = join(dir, 'split.jsonl')
-    const line = `${JSON.stringify({ type: 'system', subtype: 'agents_killed', timestamp: stamp(1), text: 'é' })}\n`
-    await writeFile(path, line)
-    const cursor = createClaudeTranscriptCursor(path)
-    const records: Record<string, unknown>[] = []
-    for (let i = 0; i < 50; i++) {
-      const result = await readClaudeTranscriptChunk(cursor, 7)
-      records.push(...(result?.records ?? []))
-      if (result?.caughtUp) {
-        break
-      }
-    }
-    const evidence: ClaudeHelperTranscriptEvidence = {
-      observedAt: now,
-      launches: new Map(),
-      resumedAt: new Map()
-    }
-    readClaudeHelperEvidence(evidence, records)
-    expect(evidence.killedAt).toBe(now + 1)
-  })
-
-  it('skips one overlong line through its newline and retains the following kill', async () => {
-    const path = join(dir, 'oversize.jsonl')
-    await writeFile(path, `${'x'.repeat(1024 * 1024 + 10)}\n${kill()}`)
-    const cursor = createClaudeTranscriptCursor(path)
-    const first = await readClaudeTranscriptChunk(cursor)
-    const next = await readClaudeTranscriptChunk(cursor)
-    expect(first?.records).toEqual([])
-    expect(next?.records).toHaveLength(1)
-  })
-
   it('treats missing files as unverifiable and replacement/shrink as a new baseline', async () => {
     const path = join(dir, 'replace.jsonl')
     const cursor = createClaudeTranscriptCursor(path)

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /* oxlint-disable no-control-regex -- query replies are ESC/DCS control sequences by definition */
 const XTVERSION_REPLY = new RegExp('^\u001bP>\\|[^\u001b]*\u001b\\\\$')

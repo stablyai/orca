@@ -1,11 +1,9 @@
-// Proven generation death must immediately disable old work and wake cards even when lease release fails.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   exitChild,
@@ -17,6 +15,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+// Proven generation death must immediately disable old work and wake cards even when lease release fails.
 
 let rig: QueuedMessageTestRig | undefined
 
@@ -34,7 +33,7 @@ async function queuedBehindPrompt(
     ...(probeOwner ? { probeOwner } : {})
   })
   const current = rig
-  await current.workingSend()
+  await current.settleAccepted(await current.workingSend(), 'received')
   await leaveUnfinishedWork(current, { prompt: true })
   const queued = await current.send('after this', 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {

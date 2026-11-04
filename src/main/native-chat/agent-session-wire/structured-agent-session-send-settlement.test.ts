@@ -8,18 +8,16 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlem
   return {
     activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState,
-        providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
-        reason: dispatchState === 'unknown' ? 'provider exited' : null,
-        submittedAt: 1,
-        resolvedAt: dispatchState === 'pending' ? null : 2
-      }
-    ]
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState,
+      providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
+      reason: dispatchState === 'unknown' ? 'provider exited' : null,
+      submittedAt: 1,
+      resolvedAt: dispatchState === 'pending' ? null : 2
+    })
   }
 }
 
@@ -27,7 +25,7 @@ function emptyJournal(): SendSettlementJournal {
   return {
     activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
-    submissions: () => []
+    submission: () => undefined
   }
 }
 
@@ -35,20 +33,18 @@ function queuedJournal(activeTurnId: string | null, handedOver = false): SendSet
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState: 'pending',
-        providerItemId: null,
-        reason: null,
-        submittedAt: 1,
-        resolvedAt: null,
-        handoverRecorded: true,
-        ...(handedOver ? { handedOverAt: 3 } : {})
-      }
-    ]
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState: 'pending',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      handoverRecorded: true,
+      ...(handedOver ? { handedOverAt: 3 } : {})
+    })
   }
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import {
   mergeNativeChatLiveSession,
   nativeChatHookHasWorkingSubagents,
@@ -19,14 +19,20 @@ import {
 } from '../../../src/shared/native-chat/native-chat-terminal-turn'
 import { deriveNativeChatStreamingText } from '../../../src/shared/native-chat/native-chat-streaming'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
-import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
+import type { MobileNativeChatSession } from './native-chat/use-mobile-native-chat-session'
 import type { MobileNativeChatResolution } from './native-chat/mobile-native-chat-eligibility'
+
+import {
+  pendingSendsAsMessages,
+  type NativeChatPendingSend
+} from '../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 
 const NO_MESSAGES: NativeChatMessage[] = []
 
 export type MobileNativeChatTerminalTurn = NativeChatTerminalTurn & {
   streamingText: string | undefined
   workingStartedAt: number | null
+  workingEpoch: number | null | undefined
   settledTurns: NativeChatSettledTurns
   /** Stop hides working until the turn ends or a newer working epoch starts. */
   stop: () => void
@@ -41,6 +47,7 @@ export function useMobileNativeChatTerminalTurn(args: {
   session: Pick<MobileNativeChatSession, 'messages' | 'transcriptLifecycle'> | null
   /** The newest pending echo; a new one is a new send, which ends Stop's suppression like desktop. */
   latestPendingId: string | null
+  pending?: NativeChatPendingSend[]
   hasPromptCard: boolean
   scopeKey: string
   stop: () => Promise<boolean>
@@ -61,11 +68,17 @@ export function useMobileNativeChatTerminalTurn(args: {
     hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(status)
   })
   const liveWorking = live.status === 'working'
+  const turnStartedAt = nativeChatHookTurnStartedAt(status ?? undefined)
+  const workingEpoch =
+    liveWorking || live.hookAwaitingInput ? (status?.turnStartedAt ?? null) : undefined
+  const messagesWithPending = useMemo(
+    () => [...messages, ...pendingSendsAsMessages(args.pending ?? [], messages, workingEpoch)],
+    [messages, args.pending, workingEpoch]
+  )
   // Throttle status-part previews to avoid reparsing the whole accumulated markdown per part.
   const streamingText = useThrottledLatestValue(
     deriveNativeChatStreamingText({
-      // A pending echo is the transcript's tail on desktop, so no earlier reply can hide the preview.
-      messages: hasPending ? NO_MESSAGES : messages,
+      messages: messagesWithPending,
       previewText: status?.lastAssistantMessage,
       working: liveWorking,
       previewIsToolOutput: status?.lastAssistantMessageIsToolOutput === true
@@ -114,7 +127,6 @@ export function useMobileNativeChatTerminalTurn(args: {
     hasPromptCard
   })
 
-  const turnStartedAt = nativeChatHookTurnStartedAt(status ?? undefined)
   const latestWorkedSeconds = nativeChatHookLatestTurnWorkedSeconds(
     status ?? undefined,
     hookState === null
@@ -136,6 +148,7 @@ export function useMobileNativeChatTerminalTurn(args: {
     ...turn,
     streamingText,
     workingStartedAt: turn.turnActive ? turnStartedAt : null,
+    workingEpoch,
     settledTurns,
     stop: stopTurn
   }

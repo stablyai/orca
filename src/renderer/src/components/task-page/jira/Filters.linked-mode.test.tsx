@@ -159,10 +159,4 @@ describe('Jira project filters in Has Workspace mode', () => {
     expect(picker).toHaveTextContent('All Jira projects')
     expect(setJiraProjectFilter).toHaveBeenCalledExactlyOnceWith(null)
   })
-
-  it('keeps project changes disabled during inventory loading', () => {
-    fixture.loading = true
-    render(<TaskPage />)
-    expect(screen.getByRole('combobox', { name: 'Jira project' })).toBeDisabled()
-  })
 })

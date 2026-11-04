@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { SourceControlActionVariable } from '../../../../shared/source-control-ai-action-variables'
+import type { SourceControlActionVariable } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 
 export function sourceControlVariableDescription(variable: SourceControlActionVariable): string {
   switch (variable) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { setupLayoutOwnerRuntime, WORKTREE_ID } from '../../orca-runtime-layout-owner-start-fixture'
 
@@ -40,6 +40,11 @@ describe("the window's new tab, started by main in a layout-owner build", () => 
       tabId: TAB_ID,
       leafId: LEAF_ID,
       cwd: '/workspace/sub',
+      resolvedWorkspace: expect.objectContaining({
+        id: WORKTREE_ID,
+        path: '/workspace',
+        connectionId: null
+      }),
       command: 'make dev'
     })
     // Publish starting status so views cannot spawn duplicates; clear it after binding.

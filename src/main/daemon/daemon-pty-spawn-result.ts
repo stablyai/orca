@@ -1,5 +1,5 @@
-import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
-import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
+import { isAgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
+import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { daemonSpawnResultIdentity } from './daemon-spawn-result-identity'
 import { retireUnexpectedAttachOnlySpawn } from './daemon-attach-only-retirement'
 import { DaemonPtySpawnRequest, type DaemonPtySpawnContext } from './daemon-pty-spawn-request'

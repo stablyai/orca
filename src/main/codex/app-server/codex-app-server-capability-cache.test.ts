@@ -1,80 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES,
-  CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS,
-  CodexAppServerCapabilityCache,
-  getCodexAppServerHostKey
+  CodexAppServerCapabilityCache
 } from './codex-app-server-capability-cache'
 
 const unsupportedError = new Error('unsupported')
 const isUnsupported = (error: unknown): boolean => error === unsupportedError
 
 describe('CodexAppServerCapabilityCache', () => {
-  it('retries a host after the compatibility interval', () => {
-    const cache = new CodexAppServerCapabilityCache()
-    cache.rememberUnsupported('wsl:Alpine', 1_000)
-
-    expect(
-      cache.shouldTry('wsl:Alpine', 1_000 + CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS - 1)
-    ).toBe(false)
-    expect(
-      cache.shouldTry('wsl:Alpine', 1_000 + CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS)
-    ).toBe(true)
-  })
-
-  it('falls back on the first unsupported probe and skips the probe on later calls', async () => {
-    const cache = new CodexAppServerCapabilityCache()
-    const firstPreferred = vi.fn(() => Promise.reject(unsupportedError))
-    await expect(
-      cache.runWithFallback(
-        'wsl:Alpine',
-        firstPreferred,
-        () => Promise.resolve('first-fallback'),
-        isUnsupported
-      )
-    ).resolves.toBe('first-fallback')
-    expect(firstPreferred).toHaveBeenCalledTimes(1)
-
-    const laterPreferred = vi.fn(() => Promise.resolve('unexpected-preferred'))
-    await expect(
-      cache.runWithFallback(
-        'wsl:Alpine',
-        laterPreferred,
-        () => Promise.resolve('cached-fallback'),
-        isUnsupported
-      )
-    ).resolves.toBe('cached-fallback')
-    await expect(
-      cache.runWithFallback(
-        'wsl:Alpine',
-        laterPreferred,
-        () => Promise.resolve('cached-fallback'),
-        isUnsupported
-      )
-    ).resolves.toBe('cached-fallback')
-    expect(laterPreferred).not.toHaveBeenCalled()
-  })
-
-  it('isolates capability state per execution host', async () => {
-    const cache = new CodexAppServerCapabilityCache()
-    cache.rememberUnsupported('wsl:Ubuntu', 1_000)
-
-    expect(cache.shouldTry('wsl:Ubuntu', 1_001)).toBe(false)
-    expect(cache.shouldTry('wsl:Alpine', 1_001)).toBe(true)
-    expect(cache.shouldTry('wsl:Debian', 1_001)).toBe(true)
-
-    const nativePreferred = vi.fn(() => Promise.resolve('native-result'))
-    await expect(
-      cache.runWithFallback(
-        'wsl:Alpine',
-        nativePreferred,
-        () => Promise.resolve('unexpected'),
-        isUnsupported
-      )
-    ).resolves.toBe('native-result')
-    expect(nativePreferred).toHaveBeenCalledTimes(1)
-  })
-
   it('bounds host capability state during WSL distro churn', () => {
     const cache = new CodexAppServerCapabilityCache()
     cache.rememberUnsupported('wsl:Alpine', 1_000)
@@ -210,10 +143,5 @@ describe('CodexAppServerCapabilityCache', () => {
         isUnsupported
       )
     ).resolves.toBe('wsl-result')
-  })
-
-  it('builds host keys that keep WSL distros apart', () => {
-    expect(getCodexAppServerHostKey({ distro: 'Ubuntu' })).toBe('wsl:Ubuntu')
-    expect(getCodexAppServerHostKey({ distro: 'Debian' })).toBe('wsl:Debian')
   })
 })

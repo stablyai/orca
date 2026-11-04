@@ -1,4 +1,4 @@
-import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 export const MESSAGE_TYPES = [
   'status',
@@ -318,6 +318,10 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** The settled Dispatch whose worker this follow-up continues. */
+  follow_up_of_dispatch_id: string | null
+  /** When its worker reported with coordinator mail unread, until that mail continues it. */
+  follow_up_mail_at: string | null
 }
 
 export type DecisionGateRow = {

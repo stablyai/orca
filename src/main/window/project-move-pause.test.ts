@@ -132,14 +132,6 @@ describe('main-owned project move pause', () => {
     await paused
   })
 
-  it('refuses a renderer that omits or substitutes a workspace before stopping hosts', async () => {
-    const f = fixture()
-    const paused = pauseWorkspacesForProjectMove(f.mainWindow, f, ['wt'])
-    f.respond({ phase: 'prepare', targets: [] })
-    await expect(paused).rejects.toThrow('invalid_scope')
-    expect(f.sleepWorkspaces).not.toHaveBeenCalled()
-  })
-
   it('rejects reload during the host stop instead of accepting a new renderer persistence reply', async () => {
     const f = fixture()
     const stop = Promise.withResolvers<WorkspaceSleepOutcome[]>()

@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { isPluginJsonObject } from '../../../../shared/plugins/manifest/plugin-json-object'
 import { createPanelMessageBudget } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { createPluginFrameMessageHandler } from '../right-sidebar/plugin-frame-host'
-import { createCustomEditorHost, type CustomEditorHostOptions } from './plugin-custom-editor-host'
+import { createPluginFrameMessageHandler } from '../plugins/frames/plugin-frame-host'
+import { createCustomEditorHost } from './plugin-custom-editor-host'
+import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 
-vi.mock('../right-sidebar/plugin-panel-design-token-css', () => ({
+vi.mock('../plugins/frames/plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'light', tokens: '' })
 }))
 
@@ -73,7 +74,33 @@ function harness(
   return { host, posted, send, messages, documents, answers, answerFlushes }
 }
 
-function setup(initial: { text: string; readOnly?: boolean; maxEdits?: number }) {
+function setupWith(initial: {
+  text: string
+  onMergesOutside: () => void
+  onKeyChord?: CustomEditorHostOptions['onKeyChord']
+}) {
+  const doc = { text: initial.text, readOnly: false }
+  const onEdit = vi.fn((text: string) => {
+    doc.text = text
+  })
+  return {
+    ...harness({
+      getDocument: () => doc,
+      onEdit,
+      onMergesOutside: initial.onMergesOutside,
+      flushTimeoutMs: 1_000,
+      ...(initial.onKeyChord ? { onKeyChord: initial.onKeyChord } : {})
+    }),
+    onEdit
+  }
+}
+
+function setup(initial: {
+  text: string
+  readOnly?: boolean
+  maxEdits?: number
+  now?: () => number
+}) {
   const doc = { text: initial.text, readOnly: initial.readOnly ?? false }
   const onEdit = vi.fn((text: string) => {
     doc.text = text
@@ -88,6 +115,7 @@ function setup(initial: { text: string; readOnly?: boolean; maxEdits?: number })
     onUnappliedEdit,
     onKeyChord,
     flushTimeoutMs: 50,
+    ...(initial.now ? { now: initial.now } : {}),
     ...(initial.maxEdits === undefined
       ? {}
       : {
@@ -364,15 +392,73 @@ describe('custom editor document channel', () => {
     send(edit('d', 1, 15))
     expect(onEdit).toHaveBeenCalledTimes(1)
     expect(onUnappliedEdit).toHaveBeenLastCalledWith('held')
-    // `c` is superseded by the full-document `d`, so it succeeded.
-    expect(answers(14)).toEqual([{ orca: 1, kind: 'res', id: 14, result: null }])
+    // `c` is superseded by the full-document `d`, so it gets `d`'s answer once `d` commits.
+    expect(answers(14)).toEqual([])
     expect(answers(15)).toEqual([])
     const flushed = host.flush()
     answerFlushes()
     await expect(flushed).resolves.toBe(true)
     expect(onEdit).toHaveBeenLastCalledWith('d')
+    expect(answers(14)).toEqual([{ orca: 1, kind: 'res', id: 14, result: null }])
     expect(answers(15)).toEqual([{ orca: 1, kind: 'res', id: 15, result: null }])
     expect(onUnappliedEdit).toHaveBeenLastCalledWith(null)
+  })
+
+  it('gives a superseded held edit the refusal of the edit that replaced it', async () => {
+    const { host, doc, send, answers, answerFlushes } = setup({ text: 'a', maxEdits: 1 })
+    send(READY)
+    send(edit('b', 1, 16))
+    send(edit('c', 1, 17))
+    doc.text = 'outside'
+    host.syncDocument()
+    send(edit('d', 1, 18))
+    const flushed = host.flush()
+    answerFlushes()
+    await flushed
+    expect(answers(17)).toMatchObject([{ error: { code: 'conflict' } }])
+    expect(answers(18)).toMatchObject([{ error: { code: 'conflict' } }])
+  })
+
+  it('keeps a held edit when an oversized one follows, and the save stays blocked', async () => {
+    let clock = 0
+    const { host, onEdit, send, answers, answerFlushes } = setup({
+      text: 'a',
+      maxEdits: 1,
+      now: () => clock
+    })
+    send(READY)
+    send(edit('b', 1, 19))
+    send(edit('c', 1, 20))
+    // A new rate window, so the next edit is refused for its size alone.
+    clock = 60_000
+    send(edit('x'.repeat(CUSTOM_EDITOR_DOCUMENT_MAX_BYTES + 1), 1, 21))
+    // `c` is not answered as a success before it reaches the buffer.
+    expect(answers(20)).toEqual([])
+    expect(answers(21)).toMatchObject([{ error: { code: 'too_large' } }])
+    const flushed = host.flush()
+    answerFlushes()
+    expect(onEdit).toHaveBeenLastCalledWith('c')
+    expect(answers(20)).toEqual([{ orca: 1, kind: 'res', id: 20, result: null }])
+    // The frame's newest change was lost, so a save must not mark the tab clean.
+    await expect(flushed).resolves.toBe(false)
+  })
+
+  it('commits a held edit when a save starts, and every edit during the save at once', async () => {
+    const { host, onEdit, send, answers, answerFlushes } = setup({ text: 'a', maxEdits: 1 })
+    send(READY)
+    send(edit('b', 1, 22))
+    send(edit('c', 1, 23))
+    expect(answers(23)).toEqual([])
+    const flushed = host.flush()
+    // The frame answers a save only once its edits settle, so the held one commits first.
+    expect(onEdit).toHaveBeenLastCalledWith('c')
+    expect(answers(23)).toEqual([{ orca: 1, kind: 'res', id: 23, result: null }])
+    send(edit('d', 1, 24))
+    expect(onEdit).toHaveBeenLastCalledWith('d')
+    answerFlushes()
+    await expect(flushed).resolves.toBe(true)
+    send(edit('e', 1, 25))
+    expect(answers(25)).toEqual([])
   })
 
   it('never spends the edit budget on chords or flush replies', () => {
@@ -398,13 +484,29 @@ describe('custom editor document channel', () => {
     await expect(host.flush()).resolves.toBe(false)
   })
 
+  it('settles a flush at once for a read-only document or a frame with no window', async () => {
+    const { host, send, messages } = setup({ text: 'a', readOnly: true })
+    send(READY)
+    await expect(host.flush()).resolves.toBe(true)
+    expect(messages()).not.toContainEqual(expect.objectContaining({ method: 'editor.flush' }))
+
+    const detached = createCustomEditorHost({
+      getFrameWindow: () => null,
+      getDocument: () => ({ text: 'a', readOnly: false }),
+      onEdit: vi.fn()
+    })
+    detached.channel.onReady()
+    await expect(detached.flush()).resolves.toBe(true)
+  })
+
   it('forwards key chords from the shell for Orca to match, dropping malformed ones', () => {
     const { onKeyChord, send } = setup({ text: 'a' })
     send(keydown({ key: 'x'.repeat(65), code: 'a' }))
     expect(onKeyChord).not.toHaveBeenCalled()
     send(keydown({ key: 's', code: 'KeyS', metaKey: true }))
     expect(onKeyChord).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 's', metaKey: true, ctrlKey: false })
+      expect.objectContaining({ key: 's', metaKey: true, ctrlKey: false }),
+      { userActivation: false, transport: 'iframe' }
     )
   })
 
@@ -416,5 +518,65 @@ describe('custom editor document channel', () => {
     expect(documents()).toHaveLength(1)
     send(READY)
     expect(documents()).toHaveLength(2)
+  })
+
+  it('settles a merge only on the edit made against its own version', async () => {
+    const onMergesOutside = vi.fn()
+    const onKeyChord = vi.fn()
+    const { host, send, documents, onEdit } = setupWith({
+      text: 'a+mine',
+      onMergesOutside,
+      onKeyChord
+    })
+    send(READY)
+    await expect(host.mergeOutsideChange('a+agent', 'a')).resolves.toBeNull()
+    send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+    expect(onMergesOutside).toHaveBeenCalledOnce()
+    const merged = host.mergeOutsideChange('a+mine+agent', 'a')
+    expect(documents().at(-1)).toMatchObject({
+      payload: {
+        version: 2,
+        content: { kind: 'text', text: 'a+mine+agent' },
+        ancestor: { kind: 'text', text: 'a' }
+      }
+    })
+    // The merge result equals the disk text just sent; it still has to reach the buffer.
+    send(edit('a+mine+agent', 2))
+    await expect(merged).resolves.toBe('a+mine+agent')
+    expect(onEdit).toHaveBeenLastCalledWith('a+mine+agent')
+    // Events after the capability still reach their handlers (Save included).
+    send(
+      keydown({
+        key: 's',
+        code: 'KeyS',
+        metaKey: true,
+        ctrlKey: false,
+        altKey: false,
+        shiftKey: false
+      })
+    )
+    expect(onKeyChord).toHaveBeenCalledOnce()
+  })
+
+  it('answers null when the session never acknowledges, or the frame remounts', async () => {
+    vi.useFakeTimers()
+    try {
+      const { host, send } = setupWith({ text: 'a', onMergesOutside: vi.fn() })
+      send(READY)
+      send({ orca: 1, kind: 'evt', event: 'editor.merges', payload: {} })
+      const silent = host.mergeOutsideChange('b', 'a')
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(silent).resolves.toBeNull()
+      // A frame whose merge threw edits against the old version: refused, never the acknowledgement.
+      const failed = host.mergeOutsideChange('b2', 'a')
+      send(edit('a+typed', 1, 77))
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(failed).resolves.toBeNull()
+      const remounted = host.mergeOutsideChange('c', 'a')
+      host.reset()
+      await expect(remounted).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

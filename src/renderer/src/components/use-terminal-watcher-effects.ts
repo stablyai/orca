@@ -11,10 +11,10 @@ import {
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
-import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
-import { hasStructuredAgentLaunchInWorktree } from '@/lib/structured-agent-session-launch'
+import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'

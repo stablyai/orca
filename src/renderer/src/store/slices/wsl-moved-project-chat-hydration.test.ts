@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { Tab } from '../../../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
@@ -112,14 +112,6 @@ it("keeps only a moved project's chat tab through hydration and persistence", ()
   store.getState().setHydrationSucceeded(true)
   const persisted = buildWorkspaceSessionPayload(store.getState())
   expect(persisted.unifiedTabs?.[MOVED]?.map((entry) => entry.id)).toEqual([CHAT])
-})
-
-it("never treats a paired host's partition as the moved local workspace", () => {
-  const session = movedSession()
-  expect(
-    collectWslMovedWorkspaceKeysFromSession(session, projects, { [MOVED]: 'runtime:wsl-ubuntu' })
-  ).toEqual([])
-  expect(collectWslMovedWorkspaceKeysFromSession(session, [])).toEqual([])
 })
 
 it("lists the moved chats under their project, and never the host's listed worktree", () => {

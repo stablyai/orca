@@ -1,10 +1,11 @@
+import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
@@ -18,7 +19,7 @@ import {
   NativeChatDetailsDisclosure,
   NativeChatImageAttachments
 } from './NativeChatTranscriptChrome'
-import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -70,6 +71,7 @@ export function NativeChatUserMessageRow({
   onLinkClick,
   allowFileUriLinks,
   runtimeContext,
+  structuredAttachments = false,
   rewind,
   deliveryNotice
 }: {
@@ -80,6 +82,7 @@ export function NativeChatUserMessageRow({
   onRefolded: () => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   rewind?: NativeChatRewindSurface
   deliveryNotice?: NativeChatDeliveryNotice
@@ -99,6 +102,7 @@ export function NativeChatUserMessageRow({
         <NativeChatAgentMessageCard
           message={message}
           from={from}
+          textAttachmentContent={structuredAttachments ? markdown : undefined}
           runtimeContext={runtimeContext}
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
@@ -118,14 +122,21 @@ export function NativeChatUserMessageRow({
                 markdown={markdown}
                 onRefolded={onRefolded}
               >
-                <NativeChatMarkdown
-                  rowKey={message.id}
+                <NativeChatTextAttachments
                   content={markdown}
-                  variant="document"
-                  className="text-sm"
-                  renderCodeBlock={NativeChatCodeBlock}
-                  onLinkClick={onLinkClick}
-                  allowFileUriLinks={allowFileUriLinks}
+                  structured={structuredAttachments}
+                  runtimeContext={runtimeContext}
+                  renderText={(text) => (
+                    <NativeChatMarkdown
+                      rowKey={message.id}
+                      content={text}
+                      variant="document"
+                      className="text-sm"
+                      renderCodeBlock={NativeChatCodeBlock}
+                      onLinkClick={onLinkClick}
+                      allowFileUriLinks={allowFileUriLinks}
+                    />
+                  )}
                 />
               </NativeChatUserMessageFold>
             </>
@@ -155,6 +166,16 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+          {deliveryNotice.onSend ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
+              {translate('components.native-chat.queuedMessages.send', 'Send')}
+            </Button>
+          ) : null}
+          {deliveryNotice.onEdit ? (
+            <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
+              {translate('components.native-chat.editDeliveryNotice', 'Edit')}
+            </Button>
+          ) : null}
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
               {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}

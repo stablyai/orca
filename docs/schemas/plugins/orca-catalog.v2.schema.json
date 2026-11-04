@@ -261,7 +261,7 @@
           "pattern": "^\\(?[A-Za-z0-9][A-Za-z0-9.+-]*(?: (?:AND|OR|WITH) \\(?[A-Za-z0-9][A-Za-z0-9.+-]*\\)?)*\\)?$"
         },
         "repository": {
-          "description": "Source repository page, https only.",
+          "description": "Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher.",
           "x-orca-since": "1.4.245",
           "examples": [
             "https://github.com/acme/orca-gleam-syntax"
@@ -269,6 +269,15 @@
           "type": "string",
           "maxLength": 2048,
           "pattern": "^https:\\/\\/\\S+$"
+        },
+        "sourceUnavailable": {
+          "description": "Set when the release's `repository` is gone and `source` serves an archived copy, so Orca links `source` instead.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            true
+          ],
+          "type": "boolean",
+          "const": true
         },
         "homepage": {
           "description": "Project homepage, https only.",
@@ -340,14 +349,17 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 7,
+          "maxItems": 10,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "workspace:read",
+              "workspace:write",
               "agent:read",
+              "agent:launch",
               "terminal:send",
+              "terminal:read",
               "notifications:show",
               "storage:own",
               "secrets:own",
@@ -545,6 +557,7 @@
             "panels",
             "commands",
             "events",
+            "hooks",
             "languagePacks",
             "keybindings",
             "vmRecipes",
@@ -553,7 +566,9 @@
             "iconThemes",
             "syntaxes",
             "customEditors",
-            "newFiles"
+            "newFiles",
+            "settings",
+            "statusBarItems"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

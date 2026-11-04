@@ -1,3 +1,4 @@
+import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,7 +10,7 @@ import {
   tmpdir
 } from '../orca-runtime-test-mocks.spec'
 import type { OrchestrationDb } from '../orchestration/db'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   LIST_PROVIDER_DEADLINE,
@@ -80,6 +81,7 @@ describe('OrcaRuntimeService', () => {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () =>

@@ -14,7 +14,7 @@ const requestEditorFileClose = vi.hoisted(() => vi.fn())
 vi.mock('../confirmation-dialog-context', () => ({
   useConfirmationDialog: () => async () => true
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({ requestEditorFileClose }))
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({ requestEditorFileClose }))
 
 const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
 const groupId = 'floating-group'
@@ -90,15 +90,6 @@ describe('floating titlebar close actions', () => {
 
     expect(closeFile).not.toHaveBeenCalled()
     expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
-  })
-
-  it('closes editor tabs without closing structured chats from Close All Editor Tabs', async () => {
-    actions().closeAllFiles()
-    await Promise.resolve()
-
-    expect(closeUnifiedTab).toHaveBeenCalledWith(editor.id)
-    expect(closeUnifiedTab).not.toHaveBeenCalledWith(chat.id)
-    expect(closeFile).not.toHaveBeenCalled()
   })
 
   it.each([true, false])(

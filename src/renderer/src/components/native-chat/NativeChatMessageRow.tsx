@@ -7,8 +7,8 @@ import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
 import type {
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+} from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
@@ -26,8 +26,22 @@ import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
-  | { sending: true; text?: never; onDismiss?: never; detail?: never }
-  | { sending?: never; text: string; onDismiss?: () => void; detail?: string }
+  | {
+      sending: true
+      text?: never
+      onDismiss?: never
+      onEdit?: never
+      onSend?: never
+      detail?: never
+    }
+  | {
+      sending?: never
+      text: string
+      detail?: string
+      onDismiss?: () => void
+      onEdit?: () => void
+      onSend?: () => void
+    }
 
 export type MessageRowProps = {
   message: NativeChatMessage
@@ -51,6 +65,7 @@ export type MessageRowProps = {
   subagentDisclosure?: NativeChatSubagentDisclosure
   /** Inside a subagent's section, whose border has to reach past the row's controls. */
   inSubagentSection?: boolean
+  structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
@@ -156,6 +171,7 @@ export const MessageRow = memo(function MessageRow(
         onLinkClick={onLinkClick}
         allowFileUriLinks={allowFileUriLinks}
         runtimeContext={runtimeContext}
+        structuredAttachments={props.structuredAttachments}
         rewind={rewind}
         deliveryNotice={deliveryNotice}
       />

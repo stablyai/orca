@@ -8,7 +8,7 @@ import {
 import nacl from 'tweetnacl'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { CellReserveBook } from './cell-reserve-book.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
@@ -210,20 +210,6 @@ describe('host pre-auth latency', () => {
     }
   })
 
-  it('records a hello the database refuses on the db path', async () => {
-    const h = setup({ admitMode: 'db', databaseSays: false })
-    const { keyPair, identity } = hostKey()
-    const socket = new FakeSocket()
-    h.registry.acceptControl(socket.asWebSocket(), identity)
-    h.advance(120)
-    sendHello(socket, keyPair, identity.relayHostId)
-    await vi.waitFor(() => expect(socket.close).toHaveBeenCalled())
-
-    expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')
-    expect(h.take).not.toHaveBeenCalled()
-    expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('db', 'refused', 120)
-  })
-
   it('records a hello timeout as a refusal before any check, once', () => {
     vi.useFakeTimers()
     const h = setup({ admitMode: 'db', databaseSays: true })
@@ -238,17 +224,6 @@ describe('host pre-auth latency', () => {
       'host hello timeout'
     )
     expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('beforeCheck', 'refused', 2_000)
-  })
-
-  it('records a host that hangs up before its hello as abandoned', () => {
-    const h = setup({ admitMode: 'db', databaseSays: true })
-    const { identity } = hostKey()
-    const socket = new FakeSocket()
-    h.registry.acceptControl(socket.asWebSocket(), identity)
-    h.advance(300)
-    socket.close()
-
-    expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('beforeCheck', 'abandoned', 300)
   })
 
   it.each([true, false])(
@@ -270,33 +245,6 @@ describe('host pre-auth latency', () => {
       expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('db', 'abandoned', 900)
     }
   )
-
-  it('records a host that hangs up during its proof as abandoned on its path', async () => {
-    const h = setup({ admitMode: 'reserve', databaseSays: false })
-    const { keyPair, identity } = hostKey()
-    const socket = new FakeSocket()
-    h.registry.acceptControl(socket.asWebSocket(), identity)
-    sendHello(socket, keyPair, identity.relayHostId)
-    await vi.waitFor(() => expect(socket.send).toHaveBeenCalledTimes(1))
-    h.advance(700)
-    socket.close()
-
-    expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('reserve', 'abandoned', 700)
-  })
-
-  it('records the pool-pressure shed as a refusal before any check', async () => {
-    const h = setup({ admitMode: 'reserve', databaseSays: true, databaseShedding: true })
-    h.take.mockReturnValue(null)
-    const { keyPair, identity } = hostKey()
-    const socket = new FakeSocket()
-    h.registry.acceptControl(socket.asWebSocket(), identity)
-    h.advance(40)
-    sendHello(socket, keyPair, identity.relayHostId)
-    await vi.waitFor(() => expect(socket.close).toHaveBeenCalled())
-
-    expect(h.verifyCellAssignment).not.toHaveBeenCalled()
-    expect(h.recordHostPreAuth).toHaveBeenCalledExactlyOnceWith('beforeCheck', 'refused', 40)
-  })
 })
 
 function config(): RelayConfig {

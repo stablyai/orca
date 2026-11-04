@@ -1,24 +1,22 @@
-import {
-  normalizeSourceControlAiSettings,
-  resolveSourceControlActionRecipe
-} from '../../shared/source-control-ai'
-import { normalizeSourceControlActionRecipe } from '../../shared/source-control-ai-actions'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlActionRecipe } from '../../shared/source-control/ai/source-control-ai-operation-policy'
+import { normalizeSourceControlActionRecipe } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
   sanitizeGeneratedConversationName
-} from '../../shared/conversation-name-generation'
+} from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
-import type { AgentLaunchProfileSettings } from '../../shared/tui-agent-launch-defaults'
+import type { AgentLaunchProfileSettings } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-naming'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
-import { firstStructuredAgentSessionPrompt } from '../../shared/structured-agent-session-first-prompt'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
+import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
 import {
   generateConversationNameFromContext,
   resolveTextGenerationParams
@@ -50,14 +48,14 @@ export function structuredChatNamingDeps(
     readFirstPrompt: async (sessionId, hostStartedAt) => {
       const host = getStructuredAgentSessionHost()
       return host
-        ? firstStructuredChatNamingPrompt(await host.journalSnapshot(sessionId), hostStartedAt)
+        ? firstStructuredChatNamingPrompt(await host.journalCurrentRead(sessionId), hostStartedAt)
         : ''
     },
     readJournalFirstPrompt: async (sessionId) => {
       const host = getStructuredAgentSessionHost()
       return host
         ? firstStructuredAgentSessionPrompt(
-            agentSessionCurrentContextRows((await host.journalSnapshot(sessionId)).items).items
+            agentSessionCurrentContextRows((await host.journalCurrentRead(sessionId)).items).items
           )
         : ''
     },

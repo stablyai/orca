@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
-vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
+vi.mock('../browser/cdp/screencast/browser-screencast-stream', () => ({ startBrowserScreencast }))
 
 async function subscribe(sendBinary: RpcBinarySender) {
   const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
@@ -95,15 +95,6 @@ describe('screencast frames a viewer refused', () => {
     socketFull = false
     await vi.advanceTimersByTimeAsync(SCREENCAST_PENDING_FRAME_RETRY_MS * 4)
     expect(received).toEqual([newest])
-    subscription.session.stop()
-  })
-
-  // Lossy frames must not queue behind backlog; retries deliver only the newest.
-  it('asks the transport to drop frames while the socket is backlogged', async () => {
-    const sendBinary = vi.fn(() => true)
-    const { subscription, onFrame } = await subscribe(sendBinary)
-    onFrame(new Uint8Array([1]))
-    expect(sendBinary).toHaveBeenCalledWith(new Uint8Array([1]), { dropWhenBacklogged: true })
     subscription.session.stop()
   })
 

@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import type { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'

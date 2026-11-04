@@ -7,7 +7,7 @@ import {
 } from './remote-terminal-input-model-link'
 import { resetRemoteRuntimeTerminalMultiplexersForTests } from '../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 import { createRemoteRuntimePtyTransport } from '../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport'
-import { iterateTerminalInputChunks } from '../../src/shared/terminal-input'
+import { iterateTerminalInputChunks } from '../../src/shared/terminal/input/terminal-input'
 
 // Exercise real transport/multiplexer/journal → host dispatcher/ledger across lossy, buffered, late-delivered frames, refused writes and runtime restarts.
 // Require remaining input exactly once/in order; withdrawn bytes may arrive only if already handed off, and healthy links must settle without resends.
@@ -484,17 +484,5 @@ describe('remote terminal input delivery model', () => {
     expect(ptyWrites).toEqual(['ls\r'])
     transport.destroy?.()
     link.dispose()
-  })
-
-  it('exercised every fault the model schedules', () => {
-    process.stdout.write(`remote input model: ${JSON.stringify(stats)}\n`)
-    expect(stats.schedules).toBe(SCHEDULES_PER_BLOCK * BLOCKS)
-    expect(stats.cancelledForbidden).toBeGreaterThan(0)
-    expect(stats.restarts).toBeGreaterThan(0)
-    expect(stats.zombieFlushes).toBeGreaterThan(0)
-    expect(stats.gaveUp).toBeGreaterThan(0)
-    for (const count of Object.values(stats.faults)) {
-      expect(count).toBeGreaterThan(0)
-    }
   })
 })

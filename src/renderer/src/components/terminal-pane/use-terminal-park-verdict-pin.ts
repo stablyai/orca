@@ -1,6 +1,6 @@
 /** Damp the final rendered verdict, including worktree/activation inputs that bypass cold-park candidates (#15136). The passive-effect pin lags one commit so rendering unparked settles the flip loop. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   recordParkVerdictFlips,
   selectParkVerdictPinnedTabIds,

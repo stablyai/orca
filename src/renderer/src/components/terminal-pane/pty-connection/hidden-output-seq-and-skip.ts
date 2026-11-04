@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
-import { parseTerminalKittyKeyboardFlags } from '../../../../../shared/terminal-kitty-keyboard-flags'
+import { parseTerminalKittyKeyboardFlags } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import {
   containsStatefulRendererQuery,
   extractHiddenStartupRendererQueryData
-} from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   resolveTerminalColorSchemeMode,
   scanMode2031ReplyDecision
-} from '../../../../../shared/terminal-color-scheme-protocol'
+} from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { installTerminalLiveScrollbackRestore } from '@/lib/pane-manager/terminal-live-scrollback-restore'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies'
@@ -37,7 +37,11 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.deps.paneMode2031Ref.current.delete(session.pane.id)
       session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
     }
-    if (result.decision !== 'subscribed') {
+    // A repeated DECSET must not overwrite a report still owed after a hold or outage.
+    if (
+      result.decision !== 'subscribed' ||
+      session.deps.paneMode2031Ref.current.get(session.pane.id)
+    ) {
       return
     }
     const settings = useAppStore.getState().settings
@@ -149,6 +153,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       session.clearRestoredSnapshotBaseline()
     }
     if (session.rendererOrderedPtyId === exitedPtyId) {
+      session.resumeEscapeGap.reset()
       session.rendererOrderedPtyId = null
       session.rendererOrderedSeq = null
     }

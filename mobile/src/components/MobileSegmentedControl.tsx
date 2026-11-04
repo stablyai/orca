@@ -1,9 +1,15 @@
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, concentricRadius, radii, spacing, typography } from '../theme/mobile-theme'
+import { triggerSelection } from '../platform/haptics'
+import { colors, concentricRadius, feedback, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-export type MobileSegment<Value extends string> = { value: Value; label: string }
+export type MobileSegment<Value extends string> = {
+  value: Value
+  label: string
+  /** A longer spoken name where the short label leans on its surroundings. */
+  accessibilityLabel?: string
+}
 
 type Props<Value extends string> = {
   segments: readonly MobileSegment<Value>[]
@@ -14,33 +20,51 @@ type Props<Value extends string> = {
   testIDPrefix?: string
   /** Segments share the full width instead of sizing to their labels. */
   fill?: boolean
+  /** Paints the track like a sheet's grouped rows, so it stands out from the sheet. */
+  onSheet?: boolean
   /** The track; its default color suits a panel-colored row. */
   style?: StyleProp<ViewStyle>
   /** Shown but not pickable, e.g. while the value it sets is locked. */
   disabled?: boolean
+  /** The segments switch the content below, so screen readers hear tabs instead of radio buttons. */
+  tabs?: boolean
 }
 
-/** A pick-one pill control; each segment reads as a radio button. */
+/** A pick-one pill control; each segment reads as a radio button, or as a tab with `tabs`. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
   useMobileColorScheme()
   return (
-    <View style={[styles.segmented, props.style]} accessibilityRole="radiogroup">
+    <View
+      style={[styles.segmented, props.onSheet && styles.segmentedOnSheet, props.style]}
+      accessibilityRole={props.tabs ? 'tablist' : 'radiogroup'}
+    >
       {props.segments.map((segment) => {
         const active = segment.value === props.selected
         return (
           <Pressable
             key={segment.value}
-            accessibilityRole="radio"
-            aria-checked={active}
-            accessibilityState={{ disabled: props.disabled === true }}
+            accessibilityRole={props.tabs ? 'tab' : 'radio'}
+            aria-checked={props.tabs ? undefined : active}
+            accessibilityState={{
+              disabled: props.disabled === true,
+              ...(props.tabs ? { selected: active } : {})
+            }}
             disabled={props.disabled}
-            accessibilityLabel={segment.label}
+            accessibilityLabel={segment.accessibilityLabel ?? segment.label}
             testID={props.testIDPrefix ? `${props.testIDPrefix}${segment.value}` : undefined}
-            onPress={() => props.onSelect(segment.value)}
-            style={[
+            onPress={() => {
+              if (!active) {
+                triggerSelection()
+              }
+              props.onSelect(segment.value)
+            }}
+            // Stretches the 34 pt segment to a 44 pt touch box.
+            hitSlop={{ top: 5, bottom: 5 }}
+            style={({ pressed }) => [
               styles.segment,
               props.fill && styles.segmentFill,
-              active && styles.segmentActive
+              active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive),
+              pressed && !active && styles.segmentPressed
             ]}
           >
             <Text
@@ -56,21 +80,29 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
   )
 }
 
+const TRACK_INSET = 3
+
 const styles = themedStyleSheet(() => ({
   segmented: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgBase,
     borderRadius: radii.control,
-    padding: 2
+    padding: TRACK_INSET
   },
+  // Room above and below the label, so it doesn't sit against the track's edges.
   segment: {
+    minHeight: 34,
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: concentricRadius(radii.control, 2)
+    borderRadius: concentricRadius(radii.control, TRACK_INSET)
   },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
+  segmentedOnSheet: { backgroundColor: colors.sheetGroup },
   segmentActive: { backgroundColor: colors.bgRaised },
-  segmentText: { fontSize: typography.metaSize, color: colors.textSecondary, fontWeight: '600' },
-  segmentTextActive: { color: colors.textPrimary }
+  // bgRaised is the sheet group's own color in dark; the switch's grey fill lifts off it in both themes.
+  segmentActiveOnSheet: { backgroundColor: colors.translucentFill },
+  segmentText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  segmentTextActive: { color: colors.textPrimary },
+  segmentPressed: { opacity: feedback.pressedOpacity }
 }))

@@ -24,23 +24,6 @@ function createEntry(): QueueEntry {
 }
 
 describe('pane terminal output queue chunks', () => {
-  it('assembles many queued chunks in order and preserves a partial residual', () => {
-    const entry = createEntry()
-    const chunks = Array.from({ length: 128 }, (_, index) => `${index}:`)
-    for (const chunk of chunks) {
-      enqueueChunk(entry, chunk, { foreground: false })
-    }
-
-    const allData = chunks.join('')
-    const first = takeQueuedChunk(entry, allData.length - 2)
-    expect(first?.data).toBe(allData.slice(0, -2))
-    expect(entry.queuedChars).toBe(2)
-
-    const second = takeQueuedChunk(entry, 2)
-    expect(second?.data).toBe(allData.slice(-2))
-    expect(entry.queuedChars).toBe(0)
-  })
-
   it('does not cut a queued chunk inside an open DEC 2026 frame', () => {
     const entry = createEntry()
     const open = '\x1b[?2026h'

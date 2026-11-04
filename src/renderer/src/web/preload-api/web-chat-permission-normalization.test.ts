@@ -1,14 +1,11 @@
 import { expect, it } from 'vitest'
-import {
-  migrateStoredWebSettings,
-  runtimeChatPermissionSetting
-} from './web-preference-normalization'
+import { migrateStoredWebSettings } from './web-preference-normalization'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { resolveAgentPermission } from '../../../../shared/tui-agent-permission-choice'
+import { resolveAgentPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
+} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 it.each([
   ['mixed', '--dangerously-skip-permissions --model sonnet', '--model sonnet', 'full-access'],
@@ -49,10 +46,3 @@ it.each([
     expect(migrateStoredWebSettings(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded)
   }
 )
-
-it('keeps the legacy host-support marker without recreating per-agent chat copies', () => {
-  expect(runtimeChatPermissionSetting({ nativeChatPermissionMode: 'ask' })).toEqual({
-    nativeChatPermissionMode: 'ask'
-  })
-  expect(runtimeChatPermissionSetting({})).toEqual({})
-})

@@ -1,11 +1,12 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { HistoryReader } from './agent-session-history-page-bounds'
 import {
   readAgentSessionHistory,
   type AgentSessionHistoryScope
@@ -27,6 +28,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  reader?: HistoryReader
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
@@ -34,6 +36,7 @@ export function readStructuredAgentSessionHistoryResult(input: {
   const result = withPublishedWorkResult(
     readAgentSessionHistory(input.journal, input.request, {
       scope: input.scope,
+      reader: input.reader,
       rowReplay: input.replaceNormalizedHistory === false
     }),
     input.work

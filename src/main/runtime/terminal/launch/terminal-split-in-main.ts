@@ -7,10 +7,10 @@ import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-
 import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
 import { spawnInAdmittedPane } from '../../runtime-pane-admission'
 import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/pty-first-size'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { randomUUID } from 'node:crypto'
 import { paneStartFailure } from '../../pane-start-statuses'
-import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
 
 export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: string }
 
@@ -116,6 +116,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       preAllocatedHandle,
       tabId: source.tabId,
       leafId,
@@ -135,6 +136,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       throw new Error('terminal_exited')
     }
     recordPtySurface(
+      this.terminalIdentity,
       createdPty,
       source.tabId,
       makePaneKey(source.tabId, leafId),

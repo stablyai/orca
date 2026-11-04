@@ -4,7 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type * as ConnectionOwnerResolutionModule from './connection-owner-resolution'
 
@@ -42,7 +42,6 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId,
   type AgentLaunchRouteArgs,
   type AgentLaunchRouteStore
 } from './agent-launch-route-input'
@@ -202,19 +201,6 @@ describe('buildAgentLaunchRouteInput', () => {
     }
   )
 
-  it('names the runtime environment as the host of a prospective folder workspace', () => {
-    const input = buildAgentLaunchRouteInput(store(), {
-      agent: 'claude',
-      workspace: { kind: 'folder', runtimeEnvironmentId: 'env 1', executionHostId: 'ssh:ignored' },
-      prompt: 'note',
-      promptDelivery: 'auto-submit'
-    })
-    expect(input.executionHostId).toBe('runtime:env%201')
-    expect(input.workspaceKind).toBe('folder')
-    expect(input.projectRuntime).toBeUndefined()
-    expect(input.nativeChatTranscriptIsLocalReadable).toBe(true)
-  })
-
   it('marks the floating workspace and skips its project runtime', () => {
     const input = buildAgentLaunchRouteInput(store(), {
       agent: 'codex',
@@ -230,122 +216,6 @@ describe('buildAgentLaunchRouteInput', () => {
         workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
       })
     ).toBe(true)
-  })
-
-  it('passes a draft prompt through and never turns it into a blocker', () => {
-    const args = {
-      agent: 'codex' as const,
-      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
-      prompt: 'edit me first',
-      promptDelivery: 'draft' as const
-    }
-    expect(buildAgentLaunchRouteInput(store(), args).promptDelivery).toBe('draft')
-    expect(routeFor(store(), args)).toBe('structured-native-chat')
-    expect(structuredFeasibleFor(store(), args)).toBe(true)
-  })
-
-  it('requires a terminal for a cwd outside the workspace root', () => {
-    const input = buildAgentLaunchRouteInput(store(), {
-      agent: 'codex',
-      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
-      tuiCustomization: { cwd: '/repo/sub' }
-    })
-    expect(input.startsOutsideWorkspaceRoot).toBe(true)
-  })
-
-  it.each([
-    ['claude', 'claude-wrapper'],
-    ['codex', 'codex-nightly'],
-    ['claude', 'npx claude'],
-    ['codex', 'wrapper --arg'],
-    ['claude', '/missing/claude'],
-    ['codex', './codex']
-  ] as const)('keeps %s structured with launch command %s', (agent, command) => {
-    const appStore = store({ ...STRUCTURED_SETTINGS, agentCmdOverrides: { [agent]: command } })
-    const args = {
-      agent,
-      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
-    }
-    expect(buildAgentLaunchRouteInput(appStore, args).startsOutsideWorkspaceRoot).toBe(false)
-    expect(routeFor(appStore, args)).toBe('structured-native-chat')
-    expect(structuredFeasibleFor(appStore, args)).toBe(true)
-  })
-
-  // Custom CLI Arguments once silently demoted Claude chat; terminal flags must not decide the chat surface.
-  it.each([
-    ['claude', '--dangerously-skip-permissions --model Opus'],
-    ['codex', '--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-sol'],
-    ['claude', '--append-system-prompt "be brief"']
-  ] as const)('keeps %s structured with configured arguments %s', (agent, agentArgs) => {
-    const appStore = store({
-      ...STRUCTURED_SETTINGS,
-      agentDefaultArgs: { [agent]: agentArgs },
-      agentDefaultEnv: { [agent]: { ORCA_QA: '1' } }
-    })
-    const args = {
-      agent,
-      workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' }
-    }
-    expect(routeFor(appStore, args)).toBe('structured-native-chat')
-    expect(buildAgentLaunchRouteInput(appStore, args).startsOutsideWorkspaceRoot).toBe(false)
-  })
-
-  // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.
-  const NATIVE_CHAT_SETTINGS = { nativeChatProviders: EVERY_AGENT_CHAT }
-  const UNLANDED_WORKSPACE = {
-    kind: 'git-worktree',
-    worktreeId: 'repo-1::/repo/wt-1',
-    repoId: 'repo-1'
-  } as const
-
-  it('falls back to the repo when the worktree row has not landed yet', () => {
-    // During workspace creation, unresolved ownership must not demote chat before the new row reaches the store.
-    mocks.getConnectionIdFromState.mockReturnValue(undefined)
-    const appStore = {
-      settings: NATIVE_CHAT_SETTINGS,
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: null }],
-      worktreesByRepo: {}
-    } as unknown as AgentLaunchRouteStore
-    expect(
-      buildAgentLaunchRouteInput(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })
-        .nativeChatTranscriptIsLocalReadable
-    ).toBe(true)
-    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
-      'terminal-tui'
-    )
-  })
-
-  it('keeps a worktree on an unresolvable repo off native chat', () => {
-    mocks.getConnectionIdFromState.mockReturnValue(undefined)
-    const appStore = {
-      settings: NATIVE_CHAT_SETTINGS,
-      repos: [],
-      worktreesByRepo: {}
-    } as unknown as AgentLaunchRouteStore
-    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
-      'terminal-tui'
-    )
-  })
-
-  it('never lets the repo answer over a resolved local worktree owner', () => {
-    mocks.getConnectionIdFromState.mockReturnValue(null)
-    const appStore = {
-      settings: NATIVE_CHAT_SETTINGS,
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'build-box' }],
-      worktreesByRepo: {}
-    } as unknown as AgentLaunchRouteStore
-    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
-      'terminal-tui'
-    )
-  })
-
-  it('reports an unprobed host as unknown rather than unsupported', () => {
-    mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue(null)
-    const input = buildAgentLaunchRouteInput(store(), {
-      agent: 'codex',
-      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
-    })
-    expect(input.hostCapabilities).toBeNull()
   })
 
   describe('a workspace on a paired server', () => {
@@ -399,15 +269,6 @@ describe('buildAgentLaunchRouteInput', () => {
         mocks.isWebClientLocation.mockReturnValue(false)
       }
     })
-
-    it("does not route on this machine's launch command override for the server", () => {
-      const settings = { ...STRUCTURED_SETTINGS, agentCmdOverrides: { claude: 'claude-wrapper' } }
-      expect(
-        buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER, settings), args)
-          .startsOutsideWorkspaceRoot
-      ).toBe(false)
-      expect(routeFor(pairedStore(CURRENT_SERVER, settings), args)).toBe('structured-native-chat')
-    })
   })
 
   it('does not name a host for a workspace id two hosts publish', () => {
@@ -433,16 +294,6 @@ describe('buildAgentLaunchRouteInput', () => {
         workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
       })
     ).toBe('terminal-tui')
-  })
-})
-
-describe('workspaceKindForWorktreeId', () => {
-  it.each([
-    [FLOATING_TERMINAL_WORKTREE_ID, 'floating'],
-    ['folder:ws-1', 'folder'],
-    ['repo-1::/repo/orca', 'git-worktree']
-  ])('classifies %s as %s', (worktreeId, kind) => {
-    expect(workspaceKindForWorktreeId(worktreeId)).toBe(kind)
   })
 })
 

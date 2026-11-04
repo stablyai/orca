@@ -8,7 +8,7 @@ import { useNewTabAgentMenuRows } from '@/components/tab-bar/use-new-tab-agent-m
 import {
   useSourceControlActionAgent,
   useSourceControlActionAgentInventory
-} from '@/components/settings/use-source-control-action-agent'
+} from '@/components/settings/source-control/use-source-control-action-agent'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import { useHostStructuredAgentsSync } from '@/runtime/host-structured-agents-sync'
 import {
@@ -17,7 +17,7 @@ import {
 } from '@/runtime/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { Project } from '../../../shared/project-types'
 import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
 

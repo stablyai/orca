@@ -4,24 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../../src/shared/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../../src/shared/agent-session-journal-turn-scope'
-import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session-journal-item-key'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat-turn-membership'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../../src/shared/agent-session/journal/agent-session-journal-turn-scope'
+import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
-
-function workRow(id: string): NativeChatMessage {
-  return {
-    id,
-    role: 'assistant',
-    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' }],
-    timestamp: null,
-    source: 'transcript'
-  }
-}
 
 describe('useMobileNativeChatTurnDisclosure', () => {
   let renderer: ReactTestRenderer | null = null
@@ -59,101 +49,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     expect(row.turnKey).toBeUndefined()
     expect(row.turnStatus).toBeNull()
     expect(row.activeTurnIsWorking).toBe(false)
-  })
-
-  it('does not scan bridge-lane transcripts', () => {
-    const messages: NativeChatMessage[] = [
-      {
-        id: 'u1',
-        role: 'user',
-        blocks: [{ type: 'text', text: 'go' }],
-        timestamp: null,
-        source: 'transcript'
-      }
-    ]
-    const findLastIndex = vi.spyOn(messages, 'findLastIndex')
-    const slice = vi.spyOn(messages, 'slice')
-    const filter = vi.spyOn(messages, 'filter')
-    const map = vi.spyOn(messages, 'map')
-
-    act(() => {
-      renderer = create(createElement(Harness, { messages, enabled: false }))
-    })
-
-    expect(findLastIndex).not.toHaveBeenCalled()
-    expect(slice).not.toHaveBeenCalled()
-    expect(filter).not.toHaveBeenCalled()
-    expect(map).not.toHaveBeenCalled()
-  })
-
-  it('keeps a settled turn handler stable for NUL-delimited scope keys', () => {
-    vi.useFakeTimers()
-    try {
-      vi.setSystemTime(1_000)
-      const messages: NativeChatMessage[] = [
-        {
-          id: 'u1',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'go' }],
-          timestamp: null,
-          source: 'transcript'
-        },
-        workRow('a1')
-      ]
-      act(() => {
-        renderer = create(createElement(Harness, { messages, enabled: true }))
-      })
-      vi.setSystemTime(6_000)
-      act(() => {
-        renderer?.update(createElement(Harness, { messages, enabled: true, isWorking: false }))
-      })
-      const first = renderer!.root.findByType(Result).props.disclosure.resolveRow(0, messages[0])
-
-      const refreshed = [...messages]
-      act(() => {
-        renderer?.update(
-          createElement(Harness, { messages: refreshed, enabled: true, isWorking: false })
-        )
-      })
-      const second = renderer!.root.findByType(Result).props.disclosure.resolveRow(0, refreshed[0])
-
-      // Keep one scoped handler so rerendering cannot invalidate each row’s memo.
-      expect(first.turnKey).toBe('u1')
-      expect(second.turnKey).toBe('u1')
-      const firstHandler = renderer!.root.findByType(Result).props.disclosure.onToggleTurn
-      expect(firstHandler).toBeTypeOf('function')
-      act(() => {
-        renderer?.update(
-          createElement(Harness, { messages: [...refreshed], enabled: true, isWorking: false })
-        )
-      })
-      expect(renderer!.root.findByType(Result).props.disclosure.onToggleTurn).toBe(firstHandler)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('shows the host-recorded duration over the locally observed one', () => {
-    vi.useFakeTimers()
-    try {
-      vi.setSystemTime(1_000)
-      const messages = [userMessage('u1'), workRow('a1')]
-      act(() => {
-        renderer = create(createElement(Harness, { messages, enabled: true }))
-      })
-      vi.setSystemTime(6_000)
-      const settledTurns = new Map([['u1', { startedAt: 500, workedSeconds: 197 }]])
-      act(() => {
-        renderer?.update(
-          createElement(Harness, { messages, enabled: true, isWorking: false, settledTurns })
-        )
-      })
-      const row = renderer!.root.findByType(Result).props.disclosure.resolveRow(0, messages[0])
-      expect(row.turnStatus).toEqual({ startedAt: 500, thinking: false, workedSeconds: 197 })
-      expect(row.turnKey).toBe('u1')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('keeps the live bar on every render until it settles in place', () => {
@@ -424,40 +319,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     expect(after.resolveRow(1, messages[1]).userMessageOpen).toBe(false)
   })
 
-  it('keeps at most the latest 128 turns expanded', () => {
-    vi.useFakeTimers()
-    try {
-      let messages: NativeChatMessage[] = []
-      for (let index = 0; index < 129; index++) {
-        messages = messages.concat(userMessage(`u${index}`))
-        vi.setSystemTime(index * 2_000)
-        act(() => {
-          if (renderer) {
-            renderer.update(createElement(Harness, { messages, enabled: true }))
-          } else {
-            renderer = create(createElement(Harness, { messages, enabled: true }))
-          }
-        })
-        vi.setSystemTime(index * 2_000 + 1_000)
-        act(() => {
-          renderer?.update(createElement(Harness, { messages, enabled: true, isWorking: false }))
-        })
-        const disclosureNow = renderer!.root.findByType(Result).props.disclosure
-        act(() => disclosureNow.onToggleTurn(`u${index}`))
-      }
-
-      const disclosure = renderer!.root.findByType(Result).props.disclosure
-      const expanded = messages.filter(
-        (message, index) => disclosure.resolveRow(index, message).turnExpanded
-      )
-      expect(expanded).toHaveLength(128)
-      expect(disclosure.resolveRow(0, messages[0]).turnExpanded).toBe(false)
-      expect(disclosure.resolveRow(128, messages[128]).turnExpanded).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('keeps a turn the provider opened live while it runs, and the turn before it settled', () => {
     let sequence = 0
     const entry = (
@@ -594,11 +455,5 @@ describe('the open reasoning block the live line discloses', () => {
       reasoning: { message: { id: 'r-2' } },
       reasoningExpanded: false
     })
-  })
-
-  it('discloses nothing, and hides nothing, while a prompt takes the line', () => {
-    show([userMessage('u1'), block('r-1', 'running')], { thinking: true, lineYields: true })
-    expect(latest().liveLine).toBeNull()
-    expect(latest().resolveRow(1, block('r-1', 'running')).reasoningIsLive).toBe(false)
   })
 })

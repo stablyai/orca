@@ -1,18 +1,21 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
+import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
-  inspectRuntimeTerminalProcess,
-  type RuntimeTerminalProcessInspection
+  inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
+
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget,
@@ -23,9 +26,10 @@ import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../shared/managed-account-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
+import { isSessionHeldByAnotherPane } from './claude-session-pane-holders'
 import {
   isClaudePaneOnAccount,
   resolveClaudePaneFolder,
@@ -89,6 +93,7 @@ type LocalClaudePane = ClaudeSessionMoveCandidate & {
   laneKey: string
   inLane: boolean
   transcriptPath: string | undefined
+  sessionId: string | undefined
 }
 
 function* localClaudePanes(
@@ -115,6 +120,7 @@ function* localClaudePanes(
           continue
         }
         const { laneKey } = resolveCodexPaneSelectionLane({ state, tab, ptyId })
+        const providerSession = normalizeAgentProviderSession(entry.providerSession)
         yield {
           ptyId,
           worktreeId,
@@ -123,7 +129,8 @@ function* localClaudePanes(
           tab,
           laneKey,
           inLane: isLaneInScope(laneKey),
-          transcriptPath: normalizeAgentProviderSession(entry.providerSession)?.transcriptPath
+          transcriptPath: providerSession?.transcriptPath,
+          sessionId: providerSession?.id
         }
       }
     }
@@ -165,6 +172,7 @@ export type ClaudeSessionCantMoveReason =
   | 'own-folder'
   | 'unknown-account'
   | 'no-session'
+  | 'shared-session'
 
 /** Running Claude sessions a switch can see, by what a restart would do for them. */
 export type ClaudeSwitchSessions = {
@@ -257,6 +265,8 @@ export async function findClaudeSwitchSessions(args: {
   host?: ClaudeHostFolders
   /** Sessions on the outgoing account left out because their foreground could not be read. */
   onUnchecked?: (sessions: ClaudeSessionMoveCandidate[]) => void
+  /** Sessions on the outgoing account kept running because another pane holds their conversation. */
+  onShared?: (sessions: ClaudeSessionMoveCandidate[]) => void
 }): Promise<ClaudeSwitchSessions> {
   const found: ClaudeSwitchSessions = { onAccount: [], elsewhere: [], cantMove: [] }
   if (args.owner.kind !== 'local') {
@@ -279,6 +289,7 @@ export async function findClaudeSwitchSessions(args: {
     scanned.map(async (row) => ({ ...row, running: await isClaudeRunning(state, row.pane) }))
   )
   const unchecked: ClaudeSessionMoveCandidate[] = []
+  const shared: ClaudeSessionMoveCandidate[] = []
   for (const row of inspected) {
     const candidate = toCandidate(row.pane)
     if (row.running === 'unchecked' && row.group === 'onAccount') {
@@ -287,13 +298,26 @@ export async function findClaudeSwitchSessions(args: {
     if (row.running !== true) {
       continue
     }
-    if (row.group === 'onAccount') {
+    const paneKey = makePaneKey(row.pane.tabId, row.pane.leafId)
+    if (
+      row.group !== 'cantMove' &&
+      row.pane.sessionId &&
+      isSessionHeldByAnotherPane(state, paneKey, row.pane.sessionId)
+    ) {
+      found.cantMove.push({ ...candidate, reason: 'shared-session' })
+      if (row.group === 'onAccount') {
+        shared.push(candidate)
+      }
+    } else if (row.group === 'onAccount') {
       found.onAccount.push(candidate)
     } else if (row.group === 'elsewhere') {
       found.elsewhere.push({ ...candidate, accountId: row.accountId })
     } else {
       found.cantMove.push({ ...candidate, reason: row.reason })
     }
+  }
+  if (shared.length > 0) {
+    args.onShared?.(shared)
   }
   if (unchecked.length > 0) {
     args.onUnchecked?.(unchecked)
