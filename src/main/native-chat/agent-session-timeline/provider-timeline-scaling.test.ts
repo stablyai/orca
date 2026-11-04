@@ -51,6 +51,7 @@ describe('long-turn event scaling', () => {
     expect(operations[1]).toBeLessThanOrEqual(operations[0]! * 10)
   })
 
+  // The real-scale corpus persists 2,500 rows and their terminal revisions through SQLite.
   it('completes a turn with 2,000 live tools and 500 interleaved text streams', async () => {
     const rig = await openProviderTimelineRig({ schedule: () => () => {} })
     const assembler = rig.assembler
