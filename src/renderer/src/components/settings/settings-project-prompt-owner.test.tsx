@@ -7,10 +7,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   renderProjectSettingsSections,
   type ProjectSettingsRenderContext
-} from './settings-project-section-renderer'
+} from './page/settings-project-section-renderer'
 
 vi.mock('./repository/RepositoryPane', () => ({ RepositoryPane: () => null }))
-vi.mock('./SettingsSection', () => ({ SettingsSection: () => null }))
+vi.mock('./section-layout/SettingsSection', () => ({ SettingsSection: () => null }))
 
 const project: Project = {
   id: 'project',
@@ -75,6 +75,7 @@ describe('Project Settings prompt template host routing', () => {
         isWindowsTerminalHost: false,
         windowsTerminalCapabilities: { wslAvailable: false, wslDistros: [], isLoading: false }
       },
+      interactions: { writeSourceControlAiSettings: vi.fn() },
       view: { isSectionMounted: () => true }
     } satisfies ProjectSettingsRenderContext
     const sections = renderProjectSettingsSections(context)
