@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { useAppStore } from '@/store'
+import { isContextualTourId, type ContextualTourId } from '../../../../shared/contextual-tours'
 import { getContextualTourFocusableElements } from './ContextualTourOverlaySurface'
 
 // Moves focus into a newly shown tour step and gives it back when the tour ends.
@@ -9,14 +10,14 @@ export function useContextualTourFocus({
   rendered,
   panelRef
 }: {
-  activeTourId: string | null
+  activeTourId: ContextualTourId | null
   activeStepIndex: number
   rendered: boolean
   panelRef: RefObject<HTMLElement | null>
 }): void {
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const focusedStepRef = useRef<string | null>(null)
-  const pausedTourIdRef = useRef<string | null>(null)
+  const pausedTourIdRef = useRef<ContextualTourId | null>(null)
 
   useEffect(() => {
     if (!activeTourId || !rendered) {
@@ -57,8 +58,8 @@ export function useContextualTourFocus({
     // the terminal would land on its dismiss button. A tour that ended for good is not paused.
     // Another tour showing in between, or an activation that never painted, keeps the earlier pause.
     const seenIds = useAppStore.getState().contextualToursSeenIds
-    const focusedTourId = focusedStepRef.current?.split(':')[0] ?? null
-    if (focusedTourId && !seenIds.includes(focusedTourId)) {
+    const focusedTourId = focusedStepRef.current?.split(':')[0]
+    if (isContextualTourId(focusedTourId) && !seenIds.includes(focusedTourId)) {
       pausedTourIdRef.current = focusedTourId
     } else if (pausedTourIdRef.current && seenIds.includes(pausedTourIdRef.current)) {
       pausedTourIdRef.current = null
