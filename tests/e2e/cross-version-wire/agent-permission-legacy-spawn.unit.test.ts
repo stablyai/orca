@@ -244,13 +244,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         tabId: 'host-tab-1',
         leafId: 'leaf-1',
         agent: test.agent,
-        sessionOptions: plan.sessionOptions,
-        legacy: {
+        legacy: async () => ({
+          sessionOptions: plan.sessionOptions,
           command: plan.launchCommand,
           env: plan.env ?? {},
           launchConfig: plan.launchConfig,
           launchToken: 'token'
-        }
+        })
       })
     } else {
       const result = await launchAgentInWebHostTab({

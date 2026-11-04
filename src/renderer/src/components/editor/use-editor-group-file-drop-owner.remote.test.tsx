@@ -14,7 +14,7 @@ import { joinPath } from '@/lib/path'
 import { useEditorGroupFileDropOwner } from './use-editor-group-file-drop-owner'
 import { captureEditorFileDropOpen } from './editor-dropped-file-open'
 import * as crossPlatformPath from '../../../../shared/cross-platform-path'
-import type * as ExplorerOwner from '../right-sidebar/file-explorer-operation-owner'
+import type * as ExplorerOwner from '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 
 const mocks = vi.hoisted(() => ({
   stat: vi.fn(),
@@ -33,24 +33,27 @@ vi.mock('../../../../shared/cross-platform-path', async (importOriginal) => {
     normalizeRuntimePathForComparison: vi.fn(actual.normalizeRuntimePathForComparison)
   }
 })
-vi.mock('../right-sidebar/file-explorer-operation-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof ExplorerOwner>()
-  return {
-    ...actual,
-    captureFileExplorerOperationGuard: (
-      ...args: Parameters<typeof actual.captureFileExplorerOperationGuard>
-    ) => {
-      const guard = actual.captureFileExplorerOperationGuard(...args)
-      return {
-        ...guard,
-        assertCurrent: () => {
-          validateOwner()
-          return guard.assertCurrent()
+vi.mock(
+  '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof ExplorerOwner>()
+    return {
+      ...actual,
+      captureFileExplorerOperationGuard: (
+        ...args: Parameters<typeof actual.captureFileExplorerOperationGuard>
+      ) => {
+        const guard = actual.captureFileExplorerOperationGuard(...args)
+        return {
+          ...guard,
+          assertCurrent: () => {
+            validateOwner()
+            return guard.assertCurrent()
+          }
         }
       }
     }
   }
-})
+)
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/runtime/runtime-file-import-client', () => ({

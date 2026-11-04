@@ -21,7 +21,7 @@ import {
   recordWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,

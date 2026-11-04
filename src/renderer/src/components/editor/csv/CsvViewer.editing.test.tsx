@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import CsvViewer from './CsvViewer'
 import { useCsvTableEditor } from './useCsvTableEditor'
 import { parseCsvTextDocument } from './csv-text-document'
-import { flushPendingEditorBuffer, hasPendingEditorBufferChange } from '../editor-pending-flush'
+import {
+  flushPendingEditorBuffer,
+  hasPendingEditorBufferChange
+} from '../save/flush/editor-pending-flush'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
-import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
+import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../autosave/editor-autosave'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 vi.mock('@tanstack/react-virtual', () => ({

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
+import type { AccountsSnapshot } from '../components/AccountUsage'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import {
   loadMobileOnboardingSteps,
@@ -25,8 +26,12 @@ import {
 } from '../worktree/last-visited-worktree-repo'
 import { selectHomeJumpBackInRows } from '../worktree/home-jump-back-in'
 import { selectHomeResumeCard } from '../worktree/home-resume-card'
+import { fetchHomeHostStats } from '../stats/home-stats-summary-read'
+import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { projectHomeHostConnections } from './home-host-connection-projection'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
+
+export type MobileHomeData = ReturnType<typeof useMobileHomeData>
 
 export function useMobileHomeData() {
   const router = useRouter()
@@ -34,6 +39,12 @@ export function useMobileHomeData() {
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
+  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
+  const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
+  const hostSetters = useMemo(
+    () => ({ setWorktreeInfo, setStats: setStatsByHost, setAccounts: setAccountsByHost }),
+    []
+  )
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
@@ -42,12 +53,7 @@ export function useMobileHomeData() {
   const focusedRef = useRef(false)
   const isHomeFocused = useCallback(() => focusedRef.current, [])
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
-  const connections = useMobileHomeHostConnections(
-    hosts,
-    hostCatalog,
-    setWorktreeInfo,
-    isHomeFocused
-  )
+  const connections = useMobileHomeHostConnections(hosts, hostCatalog, hostSetters, isHomeFocused)
   const allClientsRef = useRef(connections.allClients)
 
   useEffect(() => {
@@ -124,6 +130,7 @@ export function useMobileHomeData() {
       for (const entry of allClientsRef.current) {
         if (entry.client.getState() === 'connected') {
           void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
+          fetchHomeHostStats(entry.client, entry.hostId, setStatsByHost, () => stale)
         }
       }
       return () => {
@@ -165,6 +172,8 @@ export function useMobileHomeData() {
     const state = connections.hostStates[host.id]
     return state === undefined || state === 'connecting' || state === 'handshaking'
   })
+  const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
+  const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(
     () => projectHomeHostConnections(connections.allClients),
     [connections.allClients]
@@ -172,6 +181,7 @@ export function useMobileHomeData() {
 
   return {
     ...connections,
+    accountsByHost,
     connectedHosts,
     hostCatalog,
     hostCatalogLoaded,
@@ -181,6 +191,8 @@ export function useMobileHomeData() {
     router,
     setHostCatalog,
     sortedHostCatalog,
+    sortedHosts,
+    stats,
     worktreeInfo
   }
 }

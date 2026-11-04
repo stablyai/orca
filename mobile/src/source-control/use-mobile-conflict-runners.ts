@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../src/shared/source-control/listing/source-control-entry-actions'
 import { isMobileGitUnavailable } from './mobile-git-status'
 import { translate } from '../i18n/mobile-i18n'
 import {

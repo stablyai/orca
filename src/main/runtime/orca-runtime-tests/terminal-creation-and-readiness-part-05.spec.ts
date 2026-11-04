@@ -26,7 +26,7 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 
 describe('OrcaRuntimeService', () => {
   it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(

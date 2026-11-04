@@ -91,7 +91,7 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { BranchPrefixSettings } from '../../shared/branch-prefix'
+import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
 import {

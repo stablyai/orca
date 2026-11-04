@@ -1,8 +1,8 @@
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
-import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
-import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
+import type { RecognizedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
 import {
   observePtyForeground,

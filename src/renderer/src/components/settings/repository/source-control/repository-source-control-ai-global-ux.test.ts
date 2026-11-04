@@ -1,26 +1,26 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
-import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control-ai-settings'
-import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
 import { withRepoAiActionLaunchPreferences } from './repository-source-control-ai-action-agent-draft'
 import {
   dropRepoLegacyInstructionForAction,
-  readActionRecipeTextDraft,
   withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
+import { readActionRecipeTextDraft } from './repository-source-control-ai-recipe-text'
 import {
   type SourceControlAiRepoUpdate,
   toSourceControlAiRepoUpdate
-} from '../../../../../../shared/source-control-ai-recipe-save'
-import type { SourceControlActionId } from '../../../../../../shared/source-control-ai-actions'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control-action-launch-preferences'
-import { liftActionPermissionArgs } from '../../../../../../shared/source-control-action-permission-lift'
-import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
+import { sourceControlActionSelectedPreferences } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { liftActionPermissionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
+import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
 const source = normalizeSourceControlAiSettings(undefined, undefined)
 

@@ -1,12 +1,12 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { agentHookServer } from '../agent-hooks/server'
-import type { AgentStatusState } from '../../shared/agent-status-types'
-import { normalizeTerminalTitle } from '../../shared/agent-title-status'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
+import { normalizeTerminalTitle } from '../../shared/agent-status/title/agent-title-status'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
-} from '../../shared/synthetic-agent-title'
+} from '../../shared/agent-status/title/synthetic-agent-title'
 import {
   advanceSyntheticTitleSpinnerEntries,
   getSyntheticTitleSpinnerPaneKeyToStop,

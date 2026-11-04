@@ -5,7 +5,7 @@
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import type { LegacyRelayBridgedPane } from '../../../shared/legacy-relay-bridge-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LegacyRelayClient, LegacyRelayPty } from './legacy-relay-client'
 import { isEpochScopedRelayPtyId } from '../../../shared/ssh-pending-pty-kill'
 import type { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'

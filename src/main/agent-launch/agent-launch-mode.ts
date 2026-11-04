@@ -1,6 +1,6 @@
 /** Chat defaults may fall back; explicit chat is refused only conclusively before launch effects. */
 
-import { requestsCwdOutsideWorkspaceRoot } from '../../shared/terminal-startup-cwd'
+import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
 import type {
   AgentLaunchModeReason,
   AgentLaunchModeReceipt
@@ -21,7 +21,7 @@ import type {
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
-import { formatAgentTypeLabel } from '../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>

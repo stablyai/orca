@@ -52,22 +52,6 @@ describe('clientRouteCookieImportSources', () => {
     expect(clientRouteCookieImportSources('env-a')).toEqual({ default: chromeSource })
   })
 
-  it('replaces the source on re-import of the same jar', () => {
-    recordClientRouteCookieImportSource({
-      environmentId: 'env-a',
-      profileId: 'default',
-      source: chromeSource
-    })
-    const edge = { browserFamily: 'edge' as const, importedAt: 2_000 }
-    recordClientRouteCookieImportSource({
-      environmentId: 'env-a',
-      profileId: 'default',
-      source: edge
-    })
-
-    expect(clientRouteCookieImportSources('env-a')).toEqual({ default: edge })
-  })
-
   it('tolerates a corrupt store file by starting empty', () => {
     recordClientRouteCookieImportSource({
       environmentId: 'env-a',

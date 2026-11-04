@@ -4,7 +4,7 @@ import {
   type FeatureTip,
   type FeatureTipId
 } from '../../../../shared/feature-tips'
-import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

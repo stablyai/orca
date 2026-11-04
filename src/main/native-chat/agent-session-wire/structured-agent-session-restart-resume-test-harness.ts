@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-current-work'
 import { structuredAgentSessionResumableSet } from './structured-agent-session-restart-resume-set'
@@ -145,7 +145,9 @@ export function journal(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = []
 ) {
-  const currentWork: StructuredAgentSessionCurrentWorkJournal = {
+  const currentWork: StructuredAgentSessionCurrentWorkJournal & {
+    inputOrder: { inputOrdinal: (id: string) => number }
+  } = {
     item: (itemId) => items.find((item) => item.itemId === itemId) ?? null,
     cursor: () => ({ epoch: EPOCH, sequence: items.length }),
     visitItems: (visit) => {
@@ -155,6 +157,11 @@ export function journal(
     },
     runningTurn: () => runningStructuredAgentSessionTurnItemBySequence(items),
     submissions: () => submissions,
+    inputOrder: {
+      inputOrdinal: (id: string) => submissions.findIndex((input) => input.clientMessageId === id),
+      recoverableSubmissions: () =>
+        submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
+    },
     itemFence: () => undefined,
     wroteBeforeOpen: () => false
   }
@@ -162,6 +169,7 @@ export function journal(
   return {
     ...currentWork,
     snapshot: () => ({ items, submissions, cursor: { epoch: EPOCH, sequence: items.length } }),
+    statusRead: () => ({ items, submissions }),
     appendItem: async () => undefined
   } as never
 }

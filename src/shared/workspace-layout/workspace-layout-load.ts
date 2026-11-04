@@ -1,8 +1,8 @@
 // Load one session partition after Store pane-identity normalization. Reapply fixed precedence on every load because older builds may rewrite the documents; do not merge disagreements.
 
 import type { ExecutionHostId } from '../execution-host'
-import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import {
   CARRIED_SESSION_FIELDS,
   FACT_SESSION_FIELDS,

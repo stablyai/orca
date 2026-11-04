@@ -3,7 +3,7 @@ import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
 import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
-import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal-send-acknowledgment'
+import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import {
   AGENT_TUI_CLEAR_MAX_LINES,
   countAgentTuiInputLines,

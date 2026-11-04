@@ -163,7 +163,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
   let admitted: AdmittedLaunch | null = null
   const isCancelled = (): boolean => cancelled || args.hooks.signal?.aborted === true
   let resolveDelivery: (result: StructuredPromptDeliveryResult) => void = () => undefined
-  const deliversPrompt = Boolean(plan.prompt?.trim())
+  const deliversPrompt = Boolean(plan.prompt?.trim() || plan.promptAttachments?.length)
   const promptDeliveryResult = deliversPrompt
     ? new Promise<StructuredPromptDeliveryResult>((resolve) => {
         resolveDelivery = resolve

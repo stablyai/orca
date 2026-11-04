@@ -3,7 +3,7 @@ import {
   type SourceControlAiRepoUpdate,
   saveSourceControlActionRecipe,
   toSourceControlAiRepoUpdate
-} from '../../../../../../shared/source-control-ai-recipe-save'
+} from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -12,17 +12,17 @@ import { pickerLocaleFixture } from '../../__fixtures__/settings-persistence-tes
 import React from 'react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { createRepoActionTextDraftEditors } from './repository-source-control-ai-text-draft'
-import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
-import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
+import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   computeActionDirtyById,
   withRepoAiActionMode,
   withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
 import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
-import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
+import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
-import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
+import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control/ai/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../source-control/SourceControlActionAgentPicker'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
@@ -30,7 +30,7 @@ import { SourceControlAiActionRecipeDefaults } from '../../source-control/Source
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearHostAgentMenuSettingsForTests } from '../../../../runtime/agent-launch-settings/host-agent-launch-preferences-resource'
@@ -607,7 +607,7 @@ it('keeps staged repository setup through template edits and saves/reopens only 
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: '--model claude-sonnet-5-5 --accepted' }
     })
-    fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: '--pending' }
     })

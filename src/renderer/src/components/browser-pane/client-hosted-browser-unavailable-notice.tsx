@@ -8,7 +8,7 @@ import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-clie
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat

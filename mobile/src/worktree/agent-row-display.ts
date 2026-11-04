@@ -1,8 +1,8 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { isAgentStatusFresh } from '../../../src/shared/agent-status-freshness'
-import { agentVerdictDisplayMark } from '../../../src/shared/agent-main-agent-verdict'
-import { resolveDecayedAgentRowState } from '../../../src/shared/agent-row-decay-state'
-import { getAgentRowPrimaryText } from '../../../src/shared/agent-row-primary-text'
+import { isAgentStatusFresh } from '../../../src/shared/agent-status/contracts/agent-status-freshness'
+import { agentVerdictDisplayMark } from '../../../src/shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { resolveDecayedAgentRowState } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
+import { getAgentRowPrimaryText } from '../../../src/shared/agent-status/presentation/agent-row-primary-text'
 import { translate } from '../i18n/mobile-i18n'
 
 // Mirror desktop AgentStateDot vocabulary.

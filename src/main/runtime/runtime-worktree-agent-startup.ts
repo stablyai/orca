@@ -1,3 +1,4 @@
+import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../shared/agent-session/agent-session-host-authority'
 import type { Repo } from '../../shared/repo-types'
@@ -42,6 +43,7 @@ type StartupEnvironment = {
   /** Replaces the configured arguments for this launch; `null` means none. */
   agentArgs?: string | null
   /** An automation's saved extras, merged over the launch's arguments. */
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   extraAgentArgs?: string
   /** Orca, not a user, types into this agent once it starts. */
   suppressStartupUpdatePrompt?: boolean
@@ -177,7 +179,8 @@ export function buildWorktreeStartupForAgent(
     ...(environment.agentArgs !== undefined ? { agentArgs: environment.agentArgs } : {}),
     ...(environment.extraAgentArgs ? { extraAgentArgs: environment.extraAgentArgs } : {}),
     ...(environment.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-    sessionOptions: environment.toSessionOptions(environment.launchPreferences)
+    sessionOptions:
+      environment.sessionOptions ?? environment.toSessionOptions(environment.launchPreferences)
   })
   const prompt = environment.prompt ?? ''
   let startupPlan: ReturnType<typeof buildAgentStartupPlan>
@@ -232,6 +235,7 @@ export function resolveWorktreeCreateAgentStartup(
     preferences: AgentLaunchPreferences | undefined,
     inputs: {
       agentArgs?: string | null
+      sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
       launchSource?: string
@@ -249,6 +253,7 @@ export function resolveWorktreeCreateAgentStartup(
   }
   const built = build(args.startupAgent, args.startupPrompt, args.startupLaunchPreferences, {
     ...(args.startupAgentArgs !== undefined ? { agentArgs: args.startupAgentArgs } : {}),
+    ...(args.startupSessionOptions ? { sessionOptions: args.startupSessionOptions } : {}),
     ...(args.startupExtraAgentArgs ? { extraAgentArgs: args.startupExtraAgentArgs } : {}),
     ...(args.startupSuppressUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
     ...(args.startupLaunchSource ? { launchSource: args.startupLaunchSource } : {}),

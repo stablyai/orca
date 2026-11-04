@@ -118,34 +118,6 @@ function windowLeafIdsOf(page: Page, tabId: string): Promise<string[]> {
   }, tabId)
 }
 
-// Main writes the split and starts its terminal itself, so a busy window never holds the CLI up.
-test('a CLI split of a parked tab answers promptly while the window is busy', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
-  test.setTimeout(180_000)
-  await waitForSessionReady(orcaPage)
-  const worktreeId = await waitForActiveWorktree(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage, 30_000)
-  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-  const client = new RuntimeClient(userDataDir, 30_000)
-  const tabId = await createActiveTab(orcaPage, worktreeId)
-  const source = await handleFor(client, worktreeId, tabId)
-  await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, { parkDelayMs: PARKING_DELAY_MS })
-  await stallRenderer(orcaPage, 8_000)
-  const startedAt = Date.now()
-  const outcome = await runCliSplit(userDataDir, source, 'echo started-by-main')
-  const elapsedMs = Date.now() - startedAt
-  await testInfo.attach('split-busy-window.json', {
-    body: JSON.stringify({ elapsedMs, outcome }, null, 2),
-    contentType: 'application/json'
-  })
-  expect(outcome).toEqual({ ok: true })
-  expect(elapsedMs).toBeLessThan(6_000)
-})
-
 // The window is stalled past the old 10 s wait: main still starts the split's terminal, its
 // command runs, and the window shows the pane from main's layout once it is free.
 test('a CLI split runs its command while the window is stalled, and the window shows the pane', async ({

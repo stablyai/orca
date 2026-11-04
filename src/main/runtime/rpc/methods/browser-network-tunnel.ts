@@ -5,7 +5,7 @@ import {
   type BrowserNetworkExecutionRouteResolver
 } from '../../../browser/network/execution-routes/browser-network-execution-route'
 import { resolveBrowserNetworkExecutionRoute } from '../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
-import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser-client-host-protocol'
+import { BrowserNetworkTunnelAttachParams } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,

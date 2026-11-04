@@ -75,6 +75,25 @@ it('looks up delivery facts linearly as the transcript and submission ledger gro
   }
 })
 
+it('keeps a local echo when a mixed-version host lacks its submission until the row arrives', () => {
+  const missing = rejected({
+    dispatchState: 'unknown',
+    reason: 'durable_send_submission_missing'
+  })
+  const projected = projectStructuredAgentSessionMessages([], [lingeringCopy], [missing])
+  expect(projected).toEqual([
+    expect.objectContaining({
+      id: agentJournalSubmissionKey(KEPT_ID),
+      blocks: lingeringCopy.body.blocks,
+      deliveryState: 'unknown'
+    })
+  ])
+  const item = userItem(KEPT_ID, 'the kept words', 1)
+  expect(projectStructuredAgentSessionMessages([item], [lingeringCopy], [missing])).toEqual(
+    projectStructuredAgentSessionMessages([item], [], [missing])
+  )
+})
+
 describe('a send kept as a card', () => {
   it('shows nothing of the original send, even beside its own local copy', () => {
     const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })

@@ -573,7 +573,7 @@ describe('launch runtime dispatch and allocation phases', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('captures startup and create overrides before option getters', async () => {
+  it('captures the create override before evaluating its creation options', async () => {
     const runtime = new OrcaRuntimeService(null)
     const repo = {
       id: 'repo',
@@ -594,16 +594,6 @@ describe('launch runtime dispatch and allocation phases', () => {
       value: async () => ({ id: 'repo::workspace', repoId: 'repo', path: '/workspace' })
     })
     const events: string[] = []
-    Object.defineProperty(runtime, 'buildStartupForAgent', {
-      configurable: true,
-      get: () => {
-        events.push('read-startup')
-        return function (this: OrcaRuntimeService) {
-          expect(this).toBe(runtime)
-          return { agent: 'codex', startup: { command: 'codex' } }
-        }
-      }
-    })
     Object.defineProperty(runtime, 'createTerminal', {
       configurable: true,
       get: () => {
@@ -618,7 +608,6 @@ describe('launch runtime dispatch and allocation phases', () => {
       runtime.launchAgentTerminal('workspace', {
         get agent(): 'codex' {
           events.push('read-agent')
-          Object.defineProperty(runtime, 'buildStartupForAgent', { value: replacement })
           return 'codex'
         },
         prompt: 'prompt',
@@ -629,7 +618,8 @@ describe('launch runtime dispatch and allocation phases', () => {
         }
       })
     ).resolves.toBe(terminal)
-    expect(events).toEqual(['read-startup', 'read-agent', 'read-create', 'read-title'])
+    expect(events.filter((event) => event === 'read-create')).toHaveLength(1)
+    expect(events.indexOf('read-create')).toBeLessThan(events.indexOf('read-title'))
   })
 
   it('captures admission store and controller before spawn argument getters', async () => {

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { buildAiVaultResumeCommand } from '../../src/shared/ai-vault-resume-command.ts'
+import { buildAiVaultResumeCommand } from '../../src/shared/ai-vault/resume/ai-vault-resume-command.ts'
 import { tokenizeStartupCommand } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell.ts'
 
 assert.ok(process.argv[2], 'Pass a read-only OMP checkout path')

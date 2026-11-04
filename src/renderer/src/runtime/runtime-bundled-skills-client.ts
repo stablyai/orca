@@ -43,7 +43,10 @@ export async function planBundledSkillsOnTarget(
     return { kind: 'unsupported', reason: 'connect-host' }
   }
   if (target.kind !== 'environment') {
-    const plan = await window.api.skills.bundledPlan(request)
+    const plan = await window.api.skills.bundledPlan({
+      ...request,
+      ...(target.agent ? { agent: target.agent } : {})
+    })
     return { kind: 'plan', plan }
   }
   if (
@@ -76,7 +79,7 @@ export async function executeBundledSkillsOnTarget(
   if (target.kind !== 'environment') {
     return window.api.skills.bundledExecute({
       planDigest,
-      request
+      request: { ...request, ...(target.agent ? { agent: target.agent } : {}) }
     })
   }
   if (!(await supportsSelectedNames(target.environmentId, request.names))) {

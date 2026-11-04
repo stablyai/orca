@@ -6,7 +6,8 @@ import type { HostStatusReply } from './host-status-reply-schema'
 export function recordHostDescriptorFromStatus(hostId: string, status: HostStatusReply): void {
   const descriptor = {
     machineName: status.machineName?.trim() || null,
-    platform: status.hostPlatform ?? null
+    platform: status.hostPlatform ?? null,
+    machine: status.hostMachine ?? null
   }
   recordHostDescriptor(hostId, descriptor)
   void updateHostDescriptor(hostId, descriptor)

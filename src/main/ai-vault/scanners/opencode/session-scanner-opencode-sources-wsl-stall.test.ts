@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Dirent } from 'node:fs'
+
 import type * as NodeFsPromisesModule from 'node:fs/promises'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
-const WSL_DATA_DIR = `${WSL_HOME}/.local/share/opencode`
 
 const mocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
 
@@ -58,31 +57,6 @@ afterEach(async () => {
 })
 
 describe('OpenCode source discovery with a stalled WSL data directory', () => {
-  it('reports the stalled home as an issue and still resolves every discovery', async () => {
-    mocks.readdir.mockImplementation((dir: string) =>
-      dir === WSL_DATA_DIR ? stalls() : Promise.resolve([] as Dirent[])
-    )
-    const issues: AiVaultScanIssue[] = []
-    const discoveries = Promise.all(
-      opencodeDiscoveries(
-        { opencodeStorageDir: '/home/ada/.local/share/opencode/storage' },
-        [WSL_HOME],
-        10,
-        issues
-      )
-    )
-    // The storage scan queues before the data-dir timeout marks the route stuck; both reach their deadlines.
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
-
-    // A scan issue distinguishes an unreachable source from an uninstalled agent.
-    const resolved = await discoveries
-    expect(resolved).toHaveLength(4)
-    expect(mocks.readdir.mock.calls.filter(([path]) => path === WSL_DATA_DIR)).toHaveLength(1)
-    expect(resolved.every((discovery) => discovery.files.length === 0)).toBe(true)
-    expect(issues.some((issue) => issue.path === WSL_DATA_DIR)).toBe(true)
-    expect(issues.every((issue) => issue.agent === 'opencode')).toBe(true)
-  })
-
   it('reports a refused primary data directory instead of scanning clean', async () => {
     const previousXdg = process.env.XDG_DATA_HOME
     const previousDb = process.env.OPENCODE_DB

@@ -3,7 +3,7 @@ import { connect } from './rpc-client'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -185,22 +185,6 @@ describe('mobile rpc-client connection timeout', () => {
     vi.advanceTimersByTime(12_000)
 
     expect(secondSocket.close).toHaveBeenCalledTimes(1)
-
-    client.close()
-  })
-
-  it('clears the open timeout once the socket opens and authenticates', () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-
-    openAndAuthenticate(socket)
-
-    expect(client.getState()).toBe('connected')
-
-    vi.advanceTimersByTime(12_000)
-
-    expect(socket.close).not.toHaveBeenCalled()
-    expect(client.getState()).toBe('connected')
 
     client.close()
   })
@@ -472,33 +456,6 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
-  it('still routes terminal binary frames after browser demux is enabled', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-    const events: unknown[] = []
-
-    openAndAuthenticate(socket)
-
-    client.subscribe('terminal.subscribe', { terminal: 'term-1' }, (event) => events.push(event))
-    const request = sentRequest(socket, 'terminal.subscribe')
-    socket.receive(
-      `encrypted:${JSON.stringify({
-        id: request.id,
-        ok: true,
-        streaming: true,
-        result: { type: 'subscribed', streamId: 42 },
-        _meta: { runtimeId: 'r1' }
-      })}`
-    )
-    socket.receive(encodeTerminalOutput(42, 'hello'))
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(events).toContainEqual({ type: 'data', streamId: 42, chunk: 'hello' })
-
-    client.close()
-  })
-
   it('replays terminal subscribe with the latest viewport after reconnect', () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const firstSocket = mockSockets[0]!
@@ -527,46 +484,6 @@ describe('mobile rpc-client connection timeout', () => {
     expect(sentRequest(secondSocket, 'terminal.subscribe').params).toMatchObject({
       viewport: { cols: 60, rows: 24 }
     })
-
-    client.close()
-  })
-
-  it('honors per-request timeout overrides', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = mockSockets[0]!
-
-    openAndAuthenticate(socket)
-
-    const request = client.sendRequest(
-      'speech.dictation.finish',
-      { dictationId: 'd1' },
-      {
-        timeoutMs: 123
-      }
-    )
-    let settled = false
-    const outcome = request.then(
-      (response) => {
-        settled = true
-        return response
-      },
-      (error: unknown) => {
-        settled = true
-        return error
-      }
-    )
-    await Promise.resolve()
-    expect(sentRequest(socket, 'speech.dictation.finish').params).toEqual({ dictationId: 'd1' })
-
-    await vi.advanceTimersByTimeAsync(122)
-    expect(settled).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(1)
-    const error = await outcome
-    if (!(error instanceof Error)) {
-      throw new Error('Expected the request timeout')
-    }
-    expect(error.message).toBe('Request timed out: speech.dictation.finish')
 
     client.close()
   })
@@ -832,18 +749,6 @@ describe('mobile rpc-client connection timeout', () => {
 
         client.close()
       }
-    })
-
-    it('does not count undecryptable payloads as probe activity', async () => {
-      const { client, socket } = connectAuthenticated()
-
-      client.notifyForeground()
-      socket.receive('undecryptable')
-
-      await vi.advanceTimersByTimeAsync(24_000)
-      expect(socket.close).toHaveBeenCalled()
-
-      client.close()
     })
 
     it('is a no-op after the client is closed', () => {

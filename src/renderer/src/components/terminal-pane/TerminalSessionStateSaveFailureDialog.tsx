@@ -9,7 +9,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { isTerminalSessionStorageCapacityFailure } from '../../../../shared/terminal-session-state-save-failure'
+import { isTerminalSessionStorageCapacityFailure } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
 
 export function TerminalSessionStateSaveFailureDialog({
   open,

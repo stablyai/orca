@@ -14,7 +14,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../../shared/agent-hook-relay'
+} from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { WSL_HOOK_FS_METHODS } from '../../shared/wsl-hook-relay-contract'
 
 function gate() {

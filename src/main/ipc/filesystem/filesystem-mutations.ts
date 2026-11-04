@@ -29,7 +29,7 @@ import { streamExternalFileToRuntime } from '../runtime-upload-file-stream'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
 import type { RuntimeUploadFileStreamRequest } from '../../../shared/runtime-upload-staging-contract'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export function registerFilesystemMutationHandlers(store: Store): void {

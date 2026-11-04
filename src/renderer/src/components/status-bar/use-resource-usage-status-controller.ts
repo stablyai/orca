@@ -5,7 +5,7 @@ import { useDaemonActions } from '../shared/useDaemonActions'
 import type { UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { SortOption } from './resource-usage-resource-tree'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,

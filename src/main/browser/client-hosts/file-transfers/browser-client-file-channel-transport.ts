@@ -1,4 +1,4 @@
-import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../../shared/browser-client-file-channel-methods'
+import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 

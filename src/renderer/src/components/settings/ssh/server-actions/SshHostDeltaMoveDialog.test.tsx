@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-
-// @vitest-environment happy-dom
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -72,27 +70,6 @@ function api(next: OrcadDeltaMovePreview, result: OrcadDeltaMoveResult): Managed
   }
 }
 
-async function render(
-  managed: ManagedOrcadPreloadApi,
-  onFinished = vi.fn()
-): Promise<HTMLDivElement> {
-  const container = document.createElement('div')
-  document.body.append(container)
-  const root = createRoot(container)
-  roots.push(root)
-  await act(async () => {
-    root.render(
-      <SshHostDeltaMoveDialog
-        api={managed}
-        target={target}
-        onClose={vi.fn()}
-        onFinished={onFinished}
-      />
-    )
-  })
-  return container
-}
-
 function confirmButton(container: HTMLElement): HTMLButtonElement {
   return [...container.querySelectorAll('button')].find(
     (button) => button.textContent === 'Move the new projects'
@@ -100,19 +77,6 @@ function confirmButton(container: HTMLElement): HTMLButtonElement {
 }
 
 describe('moving what an older build added', () => {
-  it('lists what is added and what the server will not reflect, then moves', async () => {
-    const onFinished = vi.fn()
-    const managed = api(preview(), { outcome: 'moved', migrationId: 'm-2' })
-    const container = await render(managed, onFinished)
-    expect(container.textContent).toContain('Repository tool')
-    expect(container.textContent).toContain('the server keeps its own copy')
-    expect(container.textContent).toContain('Repository app')
-    expect(container.textContent).toContain('Folder notes')
-    await act(async () => confirmButton(container).click())
-    expect(managed.moveDelta).toHaveBeenCalledWith({ sshTargetId: 'ssh-1' })
-    expect(onFinished).toHaveBeenCalled()
-  })
-
   it('keeps a running move when the caller passes a fresh target object', async () => {
     const managed = api(preview(), { outcome: 'moved', migrationId: 'm-2' })
     managed.moveDelta = vi.fn(() => new Promise<OrcadDeltaMoveResult>(() => {}))

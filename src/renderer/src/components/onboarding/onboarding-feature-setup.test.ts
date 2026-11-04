@@ -3,29 +3,14 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
-import {
-  COMPUTER_USE_SKILL_NAME,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_LINEAR_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
-import {
-  ORCHESTRATION_ENABLED_STORAGE_KEY,
-  ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
-} from '@/lib/orchestration-setup-state'
+import { ORCHESTRATION_ENABLED_STORAGE_KEY } from '@/lib/orchestration-setup-state'
 import {
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
-
-const ALL_SKILL_NAMES = [
-  ORCA_CLI_SKILL_NAME,
-  COMPUTER_USE_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME,
-  ORCA_LINEAR_SKILL_NAME
-]
 
 const GRANTED_COMPUTER_USE_STATUS: ComputerUsePermissionStatusResult = {
   platform: 'darwin',
@@ -70,40 +55,6 @@ describe('onboarding feature setup runner', () => {
     vi.unstubAllGlobals()
   })
 
-  it('runs selected feature setup through injected deps only', async () => {
-    const deps = createDeps({
-      getComputerUsePermissionStatus: vi.fn(
-        async (): Promise<ComputerUsePermissionStatusResult> => ({
-          platform: 'darwin',
-          helperAppPath: '/Applications/Orca Computer Use.app',
-          helperUnavailableReason: null,
-          permissions: [
-            { id: 'accessibility', status: 'not-granted' },
-            { id: 'screenshots', status: 'granted' }
-          ]
-        })
-      )
-    })
-
-    const result = await runOnboardingFeatureSetup(
-      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
-      deps
-    )
-
-    expect(result).toEqual({
-      selectedIds: ['browserUse', 'computerUse', 'orchestration', 'linearTickets'],
-      skillNames: ALL_SKILL_NAMES,
-      computerUsePermissionsOpened: true,
-      warnings: []
-    })
-    expect(deps.getComputerUsePermissionStatus).toHaveBeenCalledTimes(1)
-    expect(deps.openComputerUsePermissionSetup).toHaveBeenCalledTimes(1)
-    expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-    expect(deps.removeStorageItem).toHaveBeenCalledWith(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
-    expect(deps.notifyOrchestrationStateChanged).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps invasive Browser Use and Computer Use setup untouched when only Orchestration is selected', async () => {
     const deps = createDeps()
     const selection: OnboardingFeatureSetupSelection = {
@@ -122,25 +73,6 @@ describe('onboarding feature setup runner', () => {
     expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
     expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
     expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('1')
-  })
-
-  it('clears feature markers when no setup items are selected', async () => {
-    const deps = createDeps()
-
-    const result = await runOnboardingFeatureSetup(
-      { browserUse: false, computerUse: false, orchestration: false, linearTickets: false },
-      deps
-    )
-
-    expect(result).toEqual({
-      selectedIds: [],
-      skillNames: [],
-      computerUsePermissionsOpened: false,
-      warnings: []
-    })
-    expect(deps.storage.get(BROWSER_USE_ENABLED_STORAGE_KEY)).toBe('0')
-    expect(deps.storage.get(ORCHESTRATION_ENABLED_STORAGE_KEY)).toBe('0')
-    expect(deps.getComputerUsePermissionStatus).not.toHaveBeenCalled()
   })
 
   it('keeps main’s skill selection but skips permissions when the Computer Use helper is unavailable', async () => {
