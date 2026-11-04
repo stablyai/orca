@@ -19,7 +19,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
 

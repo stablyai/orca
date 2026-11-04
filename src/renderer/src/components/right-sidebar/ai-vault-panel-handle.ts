@@ -1,5 +1,8 @@
 import { useImperativeHandle, type ReactNode, type Ref } from 'react'
-import type { AiVaultAgent, AiVaultScope } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultScope
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultPanelWorkspace } from './ai-vault-panel-workspace'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
 

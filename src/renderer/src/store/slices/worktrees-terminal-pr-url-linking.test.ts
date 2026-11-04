@@ -4,7 +4,7 @@ import type {
   HostedReviewForBranchArgs
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   createTestStore,
   mockApi,

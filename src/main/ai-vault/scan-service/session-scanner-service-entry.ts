@@ -1,8 +1,8 @@
 import { requestSessionSearchRoots } from './session-scanner-service-root-request'
 import { aiVaultScanWork, trackAiVaultScanProgress } from '../ai-vault-scan-progress'
-import type { AiVaultScanWork } from '../../../shared/ai-vault-scan-progress'
-import type { AiVaultSessionTitle } from '../../../shared/ai-vault-session-title'
-import type { AiVaultListResult } from '../../../shared/ai-vault-types'
+import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import type { AiVaultSessionTitle } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { readAiVaultFirstUserPrompt } from '../session-first-user-prompt-read'
 import {
   flushSessionParseCachePersist,

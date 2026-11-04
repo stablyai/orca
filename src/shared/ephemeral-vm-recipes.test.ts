@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
+import { encodePairingOffer } from './remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from './remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS,
   parseEphemeralVmRecipeResult

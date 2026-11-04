@@ -2,7 +2,7 @@
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import type { OrcadDeploymentLink } from '../../../../shared/runtime-environments'
+import type { OrcadDeploymentLink } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resetHostTerminalScrollbackHydrationForTests } from '@/runtime/host-terminal-scrollback-hydration'
 import { useHostTerminalScrollbackHold } from './use-host-terminal-scrollback-hold'
 import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'

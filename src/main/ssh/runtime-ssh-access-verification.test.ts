@@ -1,6 +1,6 @@
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEnvironmentFromPairingOffer } from '../../shared/runtime-environments'
+import { createEnvironmentFromPairingOffer } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RUNTIME_PROTOCOL_VERSION } from '../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'

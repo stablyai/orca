@@ -1,8 +1,11 @@
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
-} from '../../../shared/device-key-registration-contract'
-import { sanitizeDeviceLabel, verifyDeviceProof } from '../../../shared/device-key-proof'
+} from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import {
+  sanitizeDeviceLabel,
+  verifyDeviceProof
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 import type { DeviceRegistry } from '../device-registry'
 import type { AuthenticatedMobileSocket } from '../rpc/mobile-socket-wiring'
 

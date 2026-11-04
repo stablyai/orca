@@ -108,35 +108,67 @@ describe('PR test LoC summary', () => {
     for (const { options } of requests.slice(1)) {
       expect(options.method).toBe('PATCH')
       expect(JSON.parse(options.body)).toEqual({
-        body: `${renderLocBlock(totals)}\n\n${body}`
+        body: `${body}\n${renderLocBlock(totals)}\n`
       })
     }
     expect(delays).toEqual([1000])
   })
 
-  it('replaces an existing header and prepends when missing', () => {
+  it('renders the table with a hands-off marker', () => {
+    const block = renderLocBlock({
+      test: { files: 1, added: 2, deleted: 1 },
+      nonTest: { files: 1, added: 4, deleted: 0 }
+    })
+
+    expect(block).toContain(LOC_HANDS_OFF_COMMENT)
+    expect(block).toContain(
+      '| Test | 1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$​2 | $\\color{#cf222e}{\\Huge{\\mathbf{−}}}$​1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$​1 |'
+    )
+    expect(block).toContain(
+      '| Prod | 1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$​4 | 0 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$​4 |'
+    )
+    expect(block).not.toContain('| Total |')
+  })
+
+  it('places the table after the ELI5 section so link unfurls stay readable', () => {
     const totals = {
       test: { files: 1, added: 2, deleted: 1 },
       nonTest: { files: 1, added: 4, deleted: 0 }
     }
     const block = renderLocBlock(totals)
+    const expected = `## ELI5\n\nHello\n\n${block}\n\n## Why\n\nBecause\n`
 
-    expect(block).toContain(LOC_HANDS_OFF_COMMENT)
-    expect(block).toContain(
-      '| Test | 1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b2 | $\\color{#cf222e}{\\Huge{\\mathbf{−}}}$\u200b1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b1 |'
+    expect(mergeLocBlock('## ELI5\n\nHello\n\n## Why\n\nBecause\n', totals)).toBe(expected)
+    // Idempotent once placed.
+    expect(mergeLocBlock(expected, totals)).toBe(expected)
+    // Migrates a block previously prepended at the top, including legacy formats.
+    expect(mergeLocBlock(`${block}\n\n## ELI5\n\nHello\n\n## Why\n\nBecause\n`, totals)).toBe(
+      expected
     )
-    expect(block).toContain(
-      '| Prod | 1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b4 | 0 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b4 |'
-    )
-    expect(block).not.toContain('| Total |')
-    expect(mergeLocBlock('## ELI5\n\nHello\n', totals)).toBe(`${block}\n\n## ELI5\n\nHello\n`)
-    expect(mergeLocBlock(`${block}\n\n## ELI5\n`, totals)).toBe(`${block}\n\n## ELI5\n`)
     expect(
       mergeLocBlock(
-        '<!-- orca-pr-loc -->\n**LoC** · test **+1 / −0**\n<!-- /orca-pr-loc -->\n\n## ELI5\n',
+        '<!-- orca-pr-loc -->\n**LoC** · test **+1 / −0**\n<!-- /orca-pr-loc -->\n\n## ELI5\n\nHello\n\n## Why\n\nBecause\n',
         totals
       )
-    ).toBe(`${block}\n\n## ELI5\n`)
+    ).toBe(expected)
+    // ELI5 subsections stay inside the section.
+    expect(mergeLocBlock('## ELI5\n\nHi\n\n### Detail\n\nMore\n\n## Why\n', totals)).toBe(
+      `## ELI5\n\nHi\n\n### Detail\n\nMore\n\n${block}\n\n## Why\n`
+    )
+  })
+
+  it('appends the table when there is no ELI5 section to follow', () => {
+    const totals = {
+      test: { files: 0, added: 0, deleted: 0 },
+      nonTest: { files: 1, added: 4, deleted: 0 }
+    }
+    const block = renderLocBlock(totals)
+
+    expect(mergeLocBlock('## ELI5\n\nHello\n', totals)).toBe(`## ELI5\n\nHello\n\n${block}\n`)
+    expect(mergeLocBlock('Bump deps\n', totals)).toBe(`Bump deps\n\n${block}\n`)
+    expect(mergeLocBlock(`${block}\n\nBump deps\n`, totals)).toBe(`Bump deps\n\n${block}\n`)
+    expect(mergeLocBlock('', totals)).toBe(`${block}\n`)
+    expect(mergeLocBlock(null, totals)).toBe(`${block}\n`)
   })
 
   it('counts and merges from a files JSON fixture', () => {
@@ -156,7 +188,7 @@ describe('PR test LoC summary', () => {
     const result = runLoc(['--files-json', filesPath, '--merge-body', bodyPath])
 
     expect(result.status).toBe(0)
-    expect(result.stdout.startsWith('<!-- orca-pr-loc -->')).toBe(true)
+    expect(result.stdout.startsWith('## ELI5\n\nHello\n\n<!-- orca-pr-loc -->')).toBe(true)
     expect(result.stdout).toContain(LOC_HANDS_OFF_COMMENT)
     expect(result.stdout).toContain(
       '| Test | 1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b6 | $\\color{#cf222e}{\\Huge{\\mathbf{−}}}$\u200b1 | $\\color{#1a7f37}{\\Huge{\\mathbf{+}}}$\u200b5 |'

@@ -5,7 +5,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import {
   terminalViewColorQueryReplyColors,
   type TerminalViewAttributes
-} from '../../../../shared/terminal-view-attributes'
+} from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { applyTerminalAppearance } from './terminal-appearance'
 import {
   _resetTerminalViewAttributesPublisherForTest,

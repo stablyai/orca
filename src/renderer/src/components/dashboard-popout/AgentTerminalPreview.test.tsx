@@ -5,7 +5,7 @@ import type { ITerminalOptions } from '@xterm/xterm'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalPreviewApi } from '../../../../preload/api/dashboard-api'
-import type { TerminalPreviewConnectResult } from '../../../../shared/terminal-preview'
+import type { TerminalPreviewConnectResult } from '../../../../shared/terminal/replay/terminal-preview'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {

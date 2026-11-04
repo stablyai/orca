@@ -1,4 +1,7 @@
-import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type {
+  TerminalLimitStatus,
+  TerminalLimitUpdate
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus

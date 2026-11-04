@@ -9,7 +9,7 @@ import {
   MAX_CONFIGURED_TERMINALS,
   terminalLimitInputMaximum,
   type TerminalLimitStatus
-} from '../../shared/terminal-limit-policy'
+} from '../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { profileStateAccessMachineIdentity } from '../persistence/profile-state/profile-state-access-identity'
 import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
 import { awaitDaemonValueWithinCallerDeadline } from './daemon-request-deadline'

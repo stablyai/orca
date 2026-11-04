@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
-import '../../../../shared/folder-workspace-execution-host'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

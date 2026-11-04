@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../execution-host'
 import { buildExecutionHostRegistry } from '../execution-host-registry'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts,

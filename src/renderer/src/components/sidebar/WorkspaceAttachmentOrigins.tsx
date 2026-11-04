@@ -10,7 +10,7 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import type { Tab } from '../../../../shared/tab-types'
-import { getWorkspaceAttachmentOriginKey } from '../../../../shared/workspace-attachment-origins'
+import { getWorkspaceAttachmentOriginKey } from '../../../../shared/workspace-attachments/workspace-attachment-origins'
 import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
 

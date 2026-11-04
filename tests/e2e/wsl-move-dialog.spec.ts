@@ -19,8 +19,8 @@ import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-pr
 import { createElectronHomeIsolation } from './helpers/electron-home-isolation'
 import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { encodePairingOffer } from '../../src/shared/pairing'
-import { addWslHostEnvironment } from '../../src/shared/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
 import type {
   WslMovePreview,

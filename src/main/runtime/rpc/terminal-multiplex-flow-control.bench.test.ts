@@ -7,7 +7,7 @@ import {
   TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
   TERMINAL_STREAM_CHUNK_BYTES
-} from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from './terminal-multiplex-round-robin'
 
 const MIB = 1024 * 1024

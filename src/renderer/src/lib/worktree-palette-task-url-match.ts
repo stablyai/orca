@@ -15,7 +15,7 @@ import { parseGitLabIssueOrMRLink } from '../../../shared/new-workspace/gitlab-l
 import { parseJiraIssueUrl, type ParsedJiraIssueUrl } from '../../../shared/jira/jira-issue-url'
 import { parseLinearIssueUrlIntent, type LinearIssueUrlIntent } from '../../../shared/linear/links'
 import type { Repo } from '../../../shared/repo-types'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { Worktree } from '../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from './linear-issue-workspace-attachment'
 import {

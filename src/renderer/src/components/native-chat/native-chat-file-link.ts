@@ -3,13 +3,13 @@ import {
   routeNativeChatHref,
   type NativeChatHrefRoute
 } from '../../../../shared/native-chat/native-chat-href-routing'
-import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../shared/file-uri-path'
-import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
+import { WINDOWS_DRIVE_PATH_PREFIX } from '../../../../shared/file-links/file-uri-path'
+import { normalizeAbsolutePath } from '../../../../shared/file-links/file-link-path-normalization'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget,
   resolveExplicitFileLinkTargetPath
-} from '../../../../shared/explicit-file-link-target'
+} from '../../../../shared/file-links/explicit-file-link-target'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'

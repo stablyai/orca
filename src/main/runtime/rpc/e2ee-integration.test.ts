@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from '../../../shared/e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 // Exercise mobile/desktop ephemeral key exchange and encrypted RPC compatibility without a real WebSocket.
 

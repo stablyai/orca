@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime-client'
 import type { CliStatusResult } from '../../shared/runtime-types'
-import { TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import '../../shared/protocol-version'
+import { TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { TERMINAL_HANDLERS } from './terminal'
 
 function splitClient(
