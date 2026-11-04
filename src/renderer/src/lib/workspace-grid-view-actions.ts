@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { isKnownGridViewWorkspace } from '@/store/slices/workspace-grid-view'
 import { activateAndRevealWorkspace } from './worktree-activation'
 
 /** Adds a workspace and opens the grid view when the user is looking at a workspace outside it. */
@@ -14,9 +15,13 @@ export function addWorkspaceToGridViewAndShow(workspaceId: string): void {
 /** Removes a workspace; when it held focus, focus moves to another member so the grid view stays put. */
 export function removeWorkspaceFromGridViewKeepingFocus(workspaceId: string): void {
   const state = useAppStore.getState()
+  // Why only resolvable members: activating a removed or still-reconnecting one fails, which would
+  // leave focus on the workspace just taken out and hide the rest of the grid view.
   const nextFocusId =
     state.activeWorktreeId === workspaceId
-      ? (state.workspaceGridViewMemberIds.find((id) => id !== workspaceId) ?? null)
+      ? (state.workspaceGridViewMemberIds.find(
+          (id) => id !== workspaceId && isKnownGridViewWorkspace(state, id)
+        ) ?? null)
       : null
   state.removeWorkspaceFromGridView(workspaceId)
   if (nextFocusId) {

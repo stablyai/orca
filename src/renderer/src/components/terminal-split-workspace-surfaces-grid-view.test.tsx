@@ -17,7 +17,8 @@ type SurfaceProps = {
 const mocks = vi.hoisted(() => ({
   surfaces: new Map<string, SurfaceProps>(),
   emptyCells: new Map<string, WorkspaceGridViewCellRect>(),
-  openingEmptyCells: new Set<string>()
+  openingEmptyCells: new Set<string>(),
+  focusedEmptyCells: new Set<string>()
 }))
 vi.mock('./TerminalWorktreeSplitSurface', () => ({
   WorktreeSplitSurface: (props: SurfaceProps) => {
@@ -29,11 +30,15 @@ vi.mock('./workspace-grid-view/WorkspaceGridViewEmptyCell', () => ({
   WorkspaceGridViewEmptyCell: (props: {
     workspaceId: string
     rect: WorkspaceGridViewCellRect
+    isFocused: boolean
     isOpening: boolean
   }) => {
     mocks.emptyCells.set(props.workspaceId, props.rect)
     if (props.isOpening) {
       mocks.openingEmptyCells.add(props.workspaceId)
+    }
+    if (props.isFocused) {
+      mocks.focusedEmptyCells.add(props.workspaceId)
     }
     return null
   }
@@ -58,18 +63,21 @@ afterEach(async () => {
   mocks.surfaces.clear()
   mocks.emptyCells.clear()
   mocks.openingEmptyCells.clear()
+  mocks.focusedEmptyCells.clear()
 })
 
 async function renderSurfaces({
   activeId,
   visibleIds,
   activeView = 'terminal',
-  withoutLayout = []
+  withoutLayout = [],
+  unmounted = []
 }: {
   activeId: string
   visibleIds: string[]
   activeView?: string
   withoutLayout?: string[]
+  unmounted?: string[]
 }): Promise<void> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TerminalSplitWorkspaceSurfaces reads only the fields listed here; the rest of the controller is machinery this render never touches.
   const controller = {
@@ -84,7 +92,7 @@ async function renderSurfaces({
     forceParkedTerminalWorktreeIds: new Set(),
     getEffectiveLayoutForWorktree: (id: string) => (withoutLayout.includes(id) ? null : LAYOUT),
     measurableBackgroundWorktreeIdsRef: { current: new Set() },
-    mountedWorktreeIdsRef: { current: new Set(ALL_IDS) },
+    mountedWorktreeIdsRef: { current: new Set(ALL_IDS.filter((id) => !unmounted.includes(id))) },
     renderedActiveWorktreeId: activeId,
     startupTerminalTabHold: null,
     visibleWorkspaceIds: visibleIds,
@@ -122,7 +130,16 @@ describe('TerminalSplitWorkspaceSurfaces on a workspace grid view', () => {
 
     expect(mocks.surfaces.has(BETA)).toBe(false)
     expect(mocks.emptyCells.get(BETA)).toEqual(computeWorkspaceGridViewCellRects(2)[1])
+    expect(mocks.openingEmptyCells.has(BETA)).toBe(false)
     expect(mocks.emptyCells.has(ALPHA)).toBe(false)
+  })
+
+  it('shows a restored member as opening until startup mounts it', async () => {
+    await renderSurfaces({ activeId: ALPHA, visibleIds: [ALPHA, BETA], unmounted: [BETA] })
+
+    expect(mocks.surfaces.has(BETA)).toBe(false)
+    expect(mocks.openingEmptyCells.has(BETA)).toBe(true)
+    expect(mocks.focusedEmptyCells.has(BETA)).toBe(false)
   })
 
   it('keeps the single-workspace view when only the active workspace is visible', async () => {
@@ -153,6 +170,7 @@ describe('TerminalSplitWorkspaceSurfaces on a workspace grid view', () => {
     expect(container.firstElementChild?.classList.contains('hidden')).toBe(false)
     expect(mocks.surfaces.get(ALPHA)).toMatchObject({ isVisible: true, isFocused: false })
     expect(mocks.openingEmptyCells.has(BETA)).toBe(true)
+    expect(mocks.focusedEmptyCells.has(BETA)).toBe(true)
   })
 
   it('still hides the single view while its workspace has no layout', async () => {

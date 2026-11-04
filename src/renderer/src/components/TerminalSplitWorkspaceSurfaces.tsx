@@ -109,13 +109,17 @@ export function TerminalSplitWorkspaceSurfaces({
             )
             .map((workspace) => {
               const rect = gridViewCellRectFor(workspace.id)
+              const isFocused = workspace.id === renderedActiveWorktreeId
               return rect ? (
                 <WorkspaceGridViewEmptyCell
                   key={`grid-view-empty-${workspace.id}`}
                   workspaceId={workspace.id}
                   workspacePath={workspace.path}
                   rect={rect}
-                  isOpening={workspace.id === renderedActiveWorktreeId}
+                  isFocused={isFocused}
+                  // Why unmounted counts as opening: a restored member mounts only once startup
+                  // releases its terminal hold, and offering to open it before then is wrong.
+                  isOpening={isFocused || !mountedWorktreeIdsRef.current.has(workspace.id)}
                 />
               ) : null
             })

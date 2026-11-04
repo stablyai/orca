@@ -17,12 +17,14 @@ export function WorkspaceGridViewEmptyCell({
   workspaceId,
   workspacePath,
   rect,
+  isFocused,
   isOpening
 }: {
   workspaceId: string
   workspacePath: string
   rect: WorkspaceGridViewCellRect
-  /** True once the member is active and its first tab is still being created. */
+  isFocused: boolean
+  /** True while the member is being opened or restored, so there is nothing to offer yet. */
   isOpening: boolean
 }): React.JSX.Element {
   const { spokenName } = useWorkspaceGridViewCellName(workspaceId, workspacePath)
@@ -35,7 +37,7 @@ export function WorkspaceGridViewEmptyCell({
       <WorkspaceGridViewCellHeader
         workspaceId={workspaceId}
         workspacePath={workspacePath}
-        isFocused={isOpening}
+        isFocused={isFocused}
         windowCorners={workspaceGridViewCellWindowCorners(rect)}
       />
       <div className="flex flex-1 items-center justify-center bg-background">
