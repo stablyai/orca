@@ -20514,7 +20514,8 @@
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
         "projectCheckout": "Project checkout"
-      }
+      },
+      "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message."
     },
     "tab": {
       "bar": {

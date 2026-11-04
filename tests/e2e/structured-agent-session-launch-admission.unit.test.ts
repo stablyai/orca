@@ -66,6 +66,10 @@ import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-sessio
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
@@ -747,27 +751,32 @@ describe('a paired server that cannot resolve a new workspace yet', () => {
   })
 })
 
-it('keeps explicit refusal owned by admission and keeps an opened chat failure out of the menu', async () => {
+it('keeps an explicit chat and its prompt when its host declines startup', async () => {
   seedPairedServerWorkspace()
-  for (const supported of [false, true]) {
-    mocks.toastError.mockClear()
-    mocks.createSupport.mockResolvedValue({ supported, reason: 'wsl' })
-    const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
-    if (supported) {
-      mocks.createSupport
-        .mockResolvedValueOnce({ supported: true })
-        .mockResolvedValueOnce({ supported: false })
-    }
-    const onHostDeclined = vi.fn()
-    const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {}, onHostDeclined })
-    await expect(launch?.settlement).resolves.toMatchObject({ kind: 'failed' })
-    expect(onHostDeclined).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalledTimes(supported ? 0 : 1)
-    if (!supported) {
-      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
-        delivered: false,
-        failureNotified: true
-      })
-    }
+  mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+  const plan = adoptAgentSessionLaunchVerdict({ ...pairedPlan(), requestedSurface: 'chat' })
+  const launch = beginStructuredAgentSessionProvisionalLaunch({ plan, hooks: {} })
+  if (!launch?.tab) {
+    throw new Error('An explicit chat must open before its host answers')
   }
+
+  await expect(launch.settlement).resolves.toMatchObject({
+    kind: 'failed',
+    error: { code: 'structured_agent_session_unsupported' }
+  })
+  await expect(launch.promptDeliveryResult).resolves.toMatchObject({
+    delivered: false,
+    inComposer: true
+  })
+  expect(
+    readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(launch.tab.entityId)).text
+  ).toBe('fix the flaky test')
+  await vi.waitFor(() =>
+    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
+      expect.objectContaining({
+        contentType: 'agent-session',
+        executionHostId: 'runtime:server-1'
+      })
+    ])
+  )
 })
