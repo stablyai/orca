@@ -1,6 +1,7 @@
 import { agentHookServer } from '../../agent-hooks/server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
+import { recordClaudePaneAccount } from '../../claude-accounts/claude-pane-accounts'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import {
   codexReattachedHomeRouteField,
@@ -50,6 +51,10 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     target: state.codexSelectionTarget,
     settings: deps.getSettings?.()
   })
+  // A reattach keeps the account its process started on; a fresh spawn records its own.
+  if (result.isReattach !== true) {
+    recordClaudePaneAccount(result.id, input.claudeAccount ?? null)
+  }
   if (input.hiddenDelivery === 'renderer-scoped' && input.initiallyHidden) {
     markRendererScopedHiddenAtCommit(state)
   }

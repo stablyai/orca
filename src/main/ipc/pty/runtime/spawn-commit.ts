@@ -5,6 +5,7 @@ import { normalizeValidPaneKey } from '../pane/key-state'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
+import { CLAUDE_LAUNCH_ACCOUNT_ENV } from '../../../../shared/claude-profile-routing'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
@@ -39,6 +40,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       paneKey: normalizeValidPaneKey(ctx.env?.ORCA_PANE_KEY),
       resumeArgvDropped: ctx.codexResumeArgvDropped,
       codexLaunchEnv: ctx.env,
+      claudeAccount: ctx.env?.[CLAUDE_LAUNCH_ACCOUNT_ENV],
       initiallyHidden: args.initiallyHidden === true,
       hiddenDelivery: 'runtime-owned',
       response: {

@@ -102,6 +102,8 @@ export type PtySpawnCommitInput = {
   resumeArgvDropped: boolean
   /** TEMPORARY (rows 14–18): window reports base env, host assembled env; launch-env follow-up. */
   codexLaunchEnv: Record<string, string> | undefined
+  /** `--account` of a runtime launch; absent for terminals that follow the selection. */
+  claudeAccount?: string
   initiallyHidden: boolean
   /** TEMPORARY: renderer marks refresh here, host marks after commit; terminal-transport follow-up. */
   hiddenDelivery: 'renderer-scoped' | 'runtime-owned'

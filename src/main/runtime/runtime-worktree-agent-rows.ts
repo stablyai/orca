@@ -5,6 +5,7 @@ import {
 
 import type { RuntimeWorktreeAgentRow, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
+import { getClaudePaneAccounts } from '../claude-accounts/claude-pane-accounts'
 import {
   resolveRuntimeWorktreeSidebarStatus,
   terminalTitleEvidenceMatchesSource
@@ -46,6 +47,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     const parent = parentPaneKey ? rowSources.get(parentPaneKey) : undefined
     const conversationName =
       parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
+    const claudeAccount = source.ptyId ? getClaudePaneAccounts()[source.ptyId] : undefined
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
       parentPaneKey,
@@ -67,7 +69,8 @@ export function attachRuntimeWorktreeAgentRows(args: {
       ...(source.subagents !== undefined ? { subagents: source.subagents } : {}),
       ...(source.structuredHost === 'owned' ? { structuredHostOwned: true as const } : {}),
       ...(source.hasLivePty ? { hasLivePty: true as const } : {}),
-      ...(source.programStatus ? { programStatus: source.programStatus } : {})
+      ...(source.programStatus ? { programStatus: source.programStatus } : {}),
+      ...(claudeAccount ? { claudeAccount } : {})
     }
     if (source.children !== undefined || source.subagents !== undefined) {
       row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'

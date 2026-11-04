@@ -204,6 +204,10 @@ function scanPane(
       ? { group: 'cantMove', pane, reason: 'wsl-terminal' }
       : null
   }
+  // Why: a pane launched with --account stays on that account; the selection never routed it.
+  if (args.host?.paneAccounts?.[pane.ptyId]) {
+    return null
+  }
   const folder = resolveClaudePaneFolder(pane.transcriptPath, args.saved, args.host)
   if (!folder) {
     return { group: 'cantMove', pane, reason: 'unknown-account' }

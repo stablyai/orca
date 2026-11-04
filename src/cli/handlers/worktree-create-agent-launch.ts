@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RuntimeWorktreeCreateResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import {
+  ACCOUNT_UNSUPPORTED_MESSAGE,
   callAgentLaunch,
   formatAgentLaunch,
   hasLaunchModelFlags,
@@ -55,6 +56,9 @@ export async function createWorktreeWithAgent(args: {
         'incompatible_runtime',
         'This Orca host cannot start an agent on a chosen model or effort. Update Orca on the execution host, or omit --model and --effort.'
       )
+    }
+    if (launch.account) {
+      throw new RuntimeClientError('incompatible_runtime', ACCOUNT_UNSUPPORTED_MESSAGE)
     }
     if (launch.surface) {
       throw new RuntimeClientError('incompatible_runtime', SURFACE_UNSUPPORTED_MESSAGE)

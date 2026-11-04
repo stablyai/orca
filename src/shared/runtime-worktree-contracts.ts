@@ -61,6 +61,8 @@ export type RuntimeWorktreeAgentRow = {
   hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
+  /** `--account` this agent was launched on (an account id or `system`); absent when it follows the selection. */
+  claudeAccount?: string
 }
 
 export type RuntimeWorktreePsSummary = {

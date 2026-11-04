@@ -538,6 +538,39 @@ describe('ClaudeProfileRouter', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'launches one terminal on a chosen account without moving the selection, and keeps it there after a switch',
+    async () => {
+      const f = fixture()
+      const claude = claudeShellProbe(f.root)
+      f.router.publish()
+      expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
+      signIn(f.home('b'), 'b@example.test')
+      const launch = f.router.pinnedLaunchEnv('b')
+      await vi.waitFor(() => expect(f.setup.calls).toBe(2))
+      f.setup.settle()
+      const pane = (await launch)!
+      expect(pane.CLAUDE_CONFIG_DIR).toBe(f.home('b'))
+      expect(readFileSync(f.router.pointerPath, 'utf8')).toBe(f.home('a'))
+      expect(claude({ ...pane })).toBe(f.home('b'))
+      f.settings.activeClaudeManagedAccountId = null
+      f.router.publish()
+      expect(claude({ ...pane })).toBe(f.home('b'))
+
+      f.settings.activeClaudeManagedAccountId = 'a'
+      f.router.publish()
+      const systemPane = (await f.router.pinnedLaunchEnv(null))!
+      expect(systemPane).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+      expect(claude({ ...systemPane })).toBe('unset')
+    }
+  )
+
+  it('refuses a chosen account that is signed out', async () => {
+    const f = fixture()
+    await expect(f.router.pinnedLaunchEnv('a')).resolves.toBeNull()
+    expect(f.setup.calls).toBe(0)
+  })
+
   it('removes a folder only after its running setup, so the setup cannot bring it back', async () => {
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })

@@ -1,4 +1,8 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import {
+  CLAUDE_LAUNCH_ACCOUNT_ENV,
+  CLAUDE_LAUNCH_ACCOUNT_HOST_ONLY_MESSAGE
+} from '../../../../shared/claude-profile-routing'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
@@ -100,9 +104,16 @@ export async function prepareRuntimePtySpawn(
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  const launchAccount = args.env?.[CLAUDE_LAUNCH_ACCOUNT_ENV]
+  if (launchAccount && ctx.codexSelectionTarget.runtime !== 'host') {
+    throw new Error(CLAUDE_LAUNCH_ACCOUNT_HOST_ONLY_MESSAGE)
+  }
+  // A launch on a chosen account carries its own env; the selection must not replace it.
+  if (!launchAccount) {
+    args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  }
   ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+    !launchAccount && ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
 

@@ -13,6 +13,7 @@ import {
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../shared/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
+import { writePinnedClaudePointer } from './claude-profile-pinned-pointer'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
@@ -190,6 +191,20 @@ export class ClaudeProfileRouter {
       this.args.refreshWaitMs
     )
     return this.preparation()
+  }
+
+  /** One launch on account `id` (null: System default) apart from the selection: the pane reads its
+   *  own pointer, so a switch never moves it. Null when the account is signed out. */
+  async pinnedLaunchEnv(id: string | null): Promise<ClaudeEnvPatch | null> {
+    await this.envReady
+    const own = id && !this.coveredBySystemDefault(id) ? this.describe(id) : null
+    if (own && !this.accountLogin(own.accountId)) {
+      return null
+    }
+    if (own) {
+      await prepareClaudeProfileForLaunch(own, (p) => this.setUp(p), this.args.refreshWaitMs)
+    }
+    return writePinnedClaudePointer(this.pointerPath, id, own?.home ?? '', this.env)
   }
 
   accountHome(accountId: string): string {

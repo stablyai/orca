@@ -35,6 +35,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { recordClaudePaneAccount } from '../claude-accounts/claude-pane-accounts'
 import { shortPluginBranchName } from '../../shared/plugins/events/plugin-events'
 import { notifyWorkspaceCreatedPluginHook } from '../plugins/hooks/workspace-create-plugin-hook'
 
@@ -94,6 +95,7 @@ export function handleCodexHomePtySpawned(args: {
 
 export function handlePtyExit(id: string, exitSequence: number): void {
   state.codexSessionMigration?.finishLaunch(id, exitSequence)
+  recordClaudePaneAccount(id, null)
 }
 
 /** Runs once provider and hook hydration settle, so targeted PTY liveness can answer. */

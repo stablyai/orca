@@ -114,4 +114,49 @@ describe('runtime pty spawn preflight: Claude account routing in a WSL pane', ()
     })
     expect(runSetup).not.toHaveBeenCalled()
   })
+
+  it('keeps a launch on a chosen account off the selection, and refuses one in a WSL pane', async () => {
+    const dataRoot = mkdtempSync(join(tmpdir(), 'orca-claude-launch-account-'))
+    installClaudeProfileRouter(
+      new ClaudeProfileRouter({
+        getSettings: () => getDefaultSettings('/tmp'),
+        dataRoot,
+        env: {},
+        runSetup: vi.fn()
+      })
+    )
+    const pinned = {
+      ORCA_CLAUDE_ACCOUNT: 'work',
+      ORCA_CLAUDE_PROFILE_POINTER: '/data/claude-profiles/pinned/work',
+      CLAUDE_CONFIG_DIR: '/data/claude-profiles/work/home'
+    }
+    const prepareClaudeAuth = vi.fn()
+    const args: RuntimePtySpawnArgs = {
+      cols: 120,
+      rows: 40,
+      cwd: dataRoot,
+      command: 'claude',
+      env: { ...pinned }
+    }
+    const ctx = createRuntimePtySpawnState({ ...makeDeps(), prepareClaudeAuth }, args)
+    try {
+      await expect(prepareRuntimePtySpawn(ctx)).resolves.toBeNull()
+      expect(args.env).toEqual(pinned)
+      expect(ctx.claudeAuth).toBeNull()
+      expect(prepareClaudeAuth).not.toHaveBeenCalled()
+
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const wsl = createRuntimePtySpawnState(makeDeps(), {
+        cols: 120,
+        rows: 40,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\u',
+        shellOverride: 'wsl.exe',
+        env: { ...pinned },
+        wslUserAct: true
+      })
+      await expect(prepareRuntimePtySpawn(wsl)).rejects.toThrow(/WSL and SSH terminals/)
+    } finally {
+      rmSync(dataRoot, { recursive: true, force: true })
+    }
+  })
 })

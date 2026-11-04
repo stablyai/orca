@@ -128,6 +128,8 @@ export type ClaudeRateLimitAccountsState = {
   systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+  /** Host PTYs launched with `--account`, by PTY id; a switch leaves them on that account. */
+  paneAccounts?: Record<string, string>
 }
 
 /** A Claude switch made over runtime RPC, e.g. from the phone. */

@@ -464,6 +464,20 @@ describe('a switch away from the login System default holds', () => {
     expect(found.elsewhere).toEqual([expect.objectContaining({ ptyId: ptyId(1), accountId: null })])
   })
 
+  it('leaves a session launched with --account on its account, wherever the switch goes', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A },
+      { n: 2, agentType: 'claude', configDir: FOLDER_B },
+      { n: 3, agentType: 'claude', configDir: FOLDER_A }
+    ])
+    const pinned = hostFolders({ paneAccounts: { [ptyId(1)]: 'acct-a', [ptyId(2)]: 'acct-b' } })
+
+    const found = await scan('acct-a', HOST, pinned)
+
+    expect(found.onAccount.map((pane) => pane.ptyId)).toEqual([ptyId(3)])
+    expect([...found.elsewhere, ...found.cantMove]).toEqual([])
+  })
+
   it("lists a session in the user's own folder as one a restart cannot move", async () => {
     seedPanes([{ n: 1, agentType: 'claude', configDir: '/home/dev/my-claude' }])
 

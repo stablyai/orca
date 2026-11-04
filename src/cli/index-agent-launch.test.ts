@@ -48,6 +48,10 @@ import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
+import {
+  AGENT_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES
+} from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 const ORIGINAL_EXIT_CODE = process.exitCode
@@ -136,6 +140,59 @@ describe('orca cli agent launch', () => {
       launchSource: 'cli',
       operationId: expect.any(String)
     })
+  })
+
+  it('starts Claude as a terminal on the account --account names', async () => {
+    queueFixtures(callMock, agentLaunchHostFixture(), agentLaunchFixture(WORKTREE_ID))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'agent',
+        'launch',
+        '--agent',
+        'claude',
+        '--worktree',
+        `id:${WORKTREE_ID}`,
+        '--account',
+        'work'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'agent.launchReplay',
+      expect.objectContaining({ agent: 'claude', account: 'work', surface: 'terminal' })
+    )
+  })
+
+  it('refuses --account on a host that would drop it', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== AGENT_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY
+        )
+      })
+    )
+
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'claude',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--account',
+      'work',
+      '--json'
+    ])
+
+    expect(JSON.parse(output).error).toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining('cannot start an agent on a chosen account')
+    })
+    expect(launchCalls()).toEqual([])
   })
 
   it('honors the paired execution host for agent launch', async () => {
@@ -347,7 +404,10 @@ describe('orca cli agent launch', () => {
     [['--agent', 'codex', '--effort', 'high'], '--effort requires --model'],
     [['--model', 'gpt-5.5'], '--model requires --agent'],
     [['--agent', 'codex', '--model', 'gpt-5.5', '--effort', 'turbo'], 'does not support effort'],
-    [['--surface', 'terminal'], '--surface requires --agent']
+    [['--surface', 'terminal'], '--surface requires --agent'],
+    [['--account', 'work'], '--account requires --agent'],
+    [['--agent', 'codex', '--account', 'work'], '--account is supported for --agent claude only'],
+    [['--agent', 'claude', '--account', 'work', '--surface', 'chat'], 'omit --surface chat']
   ])('refuses %j before creating anything', async (flags, message) => {
     const output = await runRefused([
       'worktree',

@@ -45,11 +45,9 @@ import {
   selectAgentLaunchTabForCaller
 } from './agent-launch-caller-selection'
 import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
-import {
-  assertAgentLaunchTargetAuthorized,
-  supportsAgentLaunch
-} from './agent-launch-target-authorization'
+import { supportsAgentLaunch } from './agent-launch-target-authorization'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
+import { admitAgentLaunchTarget } from './agent-launch-account'
 import {
   publishEarlyTab,
   withPlacement,
@@ -270,9 +268,9 @@ export const AGENT_LAUNCH_METHODS = [
       if (!supportsAgentLaunch(context)) {
         throw new Error('agent_launch_replay_unsupported')
       }
-      assertAgentLaunchTargetAuthorized(params.target, context)
+      const launch = await admitAgentLaunchTarget(params, context)
       try {
-        return await runReplaySafeAgentLaunch(params, context)
+        return await runReplaySafeAgentLaunch(launch, context)
       } catch (error) {
         // Nested failures cannot authorize another workspace, regardless of their message or code.
         if (error instanceof AgentLaunchExecutionError) {
@@ -312,11 +310,11 @@ export async function launchAgentOnHost(
   if (!supportsAgentLaunch(host)) {
     throw new Error('agent_launch_unsupported')
   }
-  assertAgentLaunchTargetAuthorized(params.target, host)
+  const launch = await admitAgentLaunchTarget(params, host)
   if (!operationId) {
-    return runLegacyAgentLaunch(params, host)
+    return runLegacyAgentLaunch(launch, host)
   }
-  return runReplaySafeAgentLaunch({ ...params, operationId }, host).catch((error: unknown) => {
+  return runReplaySafeAgentLaunch({ ...launch, operationId }, host).catch((error: unknown) => {
     // Preserve the original error contract for callers of the optional-identity method.
     if (error instanceof AgentLaunchExecutionError) {
       throw error.cause instanceof AgentLaunchTabClosedError

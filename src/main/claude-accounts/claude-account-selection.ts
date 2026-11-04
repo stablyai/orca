@@ -8,6 +8,7 @@ import type { RateLimitService } from '../rate-limits/service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
+import { getClaudePaneAccounts } from './claude-pane-accounts'
 import {
   getClaudeSelectionTargetForAccount,
   getClaudeWslSelectionKey,
@@ -85,6 +86,7 @@ export class ClaudeAccountSelection {
     // Throttle parsing of the large, frequently rewritten personal state file.
     const systemDefault =
       accounts.length > 0 ? readClaudeFolderLogin(claudeStateFile(userConfigDir), 5_000) : null
+    const paneAccounts = getClaudePaneAccounts()
     return {
       accounts,
       activeAccountId: selection.host,
@@ -98,7 +100,8 @@ export class ClaudeAccountSelection {
         : {}),
       ...(systemDefault && this.runtimeAuth.router.copiedLoginIntoSystemDefault()
         ? { systemDefaultMayBeCopied: true }
-        : {})
+        : {}),
+      ...(Object.keys(paneAccounts).length > 0 ? { paneAccounts: { ...paneAccounts } } : {})
     }
   }
 

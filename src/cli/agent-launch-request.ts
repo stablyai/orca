@@ -11,6 +11,7 @@ import {
 } from '../shared/agent-launch/contracts/agent-launch-surface'
 import { checkAgentLaunchModelPreferences } from '../shared/agent-launch/choices/agent-launch-model-preferences'
 import {
+  AGENT_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
@@ -44,6 +45,8 @@ export type CliAgentLaunch = {
   sessionOptions?: Record<string, string>
   operationId?: string
   surface?: AgentLaunchSurface
+  /** A managed Claude account id or `system`; always a terminal. */
+  account?: string
 }
 
 function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
@@ -90,9 +93,27 @@ export function readCliAgentLaunch(
     throw new RuntimeClientError('invalid_argument', 'Malformed --retry-launch operation ID')
   }
   const surface = readSurfaceFlag(flags)
+  const account = flags.has('account') ? getRequiredStringFlag(flags, 'account') : undefined
+  if (account !== undefined && agent !== 'claude') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--account is supported for --agent claude only'
+    )
+  }
+  if (account !== undefined && surface === 'chat') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--account starts Claude in a terminal; omit --surface chat'
+    )
+  }
   return {
     agent,
-    ...(surface ? { surface } : {}),
+    // A launch on a chosen account is always a terminal: its env carries the account.
+    ...(account !== undefined
+      ? { account, surface: 'terminal' as const }
+      : surface
+        ? { surface }
+        : {}),
     ...(operationId ? { operationId } : {}),
     ...(typeof prompt === 'string' && prompt.trim()
       ? { prompt: { text: prompt, delivery: 'submit' as const } }
@@ -108,6 +129,9 @@ export function hasLaunchModelFlags(flags: Flags): boolean {
 // An older host strips `surface` and follows its own setting, so an explicit pick never reaches it.
 export const SURFACE_UNSUPPORTED_MESSAGE =
   'This Orca host cannot start an agent as a chat or a terminal on request. Update Orca on the execution host, or omit --surface.'
+
+export const ACCOUNT_UNSUPPORTED_MESSAGE =
+  'This Orca host cannot start an agent on a chosen account. Update Orca on the execution host, or omit --account.'
 
 export async function getAgentLaunchCapabilities(
   client: RuntimeClient
@@ -136,6 +160,9 @@ export async function callAgentLaunch(
       'incompatible_runtime',
       'This Orca host cannot safely carry launch prompts. Update Orca on the execution host.'
     )
+  }
+  if (launch.account && !capabilities.includes(AGENT_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError('incompatible_runtime', ACCOUNT_UNSUPPORTED_MESSAGE)
   }
   if (launch.surface && !capabilities.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError('incompatible_runtime', SURFACE_UNSUPPORTED_MESSAGE)
