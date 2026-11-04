@@ -72,6 +72,25 @@ describe('chat composer workspace', () => {
     expect(screen.queryByRole('button', { name: 'Copy feature/composer' })).toBeNull()
   })
 
+  it('shows a legacy chat with an opaque workspace ID before its unified bucket arrives', () => {
+    const opaque = makeWorktree({
+      id: 'constructor',
+      repoId: TEST_REPO.id,
+      hostId: 'local',
+      path: '/repo/opaque',
+      displayName: 'opaque-checkout',
+      branch: 'refs/heads/opaque-branch'
+    })
+    useAppStore.setState({
+      worktreesByRepo: { [TEST_REPO.id]: [opaque] },
+      tabsByWorktree: { constructor: [makeTab({ id: 'tab-1', worktreeId: opaque.id })] },
+      unifiedTabsByWorktree: {}
+    })
+    render(<Footer />)
+    expect(screen.getByRole('button', { name: 'Copy opaque-branch' })).toBeTruthy()
+    expect(screen.getByText('opaque-checkout')).toBeTruthy()
+  })
+
   it('copies the full detached HEAD and never invents a branch for a folder', async () => {
     useAppStore.setState({
       worktreesByRepo: { [TEST_REPO.id]: [{ ...wt, branch: '', head: 'a1b2c3d4e5f6' }] }

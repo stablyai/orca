@@ -44,7 +44,7 @@ function indexTabs(tabs: readonly DirectoryTab[] | undefined): StructuredTabInde
 type TabsByWorkspace = Readonly<Record<string, readonly Tab[] | undefined>> | undefined
 
 /** Own entries only: a paired host's workspace id can name an `Object.prototype` member. */
-function workspaceTabs(
+export function workspaceTabs(
   tabsByWorkspace: TabsByWorkspace,
   workspaceId: string
 ): readonly Tab[] | undefined {

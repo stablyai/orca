@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { workspaceTabs } from '@/lib/structured-chat-tab-index'
 import { findIndexedRepoOwnerForHost } from '@/lib/repo-owner-index'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
@@ -29,7 +30,7 @@ export function createNativeChatComposerWorkspaceSelector(
   target?: NativeChatComposerWorkspaceTarget
 ) {
   const selectOwner = createNativeChatTabOwnerSelector(tabId)
-  let unifiedBucket: AppState['unifiedTabsByWorktree'][string] | undefined
+  let unifiedBucket: ReturnType<typeof workspaceTabs>
   let tabHost: ExecutionHostId | undefined
   let inputs: unknown[] | undefined
   let presentation: {
@@ -42,7 +43,7 @@ export function createNativeChatComposerWorkspaceSelector(
   } = {}
   return (state: AppState) => {
     const worktreeId = target?.worktreeId ?? selectOwner(state)
-    const unified = worktreeId ? state.unifiedTabsByWorktree[worktreeId] : undefined
+    const unified = worktreeId ? workspaceTabs(state.unifiedTabsByWorktree, worktreeId) : undefined
     if (unifiedBucket !== unified) {
       tabHost = unified?.find((tab) => tab.id === tabId)?.executionHostId
       unifiedBucket = unified
