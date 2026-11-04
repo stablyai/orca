@@ -1,27 +1,33 @@
 import { useCallback, useRef } from 'react'
-import { prSidebarReviewKey, type PrSidebarState } from './mobile-pr-sidebar-state'
+import { prSidebarResourceKey, type PrSidebarState } from './mobile-pr-sidebar-state'
 
-/** applied: on screen. stale: superseded or skipped. failed: a read failed and what it would have replaced stayed. */
+/** applied: on screen. stale: superseded or skipped. failed: the read failed and the shown PR stayed. */
 export type PrSidebarLoadResult = 'applied' | 'stale' | 'failed'
 
-// A background read keeps what is on screen when its read fails; the poller backs off instead.
-export function backgroundReadFailed(current: PrSidebarState, next: PrSidebarState): boolean {
-  return current.kind === 'ready' && (next.kind === 'error' || next.kind === 'blocked')
+// A poll's discovery that succeeded with a failed checks read for the same complete PR is not a failed discovery:
+// it lands, while the Checks screen keeps the checks it had. Equal numbers in another repository are another PR.
+export function pollChecksReadFailed(current: PrSidebarState, next: PrSidebarState): boolean {
+  return (
+    current.kind === 'ready' &&
+    next.kind === 'ready' &&
+    next.data.checksError !== null &&
+    prSidebarResourceKey(next.data.pr) === prSidebarResourceKey(current.data.pr)
+  )
 }
 
-// A failed checks read on the same review keeps the checks it had rather than emptying the Checks screen,
-// while the PR it read (state, title, merge status) still lands: a write's reread must show a merge or close.
-export function keepShownChecks(current: PrSidebarState, next: PrSidebarState): PrSidebarState {
-  if (
-    current.kind !== 'ready' ||
-    next.kind !== 'ready' ||
-    next.data.checksError === null ||
-    prSidebarReviewKey(current.data.pr) !== prSidebarReviewKey(next.data.pr)
-  ) {
-    return next
+export function settleLoadedPr(
+  accepted: PrSidebarState,
+  next: PrSidebarState,
+  background: boolean
+): { settled: PrSidebarState; result: 'applied' | 'failed' } {
+  if (!background || !pollChecksReadFailed(accepted, next)) {
+    return { settled: next, result: 'applied' }
   }
-  const { checks, checksError } = current.data
-  return { kind: 'ready', data: { ...next.data, checks, checksError } }
+  if (next.kind !== 'ready' || accepted.kind !== 'ready') {
+    return { settled: next, result: 'applied' }
+  }
+  const { checks, checksError } = accepted.data
+  return { settled: { ...next, data: { ...next.data, checks, checksError } }, result: 'failed' }
 }
 
 // A poll never supersedes a read the user started or a write's reread; it skips and tries again later.

@@ -6,7 +6,7 @@ import {
   githubRepoIdentityKey,
   isDefaultGitHubHost
 } from '../../shared/github/repository-identity-key'
-import { shouldProbeGitRemote } from '../git/remote-name-listing'
+import { shouldProbeGitRemote } from '../git/remotes/remote-name-listing'
 import { ghRepoExecOptions, githubRepoContext, type LocalGitExecOptions } from './gh-utils'
 import { isGitHubHostAuthenticated } from './github-enterprise-repository'
 import { githubHostExecOptions } from './github-repository-host'

@@ -1,9 +1,9 @@
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   admitAndRunAgentSessionMutation,
   type AgentSessionMutationRequest,

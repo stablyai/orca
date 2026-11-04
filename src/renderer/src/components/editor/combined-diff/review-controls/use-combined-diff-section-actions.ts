@@ -6,7 +6,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { openFilePreviewToSide } from '@/lib/file-preview'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import { getLargeDiffRenderLimit } from '../../large-diff-render-limit'
 import {

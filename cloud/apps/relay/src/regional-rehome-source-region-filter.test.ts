@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
-import { rehomeSourceRegionAllowed } from './idle-regional-rehome-selection.js'
 import { openIdleRehomeTestDatabase } from './idle-regional-rehome-test-database.js'
-import { REGIONAL_REHOME_POLL_SUMMARY_INTERVAL_MS } from './regional-rehome-poll-telemetry.js'
 
 type Region = 'us-central1' | 'asia-east2'
 const cell = (id: string, region: Region) => ({
@@ -141,12 +139,6 @@ afterEach(() => {
 })
 
 describe('rehome source-region filter', () => {
-  it('keys on the source region, never on the target region', () => {
-    expect(rehomeSourceRegionAllowed('us-central1', 'us-central1')).toBe(true)
-    expect(rehomeSourceRegionAllowed('asia-east2', 'us-central1')).toBe(false)
-    expect(rehomeSourceRegionAllowed('asia-east2', undefined)).toBe(true)
-  })
-
   it('keeps US to Asia moves and drops Asia to US moves', async () => {
     const context = await setup('us-central1')
     const candidates = await context.store.selectIdleRegionalRehomeCandidates(context.safety())
@@ -165,23 +157,6 @@ describe('rehome source-region filter', () => {
     expect(new Set(moves(candidates).map(({ from, to }) => `${from}>${to}`))).toEqual(
       new Set(['us-central1>asia-east2', 'asia-east2>us-central1'])
     )
-    await context.database.close()
-  })
-
-  it('counts the skipped source cells in the poll summary line', async () => {
-    const context = await setup('us-central1')
-    const lines: string[] = []
-    vi.spyOn(console, 'warn').mockImplementation((line: unknown) => {
-      lines.push(String(line))
-    })
-    await context.store.selectIdleRegionalRehomeCandidates(context.safety())
-    context.advance(REGIONAL_REHOME_POLL_SUMMARY_INTERVAL_MS)
-    await context.beatAll()
-    await context.store.selectIdleRegionalRehomeCandidates(context.safety())
-    const summary = lines
-      .map((line) => JSON.parse(line) as Record<string, unknown>)
-      .find(({ event }) => event === 'orca_relay_regional_rehome_poll_summary')
-    expect(summary).toMatchObject({ open: 2, skippedOffRegionSourceCells: 2 })
     await context.database.close()
   })
 

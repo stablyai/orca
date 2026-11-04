@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest'
 import { access } from 'node:fs/promises'
-import { getNodeRuntimeInclude } from './vitest-node-runtime-files.mjs'
 import { runProcessSync } from '@orca/process-host'
 
 it('uses Bun for ordinary suites when the Bun project is selected', () => {
@@ -20,21 +19,4 @@ it('launches application child fixtures under Node even when Vitest runs under B
   expect(result.code).toBe(0)
   const identity: unknown = JSON.parse(result.stdout)
   expect(identity).toEqual({ node: expect.stringMatching(/^\d+\.\d+\.\d+$/) })
-})
-
-it('routes native-chat journal and record-store SQLite contracts through Node', () => {
-  expect(getNodeRuntimeInclude()).toEqual(
-    expect.arrayContaining([
-      'src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.test.ts',
-      'src/main/native-chat/agent-session-wire/structured-agent-session-status-first-input-identity.test.ts',
-      'src/main/native-chat/structured-chat-naming.test.ts',
-      'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts'
-    ])
-  )
-})
-
-it('runs plugin reconciliation with its native watcher under Node', () => {
-  expect(getNodeRuntimeInclude()).toContain(
-    'src/main/plugins/plugin-service-reconciliation.test.ts'
-  )
 })

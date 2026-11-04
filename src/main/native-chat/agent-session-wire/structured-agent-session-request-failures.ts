@@ -1,5 +1,5 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
+import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'

@@ -1,4 +1,4 @@
-import { materializeOmpFreshConfig } from '../../shared/omp-fresh-config'
+import { materializeOmpFreshConfig } from '../../shared/agent-launch/startup/omp-fresh-config'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'

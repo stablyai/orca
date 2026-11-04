@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { terminalQuickCommandAgentPromptMaxLength } from '../../../shared/terminal-quick-command-prompt-limit'
+import { terminalQuickCommandAgentPromptMaxLength } from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 

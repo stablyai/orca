@@ -18,7 +18,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 
 const DEFAULT_TIMEOUT_MS = 15_000

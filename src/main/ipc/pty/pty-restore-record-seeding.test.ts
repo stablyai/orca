@@ -20,7 +20,7 @@ import { registerPtyHandlers } from './register-handlers'
 import { clearProviderPtyState } from './provider/state-cleanup'
 import { getPtyIdForPaneKey } from './pane/key-state'
 import { setLocalPtyProvider } from './provider/registry'
-import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportBlankingSequence } from '../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

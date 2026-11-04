@@ -3,9 +3,9 @@ import {
   agentChildWorkStopEvidence,
   agentChildWorkStopTargets,
   type AgentChildWorkStopAcknowledgement
-} from '../../shared/agent-child-work-stop-targets'
+} from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
+import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'

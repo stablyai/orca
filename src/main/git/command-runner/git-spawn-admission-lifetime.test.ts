@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { withGitAdmission } from './git-spawn'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 import {
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'

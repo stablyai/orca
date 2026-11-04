@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserExtensionCaller } from '../browser-extension-namespace-registry'
+import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 const mocks = vi.hoisted(() => {
   const emitted: { event: string; args: unknown[] }[] = []
@@ -23,14 +23,17 @@ vi.mock('../../browser-manager', () => ({
     markExtensionDownload: mocks.markExtensionDownload
   }
 }))
-vi.mock('../browser-extension-api-host', () => ({
+vi.mock('../api-runtime/browser-extension-api-host', () => ({
   emitBrowserExtensionEvent: (_target: unknown, _ns: string, event: string, args: unknown[]) =>
     mocks.emitted.push({ event, args })
 }))
-vi.mock('../browser-extension-tab-model', () => ({ getActiveBrowserTabId: () => null }))
+vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
+  getActiveBrowserTabId: () => null
+}))
 
 const { registerDownloadsNamespace } = await import('./downloads')
-const { getBrowserExtensionNamespace } = await import('../browser-extension-namespace-registry')
+const { getBrowserExtensionNamespace } =
+  await import('../api-runtime/browser-extension-namespace-registry')
 
 const EXTENSION_ID = 'a'.repeat(32)
 const OTHER_ID = 'b'.repeat(32)
@@ -39,7 +42,7 @@ const pendingDownloads: Promise<unknown>[] = []
 let nextOwnerId = 7
 
 const { ensureHostSessionState, forgetHostSession, forgetExtensionContexts } =
-  await import('../browser-extension-contexts')
+  await import('../api-runtime/browser-extension-contexts')
 
 function fakeItem(url: string, savePath: string, finalUrl = url) {
   return {

@@ -5,10 +5,13 @@ import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand
 } from '../../shared/ai-vault-resume-command'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
-import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
+import {
+  agentForksConversations,
+  agentForksThroughChat
+} from '../../shared/agent-launch/startup/agent-resume-argv'
 import { isResumableTuiAgent } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   claudeProviderHandle,
   codexProviderHandle

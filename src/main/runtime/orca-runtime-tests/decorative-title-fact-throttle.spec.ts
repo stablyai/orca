@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import { syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'

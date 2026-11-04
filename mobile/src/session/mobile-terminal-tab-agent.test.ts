@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createTerminalTitleTracker } from '../../../src/shared/terminal-output-side-effects'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { createTerminalTitleTracker } from '../../../src/shared/terminal/output/terminal-output-side-effects'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,

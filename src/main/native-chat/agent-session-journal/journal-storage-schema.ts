@@ -95,7 +95,17 @@ const orchestration = z.discriminatedUnion('message', [
     mailbox: salvaged,
     dispatchId: salvaged,
     messages: z
-      .array(z.object({ messageId: salvaged, runId: salvaged, from: salvaged }))
+      .array(
+        z.object({
+          messageId: salvaged,
+          runId: salvaged,
+          from: salvaged,
+          content: z
+            .object({ subject: salvaged, body: salvaged, payload: salvaged })
+            .nullable()
+            .optional()
+        })
+      )
       .nullable()
       .optional()
   }),

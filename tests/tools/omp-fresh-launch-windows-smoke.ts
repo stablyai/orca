@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { runProcess } from '@orca/process-host'
-import { withFreshOmpLaunch } from '../../src/shared/omp-fresh-launch'
+import { withFreshOmpLaunch } from '../../src/shared/agent-launch/startup/omp-fresh-launch'
 if (process.platform !== 'win32') {
   throw new Error('Run this smoke on a Windows host')
 }

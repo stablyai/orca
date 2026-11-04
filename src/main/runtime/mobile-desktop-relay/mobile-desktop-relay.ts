@@ -1,54 +1,26 @@
 import { verifyRelayedGitHubAuthority } from './relay-github-authority'
+import { createRelayedBrowserTab } from './relayed-browser-tab-create'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
-import {
-  openRemoteRuntimePassthroughSocket,
-  type RemoteRuntimePassthroughSocket
-} from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { openRemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
+import { RelayLink, type OpenedRelayLink, type RelayedPhone } from './mobile-desktop-relay-link'
+export type { RelayedPhone } from './mobile-desktop-relay-link'
 import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
-import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
 import {
   declareRelayedPhoneCapabilities,
-  RelayedPhoneReplies,
   relayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
   withRelayedLaunchChatDefault
 } from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = 15_000
-
-export type RelayedPhone = {
-  connectionId: string
-  deviceId: string
-  deviceToken: string
-  clientCapabilities: () => readonly RuntimeCapability[]
-  reply: (frame: string) => void
-  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
-}
-
-type OpenedRelayLink = { socket: RemoteRuntimePassthroughSocket; hostToken: string }
-
-class RelayLink {
-  readonly replies: RelayedPhoneReplies
-  readonly opened: Promise<OpenedRelayLink>
-
-  constructor(
-    readonly environmentId: string,
-    readonly phone: RelayedPhone,
-    allocateStreamId: () => number,
-    open: (link: RelayLink) => Promise<OpenedRelayLink>
-  ) {
-    this.replies = new RelayedPhoneReplies(allocateStreamId)
-    this.opened = open(this)
-  }
-}
 
 /** One socket per (phone connection, configured server), authenticated with memory-only delegated phone grants.
  * Forward execution-host methods only; old servers require an update, and revocation lasts until the next sync.
@@ -65,6 +37,7 @@ export class MobileDesktopRelay {
       allocateStreamId: () => number
       /** Whether this desktop's settings open `agent` as a chat. */
       nativeChatDefault: (agent: string) => boolean
+      prepareBrowserHost?: (host: MobileDesktopRelayHost) => Promise<string | null>
     }
   ) {
     this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
@@ -82,11 +55,8 @@ export class MobileDesktopRelay {
   }
 
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
-    return localHostedBrowserPageRequest(
-      request,
-      environmentId,
-      this.options.hosts.hostsBrowserPage
-    )
+    const { hostsBrowserPage } = this.options.hosts
+    return localHostedBrowserPageRequest(request, environmentId, hostsBrowserPage)
   }
 
   forward(
@@ -106,9 +76,14 @@ export class MobileDesktopRelay {
       return
     }
     const link = this.linkFor(phone, environmentId)
-    link.replies.noteForwarded(request.id)
+    link.replies.noteForwarded(request.id, {
+      browserScreencast:
+        request.method === 'status.get'
+          ? () => Boolean(this.options.hosts.browserHostClientId?.(environmentId))
+          : undefined
+    })
     link.opened.then(
-      async ({ socket, hostToken }) => {
+      async ({ socket, hostToken, host }) => {
         // An opening link may already have ended and answered; never send its request late.
         if (!this.isCurrent(link)) {
           return
@@ -119,6 +94,23 @@ export class MobileDesktopRelay {
           this.options.nativeChatDefault
         )
         try {
+          if (request.method === 'status.get') {
+            await this.options.prepareBrowserHost?.(host)
+          }
+          if (
+            request.method === 'browser.tabCreate' &&
+            (await createRelayedBrowserTab({
+              hosts: this.options.hosts,
+              prepareBrowserHost: this.options.prepareBrowserHost,
+              link,
+              frame: outgoing,
+              socket,
+              isCurrent: () => this.isCurrent(link),
+              timeoutMs: RELAY_CONNECT_TIMEOUT_MS
+            }))
+          ) {
+            return
+          }
           const verification = verifyRelayedGitHubAuthority({
             method: request.method,
             frame: outgoing,
@@ -138,7 +130,9 @@ export class MobileDesktopRelay {
             const reply = link.replies.text(
               failure(
                 request.id,
-                error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED
+                request.method === 'browser.tabCreate' ||
+                  request.method === 'status.get' ||
+                  (error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED)
                   ? 'remote_runtime_unavailable'
                   : 'runtime_source_mismatch',
                 error instanceof Error
@@ -285,7 +279,7 @@ export class MobileDesktopRelay {
         socket.close()
         throw unavailable('The relayed request was cancelled.')
       }
-      return { socket, hostToken: grant.token }
+      return { socket, hostToken: grant.token, host }
     } catch (error) {
       if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {
         // Retrying revoked tokens would repeatedly raise the host unpaired-device prompt.
@@ -305,6 +299,7 @@ export class MobileDesktopRelay {
       return
     }
     this.links.delete(linkKey(link.phone.connectionId, link.environmentId))
+    link.abortController.abort()
     link.opened.then(
       ({ socket }) => socket.close(),
       () => {}

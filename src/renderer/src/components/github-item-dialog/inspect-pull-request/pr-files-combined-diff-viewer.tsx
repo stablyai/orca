@@ -8,7 +8,7 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
   PR_DIFF_OVERSCAN,

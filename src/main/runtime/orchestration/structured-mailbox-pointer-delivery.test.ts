@@ -12,6 +12,7 @@ import type {
 } from './structured-mailbox-pointer-host-contract'
 import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
 import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-message-params'
+import { agentMessageTranscriptText } from '../../../shared/agent-session/agent-message-display-text'
 
 type Mail = {
   id: string
@@ -279,6 +280,19 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.sent[0]!.text).toContain('Subject: subject of m1')
     expect(h.sent[0]!.text).toContain('Tests pass; PR #12 is ready.')
     expect(h.sent[0]!.text).toContain('[Reply: orca-dev orchestration reply --id m1')
+    const delivered = vi.mocked(h.host.send).mock.calls[0][0].body
+    expect(h.sent[0]!.text).toBe(
+      [
+        '──── From: TERM_COORD (term_coord) (status) ────',
+        'Subject: subject of m1',
+        'Tests pass; PR #12 is ready.',
+        '[Reply: orca-dev orchestration reply --id m1 --body "..."]',
+        '─'.repeat(60)
+      ].join('\n')
+    )
+    expect(agentMessageTranscriptText(delivered.blocks, delivered.from)).toBe(
+      'subject of m1\n\nTests pass; PR #12 is ready.'
+    )
     expect(h.mail.get('m1')).toMatchObject({ read: 1 })
     expect(h.records.size).toBe(0)
   })
@@ -551,6 +565,12 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.sent.map((send) => send.text)).toEqual([
       'You have 1 orchestration message. Run `orca-dev orchestration check`.'
     ])
+    expect(vi.mocked(h.host.send).mock.calls[0][0].body.from?.orchestration).toMatchObject({
+      messages: [{ messageId: 'm1' }]
+    })
+    expect(JSON.stringify(vi.mocked(h.host.send).mock.calls[0][0].body.from)).not.toContain(
+      '"content"'
+    )
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
     const pointer = h.operation('m1')
     h.mail.get('m1')!.read = 1

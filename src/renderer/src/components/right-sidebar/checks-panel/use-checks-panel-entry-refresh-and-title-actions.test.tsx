@@ -7,7 +7,7 @@ import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refre
 import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
-import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { checksPanelHostedReviewAsyncResultKey } from '../checks-panel-async-result-key'
 import { createModel } from './checks-panel-polling-test-model'

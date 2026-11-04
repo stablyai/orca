@@ -2,12 +2,12 @@ import {
   agentChildRowDetailText as sharedAgentChildRowDetailText,
   agentChildRowLeadTrail,
   agentChildRowName as sharedAgentChildRowName
-} from '../../../shared/agent-child-row-lead-trail'
-import type { AgentChildRowModel } from '../../../shared/agent-child-row-model'
+} from '../../../shared/agent-status/presentation/agent-child-row-lead-trail'
+import type { AgentChildRowModel } from '../../../shared/agent-status/presentation/agent-child-row-model'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { sayBackgroundTaskTranslated } from '@/components/native-chat/background-task-words-text'
 import { translate } from '@/i18n/i18n'
-import { agentNoUpdateLabel } from '../../../shared/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 
 export type AgentChildRowText = {
   /** Leads the line; kept when the row truncates. */

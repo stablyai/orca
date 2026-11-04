@@ -283,7 +283,8 @@
       "stoppedManually": "Elle durduruldu",
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
-      "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
+      "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
+      "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -330,7 +331,10 @@
       "emptyAnswer": "Boş yanıt",
       "resolved": "Çözüldü",
       "resolver": "{{device}} üzerinde yanıtlandı",
-      "unavailable": "Seçilen yanıt kullanılamıyor"
+      "unavailable": "Seçilen yanıt kullanılamıyor",
+      "thisPhone": "bu telefon",
+      "computer": "bilgisayar",
+      "otherDevice": "başka bir cihaz"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Oturum başladıktan sonra kullanılabilir.",
@@ -529,6 +533,24 @@
     "agentMessage": {
       "handedOffToAgent": "Ajana devredildi",
       "startedAgent": "Ajan başlatıldı"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "Ek yanıtı okunamıyor. Tekrar deneyin.",
+      "incompleteReply": "Ek değişti veya yanıtı eksikti. Kapatıp tekrar deneyin.",
+      "notText": "Bu dosya metin olarak önizlenemez. Başka bir uygulamada açmak için kaydedin.",
+      "openFailed": "Ek açılamadı. Tekrar deneyin.",
+      "hostUpdate": "Bu ana makine henüz metin eklerini açamıyor. O ana makinede Orca’yı güncelleyip tekrar deneyin.",
+      "copyTooLarge": "Bu dosya kopyalanamayacak kadar büyük. Bunun yerine kaydedin.",
+      "connectionChanged": "Bağlantı değişti. Eki yeniden açmayı deneyin.",
+      "hostChanged": "Ekin ana makinesi değişti. Eki kapatıp yeniden açın.",
+      "readFailed": "Ek okunamadı. Yeniden bağlanıp tekrar deneyin. Dosya kaldırılmış veya değiştirilmiş olabilir.",
+      "copyFrame": "Bu ekin tamamını kopyalamak için gelecek telefon güncellemesi gerekir.",
+      "copyFailed": "Ek kopyalanamadı. Tekrar deneyin.",
+      "pastedText": "Yapıştırılan metin",
+      "textAttachment": "Metin eki",
+      "byteSize": "{{size}} bayt",
+      "saveUpdate": "Kaydetme özelliği bir telefon güncellemesiyle kullanılabilecek.",
+      "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
     }
   },
   "common": {
@@ -803,7 +825,8 @@
     },
     "prSidebar": {
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
+      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -1643,7 +1666,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
-      "providerUnavailable": "Bu sağlayıcı için barındırılan inceleme paneli kullanılamıyor."
+      "githubRemoteRequired": "Bu sekmede çekme isteği ayrıntılarını görmek için bir GitHub uzak deposu gerekir. Desteklenen diğer platformlarda Değişiklikler bölümünden bir inceleme oluşturup tarayıcınızda açın."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",
@@ -2042,7 +2065,8 @@
       "promptUnconfirmed": "Ajan başlatıldı, ancak istemin gönderildiği doğrulanamadı."
     },
     "prActionsEngine": {
-      "mergeFailed": "Pull request merge edilemedi."
+      "mergeFailed": "Pull request merge edilemedi.",
+      "refreshFailed": "Pull request yenilenemedi."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Ajan başlatıldı",
@@ -3198,7 +3222,6 @@
       "pipelineJobs_one": "{{count}} iş",
       "pipelineJobs_other": "{{count}} iş",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "subIssueTitle": "Alt sorun başlığı",
       "subIssues": "Alt sorunlar"
     },
@@ -3429,7 +3452,6 @@
       "requestReview": "İnceleme iste",
       "requestReviewers": "İnceleme istenecek kişiler",
       "rerunAll": "Tümünü yeniden çalıştır",
-      "rerunFailed": "Başarısızları yeniden çalıştır",
       "reviewers": "İnceleyenler",
       "viewFile": "Görüntüle"
     },

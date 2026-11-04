@@ -11,7 +11,11 @@ import {
   createPane,
   createManager
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
@@ -64,6 +68,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('leaves SSH IPC OSC 9999 status ownership in the main runtime', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-ssh')
       transportFactoryQueue.push(transport)
       mockStoreState = {
@@ -76,13 +82,19 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
 
       expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
     })
 
     it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -94,7 +106,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
 
       const statusHandler = createdTransportOptions[0]?.onAgentStatus as
         | ((payload: {
@@ -154,6 +170,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('restores a suppressed terminal bell when a delayed hook completion resumes work', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -165,7 +183,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
 
       const statusHandler = createdTransportOptions[0]?.onAgentStatus as
         | ((payload: {
@@ -214,6 +236,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('restores a suppressed terminal bell when a delayed hook completion resumes via title tracking', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -225,7 +249,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+      )
 
       const statusHandler = createdTransportOptions[0]?.onAgentStatus as
         | ((payload: {
@@ -274,6 +302,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -282,7 +312,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
@@ -310,6 +344,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('cancels a title task-complete notification when the agent resumes before quiet', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -318,7 +354,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -355,6 +395,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
 
     it('forwards raw onData after a bell as a query reply', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -367,7 +409,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
 
       const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
       if (!bellHandler || !onDataHandler) {
@@ -390,6 +436,8 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
     // Why: on a stale-codex pane (pending account-switch restart), production blocks sendInput.
     it('blocks onData on a stale codex pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-codex-stale')
       transportFactoryQueue.push(transport)
       // isCodexPaneStale reads codexRestartNoticeByPtyId; seed a restart notice to trigger the stale branch.
@@ -416,7 +464,11 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
 
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')

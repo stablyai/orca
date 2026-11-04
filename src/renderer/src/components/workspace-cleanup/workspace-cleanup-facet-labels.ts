@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   WorkspaceCleanupAgentState,
   WorkspaceCleanupBlockerMode,

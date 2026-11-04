@@ -8,7 +8,7 @@ import {
   discoverSkills,
   LAST_KNOWN_ROOT_SCAN_RETENTION_MS
 } from './discovery'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import * as Plugins from './claude-plugin-skill-sources'
 import * as SkillRootFileWalk from './skill-root-file-walk'
 import type { Repo } from '../../shared/repo-types'

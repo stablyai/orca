@@ -10,8 +10,8 @@ import {
   writeWorkspaceFileDragSourceIfResolved,
   type WorkspaceFileDragSource
 } from '@/lib/workspace-file-drag'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
-import { STATUS_LABELS } from './status-display'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
+import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'

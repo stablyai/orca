@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
+import { getTerminalInputByteLength } from '../../../src/shared/terminal/input/terminal-input'
 import {
   UNFRAMED_AGENT_INPUT_MAX_BYTES,
   wrapTerminalBracketedPasteText
-} from '../../../src/shared/terminal-bracketed-paste-text'
+} from '../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 import {
@@ -19,6 +19,7 @@ import {
   queueTerminalLiveControlSend,
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush,
+  type TerminalLiveMirrorSender,
   type TerminalLiveInputFailure
 } from './terminal-live-pending-flush-state'
 
@@ -115,15 +116,14 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
   }, [])
 
-  const sendQueuedMirrorPayload = useCallback(
-    (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload),
+  const sendQueuedMirrorPayload = useCallback<TerminalLiveMirrorSender>(
+    (handle, payload, enqueue) =>
+      sendLiveTerminalInputRef.current(handle, payload, undefined, enqueue),
     [sendLiveTerminalInputRef]
   )
-
-  const sendQueuedPointerPayload = useCallback(
-    (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload, 'pointer'),
+  const sendQueuedPointerPayload = useCallback<TerminalLiveMirrorSender>(
+    (handle, payload, enqueue) =>
+      sendLiveTerminalInputRef.current(handle, payload, 'pointer', enqueue),
     [sendLiveTerminalInputRef]
   )
 

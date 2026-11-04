@@ -113,7 +113,10 @@ export async function classifyBundledSkillPath(
     }
   }
   return {
-    folderClass: bytes && frontmatterName(bytes) === source.name ? 'edited' : 'other',
+    folderClass:
+      bytes && [source.name, ...(source.aliases ?? [])].includes(frontmatterName(bytes) ?? '')
+        ? 'edited'
+        : 'other',
     observed: await observeTree(filesystem, path, observed, includeTreeDigest)
   }
 }

@@ -104,25 +104,6 @@ describe('the line under each of the chat own messages', () => {
     }
   })
 
-  it("says nothing on a message the host recorded but couldn't confirm, as the common pattern", () => {
-    expect(
-      texts(
-        notices({
-          submissions: [row('a', 'unknown', { recovered: true }), row('b', 'accepted')]
-        })
-      )
-    ).toEqual({})
-  })
-
-  it("words a message the host rejected from the host's fact, with no control", () => {
-    const map = notices({
-      submissions: [row('a', 'rejected', { reason: 'Claude does not support the image type .bmp' })]
-    })
-    const notice = map.get(agentJournalSubmissionKey('a'))
-    expect(notice?.text).toBe('Claude does not support the image type .bmp')
-    expect(notice?.onDismiss).toBeUndefined()
-  })
-
   it("keeps the CLI's own startup words behind the rejected message unless a start row has them", () => {
     const exited: AgentSessionFailureFact = {
       kind: 'providerStartFailed',

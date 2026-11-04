@@ -5,7 +5,7 @@ import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
-} from './session-scanner-background'
+} from './scan-service/session-scanner-background'
 import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import {
   listLastKnownRunningWslHomeDirs,
@@ -24,7 +24,7 @@ import {
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
-import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
+import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {

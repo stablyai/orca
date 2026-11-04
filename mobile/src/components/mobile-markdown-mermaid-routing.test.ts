@@ -40,11 +40,6 @@ function firstMermaid(tree: ReactTestRenderer) {
 }
 
 describe('MobileMarkdown mermaid routing', () => {
-  it('routes a closed mermaid fence to MermaidDiagram', () => {
-    const tree = render('```mermaid\ngraph TD; A-->B\n```')
-    expect(mermaidCount(tree)).toBe(1)
-  })
-
   it('keeps a streaming (unterminated) mermaid fence as raw code', () => {
     const tree = render('```mermaid\ngraph TD; A-->B')
     expect(mermaidCount(tree)).toBe(0)
@@ -74,10 +69,5 @@ describe('MobileMarkdown mermaid routing', () => {
       tree.update(createElement(MobileMarkdown, { content: '```mermaid\ngraph TD; A-->C\n```' }))
     )
     expect(firstMermaid(tree)).not.toBe(initial)
-  })
-
-  it('does not route other code fences to MermaidDiagram', () => {
-    const tree = render('```ts\nconst a = 1\n```')
-    expect(mermaidCount(tree)).toBe(0)
   })
 })

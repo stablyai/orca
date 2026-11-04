@@ -4,7 +4,6 @@
   "compilerOptions": { "useDefineForClassFields": true },
   "references": [
     { "path": "../src/packages/process-host/tsconfig.json" },
-    { "path": "../cloud/apps/connector/tsconfig.json" },
     { "path": "../cloud/apps/push/tsconfig.json" },
     { "path": "../cloud/apps/relay-fence-broker/tsconfig.json" },
     { "path": "../cloud/apps/relay/tsconfig.json" },

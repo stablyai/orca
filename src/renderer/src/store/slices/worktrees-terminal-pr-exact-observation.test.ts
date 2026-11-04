@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {

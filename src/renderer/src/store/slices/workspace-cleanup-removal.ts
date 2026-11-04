@@ -10,7 +10,7 @@ import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from '../../../../shared/workspace-cleanup-host-identity'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   preflightWorkspaceCleanupCandidates,
   resolveWorkspaceCleanupRemovalTargets,

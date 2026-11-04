@@ -20,7 +20,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
-import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
+import { parseAiVaultSessionTitlesResult } from './session-titles/session-title-result-validation'
 import { isGatedOffWslHost } from '../wsl/host-lifecycle/wsl-host-gate'
 import type {
   AiVaultDeleteSessionArgs,
@@ -30,7 +30,7 @@ import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
 } from '../../shared/ai-vault-runtime-session-delete'
-import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
+import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number

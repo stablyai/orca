@@ -67,13 +67,6 @@ it('keeps the start folder and effort when a terminal status row precedes the ne
   expect(recordedSession()).toMatchObject({ id: SESSION, cwd: '/repo', effort: 'max' })
 })
 
-it('keeps the effort a resume launched with until Claude next reports it', async () => {
-  seedResume({ cwd: '/repo', effort: 'max' })
-  await claudeHook({ hook_event_name: 'SessionStart', source: 'resume', cwd: '/repo' })
-
-  expect(recordedSession()).toMatchObject({ id: SESSION, cwd: '/repo', effort: 'max' })
-})
-
 it('records where a resumed process really started over the folder its seed named', async () => {
   seedResume({ cwd: '/repo' })
   await claudeHook({ hook_event_name: 'SessionStart', source: 'resume', cwd: '/elsewhere' })

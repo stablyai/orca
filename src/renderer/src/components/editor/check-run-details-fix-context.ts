@@ -2,14 +2,14 @@ import {
   buildFixBrokenChecksPrompt,
   getBrokenChecks,
   getCheckDetailsPromptKey
-} from '../../../../shared/pr-checks-fix-prompt'
+} from '../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { gitHubPRToChecksPanelReview } from '@/components/right-sidebar/checks-panel-review'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'

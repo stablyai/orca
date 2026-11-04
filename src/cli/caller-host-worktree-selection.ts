@@ -1,5 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
-import type { TuiAgent } from '../shared/tui-agent'
+import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison

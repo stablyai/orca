@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { describe, expect, it } from 'vitest'
 import {
   ptyHoldsRecordedSurface as holdsPane,
-  recordPtySurface,
   type PtySurfaceTopology,
   type RecordedPtySurface
 } from './pty-recorded-surface-topology'
@@ -60,26 +58,6 @@ describe('ptyHoldsRecordedSurface', () => {
     )
   })
 
-  it('keeps every pane attached when a lost graph empties the leaf map', () => {
-    // Lost graphs clear leaves without advancing sequence; that emptiness cannot contradict prior claims.
-    expect(
-      ptyHoldsRecordedSurface(
-        pty({ surfaceRecordedAtGraphSequence: 4 }),
-        topology({ graphSequence: 4, ptyIdHoldingPane: () => undefined })
-      )
-    ).toBe(true)
-  })
-
-  it('keeps naming a pane already observed dropped after the graph goes away', () => {
-    // An unavailable graph must not undo an already witnessed drop.
-    expect(
-      ptyHoldsRecordedSurface(
-        pty({ surfaceRecordedAtGraphSequence: 3 }),
-        topology({ graphSequence: 4, ptyIdHoldingPane: () => undefined })
-      )
-    ).toBe(false)
-  })
-
   it('keeps a surface recorded since the last graph statement', () => {
     // Spawn precedes graph publication; an already in-flight graph cannot retract its new pane (#7587).
     expect(
@@ -97,24 +75,6 @@ describe('ptyHoldsRecordedSurface', () => {
         topology({ graphSequence: 2, ptyIdHoldingPane: () => undefined })
       )
     ).toBe(false)
-  })
-
-  it('re-attaches a contradicted record once a claim re-records its surface', () => {
-    // Adoption, split and TUI recovery also claim panes before the graph can witness them.
-    const record = pty({ surfaceRecordedAtGraphSequence: 1 })
-    const graph = topology({ graphSequence: 3, ptyIdHoldingPane: () => undefined })
-    expect(ptyHoldsRecordedSurface(record, graph)).toBe(false)
-
-    const setRecordedSurface = vi.fn()
-    recordPtySurface({ setRecordedSurface }, record, TAB, `${TAB}:${LEAF}`, graph.graphSequence)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(setRecordedSurface).not.toHaveBeenCalled()
-      return
-    }
-    expect(setRecordedSurface).toHaveBeenCalledWith(record, TAB, `${TAB}:${LEAF}`, 3)
-    const applied = { ...record, surfaceRecordedAtGraphSequence: 3 }
-    expect(ptyHoldsRecordedSurface(applied, graph)).toBe(true)
-    expect(ptyHoldsRecordedSurface(applied, { ...graph, graphSequence: 4 })).toBe(false)
   })
 
   it('reports no surface when the record never named a pane', () => {

@@ -18,7 +18,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 // Drive initial/recovery push grids through real codec→multiplexer→transport; use one singleton stream so every replay retains host dimensions and old-host omission remains unknown.

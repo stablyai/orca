@@ -5,7 +5,7 @@ import {
   repo,
   store
 } from '../../../__mocks__/worktree-create-preparation'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktree-preparation-lock'
+import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   consumePreparedWorktreeCreate,
   prepareWorktreeCreateForRepo

@@ -1,8 +1,8 @@
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/source-control/hosted-review/hosted-review-github'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
@@ -22,6 +22,7 @@ import {
   type ParentPrChecksProjection,
   type ParentPrChecksRefreshOutcome,
   type ParentPrChecksRow,
+  type ParentPrChecksRowStatus,
   type ParentPrChecksSummary
 } from './parent-pr-checks-row-types'
 import {
@@ -125,7 +126,7 @@ function buildParentPrChecksRow(
     hasFallbackReview: fallbackDisplay !== null
   })
   const checkDetails = getCheckDetails(args, review, branch)
-  const detailNames = getCheckDetailNames(checkDetails)
+  const detailNames = getCheckDetailNames(checkDetails, status)
 
   return {
     id: args.worktree.id,
@@ -136,6 +137,7 @@ function buildParentPrChecksRow(
     status,
     group: groupForRowStatus(status),
     checkTone: getRowCheckTone(status, review),
+    checksSummary: review?.checksSummary,
     title: review?.title ?? fallbackDisplay?.title ?? branch ?? args.worktree.displayName,
     reviewNumber: review?.number ?? fallbackDisplay?.number ?? null,
     reviewLabel: getReviewLabel(review, fallbackDisplay),
@@ -221,12 +223,15 @@ function getCheckDetails(
   return getGitHubChecksEntry({ ...args, repo: args.repo }, review)?.data ?? []
 }
 
-function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
+function getCheckDetailNames(
+  checks: readonly PRCheckDetail[],
+  status: ParentPrChecksRowStatus
+): string[] {
   const interesting = checks.filter(
     (check) =>
       check.conclusion === 'failure' ||
       check.conclusion === 'timed_out' ||
-      check.conclusion === 'cancelled' ||
+      (check.conclusion === 'cancelled' && status === 'cancelled') ||
       check.conclusion === 'action_required' ||
       check.conclusion === 'pending' ||
       check.conclusion === null ||

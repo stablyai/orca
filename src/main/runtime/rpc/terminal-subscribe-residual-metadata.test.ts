@@ -9,7 +9,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 describe('mobile subscribe residual metadata', () => {
   it.each([undefined, 5, 12])(

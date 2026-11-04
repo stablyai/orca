@@ -13,7 +13,7 @@ vi.mock('../cache/repo-cache', () => ({ setCachedRepos: () => {} }))
 
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree, WorktreeHostContextView } from '../worktree/workspace-list-types'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { useHostScreenState } from './use-host-screen-state'
@@ -35,6 +35,13 @@ function unmountRenderers(): void {
 
 function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
+}
+
+// A display row with the host context the list draws beside it.
+type LabelledRow = Worktree & WorktreeHostContextView
+
+function labelled(display: ReturnType<typeof useHostDisplayWorktrees>): LabelledRow[] {
+  return display.worktrees.map((row) => ({ ...row, ...display.hostContextOf(row) }))
 }
 
 function row(worktreeId: string, repoId: string): Worktree {
@@ -59,7 +66,7 @@ async function displayedRows(args: {
   rows: Worktree[]
   sshTarget: Record<string, unknown>
   thenRepos?: { id: string; displayName: string; connectionId?: string }[]
-}): Promise<Worktree[]> {
+}): Promise<LabelledRow[]> {
   let repos = args.repos
   const client = new FakeSession('connected')
   client.sendRequest.mockImplementation(async (method: string) => {
@@ -74,7 +81,7 @@ async function displayedRows(args: {
         return reply({})
     }
   })
-  const seen: { rows: Worktree[]; refresh?: (options: { force: boolean }) => Promise<void> } = {
+  const seen: { rows: LabelledRow[]; refresh?: (options: { force: boolean }) => Promise<void> } = {
     rows: []
   }
   let setWorktrees: ((rows: Worktree[]) => void) | undefined
@@ -83,10 +90,8 @@ async function displayedRows(args: {
     state.clientRef.current = client
     setWorktrees = state.setWorktrees
     seen.refresh = useHostRepoMetadata({ client, connState: 'connected', hostId: 'host-1', state })
-    seen.rows = useHostDisplayWorktrees(
-      'connected',
-      state,
-      useResolvedHostPlatform(state, 'host-1')
+    seen.rows = labelled(
+      useHostDisplayWorktrees('connected', state, useResolvedHostPlatform(state, 'host-1'))
     )
     return null
   }
@@ -182,7 +187,7 @@ describe('SSH host health on the host list rows', () => {
       }
     })
     const seen: {
-      rows: Worktree[]
+      rows: LabelledRow[]
       repoCount: number
       clearRepos?: () => void
       refresh?: (options: { force: boolean }) => Promise<void>
@@ -200,10 +205,8 @@ describe('SSH host health on the host list rows', () => {
         hostId: 'host-1',
         state
       })
-      seen.rows = useHostDisplayWorktrees(
-        'connected',
-        state,
-        useResolvedHostPlatform(state, 'host-1')
+      seen.rows = labelled(
+        useHostDisplayWorktrees('connected', state, useResolvedHostPlatform(state, 'host-1'))
       )
       return null
     }

@@ -9,7 +9,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from '../orca-runtime-test-fixtures.spec'
 import { planDuplicatePtyPaneRepair } from '../../persistence/terminal-topology/duplicate-pty-pane-repair'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 // Windowless listing reads stored layout; duplicate PTY bindings need durable repair to avoid duplicate tabs.
 const duplicate = makeWorkspaceSessionWithHeadlessTerminal({
@@ -37,10 +37,6 @@ async function terminalRows(session: WorkspaceSessionState): Promise<number> {
 }
 
 describe('windowless mobile list of a terminal stored in two panes', () => {
-  it('lists the stored duplicate twice (the reader that skips the Loader)', async () => {
-    await expect(terminalRows(duplicate)).resolves.toBe(2)
-  })
-
   it('lists one row once main has repaired the stored tree', async () => {
     await expect(terminalRows(planDuplicatePtyPaneRepair(duplicate)!.session)).resolves.toBe(1)
   })

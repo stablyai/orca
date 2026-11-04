@@ -1,4 +1,4 @@
-import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
+import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'

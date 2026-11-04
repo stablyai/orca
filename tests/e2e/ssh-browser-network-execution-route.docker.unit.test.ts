@@ -12,7 +12,7 @@ import {
   startDockerSshHostTarget,
   type DockerSshHostTarget
 } from './helpers/docker-ssh-host-target'
-import { resolveSshBrowserNetworkExecutionRoute } from '../../src/main/browser/ssh-browser-network-execution-route'
+import { resolveSshBrowserNetworkExecutionRoute } from '../../src/main/browser/network/execution-routes/ssh-browser-network-execution-route'
 import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const runDocker = process.env.ORCA_RUN_DOCKER_SSH_BROWSER_E2E === '1'

@@ -3,7 +3,7 @@ import { buildPtyHostEnv } from './host-env/assembly'
 import { registerPtyHandlers } from './register-handlers'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { join } from 'node:path'
-import { withFreshOmpLaunch } from '../../../shared/omp-fresh-launch'
+import { withFreshOmpLaunch } from '../../../shared/agent-launch/startup/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readFileSyncMock,

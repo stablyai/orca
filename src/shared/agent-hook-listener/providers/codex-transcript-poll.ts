@@ -3,7 +3,7 @@ import {
   codexTranscriptTurnEnd,
   reconcileCodexSubagentTranscript
 } from '../../codex-subagent-transcript'
-import { normalizeHookPayload } from '../../agent-hook-listener'
+import { normalizeHookPayload } from '../normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'

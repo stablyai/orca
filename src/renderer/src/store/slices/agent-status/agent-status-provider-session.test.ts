@@ -1,4 +1,4 @@
-import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { applyProviderSessionOnlyUpdate } from '../../../hooks/ipc-events/agent-status-partial-updates'
 import { describe, expect, it } from 'vitest'
@@ -368,4 +368,32 @@ it('retains recorded Jcode session-start identity without a status row', () => {
     agent: 'jcode',
     providerSession: { key: 'session_id', id: 'session_jc_5' }
   })
+})
+
+it('replaces only the captured pane resume handle and keeps a newer session through manual sleep', () => {
+  const store = createTestStore()
+  const paneKey = 'tab-1:leaf-1'
+  const captured = {
+    paneKey,
+    worktreeId: 'wt-1',
+    agent: 'codex' as const,
+    providerSession: { key: 'session_id' as const, id: 'old' },
+    prompt: '',
+    state: 'done' as const,
+    origin: 'live' as const,
+    capturedAt: 1,
+    updatedAt: 1
+  }
+  store.getState().rememberSleepingAgentSession(captured)
+  const resumed = { ...captured, origin: 'quit' as const, restoreOnTabOpenOnly: true }
+  store.getState().rememberSleepingAgentSession(resumed, captured)
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(resumed)
+  const newer = { ...resumed, providerSession: { ...captured.providerSession, id: 'new' } }
+  store.getState().rememberSleepingAgentSession(newer, resumed)
+  store.getState().rememberSleepingAgentSession(resumed, captured)
+  store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBe(newer)
+  store.getState().clearSleepingAgentSession(paneKey)
+  store.getState().rememberSleepingAgentSession(resumed, newer)
+  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 })

@@ -2,7 +2,7 @@
 import {
   TERMINAL_VIEWPORT_MIN_COLS,
   TERMINAL_VIEWPORT_MIN_ROWS
-} from '../../../src/shared/terminal-viewport'
+} from '../../../src/shared/terminal/viewport/terminal-viewport'
 
 export type TerminalFitDimensions = { cols: number; rows: number }
 
