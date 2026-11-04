@@ -9,6 +9,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { nativeChatScrollsToLatestOnSend } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
 import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
@@ -315,10 +316,7 @@ export function NativeChatMessageList({
   })
   // Off keeps a reader who scrolled up in place; one at the end still follows the reply.
   const revealSent = useCallback(() => {
-    if (
-      useAppStore.getState().settings?.nativeChatScrollToLatestOnSend === false &&
-      !readerAtEnd()
-    ) {
+    if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerAtEnd()) {
       return
     }
     jumpToLatest()

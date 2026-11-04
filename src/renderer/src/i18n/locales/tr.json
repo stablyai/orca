@@ -20476,7 +20476,6 @@
         "followUpBehaviorTitle": "Takip mesajlarını sıraya al",
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
-        "scrollToLatestOnSendSearchScroll": "kaydırma",
         "scrollToLatestOnSendSearchPosition": "konum",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",

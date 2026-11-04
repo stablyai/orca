@@ -29,6 +29,13 @@ export type NativeChatGlobalSettings = {
   nativeChatScrollToLatestOnSend?: boolean
 }
 
+/** Only explicit OFF keeps a reader's place on send. */
+export function nativeChatScrollsToLatestOnSend(
+  settings: { readonly nativeChatScrollToLatestOnSend?: unknown } | null | undefined
+): boolean {
+  return settings?.nativeChatScrollToLatestOnSend !== false
+}
+
 export const DEFAULT_NATIVE_CHAT_FONT_SIZE = 14
 export const DEFAULT_NATIVE_CHAT_CODE_FONT_SIZE = 12
 export const DEFAULT_NATIVE_CHAT_CONTRAST = 100

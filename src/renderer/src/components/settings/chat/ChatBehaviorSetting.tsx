@@ -13,6 +13,7 @@ import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -59,7 +60,7 @@ export function ChatBehaviorSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
-  const scrollToLatestOnSend = settings.nativeChatScrollToLatestOnSend !== false
+  const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">

@@ -21181,7 +21181,6 @@
         "followUpBehaviorTitle": "Ставить следующие сообщения в очередь",
         "scrollToLatestOnSendTitle": "Прокручивать к последнему сообщению при отправке",
         "scrollToLatestOnSendCopy": "Отправка при прокрутке вверх переносит к последнему сообщению и следит за ответом. Отключите, чтобы остаться на месте.",
-        "scrollToLatestOnSendSearchScroll": "прокрутка",
         "scrollToLatestOnSendSearchPosition": "позиция",
         "inlineVisualsTitle": "Визуализации в чате",
         "inlineVisualsCopy": "Агент сможет показывать графики, схемы и макеты прямо в ответах. Применяется к новым чатам.",

@@ -61,7 +61,6 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       'Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.'
     ),
     keywords: [
-      translate('components.settings.nativeChat.scrollToLatestOnSendSearchScroll', 'scroll'),
       translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
     ]
   },

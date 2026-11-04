@@ -20178,7 +20178,6 @@
         "followUpBehaviorTitle": "將後續訊息加入佇列",
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
-        "scrollToLatestOnSendSearchScroll": "捲動",
         "scrollToLatestOnSendSearchPosition": "位置",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",

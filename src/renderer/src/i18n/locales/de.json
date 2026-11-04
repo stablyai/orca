@@ -20492,7 +20492,6 @@
         "followUpBehaviorTitle": "Folgenachrichten einreihen",
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
-        "scrollToLatestOnSendSearchScroll": "scrollen",
         "scrollToLatestOnSendSearchPosition": "Position",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
