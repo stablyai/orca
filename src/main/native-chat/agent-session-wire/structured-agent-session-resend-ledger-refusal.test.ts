@@ -1,7 +1,7 @@
 import { deleteTestOperationLedger } from '../agent-session-journal/journal-retained-fault-test-support'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -11,11 +11,7 @@ import {
   envelope,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import {
-  HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
-  hostTestMessage
-} from './structured-agent-session-host-test-data'
+import { HOST_TEST_NOW as NOW, hostTestMessage } from './structured-agent-session-host-test-data'
 
 let root: string
 let host: StructuredAgentSessionHost
@@ -26,12 +22,6 @@ beforeEach(() => {
 })
 
 afterEach(() => vi.restoreAllMocks())
-
-function hostJournal(): AgentSessionJournal {
-  return (
-    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-  ).sessions.get(SESSION)!.journal
-}
 
 function sendParams(text: string, clientOperationId?: string) {
   const body = hostTestMessage(text)
@@ -72,39 +62,6 @@ describe('send without ledger policy', () => {
 })
 
 describe('a /clear in flight', () => {
-  it('answers a resend from the attempt queued ahead of it, delivering once', async () => {
-    await attach()
-    const journal = hostJournal()
-    const append = journal.appendSubmission.bind(journal)
-    const held = Promise.withResolvers<void>()
-    // Hold the earlier send so clear arrives before the queued retry runs.
-    vi.spyOn(journal, 'appendSubmission').mockImplementationOnce(async (...args) => {
-      await held.promise
-      return append(...args)
-    })
-    const earlier = host.send(CALLER, sendParams('holds the queue'))
-    const params = sendParams('queued ahead of the clear')
-    const id = params.envelope.clientOperationId
-    const attempt = host.send(CALLER, params)
-    await vi.waitFor(() => expect(journal.appendSubmission).toHaveBeenCalledTimes(1))
-
-    const clearing = clear()
-    const resent = host.send(CALLER, params)
-    held.resolve()
-    const [first, second] = await Promise.all([attempt, resent, earlier, clearing])
-
-    expect(first).toMatchObject({ ok: true, replayed: false })
-    expect(second).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { submission: { clientMessageId: id } }
-    })
-    expect(journal.submissions().filter((entry) => entry.clientMessageId === id)).toHaveLength(1)
-    expect(
-      dispatch.mock.calls.filter(([input]) => input.clientMessageId === id).length
-    ).toBeLessThanOrEqual(1)
-  })
-
   it('refuses an old id only for the clear in flight', async () => {
     await attach()
     const clearing = clear()

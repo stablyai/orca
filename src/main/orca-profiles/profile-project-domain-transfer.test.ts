@@ -306,7 +306,6 @@ describe('profile domain transfers', () => {
           marker !== undefined
         )
         expect(settings.futureSetting).toEqual({ retained: true })
-        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
         const options = {
           dataFile: join(root, 'profiles', id, 'orca-data.json'),
           databaseFile: dbPath(id),
@@ -317,15 +316,12 @@ describe('profile domain transfers', () => {
           canonicalRunWorkerOptions(crashRoot)
         )
         try {
-          vi.advanceTimersByTime(5000)
-          vi.useRealTimers()
-          await loaded.waitForPendingWrite()
+          await loaded.flushPendingOrThrowAsync()
           expect(JSON.parse(raw(id).json).settings).toMatchObject({
             uiLanguage: marker === true ? plugin : 'pt',
             uiLanguagePortugueseMigrationApplied: true
           })
         } finally {
-          vi.useRealTimers()
           await loaded.freezeWritesAsync()
         }
         const { store: reopened } = await createLiveProfileStateStore(
