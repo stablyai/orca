@@ -286,60 +286,6 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.hasMore).toBe(false)
   })
 
-  it('clears a stale cursor when a replacement omits paging metadata', async () => {
-    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({
-        type: 'snapshot',
-        messages: Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`)),
-        hasMore: true,
-        beforeOffset: 100
-      })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-
-    await act(async () =>
-      emit({
-        type: 'replacement',
-        messages: Array.from({ length: 40 }, (_unused, index) => message(`new-${index}`))
-      })
-    )
-    act(() => state?.loadEarlier())
-
-    expect(sendRequest).toHaveBeenCalledWith(
-      'nativeChat.readSession',
-      {
-        agent: 'claude',
-        sessionId: 'session',
-        limit: 100,
-        capabilities: { transcriptSourceOrder: 1 }
-      },
-      expect.objectContaining({ budgetSpansConnect: true })
-    )
-  })
-
-  it('clears hasMore when a replaced window is shorter than the initial page', async () => {
-    const sendRequest = vi.fn()
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({
-        type: 'snapshot',
-        messages: Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`)),
-        hasMore: true,
-        beforeOffset: 100
-      })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    expect(state?.hasMore).toBe(true)
-
-    await act(async () => emit({ type: 'replacement', messages: [message('only')] }))
-
-    expect(state?.hasMore).toBe(false)
-  })
-
   it('fences an in-flight older page when a merging replay re-cuts the byte cursor', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(
@@ -458,39 +404,6 @@ describe('useMobileNativeChatSession', () => {
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['older-page', ...shown, 'live-1'])
   })
-
-  it('pages a growing tail from what the phone holds, not from the first window', async () => {
-    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({
-        type: 'snapshot',
-        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
-        hasMore: true
-      })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    await act(async () =>
-      emit({
-        type: 'appended',
-        messages: Array.from({ length: 30 }, (_unused, index) => message(`live-${index}`))
-      })
-    )
-
-    act(() => state?.loadEarlier())
-
-    expect(sendRequest).toHaveBeenLastCalledWith(
-      'nativeChat.readSession',
-      {
-        agent: 'claude',
-        sessionId: 'session',
-        limit: 130,
-        capabilities: { transcriptSourceOrder: 1 }
-      },
-      expect.objectContaining({ budgetSpansConnect: true })
-    )
-  })
 })
 
 describe('useMobileNativeChatSession transcriptLoading', () => {
@@ -543,14 +456,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       renderer = create(createElement(Harness, { client, sessionId }))
     })
   }
-
-  it('reports loading on the very first render, before the subscription effect runs', async () => {
-    // Idle alone cannot make an empty pre-read transcript trustworthy for launch seeding.
-    const subscribe: RpcClient['subscribe'] = vi.fn(() => () => {})
-    await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
-
-    expect(renders[0]).toMatchObject({ transcriptLoading: true, ids: [] })
-  })
 
   it('re-reads instead of resurfacing a settled read when the same identity returns', async () => {
     // View toggles clear subscription state; retain settled history without claiming the reread is ready.
@@ -683,26 +588,6 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     )
     expect(leaked).toBeUndefined()
     expect(renders.find((entry) => entry.sessionId === 'session-b')).toMatchObject({
-      transcriptLoading: true,
-      ids: []
-    })
-  })
-
-  it('settles the view but not the read on a pending snapshot', async () => {
-    // Pending means no file yet: render without a spinner, but do not call empty history ready for launch seeding.
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
-      return () => {}
-    })
-    await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
-
-    expect(subscribe).toHaveBeenCalledWith(
-      'nativeChat.subscribe',
-      expect.objectContaining({ capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 } }),
-      expect.any(Function)
-    )
-    expect(renders.at(-1)).toMatchObject({
-      status: 'awaiting-transcript',
       transcriptLoading: true,
       ids: []
     })

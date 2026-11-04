@@ -226,7 +226,7 @@ describe('Mobile CI tool preflight routing', () => {
 })
 
 describe('Renderer-only relay admission', () => {
-  const renderer = 'src/renderer/src/components/right-sidebar/FileExplorer.tsx'
+  const renderer = 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx'
   const admitted = (files) => {
     const outputs = routedOutputs(files, 'false')
     const runRelay = evaluate(workflow.jobs.test.with.run_relay_integration, {
