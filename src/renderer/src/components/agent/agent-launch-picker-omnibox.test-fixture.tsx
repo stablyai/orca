@@ -1,4 +1,4 @@
-import { act, fireEvent, waitFor } from '@testing-library/react'
+import { act, fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { expect } from 'vitest'
 import type { Root } from 'react-dom/client'
 import { useAppStore } from '@/store'
@@ -96,7 +96,7 @@ export async function verifyOmniboxPresetIdentity(
     fireEvent.change(document.querySelector('textarea')!, {
       target: { value: '--model private/preset --preset-pending' }
     })
-    fireEvent.blur(document.querySelector('textarea')!)
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
     close()
     await showEntries(false)
     await configure()
