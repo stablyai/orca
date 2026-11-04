@@ -21,8 +21,12 @@ import {
 describe('onboarding flow persistence', () => {
   beforeEach(() => {
     window.api = {
-      onboarding: { update: vi.fn().mockResolvedValue(getDefaultOnboardingState()) }
-    } as unknown as typeof window.api
+      ...window.api,
+      onboarding: {
+        ...window.api?.onboarding,
+        update: vi.fn().mockResolvedValue(getDefaultOnboardingState())
+      }
+    }
   })
 
   afterEach(() => {
