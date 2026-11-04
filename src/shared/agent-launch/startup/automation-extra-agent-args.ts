@@ -244,10 +244,9 @@ export function parseExtraAgentArgs(args: {
 
 function removeDefaultsFor(
   agent: TuiAgent,
-  extras: Extract<ParsedExtraAgentArgs, { ok: true }>,
+  kinds: ReadonlySet<ExtraAgentArgKind>,
   tokens: readonly string[]
 ): string[] {
-  const { kinds } = extras
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   let result = [...tokens]
   if (!catalog) {
@@ -256,13 +255,6 @@ function removeDefaultsFor(
       if (option.kind !== 'repeatable' && kinds.has(option.kind)) {
         result = removeAgentArgOption(agent, result, option.aliases)
       }
-    }
-    // Pi looks a model up only within --provider, and an inline key belongs to that provider.
-    if (
-      agent === 'pi' &&
-      findOptionOccurrence(extras.tokens, ['--model'], false)?.value?.includes('/')
-    ) {
-      result = removeAgentArgOption(agent, result, ['--provider', '--api-key'])
     }
     return result
   }
@@ -315,7 +307,7 @@ export function mergeParsedExtraAgentArgs(args: {
   if (!defaults.ok) {
     return { ok: false, error: `Default agent arguments are invalid: ${defaults.error}` }
   }
-  const kept = removeDefaultsFor(args.agent, extras, defaults.tokens)
+  const kept = removeDefaultsFor(args.agent, extras.kinds, defaults.tokens)
   const terminator = agentArgTerminatorIndex(args.agent, kept)
   const merged = [...kept.slice(0, terminator), ...extras.tokens, ...kept.slice(terminator)]
   const agentArgs = merged.map((token) => quoteStartupArg(token, args.shell)).join(' ')

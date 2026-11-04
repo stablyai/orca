@@ -174,35 +174,41 @@ describe('typed creation through the startup and recorded resume owners', () => 
     )
   })
 
-  it('replaces Pi defaults, and a provider-qualified model also drops their provider and key', () => {
-    const pi = (extraAgentArgs: string) =>
-      words(
-        fresh('pi', {
-          settings: {
-            agentDefaultArgs: { pi: '--provider host --api-key key --model old --thinking low' }
-          },
-          extraAgentArgs
-        }).launchCommand
+  describe('Pi extras', () => {
+    const pi = (extraAgentArgs: string, settings: AgentStartupSettings) =>
+      words(fresh('pi', { settings, extraAgentArgs }).launchCommand)
+
+    it('replace the model and thinking within the pinned provider, keeping its key', () => {
+      const defaults = { pi: '--provider openrouter --api-key key --model old --thinking low' }
+      expect(
+        pi('--model=anthropic/claude --thinking high', { agentDefaultArgs: defaults })
+      ).toEqual([
+        'pi',
+        '--provider',
+        'openrouter',
+        '--api-key',
+        'key',
+        '--model',
+        'anthropic/claude',
+        '--thinking',
+        'high'
+      ])
+      expect(() => pi('--thinking extreme', { agentDefaultArgs: defaults })).toThrow(
+        /--thinking accepts off/
       )
-    expect(pi('--model=other/new --thinking high')).toEqual([
-      'pi',
-      '--model',
-      'other/new',
-      '--thinking',
-      'high'
-    ])
-    expect(pi('--model new')).toEqual([
-      'pi',
-      '--provider',
-      'host',
-      '--api-key',
-      'key',
-      '--thinking',
-      'low',
-      '--model',
-      'new'
-    ])
-    expect(() => pi('--thinking extreme')).toThrow(/--thinking accepts off/)
+    })
+
+    it('refuse a model override that could move an unpinned Command key to another provider', () => {
+      expect(() =>
+        pi('--model anthropic/claude', { agentCmdOverrides: { pi: 'pi --api-key key' } })
+      ).toThrow(/--provider beside/)
+    })
+
+    it('keep dash-leading operands of default options', () => {
+      expect(
+        pi('--model new', { agentDefaultArgs: { pi: '--system-prompt --model --model old' } })
+      ).toEqual(['pi', '--system-prompt', '--model', '--model', 'new'])
+    })
   })
 })
 

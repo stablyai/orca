@@ -15,6 +15,7 @@ import { readLaunchPermissionChoice } from '../permissions/tui-agent-permission-
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import { agentArgTerminatorIndex } from '../../agent-session/options/agent-session-option-agent-args'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
+import { piInlineApiKeyIsUnpinned } from './pi-inline-api-key-pin'
 import {
   quoteStartupArg,
   tokenizeStartupCommand,
@@ -244,6 +245,14 @@ export function terminalSessionOptionInputs(args: {
     : undefined
   if (extras && !extras.ok) {
     throw new Error(extras.error)
+  }
+  if (
+    extras?.ok &&
+    args.agent === 'pi' &&
+    extras.kinds.has('model') &&
+    piInlineApiKeyIsUnpinned([args.command, raw], args.shell)
+  ) {
+    throw new Error("A Pi model override needs --provider beside this host's --api-key.")
   }
   if (extras?.ok) {
     const merged = mergeParsedExtraAgentArgs({
