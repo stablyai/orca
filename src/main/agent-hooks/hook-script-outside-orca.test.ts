@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getManagedScript } from '../codex/codex-hook-script'
+import { getManagedScript } from '../codex/hooks/definitions/codex-hook-script'
 import { buildPosixHookSpoolLines } from './hook-stdin-contract'
 
 const roots: string[] = []

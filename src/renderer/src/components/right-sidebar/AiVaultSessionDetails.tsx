@@ -1,5 +1,5 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
-import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
+
 import type React from 'react'
 import {
   FileJson,
@@ -18,12 +18,18 @@ import {
   isAiVaultSessionResumableContent,
   type AiVaultScope,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { ResumeInNewCliTooltipText } from './ai-vault-session-cli-fork-copy'
-import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
-import { SessionSubagentsSection } from './AiVaultSessionSubagents'
+import {
+  sessionDetailConversationTurns,
+  sessionPromptPreview
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
+import {
+  type AiVaultSubagentResumeActions,
+  SessionSubagentsSection
+} from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import { useAiVaultSessionAccount } from './ai-vault-session-account'
 import { SessionAccountSection } from './AiVaultSessionAccount'
@@ -32,12 +38,14 @@ import {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionWorkspaceHeading,
   isAiVaultFolderWorkspaceId,
-  aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
+  shouldShowAiVaultSessionWorktreeLine
 } from './ai-vault-session-worktree'
+import {
+  aiVaultWorktreeCompactPath,
+  type AiVaultSessionWorktreeInfo
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 export function SessionInlineDetails({
   id,

@@ -1,5 +1,5 @@
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { buildAiVaultResumeCommand } from '../../../shared/ai-vault-resume-command'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { buildAiVaultResumeCommand } from '../../../shared/ai-vault/resume/ai-vault-resume-command'
 import { generatedSessionTitle } from '../session-scanner-accumulator'
 import {
   readCursorChatMeta,

@@ -8,8 +8,8 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { prepareCodexAccountRestartResume } from './codex-legacy-session-resume'
-import { getSystemCodexHomePath } from './codex-home-paths'
+import { prepareCodexAccountRestartResume } from './history/resume/codex-legacy-session-resume'
+import { getSystemCodexHomePath } from './configuration/homes/codex-home-paths'
 
 /** Move only the current conversation before launching with the selected account's credentials. */
 export async function prepareCodexStructuredAccountHome(

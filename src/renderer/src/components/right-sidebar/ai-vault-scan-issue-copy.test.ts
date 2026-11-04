@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import es from '@/i18n/locales/es.json'
-import { aiVaultScanIssueText } from '../../../../shared/ai-vault-scan-issue-copy'
+import { aiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { aiVaultScanErrorText, aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
 const originalLanguage = i18n.language

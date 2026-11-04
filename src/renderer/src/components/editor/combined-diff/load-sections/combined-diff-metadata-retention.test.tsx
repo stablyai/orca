@@ -10,7 +10,7 @@ import type {
   GitDiffResult,
   GitDiffTextResult
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { createCombinedDiffSectionIndexMap } from '../resolve-changes/combined-diff-section-identity'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'

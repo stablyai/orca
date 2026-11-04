@@ -7,7 +7,7 @@ import {
 } from './terminal-layout-snapshot-schema'
 import { closedTerminalPaneSchema } from './closed-terminal-panes'
 import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
-import type { WorkspaceKey } from './folder-workspace-types'
+import type { WorkspaceKey } from './folder-workspaces/folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'

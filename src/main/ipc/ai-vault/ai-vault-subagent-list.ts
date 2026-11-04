@@ -8,7 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   AiVaultSubagentListArgs,
   AiVaultSubagentListResult
-} from '../../../shared/ai-vault-types'
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 // Only Claude and OMP currently store Task subagents as sibling transcripts.
 export async function listAiVaultSubagentSessions(

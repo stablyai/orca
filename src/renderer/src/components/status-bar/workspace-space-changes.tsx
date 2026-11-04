@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { FileTypeIcon } from '../FileTypeIcon'
 import { VirtualizedList } from '../virtualized-list'
 import { Badge } from '../ui/badge'

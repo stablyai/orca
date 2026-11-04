@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type * as CrossPlatformPathModule from '../../../../shared/cross-platform-path'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'

@@ -1,6 +1,6 @@
 // Check generated .cmd scripts on every host; Antigravity uses a separate bounded Node stdin reader.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,10 +13,12 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -34,7 +36,8 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { ClaudeHookService } from '../claude/hook-service'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { DevinHookService } from '../devin/hook-service'

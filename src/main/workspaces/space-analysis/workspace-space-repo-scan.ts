@@ -8,7 +8,7 @@ import type {
   WorkspaceSpaceScanProgress,
   WorkspaceSpaceScanStatus,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'

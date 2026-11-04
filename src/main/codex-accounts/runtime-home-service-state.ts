@@ -14,7 +14,7 @@ import type {
   CodexSharedRuntimeAuthProvenanceStatus,
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
-import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
+import type { CodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-types'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import type { LegacyWslRuntimeAuthDestination } from './legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl-codex-auth-batch-reader'

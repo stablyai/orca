@@ -672,7 +672,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-index-heal-binary-contract.test.ts
+            src/main/codex/history/index/codex-index-heal-binary-contract.test.ts
 
       - name: Install pinned no-daemon Codex CLI
         run: |
@@ -700,7 +700,7 @@ jobs:
             ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/${install%%:*}/node_modules/.bin/codex" \
               ORCA_CODEX_HOOK_CONTRACT_VERSION="${install#*:}" \
               pnpm exec vitest run --config config/vitest.config.ts \
-              src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+              src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
           done
 
       - name: Install latest Codex CLI
@@ -715,7 +715,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-latest/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+            src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
 
       # Why the no-daemon install: it is the newest pinned Codex, and its project
       # lookup decides whether a worktree launch stops at the trust prompt.

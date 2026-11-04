@@ -1,5 +1,5 @@
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
-import { BrowserClientProfileMetadata } from '../../../../shared/browser-client-profile-switch-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { sameBrowserClientPageAuthority } from '../../client-hosts/commands/browser-client-host-command-authority'
 import {
   assertBrowserClientPageCommandNotAborted,

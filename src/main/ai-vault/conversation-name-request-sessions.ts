@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { CONVERSATION_NAME_PROMPT_OPENING } from '../../shared/source-control/ai/generation/conversation-name-generation'
 
 const MAX_NAME_REQUEST_MESSAGES = 6

@@ -4,12 +4,15 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import type { WebSocket } from 'ws'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeDeviceProofMessage, type DeviceProofPurpose } from '../../../shared/device-key-proof'
+import {
+  encodeDeviceProofMessage,
+  type DeviceProofPurpose
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { DeviceRegistry } from '../device-registry'
 import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
-import { generateKeyPair } from '../../../shared/e2ee-crypto'
+import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,

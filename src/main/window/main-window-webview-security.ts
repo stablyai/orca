@@ -22,9 +22,10 @@ import {
 import { isDocPreviewSession } from '../browser/document-preview/doc-preview-protocol'
 import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
+import { parseChromeExtensionUrl } from '../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { installBrowserJavaScriptDialogs } from '../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
+import { installNativeChatVisualGuestTheme } from '../host/native-chat-visual-guest-theme'
 import {
   admitPluginFrameAttach,
   attachPluginFrameGuest,
@@ -57,6 +58,7 @@ function isAdmissibleExtensionPageAttach(partition: string, src: string): boolea
 }
 
 export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): void {
+  installNativeChatVisualGuestTheme(mainWindow)
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
   // Why: plugin panels are frames of this renderer; same IP-handling fence as doc preview guests.
   mainWindow.webContents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp')

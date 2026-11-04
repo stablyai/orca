@@ -8,7 +8,7 @@ import { planDeviceKeyFork } from './device-key-fork'
 import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { RelayDeviceBinding } from './mobile-cloud-relay/relay-revoke-outbox'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { DelegatedPhone } from '../../shared/delegated-mobile-device-contract'
 import {

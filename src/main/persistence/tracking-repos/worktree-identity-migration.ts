@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'

@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../../shared/folder-workspace-path-status'
+import { FOLDER_WORKSPACE_PATH_STATUS_TTL_MS } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { FolderWorkspacePathStatusCacheEntry } from '@/store/repos/repo-state'
 import { useAppStore } from '@/store'
 import { getFolderWorkspaceStatusRequestSnapshot } from '@/store/folder-workspaces/folder-path-status'

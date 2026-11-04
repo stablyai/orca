@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { makeRepo, makeWorktree } from './worktree-jump/worktree-jump-palette-test-fixtures'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 const initialState = useAppStore.getInitialState()
 
