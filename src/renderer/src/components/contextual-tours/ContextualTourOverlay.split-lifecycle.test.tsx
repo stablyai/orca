@@ -74,14 +74,14 @@ beforeEach(() => {
       'cancelAnimationFrame'
     ]
   })
-  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  ;(window as unknown as { api: unknown }).api = {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('api', {
     ui: {
       set: () => Promise.resolve(),
       recordFeatureInteraction: () =>
         Promise.resolve({ featureInteractions: {}, contextualToursSeenIds: [] })
     }
-  }
+  })
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 960 })
   useAppStore.setState({
@@ -111,6 +111,7 @@ afterEach(() => {
   document.querySelectorAll('[data-contextual-tour-target]').forEach((node) => node.remove())
   useAppStore.setState({ activeContextualTourId: null, activeContextualTourStepIndex: 0 })
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('Split a terminal pane tip lifecycle', () => {
@@ -201,6 +202,48 @@ describe('Split a terminal pane tip lifecycle', () => {
     addTourTarget('workspace-create-control', 40)
     await closeDialog()
     expect(shownTip()).toBe('Start another task in parallel')
+  })
+
+  it('keeps its place and focus when a forced tour shows while it is paused', async () => {
+    act(() => {
+      useAppStore.setState({ sidebarOpen: false })
+    })
+    document.querySelector('[data-contextual-tour-target="workspace-create-control"]')?.remove()
+    renderSurfaces({ terminal: true, tasks: false })
+    await settle()
+    expect(shownTip()).toBe('Split a terminal pane')
+    const terminalInput = document.createElement('textarea')
+    document.body.appendChild(terminalInput)
+    renderSurfaces({ terminal: false, tasks: false })
+    await settle()
+    terminalInput.focus()
+
+    const browserTarget = addTourTarget('client-hosted-browser-controls', 300)
+    act(() => {
+      useAppStore
+        .getState()
+        .requestContextualTour('client-hosted-browser', 'client_hosted_browser_visible', false, {
+          force: true
+        })
+    })
+    await settle()
+    expect(shownTip()).toBe('This page renders on your desktop')
+    act(() => {
+      void useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+    })
+    expect(useAppStore.getState().sidebarOpen).toBe(true)
+    act(() => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Dismiss tour"]')?.click()
+    })
+    await settle()
+    browserTarget.remove()
+
+    addTourTarget('workspace-create-control', 40)
+    renderSurfaces({ terminal: true, tasks: false })
+    await settle()
+    expect(shownTip()).toBe('Start another task in parallel')
+    expect(document.activeElement).toBe(terminalInput)
+    terminalInput.remove()
   })
 
   it('stays closed after the user dismisses it', async () => {

@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import type { FeatureInteractionId } from '../../../../../shared/feature-interactions'
 import { getContextualTour } from '../../../../../shared/contextual-tours'
+import { isPausedActionTour } from './ui-slice-tour-actions'
 import {
   getNextVisibleContextualTourStepIndex,
   hasContextualTourTarget
@@ -16,15 +17,18 @@ export function getContextualTourProgressionForFeatureInteraction(
   | 'advance-to-next-step'
   | 'reveal-sidebar'
   | null {
-  if (!state.activeContextualTourId) {
-    // A split that finishes while its tip is paused still opens the sidebar the next tip points at.
-    const pausedTourId = state.contextualTourSessionTourId
-    return pausedTourId === 'workspace-agent-sessions' &&
+  if (state.activeContextualTourId !== state.contextualTourSessionTourId) {
+    // A split that finishes while its tip is paused (no tour, or a forced one, showing) still opens
+    // the sidebar the next tip points at.
+    return state.contextualTourSessionTourId === 'workspace-agent-sessions' &&
+      isPausedActionTour(state, state.contextualTourSessionTourId) &&
       id === 'terminal-pane-split' &&
-      !state.sidebarOpen &&
-      !state.contextualToursSeenIds.includes(pausedTourId)
+      !state.sidebarOpen
       ? 'reveal-sidebar'
       : null
+  }
+  if (!state.activeContextualTourId) {
+    return null
   }
   const tour = getContextualTour(state.activeContextualTourId)
   const step = tour.steps[state.activeContextualTourStepIndex]

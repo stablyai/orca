@@ -2,6 +2,7 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   getContextualTour,
   hasContextualTourActionStep,
+  type ContextualTourId,
   isContextualTourStepDone
 } from '../../../../../shared/contextual-tours'
 import {
@@ -11,6 +12,18 @@ import {
   getPreviousVisibleContextualTourStepIndex
 } from '../../../components/contextual-tours/contextual-tour-gate'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+
+// The session belongs to an unfinished action tour until it is seen (final tip shown or closed).
+export function isPausedActionTour(
+  state: Pick<UISlice, 'contextualToursSeenIds'>,
+  tourId: ContextualTourId | null
+): tourId is ContextualTourId {
+  return (
+    tourId !== null &&
+    !state.contextualToursSeenIds.includes(tourId) &&
+    hasContextualTourActionStep(getContextualTour(tourId))
+  )
+}
 
 export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -92,7 +105,10 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
             hasFeatureInteraction(s.featureInteractions, id),
           contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
           activeContextualTourSuppressed: false,
-          contextualTourSessionTourId: id,
+          // A forced tour may show over a paused action tour, but must not take its session.
+          contextualTourSessionTourId: isPausedActionTour(s, s.contextualTourSessionTourId)
+            ? s.contextualTourSessionTourId
+            : id,
           lastCompletedContextualTourId: null
         }
       }),
@@ -222,7 +238,10 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourWasFeaturePreviouslyInteracted: false,
           activeContextualTourSuppressed: false,
           lastCompletedContextualTourId: null,
-          contextualTourSessionTourId: keepsSession ? s.contextualTourSessionTourId : null
+          contextualTourSessionTourId:
+            s.contextualTourSessionTourId === tourId && !keepsSession
+              ? null
+              : s.contextualTourSessionTourId
         }
       }),
     markContextualToursSeen: (ids) =>
