@@ -7968,9 +7968,6 @@
           "browserExtensions": {
             "copy": "Fügt Einstellungen › Browser › Erweiterungen für lokale Browserprofile hinzu.",
             "toggleLabel": "Browser-Erweiterungen umschalten"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Orchestrierungs-Panel umschalten"
           }
         },
         "FloatingWorkspacePane": {
