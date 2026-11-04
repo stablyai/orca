@@ -77,6 +77,7 @@ export type NativeChatStructuredComposerTransport = {
   runtime: 'local' | 'remote'
   /** The session behind this composer; a real user send relinquishes orchestration ownership. */
   sessionId: string
+  attachmentStagingScope?: string
   /** Owning runtime for that report; null is the local runtime. */
   runtimeEnvironmentId: string | null
   /** The host has not confirmed this chat: session uploads wait for publication. */
@@ -137,9 +138,7 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** The chat's worktree is still being created, so there is no session or file tree yet:
-   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
-   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  /** Compose against the source checkout until the new workspace and session exist. */
   workspacePending?: true
   /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
    *  no /resume, the launch workspace's skills, and a draft kept in memory until the launch. */
