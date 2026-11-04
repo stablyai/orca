@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 import { act, useState, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('./MobileNativeChatComposerField', () => import('./MobileNativeChatComposerField.web'))
 vi.mock('../../../platform/host-os', () => import('../../../platform/host-os.web'))
 vi.mock('../../../platform/keyboard-occlusion', () => ({ useKeyboardOcclusion: () => 0 }))
