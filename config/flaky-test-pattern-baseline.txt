@@ -1242,7 +1242,7 @@
 3 test-no-wall-clock:src/main/runtime/orca-runtime-codex-idle-title-chat-address.test.ts
 3 test-no-wall-clock:src/main/runtime/orchestration-cli-subprocess.test.ts
 3 test-no-wall-clock:src/main/runtime/rpc/methods/orchestration/worker/fleet-status-terminal-identity.test.ts
-3 test-no-wall-clock:src/main/runtime/workspace-layout-live-titles.test.ts
+2 test-no-wall-clock:src/main/runtime/workspace-layout-live-titles.test.ts
 3 test-no-wall-clock:src/main/star-nag/service-threshold-prompt.test.ts
 3 test-no-wall-clock:src/main/windows/windows-msys-job.win32.test.ts
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
