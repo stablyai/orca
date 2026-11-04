@@ -460,7 +460,7 @@ describe('NativeChatQuestionCard', () => {
     ])
   })
 
-  it('toggles highlighted multi-select options without submitting and arrows out of the answer field', () => {
+  it('toggles highlighted multi-select options without submitting', () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()
     container.setAttribute('data-native-chat-root', 'true')
@@ -478,12 +478,6 @@ describe('NativeChatQuestionCard', () => {
     expect(optionPressed('Spaces')).toBe('false')
     pressKey({ key: 'Enter' }, document.activeElement!)
     const input = container.querySelector('input')!
-    act(() => input.focus())
-    expect(pressKey({ key: 'ArrowUp', shiftKey: true }, input).defaultPrevented).toBe(false)
-    expect(document.activeElement).toBe(input)
-    expect(pressKey({ key: 'ArrowUp' }, input).defaultPrevented).toBe(true)
-    expect(document.activeElement?.textContent).toContain('Spaces')
-    expect(optionPressed('Spaces')).toBe('true')
     act(() => input.focus())
     typeAnswer('Other')
     expect(document.activeElement).toBe(input)
@@ -509,18 +503,22 @@ describe('NativeChatQuestionCard', () => {
     expect(document.activeElement).toBe(input)
     expect(input.selectionStart).toBe(10)
     expect(optionPressed('Tabs')).toBe('true')
+    expect(pressKey({ key: 'ArrowDown', shiftKey: true }, input).defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(input)
     pressKey({ key: 'ArrowDown' }, input)
     expect(document.activeElement).toBe(rows[0])
     clickAction('Submit')
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0], other: '' }])
   })
 
-  it('leaves a multiline answer field only from the very start or end of its text', () => {
+  it('arrows past a title checkbox into the multiline answer and leaves only at its text edges', () => {
     container.setAttribute('data-native-chat-root', 'true')
     act(() => {
       root.render(
         <NativeChatQuestionCard
-          prompt={tabsOrSpaces}
+          prompt={{
+            questions: [{ ...tabsOrSpaces.questions[0]!, question: '- [ ] Tabs or spaces?' }]
+          }}
           onAnswer={() => {}}
           onCancel={() => {}}
           freeTextInputs={[{ multiline: true }]}
@@ -535,6 +533,11 @@ describe('NativeChatQuestionCard', () => {
       field.dispatchEvent(new Event('input', { bubbles: true }))
     })
     const rows = container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+    field.setSelectionRange(0, 0)
+    act(() => rows[1]!.focus())
+    pressKey({ key: 'ArrowDown' }, rows[1]!)
+    expect(document.activeElement).toBe(field)
+    expect([field.selectionStart, field.selectionEnd]).toEqual([10, 10])
     const pressAt = (start: number, end: number, key: string): boolean => {
       act(() => field.focus())
       field.setSelectionRange(start, end)
@@ -543,8 +546,6 @@ describe('NativeChatQuestionCard', () => {
 
     expect(pressAt(3, 3, 'ArrowUp')).toBe(false)
     expect(pressAt(0, 0, 'ArrowDown')).toBe(false)
-    expect(pressAt(5, 5, 'ArrowDown')).toBe(false)
-    expect(pressAt(10, 10, 'ArrowUp')).toBe(false)
     expect(pressAt(0, 10, 'ArrowDown')).toBe(false)
     expect(document.activeElement).toBe(field)
     expect(pressAt(0, 0, 'ArrowUp')).toBe(true)

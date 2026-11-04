@@ -2,15 +2,6 @@ import { useEffect, useEffectEvent, type RefObject } from 'react'
 import { isEditableTarget } from '@/lib/editable-target'
 import { isInNativeChatPaneOf } from './use-native-chat-prompt-card-focus'
 
-// A multiline field keeps arrows for caret moves until the caret sits at the start (Up) or end (Down).
-function isCaretAtEdge(field: HTMLInputElement | HTMLTextAreaElement, up: boolean): boolean {
-  if (field instanceof HTMLInputElement) {
-    return true
-  }
-  const { selectionStart, selectionEnd, value } = field
-  return selectionStart === selectionEnd && selectionStart === (up ? 0 : value.length)
-}
-
 /** Keep question shortcuts scoped to its pane, including when a replaced row drops focus. */
 export function useNativeChatQuestionKeys(
   cardRef: RefObject<HTMLElement | null>,
@@ -24,7 +15,7 @@ export function useNativeChatQuestionKeys(
     const isNumberKey = /^[1-9]$/.test(event.key)
     const isArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp'
     const field = card?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      'input:not([type="checkbox"]), textarea'
+      '[data-native-chat-answer-field]'
     )
     const inField = field != null && target === field
     if (
@@ -60,17 +51,24 @@ export function useNativeChatQuestionKeys(
       event.preventDefault()
       onPick(optionIndex)
     } else if (isArrow) {
-      if (rows.length === 0 || (inField && !isCaretAtEdge(field, event.key === 'ArrowUp'))) {
+      const up = event.key === 'ArrowUp'
+      if (
+        rows.length === 0 ||
+        (inField &&
+          field instanceof HTMLTextAreaElement &&
+          (field.selectionStart !== field.selectionEnd ||
+            field.selectionStart !== (up ? 0 : field.value.length)))
+      ) {
         return
       }
       const stops: HTMLElement[] = field ? [...rows, field] : rows
       const current = inField ? stops.length - 1 : focusedIndex
       const nextIndex =
         current === -1
-          ? event.key === 'ArrowDown'
-            ? 0
-            : stops.length - 1
-          : (current + (event.key === 'ArrowDown' ? 1 : -1) + stops.length) % stops.length
+          ? up
+            ? stops.length - 1
+            : 0
+          : (current + (up ? -1 : 1) + stops.length) % stops.length
       event.preventDefault()
       const next = stops[nextIndex]
       next?.focus()
