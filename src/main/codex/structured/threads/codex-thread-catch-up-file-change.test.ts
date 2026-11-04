@@ -81,13 +81,9 @@ it('retains a sparse pending patch until a new import confirms its application',
   expect(outcome.files[0]?.edits).toHaveLength(1)
   expect(nativeChatTurnDiffEditFile(outcome.files[0]!.edits[0]!)).toMatchObject({
     path: 'src/app.ts',
-    hunks: [
-      {
-        lines: [
-          { kind: 'removed', text: 'old' },
-          { kind: 'added', text: 'new' }
-        ]
-      }
+    lines: [
+      { kind: 'del', text: 'old' },
+      { kind: 'add', text: 'new' }
     ]
   })
 })
