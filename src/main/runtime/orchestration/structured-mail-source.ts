@@ -10,6 +10,7 @@ import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
+import { exposeUtcTimestamp } from './db/utc-timestamp'
 import {
   formatMessageBanner,
   formatMessageBannerWithContent,
@@ -131,6 +132,21 @@ export function structuredMailMessage(input: {
   }
 }
 
+/** When a message was written, in whole seconds; a Dispatch's mail counts from no earlier than the
+ *  Dispatch, since moved follow-up mail keeps its old time. Unreadable is NaN, never after a Stop. */
+export function structuredMailWrittenAt(
+  db: OrchestrationDb,
+  mailboxHandle: string,
+  message: MessageRow
+): number {
+  const seconds = (at: string | undefined) =>
+    Math.floor(Date.parse(exposeUtcTimestamp(at ?? null) ?? '') / 1000)
+  const dispatch = mailboxHandle.startsWith('dispatch:')
+    ? db.getDispatchContextById?.(mailboxHandle.slice('dispatch:'.length))
+    : undefined
+  return Math.max(seconds(message.created_at), dispatch ? seconds(dispatch.created_at) : -Infinity)
+}
+
 /** Whether a message goes to a chat whole, rather than as a pointer at `check`. */
 export function structuredMailFitsWhole(
   message: MessageRow,
@@ -169,4 +185,9 @@ function reportFact(message: MailSourceMessage): ReportFact {
     }
   }
   return { kind: 'invalid' }
+}
+
+/** The same committed cutoff is used before dispatch and at final admission. */
+export function structuredMailAfterStop(createdAt: number, stopAt: number | null): boolean {
+  return stopAt === null || createdAt > Math.floor(stopAt / 1000)
 }

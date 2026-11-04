@@ -20,7 +20,8 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
+import { buildJournalItemRow } from './journal-row-builders'
+import { buildJournalTombstoneRow } from './journal-tombstone-row'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -403,6 +404,53 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.has('cm_1')).toBe(false)
     expect(state.aliases.has(providerItemId)).toBe(false)
   })
+
+  it.each(['item', 'lifecycle-batch'] as const)(
+    'a stale %s cannot declare an echo contract that blocks a later valid acceptance',
+    (kind) => {
+      const body = userText('hi')
+      const providerItemId = 'claude:session-1:user-1'
+      const stale = {
+        kind: 'item' as const,
+        itemId: providerItemId,
+        revision: 1,
+        body,
+        echoOf: null
+      }
+      const state = fold([
+        { ...submission, payloadFingerprint: sendFingerprint(body) },
+        { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
+        kind === 'item'
+          ? { ...stale, ...base(3) }
+          : {
+              kind,
+              settlementId: 'stale-declaration',
+              mutations: [
+                { kind: 'item', itemId: 'assistant-kept', revision: 1, body: text('kept') },
+                stale
+              ],
+              ...base(3)
+            }
+      ])
+      expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+      expect(state.receipts.has('cm_1')).toBe(false)
+      expect(state.aliases.has(providerItemId)).toBe(false)
+      expect(state.itemEchoes.has(providerItemId)).toBe(false)
+      if (kind === 'lifecycle-batch') {
+        expect(state.items.get('assistant-kept')?.body).toEqual(text('kept'))
+      }
+      applyJournalRow(state, {
+        kind: 'item',
+        itemId: providerItemId,
+        revision: 3,
+        body,
+        ...base(4)
+      })
+      expect(state.submissions.get('cm_1')?.dispatchState).toBe('accepted')
+      expect(state.receipts.has('cm_1')).toBe(true)
+      expect(state.aliases.get(providerItemId)).toBe(agentJournalSubmissionKey('cm_1'))
+    }
+  )
 
   it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
     'preserves submitted text and attachments when %s is restored',

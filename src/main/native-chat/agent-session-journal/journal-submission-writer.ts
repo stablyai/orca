@@ -3,7 +3,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
-import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
+import { journalQueueReopenRowBuilder, journalStopLiftRows } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import { QueuedMessageNotOwedError } from './queued-message-consume-error'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
@@ -49,8 +49,14 @@ export class JournalSubmissionWriter {
             floor?.epoch === state().epoch
               ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
               : []
+          // After the send, so the cards it lifts wait behind it as before. Card Send-now and /compact
+          // are the person's too; drained and agents' sends never lift.
+          const lift =
+            input.origin === 'client' || input.source?.kind === 'user'
+              ? journalStopLiftRows(state, input.fence)
+              : []
           if (!consume) {
-            return [...reopen, submission]
+            return [...reopen, submission, ...lift]
           }
           queuedMessages.assertConsumable({
             ...consume,
@@ -64,7 +70,7 @@ export class JournalSubmissionWriter {
           }
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...reopen, ...card.rows, submission]
+          return [...reopen, ...card.rows, submission, ...lift]
         },
         {
           write: (db, row) => {
@@ -83,9 +89,9 @@ export class JournalSubmissionWriter {
             receipt?.committed()
           }
         },
-        (rows) => rows.at(-1)
+        (rows) => rows.find(isSubmissionRow)
       )
-      .then(rowCursor)
+      .then((rows) => rowCursor(rows.filter(isSubmissionRow)))
   }
 
   /** Adopt provider identities to prevent duplicate echoes; card changes commit or roll back with the row. */
@@ -123,6 +129,10 @@ export class JournalSubmissionWriter {
         : []
     )
   }
+}
+
+function isSubmissionRow(row: JournalRow): boolean {
+  return row.kind === 'submission'
 }
 
 function rowCursor(rows: readonly JournalRow[]): AgentJournalCursor {

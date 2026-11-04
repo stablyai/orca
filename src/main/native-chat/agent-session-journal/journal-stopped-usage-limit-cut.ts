@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 // A person's accepted Stop withdraws its work's automatic continuation whichever commits first:
 // its acceptance, or the limited end. Settlement binds turns that had no ID when Stop was accepted.
 
@@ -5,9 +6,7 @@ import { readAgentSessionFailureFact } from '../../../shared/agent-session/failu
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { renderJournalState, type JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 
 function mayEndWork(body: AgentJournalItemBody): boolean {
@@ -38,28 +37,24 @@ function mayRevealCut(row: JournalRow): boolean {
 /** The known-reset cut this commit leaves for work the latest personal Stop withdrew. */
 export function journalStoppedUsageLimitCut(
   state: JournalReducerState,
-  rows: readonly JournalRow[]
+  rows: readonly JournalRow[],
+  _previous: JournalReducerState = state,
+  _withdrawn?: UsageLimitContinueIdentity
 ): UsageLimitContinueIdentity | undefined {
-  const stop = state.queuePauseMarks.latestStop
-  if (stop?.event.reason !== 'user-stop') {
+  if (
+    !rows.some(
+      (row) =>
+        (row.kind === 'tombstone' && row.stopEvent?.reason === 'user-stop') || mayRevealCut(row)
+    )
+  ) {
     return undefined
   }
-  // Acceptance withdraws the latest cut, including one its own withdrawals reveal.
-  const accepting = rows.some((row) => row.seq === stop.sequence)
-  const owns = (turnId: string | undefined): boolean =>
-    accepting ||
-    stop.settle?.settling === true ||
-    (turnId !== undefined && (turnId === stop.settle?.turnId || turnId === stop.event.turnId))
-  if (!accepting) {
-    const newest = rows.some(mayRevealCut)
-      ? newestStructuredAgentSessionTurnBySequence(state.items.values())
-      : null
-    if (!newest || newest.state === 'running' || !owns(newest.turnId)) {
-      return undefined
-    }
+  const input = journalInputOrder(state)
+  if (input.sendingSubmissions().length > 0) {
+    return undefined
   }
-  const cut = latestUsageLimitContinueIdentity(renderJournalState(state))
-  return cut && owns(readAgentJournalTurn(state.items.get(cut.turnItemId)?.body)?.turnId)
+  const cut = input.newestTurn.usageLimitCut.read()
+  return cut && state.derivedTurnScope.cancellations.history(state, cut.turnItemId)?.userStop
     ? cut
     : undefined
 }

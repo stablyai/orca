@@ -1,11 +1,11 @@
+import type { JournalReplacementItem } from './journal-execution-restatement'
+export type { JournalReplacementItem } from './journal-execution-restatement'
+import { journalExecutionRestatements } from './journal-execution-restatement'
+import { carryStopCancellations } from './journal-stop-cancellation'
 import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import {
-  journalItemEchoFields,
-  journalItemEchoRestatement,
-  type JournalItemEcho
-} from './journal-item-echo'
+import { journalItemEchoFields, journalItemEchoRestatement } from './journal-item-echo'
 
 import { sameJournalConversation } from './journal-history-origin'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -16,14 +16,8 @@ import {
 
 import type {
   AgentJournalCursor,
-  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
@@ -58,18 +52,6 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { copyJournalNativeState } from './journal-input-conversion'
 import { journalInputAcceptance, journalQueueRebase } from './journal-input-provenance'
-
-export type JournalReplacementItem = AgentJournalProducerLinkage & {
-  echoOf?: JournalItemEcho['echoOf']
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-  observedAt?: number
-  /** Derive absent legacy scopes from timeline position before persisting them. */
-  turnScope?: AgentJournalTurnScope
-  /** Preserve original execution provenance; history replacement is not new work. */
-  ownerFence: number
-  executionOwner?: number
-}
 
 /** Survivors are restated from the open chat. That loses nothing another build wrote: a chat holding
  * a key this build does not declare refuses to open, so no handle can reach here. */
@@ -135,7 +117,7 @@ export function replaceJournalEpoch(input: {
   if (lifted && failureHeld) {
     resume()
   }
-  for (const item of input.items) {
+  for (const item of journalExecutionRestatements(input.previous, input.items)) {
     const row = buildJournalItemRow({
       state,
       identity: item.identity,
@@ -152,6 +134,8 @@ export function replaceJournalEpoch(input: {
       fence: input.fence,
       ownerFence: item.ownerFence,
       executionOwner: item.executionOwner,
+      executionInterruption: item.executionInterruption,
+      executionOrigin: item.executionOrigin,
       ts: item.observedAt ?? input.now(),
       linkage: item,
       turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
@@ -217,7 +201,7 @@ export function replaceJournalEpoch(input: {
     resume()
   }
   if (liveStop) {
-    const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    const row = buildJournalStopEventRow({ ...place(), event: { ...liveStop, targets: [] } })
     applyJournalRow(state, row)
     rows.push(row)
   }
@@ -232,6 +216,20 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
   }
 
+  if (input.previous) {
+    carryStopCancellations(input.previous, state, state.items.values())
+    for (const row of rows) {
+      if (row.kind !== 'item') {
+        continue
+      }
+      const fact = state.items.get(
+        state.aliases.get(row.itemId) ?? row.itemId
+      )?.executionInterruption
+      if (fact) {
+        row.executionInterruption = fact
+      }
+    }
+  }
   journalInputOrder(state).restore(state)
   journalInputOrder(state).finishReconstruction(state)
   const { sessionId } = input.identity

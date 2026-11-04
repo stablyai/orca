@@ -1,3 +1,5 @@
+import { executionInterruptionSchema } from './journal-execution-interruption'
+import { executionOriginSchema } from './journal-execution-item'
 import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
@@ -33,7 +35,13 @@ const envelope = {
   turnScope: AgentJournalTurnScopeSchema.optional(),
   ...AgentJournalProducerLinkageFields
 }
-const provenance = { ownerFence: value, executionOwner: value, echoOf: value }
+const provenance = {
+  ownerFence: value,
+  executionOwner: value,
+  echoOf: value,
+  executionInterruption: executionInterruptionSchema.optional(),
+  executionOrigin: executionOriginSchema.optional()
+}
 const legacyOptions = z.record(z.string(), z.unknown()).optional()
 
 const itemMutation = {
@@ -87,7 +95,9 @@ const storedRow = z.discriminatedUnion('kind', [
     kind: z.literal('tombstone'),
     itemId: value,
     revision: value,
-    stopEvent: z.object({ reason: value, turnId: value, at: value, caller: value }).optional(),
+    stopEvent: z
+      .object({ reason: value, turnId: value, at: value, caller: value, targets: value })
+      .optional(),
     queueResume: value,
     queueReopen: value,
     queueReopenSince: value,

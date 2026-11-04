@@ -1,14 +1,10 @@
+import { journalItemExecutionFence } from './journal-item-provenance'
+import { activeCancellations, executionCancellation } from './journal-stop-cancellation'
+import { turnOpeningClientId } from './journal-cancellation-targets'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
 // and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
 
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
@@ -30,69 +26,47 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
 
 type TurnEndState = Pick<
   JournalReducerState,
-  'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
+  | 'items'
+  | 'queuePauseMarks'
+  | 'submissions'
+  | 'aliases'
+  | 'itemFences'
+  | 'itemExecutionOwners'
+  | 'derivedTurnScope'
 >
-
-/** Find the opening send; this does not decide cancellation ownership. */
-function openingSubmission(
-  state: TurnEndState,
-  userItemId: string | undefined
-): AgentJournalSubmission | undefined {
-  if (userItemId === undefined) {
-    return undefined
-  }
-  const identity = parseAgentJournalItemKey(state.aliases.get(userItemId) ?? userItemId)
-  return identity?.provider === 'orca' && 'clientMessageId' in identity
-    ? state.submissions.get(identity.clientMessageId)
-    : undefined
-}
 
 /** Accepted openers may precede their turn row; steers/folds into running turns open none. */
 export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
-  let latest: { submission: AgentJournalSubmission; sequence: number } | undefined
-  for (const submission of state.submissions.values()) {
-    const item = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))
-    if (
-      submission.dispatchState === 'accepted' &&
-      item !== undefined &&
-      item.turnScope?.kind !== 'turn' &&
-      item.sequence >= (latest?.sequence ?? -1)
-    ) {
-      latest = { submission, sequence: item.sequence }
-    }
-  }
-  if (!latest) {
-    return false
-  }
-  for (const item of state.items.values()) {
-    if (
-      openingSubmission(state, readAgentJournalTurn(item.body)?.userItemId) === latest.submission
-    ) {
-      return false
-    }
-  }
-  return true
+  return state.derivedTurnScope.cancellations
+    .unresolved()
+    .some(
+      (target) =>
+        target.turnId === undefined &&
+        target.clientMessageId !== undefined &&
+        state.submissions.get(target.clientMessageId)?.dispatchState === 'accepted'
+    )
 }
 
-/** A session-ending Stop owns every turn ending while it settles; a targeted Stop owns its turn. */
-function stopIsTurnCancellation(stop: JournalLatestStop, turnId: string): boolean {
-  if (!stopIsAPersons(stop.event.reason)) {
-    return false
-  }
-  return stop.settle?.settling || stop.settle?.turnId === turnId || stop.event.turnId === turnId
-}
-
-/** Ends observed before Stop keep their meaning even if written later. */
+/** Every consumer resolves the same captured execution, independently of the queue boundary. */
 function stopEndsTurnAsCancellation(
   state: TurnEndState,
   turnId: string,
-  endedAt: number | undefined
+  endedAt?: number,
+  userItemId?: string,
+  ownerFence?: number,
+  itemId?: string
 ): boolean {
-  const stop = state.queuePauseMarks.latestStop
-  return (
-    stop !== null &&
-    stopIsTurnCancellation(stop, turnId) &&
-    (endedAt === undefined || endedAt >= stop.event.at)
+  const opener = turnOpeningClientId(state, userItemId)
+  const current =
+    itemId === undefined
+      ? state.derivedTurnScope.cancellations.turn(turnId)
+      : state.derivedTurnScope.cancellations.forItem(itemId)
+  return activeCancellations(state).some(
+    (stop) =>
+      (ownerFence === undefined || stop.target?.ownerFence === ownerFence) &&
+      ((current?.executionId !== undefined && stop.target?.executionId === current.executionId) ||
+        (opener !== undefined && stop.target?.clientMessageId === opener)) &&
+      (endedAt === undefined || endedAt >= stop.event.at)
   )
 }
 
@@ -102,27 +76,27 @@ export function personStopDecidesTurn(
   turnId: string | null,
   endedAt?: number
 ): boolean {
-  const stop = state.queuePauseMarks.latestStop
-  if (stop === null || !stopIsAPersons(stop.event.reason)) {
-    return false
-  }
   if (turnId === null) {
-    return stop.settle?.settling === true
+    return executionCancellation(state, null) !== undefined
   }
   return stopEndsTurnAsCancellation(state, turnId, endedAt)
 }
 
 /** Until its child closes, a session-ending Stop owns all turns; other callers stay unnamed-only. */
 export function beginJournalStopSettle(
-  state: Pick<JournalReducerState, 'queuePauseMarks'>,
-  endsSession = false
+  state: Pick<JournalReducerState, 'queuePauseMarks' | 'derivedTurnScope'>,
+  endsSession = false,
+  sequence?: number
 ): JournalStopSettle | null {
-  const stop = state.queuePauseMarks.latestStop
-  const targeted = !endsSession && stop?.event.turnId !== undefined
-  if (stop === null || targeted || !stopIsAPersons(stop.event.reason)) {
+  const pending = activeCancellations(state)
+  const stop =
+    sequence === undefined ? pending.at(-1) : pending.find((entry) => entry.sequence === sequence)
+  if (!stop || !stopIsAPersons(stop.event.reason)) {
     return null
   }
-  // Repeated Stop preserves the earlier bound turn.
+  if (sequence === undefined && !endsSession && stop.event.turnId !== undefined) {
+    return null
+  }
   stop.settle = { settling: true, ...(stop.settle?.turnId ? { turnId: stop.settle.turnId } : {}) }
   return stop.settle
 }
@@ -131,7 +105,8 @@ export function beginJournalStopSettle(
 export function turnEndAfterStop(
   state: TurnEndState,
   itemId: string,
-  body: AgentJournalItemBody
+  body: AgentJournalItemBody,
+  ownerFence = journalItemExecutionFence(state, itemId)
 ): AgentJournalItemBody {
   if (body.kind !== 'turn' || body.state !== 'interrupted' || body.outcome !== undefined) {
     return body
@@ -141,7 +116,14 @@ export function turnEndAfterStop(
   if (previous && previous.state !== 'running' && previous.state !== 'unverifiable') {
     return body
   }
-  return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
+  return stopEndsTurnAsCancellation(
+    state,
+    body.turnId,
+    body.completedAt,
+    body.userItemId,
+    ownerFence,
+    itemId
+  )
     ? { ...body, outcome: 'cancellation' }
     : body
 }

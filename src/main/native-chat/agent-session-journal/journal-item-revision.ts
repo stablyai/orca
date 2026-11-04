@@ -5,11 +5,10 @@ export function nextJournalItemRevision(
   itemId: string,
   revisions?: Map<string, number>
 ): number {
-  const resolved = state.aliases.get(itemId) ?? itemId
   const revision =
-    (revisions?.get(resolved) ??
-      Math.max(state.items.get(resolved)?.revision ?? 0, state.tombstones.get(resolved) ?? 0)) + 1
-  revisions?.set(resolved, revision)
+    (revisions?.get(itemId) ??
+      Math.max(state.items.get(itemId)?.revision ?? 0, state.tombstones.get(itemId) ?? 0)) + 1
+  revisions?.set(itemId, revision)
   return revision
 }
 

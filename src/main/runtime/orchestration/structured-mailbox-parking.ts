@@ -51,6 +51,12 @@ export class StructuredMailboxParking {
     }
   }
 
+  clear(): void {
+    for (const sessionId of this.watches.keys()) {
+      this.forget(sessionId)
+    }
+  }
+
   parkedFor(sessionId: string): [string, ParkedMailbox][] {
     return Array.from(this.parked.get(sessionId) ?? [])
   }

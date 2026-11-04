@@ -1,3 +1,4 @@
+import type { StructuredMailDeliveryCause } from './structured-mailbox-pointer-host-contract'
 import {
   ptyRecordForPaneKey,
   type TerminalIdentityReadContext
@@ -162,8 +163,25 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     })
   }
 
-  deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
+  protected discoverPendingMessagesForHandle(handle: string): void {
+    this.orchestrationStructuredMailboxPointerDelivery.discover(handle)
+    // A woken check takes its batch before the delayed push reconciles relaxed exclusions.
+    this.mailPointerRepointScheduler.schedule(handle)
+  }
+
+  protected onRoutedMailboxMessageTypes(handle: string, types: readonly string[]): void {
+    this.messageWaiters.notifyRouted(handle, types)
+    if (types.length > 0) {
+      this.discoverPendingMessagesForHandle(handle)
+    }
+  }
+
+  deliverPendingMessagesForHandle(
+    handle: string,
+    reservedTypes?: ReadonlySet<string>,
+    cause: StructuredMailDeliveryCause = 'discovery'
+  ): void {
+    this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes, cause)
   }
 
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
@@ -193,7 +211,8 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
         return
       }
       const openDb = () => this.getExistingOrchestrationDb()
-      const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
+      const deliver = (mailbox: string) =>
+        this.deliverPendingMessagesForHandle(mailbox, undefined, 'service')
       structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
     } catch (error) {
       console.warn('[orchestration] structured session mail redrive failed', {
@@ -225,8 +244,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
-  withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
-    this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
+  withdrawStaleChatMail(
+    mailboxes?: Iterable<string>,
+    cause: StructuredMailDeliveryCause = mailboxes ? 'service' : 'discovery'
+  ): void {
+    this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes, cause)
   }
 
   /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
@@ -280,18 +302,22 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     for (const handle of handles) {
       try {
         if (handle.startsWith('run:') || handle.startsWith('dispatch:')) {
+          this.orchestrationStructuredMailboxPointerDelivery.discover(handle)
           this.mailPointerRepointScheduler.schedule(handle)
           continue
         }
         const routed = this.orchestrationMailboxOwner.routeDetachedDirectMessages(handle)
         for (const mailbox of routed.mailboxes) {
+          this.orchestrationStructuredMailboxPointerDelivery.discover(mailbox.mailboxHandle)
           this.mailPointerRepointScheduler.schedule(mailbox.mailboxHandle)
         }
         if (!routed.hasMore) {
+          this.orchestrationStructuredMailboxPointerDelivery.discover(handle)
           this.mailPointerRepointScheduler.schedule(handle)
         }
       } catch (error) {
         console.warn(`[orchestration] failed to restore mailbox ${handle}`, error)
+        this.orchestrationStructuredMailboxPointerDelivery.discover(handle)
         this.mailPointerRepointScheduler.schedule(handle)
       }
     }
@@ -299,7 +325,8 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
-      this.deliverPendingMessagesForHandle(handle)
+      this.flushDeferredMailHandBacks(handle)
+      this.deliverPendingMessagesForHandle(handle, undefined, 'service')
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.
     }

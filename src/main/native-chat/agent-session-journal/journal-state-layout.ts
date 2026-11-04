@@ -1,3 +1,4 @@
+import { durableQueuePauseMarks } from './journal-outcome-format-1-decode'
 import type { JournalReducerState } from './journal-reducer'
 
 // Every reducer field has a storage home; queue splits its revision from its keyed cards.
@@ -40,7 +41,6 @@ type ScalarKey = {
 type Collection = { path: string; entries: Iterable<[unknown, unknown]> }
 
 export function journalStateScalars(state: JournalReducerState): string {
-  const stop = state.queuePauseMarks.latestStop
   return JSON.stringify({
     sessionId: state.sessionId,
     epoch: state.epoch,
@@ -50,10 +50,7 @@ export function journalStateScalars(state: JournalReducerState): string {
     highestFence: state.highestFence,
     derivedTurnScope: state.derivedTurnScope.snapshot(),
     latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-    queuePauseMarks: {
-      ...state.queuePauseMarks,
-      latestStop: stop && { sequence: stop.sequence, event: stop.event }
-    },
+    queuePauseMarks: durableQueuePauseMarks(state.queuePauseMarks),
     queue: { revision: state.queue.revision },
     historyOrigin: state.historyOrigin
   } satisfies Record<ScalarKey, unknown>)

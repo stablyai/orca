@@ -19,6 +19,7 @@ import { LegacyQueuedCards } from './journal-queue-import'
 import { retainedQueueFacts } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
+import { journalStopLiftRows } from './journal-stop-and-resume-rows'
 import {
   deriveQueuePauses,
   journalUserStopInForce,
@@ -115,6 +116,8 @@ export class JournalQueuedMessages {
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
+      /** The person's own message: queueing it lifts their Stop. */
+      person?: true
     },
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
@@ -138,7 +141,7 @@ export class JournalQueuedMessages {
           ...(input.holdReason ? { holdReason: input.holdReason } : {}),
           ...(input.options ? { options: input.options } : {})
         }
-        return { changes: [{ messageId, change }], result: undefined }
+        return { changes: [{ messageId, change }], result: undefined, lift: input.person === true }
       },
       composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : []))
     ).then(() => {
@@ -288,8 +291,7 @@ export class JournalQueuedMessages {
   }
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
-    const state = this.deps.state()
-    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
+    return journalUserStopInForce(this.deps.state().queuePauseMarks)
   }
 
   private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
@@ -306,7 +308,7 @@ export class JournalQueuedMessages {
 
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */
   private write<T>(
-    plan: () => { changes: readonly JournalQueueCardChange[]; result: T },
+    plan: () => { changes: readonly JournalQueueCardChange[]; result: T; lift?: boolean },
     receipt?: JournalOperationReceipt
   ): Promise<T> {
     let planned: { result: T; plan: JournalQueuePlan } | undefined
@@ -315,7 +317,7 @@ export class JournalQueuedMessages {
         () => {
           const next = plan()
           planned = { result: next.result, plan: this.plan(next.changes) }
-          return planned.plan.rows
+          return [...(next.lift ? journalStopLiftRows(this.deps.state) : []), ...planned.plan.rows]
         },
         {
           write: (db, row) => {

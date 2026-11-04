@@ -12,6 +12,7 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
+  AGENT_JOURNAL_STOP_NOTE_PREFIX,
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -20,7 +21,6 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   agentSessionCompactCommandText,
   type AgentSessionConversationCommand
@@ -102,15 +102,14 @@ export function isStructuredAgentSessionCommandTurnId(turnId: string): boolean {
   return turnId.startsWith('compact:')
 }
 
-const STOP_NOTE_PREFIX = 'stop:'
-
-export function structuredAgentSessionStopNoteIdentity(stopKey: string): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `${STOP_NOTE_PREFIX}${stopKey}` }
-}
+export { agentJournalStopNoteIdentity as structuredAgentSessionStopNoteIdentity } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export function isStructuredAgentSessionStopNote(itemId: string): boolean {
   const identity = parseAgentJournalItemKey(itemId)
-  return identity?.provider === 'orca' && identity.clientMessageId.startsWith(STOP_NOTE_PREFIX)
+  return (
+    identity?.provider === 'orca' &&
+    identity.clientMessageId.startsWith(AGENT_JOURNAL_STOP_NOTE_PREFIX)
+  )
 }
 
 /** Read Stop from the journal so cached state cannot outlive the command. */

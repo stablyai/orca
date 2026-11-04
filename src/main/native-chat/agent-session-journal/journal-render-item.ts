@@ -1,7 +1,7 @@
+import type { JournalOwnedItem } from './journal-execution-interruption'
 import type {
   AgentJournalItemBody,
-  AgentJournalProducerLinkage,
-  AgentJournalRenderItem
+  AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
@@ -19,8 +19,12 @@ export function journalRenderItem(
   turnScope: AgentJournalTurnScope,
   producer: AgentJournalProducerLinkage = row,
   sequenceIndex = 0
-): AgentJournalRenderItem {
+): JournalOwnedItem {
   return {
+    ...(row.kind === 'item' && row.executionOrigin ? { executionOrigin: row.executionOrigin } : {}),
+    ...(row.kind === 'item' && row.executionInterruption
+      ? { executionInterruption: row.executionInterruption }
+      : {}),
     itemId,
     revision,
     body,

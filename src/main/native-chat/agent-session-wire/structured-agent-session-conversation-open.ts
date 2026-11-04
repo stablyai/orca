@@ -101,6 +101,7 @@ export async function openStructuredAgentSessionConversationJournal(
     // Without a record store (acquisition-only opens) there is no continuation to withdraw.
     ...(store
       ? {
+          stoppedCut: () => store.getConversation(sessionId)?.usageLimitContinueCancel,
           withdrawStoppedCut: (cut: UsageLimitContinueIdentity) =>
             store.usageLimitContinueCancelReceipt(sessionId, cut)
         }

@@ -1,3 +1,10 @@
+import type { ExecutionInterruption } from './journal-execution-interruption'
+import { journalWriteTurnScope } from './journal-write-turn-scope'
+import {
+  journalExecutionAddress,
+  journalExecutionOriginForItem,
+  type JournalExecutionOrigin
+} from './journal-execution-item'
 import { journalInputOrder } from './journal-input-order'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
@@ -17,18 +24,9 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { journalItemOwnerFence } from './journal-item-provenance'
+import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
-import {
-  type JournalDispatchRow,
-  type JournalItemRow,
-  type JournalLifecycleBatchRow,
-  type JournalLifecycleMutation,
-  type JournalSubmissionRow,
-  type JournalTombstoneRow,
-  MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
-  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
-} from './journal-row-schema'
+import type { JournalDispatchRow, JournalItemRow, JournalSubmissionRow } from './journal-row-schema'
 import {
   boundInlineText,
   boundRunningToolOutput,
@@ -40,9 +38,7 @@ import { nextJournalItemRevision } from './journal-item-revision'
 import type { ResolveDispatchInput, JournalSubmissionInput } from './journal-store-contracts'
 import {
   journalLifecycleMutationItemId,
-  journalLifecycleMutationRow,
-  type JournalItemAddress,
-  type JournalLifecycleMutationInput
+  type JournalItemAddress
 } from './journal-lifecycle-mutation'
 export {
   journalLifecycleItemMutation,
@@ -84,16 +80,6 @@ export function journalItemRowBuilder(
       turnScope: options.turnScope,
       revisions
     })
-}
-
-export function journalTombstoneRowBuilder(
-  state: () => JournalReducerState,
-  itemId: string,
-  fence: number,
-  revisions?: Map<string, number>
-): RowBuilder<JournalTombstoneRow> {
-  return (seq, ts) =>
-    buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts, revisions })
 }
 
 export function journalSubmissionRowBuilder(
@@ -169,55 +155,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
 }
 
-export function journalLifecycleBatchRowBuilder(
-  state: () => JournalReducerState,
-  settlementId: string,
-  mutations: readonly JournalLifecycleMutationInput[],
-  /** Each mutation owns producer linkage; whole-row stamping would misattribute mixed-agent batches. */
-  options: { fence: number; recovered?: true },
-  revisions?: Map<string, number>
-): RowBuilder<JournalLifecycleBatchRow> {
-  return (seq, ts) => {
-    if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
-      throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
-    }
-    const current = state()
-    const runningRevisions = revisions ?? new Map<string, number>()
-    const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
-      const itemId = journalLifecycleMutationItemId(mutation)
-      const resolved = current.aliases.get(itemId) ?? itemId
-      const revision = nextJournalItemRevision(current, itemId, runningRevisions)
-      return journalLifecycleMutationRow(
-        mutation.kind === 'item'
-          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
-          : mutation,
-        itemId,
-        revision,
-        journalItemOwnerFence(current, resolved, {
-          fence: options.fence,
-          ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
-        })
-      )
-    })
-    const row: JournalLifecycleBatchRow = {
-      kind: 'lifecycle-batch',
-      settlementId,
-      mutations: built,
-      ...journalRowBase(
-        current.epoch,
-        seq,
-        options.fence,
-        ts,
-        built.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
-      ),
-      ...(options.recovered ? { recovered: options.recovered } : {})
-    }
-    if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
-      throw new Error('journal_lifecycle_batch_byte_bound_exceeded')
-    }
-    return row
-  }
-}
+export { journalLifecycleBatchRowBuilder } from './journal-lifecycle-row'
 
 export function journalRowBase(
   epoch: string,
@@ -238,6 +176,8 @@ export function buildJournalItemRow(
     fence: number
     ownerFence?: number
     executionOwner?: number
+    executionInterruption?: ExecutionInterruption
+    executionOrigin?: JournalExecutionOrigin
     ts: number
     recovered?: true
     linkage?: AgentJournalProducerLinkage
@@ -246,39 +186,53 @@ export function buildJournalItemRow(
   }
 ): JournalItemRow {
   const itemId = journalLifecycleMutationItemId(input)
-  const resolved = input.state.aliases.get(itemId) ?? itemId
+  const address = journalExecutionAddress(
+    input.state,
+    { kind: input.itemId === undefined ? 'provider' : 'exact', itemId },
+    input.body,
+    input
+  )
+  const resolved = address.itemId ?? itemId
   // Recreated items must outrank tombstones or the reducer will discard them.
-  const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = boundRunningToolOutput(turnEndAfterStop(input.state, resolved, input.body))
+  const revision = nextJournalItemRevision(input.state, resolved, input.revisions)
+  const body = boundRunningToolOutput(
+    address.itemId === undefined
+      ? input.body
+      : turnEndAfterStop(
+          input.state,
+          resolved,
+          input.body,
+          input.executionOwner ??
+            journalItemExecutionFence(input.state, resolved) ??
+            input.ownerFence ??
+            input.fence
+        )
+  )
+  const executionOrigin =
+    input.executionOrigin ??
+    (input.itemId === undefined ? undefined : journalExecutionOriginForItem(input.state, itemId))
   return {
     kind: 'item',
+    ...(input.executionInterruption ? { executionInterruption: input.executionInterruption } : {}),
+    ...(executionOrigin ? { executionOrigin } : {}),
     ...journalItemEchoFields(input),
     itemId,
     revision,
     body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
-    ownerFence: journalItemOwnerFence(input.state, resolved, input),
+    ownerFence:
+      address.itemId === undefined
+        ? (input.ownerFence ?? input.fence)
+        : journalItemOwnerFence(input.state, resolved, input),
     ...(input.executionOwner === undefined ? {} : { executionOwner: input.executionOwner }),
     ...(input.recovered ? { recovered: input.recovered } : {}),
-    turnScope: input.turnScope,
+    turnScope: journalWriteTurnScope(
+      input.state,
+      input.turnScope,
+      input.executionOwner ?? input.ownerFence ?? input.fence,
+      input.itemId !== undefined ? 'exact' : 'provider'
+    ),
     ...agentJournalLinkageFields(input.linkage)
-  }
-}
-
-export function buildJournalTombstoneRow(input: {
-  state: JournalReducerState
-  itemId: string
-  seq: number
-  fence: number
-  ts: number
-  revisions?: Map<string, number>
-}): JournalTombstoneRow {
-  return {
-    kind: 'tombstone',
-    itemId: input.itemId,
-    // Rank above both live and tombstone revisions even if map-disjointness is later relaxed.
-    revision: nextJournalItemRevision(input.state, input.itemId, input.revisions),
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }
 

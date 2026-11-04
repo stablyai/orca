@@ -309,11 +309,11 @@ function countCommitWork() {
   const counts = { hooks: 0, scans: 0, renders: 0, cutReads: 0, indexes: 0 }
   let inside: 'hook' | 'cut' | null = null
   const hook = stoppedCut.journalStoppedUsageLimitCut
-  vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((state, rows) => {
+  vi.spyOn(stoppedCut, 'journalStoppedUsageLimitCut').mockImplementation((...args) => {
     counts.hooks++
     inside = 'hook'
     try {
-      return hook(state, rows)
+      return hook(...args)
     } finally {
       inside = null
     }
@@ -358,8 +358,8 @@ describe('journal commit work after a Stop', () => {
       await codexTurnAccepted('turn-1')
       expect(await rig.stop()).toMatchObject({ ok: true })
       await codexLimitedEnd('turn-1', 60)
-      // The Stop owns this end, so it rendered once to find the cut it withdraws.
-      expect(counts.renders).toBeGreaterThan(0)
+      // Exact-source withdrawal uses the maintained cut index.
+      expect(counts.renders).toBe(0)
       expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toEqual(await currentCut())
       const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
       for (let i = 0; i < history; i++) {
@@ -387,8 +387,8 @@ describe('journal commit work after a Stop', () => {
       reset()
       codex()('turn/completed', { threadId: THREAD, turn: { id: 'turn-2', status: 'completed' } })
       await rig.host.flushStreamedEvents(SESSION)
-      // The end scans for the newest turn once; the Stop does not own it, so nothing renders.
-      expect(counts).toMatchObject({ scans: 1, renders: 0, indexes: 0 })
+      // An unrelated end also uses the maintained cut index.
+      expect(counts).toMatchObject({ scans: 0, renders: 0, indexes: 0 })
     }
   )
 })

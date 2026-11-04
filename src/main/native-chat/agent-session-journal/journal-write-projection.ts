@@ -25,6 +25,7 @@ export class JournalWriteProjection {
       database: JournalHostDatabase
       state: () => JournalReducerState
       adopt: (state: JournalReducerState) => void
+      stoppedCut?: () => UsageLimitContinueIdentity | undefined
       withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
     }
   ) {}
@@ -33,7 +34,14 @@ export class JournalWriteProjection {
   prepare(db: Database.Database, rows: readonly JournalRow[], savedAt: number): () => void {
     const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt)
     // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
-    const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
+    const cut =
+      this.deps.withdrawStoppedCut &&
+      journalStoppedUsageLimitCut(
+        transition.state,
+        rows,
+        this.deps.state(),
+        this.deps.stoppedCut?.()
+      )
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined
     withdrawal?.write(db)
     return () => {

@@ -14,6 +14,8 @@ import {
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
+import { sessionCrewChanges } from './crew/crew-changes'
+import { structuredMailAfterStop } from './structured-mail-source'
 import { subscribeForRedrive } from './structured-session-journal-redrive'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 
@@ -75,7 +77,34 @@ async function observeMailSend(
 }
 
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
+  const readEligibility = (sessionId: string) => {
+    const host = getStructuredAgentSessionHost()
+    const state = host?.reads.readQueueStop(sessionId)
+    const fence = host?.deps.store.getConversation(sessionId)?.currentFence
+    return host && state && fence !== undefined
+      ? {
+          host,
+          fence,
+          key: `${state.epoch}:${state.stopSequence}:${state.resumedSequence}:${state.clearedSequence}`,
+          stopAt: state.stopAt
+        }
+      : null
+  }
   return {
+    attachment: getStructuredAgentSessionHost,
+    readEligibility,
+    async openEligibility(sessionId) {
+      const host = getStructuredAgentSessionHost()
+      if (!host || !host.deps.store.getConversation(sessionId)) {
+        return null
+      }
+      try {
+        await host.reads.openQueueStop(sessionId)
+        return host === getStructuredAgentSessionHost() ? readEligibility(sessionId) : null
+      } catch {
+        return null
+      }
+    },
     observe(sessionId, operationId) {
       return observeMailSend(sessionId, operationId)
     },
@@ -118,22 +147,38 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
     },
 
     watchJournal(sessionId, onActivity) {
-      const host = getStructuredAgentSessionHost()
       let seen: string | undefined
       // Only what mail waits on: a card handed over, deleted or edited (each moves the queue's
       // revision without adding a card, so a new card, the lane's own included, changes nothing),
-      // handoffs settling, an accepted turn, a /clear, a new item. A streamed token changes none.
+      // handoffs settling, an accepted turn, a /clear, a Resume (the person's send writes one, and
+      // lifts mail held at their Stop), a new item. A streamed token changes none.
       const relevant = (journal: AgentSessionJournal) => {
         const order = journal.inputOrder
         const state = journal.queuedMessages.inputState()
-        const cleared = state.queuePauseMarks.cleared?.sequence
+        const { cleared, resumedSequence, latestStop } = state.queuePauseMarks
         const changes = state.queue.revision - state.queue.cards.size
-        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared}:${state.items.size}`
+        const key = `${state.epoch}:${changes}:${order.unsettledSubmissions().length}:${order.links.version()}:${order.links.acceptedHandover()}:${cleared?.sequence}:${resumedSequence}:${latestStop?.sequence}:${state.items.size}`
         const changed = key !== seen
         seen = key
         return changed
       }
-      return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+      let host = getStructuredAgentSessionHost()
+      let stop = host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+      const unsubscribe = sessionCrewChanges.subscribe(() => {
+        const next = getStructuredAgentSessionHost()
+        if (host === next) {
+          return
+        }
+        stop()
+        host = next
+        seen = undefined
+        stop = host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}
+        onActivity()
+      })
+      return () => {
+        unsubscribe()
+        stop()
+      }
     },
 
     currentFence(sessionId) {
@@ -162,16 +207,22 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             delivery: 'queue',
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
-            beforeRun: () => {
+            // On the write lane, with the card or turn it admits: a Stop committed meanwhile is seen.
+            admit: (stop) => {
               if (!input.stillOwed()) {
-                throw new StructuredMailObsoleteError()
+                throw new StructuredMailRefusal('obsolete')
+              }
+              // Only mail written after the Stop wakes the chat; the same second is an order nobody
+              // can tell, so it waits too.
+              if (!structuredMailAfterStop(input.createdAt, stop?.at ?? null)) {
+                throw new StructuredMailRefusal('held')
               }
             }
           }
         })
       } catch (error) {
-        if (error instanceof StructuredMailObsoleteError) {
-          return { kind: 'obsolete' }
+        if (error instanceof StructuredMailRefusal) {
+          return { kind: error.kind }
         }
         throw error
       }
@@ -189,4 +240,8 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
   }
 }
 
-class StructuredMailObsoleteError extends Error {}
+class StructuredMailRefusal extends Error {
+  constructor(readonly kind: 'obsolete' | 'held') {
+    super(kind)
+  }
+}

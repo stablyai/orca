@@ -14,6 +14,7 @@ import type {
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalSendAdmission } from '../agent-session-journal/journal-store-contracts'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
@@ -35,9 +36,9 @@ import {
   cancelPlan,
   promptPlan,
   sendPlan,
-  setOptionPlan,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
+import { setOptionPlan } from './structured-agent-session-option-plan'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
@@ -69,6 +70,8 @@ export function sendStructuredAgentSessionTurn(
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void
+    /** An automated send's own admission, asked on the journal write lane, queued or sent at once. */
+    admit?: JournalSendAdmission
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {

@@ -1,3 +1,4 @@
+import { journalChangedItemIds } from './journal-item-address'
 import {
   readJournalInputPlace,
   restoreJournalInputPlaces,
@@ -231,11 +232,9 @@ export class JournalInputOrder {
       this.refresh(state, row.clientMessageId)
     } else if (row.kind === 'tombstone' && row.retireSubmission) {
       this.refreshItem(state, row.itemId)
-    } else if (row.kind === 'item') {
-      this.refreshItem(state, state.aliases.get(row.itemId) ?? row.itemId)
-    } else if (row.kind === 'lifecycle-batch') {
-      for (const mutation of row.mutations) {
-        this.refreshItem(state, state.aliases.get(mutation.itemId) ?? mutation.itemId)
+    } else if (row.kind === 'item' || row.kind === 'lifecycle-batch') {
+      for (const itemId of journalChangedItemIds(state, row)) {
+        this.refreshItem(state, itemId)
       }
     } else if (row.kind === 'queue') {
       const id = state.queue.cards.get(row.messageId)?.consumedAs

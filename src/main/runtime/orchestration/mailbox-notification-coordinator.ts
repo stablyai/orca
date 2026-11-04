@@ -1,3 +1,4 @@
+import type { StructuredMailDeliveryCause } from './structured-mailbox-pointer-host-contract'
 import type { OrchestrationDb } from './db'
 import type {
   OrchestrationMailboxOwner,
@@ -24,7 +25,11 @@ type NotificationCoordinatorDependencies<TWaiter extends OrchestrationMessageWai
   getPaneKeyForHandle: (handle: string) => string | undefined
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   hasTerminalHandle: (handle: string) => boolean
-  deliverForHandle: (handle: string, reservedTypes?: ReadonlySet<string>) => void
+  deliverForHandle: (
+    handle: string,
+    reservedTypes?: ReadonlySet<string>,
+    cause?: StructuredMailDeliveryCause
+  ) => void
   notifyMessageArrived: (handle: string, messageType: string) => void
   /** Waiters resolved together share one wake, so they share the batch the first one takes. */
   resolveMessageWaiters: (waiters: readonly TWaiter[]) => void
@@ -35,8 +40,12 @@ export class OrchestrationMailboxNotificationCoordinator<
 > {
   constructor(private readonly deps: NotificationCoordinatorDependencies<TWaiter>) {}
 
-  deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
-    if (this.deps.structuredPointerDelivery?.deliverForHandle(handle, reservedTypes)) {
+  deliverForHandle(
+    handle: string,
+    reservedTypes?: ReadonlySet<string>,
+    cause: StructuredMailDeliveryCause = 'discovery'
+  ): void {
+    if (this.deps.structuredPointerDelivery?.deliverForHandle(handle, reservedTypes, cause)) {
       return
     }
     this.deps.pointerDelivery.deliverForHandle(handle, reservedTypes)
@@ -77,6 +86,7 @@ export class OrchestrationMailboxNotificationCoordinator<
     if (!mailboxHandle) {
       return
     }
+    this.deps.structuredPointerDelivery?.discover(mailboxHandle)
     const waiters = this.deps.getMessageWaiters(mailboxHandle)
     const arrivedTypes = directTypes ?? (messageType ? [messageType] : undefined)
     const consumers = waiters
@@ -92,7 +102,7 @@ export class OrchestrationMailboxNotificationCoordinator<
         waiters ? [...waiters].flatMap((waiter) => waiter.typeFilter ?? []) : []
       )
       // Let a check awakened in this drain mark its rows read before the push re-reads them.
-      queueMicrotask(() => this.deps.deliverForHandle(mailboxHandle, reservedTypes))
+      queueMicrotask(() => this.deps.deliverForHandle(mailboxHandle, reservedTypes, 'service'))
       return
     }
     this.deps.resolveMessageWaiters(consumers)

@@ -18,6 +18,7 @@ export type DeadGenerationJournal = UnopenedSendJournal & {
   appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
   pendingSubmissions?: AgentSessionJournal['pendingSubmissions']
   itemFence: AgentSessionJournal['itemFence']
+  lifecycleItems: AgentSessionJournal['lifecycleItems']
 }
 
 export type StructuredAgentSessionUnfinishedWork = {
@@ -38,12 +39,11 @@ export function hasUnfinishedStructuredAgentSessionWork(
   journal: DeadGenerationJournal,
   exit?: StructuredAgentSessionWatchedExit
 ): boolean {
-  const work = captureUnfinishedStructuredAgentSessionWork(journal)
+  const items = providerTimelineExecutionItems(journal.lifecycleItems())
   return (
-    work.hadUnsettledSubmissions ||
-    work.items.length > 0 ||
-    watchedExitRevisions(providerTimelineExecutionItems(journal.snapshot().items), exit, journal)
-      .length > 0
+    hasUnsettledSubmission(journal) ||
+    items.some(isUnfinishedItem) ||
+    watchedExitRevisions(items, exit, journal).length > 0
   )
 }
 

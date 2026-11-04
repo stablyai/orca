@@ -64,6 +64,9 @@ function put(node: Node | undefined, card: QueuedMessageRow, remove: boolean): N
   return balance(node)
 }
 
+/** What a walk past the head found: the first card ready to go, and the first of those not mail. */
+export type JournalPastHead = { first: QueuedMessageRow | null; person: QueuedMessageRow | null }
+
 /** The live cards that could lead the queue (waiting and not held, or returned), kept in queue order as
  *  each one changes: what a pass over held mail walks, never the epoch's dispatched or withdrawn history. */
 export class JournalInputCandidates {
@@ -71,7 +74,8 @@ export class JournalInputCandidates {
   private root: Node | undefined
   /** Changes with any candidate, so a walk's answer is reused only while none has. */
   private revision = 0
-  private walked: { head: QueuedMessageRow; key: string; next: QueuedMessageRow | null } | undefined
+  /** The first ready card, and the person card behind mail that cannot be decided, stay cached together. */
+  private walked: { head: QueuedMessageRow; key: string; next: JournalPastHead }[] = []
 
   set(card: QueuedMessageRow, candidate: boolean): void {
     const prior = this.byId.get(card.messageId)
@@ -121,15 +125,15 @@ export class JournalInputCandidates {
   pastHead(
     head: QueuedMessageRow,
     inputs: readonly unknown[],
-    walk: () => QueuedMessageRow | null
-  ): QueuedMessageRow | null {
+    walk: () => JournalPastHead
+  ): JournalPastHead {
     const key = [this.revision, ...inputs].join(':')
-    const last = this.walked
-    if (last?.head === head && last.key === key) {
-      return last.next
+    const hit = this.walked.find((entry) => entry.head === head && entry.key === key)
+    if (hit) {
+      return hit.next
     }
     const next = walk()
-    this.walked = { head, key, next }
+    this.walked = [...this.walked, { head, key, next }].slice(-2)
     return next
   }
 }

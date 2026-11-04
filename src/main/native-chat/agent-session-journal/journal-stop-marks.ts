@@ -1,3 +1,4 @@
+import { activeCancellations, executionCancellation } from './journal-stop-cancellation'
 import type { JournalReducerState } from './journal-reducer'
 import {
   beginJournalStopSettle,
@@ -29,6 +30,38 @@ export class JournalStopMarks {
     return this.deps.state().queuePauseMarks.latestStop
   }
 
+  cancellations() {
+    return activeCancellations(this.deps.state())
+  }
+
+  userStopRequestedForItem(itemId: string): boolean {
+    const state = this.deps.state()
+    return state.derivedTurnScope.cancellations.history(state, itemId)?.userStop !== undefined
+  }
+
+  observedLiveAtItem(itemId: string): number | undefined {
+    const fact = this.deps.state().derivedTurnScope.cancellations.history(this.deps.state(), itemId)
+    return fact?.observedAt ?? fact?.first.event.at
+  }
+
+  personStopDecidesItem(itemId: string, endedAt?: number): boolean {
+    const state = this.deps.state()
+    const target = state.derivedTurnScope.cancellations.forItem(itemId)
+    return (
+      target?.executionId !== undefined &&
+      activeCancellations(state).some(
+        (entry) =>
+          entry.target?.executionId === target.executionId &&
+          (endedAt === undefined || endedAt >= entry.event.at)
+      )
+    )
+  }
+
+  observedLiveAt(turnId: string): number | undefined {
+    const fact = executionCancellation(this.deps.state(), turnId)
+    return fact ? (fact.observedAt ?? fact.event.at) : undefined
+  }
+
   revision(): number {
     return this.settleRevision
   }
@@ -42,8 +75,8 @@ export class JournalStopMarks {
   }
 
   /** Until settled, session-ending Stops own every turn ending during settlement. */
-  beginSettle(endsSession = false): JournalStopSettle | null {
-    const settle = beginJournalStopSettle(this.deps.state(), endsSession)
+  beginSettle(endsSession = false, sequence?: number): JournalStopSettle | null {
+    const settle = beginJournalStopSettle(this.deps.state(), endsSession, sequence)
     if (settle) {
       this.edge()
     }

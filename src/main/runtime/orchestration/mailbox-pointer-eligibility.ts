@@ -39,6 +39,8 @@ export function selectOrchestrationPointerBatch(input: {
   mailboxHandle: string
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
   reservedTypes: ReadonlySet<string> | undefined
+  /** Read strictly after this sequence. Set only to pass a full page of held mail. */
+  afterSequence?: number
 }): OrchestrationPointerBatch {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return { messages: [], heldDeliveryId: undefined }
@@ -51,13 +53,37 @@ export function selectOrchestrationPointerBatch(input: {
   }
   const held = input.db.getOutstandingMailboxDelivery?.(input.mailboxHandle)
   return {
-    messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
-      excludeTypes: [...excludedTypes],
-      excludeIds: held?.messageIds,
-      limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
-    }),
+    messages: input.db.getUndeliveredUnreadMessages(
+      input.mailboxHandle,
+      undefined,
+      {
+        excludeTypes: [...excludedTypes],
+        excludeIds: held?.messageIds,
+        limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
+      },
+      input.afterSequence
+    ),
     heldDeliveryId: held?.id
   }
+}
+
+/** Where to read next when this page was full and every admission was held. A short page, or any real
+ *  delivery, stays put so one pass sends at most one batch. */
+export function heldOrchestrationPageCursor(
+  messages: readonly { sequence: number }[],
+  everyAdmitHeld: boolean,
+  afterSequence: number | undefined
+): number | undefined {
+  const last = messages.at(-1)?.sequence
+  if (
+    !everyAdmitHeld ||
+    last === undefined ||
+    messages.length < ORCHESTRATION_DELIVERY_BATCH_LIMIT ||
+    last <= (afterSequence ?? -1)
+  ) {
+    return undefined
+  }
+  return last
 }
 
 export function shouldReleaseOrchestrationPointer(

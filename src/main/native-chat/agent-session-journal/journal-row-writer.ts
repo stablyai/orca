@@ -87,7 +87,7 @@ export class JournalRowWriter {
 
   /** Plan on the write lane and commit all rows atomically; receiptRow identifies the receipt target. */
   enqueueRows(
-    plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+    plan: (first: number, ts: number) => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): Promise<JournalRow[]> {
@@ -96,14 +96,14 @@ export class JournalRowWriter {
 
   /** Caller must already own the write lane. */
   writeRows(
-    plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+    plan: (first: number, ts: number) => readonly ((seq: number, ts: number) => JournalRow)[],
     prepareReceipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
     const first = this.deps.nextSequence()
     const ts = this.deps.now()
-    const rows = plan().map((build, index) => build(first + index, ts))
+    const rows = plan(first, ts).map((build, index) => build(first + index, ts))
     if (rows.length === 0) {
       return rows
     }

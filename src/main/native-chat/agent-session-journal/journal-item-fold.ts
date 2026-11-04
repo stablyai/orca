@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalOwnedItem } from './journal-execution-interruption'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -10,6 +8,8 @@ import {
   namesAgentJournalProducer
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { turnOpeningClientId } from './journal-cancellation-targets'
+import { journalItemExecutionFence } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(
@@ -23,7 +23,7 @@ export function upsertJournalItem(
   state: JournalReducerState,
   itemId: string,
   revision: number,
-  next: AgentJournalRenderItem,
+  next: JournalOwnedItem,
   /** Creation fixes ownerFence; revisions retain it, while explicit executionOwner may change. */
   fences: { fence: number; ownerFence?: number; executionOwner?: number }
 ): void {
@@ -35,6 +35,19 @@ export function upsertJournalItem(
   if (existing && revision <= existing.revision) {
     return
   }
+  const oldTurn = readAgentJournalTurn(existing?.body)
+  const nextTurn = readAgentJournalTurn(next.body)
+  if (
+    oldTurn &&
+    oldTurn.state !== 'running' &&
+    oldTurn.state !== 'unverifiable' &&
+    nextTurn?.turnId === oldTurn.turnId &&
+    (nextTurn.state === 'running' || nextTurn.state === 'unverifiable') &&
+    (fences.executionOwner === undefined ||
+      fences.executionOwner === journalItemExecutionFence(state, itemId))
+  ) {
+    next = { ...next, body: existing!.body }
+  }
   state.derivedTurnScope.observe(itemId, isRootAgentJournalItem(next), existing?.body, next.body)
   if (fences.executionOwner !== undefined) {
     state.itemExecutionOwners.set(itemId, fences.executionOwner)
@@ -43,6 +56,7 @@ export function upsertJournalItem(
     state.items.set(itemId, next)
     state.itemFences.set(itemId, fences.ownerFence ?? fences.fence)
     state.tombstones.delete(itemId)
+    observeExecution(state, next)
     return
   }
   // Pin creation position/time so provider echoes cannot move submitted bubbles below later messages.
@@ -53,6 +67,9 @@ export function upsertJournalItem(
   const { sequenceIndex: _revisedAt, ...revised } = next
   state.items.set(itemId, {
     ...revised,
+    ...(existing.executionInterruption
+      ? { executionInterruption: existing.executionInterruption }
+      : {}),
     // Host bookkeeping without explicit producer must retain subagent linkage.
     ...(namesAgentJournalProducer(next) ? {} : agentJournalLinkageFields(existing)),
     // Provider history may normalize text or omit local attachments from the original send.
@@ -63,6 +80,11 @@ export function upsertJournalItem(
     turnScope: existing.turnScope ?? next.turnScope
   })
   state.tombstones.delete(itemId)
+  observeExecution(state, state.items.get(itemId)!)
+}
+
+function observeExecution(state: JournalReducerState, item: JournalOwnedItem): void {
+  state.derivedTurnScope.cancellations.observeTurn(state, item)
 }
 
 export function removeJournalItem(
@@ -85,7 +107,41 @@ export function removeJournalItem(
       existing.body,
       undefined
     )
-    const turnId = readAgentJournalTurn(existing.body)?.turnId
+    const turn = readAgentJournalTurn(existing.body)
+    const turnId = turn?.turnId
+    const target =
+      turnId === undefined ? undefined : state.derivedTurnScope.cancellations.forItem(itemId)
+    const clientMessageId =
+      target?.clientMessageId ?? turnOpeningClientId(state, turn?.userItemId ?? itemId)
+    const anchorId = target && state.derivedTurnScope.cancellations.anchor(target)
+    const anchor = anchorId === undefined ? undefined : state.items.get(anchorId)
+    if (turnId !== undefined && anchor?.executionInterruption) {
+      const { executionInterruption: _removed, ...retained } = anchor
+      state.items.set(anchor.itemId, retained)
+    } else if (
+      turnId === undefined &&
+      existing.executionInterruption?.target.turnId !== undefined
+    ) {
+      const survivorId = state.derivedTurnScope.cancellations.executionItem(
+        existing.executionInterruption.target
+      )
+      const survivor = survivorId === undefined ? undefined : state.items.get(survivorId)
+      if (survivor && survivor.itemId !== itemId) {
+        state.items.set(survivor.itemId, {
+          ...survivor,
+          executionInterruption: existing.executionInterruption
+        })
+      }
+    }
+    if (turnId !== undefined && clientMessageId !== undefined) {
+      state.derivedTurnScope.cancellations.retireSubmission(state, clientMessageId)
+    }
+    if (
+      turnId !== undefined ||
+      state.derivedTurnScope.cancellations.forItem(itemId)?.turnId === undefined
+    ) {
+      state.derivedTurnScope.cancellations.remove(turnId, clientMessageId, target)
+    }
     if (turnId !== undefined) {
       state.removedTurnIds.add(turnId)
     }
@@ -94,4 +150,11 @@ export function removeJournalItem(
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
+  const survivingTarget = state.derivedTurnScope.cancellations.forItem(itemId)
+  const survivorId =
+    survivingTarget && state.derivedTurnScope.cancellations.executionItem(survivingTarget)
+  const survivor = survivorId === undefined ? undefined : state.items.get(survivorId)
+  if (survivor) {
+    state.derivedTurnScope.cancellations.observeTurn(state, survivor)
+  }
 }

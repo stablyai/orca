@@ -1,3 +1,4 @@
+import { normalizeStopCancellations } from './journal-stop-cancellation'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { journalInputOrder } from './journal-input-order'
 // Replay live epochs without rewriting history; damage/newer rows fail load and remain on disk.
@@ -173,6 +174,7 @@ export function startJournalRowFold(
   }
   const finish = (): JournalLoad => {
     if (!input.deferNativeCleanup) {
+      normalizeStopCancellations(state)
       journalInputOrder(state).finishReconstruction(state)
       journalInputOrder(state).lineage.restoreFrontier(
         state.lastSequence,

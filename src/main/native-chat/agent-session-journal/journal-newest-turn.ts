@@ -1,3 +1,5 @@
+import { journalChangedItemIds } from './journal-item-address'
+import { JournalUsageLimitCutIndex } from './journal-usage-limit-cut-index'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
@@ -16,6 +18,7 @@ import {
 /** Owned by the transaction-isolated input order; never saved beside the journal. Every turn and
  * clear sits in a creation-ordered tree, so each row updates only the sources it touches. */
 export class JournalNewestTurn {
+  readonly usageLimitCut: JournalUsageLimitCutIndex
   private root: TurnSourceNode | undefined
   private readonly sources = new Map<string, TurnSource>()
   /** Agent failure rows (usage limit, sign-in, terminal error) and the turn each reports on,
@@ -28,11 +31,12 @@ export class JournalNewestTurn {
 
   /** Only on restore; streamed rows never rescan conversation history. */
   constructor(state: JournalReducerState) {
+    this.usageLimitCut = new JournalUsageLimitCutIndex(state)
     this.boundary = state.lastSequence
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
     for (const item of state.items.values()) {
-      this.index(state, item.itemId, item, reported)
+      this.index(item.itemId, item, reported)
       if (isTurnOrClear(item)) {
         turns.push(item)
       }
@@ -53,15 +57,10 @@ export class JournalNewestTurn {
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
-    const itemIds =
-      row.kind === 'item' || row.kind === 'tombstone'
-        ? [row.itemId]
-        : row.kind === 'lifecycle-batch'
-          ? row.mutations.map((mutation) => mutation.itemId)
-          : []
+    this.usageLimitCut.afterRow(state, row)
+    const itemIds = journalChangedItemIds(state, row)
     const touched = new Set<string>()
-    for (const raw of itemIds) {
-      const itemId = state.aliases.get(raw) ?? raw
+    for (const itemId of itemIds) {
       const item = state.items.get(itemId)
       const prior = this.sources.get(itemId)
       if (prior && !isTurnOrClear(item)) {
@@ -73,7 +72,7 @@ export class JournalNewestTurn {
         this.sources.delete(itemId)
         this.root = putTurnSource(this.root, prior, true)
       }
-      this.index(state, itemId, item, touched)
+      this.index(itemId, item, touched)
       if (isTurnOrClear(item)) {
         touched.add(itemId)
       }
@@ -114,12 +113,11 @@ export class JournalNewestTurn {
   }
 
   private index(
-    state: JournalReducerState,
     itemId: string,
     item: AgentJournalRenderItem | undefined,
     touched: Set<string>
   ): void {
-    const turn = item ? reportedTurn(state, item) : null
+    const turn = item ? reportedTurn(item) : null
     const prior = this.evidence.get(itemId) ?? null
     if (turn === prior) {
       return
@@ -172,7 +170,7 @@ const NOT_REPORTS: ReadonlySet<string> = new Set([
 
 /** The turn a root failure row reports for, unless it is a command's own verdict: one of the kinds
  * above, or anything Orca wrote on a command's result identity (its refusals). */
-function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem): string | null {
+function reportedTurn(item: AgentJournalRenderItem): string | null {
   const { body, turnScope } = item
   if (
     body.kind !== 'status' ||
@@ -186,5 +184,5 @@ function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem):
   if (identity?.provider === 'orca' && identity.clientMessageId.startsWith('command-result:')) {
     return null
   }
-  return state.aliases.get(turnScope.turnItemId) ?? turnScope.turnItemId
+  return turnScope.turnItemId
 }

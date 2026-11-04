@@ -189,6 +189,7 @@ export class StructuredAgentSessionRequestFailures {
     const unexpected =
       ended?.rootGone === true &&
       ended.cause === 'exit' &&
+      turn.outcome !== 'cancellation' &&
       journal.itemFence(id) === ended.fence &&
       !journal.stopMarks.personStopDecides(turn.turnId, turn.completedAt)
     return {

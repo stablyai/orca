@@ -7,6 +7,7 @@ import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import { structuredMailboxCustody } from './structured-session-mail-target'
 import { structuredMailFitsWhole } from './structured-mail-source'
+import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-message-consume-error'
 import {
   orchestrationMailNotice,
@@ -21,6 +22,23 @@ import {
 /** A recorded send made again: under the same id when it was never admitted, or under a new one
  *  after a proven rejection and a later turn or /clear. */
 export type StructuredMailResend = { row: StructuredMailSendRow; renew: boolean }
+
+/** The record a send reserves: a resend keeps its id unless that id is too old to admit. */
+export function structuredMailAttempt(
+  mailboxHandle: string,
+  messageId: string,
+  sessionId: string,
+  again?: StructuredMailResend
+): StructuredMailSendRow {
+  const reuse = again && !again.renew
+  return {
+    mailbox_handle: mailboxHandle,
+    message_id: messageId,
+    session_id: sessionId,
+    operation_id: reuse ? again.row.operation_id : mintAgentSessionOperationId(Date.now()),
+    minted_at_ms: reuse ? again.row.minted_at_ms : Date.now()
+  }
+}
 
 /** The host admits a new id only this young; past it a resend of a never-admitted send renews it. */
 const REUSABLE_OPERATION_AGE_MS =
@@ -123,6 +141,10 @@ export class StructuredMailAuthority {
     )
   }
 
+  retired(mailboxHandle: string): boolean {
+    return this.ended(mailboxHandle) || this.unresolved(mailboxHandle) === 'elsewhere'
+  }
+
   /** A resolver that found no chat where the database names one cannot decide. */
   private unresolved(mailboxHandle: string): 'elsewhere' | 'unverifiable' {
     if (this.deps.unresolvedCustody) {
@@ -151,6 +173,7 @@ export async function settleStructuredMailSends(input: {
   host: Pick<StructuredMailboxPointerHost, 'observe' | 'withdraw' | 'wakeQueue'>
   cliCommand: OrchestrationCliCommand
   owed: (sessionId: string, messageIds: readonly string[]) => QueuedMessageOwed
+  onReleased?: (row: StructuredMailSendRow) => void
 }): Promise<{ outstanding: Set<string>; resend: StructuredMailResend[]; released: boolean }> {
   const { db, mailboxHandle, host } = input
   const outstanding = new Set<string>()
@@ -166,7 +189,10 @@ export async function settleStructuredMailSends(input: {
     const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
     // No longer this chat's: mail still unread goes to whoever owns the mailbox now, never read.
     const release = () => {
-      released = db.releaseStructuredMailSend(row) || released
+      if (db.releaseStructuredMailSend(row)) {
+        released = true
+        input.onReleased?.(row)
+      }
     }
     switch (state.kind) {
       case 'accepted':

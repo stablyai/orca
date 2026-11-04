@@ -77,7 +77,7 @@ export async function acceptStopTarget(ctx: AgentSessionTurnContext): Promise<Ac
 export async function acceptChatStop(
   ctx: AgentSessionTurnContext,
   input: Omit<JournalStopAcceptanceInput, 'liveTurnId'>
-): Promise<Accepted<{ turnId: string | null; withdrawn?: string[] }>> {
+): Promise<Accepted<{ turnId: string | null; withdrawn?: string[]; stopSequence?: number }>> {
   const receipt = stopReceipt(ctx)
   const committedBefore = receipt.isCommitted()
   try {
@@ -85,7 +85,14 @@ export async function acceptChatStop(
       { ...input, liveTurnId: () => contextStructuredAgentSessionCurrentWork(ctx).activeTurnId() },
       committedBefore ? undefined : receipt
     )
-    return { ok: true, value: { turnId: accepted.turnId, withdrawn: accepted.withdrawn } }
+    return {
+      ok: true,
+      value: {
+        turnId: accepted.turnId,
+        withdrawn: accepted.withdrawn,
+        stopSequence: accepted.mark.sequence
+      }
+    }
   } catch (error) {
     return savedAnyway(ctx, receipt, committedBefore, error)
       ? { ok: true, value: { turnId: null } }
@@ -99,7 +106,7 @@ export async function acceptCapturedChatStop(
   target: ChatStopTarget,
   callerKey: string,
   settlesOtherWork: boolean
-): Promise<Accepted<{ settled: boolean; turnId: string | null }>> {
+): Promise<Accepted<{ settled: boolean; turnId: string | null; stopSequence?: number }>> {
   if (!target.marks) {
     const accepted = await acceptStopTarget(ctx)
     return accepted.ok ? { ok: true, value: { settled: false, turnId: null } } : accepted
@@ -131,7 +138,8 @@ export async function acceptCapturedChatStop(
             (accepted.value.withdrawn?.length ?? (target.queued ? 1 : 0)) > 0 ||
             handed ||
             settlesOtherWork,
-          turnId: accepted.value.turnId
+          turnId: accepted.value.turnId,
+          stopSequence: accepted.value.stopSequence
         }
       }
     : accepted

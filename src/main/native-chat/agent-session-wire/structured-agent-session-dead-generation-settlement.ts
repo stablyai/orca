@@ -40,6 +40,7 @@ import {
 import { exitedRootTurnScope } from './structured-agent-session-exit-turn-scope'
 import {
   hasUnfinishedStructuredAgentSessionWork,
+  captureUnfinishedStructuredAgentSessionWork,
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
 import { codexUnopenedSendResolutions } from './structured-agent-session-unopened-send-withdrawal'
@@ -73,7 +74,13 @@ export function planStructuredAgentSessionDeadGeneration(
   owns: (fence: number | undefined) => boolean = () => true
 ): { mutations: JournalLifecycleMutationInput[]; dispatches: ResolveDispatchInput[] } {
   const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
-  const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
+  const publicItems = providerTimelineExecutionItems(input.journal.snapshot().items)
+  const visibleWork = captureUnfinishedStructuredAgentSessionWork(input.journal)
+  const publicWork =
+    visibleWork.hadUnsettledSubmissions ||
+    visibleWork.items.length > 0 ||
+    watchedExitRevisions(publicItems, input.exit, input.journal).length > 0
+  const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? publicWork
   // Leave queued sends to delivery. Failed-start handoffs never ran; ready-child handoffs remain uncertain.
   const startupFailure = input.exitedDuringStartup
     ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
@@ -96,7 +103,7 @@ export function planStructuredAgentSessionDeadGeneration(
       unrun ? { rejection: unrun } : { reason: input.pendingSubmissionReason }
     )
   ]
-  const allItems = providerTimelineExecutionItems(input.journal.snapshot().items)
+  const allItems = providerTimelineExecutionItems(input.journal.lifecycleItems())
   const items = allItems.filter((item) => owns(input.journal.itemFence(item.itemId)))
   const proven = watchedExitRevisions(items, input.exit, input.journal)
   const mutations: JournalLifecycleMutationInput[] = []
@@ -126,7 +133,13 @@ export function planStructuredAgentSessionDeadGeneration(
         ),
         tone: 'error'
       },
-      turnScope: exitedRootTurnScope(withRevisions(items, proven), input.verdict)
+      turnScope: exitedRootTurnScope(
+        withRevisions(
+          publicItems.filter((item) => owns(input.journal.itemFence(item.itemId))),
+          proven
+        ),
+        input.verdict
+      )
     })
   }
   const bodies = new Map(allItems.map((item) => [item.itemId, item.body]))

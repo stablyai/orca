@@ -119,6 +119,9 @@ async function renderChatMail(mailbox: string): Promise<{ text: string; id: stri
     getCliCommand: localOrchestrationCliCommand,
     senderSnapshot: () => ({ name: null, agent: null }),
     host: {
+      attachment: () => db,
+      readEligibility: () => ({ host: db, fence: 1, key: 'epoch:0', stopAt: null }),
+      openEligibility: async () => ({ host: db, fence: 1, key: 'epoch:0', stopAt: null }),
       currentFence: () => 1,
       watchJournal: () => () => {},
       observe: async () => ({ kind: 'accepted' }),

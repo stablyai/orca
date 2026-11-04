@@ -1,4 +1,9 @@
+import {
+  executionInterruptionSchema,
+  type JournalOwnedItem
+} from './journal-execution-interruption'
 import { z } from 'zod'
+import { executionOriginSchema } from './journal-execution-item'
 import {
   AgentJournalKnownSchemas,
   AgentJournalRenderItemSchema
@@ -6,10 +11,7 @@ import {
 import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 import { AgentSessionFailureFactSchema } from '../../../shared/agent-session/failures/agent-session-failure-fact-schema'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StorageDeclaresAll, UndeclaredStorageKeys } from './journal-storage-strict'
 
 // What saved outcomes declare beyond the wire's open schemas, which read only the keys their
@@ -175,7 +177,11 @@ export const storedProviderHandle = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('opaque'), agent: z.string(), value: z.string() })
 ])
 
-export const storedItem = AgentJournalRenderItemSchema.extend({ body: storedItemBody })
+export const storedItem = AgentJournalRenderItemSchema.extend({
+  body: storedItemBody,
+  executionInterruption: executionInterruptionSchema.optional(),
+  executionOrigin: executionOriginSchema.optional()
+})
 
 export const storedSubmission = AgentJournalSubmissionSchema.extend({
   rejection: storedFailureFact.optional(),
@@ -184,7 +190,7 @@ export const storedSubmission = AgentJournalSubmissionSchema.extend({
 })
 
 export type StoredValuesAreDeclared = [
-  StorageDeclaresAll<UndeclaredStorageKeys<AgentJournalRenderItem, z.output<typeof storedItem>>>,
+  StorageDeclaresAll<UndeclaredStorageKeys<JournalOwnedItem, z.output<typeof storedItem>>>,
   StorageDeclaresAll<
     UndeclaredStorageKeys<AgentJournalSubmission, z.output<typeof storedSubmission>>
   >,

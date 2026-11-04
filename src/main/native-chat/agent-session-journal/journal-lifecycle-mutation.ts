@@ -1,3 +1,10 @@
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { journalExecutionAddress, journalExecutionOriginForItem } from './journal-execution-item'
+import { journalWriteTurnScope } from './journal-write-turn-scope'
+import { journalItemExecutionFence, journalItemOwnerFence } from './journal-item-provenance'
+import { nextJournalItemRevision } from './journal-item-revision'
+import { turnEndAfterStop } from './journal-stop-turn-end'
+import type { JournalReducerState } from './journal-reducer'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
   AgentJournalItemBody,
@@ -11,6 +18,7 @@ import {
   agentJournalLinkageFields,
   namesAgentJournalProducer
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { JournalExecutionOrigin } from './journal-execution-item'
 import type { JournalLifecycleMutation } from './journal-row-schema'
 import { boundRunningToolOutput } from './journal-payload-bounds'
 
@@ -29,6 +37,8 @@ export type JournalLifecycleMutationInput = JournalItemAddress &
         linkage?: AgentJournalProducerLinkage
         turnScope: AgentJournalTurnScope
         ownerFence?: number
+        executionOwner?: number
+        executionOrigin?: JournalExecutionOrigin
       }
     | { kind: 'tombstone' }
   )
@@ -74,6 +84,7 @@ export function journalLifecycleMutationRow(
   return mutation.kind === 'item'
     ? {
         kind: 'item',
+        ...(mutation.executionOrigin ? { executionOrigin: mutation.executionOrigin } : {}),
         itemId,
         revision,
         body: boundRunningToolOutput(mutation.body),
@@ -81,7 +92,93 @@ export function journalLifecycleMutationRow(
         ...journalItemEchoFields(mutation),
         turnScope: mutation.turnScope,
         ownerFence,
+        ...(mutation.executionOwner === undefined
+          ? {}
+          : { executionOwner: mutation.executionOwner }),
         ...agentJournalLinkageFields(mutation.linkage)
       }
     : { kind: 'tombstone', itemId, revision }
+}
+
+export function journalLifecycleMutationForState(
+  state: JournalReducerState,
+  mutation: JournalLifecycleMutationInput,
+  fence: number,
+  revisions: Map<string, number>
+): JournalLifecycleMutation | null {
+  const itemId = journalLifecycleMutationItemId(mutation)
+  if (mutation.itemId !== undefined) {
+    if (mutation.kind === 'tombstone' && !state.items.has(itemId) && state.aliases.has(itemId)) {
+      return null
+    }
+    if (
+      state.tombstones.has(itemId) &&
+      !state.items.has(itemId) &&
+      (mutation.kind === 'tombstone' || readAgentJournalTurn(mutation.body))
+    ) {
+      return null
+    }
+    if (mutation.kind === 'item') {
+      const next = readAgentJournalTurn(mutation.body)
+      const previous = readAgentJournalTurn(state.items.get(itemId)?.body)
+      if (
+        next &&
+        (!previous ||
+          (previous.state !== 'running' &&
+            previous.state !== 'unverifiable' &&
+            (next.state !== previous.state || next.completedAt !== previous.completedAt)))
+      ) {
+        return null
+      }
+    }
+  }
+  const address =
+    mutation.kind === 'item'
+      ? journalExecutionAddress(
+          state,
+          { kind: mutation.itemId === undefined ? 'provider' : 'exact', itemId },
+          mutation.body,
+          {
+            fence,
+            ownerFence: mutation.ownerFence,
+            executionOwner: mutation.executionOwner
+          }
+        )
+      : undefined
+  const resolved =
+    address?.itemId ??
+    (mutation.itemId !== undefined ? itemId : (state.aliases.get(itemId) ?? itemId))
+  const revision = nextJournalItemRevision(state, resolved, revisions)
+  const ownerFence = journalItemOwnerFence(state, resolved, {
+    fence,
+    ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
+  })
+  return journalLifecycleMutationRow(
+    mutation.kind === 'item'
+      ? {
+          ...mutation,
+          turnScope: journalWriteTurnScope(
+            state,
+            mutation.turnScope,
+            mutation.executionOwner ?? mutation.ownerFence ?? fence,
+            mutation.itemId !== undefined ? 'exact' : 'provider'
+          ),
+          ...(mutation.itemId === undefined
+            ? {}
+            : { executionOrigin: journalExecutionOriginForItem(state, itemId) }),
+          body:
+            address?.itemId === undefined
+              ? mutation.body
+              : turnEndAfterStop(
+                  state,
+                  resolved,
+                  mutation.body,
+                  journalItemExecutionFence(state, resolved) ?? ownerFence
+                )
+        }
+      : mutation,
+    mutation.kind === 'tombstone' ? resolved : itemId,
+    revision,
+    ownerFence
+  )
 }

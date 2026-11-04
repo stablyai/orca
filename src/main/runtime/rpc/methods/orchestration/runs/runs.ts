@@ -124,7 +124,7 @@ export const ORCHESTRATION_RUN_METHODS = [
       )
       moved.forEach((mailbox) => runtime.cancelMessageWaiters(mailbox))
       // The former coordinator's waiting report cards are the new one's mail now.
-      runtime.withdrawStaleChatMail(moved)
+      runtime.withdrawStaleChatMail(moved, 'discovery')
       return { run: exposeRun(run) }
     }
   }),

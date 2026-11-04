@@ -1,4 +1,6 @@
+import type { JournalItemProvenance } from './journal-execution-interruption'
 export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
+import type { JournalCancellationTarget } from './journal-cancellation-targets'
 import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
@@ -59,13 +61,6 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
 ] as const
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
 
-/** Creation provenance differs from writer authority; legacy rows fall back to their creating fence. */
-type JournalItemProvenance = {
-  ownerFence?: number
-  /** Later execution owner for resumable children; absent falls back to ownerFence. */
-  executionOwner?: number
-}
-
 export type JournalItemRow = JournalRowBase &
   JournalItemProvenance &
   JournalItemEcho & {
@@ -98,6 +93,8 @@ export type JournalStopEvent = {
   turnId?: string
   at: number
   caller?: string
+  /** Captured before provider shutdown; omitted from the retained queue boundary. */
+  targets?: JournalCancellationTarget[]
 }
 
 export type JournalStopOrResumeRow = JournalTombstoneRow &
