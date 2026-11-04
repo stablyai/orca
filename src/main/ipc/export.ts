@@ -11,7 +11,48 @@ export type ExportHtmlToPdfArgs = {
 
 export type ExportHtmlToPdfResult = PdfExportResult
 
+const TEXT_EXPORT_MAX_BYTES = 20_000_000
+const TEXT_EXPORT_EXTENSIONS = new Set(['json', 'csv'])
+
+/** Write renderer-built text only where the user picks in the native dialog. */
+function registerTextFileExport(): void {
+  ipcMain.removeHandler('export:save-text-file')
+  ipcMain.handle(
+    'export:save-text-file',
+    async (
+      event,
+      args: { text: unknown; suggestedName: unknown; extension: unknown }
+    ): Promise<{ saved: boolean; filePath?: string; error?: string }> => {
+      const { text, suggestedName, extension } = args ?? {}
+      if (typeof text !== 'string' || typeof suggestedName !== 'string') {
+        return { saved: false, error: 'Nothing to export.' }
+      }
+      if (typeof extension !== 'string' || !TEXT_EXPORT_EXTENSIONS.has(extension)) {
+        return { saved: false, error: 'Unsupported export format.' }
+      }
+      if (Buffer.byteLength(text, 'utf8') > TEXT_EXPORT_MAX_BYTES) {
+        return { saved: false, error: 'The export is larger than 20 MB.' }
+      }
+      const name = suggestedName.replace(/[/\\:*?"<>|]/g, '_').slice(0, 100) || 'export'
+      const options = {
+        defaultPath: `${name}.${extension}`,
+        filters: [{ name: extension.toUpperCase(), extensions: [extension] }]
+      }
+      const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const { canceled, filePath } = parent
+        ? await dialog.showSaveDialog(parent, options)
+        : await dialog.showSaveDialog(options)
+      if (canceled || !filePath) {
+        return { saved: false }
+      }
+      await writeFile(filePath, text, 'utf8')
+      return { saved: true, filePath }
+    }
+  )
+}
+
 export function registerExportHandlers(): void {
+  registerTextFileExport()
   ipcMain.removeHandler('export:html-to-pdf')
   ipcMain.handle(
     'export:html-to-pdf',

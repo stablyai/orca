@@ -12,15 +12,21 @@ const textareaVariants = cva('', {
       cell: 'h-full min-h-0 resize-none rounded-none border-0 px-2 py-0 font-mono text-xs shadow-none md:text-xs focus-visible:ring-1 focus-visible:ring-inset',
       composite:
         'resize-none rounded-none border-0 p-0 font-mono text-xs leading-5 shadow-none md:text-xs focus-visible:ring-0 dark:bg-transparent'
+    },
+    // Matches Input's compact density for dense inspector forms.
+    density: {
+      default: '',
+      compact:
+        'min-h-0 resize-y border-border bg-input/50 px-2 py-1.5 text-xs leading-5 shadow-none md:text-xs'
     }
   },
-  defaultVariants: { variant: 'default' }
+  defaultVariants: { variant: 'default', density: 'default' }
 })
 
 const Textarea = React.forwardRef<
   HTMLTextAreaElement,
   React.ComponentProps<'textarea'> & VariantProps<typeof textareaVariants>
->(({ className, variant, ...props }, ref) => {
+>(({ className, variant, density, ...props }, ref) => {
   return (
     <ImeTextarea
       ref={ref}
@@ -30,7 +36,7 @@ const Textarea = React.forwardRef<
         'scrollbar-sleek min-h-16 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30',
         'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
         'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
-        textareaVariants({ variant }),
+        textareaVariants({ variant, density }),
         className
       )}
       {...props}

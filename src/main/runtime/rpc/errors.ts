@@ -119,6 +119,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'run_required',
   'stable_pane_required',
   'consumer_fenced',
+  'workflow_route_refused',
   'task_not_found',
   'task_not_startable',
   'inject_rejected',

@@ -10,7 +10,9 @@ const labelVariants = cva('', {
   variants: {
     variant: {
       default: '',
-      settings: 'text-xs text-muted-foreground'
+      settings: 'text-xs text-muted-foreground',
+      // Dense form label: inspector panels and compact dialogs.
+      field: 'text-xs font-medium'
     }
   },
   defaultVariants: { variant: 'default' }

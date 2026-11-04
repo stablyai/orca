@@ -31,6 +31,7 @@ import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
+import { assertWorkflowSendPermitted } from '../../../../orchestration/workflow-route-guard'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
@@ -247,6 +248,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             sendWarnings.push(runBound.warning)
           }
         }
+        assertWorkflowSendPermitted(messageRunId, routing.dispatchId, from, to, params)
         const federatedControl = sendFederatedControlMail({
           params,
           runtime,
@@ -287,6 +289,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         )
         return sent
       }
+      assertWorkflowSendPermitted(routing.run?.id, routing.dispatchId, from, to, params)
       return sendGroupMessage({
         params,
         runtime,

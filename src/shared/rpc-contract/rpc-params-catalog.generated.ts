@@ -688,6 +688,19 @@ import {
   UsageCredentialSessionCookieParams
 } from './usage-credentials-params'
 import { CancelUsageLimitContinueParams } from './usage-limit-continue-params'
+import {
+  WorkflowApprovalResolveParams,
+  WorkflowMessageReleaseParams,
+  WorkflowPresetIdParams,
+  WorkflowPresetSaveParams,
+  WorkflowQuestionReplyParams,
+  WorkflowRunGetParams,
+  WorkflowRunIdParams,
+  WorkflowRunListParams,
+  WorkflowRunStartParams,
+  WorkflowTaskRetryParams,
+  WorkflowValidateParams
+} from './workflow-params'
 import { LayoutReopenHeldPanesParams } from './workspace-layout-held-panes-params'
 import {
   LayoutApplyParams,
@@ -1539,6 +1552,21 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'workflow.approvalResolve': WorkflowApprovalResolveParams,
+  'workflow.messageRelease': WorkflowMessageReleaseParams,
+  'workflow.presetDelete': WorkflowPresetIdParams,
+  'workflow.presetList': null,
+  'workflow.presetSave': WorkflowPresetSaveParams,
+  'workflow.questionReply': WorkflowQuestionReplyParams,
+  'workflow.runCancel': WorkflowRunIdParams,
+  'workflow.runDelete': WorkflowRunIdParams,
+  'workflow.runGet': WorkflowRunGetParams,
+  'workflow.runList': WorkflowRunListParams,
+  'workflow.runPause': WorkflowRunIdParams,
+  'workflow.runResume': WorkflowRunIdParams,
+  'workflow.runStart': WorkflowRunStartParams,
+  'workflow.taskRetry': WorkflowTaskRetryParams,
+  'workflow.validate': WorkflowValidateParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,

@@ -14,6 +14,7 @@ const PLAIN_CSS = ['src/renderer/*.css', 'src/shared/*.css']
 // Package stylesheets imported from renderer JS (xterm is also compiled in through main.css).
 const VENDOR_CSS = [
   '@xterm/xterm/css/xterm.css',
+  '@xyflow/react/dist/base.css',
   'monaco-editor/min/vs/editor/editor.main.css',
   'pdfjs-dist/web/pdf_viewer.css',
   'react-grab/styles.css'

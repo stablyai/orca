@@ -1,0 +1,69 @@
+/* React Flow chrome mapped onto Orca tokens; no new colors. */
+.workflow-canvas .react-flow {
+  --xy-background-color: var(--background);
+  --xy-background-pattern-color: color-mix(in srgb, var(--muted-foreground) 22%, transparent);
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-connectionline-stroke: var(--ring);
+  --xy-selection-background-color: color-mix(in srgb, var(--ring) 8%, transparent);
+  --xy-selection-border: 1px solid var(--ring);
+}
+
+.workflow-canvas .react-flow__node {
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.workflow-canvas .react-flow__node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.workflow-canvas .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+
+.workflow-canvas .react-flow__controls-button {
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  fill: currentColor;
+}
+
+.workflow-canvas .react-flow__controls-button:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.workflow-canvas .react-flow__minimap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  overflow: hidden;
+}
+
+.workflow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.workflow-canvas .react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: var(--ring);
+}
+
+.workflow-edge-flowing {
+  animation: workflow-edge-flow 0.5s linear infinite;
+}
+
+@keyframes workflow-edge-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-edge-flowing {
+    animation: none;
+  }
+}

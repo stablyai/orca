@@ -45,6 +45,12 @@ import type {
 
 export type ExportApi = {
   htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
+  /** Optional so hosts without a native save dialog (web) fall back to a download. */
+  saveTextFile?: (args: {
+    text: string
+    suggestedName: string
+    extension: 'json' | 'csv'
+  }) => Promise<{ saved: boolean; filePath?: string; error?: string }>
 }
 
 export type FilesystemApi = {

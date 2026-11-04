@@ -232,6 +232,7 @@
     "@parcel/watcher": "^2.5.6",
     "@xterm/addon-serialize": "0.15.0-beta.330",
     "@xterm/headless": "6.1.0-beta.334",
+    "@xyflow/react": "12.8.6",
     "agent-browser": "~0.39.4",
     "electron-updater": "^6.8.10",
     "fflate": "0.8.3",

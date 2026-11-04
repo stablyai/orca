@@ -58,6 +58,7 @@
               "scrollbar-sleek-lg",
               "scrollbar-sleek-parent",
               "toaster",
+              "workflow-*",
               "worktree-sidebar-scrollbar",
               "xterm-*"
             ]
