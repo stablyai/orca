@@ -1,6 +1,7 @@
-// One Durable Object per relay host. Owns the host control socket, phone sockets, host data
-// sockets and their splices. Every socket uses the Hibernation API; all per-socket state lives
-// in attachments and durable session state lives in object storage, so nothing depends on memory.
+// One Durable Object per relay host. Owns the host control socket, the session (generation,
+// resume secret, orphan grace) and the host's connection bookkeeping. Each phone connection and its
+// host data socket live in their own SpliceRelay object, so a flooding phone cannot reset this one.
+// The control socket uses the Hibernation API; durable state lives in object storage.
 import { DurableObject } from 'cloudflare:workers'
 import nacl from 'tweetnacl'
 import {
@@ -10,12 +11,10 @@ import {
 } from '../../../packages/relay-contract/src/host-proof-transcript'
 import {
   HostChallengeAckSchema,
-  HostDataAuthSchema,
   HostHelloSchema,
   RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS,
   parseRelayHostCapabilities
 } from '../../../packages/relay-contract/src/control-messages'
-import { RelayAuthSchema } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
 import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/protocol-limits'
 import { verifyRelayJwt } from './jwt'
@@ -36,18 +35,14 @@ type ControlAttachment = {
   lastPongAt?: number
   lastPingAt?: number
 }
-type PhoneAttachment = {
-  k: 'phone'
-  phase: 'auth' | 'pending' | 'spliced'
-  deadline: number
-  connId?: string
+type Attachment = ControlAttachment
+type Conn = {
+  phase: 'pending' | 'active'
+  generation: number
   connTicket?: string
-  generation?: number
-  credentialKind?: 'invite' | 'resume'
-  relayDeviceId?: string
+  kind: 'invite' | 'resume'
+  relayDeviceId: string
 }
-type DataAttachment = { k: 'data'; phase: 'auth' | 'spliced'; deadline: number; connId: string }
-type Attachment = ControlAttachment | PhoneAttachment | DataAttachment
 
 type Session = {
   generation: number
@@ -92,22 +87,6 @@ export class HostRelay extends DurableObject<Env> {
         caps: [...parseRelayHostCapabilities(request.headers.get('x-orca-host-capabilities') ?? '')],
         deadline: now + RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs
       })
-    } else if (kind === 'phone') {
-      this.ctx.acceptWebSocket(server, ['phone'])
-      this.attach(server, {
-        k: 'phone',
-        phase: 'auth',
-        deadline: now + RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs
-      })
-    } else if (kind === 'data') {
-      const connId = request.headers.get('x-edge-conn-id') ?? ''
-      this.ctx.acceptWebSocket(server, ['data', `data:${connId}`])
-      this.attach(server, {
-        k: 'data',
-        phase: 'auth',
-        connId,
-        deadline: now + RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs
-      })
     } else {
       return new Response(null, { status: 404 })
     }
@@ -118,9 +97,7 @@ export class HostRelay extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const a = this.attachment(ws)
     if (!a) return
-    if (a.k === 'control') return this.onControl(ws, a, message)
-    if (a.k === 'phone') return this.onPhone(ws, a, message)
-    return this.onData(ws, a, message)
+    return this.onControl(ws, a, message)
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -297,7 +274,7 @@ export class HostRelay extends DurableObject<Env> {
       for (const old of otherControls) {
         this.close(old, RELAY_CLOSE_CODE.PEER_DROPPED, 'replaced by a newer generation')
       }
-      this.closeAllSplices(RELAY_CLOSE_CODE.PEER_DROPPED, 'host control replaced')
+      await this.closeSplices(() => true, RELAY_CLOSE_CODE.PEER_DROPPED, 'host control replaced')
     }
     await this.ctx.storage.put<Session>('session', {
       generation,
@@ -318,14 +295,13 @@ export class HostRelay extends DurableObject<Env> {
     const details = a.caps.includes(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
     const activeConnIds: string[] = []
     const pendingConns: Record<string, unknown>[] = []
-    for (const phone of this.ctx.getWebSockets('phone')) {
-      const p = this.attachment(phone) as PhoneAttachment
-      if (p.phase === 'spliced' && p.connId) activeConnIds.push(p.connId)
-      if (p.phase === 'pending' && p.connId && p.connTicket) {
+    for (const [connId, c] of Object.entries(await this.conns())) {
+      if (c.phase === 'active') activeConnIds.push(connId)
+      if (c.phase === 'pending' && c.connTicket && c.generation === generation) {
         pendingConns.push({
-          connId: p.connId,
-          connTicket: p.connTicket,
-          ...(details ? { kind: p.credentialKind, relayDeviceId: p.relayDeviceId } : {})
+          connId,
+          connTicket: c.connTicket,
+          ...(details ? { kind: c.kind, relayDeviceId: c.relayDeviceId } : {})
         })
       }
     }
@@ -349,72 +325,66 @@ export class HostRelay extends DurableObject<Env> {
     return null
   }
 
-  // ---------------- phone ----------------
+  // ---------------- RPC from SpliceRelay ----------------
 
-  private async onPhone(
-    ws: WebSocket,
-    a: PhoneAttachment,
-    message: string | ArrayBuffer
-  ): Promise<void> {
-    if (a.phase === 'spliced') {
-      const peer = a.connId ? this.ctx.getWebSockets(`data:${a.connId}`)[0] : undefined
-      peer?.send(message)
-      return
-    }
-    if (a.phase === 'pending') return // the phone waits for relay-hello before E2EE frames
-    if (typeof message !== 'string') {
-      this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'binary relay-auth')
-      return
-    }
-    let body: Record<string, unknown>
-    try {
-      const { type, ...rest } = JSON.parse(message) as Record<string, unknown>
-      if (type !== 'relay-auth') throw new Error('type')
-      body = rest
-    } catch {
-      this.phoneFail(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
-      return
-    }
-    const auth = RelayAuthSchema.safeParse(body)
-    if (!auth.success) {
-      this.phoneFail(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
-      return
-    }
-    const credential = await this.resolveCredential(auth.data.credential)
-    if (!credential) {
-      this.phoneFail(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
-      return
-    }
+  // Phone presented relay-auth to its splice object. Checks the credential and the host's
+  // connection budget, records the pending connection and sends conn-open on the control socket.
+  async authorizePhone(
+    connId: string,
+    credentialToken: string
+  ): Promise<
+    | { ok: true; connTicket: string; generation: number; kind: 'invite' | 'resume'; relayDeviceId: string }
+    | { ok: false; code: number }
+  > {
+    const credential = await this.resolveCredential(credentialToken)
+    if (!credential) return { ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL }
     const control = this.activeControl()
-    if (!control) {
-      this.phoneFail(ws, RELAY_CLOSE_CODE.HOST_OFFLINE)
-      return
+    if (!control || control.a.generation === undefined) {
+      return { ok: false, code: RELAY_CLOSE_CODE.HOST_OFFLINE }
     }
-    const live = this.ctx
-      .getWebSockets('phone')
-      .filter((s) => (this.attachment(s) as PhoneAttachment).phase !== 'auth')
-    if (live.length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
-      this.phoneFail(ws, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
-      return
+    const conns = await this.conns()
+    if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+      await this.pruneDeadConns(conns)
+      if (Object.keys(conns).length >= RELAY_PROTOCOL_LIMITS.maxConnectionsPerHost) {
+        return { ok: false, code: RELAY_CLOSE_CODE.LIMIT_EXCEEDED }
+      }
     }
-    const relayHostId = control.a.claims.relayHostId
-    a.connId = `${relayHostId}.${crypto.randomUUID()}`
-    a.connTicket = b64url(nacl.randomBytes(32))
-    a.phase = 'pending'
-    a.generation = control.a.generation
-    a.credentialKind = credential.kind
-    a.relayDeviceId = credential.relayDeviceId
-    a.deadline = Date.now() + RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
-    this.attach(ws, a)
+    const connTicket = b64url(nacl.randomBytes(32))
+    conns[connId] = {
+      phase: 'pending',
+      generation: control.a.generation,
+      connTicket,
+      kind: credential.kind,
+      relayDeviceId: credential.relayDeviceId
+    }
+    await this.ctx.storage.put('conns', conns)
     this.send(control.ws, {
       type: 'conn-open',
-      connId: a.connId,
-      connTicket: a.connTicket,
+      connId,
+      connTicket,
       kind: credential.kind,
       relayDeviceId: credential.relayDeviceId,
       attachDeadlineMs: RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs
     })
-    await this.reschedule()
+    return { ok: true, connTicket, generation: control.a.generation, ...credential }
+  }
+
+  // Host data socket presented a valid ticket to the splice object.
+  async confirmSplice(connId: string, generation: number): Promise<boolean> {
+    const conns = await this.conns()
+    const conn = conns[connId]
+    if (!conn || conn.phase !== 'pending' || conn.generation !== generation) return false
+    if (this.activeControl()?.a.generation !== generation) return false
+    conns[connId] = { ...conn, phase: 'active', connTicket: undefined }
+    await this.ctx.storage.put('conns', conns)
+    return true
+  }
+
+  async spliceClosed(connId: string): Promise<void> {
+    const conns = await this.conns()
+    if (!(connId in conns)) return
+    delete conns[connId]
+    await this.ctx.storage.put('conns', conns)
   }
 
   // Spike stub. Production reads relay_devices / relay_invites through Hyperdrive.
@@ -431,110 +401,48 @@ export class HostRelay extends DurableObject<Env> {
     return null
   }
 
-  private phoneFail(ws: WebSocket, code: number, reason = ''): void {
-    this.send(ws, { type: 'relay-hello', ok: false, code })
-    this.close(ws, code, reason)
+  private async conns(): Promise<Record<string, Conn>> {
+    return (await this.ctx.storage.get<Record<string, Conn>>('conns')) ?? {}
   }
 
-  private phoneByConnId(connId: string): { ws: WebSocket; a: PhoneAttachment } | null {
-    for (const ws of this.ctx.getWebSockets('phone')) {
-      const a = this.attachment(ws) as PhoneAttachment
-      if (a.connId === connId) return { ws, a }
-    }
-    return null
+  // A splice object that was reset never reports its close. Ask before refusing on the budget.
+  private async pruneDeadConns(conns: Record<string, Conn>): Promise<void> {
+    const ids = Object.keys(conns)
+    const alive = await Promise.all(ids.map((id) => this.splice(id).isAlive().catch(() => false)))
+    ids.forEach((id, i) => {
+      if (!alive[i]) delete conns[id]
+    })
+    await this.ctx.storage.put('conns', conns)
   }
 
-  // ---------------- host data ----------------
+  private splice(connId: string) {
+    return this.env.SPLICE_RELAY.get(this.env.SPLICE_RELAY.idFromName(connId))
+  }
 
-  private async onData(
-    ws: WebSocket,
-    a: DataAttachment,
-    message: string | ArrayBuffer
-  ): Promise<void> {
-    if (a.phase === 'spliced') {
-      this.phoneByConnId(a.connId)?.ws.send(message)
-      return
-    }
-    const phone = this.phoneByConnId(a.connId)
-    let ok = false
-    if (typeof message === 'string' && phone && phone.a.phase === 'pending') {
-      try {
-        const { type, ...body } = JSON.parse(message) as Record<string, unknown>
-        const auth = HostDataAuthSchema.safeParse(body)
-        ok =
-          type === 'host-data-auth' &&
-          auth.success &&
-          timingSafeEqualStr(auth.data.connTicket, phone.a.connTicket ?? '') &&
-          auth.data.generation === phone.a.generation &&
-          this.activeControl()?.a.generation === auth.data.generation
-      } catch {
-        ok = false
-      }
-    }
-    if (!ok || !phone) {
-      this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data ticket')
-      return
-    }
-    a.phase = 'spliced'
-    a.deadline = NO_DEADLINE
-    this.attach(ws, a)
-    phone.a.phase = 'spliced'
-    phone.a.deadline = NO_DEADLINE
-    delete phone.a.connTicket
-    this.attach(phone.ws, phone.a)
-    const now = Date.now()
-    this.send(
-      phone.ws,
-      phone.a.credentialKind === 'invite'
-        ? { type: 'relay-hello', ok: true, credentialKind: 'invite', leaseExpiresAt: now + 15_000 }
-        : {
-            type: 'relay-hello',
-            ok: true,
-            credentialKind: 'resume',
-            leaseExpiresAt: now + 10_000,
-            acceptedCredentialVersion: 1,
-            acceptedAs: 'current',
-            resumeExpiresAt: now + RELAY_PROTOCOL_LIMITS.resumeTtlMs
-          }
-    )
-    await this.reschedule()
+  private async closeSplices(filter: (c: Conn) => boolean, code: number, reason: string): Promise<void> {
+    const conns = await this.conns()
+    const ids = Object.keys(conns).filter((id) => filter(conns[id]))
+    await Promise.all(ids.map((id) => this.splice(id).closeSplice(code, reason).catch(() => {})))
+    for (const id of ids) delete conns[id]
+    await this.ctx.storage.put('conns', conns)
   }
 
   // ---------------- lifecycle ----------------
 
-  private async onSocketGone(ws: WebSocket, code: number): Promise<void> {
+  private async onSocketGone(ws: WebSocket, _code: number): Promise<void> {
     const a = this.attachment(ws)
     if (!a) return
     // During webSocketClose the closing socket is still listed; clear it first so it can't count as live.
     this.attach(ws, null)
-    if (a.k === 'control' && a.phase === 'active') {
-      if (!this.activeControl()) {
-        const session = await this.ctx.storage.get<Session>('session')
-        if (session && session.generation === a.generation) {
-          await this.ctx.storage.put<Session>('session', { ...session, orphanedAt: Date.now() })
-        }
-        // Pending phones have nobody to attach them.
-        for (const phone of this.ctx.getWebSockets('phone')) {
-          const p = this.attachment(phone) as PhoneAttachment
-          if (p.phase === 'pending') this.close(phone, RELAY_CLOSE_CODE.HOST_OFFLINE, '')
-        }
+    if (a.k === 'control' && a.phase === 'active' && !this.activeControl()) {
+      const session = await this.ctx.storage.get<Session>('session')
+      if (session && session.generation === a.generation) {
+        await this.ctx.storage.put<Session>('session', { ...session, orphanedAt: Date.now() })
       }
-    } else if (a.k === 'phone' && a.connId) {
-      for (const data of this.ctx.getWebSockets(`data:${a.connId}`)) {
-        this.close(data, RELAY_CLOSE_CODE.PEER_DROPPED, 'peer dropped')
-      }
-    } else if (a.k === 'data' && a.phase === 'spliced') {
-      const phone = this.phoneByConnId(a.connId)
-      if (phone) this.close(phone.ws, RELAY_CLOSE_CODE.PEER_DROPPED, code === 1000 ? '' : 'peer dropped')
+      // Pending phones have nobody to attach them.
+      await this.closeSplices((c) => c.phase === 'pending', RELAY_CLOSE_CODE.HOST_OFFLINE, '')
     }
     await this.reschedule()
-  }
-
-  private closeAllSplices(code: number, reason: string): void {
-    for (const ws of [...this.ctx.getWebSockets('phone'), ...this.ctx.getWebSockets('data')]) {
-      const a = this.attachment(ws)
-      if (a && a.k !== 'control' && a.phase !== 'auth') this.close(ws, code, reason)
-    }
   }
 
   async alarm(): Promise<void> {
@@ -556,11 +464,7 @@ export class HostRelay extends DurableObject<Env> {
         continue
       }
       if (now >= a.deadline) {
-        if (a.k === 'phone' && a.phase === 'pending') {
-          this.close(ws, RELAY_CLOSE_CODE.HOST_OFFLINE, 'attach-timeout')
-        } else {
-          this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
-        }
+        this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
         await this.onSocketGone(ws, 1006)
       }
     }
@@ -570,7 +474,7 @@ export class HostRelay extends DurableObject<Env> {
       !this.activeControl() &&
       now - session.orphanedAt >= this.orphanGraceMs
     ) {
-      this.closeAllSplices(RELAY_CLOSE_CODE.PEER_DROPPED, 'host control lost')
+      await this.closeSplices(() => true, RELAY_CLOSE_CODE.PEER_DROPPED, 'host control lost')
       await this.ctx.storage.put<Session>('session', { ...session, orphanedAt: null })
     }
     await this.reschedule()

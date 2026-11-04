@@ -1,7 +1,7 @@
 # Relay edge local spike: results (2026-11-04)
 
 Run: `npm install && npx tsx spike/run-all.ts` (starts `wrangler dev`, workerd 1.20261103.1, local keys only).
-Result: **14/14 pass**. Timings are scaled down for the run (ping 1.5 s, silence 5 s, grace 4 s); production values are 30 s / 75 s / 30 s.
+Result: **17/17 pass** (default), **17/17** with `GUARD=1` (one of those checks only records the guard's false positive). Timings are scaled down for the run (ping 1.5 s, silence 5 s, grace 4 s); production values are 30 s / 75 s / 30 s.
 
 ## What was exercised
 
@@ -9,7 +9,8 @@ Result: **14/14 pass**. Timings are scaled down for the run (ping 1.5 s, silence
   - control: by the verified JWT's `relayHostId`;
   - phone: by `/v1/connect/<relayHostId>`;
   - data: by the `connId` prefix `<relayHostId>.<uuid>`.
-- Durable Object `src/host-relay.ts`, one per host:
+- Durable Object `src/splice-relay.ts`, one per phone connection (`connId`): phone socket plus host data socket and the splice. It calls the host object over DO RPC (`authorizePhone`, `confirmSplice`, `spliceClosed`); the host calls back with `closeSplice` and `isAlive`.
+- Durable Object `src/host-relay.ts`, one per host, now holds only control, session and connection bookkeeping:
   - Hibernation API for every socket;
   - per-socket state in attachments;
   - session state (generation, resume-secret hash, orphan time) in storage;
@@ -32,18 +33,23 @@ Result: **14/14 pass**. Timings are scaled down for the run (ping 1.5 s, silence
   - credential commands: invite, install, confirm and revoke all return `control-error unsupported` in the spike;
   - the director epoch check.
 
-## R4 splice: PASS for correctness, RISK CONFIRMED for slow readers
-- Text/binary frame type is preserved in both directions.
-- 8 MiB text and 8 MiB binary frames pass host→phone.
-- ~0.9 MiB phone→host passes. The shipped desktop caps inbound data frames at 1 MiB, so 8 MiB phone→host is not a client path.
-- **Slow reader:**
-  - Setup: phone TCP paused, host pushes 256 × 1 MiB.
-  - Result: `send()` never throws or closes, and workerd RSS grew 239→755 MB (local). Workers WebSockets have no `bufferedAmount` (checked in workers-types), so the edge cannot see its outbound queue.
-  - On Cloudflare an object is capped at 128 MB. One slow phone could get the object reset, which drops **every** socket for that host.
-  - Mitigation options, to test on Cloudflare:
-    1. Learn what CF does when the outbound buffer fills. Types say "socket is closed automatically"; need the actual limit.
-    2. An edge-side byte budget per splice with no drain signal: close 4429 once more than N MB has been forwarded in a window where the reader sent nothing. Crude.
-    3. An application-level ack window. This needs a client change, so it's out of scope.
+## R4 splice: PASS. Mitigation = one object per splice. Drop the flood guard
+- Correctness unchanged: text/binary type preserved; 8 MiB text and binary host→phone; ~0.9 MiB phone→host (the desktop caps inbound at 1 MiB).
+- The slow-reader risk itself is unchanged: Workers WebSockets have no `bufferedAmount`, `send()` never fails, and local RSS grew 243→760 MB for 256 MiB pushed at a paused phone.
+- **Isolation (the mitigation):**
+  - While flooding one paused phone, the host control kept answering pings (6 during the flood) and a second phone on the same host echoed 16/16.
+  - Resetting one splice object (`ctx.abort`) dropped only that phone (1006). Control and the other splice stayed up.
+  - The host reclaimed the dead slot by probing `isAlive()` when its 8-connection budget filled: 6/6 new phones were accepted, and the 9th was refused with 4429.
+  - So on Cloudflare the worst case is one phone's object hitting the 128 MB cap and being reset. That phone reconnects; the host and its other phones don't notice.
+- **RPC hop cost (local):** phone open → `relay-hello` p50 21.0 ms, p95 21.7 ms; `authorizePhone` RPC p50 1 ms, max 11 ms (n=33). Add one intra-colo RPC on Cloudflare (to measure).
+- **Silent-bytes flood guard** (`SPLICE_SILENT_BYTES_MAX`, tested at 32 MiB per 10 s): **drop it.**
+  - It cut the flood at 33 MiB and closed 4429, with RSS rising 242→298 MB.
+  - But it also closed a legitimate phone that was reading normally while the host streamed 48 MiB, at 32 MiB (false positive). The edge can't tell a paused reader from a quiet one.
+  - Isolation already bounds the damage to one phone. Left in the code disabled (0) for the Cloudflare test only.
+- **Still needs Cloudflare:**
+  - what the runtime actually does when a socket's outbound queue grows (limit, close code), and when an object hits 128 MB;
+  - real cross-object RPC latency;
+  - cost of 2 objects per active phone (requests and duration).
 
 ## R2 local part: PASS (with one caveat)
 - Generation floor and resume state live in object storage.
@@ -61,7 +67,7 @@ Result: **14/14 pass**. Timings are scaled down for the run (ping 1.5 s, silence
 - Real hibernation (miniflare keeps objects in memory).
 
 ## Files
-- `src/index.ts` router; `src/jwt.ts` ES256/JWKS; `src/host-relay.ts` object; `src/bytes.ts`; `src/env.ts`.
+- `src/index.ts` router; `src/jwt.ts` ES256/JWKS; `src/host-relay.ts` host object; `src/splice-relay.ts` splice object; `src/bytes.ts`; `src/env.ts`.
 - `spike/run-all.ts` harness. `wrangler.jsonc`.
-- The spike-only route `/__spike/abort/<hostId>` is gated by `SPIKE_ADMIN=1`.
+- The spike-only routes `/__spike/abort/<hostId>` and `/__spike/abort-splice/<connId>` are gated by `SPIKE_ADMIN=1`. `GUARD=1 npx tsx spike/run-all.ts` runs with the flood guard on.
 - The phone credential check is a stub driven by `SPIKE_RESUME_TOKEN_HASHES`.

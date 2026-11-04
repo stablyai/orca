@@ -1,9 +1,10 @@
 // Relay edge Worker: stateless router. Every socket is owned by the host's Durable Object.
 import { HostRelay } from './host-relay'
+import { SpliceRelay } from './splice-relay'
 import type { Env } from './env'
 import { HOST_ID, verifyRelayJwt } from './jwt'
 
-export { HostRelay }
+export { HostRelay, SpliceRelay }
 
 const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id']
 
@@ -16,14 +17,17 @@ function forward(
   env: Env,
   request: Request,
   relayHostId: string,
-  extra: Record<string, string>
+  extra: Record<string, string>,
+  target: 'host' | 'splice' = 'host',
+  connId = ''
 ): Promise<Response> {
   const headers = new Headers(request.headers)
   for (const name of INTERNAL_HEADERS) headers.delete(name)
   headers.set('x-edge-origin', new URL(request.url).origin)
   for (const [name, value] of Object.entries(extra)) headers.set(name, value)
-  const stub = env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId))
-  return stub.fetch(new Request(request.url, { method: 'GET', headers }))
+  const init = new Request(request.url, { method: 'GET', headers })
+  if (target === 'splice') return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(connId)).fetch(init)
+  return env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId)).fetch(init)
 }
 
 export default {
@@ -37,6 +41,11 @@ export default {
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
       return forward(env, request, abort[1], { 'x-edge-kind': 'abort' })
+    }
+    const abortSplice = url.pathname.match(/^\/__spike\/abort-splice\/([^/]+)$/)
+    if (abortSplice && env.SPIKE_ADMIN === '1') {
+      const connId = decodeURIComponent(abortSplice[1])
+      return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', connId)
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
@@ -56,7 +65,9 @@ export default {
       if (!isUpgrade) return reject(426)
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) return reject(429)
-      return forward(env, request, phone[1], { 'x-edge-kind': 'phone' })
+      // Each phone connection gets its own splice object, named by a fresh connId.
+      const connId = `${phone[1]}.${crypto.randomUUID()}`
+      return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', connId)
     }
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
@@ -65,10 +76,7 @@ export default {
       const connId = decodeURIComponent(data[1])
       const relayHostId = connId.split('.', 1)[0]
       if (connId.length > 128 || !HOST_ID.test(relayHostId)) return reject(429)
-      return forward(env, request, relayHostId, {
-        'x-edge-kind': 'data',
-        'x-edge-conn-id': connId
-      })
+      return forward(env, request, relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', connId)
     }
     return reject(404)
   }

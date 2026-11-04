@@ -17,6 +17,9 @@ const ORIGIN = `http://127.0.0.1:${PORT}`
 const PING_MS = 1500
 const SILENCE_MS = 5000
 const GRACE_MS = 4000
+// GUARD=1 enables the per-splice silent-bytes flood guard (32 MiB per 10 s) for a second run.
+const GUARD = process.env.GUARD === '1'
+const GUARD_BYTES = 32 * 1024 * 1024
 const results: { name: string; ok: boolean; detail: string }[] = []
 const record = (name: string, ok: boolean, detail = ''): void => {
   results.push({ name, ok, detail })
@@ -39,7 +42,9 @@ async function main(): Promise<void> {
       `SILENCE_TIMEOUT_MS=${SILENCE_MS}`,
       `ORPHAN_GRACE_MS=${GRACE_MS}`,
       `SPIKE_RESUME_TOKEN_HASHES=resume:dev-spike:${phoneTokenHash}`,
-      `SPIKE_ADMIN=1`
+      `SPIKE_ADMIN=1`,
+      `SPLICE_SILENT_BYTES_MAX=${GUARD ? GUARD_BYTES : 0}`,
+      `SPLICE_SILENT_WINDOW_MS=10000`
     ].join('\n')
   )
   const host = nacl.box.keyPair()
@@ -76,7 +81,7 @@ async function main(): Promise<void> {
       if (i > 120) throw new Error(`wrangler dev did not start:\n${devLog}`)
       await sleep(500)
     }
-    await runTests({ jwt, keypair, identity, relayHostId, phoneToken })
+    await runTests({ jwt, keypair, identity, relayHostId, phoneToken }, () => devLog)
   } finally {
     dev.kill('SIGINT')
     await sleep(500)
@@ -211,7 +216,7 @@ function workerdRssMb(): number {
   }
 }
 
-async function runTests(ctx: Ctx): Promise<void> {
+async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
   // R5/R11: shipped desktop client completes hello -> challenge -> proof -> strict ack.
   const a = makeControl(ctx, ORIGIN)
   const ack = await a.client.connect().catch((e: Error) => e)
@@ -296,28 +301,108 @@ async function runTests(ctx: Ctx): Promise<void> {
     transport.onMessage(echo as never)
   }
 
-  // R4 slow reader: pause the phone's TCP socket, push 256 x 1 MiB frames from host; watch memory.
+  // R4 slow reader, isolated per splice object: pause one phone's TCP socket and flood it from the
+  // host while a second healthy phone keeps echoing and the host control keeps answering pings.
   {
+    const healthy = openPhone(ctx)
+    await waitFor(() => healthy.hello !== null, 5000)
     const slow = openPhone(ctx)
     await waitFor(() => slow.hello !== null, 5000)
     const tcp = (slow.ws as any)._socket as import('node:net').Socket
     tcp.pause()
     const before = workerdRssMb()
+    const pingsBefore = main.events.pings
     const hostSocket = [...((transport as any).socketsByConnectionId as Map<string, WebSocket>).values()].at(-1)!
     const frame = Buffer.alloc(1024 * 1024, 9)
     let sent = 0
+    let healthyEchoes = 0
     for (; sent < 256; sent++) {
       if (hostSocket.readyState !== WebSocket.OPEN) break
       hostSocket.send(frame, { binary: true })
-      if (sent % 16 === 0) await sleep(50)
+      if (sent % 16 === 0) {
+        const tag = `healthy-${sent}`
+        healthy.ws.send(tag)
+        if (await waitFor(() => healthy.inbox.some((m) => m.data === tag), 3000)) healthyEchoes++
+      }
     }
-    await sleep(3000)
+    await sleep(PING_MS * 2 + 500)
     const peak = workerdRssMb()
-    record('R4 slow reader: edge buffering under a paused phone (no backpressure API)', true,
-      `sent=${sent}MiB workerdRss before=${before}MB after=${peak}MB hostSocketOpen=${hostSocket.readyState === WebSocket.OPEN} phoneClosed=${slow.closed}`)
+    const controlOk = main.client.isLive() && main.events.pings > pingsBefore
+    // A paused phone can't read its close frame until its socket resumes.
     tcp.resume()
-    await sleep(2000)
+    const slowClose = await waitFor(() => slow.closed !== null, 5000).then(() => slow.closed)
+    if (GUARD) {
+      record('R4 guard: flood to a silent paused phone closes that splice 4429; control + other splice unaffected',
+        slowClose === 4429 && controlOk && healthyEchoes > 0 && healthy.closed === null,
+        `sent=${sent}MiB slowClose=${slowClose} healthyEchoes=${healthyEchoes} controlLive=${controlOk} rss ${before}->${peak}MB`)
+    } else {
+      record('R4 isolation: flooding one paused phone leaves host control and another splice working',
+        controlOk && healthyEchoes >= Math.floor(sent / 16) && healthy.closed === null,
+        `sent=${sent}MiB healthyEchoes=${healthyEchoes} pingsDuringFlood=${main.events.pings - pingsBefore} controlLive=${controlOk} slowClosed=${slowClose} workerdRss ${before}->${peak}MB`)
+    }
+    await sleep(500)
     slow.ws.close()
+
+    // Guard false-positive probe: a phone that reads normally but sends nothing while the host
+    // streams 48 MiB in ~6 s (e.g. a busy terminal) looks identical to a flood at the edge.
+    {
+      const reader = openPhone(ctx)
+      await waitFor(() => reader.hello !== null, 5000)
+      const hs = [...((transport as any).socketsByConnectionId as Map<string, WebSocket>).values()].at(-1)!
+      for (let i = 0; i < 48 && hs.readyState === WebSocket.OPEN; i++) {
+        hs.send(frame, { binary: true })
+        await sleep(120)
+      }
+      await waitFor(() => reader.inbox.length >= 48 || reader.closed !== null, 8000)
+      record(`R4 guard ${GUARD ? 'ON' : 'OFF'}: legit silent 48 MiB stream to a reading phone`,
+        GUARD ? true : reader.closed === null && reader.inbox.length === 48,
+        `received=${reader.inbox.length}MiB closed=${reader.closed}${GUARD && reader.closed === 4429 ? ' (FALSE POSITIVE)' : ''}`)
+      reader.ws.close()
+    }
+
+    // R4: resetting one splice object drops only that phone; the host budget is not leaked.
+    {
+      const victim = openPhone(ctx)
+      await waitFor(() => victim.hello !== null, 5000)
+      const victimConn = main.events.opens.at(-1)?.connId as string
+      await fetch(`${ORIGIN}/__spike/abort-splice/${encodeURIComponent(victimConn)}`).catch(() => {})
+      const victimDropped = await waitFor(() => victim.closed !== null, 5000)
+      healthy.ws.send('after-splice-reset')
+      const healthyOk = await waitFor(() => healthy.inbox.some((m) => m.data === 'after-splice-reset'), 3000)
+      // Fill the host's 8-connection budget (2 phones are still live: `phone` and `healthy`).
+      // The reset splice must not hold a slot: 6 more succeed, and a 7th is refused 4429.
+      const extra = []
+      for (let i = 0; i < 6; i++) {
+        extra.push(openPhone(ctx))
+        await waitFor(() => extra.at(-1)!.hello !== null || extra.at(-1)!.closed !== null, 5000)
+      }
+      const okCount = extra.filter((p) => (p.hello as any)?.ok === true).length
+      const over = openPhone(ctx)
+      await waitFor(() => over.closed !== null, 5000)
+      record('R4 splice object reset drops only that phone; control + other splice live; budget reclaimed + enforced',
+        victimDropped && healthyOk && main.client.isLive() && okCount === 6 && over.closed === 4429,
+        `victimClose=${victim.closed} healthyEcho=${healthyOk} control=${main.client.isLive()} newPhonesOk=${okCount}/6 ninthClose=${over.closed}`)
+      for (const p of extra) p.ws.close()
+    }
+    healthy.ws.close()
+    await sleep(500)
+  }
+
+  // R4: phone connect latency through the extra RPC hop (local).
+  {
+    const samples: number[] = []
+    for (let i = 0; i < 20; i++) {
+      const t0 = performance.now()
+      const p = openPhone(ctx)
+      await waitFor(() => p.hello !== null || p.closed !== null, 5000)
+      samples.push(performance.now() - t0)
+      p.ws.close()
+      await sleep(50)
+    }
+    samples.sort((x, y) => x - y)
+    const rpc = [...devLog().matchAll(/spike_rpc_authorize_ms=(\d+)/g)].map((m) => Number(m[1])).sort((x, y) => x - y)
+    record('R4 phone connect latency with splice->host RPC (local)', samples[19] < 1000,
+      `open->relay-hello p50=${samples[10].toFixed(1)}ms p95=${samples[18].toFixed(1)}ms; authorize RPC p50=${rpc[Math.floor(rpc.length / 2)]}ms max=${rpc.at(-1)}ms n=${rpc.length}`)
   }
 
   // Rebind keeps generation and splices (resume secret within orphan grace).

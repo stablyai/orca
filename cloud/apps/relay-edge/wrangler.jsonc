@@ -5,9 +5,15 @@
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
-    "bindings": [{ "name": "HOST_RELAY", "class_name": "HostRelay" }]
+    "bindings": [
+      { "name": "HOST_RELAY", "class_name": "HostRelay" },
+      { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["HostRelay"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["HostRelay"] },
+    { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] }
+  ],
   "vars": {
     // Local spike only. Real deployments read JWKS from the auth service.
     "RELAY_JWT_AUDIENCE": "orca-relay",
