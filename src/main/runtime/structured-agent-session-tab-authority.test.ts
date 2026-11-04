@@ -65,7 +65,16 @@ it('captures persisted folder attention without installing the chat host or open
       providerHandle: null
     }
   })
+  const physicalEpoch = journal.cursor().epoch
+  await journal.replaceEpochItems('handle_forked', 0, [
+    {
+      identity: { provider: 'orca', clientMessageId: 'kept-history' },
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'retained history' }] },
+      turnScope: { kind: 'thread' }
+    }
+  ])
   const cursor = journal.cursor()
+  expect(cursor.epoch).not.toBe(physicalEpoch)
   await journals.closeAll()
   const runtime = new AuthorityRuntime(profile.profile)
   const ensureHost = vi
