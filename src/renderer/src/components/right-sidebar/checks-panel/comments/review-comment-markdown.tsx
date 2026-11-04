@@ -98,12 +98,8 @@ const diagramClassName =
 
 const components: Components = {
   // Review bots (Greptile) post Mermaid diagrams; show them as diagrams, with the source until they render.
-  pre: ({ node, children }) => {
-    const source = CompactPre ? (
-      <CompactPre node={node}>{children}</CompactPre>
-    ) : (
-      <pre>{children}</pre>
-    )
+  pre: ({ children }) => {
+    const source = CompactPre ? <CompactPre>{children}</CompactPre> : <pre>{children}</pre>
     const code = React.Children.toArray(children)[0]
     return isMermaidPre(children) && React.isValidElement<{ children?: React.ReactNode }>(code)
       ? renderMermaidFence(code.props.children, diagramClassName, source)
