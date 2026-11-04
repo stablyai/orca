@@ -3,6 +3,8 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'project group create': { name: '--name <name>          Name for the new project group' },
+  'project group rename': { name: '--name <name>          New name for the project group' },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection'

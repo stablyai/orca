@@ -27,6 +27,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'from-element-index': '--from-element-index <n> Source element index from get-app-state',
   'from-x': '--from-x <x>           Source window-local x coordinate',
   'from-y': '--from-y <y>           Source window-local y coordinate',
+  group: '--group <id-or-name>   Project group id or name',
   help: '--help                 Show this help message',
   'include-visual-layouts': '--include-visual-layouts Include tab and pane topology in JSON output',
   interrupt: '--interrupt            Send as an interrupt-style input when supported',
