@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-
-// @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
@@ -8,7 +6,6 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-
 import { ChatBehaviorSetting } from './ChatBehaviorSetting'
 import { i18n } from '@/i18n/i18n'
 import de from '../../../i18n/locales/de.json'
@@ -154,7 +151,16 @@ describe('ChatBehaviorSetting shell environment', () => {
 describe('ChatBehaviorSetting follow-up behavior', () => {
   const FOLLOW_UP_SWITCH = '[role="switch"][aria-label="Queue follow-ups"]'
 
-  it('hides the choice until the host answers, then shows it', async () => {
+  it('shows image-queue copy and saves the toggle when the host queues messages', () => {
+    setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY])
+    const updateSettings = vi.fn()
+    const { container } = renderSetting({}, updateSettings)
+    expect(container.textContent).toContain('Messages with images wait as cards too.')
+    fireEvent.click(container.querySelector(FOLLOW_UP_SWITCH)!)
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
+  })
+
+  it('hides the switch until the host answers, then shows it', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     let answer: (status: { capabilities: string[] }) => void = () => {}
     vi.stubGlobal('api', {

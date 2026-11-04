@@ -17,7 +17,13 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
 const NO_COMMANDS: ReadonlySet<string> = new Set()
 
-/** Published delivery decides notices; an echo keeps sending until its host row arrives. */
+export {
+  agentSessionVisibleFailureFacts as structuredAgentSessionStartFailureFacts,
+  agentSessionFailureStatedByRow as agentSessionFailureStatedByStartRow,
+  sameAgentSessionFailureFact
+} from '../../../../shared/agent-session/failures/agent-session-visible-failures'
+
+/** Show sending until host rows arrive and host-worded rejections afterward; settled uncertain input remains ordinary transcript content. */
 export function structuredAgentSessionDeliveryNotices(args: {
   pending: readonly StructuredAgentSessionPendingSend[]
   submissions: readonly AgentJournalSubmission[]
@@ -30,7 +36,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   // A row under the id is the host's to describe, before the sender settles from it.
   const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
   for (const entry of args.pending) {
-    if (!recorded.has(entry.clientMessageId)) {
+    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
       notices.set(
         agentJournalSubmissionKey(entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING

@@ -5,10 +5,13 @@
       "connecting": "Conectando al host…",
       "connectingTo": "Conectando a {{name}}…",
       "default": "Predeterminado del sistema",
+      "fableWindow": "Fable",
       "hostNotFound": "Host no encontrado",
       "invalidSnapshot": "Instantánea de cuentas del host no válida",
       "loadingAccounts": "Cargando cuentas…",
       "manageAccountsHint": "Añade cuentas o vuelve a autenticarlas desde Ajustes → Cuentas en el escritorio.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Otros agentes",
       "refreshAccounts": "Actualizar cuentas",
       "sessionWindow": "5h",
       "switchFailed": "No se pudo cambiar de cuenta",
@@ -777,6 +780,9 @@
     },
     "hostCard": {
       "hostActions": "Acciones para {{title}}",
+      "needsYou_many": "{{count}} te necesitan",
+      "needsYou_one": "{{count}} te necesita",
+      "needsYou_other": "{{count}} te necesitan",
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
@@ -1311,10 +1317,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "Activos: {{count}}",
+      "heading": "Agentes",
+      "showAll": "Mostrar todos ({{count}})",
+      "showFewer": "Mostrar menos"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar la actualización de Orca {{version}}",
       "title": "Orca {{version}} está disponible",
       "updateAccessibilityLabel": "Orca {{version}} está disponible, toca para actualizar"
+    },
+    "automationsTab": {
+      "connectDesktop": "Conecta {{desktop}} para ver y ejecutar automatizaciones.",
+      "createHint": "Toca + para programar un agente.",
+      "emptyTitle": "Programa el trabajo de los agentes",
+      "lastStatus": "Última: {{status}}",
+      "newAutomation": "Nueva automatización",
+      "noAutomations": "Aún no hay automatizaciones",
+      "pairDesktop": "Empareja un escritorio para ver y ejecutar automatizaciones.",
+      "paused": "En pausa",
+      "scheduled": "Programadas",
+      "showFor": "Mostrar automatizaciones de",
+      "toggleFailed": "No se pudo actualizar {{name}}",
+      "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
     },
     "emptyState": {
       "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
@@ -1326,9 +1352,7 @@
       "title": "Conecta tu escritorio"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tareas en",
-      "automationsHeading": "Automatizaciones",
-      "automationsHostPickerTitle": "Abrir automatizaciones en"
+      "hostPickerTitle": "Abrir tareas en"
     },
     "listHeader": {
       "desktopsHeading": "Escritorios"
@@ -1339,6 +1363,33 @@
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "removeHostTitle": "Eliminar host",
       "tryAgain": "Por favor, vuelve a intentarlo."
+    },
+    "stats": {
+      "agentTime": "Tiempo de agentes",
+      "agentsSpawned": "Agentes iniciados",
+      "days": "{{days}} d",
+      "heading": "Tus estadísticas",
+      "hours": "{{hours}} h",
+      "minutes": "{{minutes}} min",
+      "prsCreated": "PRs creados"
+    },
+    "tabs": {
+      "automations": "Automatizaciones",
+      "chooseDesktop": "{{desktop}}, elegir otro escritorio",
+      "feed": "Actividad",
+      "usage": "Uso"
+    },
+    "usage": {
+      "active": "Activa",
+      "addAccounts": "Añade cuentas desde Ajustes → Cuentas en el escritorio.",
+      "connectDesktop": "Conecta {{desktop}} para ver el uso de las cuentas de agentes.",
+      "emptyTitle": "Aún no hay datos de uso",
+      "openAccountsHint": "Abre las cuentas de este escritorio",
+      "pairDesktop": "Empareja un escritorio para ver el uso de las cuentas de agentes.",
+      "refresh": "Actualizar uso",
+      "showUsageFor": "Mostrar uso de",
+      "updatedAgo": "Actualizado hace {{time}}",
+      "updatedJustNow": "Actualizado ahora mismo"
     }
   },
   "hooks": {
@@ -3983,7 +4034,6 @@
       "unknownResult": "Resultado desconocido",
       "notReported": "No informado",
       "searchOptions": "Buscar opciones",
-      "scheduleAgentWorkAndViewRuns": "Programa el trabajo de los agentes y consulta las ejecuciones",
       "task": "Tarea",
       "review": "Revisar"
     },

@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import type { ReactNode } from 'react'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
@@ -11,8 +10,25 @@ import {
   screen
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  type StructuredLaunchState,
+  resetStructuredAgentLaunchRegistryForTests,
+  setStructuredLaunchState
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
+import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
+
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -68,23 +84,7 @@ vi.mock('@/runtime/structured-chat-name-observation', () => ({
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 0 }))
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
-import {
-  QuickLaunchAgentMenuItems,
-  ProjectedAgentMenuItems,
-  useTabAgentMenuLaunch
-} from './QuickLaunchButton'
-import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
-import {
-  resetStructuredAgentLaunchRegistryForTests,
-  setStructuredLaunchState
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
 
@@ -368,16 +368,7 @@ it.each(['chat', 'cli'] as const)(
           delivered: outcome === 'delivered'
         })
       }
-      expect(toastError).toHaveBeenCalledTimes(
-        outcome === 'unconfirmed' || outcome === 'no-command' ? 1 : 0
-      )
-      if (outcome === 'unconfirmed') {
-        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
-          description: expect.stringContaining(
-            "Orca couldn't confirm your message reached the agent"
-          )
-        })
-      }
+      expect(toastError).toHaveBeenCalledTimes(outcome === 'no-command' ? 1 : 0)
       cleanup()
     }
   }
@@ -620,7 +611,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  it('tells the notes menu once why its notes did not reach the new agent', async () => {
+  it('completes an unknown notes handoff once without claiming it failed', async () => {
+    const onPromptHandedOff = vi.fn()
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
       promptDeliveryResult: Promise.resolve({
@@ -638,15 +630,14 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         onFocusTerminal={vi.fn()}
         prompt="review notes"
         promptDelivery="submit-after-ready"
-        onPromptHandedOff={vi.fn()}
+        onPromptHandedOff={onPromptHandedOff}
       />
     )
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
 
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalledOnce())
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
-      description: expect.stringContaining("Orca couldn't confirm your message reached the agent")
-    })
+    expect(onPromptHandedOff).toHaveBeenCalledOnce()
+    await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toEqual({ delivered: false })
+    expect(toastError).not.toHaveBeenCalled()
   })
 
   it("says nothing while a new tab's terminal is still starting", async () => {

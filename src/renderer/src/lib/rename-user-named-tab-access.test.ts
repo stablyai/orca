@@ -35,7 +35,7 @@ import {
   clearFileExplorerUndoHistory,
   redoFileExplorer,
   undoFileExplorer
-} from '@/components/right-sidebar/fileExplorerUndoRedo'
+} from '@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import { editorTabDocumentFolderAccess, editorTabFileAccess } from './local-file-access'
 import { renameFileOnDisk } from './rename-file'

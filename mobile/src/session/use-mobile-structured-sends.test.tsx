@@ -1,5 +1,4 @@
-// Settle local echoes by the host’s submission id, never by matching text.
-
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +9,7 @@ import type {
   AgentJournalSubmission
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   acceptedSubmission,
@@ -18,6 +18,8 @@ import {
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import { useMobileStructuredSends } from './use-mobile-structured-sends'
+// Settle local echoes by the host’s submission id, never by matching text.
 
 const asyncStorage = vi.hoisted(() => ({ getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() }))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
@@ -189,6 +191,169 @@ describe('a structured send in the open chat', () => {
       listener?.(journal([userRow('failed', 'hi', 1), userRow(id, 'hi', 2)], [failed, resent]))
     )
     expect(shown()).toEqual([[agentJournalSubmissionKey(id), 'hi']])
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the complete ordinary bubble for host-recorded uncertainty', async () => {
+    await mount()
+    answer = (id) => ({ clientMessageId: id, submission: recorded(id, 'unknown') })
+    const id = await send('maybe')
+    expect(shown()).toEqual([[agentJournalSubmissionKey(id), 'maybe']])
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('shows unknown transport input with its photo and joins only its exact row', async () => {
+    await mount()
+    sendRequest.mockImplementation(async (method) => {
+      if (method === 'agentSession.send') {
+        throw markRpcDeliveryUnknown(new Error('connection lost'))
+      }
+      return ok({ models: [], current: {} })
+    })
+    await act(async () => {
+      expect(
+        await hook!.sendWithOutcome('Full original prose', ['file:///original.png'], undefined, [
+          { path: '/host/original.png', previewUri: 'file:///original.png' }
+        ])
+      ).toBe('unknown')
+    })
+    const row = hook!.session.messages[0]!
+    expect(row.blocks).toEqual([
+      { type: 'text', text: 'Full original prose' },
+      { type: 'image-ref', path: '/host/original.png' }
+    ])
+    expect(hook!.imagePreviewsByMessageId[row.id]).toEqual(['file:///original.png'])
+    act(() => listener?.(journal([userRow('unrelated', 'different input', 1)], [])))
+    expect(hook!.session.messages.some((message) => message.id === row.id)).toBe(true)
+    const id = String(
+      fieldsOf(
+        fieldsOf(sendRequest.mock.calls.find(([method]) => method === 'agentSession.send')?.[1])
+          .envelope
+      ).clientOperationId
+    )
+    act(() => listener?.(journal([userRow(id, 'Full original prose', 2)], [recorded(id)])))
+    expect(shown()).toEqual([[row.id, 'Full original prose']])
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+})
+
+describe('a structured send whose answer was lost', () => {
+  let renderer: ReactTestRenderer | null = null
+  let sends: ReturnType<typeof useMobileStructuredSends> | null = null
+  const onSendError = vi.fn()
+
+  function Harness(props: {
+    sessionKey: string
+    submissions?: AgentJournalSubmission[]
+    queuedMessages?: AgentSessionQueuedMessage[]
+  }): null {
+    sends = useMobileStructuredSends({
+      sessionKey: props.sessionKey,
+      submissions: props.submissions ?? [],
+      queuedMessages: props.queuedMessages ?? null,
+      onSendError
+    })
+    return null
+  }
+
+  function render(props: Parameters<typeof Harness>[0]): void {
+    act(() => {
+      if (renderer) {
+        renderer.update(createElement(Harness, props))
+      } else {
+        renderer = create(createElement(Harness, props))
+      }
+    })
+  }
+
+  const message = (clientMessageId: string) => ({
+    clientMessageId,
+    body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
+    queuedAt: 1
+  })
+
+  function hold(clientMessageId: string): void {
+    act(() => sends!.accept(message(clientMessageId)))
+  }
+
+  const drawn = () => sends!.optimistic.map((send) => send.clientMessageId)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    sends = null
+    vi.useRealTimers()
+  })
+
+  it('bounds real accept/reconciliation work linearly at N and 10N retained inputs', () => {
+    const work = [20, 200].map((count) => {
+      render({ sessionKey: `population-${count}` })
+      let reads = 0
+      act(() => {
+        for (let index = 0; index < count; index++) {
+          const entry = message(`retained-${index}`)
+          sends!.accept({
+            ...entry,
+            get clientMessageId() {
+              reads++
+              return entry.clientMessageId
+            }
+          })
+        }
+      })
+      reads = 0
+      act(() => sends!.accept(message(`retained-${count - 1}`)))
+      const operations = reads
+      expect(sends!.optimistic).toHaveLength(count)
+      expect(operations).toBeGreaterThanOrEqual(count)
+      expect(operations).toBeLessThanOrEqual(4 * count)
+      return operations
+    })
+    console.info('DL1 retained-input ID reads N/10N:', work)
+  })
+
+  it('retains ordinary input after the operation deadline, independently of newer sends', () => {
+    render({ sessionKey: 'a' })
+    hold('lost')
+    expect(drawn()).toEqual(['lost'])
+    act(() => sends!.accept(message('next')))
+    render({ sessionKey: 'a', submissions: [recorded('other')] })
+    expect(drawn()).toEqual(['lost', 'next'])
+    act(() => {
+      vi.advanceTimersByTime(30_000)
+    })
+    expect(drawn()).toEqual(['lost', 'next'])
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('keeps its ordinary input while another chat is open, and settles it back in its own', () => {
+    render({ sessionKey: 'a' })
+    hold('lost')
+    render({ sessionKey: 'b', submissions: [recorded('other')] })
+    act(() => {
+      vi.advanceTimersByTime(5_000)
+    })
+    render({ sessionKey: 'a', submissions: [recorded('lost')] })
+    act(() => {
+      vi.advanceTimersByTime(30_000)
+    })
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('releases its view-owned memory when the chat screen goes away', () => {
+    render({ sessionKey: 'a' })
+    hold('lost')
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(vi.getTimerCount()).toBe(0)
+    act(() => {
+      vi.advanceTimersByTime(30_000)
+    })
     expect(onSendError).not.toHaveBeenCalled()
   })
 })

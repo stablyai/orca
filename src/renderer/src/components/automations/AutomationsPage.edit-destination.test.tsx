@@ -25,6 +25,8 @@ import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import type { Repo } from '../../../../shared/repo-types'
 import { unscopedAutomationListRows, type AutomationListRow } from './automation-list-row-identity'
 import {
@@ -40,8 +42,18 @@ import {
 import { selfScopedList } from './automations-page-runtime-fixtures'
 import { listedRow } from './automations-page-listed-items'
 import { makeAutomation, REPO_ID } from './automations-page-fixtures'
+import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
+import type { AutomationUpdateInput } from '../../../../shared/automations-types'
+import type { AutomationDraft } from './AutomationEditorDialog'
+import { editAutomationLegacyDraft, pickAutomationLaunch } from './automation-launch-draft'
+import { getAutomationTemplates } from './automation-templates'
 
 installAutomationsPageHarness()
+
+function launchDraft(value: unknown): AutomationDraft {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness captures the real editor props and forwards its actual draft unchanged.
+  return value as AutomationDraft
+}
 
 /** A runtime project with the same host-local id as the desktop project. */
 function addCollidingRuntimeProject(): void {
@@ -73,6 +85,158 @@ function addCollidingRuntimeProject(): void {
 }
 
 describe('AutomationsPage edit fencing', () => {
+  it('moves a pending supplemental edit to an older host, including a further legacy edit', async () => {
+    const automation = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
+    api.automations.list.mockResolvedValue([])
+    scopedList([automation])
+    runtimeHost([], [])
+    addRuntimeProject()
+    capableChatDestination()
+    runtimeCreateReturns(makeAutomation({ id: 'a-moved' }))
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => mocks.listPanel?.openEditDialog(listedRow(automation.id)))
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) =>
+        editAutomationLegacyDraft(launchDraft(current), '--add-dir docs --add-dir fixtures', true)
+      )
+    })
+    await act(async () => mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY))
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...editAutomationLegacyDraft(
+          launchDraft(current),
+          '--add-dir docs --add-dir examples',
+          false
+        ),
+        projectId: RUNTIME_REPO_ID,
+        workspaceId: RUNTIME_WORKSPACE_ID
+      }))
+    })
+    await save()
+    expect(mocks.editorDialog?.notice).toBeFalsy()
+    expect(createRpcCalls()).toHaveLength(1)
+    expect(createRpcCalls()[0]?.[2]).toMatchObject({
+      launchSetupPatch: {
+        surface: 'terminal',
+        arguments: { kind: 'legacy-extras', value: '--add-dir docs --add-dir examples' }
+      }
+    })
+    expect(createRpcCalls()[0]?.[2]).not.toHaveProperty('launchSetupPatch.sources')
+    expect(api.automations.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: automation.id })
+    )
+    const createIndex = mocks.callRuntimeRpc.mock.calls.findIndex(
+      (call) => call[1] === 'automation.create'
+    )
+    expect(mocks.callRuntimeRpc.mock.invocationCallOrder[createIndex]).toBeLessThan(
+      api.automations.delete.mock.invocationCallOrder[0]
+    )
+  })
+
+  it.each(['full-first', 'legacy-first', 'template-rebind'] as const)(
+    'saves accepted sources through destination callbacks and the latest owner: %s',
+    async (order) => {
+      const automation = makeAutomation({
+        surface: 'terminal',
+        launchSetup: {
+          surface: 'terminal',
+          launchPreferences: { model: 'sonnet' },
+          agentArgs: '--saved-literal'
+        }
+      })
+      api.automations.list.mockResolvedValue([])
+      scopedList([automation])
+      runtimeHost([], [])
+      addRuntimeProject()
+      mocks.state.fetchWorktrees = async () => undefined
+      const { setLocalRuntimeCapabilitiesForTests } =
+        await import('@/runtime/local-runtime-capabilities')
+      setLocalRuntimeCapabilitiesForTests([
+        ...CHAT_CAPABILITIES,
+        AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
+      ])
+      let saved = automation
+      api.automations.update.mockImplementation(
+        async ({ updates }: { updates: AutomationUpdateInput }) => {
+          saved = makeAutomation({
+            ...saved,
+            ...applyAutomationLaunchSetupPatch(updates, saved),
+            launchSetup: undefined
+          })
+          return saved
+        }
+      )
+      await renderPage()
+      await settleHostQueries()
+      await act(async () => {
+        void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+      })
+      const acceptFull = async () => {
+        await act(async () => {
+          mocks.editorDialog?.onDraftChange((current) =>
+            pickAutomationLaunch(
+              launchDraft(current),
+              'claude',
+              {
+                agent: 'claude',
+                surface: 'terminal',
+                choices: {},
+                acceptedEdits: {
+                  choices: {},
+                  arguments: order === 'full-first' ? '--verbose --model opus' : '--verbose'
+                }
+              },
+              undefined,
+              true,
+              'terminal'
+            )
+          )
+        })
+      }
+      if (order === 'full-first') {
+        await acceptFull()
+      }
+      await act(async () => {
+        mocks.editorDialog?.editDestination?.onSelect(RUNTIME_SELF_KEY)
+      })
+      await act(async () => {
+        mocks.editorDialog?.onProjectChange(RUNTIME_REPO_ID)
+      })
+      expect(mocks.editorDialog?.launchAuthority?.kind).toBe('runtime')
+      if (order === 'template-rebind') {
+        for (const agentId of ['codex', 'claude'] as const) {
+          await act(async () => {
+            mocks.editorDialog?.onApplyTemplate({ ...getAutomationTemplates()[0], agentId })
+          })
+        }
+      } else {
+        await act(async () => {
+          mocks.editorDialog?.onDraftChange((current) =>
+            editAutomationLegacyDraft(launchDraft(current), '--model opus --add-dir docs', false)
+          )
+        })
+      }
+      await act(async () => {
+        mocks.editorDialog?.editDestination?.onSelect(DESKTOP_SELF_KEY)
+      })
+      await act(async () => {
+        mocks.editorDialog?.onProjectChange(REPO_ID)
+      })
+      expect(mocks.editorDialog?.launchAuthority?.kind).toBe('desktop')
+      if (order === 'legacy-first') {
+        await acceptFull()
+      }
+      const accepted = launchDraft(mocks.editorDialog?.draft)
+      await save()
+      expect(api.automations.update).toHaveBeenCalledOnce()
+      expect(createRpcCalls()).toHaveLength(0)
+      expect(saved.agentArgs).toBe(accepted.agentArgs)
+      expect(saved.launchPreferences).toEqual(accepted.launchPreferences)
+      expect(saved.extraAgentArgs ?? '').toBe(accepted.extraAgentArgs)
+    }
+  )
+
   async function editAndSave(row: AutomationListRow): Promise<void> {
     await act(async () => {
       void mocks.listPanel?.openEditDialog(row)
@@ -85,6 +249,74 @@ describe('AutomationsPage edit fencing', () => {
     })
     await save()
   }
+
+  it('keeps the captured edit authority while project metadata is unavailable and later hydrates', async () => {
+    const automation = makeAutomation({
+      id: 'a-captured',
+      projectId: 'hidden-repo',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'logical-project',
+        repoId: 'hidden-repo',
+        hostId: 'ssh:builder',
+        path: '/saved/physical',
+        projectHostSetupId: 'saved-setup'
+      }
+    })
+    const setups = mocks.state.projectHostSetups
+    const repos = mocks.state.repos
+    const repoMap = mocks.repoMap
+    mocks.state.repos = []
+    mocks.repoMap = new Map()
+    mocks.state.projectHostSetups = []
+    mocks.state.worktreesByRepo = {}
+    mocks.state.sshTargetLabels = new Map([['builder', 'Builder']])
+    mocks.state.sshTargetGenerations = new Map([['builder', 7]])
+    mocks.state.sshConnectionStates = new Map([['builder', { status: 'connected' }]])
+    api.automations.list.mockResolvedValue([automation])
+    api.automations.listScoped.mockImplementation(async ({ selector }) => ({
+      automations: selector.kind === 'orphan' ? [automation] : [],
+      items:
+        selector.kind === 'orphan'
+          ? [
+              {
+                automationId: automation.id,
+                selector: { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.hostReselection }
+              }
+            ]
+          : [],
+      orphanCount: 1
+    }))
+    const page = await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      await mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    expect(mocks.editorDialog?.editDestination?.resolution.status).not.toBe('ready')
+    expect(mocks.editorDialog?.launchAuthority).toEqual({ kind: 'desktop' })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        name: 'Captured edit'
+      }))
+    })
+    mocks.state.projectHostSetups = setups
+    mocks.state.repos = repos
+    mocks.repoMap = repoMap
+    await page.rerender()
+    expect(mocks.editorDialog?.launchAuthority).toEqual({ kind: 'desktop' })
+    expect(mocks.editorDialog?.draft).toMatchObject({ name: 'Captured edit' })
+    await save()
+    expect(api.automations.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: automation.id,
+        expectedOwner: { selector: { kind: 'orphan' } },
+        destination: undefined,
+        updates: { name: 'Captured edit' }
+      })
+    )
+    expect(api.automations.create).not.toHaveBeenCalled()
+  })
 
   it('refuses the save when the captured record cannot be re-read', async () => {
     const automation = makeAutomation({ id: 'a-1' })
@@ -230,19 +462,37 @@ describe('AutomationsPage edit destination', () => {
     expect(mocks.editorDialog?.editDestination?.moveWarning).toBeFalsy()
   })
 
-  it.each(['legacy', 'chat'] as const)(
+  it.each(['legacy', 'chat', 'modern'] as const)(
     'moves the saved %s record across authorities by creating there and deleting here',
     async (surface) => {
       const automation = makeAutomation({
         id: 'a-1',
-        ...(surface === 'chat' ? { surface, extraAgentArgs: '--model opus' } : {})
+        ...(surface === 'chat' ? { surface, extraAgentArgs: '--model opus' } : {}),
+        ...(surface === 'modern'
+          ? {
+              surface: 'chat',
+              launchSetup: {
+                surface: 'chat',
+                agentArgs: '--verbose',
+                extraAgentArgs: '--add-dir docs',
+                launchPreferences: { model: null, options: { fastMode: 'true' } }
+              }
+            }
+          : {})
       })
       api.automations.list.mockResolvedValue([])
       scopedList([automation])
       runtimeHost([], [])
       addRuntimeProject()
-      if (surface === 'chat') {
+      if (surface !== 'legacy') {
         capableChatDestination()
+      }
+      if (surface === 'modern') {
+        const capabilities = [...CHAT_CAPABILITIES, AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY]
+        mocks.state.runtimeStatusByEnvironmentId = new Map([
+          [RUNTIME_ID, { status: { capabilities } }]
+        ])
+        mocks.getRuntimeEnvironmentStatus.mockResolvedValue({ capabilities })
       }
       const removed = Promise.withResolvers<void>()
       api.automations.delete.mockReturnValueOnce(removed.promise)
@@ -273,6 +523,10 @@ describe('AutomationsPage edit destination', () => {
           workspaceId: RUNTIME_WORKSPACE_ID
         }))
       })
+      expect(mocks.editorDialog?.launchAuthority).toMatchObject({
+        kind: 'runtime',
+        environmentId: RUNTIME_ID
+      })
       await save()
 
       expect(api.automations.update).not.toHaveBeenCalled()
@@ -288,6 +542,12 @@ describe('AutomationsPage edit destination', () => {
             arguments: { kind: 'legacy-extras', value: '--model opus' }
           }
         })
+      }
+      if (surface === 'modern') {
+        expect(createRpcCalls()[0]?.[2]).toMatchObject({
+          launchSetupPatch: { copy: automation.launchSetup }
+        })
+        expect(createRpcCalls()[0]?.[2]).not.toHaveProperty('extraAgentArgs')
       }
       expect(api.automations.delete).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-1' }))
       const createIndex = mocks.callRuntimeRpc.mock.calls.findIndex(

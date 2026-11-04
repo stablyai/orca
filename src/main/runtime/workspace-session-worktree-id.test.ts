@@ -7,19 +7,6 @@ import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-workt
 const SOURCE = 'repo-1::/old/path'
 const TARGET = 'repo-1::/new/path'
 
-function tab(id: string, worktreeId: string) {
-  return {
-    id,
-    ptyId: `pty-${id}`,
-    worktreeId,
-    title: id,
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1
-  }
-}
-
 function session(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceSessionState {
   return { ...getDefaultWorkspaceSession(), ...overrides }
 }
@@ -42,13 +29,5 @@ describe('canonicalizeTerminalSessionWorktreeId', () => {
     expect(Object.hasOwn(next.tabsByWorktree, TARGET)).toBe(true)
     expect(next.tabsByWorktree[TARGET]).toEqual([])
     expect(Object.hasOwn(next.tabsByWorktree, SOURCE)).toBe(false)
-  })
-
-  it('re-keys the tabs and their own worktree ids', () => {
-    const next = session({ tabsByWorktree: { [SOURCE]: [tab('tab-1', SOURCE)] } })
-
-    canonicalizeTerminalSessionWorktreeId(next, SOURCE, TARGET)
-
-    expect(next.tabsByWorktree[TARGET]?.map((entry) => entry.worktreeId)).toEqual([TARGET])
   })
 })

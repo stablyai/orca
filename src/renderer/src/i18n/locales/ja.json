@@ -14402,7 +14402,6 @@
           "ff92d15436": "Orca は、Agent の作業が完了したとき、またはサポートが必要になったときに通知します。",
           "b054332836": "通知を設定する",
           "f396db9f20": "まるで家にいるような気分にさせてくれる",
-          "322fc50a18": "Orca はすべての CLI Agent で動作します。最もよく使うものを選択してください。いつでも切り替えられます。",
           "198b148b3c": "デフォルトの Agent を選択",
           "windowsTerminalTitle": "Windows ターミナルの既定値を設定",
           "windowsTerminalSubtitle": "新規ペインで使う既定のシェルと、ターミナルでの右クリックの動作を選びます。",
@@ -17319,6 +17318,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "保存された実行ホストが、このプロジェクトの設定と一致しなくなりました。"
+        },
+        "launchSettings": {
+          "needsFreshSession": "起動設定を使うには、実行ごとに新しいセッションが必要です。"
         }
       },
       "agent": {
@@ -19117,7 +19119,6 @@
       "dismissDeliveryNotice": "閉じる",
       "addSelectionToChat": "チャットに追加",
       "messageNotSent": "メッセージは送信されませんでした",
-      "deliveryUnconfirmed": "配信を確認できません — 再試行する前にチャットを確認してください",
       "messageSending": "送信中…",
       "userMessage": {
         "showFull": "メッセージ全体を表示",
@@ -19180,7 +19181,6 @@
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
         "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。",
-        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。",
         "usageLimitExplanation": "中断したところから続けるよう Agent に依頼します。上限がリセットされてから使ってください。"
       },
       "rewind": {
@@ -19788,6 +19788,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "フォローアップをキューに入れる",
+        "scrollToLatestOnSendTitle": "送信時に最新までスクロール",
+        "scrollToLatestOnSendCopy": "上にスクロールした状態で送信すると、最新のメッセージに移動して返信を追従します。オフにすると現在の位置を維持します。",
+        "scrollToLatestOnSendSearchPosition": "位置",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られる代わりに、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になります。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
@@ -19804,7 +19807,13 @@
         "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
         "usageLimitContinueSearchLimit": "使用量の上限",
         "usageLimitContinueSearchReset": "リセット",
-        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える",
+        "idleStopTitle": "アイドル状態の Agent を停止するまでの時間",
+        "idleStopCopy": "チャットがこの時間アイドル状態になると、メモリを解放するためにそのチャットの Agent を終了します。チャットは残り、次にメッセージを送ると Agent が再び起動します。ターンの合間もバックグラウンドで作業を続ける Agent には「しない」を選んでください。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "タイムアウト",
+        "idleStopSearchKeepAlive": "キープアライブ",
+        "idleStopNever": "しない"
       }
     },
     "agentChildRow": {

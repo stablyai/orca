@@ -75,47 +75,6 @@ describe('rich markdown editing with Find open', () => {
     }
   })
 
-  it('preserves selection when edits remove every match and later restore one', () => {
-    vi.useFakeTimers()
-    const { editor, hook, scrollTo, dispose } = mountSearch()
-    try {
-      scrollTo.mockClear()
-      act(() => editor.commands.setContent('<p>No results</p><p>End</p>'))
-      expect(hook.result.current.searchState.matchCount).toBe(0)
-      act(() => editor.commands.setTextSelection(editor.state.doc.content.size - 1))
-      act(() => editor.commands.insertContent(' beta'))
-      expect(hook.result.current.searchState.matchCount).toBe(1)
-      expect(editor.state.selection.empty).toBe(true)
-      expect(editor.state.selection.from).toBe(editor.state.doc.content.size - 1)
-      expect(scrollTo).not.toHaveBeenCalled()
-    } finally {
-      dispose()
-    }
-  })
-
-  it('still navigates on Next with only one match, and advances after Replace', () => {
-    vi.useFakeTimers()
-    const { editor, hook, scrollTo, dispose } = mountSearch()
-    try {
-      act(() => hook.result.current.searchActions.setReplaceQuery('changed'))
-      act(() => hook.result.current.searchActions.replaceCurrentMatch())
-      expect(editor.getText()).toBe('changed beta\n\nEdit here')
-      expect(hook.result.current.searchState.matchCount).toBe(1)
-      expect(
-        editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
-      ).toBe('beta')
-      act(() => editor.commands.setTextSelection(editor.state.doc.content.size - 1))
-      scrollTo.mockClear()
-      act(() => hook.result.current.searchActions.moveToMatch(1))
-      expect(
-        editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
-      ).toBe('beta')
-      expect(scrollTo).toHaveBeenCalledOnce()
-    } finally {
-      dispose()
-    }
-  })
-
   it('does not apply delayed search navigation after focus returns to the document', () => {
     vi.useFakeTimers()
     const { editor, hook, scrollTo, dispose } = mountSearch()

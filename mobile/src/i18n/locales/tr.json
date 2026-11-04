@@ -5,10 +5,13 @@
       "connecting": "Sunucuya bağlanılıyor…",
       "connectingTo": "{{name}} ile bağlantı kuruluyor…",
       "default": "Sistem varsayılanı",
+      "fableWindow": "Fable",
       "hostNotFound": "Sunucu bulunamadı",
       "invalidSnapshot": "Sunucudan gelen hesap anlık görüntüsü geçersiz",
       "loadingAccounts": "Hesaplar yükleniyor…",
       "manageAccountsHint": "Masaüstünde Ayarlar → Hesaplar bölümünden hesap ekleyin veya hesaplarınızda yeniden oturum açın.",
+      "mcpWindow": "MCP",
+      "otherAgents": "Diğer ajanlar",
       "refreshAccounts": "Hesapları yenile",
       "sessionWindow": "5 sa",
       "switchFailed": "Hesap değiştirilemedi",
@@ -740,6 +743,8 @@
     },
     "hostCard": {
       "hostActions": "{{title}} için işlemler",
+      "needsYou_one": "{{count}} sizi bekliyor",
+      "needsYou_other": "{{count}} sizi bekliyor",
       "openHost": "Aç: {{title}}",
       "pairingInvalid": "Eşleştirme geçersiz",
       "pairingTemporarilyUnavailable": "Eşleştirme geçici olarak kullanılamıyor",
@@ -1273,10 +1278,30 @@
     }
   },
   "home": {
+    "agents": {
+      "activeCount": "{{count}} etkin",
+      "heading": "Ajanlar",
+      "showAll": "Tümünü göster ({{count}})",
+      "showFewer": "Daha az göster"
+    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
       "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun"
+    },
+    "automationsTab": {
+      "connectDesktop": "Otomasyonları görüntülemek ve çalıştırmak için {{desktop}} ile bağlantı kurun.",
+      "createHint": "Bir ajan zamanlamak için + simgesine dokunun.",
+      "emptyTitle": "Ajan işlerini zamanlayın",
+      "lastStatus": "Son: {{status}}",
+      "newAutomation": "Yeni otomasyon",
+      "noAutomations": "Henüz otomasyon yok",
+      "pairDesktop": "Otomasyonları görüntülemek ve çalıştırmak için bir masaüstü bilgisayarla eşleştirin.",
+      "paused": "Duraklatıldı",
+      "scheduled": "Zamanlanmış",
+      "showFor": "Otomasyonları gösterilecek masaüstü",
+      "toggleFailed": "{{name}} güncellenemedi",
+      "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin."
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -1288,9 +1313,7 @@
       "title": "Masaüstünüzü bağlayın"
     },
     "listFooter": {
-      "hostPickerTitle": "Görevlerin Açılacağı Sunucu",
-      "automationsHeading": "Otomasyonlar",
-      "automationsHostPickerTitle": "Otomasyonları aç"
+      "hostPickerTitle": "Görevlerin Açılacağı Sunucu"
     },
     "listHeader": {
       "desktopsHeading": "Masaüstleri"
@@ -1301,6 +1324,33 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "removeHostTitle": "Sunucuyu Kaldır",
       "tryAgain": "Lütfen tekrar deneyin."
+    },
+    "stats": {
+      "agentTime": "Ajan süresi",
+      "agentsSpawned": "Başlatılan ajanlar",
+      "days": "{{days}} g",
+      "heading": "İstatistiklerin",
+      "hours": "{{hours}} sa",
+      "minutes": "{{minutes}} dk",
+      "prsCreated": "Oluşturulan PR'lar"
+    },
+    "tabs": {
+      "automations": "Otomasyonlar",
+      "chooseDesktop": "{{desktop}}, başka bir masaüstü seçin",
+      "feed": "Akış",
+      "usage": "Kullanım"
+    },
+    "usage": {
+      "active": "Etkin",
+      "addAccounts": "Masaüstünde Ayarlar → Hesaplar bölümünden hesap ekleyin.",
+      "connectDesktop": "Ajan hesabı kullanımını görmek için {{desktop}} ile bağlantı kurun.",
+      "emptyTitle": "Henüz kullanım yok",
+      "openAccountsHint": "Bu masaüstünün hesaplarını açar",
+      "pairDesktop": "Ajan hesabı kullanımını görmek için bir masaüstü bilgisayarla eşleştirin.",
+      "refresh": "Kullanımı yenile",
+      "showUsageFor": "Kullanımı gösterilecek masaüstü",
+      "updatedAgo": "{{time}} önce güncellendi",
+      "updatedJustNow": "Az önce güncellendi"
     }
   },
   "hooks": {
@@ -3886,7 +3936,6 @@
       "unknownResult": "Bilinmeyen sonuç",
       "notReported": "Bildirilmedi",
       "searchOptions": "Seçenekleri ara",
-      "scheduleAgentWorkAndViewRuns": "Aracı işlerini zamanlayın ve çalıştırmaları görüntüleyin",
       "task": "Görev",
       "review": "İncele"
     },

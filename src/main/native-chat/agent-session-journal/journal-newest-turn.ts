@@ -1,8 +1,12 @@
+import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  agentJournalLinkageFields,
+  isRootAgentJournalItem
+} from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandTurnId } from '../agent-session-wire/structured-agent-session-command-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
@@ -48,8 +52,75 @@ export class JournalNewestTurn {
 
   /** Releasing Resume marks must be written after this position. */
   failure(): number {
-    const failedAt = this.root?.winner?.failedAt ?? 0
-    return failedAt && Math.max(failedAt, this.boundary)
+    const winner = this.root?.winner
+    const failedAt = winner?.failedAt ?? 0
+    return (
+      failedAt &&
+      Math.max(failedAt, this.boundary > (winner?.witnessedThrough ?? 0) ? this.boundary : 0)
+    )
+  }
+
+  /** Only known, unchanged retained sources can carry chronology across presentation rebuilding. */
+  retainFailures(
+    state: JournalReducerState,
+    itemIds: readonly string[]
+  ): (next: JournalNewestTurn, state: JournalReducerState) => void {
+    const failures = itemIds.flatMap((id) => {
+      const source = this.sources.get(id)
+      return source?.failedAt
+        ? [
+            {
+              source,
+              at: Math.max(
+                source.failedAt,
+                this.boundary > (source.witnessedThrough ?? 0) ? this.boundary : 0
+              ),
+              reports: this.reports.get(id) ?? 0
+            }
+          ]
+        : []
+    })
+    const evidence = itemIds.flatMap((id) => {
+      const target = this.evidence.get(id)
+      const item = state.items.get(id)
+      return target && item ? [{ id, target, item }] : []
+    })
+    return (next, current) => {
+      const unchanged = new Map<string, number>()
+      for (const { id, target, item } of evidence) {
+        const kept = current.items.get(id)
+        if (
+          next.evidence.get(id) === target &&
+          kept &&
+          isDeepStrictEqual(item.body, kept.body) &&
+          isDeepStrictEqual(item.turnScope, kept.turnScope) &&
+          isDeepStrictEqual(agentJournalLinkageFields(item), agentJournalLinkageFields(kept))
+        ) {
+          unchanged.set(target, (unchanged.get(target) ?? 0) + 1)
+        }
+      }
+      for (const { source, at, reports } of failures) {
+        const kept = next.sources.get(source.item.itemId)
+        if (
+          !kept?.failedAt ||
+          !isDeepStrictEqual(source.item.body, kept.item.body) ||
+          !isDeepStrictEqual(source.item.turnScope, kept.item.turnScope) ||
+          !isDeepStrictEqual(
+            agentJournalLinkageFields(source.item),
+            agentJournalLinkageFields(kept.item)
+          ) ||
+          source.ordinary !== kept.ordinary ||
+          source.relevant !== kept.relevant ||
+          (next.reports.get(source.item.itemId) ?? 0) !== reports ||
+          (unchanged.get(source.item.itemId) ?? 0) !== reports
+        ) {
+          continue
+        }
+        const retained = { ...kept, failedAt: at, witnessedThrough: next.boundary }
+        next.sources.set(kept.item.itemId, retained)
+        next.root = putTurnSource(next.root, retained, false)
+      }
+    }
   }
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
@@ -95,6 +166,9 @@ export class JournalNewestTurn {
     const source: TurnSource = {
       item,
       failedAt: failed && (!command || reported) ? prior?.failedAt || at : 0,
+      ...(failed && prior?.failedAt && isDeepStrictEqual(prior.item.body, item.body)
+        ? { witnessedThrough: prior.witnessedThrough }
+        : {}),
       ordinary: !command,
       relevant: !command || !failed || reported
     }

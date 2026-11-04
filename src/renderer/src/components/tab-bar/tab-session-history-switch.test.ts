@@ -1,4 +1,7 @@
-import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
+import {
+  makeTabSessionHistoryRow as row,
+  TAB_SESSION_HISTORY_PANEL_REQUEST as PANEL_REQUEST
+} from './tab-session-history-test-fixture'
 import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -26,14 +29,12 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import {
-  claimAiVaultForcedRescan,
-  resetAiVaultForcedRescanThrottleForTest
-} from '../right-sidebar/ai-vault-session-refresh'
+import { resetAiVaultForcedRescanThrottleForTest } from '../right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
+import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault/scanning/ai-vault-forced-rescan-budget'
 import {
   cacheAiVaultSessionList,
   readCachedAiVaultSessionList
-} from '../right-sidebar/ai-vault-session-list-request'
+} from '../right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   canPaneOfferResumeInNewChat,
   findTabSessionHistoryRow,
@@ -71,12 +72,15 @@ vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
 
 // Parity with the panel's real composition is pinned in tab-session-history-switch.parity.test.ts.
-vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
-  resolveAiVaultHistoryRowResume: () => ({
-    resumeState: { ...mocks.resumeState, usesSessionWorktree: true },
-    resumeInChat: mocks.resumeInChat()
+vi.mock(
+  '../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-workspace',
+  () => ({
+    resolveAiVaultHistoryRowResume: () => ({
+      resumeState: { ...mocks.resumeState, usesSessionWorktree: true },
+      resumeInChat: mocks.resumeInChat()
+    })
   })
-}))
+)
 
 const WORKTREE_ID = 'repo-1::/repo/wt'
 
@@ -104,12 +108,6 @@ function makeState(
   })
   return useAppStore.getState()
 }
-
-const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt'],
-  executionHostScope: 'local',
-  sessionLimit: 250
-} as const
 
 const liveClaudeEntry = {
   'term-1:leaf-1': makeAgentStatusEntry({

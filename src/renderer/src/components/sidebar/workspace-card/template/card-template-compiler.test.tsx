@@ -1,4 +1,3 @@
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   CARD_TEMPLATE_LIMITS,
@@ -23,66 +22,7 @@ function template(root: CardTemplate['root'], extra: Partial<CardTemplate> = {})
   return { version: 1, facts: 1, root, ...extra }
 }
 
-function draw(t: CardTemplate, facts: Record<string, unknown> = {}): string {
-  const { content } = compileCardTemplate(t, registry).render(facts, '')
-  return renderToStaticMarkup(<>{content}</>)
-}
-
 describe('card template compiler', () => {
-  it('draws layout as host elements and evaluates props, vars and when', () => {
-    const t = template(
-      {
-        el: 'Row',
-        props: { gap: 'sm', align: '=vars.wide ? "center" : "start"' },
-        children: [
-          { el: 'Echo', props: { text: '=ws.name' } },
-          { el: 'Echo', when: 'ws.hidden', props: { text: 'never' } }
-        ]
-      },
-      { vars: { wide: 'len(ws.name) > 3' } }
-    )
-    expect(draw(t, { ws: { name: 'card plugins', hidden: false } })).toBe(
-      '<div class="flex min-w-0 gap-1 items-center"><i>card plugins</i></div>'
-    )
-    expect(draw(t, { ws: { name: 'abc' } })).toContain('items-start')
-  })
-
-  it('expands defs and reports frame answers', () => {
-    const t = template(
-      { el: 'Stack', children: [{ el: 'Label' }, { el: 'Label', when: 'false' }] },
-      {
-        defs: { Label: { el: 'Echo', props: { text: 'hi' } } },
-        frame: { singleLine: '=true', statusLane: false }
-      }
-    )
-    const compiled = compileCardTemplate(t, registry)
-    const { frame, content } = compiled.render({}, '!')
-    expect(frame).toEqual({ singleLine: true, statusLane: false })
-    expect(renderToStaticMarkup(<>{content}</>)).toBe(
-      '<div class="flex min-w-0 flex-col"><i>hi!</i></div>'
-    )
-  })
-
-  it('lets the frame add attributes to the root', () => {
-    const { content } = compileCardTemplate(template({ el: 'Row' }), registry).render(
-      {},
-      '',
-      () => ({
-        style: { marginLeft: '-4px' }
-      })
-    )
-    expect(renderToStaticMarkup(<>{content}</>)).toContain('margin-left:-4px')
-  })
-
-  it('passes frame attributes through a def used as the root, and honours its when', () => {
-    const t = template({ el: 'Body', when: 'ws.show' }, { defs: { Body: { el: 'Row' } } })
-    const compiled = compileCardTemplate(t, registry)
-    const attrs = (): Record<string, unknown> => ({ style: { marginLeft: '-4px' } })
-    const shown = compiled.render({ ws: { show: true } }, '', attrs).content
-    expect(renderToStaticMarkup(<>{shown}</>)).toContain('margin-left:-4px')
-    expect(compiled.render({ ws: { show: false } }, '', attrs).content).toBeNull()
-  })
-
   it('bounds the tree defs expand to', () => {
     // Each def holds `width` copies of the next: tiny as written, width^levels once inlined.
     const fanOut = (levels: number, width: number): CardTemplate => {

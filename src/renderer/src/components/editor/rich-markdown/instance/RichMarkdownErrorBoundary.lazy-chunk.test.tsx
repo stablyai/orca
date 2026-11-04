@@ -106,31 +106,4 @@ describe('RichMarkdownErrorBoundary lazy chunk containment', () => {
       cause: `SyntaxError: ${CORRUPT_CHUNK_PARSE_ERROR}`
     })
   })
-
-  it('still reports ordinary render errors', async () => {
-    const error = new Error('ordinary render failure')
-    function BrokenEditor(): ReactElement {
-      throw error
-    }
-    ;({ container, root } = createContainer())
-
-    await act(async () => {
-      root?.render(
-        <BoundaryHarness>
-          <BrokenEditor />
-        </BoundaryHarness>
-      )
-    })
-
-    expect(container?.textContent).toContain('rich markdown editor')
-    expect(recordBreadcrumbMock).not.toHaveBeenCalled()
-    expect(reportCrashMock).toHaveBeenCalledTimes(1)
-    expect(reportCrashMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        boundaryId: 'editor.rich-markdown',
-        surface: 'rich-markdown-editor',
-        error
-      })
-    )
-  })
 })

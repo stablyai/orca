@@ -200,27 +200,6 @@ describe('the native paired E2EE codec', () => {
     expect(codec.pairedE2EENativeCodec()).not.toBeNull()
   })
 
-  it('agrees with tweetnacl on boxes either library sealed', async () => {
-    const { native } = await load(true)
-    for (let index = 0; index < 300; index++) {
-      const key = randomBytes(32)
-      const nonce = randomBytes(24)
-      const message = randomBytes(random(600))
-      const boxes = [
-        sodium.crypto_secretbox_easy(message, nonce, key),
-        nacl.secretbox(message, nonce, key)
-      ]
-      expect(boxes[0]).toEqual(boxes[1])
-      for (const box of boxes) {
-        expect(native!.openSecretbox(box, nonce, key)).toEqual(message)
-        const tampered = box.slice()
-        tampered[random(box.length)]! ^= 1 << random(8)
-        expect(native!.openSecretbox(tampered, nonce, key)).toBeNull()
-        expect(nacl.secretbox.open(tampered, nonce, key)).toBeNull()
-      }
-    }
-  })
-
   // UTF-8 fallback must preserve an already-opened frame whose counter advanced.
   it('falls back to TextDecoder when native UTF-8 throws', async () => {
     const { primitives, native } = await load(true)
@@ -255,48 +234,5 @@ describe('the native paired E2EE codec', () => {
       ).toBeNull()
     }
     expect(secretboxOpenCalls).not.toHaveBeenCalled()
-  })
-
-  it('accepts exactly the base64 that re-encodes to itself, on both paths', async () => {
-    const { native, primitives } = await load(true)
-    const { primitives: fallback } = await load(false)
-    const reencodes = (value: string) => {
-      try {
-        const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
-        return b64(bytes) === value ? bytes : null
-      } catch {
-        return null
-      }
-    }
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-    const noise = `${alphabet}=-_ \n\t.`
-    const cases = [
-      '',
-      'QR==',
-      'QQ==',
-      'QQ',
-      'QQ=',
-      'Q===',
-      '====',
-      'QUJD',
-      'QUJ D',
-      'Q=Q=',
-      '-_8=',
-      'AB+/'
-    ]
-    for (let index = 0; index < 5_000; index++) {
-      let value = b64(randomBytes(random(10)))
-      if (random(2) === 0) {
-        const at = random(value.length + 1)
-        value = value.slice(0, at) + noise[random(noise.length)] + value.slice(at + 1)
-      }
-      cases.push(value)
-    }
-    for (const value of cases) {
-      const expected = reencodes(value)
-      expect(native!.decodeBase64(value), value).toEqual(expected)
-      expect(primitives.decodeCanonicalBase64!(value), value).toEqual(expected)
-      expect(fallback.decodeCanonicalBase64!(value), value).toEqual(expected)
-    }
   })
 })

@@ -2880,7 +2880,6 @@
           "ff92d15436": "O Orca vai avisá-lo quando os agentes terminarem ou precisarem de ajuda.",
           "b054332836": "Configurar notificações",
           "f396db9f20": "Deixe com a sua cara",
-          "322fc50a18": "O Orca funciona com todo agente de CLI. Escolha o que você vai usar mais. Troque quando quiser.",
           "198b148b3c": "Escolha seu agente padrão",
           "windowsTerminalTitle": "Definir padrões do terminal do Windows",
           "windowsTerminalSubtitle": "Escolha o Shell PADRÃO para novos painéis e como o clique com o botão direito se comporta no terminal.",
@@ -14709,6 +14708,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "As configurações de inicialização do agente exigem uma nova sessão a cada execução."
         }
       },
       "TaskPage": {
@@ -20810,7 +20812,6 @@
       "dismissDeliveryNotice": "Dispensar",
       "addSelectionToChat": "Adicionar ao chat",
       "messageNotSent": "Mensagem não enviada",
-      "deliveryUnconfirmed": "Entrega não confirmada — confira o chat antes de tentar novamente",
       "messageSending": "Enviando…",
       "userMessage": {
         "showFull": "Mostrar mensagem completa",
@@ -20880,8 +20881,7 @@
       "interruptedContinue": {
         "continue": "Continuar",
         "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
-        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
-        "unconfirmed": "Não foi possível confirmar se o {{agent}} recebeu Continuar. Confira o chat antes de tentar novamente."
+        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
       },
       "antigravitySignIn": {
         "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."
@@ -21457,6 +21457,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
+        "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
+        "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
+        "scrollToLatestOnSendSearchPosition": "posição",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21468,7 +21471,13 @@
         "queueSearchSteer": "orientar",
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "idleStopTitle": "Parar agentes inativos após",
+        "idleStopCopy": "Encerra o agente de um chat quando o chat fica inativo por esse tempo, para liberar memória. O chat continua e sua próxima mensagem inicia o agente de novo. Escolha Nunca para agentes que continuam trabalhando em segundo plano entre os turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tempo limite",
+        "idleStopSearchKeepAlive": "manter ativo",
+        "idleStopNever": "Nunca"
       }
     },
     "jiraIssueAssigneeField": {
