@@ -104,3 +104,57 @@ describe('GCE relay capacity configuration', () => {
     )
   })
 })
+
+describe('relay edge configuration', () => {
+  function directorEnvironment(): NodeJS.ProcessEnv {
+    return {
+      ...cellEnvironment(4_000),
+      ORCA_RELAY_PUBLIC_URL: 'https://relay.example.com',
+      ORCA_RELAY_ROLE: 'director',
+      ORCA_RELAY_CELLS_JSON: JSON.stringify([
+        { id: 'gce-c1', url: 'https://c1.relay.example.com', capacityRequests: 4_000 }
+      ])
+    }
+  }
+
+  it('is off unless a director names an edge URL, and then defaults to no cohort in us-central1', () => {
+    expect(loadRelayConfig(directorEnvironment()).edge).toBeUndefined()
+    expect(
+      loadRelayConfig({ ...cellEnvironment(4_000), ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com' }).edge
+    ).toBeUndefined()
+    const edge = loadRelayConfig({
+      ...directorEnvironment(),
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com'
+    }).edge
+    expect(edge).toEqual({
+      cellUrl: 'https://edge.relay.example.com',
+      rolloutPercent: 0,
+      allowHosts: new Set(),
+      denyHosts: new Set(),
+      regions: new Set(['us-central1'])
+    })
+  })
+
+  it('parses the cohort and refuses unsafe edge settings', () => {
+    const env = {
+      ...directorEnvironment(),
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ROLLOUT_PERCENT: '10',
+      ORCA_RELAY_EDGE_ALLOW_HOSTS: 'abcdefghijklmnop, ABCDEFGHIJKLMNOP',
+      ORCA_RELAY_EDGE_DENY_HOSTS: 'zzzzzzzzzzzzzzzz',
+      ORCA_RELAY_EDGE_REGIONS: 'us-central1,asia-east2'
+    }
+    expect(loadRelayConfig(env).edge).toMatchObject({
+      rolloutPercent: 10,
+      allowHosts: new Set(['abcdefghijklmnop', 'ABCDEFGHIJKLMNOP']),
+      denyHosts: new Set(['zzzzzzzzzzzzzzzz']),
+      regions: new Set(['us-central1', 'asia-east2'])
+    })
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_ROLLOUT_PERCENT: '101' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_ALLOW_HOSTS: 'short' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_REGIONS: 'europe-west1' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com/path' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://c1.relay.example.com' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://relay.example.com' })).toThrow()
+  })
+})
