@@ -10,6 +10,7 @@ import {
   deleteLoadingNativeChatComposerDraftsWhere,
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
+import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 
 export function deleteNativeChatComposerDraftsWhere(
@@ -20,6 +21,7 @@ export function deleteNativeChatComposerDraftsWhere(
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {
+      releaseNativeChatStagedFiles(scope)
       installNativeChatDraftRecord(scope)
       reconcileRestoredImageChecks(scope, [])
       notifyScope(scope)
