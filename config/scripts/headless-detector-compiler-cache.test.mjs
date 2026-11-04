@@ -12,6 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
@@ -20,6 +21,7 @@ import {
   packCompilerCache
 } from './headless-detector-compiler-cache.mjs'
 import { collectNodeServerInputs } from './node-server/qualification/node-server-change-scope.mjs'
+import { copyScriptWithLocalModules } from './test-fixtures/script-copy-closure/script-module-dependencies.mjs'
 import { runProcessSync } from '@orca/process-host'
 
 const temporary = []
@@ -70,20 +72,12 @@ it('activates the compiler and workspace-policy parser and preserves import grap
   const { root, identity } = fixture()
   expect(await activateCompilerCache({ root, identity })).toEqual({ available: true })
   expect(readdirSync(join(root, 'node_modules')).sort()).toEqual(['@esbuild', 'esbuild', 'yaml'])
-  for (const name of [
-    'node-server-change-scope',
-    'node-server-test-paths',
-    'node-server-qualification',
-    'node-server-native-compat-scope',
-    'orcad-entry-build',
-    'workspace-source-exports'
-  ]) {
-    mkdirSync(join(root, 'config', 'scripts'), { recursive: true })
-    cpSync(
-      new URL(`./${name}.mjs`, import.meta.url),
-      join(root, 'config', 'scripts', `${name}.mjs`)
-    )
-  }
+  copyScriptWithLocalModules(
+    fileURLToPath(
+      new URL('./node-server/qualification/node-server-change-scope.mjs', import.meta.url)
+    ),
+    join(root, 'config', 'scripts', 'node-server', 'qualification')
+  )
   cpSync(
     new URL('../dark-build-switches.cjs', import.meta.url),
     join(root, 'config', 'dark-build-switches.cjs')
