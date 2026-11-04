@@ -220,6 +220,25 @@ describe('idle reaper for a connected but quiet client (#38188)', () => {
     expect(fresh).toEqual([])
   })
 
+  it('clamps a very long idle window to the timer maximum instead of spinning', () => {
+    // Node turns a delay above 2^31-1 into 1 ms, so an unclamped arm would re-fire every
+    // millisecond with a warning; the remainder re-arm must stay inside the limit too.
+    const delays = []
+    const watchdog = createIdleWatchdog({
+      idleMs: 1e12,
+      hasOpenDocuments: () => false,
+      onIdle: () => undefined,
+      now: () => 0,
+      setTimer: (_run, delay) => {
+        delays.push(delay)
+        return delays.length
+      },
+      clearTimer: () => {}
+    })
+    watchdog.start()
+    expect(delays).toEqual([2_147_483_647])
+  })
+
   it('is inert when disabled and defaults to a conservative hour', () => {
     expect(resolveIdleMs('0')).toBe(0)
     expect(resolveIdleMs(undefined)).toBe(60 * 60 * 1000)

@@ -182,6 +182,8 @@ export function createDiagnosticsBridge({
 }
 
 const DEFAULT_IDLE_MS = 60 * 60 * 1000
+// Node clamps longer timers to 1 ms and warns; re-arming with the remainder would then spin.
+const MAX_TIMER_MS = 2_147_483_647
 
 /** `ORCA_TS_LSP_IDLE_MS`: positive ms to reap after, 0 to disable, absent or invalid for the default. */
 export function resolveIdleMs(value = process.env.ORCA_TS_LSP_IDLE_MS) {
@@ -208,7 +210,7 @@ export function createIdleWatchdog({
   let lastActivity = now()
   let timer = null
   const arm = (delayMs) => {
-    timer = setTimer(check, Math.max(0, delayMs))
+    timer = setTimer(check, Math.min(MAX_TIMER_MS, Math.max(0, delayMs)))
     // An idle watchdog must never keep the process alive by itself.
     if (timer && typeof timer.unref === 'function') {
       timer.unref()
@@ -252,12 +254,15 @@ function runLanguageServer() {
     toClient: (message) => process.stdout.write(encodeLspMessage(message)),
     toServer: (message) => child.stdin.write(encodeLspMessage(message))
   })
+  // The idle reap is a deliberate stop, not a failure: report it as a clean exit.
+  let intentionalIdleReap = false
   const watchdog = createIdleWatchdog({
     idleMs: resolveIdleMs(),
     hasOpenDocuments: () => bridge.openDocumentCount() > 0,
     onIdle: () => {
       // A client that stayed connected but stopped using the server must not pin its heap:
       // one server per agent session costs 5-6 GB on this monorepo (#38188).
+      intentionalIdleReap = true
       child.stdin.end()
       child.kill()
       setTimeout(() => process.exit(0), 2_000).unref()
@@ -300,7 +305,9 @@ function runLanguageServer() {
     console.error(`agent-typescript-lsp: ${error.message}`)
     process.exit(1)
   })
-  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))
+  child.on('exit', (code, signal) =>
+    process.exit(intentionalIdleReap ? 0 : (code ?? (signal ? 1 : 0)))
+  )
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
