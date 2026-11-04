@@ -49,13 +49,16 @@ type TaskKind = AgentSessionBackgroundTask['kind']
 
 export function BackgroundTaskKindIcon({
   kind,
-  size
+  size,
+  color
 }: {
   kind: TaskKind
   size: number
+  /** Defaults to the strip's tone, where a monitor reads as live. */
+  color?: string
 }): React.JSX.Element {
   useMobileColorScheme()
-  const props = { size, color: kindIconColor(kind), strokeWidth: 2 }
+  const props = { size, color: color ?? kindIconColor(kind), strokeWidth: 2 }
   switch (kind) {
     case 'agent':
       return <Bot {...props} />
