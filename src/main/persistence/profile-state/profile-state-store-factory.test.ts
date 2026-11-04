@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
@@ -18,6 +18,8 @@ import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { LoadedStateParsingOperations } from '../loading-store/loaded-state-parsing'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { PROFILE_STATE_DATABASE_SCHEMA_VERSION } from './profile-state-database-schema'
+import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 vi.mock('electron', () => ({
   app: {
@@ -272,7 +274,7 @@ describe('profile state Store authority factory', () => {
   )
 
   it('initializes a valid empty SQLite profile instead of falling back to legacy JSON', () => {
-    const options = createOptions()
+    const options = { ...createOptions(), initializeHomeWorkspace: true }
     const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
     opened.db.close()
 
@@ -281,6 +283,9 @@ describe('profile state Store authority factory', () => {
     expect(result.backend).toBe('sqlite')
     expect(result.classification).toBe('sqlite-only')
     expect(result.store.getSettings()).toBeDefined()
+    expect(result.store.getRepos()).toEqual([
+      expect.objectContaining({ kind: 'folder', path: homedir(), displayName: 'Home' })
+    ])
     result.store.updateSettings({ theme: 'dark' })
     result.store.flushOrThrow()
 
@@ -305,6 +310,52 @@ describe('profile state Store authority factory', () => {
     expect(restarted.backend).toBe('sqlite')
     expect(restarted.store.getSettings().theme).toBe('dark')
     restarted.store.freezeWrites()
+  })
+
+  it('initializes and restores Home only when desktop startup opts in', () => {
+    const options = { ...createOptions(), initializeHomeWorkspace: true }
+    const first = createProfileStateStore(options)
+    const [home] = first.store.getRepos()
+
+    expect(first.store.getRepos()).toHaveLength(1)
+    expect(home).toMatchObject({ path: homedir(), displayName: 'Home', kind: 'folder' })
+    const worktreeId = getRepoMainWorktreeId(home)
+    expect(first.store.getWorkspaceSession()).toMatchObject({
+      activeRepoId: home.id,
+      activeWorktreeId: worktreeId,
+      activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+      activeWorkspaceExecutionHostId: 'local',
+      activeTabId: null,
+      tabsByWorktree: {}
+    })
+    first.store.flushOrThrow()
+    first.store.freezeWrites()
+
+    const restarted = createProfileStateStore(options)
+    expect(restarted.store.getRepos()).toEqual([home])
+    expect(restarted.store.getWorkspaceSession().activeWorktreeId).toBe(worktreeId)
+    restarted.store.removeProjectForHost({ id: home.id })
+    restarted.store.flushOrThrow()
+    restarted.store.freezeWrites()
+
+    expect(createProfileStateStore(options).store.getRepos()).toEqual([])
+  })
+
+  it('does not initialize Home in an existing empty document or generic host profile', () => {
+    const imported = createOptions()
+    writeFileSync(imported.dataFile, JSON.stringify({ repos: [] }))
+    expect(
+      createProfileStateStore({ ...imported, initializeHomeWorkspace: true }).store.getRepos()
+    ).toEqual([])
+
+    const generic = createOptions()
+    const first = createProfileStateStore(generic)
+    expect(first.store.getRepos()).toEqual([])
+    first.store.flushOrThrow()
+    first.store.freezeWrites()
+    expect(
+      createProfileStateStore({ ...generic, initializeHomeWorkspace: true }).store.getRepos()
+    ).toEqual([])
   })
 
   it('refuses a stale JSON mirror when candidate mode sees both files', () => {

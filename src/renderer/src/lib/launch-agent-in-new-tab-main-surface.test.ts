@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../store/slices/store-cascades-test-harness'
@@ -26,6 +26,15 @@ vi.mock('@/store', () => ({
 
 createStoreCascadesMockApi()
 
+import { makeFolderWorkspace } from '../components/sidebar/folder-workspace-composer-submit-fixtures'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  setLocalRuntimeCapabilitiesForTests([])
+})
+
 const MAIN_WORKTREE_ID = 'repo1::/path/wt1'
 
 function seedMainWindowOnEditor(): ReturnType<typeof createTestStore> {
@@ -47,6 +56,70 @@ function seedMainWindowOnEditor(): ReturnType<typeof createTestStore> {
 describe('launchAgentInNewTab main-window surface', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('reveals the captured folder owner before real tab creation when host facts arrive after a rival selection', async () => {
+    const store = seedMainWindowOnEditor()
+    const id = 'folder:captured'
+    store.setState((state) => ({
+      settings: {
+        ...(state.settings ?? getDefaultSettings('/tmp')),
+        nativeChatProviders: { claude: true }
+      },
+      folderWorkspaces: [
+        makeFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
+        makeFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
+      ]
+    }))
+    store.getState().setActiveFolderWorkspace('captured', 'local')
+    const shell = store.getState().createTab(id)
+    const facts = Promise.withResolvers<void>()
+    const getStatus = vi.fn(async () => {
+      await facts.promise
+      return { capabilities: [] }
+    })
+    vi.stubGlobal('window', {
+      api: { ...window.api, runtime: { ...window.api.runtime, getStatus } }
+    })
+    setLocalRuntimeCapabilitiesForTests(null)
+    const { launchAgentInNewTabWithOutcome } = await import('./launch-agent-in-new-tab')
+    const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
+    const { activateAndRevealWorkspaceWithOutcome } = await import('./worktree-activation')
+    const { reportAgentWorkspaceActivation } = await import('./worktree-activation-outcome')
+    const reveal = vi.fn(() =>
+      reportAgentWorkspaceActivation(
+        activateAndRevealWorkspaceWithOutcome(id, {
+          agent: 'claude',
+          providesInitialSurface: true,
+          executionHostId: 'local'
+        }),
+        'claude'
+      )
+    )
+    const result = launchAgentInNewTabWithOutcome({
+      requestId: 'captured-folder-facts',
+      agent: 'claude',
+      worktreeId: id,
+      workspaceExecutionHostId: 'local',
+      beforeSurfaceOpen: reveal,
+      launchSource: 'onboarding'
+    })
+    expect(getStatus).toHaveBeenCalledOnce()
+    expect(reveal).not.toHaveBeenCalled()
+    expect(store.getState().tabsByWorktree[id]).toHaveLength(1)
+    store.getState().setActiveFolderWorkspace('captured', 'runtime:rival')
+    expect(store.getState().activeWorkspaceExecutionHostId).toBe('runtime:rival')
+    facts.resolve()
+    await expect(settleAgentTabLaunch(result)).resolves.toEqual({ kind: 'terminal' })
+    const state = store.getState()
+    expect(reveal).toHaveBeenCalledOnce()
+    expect(state.activeWorkspaceExecutionHostId).toBe('local')
+    expect(state.tabsByWorktree[id]).toHaveLength(2)
+    const created = state.unifiedTabsByWorktree[id].find((tab) => tab.id !== shell.id)
+    expect(created?.executionHostId).toBe('local')
+    expect(state.tabsByWorktree[id].find((tab) => tab.id === created?.id)?.launchAgent).toBe(
+      'claude'
+    )
   })
 
   it('selects a floating launch in the floating panel without moving the main window', async () => {

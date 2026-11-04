@@ -110,3 +110,44 @@ describe('inherited folder consumer identity', () => {
     }
   )
 })
+
+describe('missing selected folder lookup cost', () => {
+  it('keeps warm unrelated writes bounded at N and 10N folders and observes catalog changes', () => {
+    for (const size of [100, 1_000]) {
+      let reads = 0
+      const folderWorkspaces = Array.from({ length: size }, (_, index) => ({
+        ...makeFolderWorkspace(),
+        get id() {
+          reads += 1
+          return `folder-${index}`
+        }
+      }))
+      const state = {
+        folderWorkspaces,
+        projectGroups: [makeProjectGroup()],
+        repos: [],
+        worktreesByRepo: {},
+        detectedWorktreesByRepo: {},
+        floatingWorkspacePath: null
+      }
+      expect(findKnownWorktreeById(state, 'folder:missing', 'local')).toBeUndefined()
+      expect(reads).toBeLessThanOrEqual(size * 2)
+      reads = 0
+      for (let update = 0; update < 100; update += 1) {
+        expect(findKnownWorktreeById({ ...state }, 'folder:missing', 'local')).toBeUndefined()
+      }
+      expect(reads).toBe(0)
+      const folder = makeFolderWorkspace({ id: 'missing', folderPath: '/new-folder' })
+      const next = { ...state, folderWorkspaces: [...folderWorkspaces, folder] }
+      expect(findKnownWorktreeById(next, 'folder:missing', 'local')?.path).toBe('/new-folder')
+      const narrow = {
+        ...state,
+        folderWorkspaces: [folder],
+        projectGroups: undefined,
+        repos: undefined
+      }
+      expect(findKnownWorktreeById(narrow, 'folder:missing')?.path).toBe('/new-folder')
+      expect(findKnownWorktreeById(narrow, 'folder:missing', 'local')).toBeUndefined()
+    }
+  })
+})

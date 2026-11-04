@@ -1,8 +1,6 @@
-import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
 import {
@@ -15,6 +13,7 @@ import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-real
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
+import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -107,22 +106,12 @@ export async function addLocalRepoFromPath(
   if (raceWinner) {
     return { repo: raceWinner, alreadyExisted: true }
   }
-  const repo: Repo = {
-    id: randomUUID(),
+  const repo = createLocalProjectRecord({
     path: resolvedPath,
     displayName: displayName?.trim() || getRepoName(resolvedPath),
-    badgeColor: DEFAULT_REPO_BADGE_COLOR,
-    ...detected,
-    addedAt: Date.now(),
     kind: repoKind,
-    ...(repoKind === 'git'
-      ? {
-          externalWorktreeVisibilityLegacy: false,
-          // Explicit imports are ready host setups; legacy-repo is reserved for migrated records.
-          projectHostSetupMethod: 'imported-existing-folder' as const
-        }
-      : {})
-  }
+    detected
+  })
 
   store.addRepo(repo)
   await prepareLocalWorktreeRootForRepo(store, repo)

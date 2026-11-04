@@ -1,3 +1,8 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { structuredAgentLabel } from './agent-session/launch/structured-agent-session-launch-label'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { agentTabLaunchStore } from '@/lib/launch-agent-execution-context'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store'
@@ -56,6 +61,16 @@ const NOT_DELIVERED: StructuredPromptDeliveryResult = { delivered: false, failur
 
 type AwaitingHostAnswer = { awaited: Promise<void>; replan: () => AgentSessionLaunchPlan }
 
+export function notifyAgentTabLaunchFailure(agent: TuiAgent): void {
+  toast.error(
+    translate(
+      'auto.components.Terminal.e57db40c11',
+      'Could not build launch command for {{value0}}.',
+      { value0: structuredAgentLabel(agent) }
+    )
+  )
+}
+
 /** Both terminal adapters retain the same actual-create receipt behind their early acceptance. */
 export async function terminalLaunchOpened(terminal: StructuredLaunchTerminal): Promise<boolean> {
   return terminal.completion
@@ -95,7 +110,11 @@ export function routeNewTabLaunch(
   return awaited
     ? {
         awaited,
-        replan: () => planAgentSessionLaunch(useAppStore.getState(), { requestId, ...request })
+        replan: () =>
+          planAgentSessionLaunch(agentTabLaunchStore(useAppStore.getState(), args), {
+            requestId,
+            ...request
+          })
       }
     : { plan: planAgentSessionLaunch(store, { requestId, ...request }) }
 }
@@ -104,16 +123,12 @@ export function routeNewTabLaunch(
 export function launchOnceHostAnswered(
   route: AwaitingHostAnswer,
   args: LaunchAgentInNewTabArgs,
-  relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome
+  relaunch: (args: LaunchAgentInNewTabArgs) => AgentTabLaunchOutcome,
+  onFailure?: () => void
 ): LaunchAgentInNewTabResult {
-  if (args.beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
-    args.focusIntent?.cancel()
-    return null
-  }
   const opened = route.awaited.then(() =>
     relaunch({
       ...args,
-      beforeSurfaceOpen: undefined,
       requestId: undefined,
       agentSessionLaunchPlan: route.replan()
     })
@@ -122,7 +137,8 @@ export function launchOnceHostAnswered(
     .then(settleAgentTabLaunch)
     .catch((error: unknown): StructuredAgentLaunchSettlement => {
       args.focusIntent?.cancel()
-      return { kind: 'failed', error }
+      onFailure?.()
+      return { kind: 'failed', error, ...(onFailure ? { notified: true as const } : {}) }
     })
   const deliversPrompt = Boolean(args.prompt?.trim())
   return {

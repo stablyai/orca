@@ -1,8 +1,6 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-registration'
@@ -12,18 +10,14 @@ import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-t
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   folderWorkspaceActivationBlocked,
-  getFolderWorkspacePathStatusDescription,
-  getFolderWorkspacePathStatusTitle
+  notifyBlockedFolderWorkspacePath
 } from './folder-workspace-path-status'
-import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../shared/folder-workspaces/folder-workspace-host-id'
-import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   ensureFolderWorkspaceInitialTerminal,
   ensureWorktreeHasInitialTerminal
@@ -33,8 +27,7 @@ import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-repla
 import {
   activationProvidesInitialSurface,
   activationSeedsUserDefaultSurface,
-  type WorktreeActivationOptions,
-  type WorktreeActivationSurfaceSelection
+  type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
@@ -48,29 +41,23 @@ import {
 } from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
-/** Share palette/dialog activation; derive repoId and no-op if the selected worktree vanished. */
-export type ActivateAndRevealResult = {
-  /** Id of the primary terminal tab seeded with `opts.startup`, or null. Prefer this over
-   *  `activeTabIdByWorktree`, which may point at another tab if setup/issue scripts opened their own. */
-  primaryTabId: string | null
-}
+import {
+  workspaceActivationResult,
+  type WorkspaceActivationOutcome,
+  type FolderWorkspaceActivationOptions,
+  type WorkspaceRevealOptions
+} from './worktree-activation-outcome'
+export type { ActivateAndRevealResult } from './worktree-activation-outcome'
 
 const canInspectAgentActivationInventory = (): boolean =>
   typeof window !== 'undefined' &&
   typeof window.api?.runtime?.call === 'function' &&
   typeof window.api?.pty?.listSessions === 'function'
 
-export function activateAndRevealFolderWorkspace(
+export function activateAndRevealFolderWorkspaceWithOutcome(
   folderWorkspaceId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
-    revealInSidebar?: boolean
-    showWorkspaceList?: boolean
-    startup?: WorktreeStartupPayload
-    runtimeEnvironmentId?: string | null
-    executionHostId?: ExecutionHostId
-  }
-): ActivateAndRevealResult | false {
+  opts?: FolderWorkspaceActivationOptions
+): WorkspaceActivationOutcome {
   const state = useAppStore.getState()
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
@@ -81,7 +68,7 @@ export function activateAndRevealFolderWorkspace(
     (workspace) => workspace === folderWorkspaceOwner
   )
   if (!folderWorkspace) {
-    return false
+    return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
@@ -95,16 +82,8 @@ export function activateAndRevealFolderWorkspace(
     { runtimeEnvironmentId }
   )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
-    const title =
-      getFolderWorkspacePathStatusTitle(pathStatus) ??
-      translate(
-        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
-        'Cannot open folder workspace'
-      )
-    toast.error(title, {
-      description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
-    })
-    return false
+    notifyBlockedFolderWorkspacePath(pathStatus, folderWorkspace.folderPath)
+    return { refused: { reason: 'path-blocked', failureNotified: true } }
   }
 
   if (state.activeView !== 'terminal') {
@@ -167,22 +146,22 @@ export function activateAndRevealFolderWorkspace(
     })
   }
 
-  return { primaryTabId }
+  return { opened: { primaryTabId } }
 }
 
-export function activateAndRevealWorktree(
+export function activateAndRevealWorktreeWithOutcome(
   worktreeId: string,
   opts?: WorktreeActivationOptions
-): ActivateAndRevealResult | false {
+): WorkspaceActivationOutcome {
   const state = useAppStore.getState()
   // The floating workspace owns a separate panel, never the main window's selection.
   if (isFloatingWorkspaceId(worktreeId)) {
     revealFloatingWorkspacePanel(state)
-    return { primaryTabId: null }
+    return { opened: { primaryTabId: null } }
   }
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
-    return false
+    return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
   // Why: a checkout published mid-create shows its creation progress until that creation hands off.
@@ -190,7 +169,7 @@ export function activateAndRevealWorktree(
     state.setActivePendingWorktreeCreation(pendingCreationId)
     state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
     state.setActiveView('terminal')
-    return { primaryTabId: null }
+    return { opened: { primaryTabId: null } }
   }
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
@@ -308,26 +287,37 @@ export function activateAndRevealWorktree(
     })
   }
 
-  return { primaryTabId }
+  return { opened: { primaryTabId } }
 }
 
 /** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */
-export function activateAndRevealWorkspace(
+export function activateAndRevealWorkspaceWithOutcome(
   workspaceId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    executionHostId?: ExecutionHostId
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
-    revealInSidebar?: boolean
-    showWorkspaceList?: boolean
-    /** Worktree-only: folder workspaces are never filter-hidden. */
-    clearSidebarFilters?: boolean
-  }
-): ActivateAndRevealResult | false {
+  opts?: WorkspaceRevealOptions
+): WorkspaceActivationOutcome {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type !== 'folder') {
-    return activateAndRevealWorktree(workspaceId, opts)
+    return activateAndRevealWorktreeWithOutcome(workspaceId, opts)
   }
-  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
+  return activateAndRevealFolderWorkspaceWithOutcome(workspaceScope.folderWorkspaceId, opts)
+}
+
+export function activateAndRevealFolderWorkspace(
+  ...args: Parameters<typeof activateAndRevealFolderWorkspaceWithOutcome>
+) {
+  return workspaceActivationResult(activateAndRevealFolderWorkspaceWithOutcome(...args))
+}
+
+export function activateAndRevealWorktree(
+  ...args: Parameters<typeof activateAndRevealWorktreeWithOutcome>
+) {
+  return workspaceActivationResult(activateAndRevealWorktreeWithOutcome(...args))
+}
+
+export function activateAndRevealWorkspace(
+  ...args: Parameters<typeof activateAndRevealWorkspaceWithOutcome>
+) {
+  return workspaceActivationResult(activateAndRevealWorkspaceWithOutcome(...args))
 }
 
 // Register here to avoid the @/store nav-history → activation import cycle.
