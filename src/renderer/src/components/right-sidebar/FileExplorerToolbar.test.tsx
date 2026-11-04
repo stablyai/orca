@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
-import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
+import { WorktreeOpenInMenuItems } from '@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { visit, type ReactElementLike } from './file-explorer-element-tree-test-harness'
 

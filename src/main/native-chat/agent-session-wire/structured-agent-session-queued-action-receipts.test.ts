@@ -67,7 +67,7 @@ function writeUnreadableReceipt(id: string, method: string): void {
     .run(id, SESSION, CALLER.callerKey, method)
 }
 
-/** Retire the epoch and unsent submissions, as older hosts could. */
+/** Replaces provider presentation while retaining the canonical hand-off. */
 async function rewindConversation(): Promise<void> {
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
   if (!journal) {
@@ -233,7 +233,7 @@ describe('Send now', () => {
     expect(await rig.handoff(draftId)).toBeUndefined()
   })
 
-  it('answers a retry after a rewind dropped its hand-off as lost, and never sends under that id again', async () => {
+  it('keeps an old-context receipt stale without dropping or repeating its canonical hand-off', async () => {
     await rig.workingSend()
     const draftId = await queuedDraft('rewound away')
     const id = opId()
@@ -243,9 +243,10 @@ describe('Send now', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_unknown', details: { reason: 'resultLost' } }
     })
-    // A never-dispatched handoff returns to waiting without redelivery under the retried ID.
+    // A cursor reset keeps the existing receipt contract, but does not release its consumed card.
     const { submissions } = await rig.host.journalSnapshot(SESSION)
-    expect(submissions.some((entry) => entry.clientMessageId === id)).toBe(false)
+    expect(submissions.filter((entry) => entry.clientMessageId === id)).toHaveLength(1)
+    expect(await rig.handoff(draftId)).toMatchObject({ clientMessageId: id })
   })
 })
 
@@ -637,8 +638,10 @@ describe('source-bound ordinary Continue', () => {
 it.each(['send-now', 'automatic'] as const)(
   'clears Sleep on queued submission only: %s',
   async (mode) => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     const draftId = await queuedDraft('retained through Sleep')
+    await openRigTurnFor(rig, working)
+    await rig.settleAccepted(working, 'received')
     expect(await rig.host.sleepWorkspace('workspace-1', true)).toEqual({
       stoppedSessionIds: [SESSION]
     })

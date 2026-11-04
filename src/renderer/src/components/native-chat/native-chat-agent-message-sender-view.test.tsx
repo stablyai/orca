@@ -14,7 +14,7 @@ import type { AgentMessageSenderView } from '../../../../shared/agent-session/ag
 import { runtimeEnvironmentStatusFromSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as cache from '@/components/dashboard/worktree-agent-rows-cache'
-import * as selectors from '@/components/sidebar/worktree-agent-row-selectors'
+import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   useAgentMessageSenderView,
   useAgentMessageSenderViews
@@ -31,6 +31,7 @@ import {
   status,
   resetSenderStore
 } from './native-chat-agent-sender.test-fixture'
+import * as selectorsOwner1 from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 
 const renders = new Map<number, number>()
 const views = new Map<number, AgentMessageSenderView>()
@@ -265,7 +266,7 @@ it('uses the child row own glyph even when its parent program needs permission',
     worktreeId: 'workspace',
     now: 2_000_000,
     generation: '',
-    orchestration: selectors.selectRuntimeAgentOrchestrationForWorktree(state, 'workspace')
+    orchestration: selectorsOwner1.selectWorktreeAgentOrchestration(state, 'workspace')
   })
   const child = projected.find((row) => row.childRow)!
   expect(child).toBeDefined()

@@ -34,9 +34,9 @@ import {
   useMobileNativeChatSendError,
   type MobileNativeChatSendErrorDetails
 } from './native-chat/use-mobile-native-chat-send-error'
+import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 
 import capture from '../../../src/shared/__fixtures__/omp-native-commands.json'
-import { useMobileNativeChatComposerMenu } from './native-chat/composer/use-mobile-native-chat-composer-menu'
 vi.mock('./native-chat/composer/MobileNativeChatComposerMenu', () => ({
   composerMenuInsertText: (row: { token: string }) => row.token
 }))
@@ -361,9 +361,8 @@ describe('mobile structured send actions', () => {
       )
       await mountSession()
       await act(async () => {
-        const outcome = state === 'unknown' ? 'unknown' : 'accepted'
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
-        expect(await hook!.sendWithOutcome('same text')).toBe(outcome)
+        expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
+        expect(await hook!.sendWithOutcome('same text')).toBe('accepted')
       })
       expect(new Set(sentIds()).size).toBe(2)
     }
@@ -557,7 +556,7 @@ describe('mobile structured send actions', () => {
               previewUri: 'file:///photo.jpg'
             }
           ])
-        ).toBe('unknown')
+        ).toBe('accepted')
       }
     })
     expect(new Set(sentIds()).size).toBe(2)

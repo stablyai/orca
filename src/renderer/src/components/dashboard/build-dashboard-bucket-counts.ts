@@ -12,7 +12,8 @@ import {
   type AgentRowUnreadState
 } from './dashboard-row-bucket'
 import type { DashboardAgentRowWithLineage } from './agent-row-lineage'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   createWorktreeAgentRowsCache,
   finishWorktreeAgentRowsCachePass,

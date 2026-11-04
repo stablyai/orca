@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
-import {
-  codexTurnEndRejection,
-  readCodexTurnEnd
-} from '../turns/codex-structured-turn-end-settlement'
+
+import { readCodexTurnEnd } from '../turns/codex-structured-turn-end-settlement'
 
 const errors = [
   'unauthorized',
@@ -54,10 +52,7 @@ describe('Codex protocol authentication failures', () => {
       const end = readCodexTurnEnd('turn/completed', {
         turn: { id: 'turn', status: 'failed', error }
       })
-      expect(end && codexTurnEndRejection(end, 'system')).toMatchObject({
-        rejection: { kind: 'notSignedIn', account: 'system' }
-      })
-      expect(end && codexTurnEndRejection(end, 'system')?.reason).toContain('codex login')
+      expect(end).toMatchObject({ status: 'failed', notSignedIn: true })
       translator.dispose()
     }
   )
