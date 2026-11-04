@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isRemoteRuntimePtyId, parseRemoteRuntimePtyId } from './remote-runtime-pty-id'
-import { getPtyExecutionHost } from '../terminal-execution-host'
+import { getPtyExecutionHost } from '../terminal/pty/lifecycle/terminal-execution-host'
 
 describe('isRemoteRuntimePtyId', () => {
   // Pins the merge of the prefix-only and parse-based copies: an unparseable `remote:` id still

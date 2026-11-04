@@ -7,7 +7,6 @@ import { chromium } from 'playwright-core'
 import { buildMobileWebAppBundle } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
-  BUFFERED_FIELD_ID,
   LIVE_INPUT_FIELD_ID,
   liveInputProbeRouteSource
 } from './preview/mobile-web-app-live-input-probe-route.mjs'
@@ -62,8 +61,7 @@ beforeAll(async () => {
     join(routeDir, 'live-input-probe.tsx'),
     liveInputProbeRouteSource({
       bindingModule: join(terminalDir, 'use-terminal-text-field-submit-binding'),
-      commitModule: join(terminalDir, 'use-terminal-live-input-commit'),
-      draftsModule: join(terminalDir, 'use-buffered-terminal-drafts')
+      commitModule: join(terminalDir, 'use-terminal-live-input-commit')
     })
   )
   const built = await buildMobileWebAppBundle({
@@ -391,83 +389,6 @@ describeRender(
         }
 
         expect(await sent(page)).toEqual([])
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-    })
-
-    describe('in buffered mode, where the field holds the draft until Enter', () => {
-      const bufferedValue = (page) =>
-        page.evaluate((id) => document.getElementById(id)?.value ?? null, BUFFERED_FIELD_ID)
-
-      it('sends the draft and empties the field on a plain Enter', async () => {
-        // Controlled DOM field must clear as buffered send begins, not just backing store.
-        const { errors, page } = await openProbe()
-        await page.focus(`#${BUFFERED_FIELD_ID}`)
-        await page.keyboard.type('ls -la')
-
-        await page.keyboard.press('Enter')
-
-        await page.waitForFunction(
-          (id) => document.getElementById(id)?.value === '',
-          BUFFERED_FIELD_ID,
-          { timeout: 30_000, polling: 100 }
-        )
-        expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.bufferedSent())).toEqual([
-          'ls -la'
-        ])
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-
-      it('sends the draft when Enter arrives with the keyboard composition still open', async () => {
-        // Buffered field shares RN-Web composing-Enter suppression; require draft sends and clears via web binding.
-        const { errors, page } = await openProbe()
-        await page.focus(`#${BUFFERED_FIELD_ID}`)
-        const input = await page.context().newCDPSession(page)
-        await input.send('Input.imeSetComposition', {
-          text: 'ls -la',
-          selectionStart: 6,
-          selectionEnd: 6
-        })
-        await page.waitForFunction(
-          (id) => document.getElementById(id)?.value === 'ls -la',
-          BUFFERED_FIELD_ID,
-          { timeout: 30_000, polling: 100 }
-        )
-
-        await page.keyboard.press('Enter')
-
-        await page.waitForFunction(
-          () => (globalThis.__orcaLiveInputProbe.bufferedSent() ?? []).length > 0,
-          undefined,
-          { timeout: 30_000, polling: 100 }
-        )
-        expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.bufferedSent())).toEqual([
-          'ls -la'
-        ])
-        expect(await bufferedValue(page)).toBe('')
-        expect(errors).toEqual([])
-        await page.close()
-      }, 300_000)
-
-      it("leaves the draft alone when the key bar's Enter chip fires", async () => {
-        // Buffered mode leaves live handles empty: accessory declines and chip sends one terminal CR without claiming buffered draft.
-        const { errors, page } = await openProbe()
-        await page.evaluate(() => globalThis.__orcaLiveInputProbe.setLiveInputEnabled(false))
-        await page.focus(`#${BUFFERED_FIELD_ID}`)
-        await page.keyboard.type('ls -la')
-
-        const result = await page.evaluate(() =>
-          globalThis.__orcaLiveInputProbe.accessory({ bytes: '\r' })
-        )
-
-        expect(result).toEqual({ kind: 'allow-raw' })
-        expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(['\r'])
-        expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.bufferedSent())).toEqual(
-          []
-        )
-        expect(await bufferedValue(page)).toBe('ls -la')
         expect(errors).toEqual([])
         await page.close()
       }, 300_000)

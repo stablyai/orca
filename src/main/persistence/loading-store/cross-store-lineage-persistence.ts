@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'

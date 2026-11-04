@@ -1,4 +1,4 @@
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
+import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 import type {
   WorkerTerminalArchiveRow,

@@ -5,7 +5,7 @@ import {
   isTerminalLeafId,
   parseLegacyNumericPaneKey,
   parsePaneKey
-} from '../../../shared/stable-pane-id'
+} from '../../../shared/workspace-layout/stable-pane-id'
 import { agentHookServer } from '../../agent-hooks/server'
 
 export function legacyMigrationUnsupportedRowsToAliasEntries(

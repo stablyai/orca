@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { stubWriteSettlement } from '../providers/settled-pty-write-stub'
-import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   checkBoundMailbox,

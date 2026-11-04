@@ -126,7 +126,7 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('./SidebarFeedbackDialog', () => {
+vi.mock('./sidebar-feedback/SidebarFeedbackDialog', () => {
   mocks.feedbackChunkLoads += 1
   return { SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" /> }
 })

@@ -9,19 +9,19 @@ import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/a
 import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredRunningChildWork } from '../../../shared/agent-status/child-work/agent-child-work-listing'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { NativeChatBackgroundTasksStatus } from '@/components/native-chat/NativeChatBackgroundTasksStatus'
 import { buildBackgroundTaskGroupsFromViews } from '../../../shared/background-task-roster'
-import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
-import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
+import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
+import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('@/components/dashboard/use-agent-row-conversation-name', () => ({
   useAgentRowConversationName: () => null
 }))
 
-vi.mock('@/components/sidebar/CacheTimer', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownForPane: () => null
 }))

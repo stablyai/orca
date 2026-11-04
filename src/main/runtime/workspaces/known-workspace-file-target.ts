@@ -16,7 +16,7 @@ import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace-file-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
-import type { PtyIncarnationId } from '../../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { forgetPtySurface } from '../pty-recorded-surface-topology'
 
 export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {

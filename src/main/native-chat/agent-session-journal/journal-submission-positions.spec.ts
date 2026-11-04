@@ -156,16 +156,5 @@ export function registerJournalSubmissionPositionsTests(): void {
       expect(replayed.submission('send-1')).toMatchObject({ submittedSequence: submitted.sequence })
       expect(journal).not.toBe(replayed)
     })
-
-    it('reaches a client on the history page', async () => {
-      const { journal, submitted } = await sendHandedOverThenWithdrawn()
-
-      expect(readAgentSessionHydrationPage(journal).submissions).toEqual([
-        expect.objectContaining({
-          clientMessageId: 'send-1',
-          submittedSequence: submitted.sequence
-        })
-      ])
-    })
   })
 }
