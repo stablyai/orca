@@ -82,6 +82,11 @@ export const getRuntimeEnvironmentsSearchEntry = createLocalizedCatalog(
         'share this computer'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.mobile.settings.search.publicTunnelKeyword',
+        'public tunnel',
+        { aliases: ['tunnel', 'cloudflare', 'cloudflare tunnel'] }
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.runtime.environments.search.accessLinkKeyword',
         'access link'
       ),

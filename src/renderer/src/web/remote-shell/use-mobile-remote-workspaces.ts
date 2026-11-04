@@ -6,7 +6,7 @@ import type {
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { buildMobileWorkspaces, type MobileWorkspaceGroup } from './mobile-remote-model'
 
 type RuntimeResponse<TResult> = {
@@ -42,9 +42,7 @@ export type MobileRemoteWorkspaces = {
  */
 export function useMobileRemoteWorkspaces(): MobileRemoteWorkspaces {
   const [worktrees, setWorktrees] = useState<RuntimeWorktreePsSummary[]>([])
-  const [sessions, setSessions] = useState<Map<string, AgentSessionStatusSummary>>(
-    () => new Map()
-  )
+  const [sessions, setSessions] = useState<Map<string, AgentSessionStatusSummary>>(() => new Map())
   const [connectionState, setConnectionState] = useState<MobileConnectionState>('connecting')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

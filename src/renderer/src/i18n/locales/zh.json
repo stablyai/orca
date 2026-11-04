@@ -9885,7 +9885,15 @@
               "5bff6a2ef0": "侧边栏",
               "6cf5f54ce1": "按钮",
               "648eeada79": "隐藏",
-              "ac79fe4a04": "显示"
+              "ac79fe4a04": "显示",
+              "publicTunnelTitle": "公网隧道",
+              "publicTunnelDescription": "随时随地通过手机或电脑浏览器访问此 Orca 服务器。出站隧道无需路由器配置，二维码链接在 URL Fragment 中携带可撤销的运行时凭证。",
+              "publicTunnelKeyword": "公网隧道",
+              "tunnelKeyword": "隧道",
+              "cloudflareKeyword": "cloudflare",
+              "cloudflaredKeyword": "cloudflared",
+              "webRemoteKeyword": "网页远程",
+              "browserRemoteKeyword": "浏览器远程"
             }
           }
         },

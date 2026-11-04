@@ -1,9 +1,11 @@
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitchRow } from './SettingsFormControls'
 import { MobilePane } from './MobilePane'
+import { RuntimePublicTunnelSection } from './RuntimePublicTunnelSection'
 import {
   getMobileOverviewSearchEntry,
   getMobileSidebarShortcutSearchEntry,
+  getPublicTunnelSearchEntry,
   getMobileSettingsPaneSearchEntries
 } from './mobile-settings-search'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +20,7 @@ const ORCA_ANDROID_APK_URL = 'https://www.onorca.dev/download/android'
 export function MobileSettingsPane(): React.JSX.Element {
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const publicTunnelSearchEntry = getPublicTunnelSearchEntry()
 
   return (
     <div className="space-y-4">
@@ -88,6 +91,15 @@ export function MobileSettingsPane(): React.JSX.Element {
           checked={showMobileButton}
           onChange={() => updateSettings({ showMobileButton: !showMobileButton })}
         />
+      </SearchableSetting>
+
+      <SearchableSetting
+        id="settings-public-tunnel"
+        title={publicTunnelSearchEntry.title}
+        description={publicTunnelSearchEntry.description}
+        keywords={publicTunnelSearchEntry.keywords}
+      >
+        <RuntimePublicTunnelSection />
       </SearchableSetting>
 
       <div className="rounded-xl border border-border/60 bg-card/50 p-4">

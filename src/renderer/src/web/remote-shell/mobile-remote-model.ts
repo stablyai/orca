@@ -1,4 +1,4 @@
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   RuntimeWorktreePsSummary,
   RuntimeWorktreeStatus
@@ -43,11 +43,7 @@ function truncate(value: string, max: number): string {
 export function mobileSessionStatus(
   status: AgentSessionStatusSummary['status']
 ): MobileSessionStatus {
-  return status === 'working'
-    ? 'working'
-    : status === 'attention'
-      ? 'attention'
-      : 'idle'
+  return status === 'working' ? 'working' : status === 'attention' ? 'attention' : 'idle'
 }
 
 export function mobileSessionTitle(session: AgentSessionStatusSummary): string {

@@ -1,11 +1,8 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type {
-  MobileChatMessage,
-  MobilePendingInteraction
-} from './views/MobileChatView'
+import type { MobileChatMessage, MobilePendingInteraction } from './views/MobileChatView'
 
 type RuntimeResponse<TResult> = {
   ok: boolean
@@ -97,9 +94,7 @@ export function pendingInteractionFor(
     kind: body.kind,
     title: body.kind === 'approval' ? body.title : 'Agent question',
     command:
-      body.kind === 'approval'
-        ? (body.detail ?? body.description ?? body.title)
-        : body.question,
+      body.kind === 'approval' ? (body.detail ?? body.description ?? body.title) : body.question,
     dangerLevel:
       body.kind === 'approval' && /rm |delete|drop|force|sudo/i.test(body.detail ?? '')
         ? 'high'

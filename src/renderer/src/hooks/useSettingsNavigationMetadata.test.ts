@@ -214,6 +214,19 @@ describe('settings navigation metadata', () => {
     expect(agentTitles(true)).not.toContain(getCodexTerminalServerIsolationTitle())
   })
 
+  it('indexes public tunnel in mobile search entries on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const mobile = sections.find((section) => section.id === 'mobile')
+    expect(mobile).toBeDefined()
+    expect(matchesSettingsSearch('public tunnel', mobile!.searchEntries)).toBe(true)
+    expect(matchesSettingsSearch('cloudflare', mobile!.searchEntries)).toBe(true)
+  })
+
   it('keeps the Browser shortcut searchable for a capable web runtime', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,

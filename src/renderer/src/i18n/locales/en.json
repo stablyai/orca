@@ -10711,7 +10711,15 @@
               "5bff6a2ef0": "sidebar",
               "6cf5f54ce1": "button",
               "648eeada79": "hide",
-              "ac79fe4a04": "show"
+              "ac79fe4a04": "show",
+              "publicTunnelTitle": "Public Tunnel",
+              "publicTunnelDescription": "Open this Orca server from a phone browser anywhere. The outbound tunnel needs no router change; the QR link carries a revocable runtime credential in its URL fragment.",
+              "publicTunnelKeyword": "public tunnel",
+              "tunnelKeyword": "tunnel",
+              "cloudflareKeyword": "cloudflare",
+              "cloudflaredKeyword": "cloudflared",
+              "webRemoteKeyword": "web remote",
+              "browserRemoteKeyword": "browser remote"
             }
           }
         },

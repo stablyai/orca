@@ -3,25 +3,22 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import {
   pendingStructuredSessionPrompts,
   projectStructuredAgentSessionMessages
-} from '../../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
   structuredAgentSessionMessageSendMutation
-} from '../../../../shared/structured-agent-session-send-mutation'
-import type {
-  MobileChatMessage,
-  MobilePendingInteraction
-} from './views/MobileChatView'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { MobileChatMessage, MobilePendingInteraction } from './views/MobileChatView'
 import {
   callRuntime,
   operationId,

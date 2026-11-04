@@ -123,10 +123,10 @@ export function RuntimePublicTunnelSection(): React.JSX.Element {
           <Globe2 size={15} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <Label>Public internet access (Cloudflare Tunnel)</Label>
+          <Label>Public Tunnel (Cloudflare)</Label>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Open this Orca server from a phone browser anywhere. The outbound tunnel needs no
-            router change; the QR link carries a revocable runtime credential in its URL fragment.
+            Open this Orca server from a phone browser anywhere. The outbound tunnel needs no router
+            change; the QR link carries a revocable runtime credential in its URL fragment.
           </p>
         </div>
       </div>

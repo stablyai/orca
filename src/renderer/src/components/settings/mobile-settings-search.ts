@@ -84,10 +84,59 @@ export const getMobileSidebarShortcutSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const getPublicTunnelSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.mobile.settings.search.publicTunnelTitle',
+    'Public Tunnel'
+  ),
+  description: translate(
+    'auto.components.settings.mobile.settings.search.publicTunnelDescription',
+    'Open this Orca server from a phone browser anywhere. The outbound tunnel needs no router change; the QR link carries a revocable runtime credential in its URL fragment.'
+  ),
+  keywords: [
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.publicTunnelKeyword',
+      'public tunnel',
+      {
+        aliases: [
+          'tunnel',
+          'cloudflare',
+          'cloudflare tunnel',
+          'cloudflared',
+          'web remote',
+          'remote web',
+          'browser remote'
+        ]
+      }
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.tunnelKeyword',
+      'tunnel'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.cloudflareKeyword',
+      'cloudflare'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.cloudflaredKeyword',
+      'cloudflared'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.webRemoteKeyword',
+      'web remote'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.mobile.settings.search.browserRemoteKeyword',
+      'browser remote'
+    )
+  ]
+}))
+
 export const getMobileSettingsPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     getMobileOverviewSearchEntry(),
     getMobileSidebarShortcutSearchEntry(),
+    getPublicTunnelSearchEntry(),
     ...getMobilePaneSearchEntries()
   ]
 )
