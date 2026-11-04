@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import type { ReactNode } from 'react'
-import { act } from 'react'
+
+import { type ReactNode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getWorkspaceCleanupCandidateIdentity } from './workspace-cleanup-host-identity'
+import './workspace-cleanup-host-identity'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { CandidateRow } from './workspace-cleanup-candidate-row'
 import { getWorkspaceCleanupCandidateAccessibleName } from './workspace-cleanup-host-label'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'

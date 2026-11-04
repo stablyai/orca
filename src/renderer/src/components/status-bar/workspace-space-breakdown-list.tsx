@@ -2,7 +2,7 @@ import { AlertTriangle, FolderSearch, Loader2 } from 'lucide-react'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
-} from '../../../../shared/workspace-space-types'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { formatBytes, formatCompactCount } from './workspace-space-format'
 import { getLargestWorkspaceSpaceItemSize } from './workspace-space-presentation'

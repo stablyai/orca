@@ -15,7 +15,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
-} from '../../../../shared/agent-chat-permission-mode'
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -99,7 +99,9 @@ function NativeChatPermissionModePickerInner({
   const title = nativeChatPermissionPickerTitle()
   const label = isAgentChatPermissionMode(current)
     ? nativeChatPermissionModeLabel(current)
-    : (currentLabel ?? title)
+    : current === 'own'
+      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      : (currentLabel ?? title)
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>

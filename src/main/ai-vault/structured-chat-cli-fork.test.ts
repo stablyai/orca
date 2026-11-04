@@ -10,7 +10,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/ag
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
 import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
-import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
+import { prepareLegacySharedCodexSessionResume } from '../codex/history/resume/codex-legacy-session-resume'
 import { AiVaultPrepareSessionResumeParams } from '../../shared/rpc-contract/ai-vault-params'
 
 let root: string | undefined

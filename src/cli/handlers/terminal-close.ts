@@ -6,7 +6,7 @@ import type { CommandHandler } from '../dispatch'
 import { formatTerminalClose, reportCliError, printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredWorktreeSelector, getTerminalHandle } from '../selectors'
-import { describeUnconfirmedCloseStop } from '../../shared/pty-liveness-verdict'
+import { describeUnconfirmedCloseStop } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 
 /** A false stop receipt is an error only when the host supplied a liveness verdict. */
 function terminalCloseFailure(close: RuntimeTerminalClose): RuntimeClientError | null {

@@ -1,6 +1,6 @@
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
-import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
+import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../../shared/windows-batch-spawn'
 import {
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs

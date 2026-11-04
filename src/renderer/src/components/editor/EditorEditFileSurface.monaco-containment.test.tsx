@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import type { OpenFile } from '@/store/slices/editor'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 
 const reportCrashMock = vi.hoisted(() => vi.fn())

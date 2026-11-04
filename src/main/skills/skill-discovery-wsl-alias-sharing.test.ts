@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const io = vi.hoisted(() => ({ run: vi.fn(), plugins: vi.fn(async () => []) }))
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: io.run }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: io.run }))
 vi.mock('./claude-plugin-skill-sources-wsl', () => ({
   discoverClaudePluginSkillSourcesInWsl: io.plugins
 }))

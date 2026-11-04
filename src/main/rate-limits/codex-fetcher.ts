@@ -10,11 +10,11 @@ import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
 } from '../codex-cli/codex-home-process-lock'
-import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
+import { isCodexStateDbBackfillPending } from '../codex/history/index/codex-state-db'
 import {
   hasCodexStateDbBackfillRecoveryGivenUp,
   startCodexStateDbBackfillRecoveryInBackground
-} from '../codex/codex-state-db-backfill-recovery'
+} from '../codex/history/index/codex-state-db-backfill-recovery'
 import { spawnProcessOnWorkerThread } from '../worker-thread-child-process/worker-thread-child-process'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { getMainHttpClient } from '../network/http-client'
@@ -32,8 +32,8 @@ import {
 } from './codex-reset-credit-client'
 import { readCodexRateLimitsViaRpc } from './codex-rpc-rate-limit-probe'
 import { getHiddenProbeWslCwdSetupCommands, resolveHiddenProbeCwd } from './hidden-probe-cwd'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
-import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
+import { resolveWslInteropSpawnCwd } from '../wsl/execution/wsl-interop-spawn-directory'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000

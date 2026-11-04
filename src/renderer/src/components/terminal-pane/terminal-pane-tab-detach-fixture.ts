@@ -1,5 +1,8 @@
 import { vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalPaneTabDetachStore } from './terminal-pane-tab-detach'
 
 export const WORKTREE_ID = 'repo-1::/worktree'

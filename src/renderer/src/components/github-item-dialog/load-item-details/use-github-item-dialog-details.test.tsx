@@ -9,7 +9,7 @@ import type {
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
 import { requestPRReviewers } from '../land-pull-request/pr-reviewers-request-actions'
-import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
+import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 import {
   invalidateWorkItemDetailsCacheForKey,
   patchCachedWorkItemBody,
@@ -50,7 +50,7 @@ const comment = (id: number): PRComment => ({
   url: ''
 })
 
-let latest: ReturnType<typeof useGitHubItemDialogDetails> | null = null
+let latest: ReturnType<typeof useGitHubWorkItemDetails> | null = null
 let setDraft: (value: string) => void = () => {}
 
 // Stands in for GHCommentComposer, whose unsent body is component-local state.
@@ -61,7 +61,7 @@ function DraftComposer(): React.JSX.Element {
 }
 
 function Harness(): React.JSX.Element | null {
-  latest = useGitHubItemDialogDetails({ workItem, repoPath: '/repo', effectiveRepoId: 'repo-1' })
+  latest = useGitHubWorkItemDetails({ workItem, repoPath: '/repo', effectiveRepoId: 'repo-1' })
   // Same gate as the Conversation tab's composer (discuss-item/conversation-tab.tsx).
   return latest.detailsLoaded ? <DraftComposer /> : null
 }
@@ -76,7 +76,7 @@ const issue: GitHubWorkItem = {
 const issueDetails: GitHubWorkItemDetails = { item: issue, body: 'Old body', comments: [] }
 
 function IssueHarness(): null {
-  latest = useGitHubItemDialogDetails({
+  latest = useGitHubWorkItemDetails({
     workItem: issue,
     repoPath: '/repo',
     effectiveRepoId: 'repo-1'
@@ -92,7 +92,7 @@ afterEach(() => {
   workItemDetailsCache.clear()
 })
 
-describe('useGitHubItemDialogDetails reconciliation', () => {
+describe('useGitHubWorkItemDetails reconciliation', () => {
   it('keeps an unsent comment draft through a failed reviewer write and its failed reread', async () => {
     lookup.mockResolvedValueOnce(details)
     render(<Harness />)

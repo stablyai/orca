@@ -27,7 +27,7 @@ const runningDistros = vi.hoisted(() => ({
 const settledGate = vi.hoisted(() => ({
   override: vi.fn((): { distro: string; state: 'stopped' } | undefined => undefined)
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({
   blockedWslDistroForPath: async (path: string) => {
     const override = settledGate.override()
     if (override !== undefined) {

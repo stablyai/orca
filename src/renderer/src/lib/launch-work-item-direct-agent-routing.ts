@@ -1,5 +1,5 @@
-import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { agentLaunchCommandErrorMessage } from '@/lib/launch-work-item-direct-messages'
 import { toast } from 'sonner'
 import {
@@ -12,10 +12,10 @@ import {
 } from '@/lib/launch-work-item-direct-agent'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
@@ -66,6 +66,7 @@ type PromptDelivery = 'draft' | 'submit-after-ready'
 export async function resolveDirectWorkItemAgent(args: {
   agentLaunchPreferences?: AgentLaunchPreferences
   agentOverride?: TuiAgent
+  preferredSurface?: 'chat'
   worktreeId: string
   repoHost: RepoHostFields
   latestStore: AppState
@@ -98,7 +99,13 @@ export async function resolveDirectWorkItemAgent(args: {
       unavailable:
         !isTuiAgentEnabled(args.agentOverride, preferences?.disabledTuiAgents) ||
         (!detected.includes(args.agentOverride) &&
-          !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
+          !agentChoiceMayOpenAsChat(
+            store,
+            args.agentOverride,
+            workspace,
+            detected,
+            args.preferredSurface
+          ))
     }
   }
   return {

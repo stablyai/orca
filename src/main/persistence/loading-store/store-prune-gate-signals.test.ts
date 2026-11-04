@@ -5,7 +5,7 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
 vi.mock('electron', () => ({
@@ -31,7 +31,7 @@ const {
   __resetLocalWorktreeMetadataPruneGateForTests,
   isLocalWorktreeMetadataPruneDue,
   markLocalWorktreeMetadataPruneStarted
-} = await import('../../local-worktree-metadata-prune-gate')
+} = await import('../../workspaces/catalog/local-worktree-metadata-prune-gate')
 
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/tmp/worktree-a`

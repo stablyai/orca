@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import { getRuntimeEnvironmentSidecarPath } from '../../../shared/runtime-environment-sidecar'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { getRuntimeEnvironmentSidecarPath } from '../../../shared/remote-runtime/host-store/runtime-environment-sidecar'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover

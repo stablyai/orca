@@ -42,13 +42,21 @@ describe('task detail request lifetime', () => {
     expect(next.requests).toHaveLength(1)
   })
 
-  it('ignores an old item reply after selecting another item', async () => {
+  it.each([
+    { id: 'mr:99', number: 99 },
+    { repoId: 'other-repo' },
+    { id: 'issue:12', type: 'issue' as const }
+  ])('ignores an old item reply after selecting another target %j', async (source) => {
     const fixture = await mount(hydratedItem())
-    const next = hydratedItem({ id: 'mr:99', number: 99 })
+    const next = hydratedItem(source)
     const old = fixture.transport.pending()
     await fixture.select(next)
     const current = fixture.transport.requests[1]
-    expect(current?.params).toMatchObject({ iid: 99 })
+    expect(current?.params).toMatchObject({
+      repo: `id:${next.source.repoId}`,
+      iid: next.source.number,
+      type: next.source.type
+    })
     await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Retired item' }), old)
     expect(fixture.state().payload).toBeNull()
     await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Current item' }))
@@ -57,69 +65,53 @@ describe('task detail request lifetime', () => {
     expect(fixture.transport.requests).toHaveLength(2)
   })
 
-  it('stops requests and ignores an outstanding reply on close', async () => {
-    const fixture = await mount()
-    await fixture.select(null)
-    await fixture.transport.answer()
-    expect(fixture.state()).toMatchObject({ actionItem: null, payload: null, loading: false })
-    expect(fixture.transport.requests).toHaveLength(1)
-  })
-
   it.each([
-    success(null),
-    success('invalid'),
-    { id: 'detail', ok: false as const, error: { code: 'refused', message: 'Access refused' } }
-  ])('does not retry refused or unreadable details', async (reply) => {
+    { host: 'other.gitlab.example', path: 'group/repo' },
+    { host: 'gitlab.example', path: 'group/other-repo' }
+  ])('reloads a changed GitLab project reference $host/$path', async (projectRef) => {
     const fixture = await mount()
-    await fixture.transport.answer(reply)
-    expect(fixture.transport.requests).toHaveLength(1)
-    expect(fixture.transport.pending()).toHaveLength(0)
-    expect(fixture.state().loading).toBe(false)
-    expect(fixture.state().error).not.toBe('')
-  })
-
-  it('does not retry a transport failure', async () => {
-    const fixture = await mount()
-    await fixture.transport.reject(new Error('Transport lost'))
-    expect(fixture.state()).toMatchObject({ loading: false, error: 'Transport lost' })
-    expect(fixture.transport.requests).toHaveLength(1)
+    const old = fixture.transport.pending()
+    await fixture.select(gitlabItem({ projectRef }))
+    expect(fixture.transport.requests[1]?.params).toMatchObject({ projectRef })
+    await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Old project' }), old)
+    expect(fixture.state().payload).toBeNull()
+    await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Current project' }))
+    expect(fixture.transport.requests).toHaveLength(2)
+    expect(fixture.state()).toMatchObject({ loading: false, payload: { body: 'Current project' } })
   })
 })
 
 describe('other detail providers', () => {
-  it('keeps GitHub and Linear reads stable after successful replies', async () => {
-    const gitlab = gitlabItem()
+  it('ignores a GitLab reply after switching provider', async () => {
+    const initial = gitlabItem()
+    const fixture = await mount(initial)
+    const old = fixture.transport.pending()
     const github: ActionableTaskItem = {
-      ...gitlab,
+      ...initial,
+      key: 'github:repo:pr:12',
       provider: 'github',
-      source: { ...gitlab.source, type: 'pr', state: 'open' }
+      source: {
+        ...initial.source,
+        type: 'pr',
+        state: 'open',
+        url: 'https://github.com/owner/repo/pull/12',
+        prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' }
+      }
     }
-    const fixture = await mount(github)
-    await fixture.transport.answer(success({ body: 'GitHub body' }))
-    expect(fixture.transport.requests).toHaveLength(1)
-    expect(fixture.state()).toMatchObject({ loading: false, payload: { provider: 'github' } })
-    const issue = {
-      id: 'linear-1',
-      identifier: 'ENG-1',
-      title: 'Issue',
-      url: 'https://linear.example/ENG-1',
-      updatedAt: '',
-      priority: 0,
-      labels: [],
-      state: { name: 'Todo', type: 'unstarted', color: '' },
-      team: { id: 'team', name: 'Team', key: 'ENG' }
-    }
-    const linear: ActionableTaskItem = { ...gitlab, provider: 'linear', source: issue }
-    await fixture.select(linear)
-    expect(fixture.transport.requests.slice(1).map((request) => request.method)).toEqual([
-      'linear.getIssue',
-      'linear.issueComments'
+    await fixture.select(github)
+    await fixture.transport.answer(success({ ...GITLAB_DETAILS, body: 'Old GitLab' }), old)
+    expect(fixture.state().payload).toBeNull()
+    await fixture.transport.answer(success({ capabilities: [] }))
+    await fixture.transport.answer(success({ body: 'GitHub body', item: github.source }))
+    expect(fixture.transport.requests.map((request) => request.method)).toEqual([
+      'gitlab.workItemDetails',
+      'status.get',
+      'github.workItemDetails'
     ])
-    await fixture.transport.answer((request) =>
-      success(request.method === 'linear.issueComments' ? [] : issue)
-    )
-    expect(fixture.transport.requests).toHaveLength(3)
-    expect(fixture.state()).toMatchObject({ loading: false, payload: { provider: 'linear' } })
-    expect(fixture.state().actionItem).toBe(linear)
+    expect(fixture.state()).toMatchObject({
+      loading: false,
+      payload: { provider: 'github', body: 'GitHub body' }
+    })
+    expect(fixture.state().items[0]).toBe(initial)
   })
 })

@@ -5,8 +5,8 @@ import {
   resolveCombinedUncommittedSnapshotEntries,
   shouldAutoReloadCombinedDiffFromGitStatus
 } from './combined-diff-entries'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 describe('getCombinedUncommittedEntries', () => {
   it('filters unresolved conflicts from live entries', () => {

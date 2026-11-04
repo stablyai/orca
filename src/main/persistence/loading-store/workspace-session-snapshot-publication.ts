@@ -1,15 +1,15 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobile-session-terminal-persistence-retirement'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { setMigrationUnsupportedPty } from '../../agent-hooks/migration-unsupported-pty-state'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
-import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import {
   deleteRemovedTerminalScrollbackSnapshotsAsync,
   migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
-} from '../../terminal-scrollback-snapshot-async-migration'
+} from '../../pty/scrollback/terminal-scrollback-snapshot-async-migration'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'

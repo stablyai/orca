@@ -1,7 +1,7 @@
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
-} from '../../editor-autosave'
+} from '../../autosave/editor-autosave'
 import { forgetCombinedDiffViewsShowingPath } from './combined-diff-view-cache'
 
 // Module state retains toolbar choices across viewer unmounts within this session.

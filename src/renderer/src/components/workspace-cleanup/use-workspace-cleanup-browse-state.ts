@@ -5,7 +5,7 @@ import {
   type WorkspaceCleanupFilterState,
   type WorkspaceCleanupSortField,
   type WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupBrowseController = {
   filters: WorkspaceCleanupFilterState

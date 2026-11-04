@@ -23,7 +23,9 @@ import {
   agentSessionRefusalReasonWords,
   type AgentSessionRefusalHolder
 } from './agent-session-refusal-reason-words'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../agent-launch/catalog/tui-agent-display-names'
+import { expiredAttachmentsSentence } from './agent-session-attachment-failure-words'
+import { agentSessionExpiredAttachmentNames } from './agent-session-expired-attachments'
 
 const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
   'read-history': 'notDoneReadHistory',
@@ -73,6 +75,10 @@ function causeParts(
   if (cause === 'notAvailable') {
     return write === 'read-history' ? [NOT_DONE[write]] : [cause]
   }
+  // Only a queued message's Send gives this cause; whatever kind of write that is, a message wasn't sent.
+  if (cause === 'mailOwnerUnconfirmed') {
+    return [cause, 'notDoneSend']
+  }
   const saysNotDone =
     (write === 'read-history' && AGENT_SESSION_HISTORY_UNREAD_CAUSES.has(cause)) ||
     (cause === 'questionChanged' && write === 'answer') ||
@@ -110,6 +116,17 @@ function reasonParts(
         context: { ...context, agentName: argumentProblem.agent }
       }
     ]
+  }
+  if (failure.code === 'agent_session_operation_invalid' && failure.details?.expiredAttachments) {
+    const expired = failure.details.expiredAttachments
+    const names = agentSessionExpiredAttachmentNames(expired)
+    if (names.length > 0) {
+      return [
+        { expiredAttachmentNames: names },
+        NOT_DONE[write],
+        expired.length > 1 ? 'reattachFiles' : 'reattachFile'
+      ]
+    }
   }
   const commandWhileWorking =
     failure.code === 'agent_session_operation_invalid'
@@ -261,7 +278,9 @@ export function agentSessionWriteNoticeEnglish(
         ? AGENT_SESSION_WRITE_NOTICE_COPY[part]
         : 'text' in part
           ? part.text
-          : agentSessionFailureSentence(part.failure, part.surface, part.context)
+          : 'expiredAttachmentNames' in part
+            ? expiredAttachmentsSentence(part.expiredAttachmentNames)
+            : agentSessionFailureSentence(part.failure, part.surface, part.context)
     )
     .join(' ')
 }

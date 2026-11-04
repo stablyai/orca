@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -71,7 +71,7 @@ vi.mock('@/store', () => ({
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './autosave/editor-autosave'
 import { registerEditorPanelHostContentRecoveryTests } from './editor-panel-host-content-recovery.spec'
 
 type Deferred<T> = {

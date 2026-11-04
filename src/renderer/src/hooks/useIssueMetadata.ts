@@ -20,8 +20,6 @@ import {
 } from './metadata-request-cache'
 import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
-export { useRepoLabels, useRepoAssignees } from './useGitHubRepoMetadata'
-
 const linearStateStore = createMetadataRequestStore<LinearWorkflowState[]>()
 const linearLabelStore = createMetadataRequestStore<LinearLabel[]>()
 const linearMemberStore = createMetadataRequestStore<LinearMember[]>()

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WslResult } from '../wsl/wsl-runner'
+import type { WslResult } from '../wsl/execution/wsl-runner'
 import {
   pendingWslWindowsCheckoutGitConfig,
   resetWslWindowsCheckoutProbesForTests,

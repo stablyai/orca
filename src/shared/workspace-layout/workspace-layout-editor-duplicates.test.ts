@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import { build, testContext, WS } from './workspace-layout-command.test-fixture'
 import { loadWorkspaceLayout } from './workspace-layout-load'

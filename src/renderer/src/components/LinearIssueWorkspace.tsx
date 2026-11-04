@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
-import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import type { LinearIssue } from '../../../shared/linear/issue-types'

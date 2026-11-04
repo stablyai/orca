@@ -64,6 +64,8 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
@@ -268,7 +270,6 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       activeSessionTabTypeRef: useRef(null),
       switchSessionTabRef: useRef(null),
       setActiveSessionTabId: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       subscribeToTerminal: vi.fn(),
       unsubscribeTerminal: vi.fn(),
       handleTerminalTap: focus

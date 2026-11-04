@@ -3,14 +3,14 @@ import type {
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   TranscriptMessageSink,
   TranscriptSessionIdentity
-} from './session-transcript-consumers'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
-import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
+} from './transcripts/session-transcript-consumers'
+import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string

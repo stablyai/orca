@@ -1,6 +1,6 @@
 import type { AppState } from '@/store'
 import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 /** PTYs whose queued account restart can run now: Codex at once, this tab's Claude once its turn ends. */
 export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string): string[] {

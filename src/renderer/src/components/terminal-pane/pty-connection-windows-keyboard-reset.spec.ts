@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   temporarilySetNavigatorUserAgent,
   sendTerminalInputThroughPane
@@ -13,12 +13,17 @@ import {
   LEAF_1,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -66,6 +71,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
 
     it('resets renderer cursor style when an agent becomes idle', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -73,7 +80,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
 
       const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
         | ((title: string) => void)
@@ -95,6 +106,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -103,7 +116,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+        )
 
         const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
           | ((title: string) => void)
@@ -157,13 +174,19 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks3 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
         try {
           configure()
           const pane = createPane(1)
-          connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+          connectPanePty(
+            pane as never,
+            createManager(1) as never,
+            bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks3)
+          )
 
           const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
             | ((title: string) => void)
@@ -191,6 +214,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -200,7 +225,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks4)
+        )
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           state: 'working',
@@ -240,6 +269,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -259,7 +290,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+        )
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
         // Batching coalesces done→working→done; only stateHistory proves the new turn re-armed Kitty.
@@ -293,6 +328,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -312,7 +349,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+        )
         notifyStoreSubscribers()
         expect(pane.terminal.write).not.toHaveBeenCalled()
 
@@ -344,6 +385,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -354,7 +397,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+        )
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           state: 'done',
@@ -396,6 +443,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -407,17 +456,20 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         connectPanePty(
           pane as never,
           createManager(1) as never,
-          createDeps({
-            startup: {
-              command: "codex 'resume' 'codex-session-1'",
-              launchAgent: 'codex',
-              telemetry: {
-                agent_kind: 'codex',
-                launch_source: 'sidebar',
-                request_kind: 'resume'
+          bindPaneAgentTitleMocks(
+            createDeps({
+              startup: {
+                command: "codex 'resume' 'codex-session-1'",
+                launchAgent: 'codex',
+                telemetry: {
+                  agent_kind: 'codex',
+                  launch_source: 'sidebar',
+                  request_kind: 'resume'
+                }
               }
-            }
-          }) as never
+            }) as never,
+            agentTitleMocks8
+          )
         )
 
         expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
@@ -465,6 +517,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -475,17 +529,20 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           connectPanePty(
             pane as never,
             createManager(1) as never,
-            createDeps({
-              startup: {
-                command: `${launchAgent} session-command`,
-                launchAgent,
-                telemetry: {
-                  agent_kind: agentKind,
-                  launch_source: 'sidebar',
-                  request_kind: requestKind
+            bindPaneAgentTitleMocks(
+              createDeps({
+                startup: {
+                  command: `${launchAgent} session-command`,
+                  launchAgent,
+                  telemetry: {
+                    agent_kind: agentKind,
+                    launch_source: 'sidebar',
+                    request_kind: requestKind
+                  }
                 }
-              }
-            }) as never
+              }) as never,
+              agentTitleMocks9
+            )
           )
 
           transport.sendInput.mockClear()
@@ -505,6 +562,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -522,7 +581,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
           stateHistory: []
         }
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks10)
+        )
 
         mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
         notifyStoreSubscribers()
@@ -571,6 +634,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -579,7 +644,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const pane = createPane(1)
         pane.terminal.modes.sendFocusMode = true
 
-        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+        connectPanePty(
+          pane as never,
+          createManager(1) as never,
+          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks11)
+        )
 
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           state: 'done',
@@ -609,6 +678,8 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -618,7 +689,11 @@ export function registerPtyConnectionWindowsKeyboardResetTests(): void {
         const manager = createManager(1)
         const deps = createDeps()
 
-        const binding = connectPanePty(pane as never, manager as never, deps as never)
+        const binding = connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks12)
+        )
         binding.dispose()
         pane.terminal.write.mockClear()
 

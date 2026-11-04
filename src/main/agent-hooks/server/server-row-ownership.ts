@@ -1,4 +1,4 @@
-import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status-terminal-owner'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { structuralValuesEqualIgnoringUndefined } from '../../../shared/structural-value-equality'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {

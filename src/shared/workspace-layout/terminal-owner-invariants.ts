@@ -1,8 +1,8 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
 import { parseAppSshPtyId } from '../ssh-pty-id'
-import { isTerminalLeafId } from '../stable-pane-id'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { isTerminalLeafId } from './stable-pane-id'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 
 // Require one leaf per terminal and one tab per leaf ID; binding writes report breaches without removing them.

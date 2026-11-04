@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
+import { dropRetirementProofsForLiveSurfaces } from '../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import { orderMobileSessionTabsByGroups } from './mobile-session-tab-merge'
 import type {
   RuntimeMobileSessionProjectionHost,

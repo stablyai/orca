@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentInterruptInputIntent } from '../../shared/agent-interrupt-intent'
+import type { AgentInterruptInputIntent } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'

@@ -1,6 +1,6 @@
 import type { Session } from './session'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalSpawnGate } from './terminal-spawn-gate'
 import { SessionTerminationController } from './session-termination-controller'
 import { shutdownOwnedTerminalProcess } from './terminal-host-session-shutdown'

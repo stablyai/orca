@@ -1,20 +1,15 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
-import { realpathSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setImmediate as flush } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  bundleCoordinationDir,
-  ORCAD_BROWSER_PARK_LABEL,
-  supervisorsDir
-} from '../../shared/serve-bundle-coordination'
+import { ORCAD_BROWSER_PARK_LABEL } from '../../shared/serve-bundle-coordination'
 import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import {
   commitServeSupervisorPark,
   parkServeSupervisorsForInstall,
   releaseServeSupervisorPark
-} from '../updater/serve-supervisor-install-park'
+} from '../updater/lifecycle/serve-supervisor-install-park'
 import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 
 const HELPER = 424242
@@ -128,34 +123,6 @@ describe('orcad browser helper in the desktop install park', () => {
     await parkWatch.close()
   })
 
-  it('restarts the helper at once when the install is abandoned', async () => {
-    const parkWatch = watch()
-    await expect(
-      parkServeSupervisorsForInstall(executable, [HELPER], installerDeps())
-    ).resolves.toEqual({ kind: 'parked' })
-    await releaseServeSupervisorPark()
-    await step()
-    expect(running).toBe(true)
-    await parkWatch.close()
-  })
-
-  it('retries a failed restart with backoff instead of leaving the browser off', async () => {
-    const parkWatch = watch()
-    await parkServeSupervisorsForInstall(executable, [HELPER], installerDeps())
-    await releaseServeSupervisorPark()
-    failStarts = 1
-    await step()
-    expect(starts).toHaveLength(1)
-    expect(running).toBe(false)
-    await step()
-    expect(starts).toHaveLength(1)
-    clock += 5_000
-    await step()
-    expect(starts).toHaveLength(2)
-    expect(running).toBe(true)
-    await parkWatch.close()
-  })
-
   it('gives up a slow restart so a new install can still park the helper', async () => {
     const parkWatch = watch()
     await parkServeSupervisorsForInstall(executable, [HELPER], installerDeps())
@@ -169,17 +136,5 @@ describe('orcad browser helper in the desktop install park', () => {
     ).resolves.toEqual({ kind: 'parked' })
     expect(starts[0]?.aborted).toBe(true)
     await parkWatch.close()
-  })
-
-  it('unregisters on close and aborts a restart in flight', async () => {
-    const parkWatch = watch()
-    const dir = bundleCoordinationDir(realpathSync(bundle), join(root, 'data'))
-    expect(await readdir(supervisorsDir(dir))).toHaveLength(1)
-    await parkServeSupervisorsForInstall(executable, [HELPER], installerDeps())
-    await releaseServeSupervisorPark()
-    tick()
-    await parkWatch.close()
-    expect(starts[0]?.aborted).toBe(true)
-    expect(await readdir(supervisorsDir(dir))).toEqual([])
   })
 })

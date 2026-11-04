@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../shared/constants'
-import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
@@ -215,6 +215,41 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(startup?.launchAgent).toBe('claude')
     expect(startup?.startupCommandDelivery).toBe('shell-ready')
     expect(startup?.resumeProviderSession?.id).toBe(SESSION_ID)
+  })
+
+  it('refuses a queued restart once another live pane holds the session', () => {
+    const otherTab = 'tab-other'
+    const otherLeaf = '0195f2ce-2222-4000-8000-000000000002'
+    const otherPaneKey = makePaneKey(otherTab, otherLeaf)
+    seedAgentStatus({
+      agentType: 'claude',
+      state: 'waiting',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    const ownEntry = useAppStore.getState().agentStatusByPaneKey[makePaneKey(TAB_ID, LEAF_ID)]
+    if (!ownEntry) {
+      throw new Error('Missing seeded status')
+    }
+    useAppStore.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [makeTerminalTab({ id: otherTab, worktreeId: WORKTREE_ID })]
+      },
+      ptyIdsByTabId: { [otherTab]: ['pty-other'] },
+      terminalLayoutsByTabId: {
+        [otherTab]: {
+          root: { type: 'leaf', leafId: otherLeaf },
+          activeLeafId: otherLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [otherLeaf]: 'pty-other' }
+        }
+      },
+      agentStatusByPaneKey: {
+        [makePaneKey(TAB_ID, LEAF_ID)]: ownEntry,
+        [otherPaneKey]: { ...ownEntry, paneKey: otherPaneKey, tabId: otherTab }
+      }
+    })
+
+    expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
   })
 
   it('resumes a hand-started Claude without the configured default arguments', () => {

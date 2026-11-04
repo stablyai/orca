@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../../shared/runtime-environment-catalog-channel'
+import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../../shared/remote-runtime/host-catalog/runtime-environment-catalog-channel'
 
 export function publishRuntimeEnvironmentCatalogChanged(): void {
   for (const window of BrowserWindow.getAllWindows()) {

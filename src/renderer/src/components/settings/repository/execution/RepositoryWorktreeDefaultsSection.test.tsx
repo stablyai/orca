@@ -12,7 +12,7 @@ vi.mock('@/store/index', () => ({
     selector({ settingsSearchQuery: '' })
 }))
 
-vi.mock('../../BaseRefPicker', () => ({
+vi.mock('../../../source-control/BaseRefPicker', () => ({
   BaseRefPicker: () => null
 }))
 

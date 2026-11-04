@@ -3,7 +3,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWorktreeCatalogVersionBefore } from '../../../shared/worktree/catalog-version'
 import {
@@ -16,7 +16,7 @@ import {
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
-import { getLocalWorktreeCatalogVersion } from '../../local-worktree-scan-generation'
+import { getLocalWorktreeCatalogVersion } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 type WorkspaceValidityCatalog = Parameters<typeof buildValidWorktreeIdsForSessionHydration>[0]
 

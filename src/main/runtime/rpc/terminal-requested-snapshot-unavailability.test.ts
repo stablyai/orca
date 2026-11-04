@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 type SerializedBuffer = { data: string; cols: number; rows: number } | null
 type SnapshotStartPayload = Record<string, unknown>

@@ -55,7 +55,7 @@ vi.mock('./SetupScriptPromptCard', () => ({
   default: () => <div data-testid="setup-script-prompt-card" />
 }))
 
-vi.mock('./WorktreeList', () => ({
+vi.mock('./worktree-list/listing/WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
 
@@ -65,7 +65,7 @@ vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
 }))
 
-vi.mock('./WorkspaceKanbanDrawer', () => ({
+vi.mock('./workspace-board/surface/WorkspaceKanbanDrawer', () => ({
   default: ({
     leftSidebarStyle,
     statusBarVisible
@@ -81,7 +81,7 @@ vi.mock('./WorkspaceKanbanDrawer', () => ({
   )
 }))
 
-vi.mock('./useSidebarProjectDrop', () => ({
+vi.mock('./project-admission/drop/useSidebarProjectDrop', () => ({
   useSidebarProjectDrop: () => ({
     dropOwnerRef: mocks.dropOwnerRef,
     dropHandlers: {},
@@ -89,7 +89,7 @@ vi.mock('./useSidebarProjectDrop', () => ({
   })
 }))
 
-vi.mock('./useWorkspaceBoardPanel', () => ({
+vi.mock('./workspace-board/surface/useWorkspaceBoardPanel', () => ({
   useWorkspaceBoardPanel: () => ({
     ...mocks.panel,
     workspaceBoardMenuOpen: false,

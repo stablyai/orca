@@ -3,7 +3,7 @@ import { isRecoverableRemoteRuntimeConnectionError } from '../../../shared/remot
 import {
   encodeTerminalStreamFrame,
   type TerminalStreamOpcode
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   recordE2eRemoteStreamFrame,
   recordE2eRemoteTransportSubscribe,

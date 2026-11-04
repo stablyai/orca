@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { readClaudeApiEndpointEnv } from './claude-api-endpoint'
 import { shareClaudeProfileHistory } from './claude-profile-history'
 import {
