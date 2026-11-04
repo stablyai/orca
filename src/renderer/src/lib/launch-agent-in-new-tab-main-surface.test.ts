@@ -26,7 +26,7 @@ vi.mock('@/store', () => ({
 
 createStoreCascadesMockApi()
 
-import { makeFolderWorkspace } from '../components/sidebar/folder-workspace-composer-submit-fixtures'
+import { makeFolderWorkspace } from '../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 afterEach(() => {
