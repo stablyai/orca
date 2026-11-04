@@ -85,6 +85,7 @@ vi.mock('lucide-react-native', () => ({
   MoreHorizontal: 'Icon',
   PanelLeftOpen: 'Icon',
   Plus: 'Icon',
+  History: 'Icon',
   SquareTerminal: 'TerminalIcon',
   Columns2: 'Icon',
   SquareChevronRight: 'Icon'
@@ -142,6 +143,8 @@ vi.mock('./MobileSessionContentRow', () => ({
   }
 }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileTerminalFileTapSheet', () => ({ MobileTerminalFileTapSheet: () => null }))
+vi.mock('./MobileTerminalUrlTapSheet', () => ({ MobileTerminalUrlTapSheet: () => null }))
 vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 vi.mock('./MobileSessionTab', async (original) => {
   const actual = await original<typeof TabModule>()
@@ -183,7 +186,9 @@ vi.mock('../platform/keyboard-occlusion', () => ({
 vi.mock('../terminal/terminal-viewport-refit', () => ({
   useTerminalViewportRefit: () => ({ notifyKeyboardVisibility: () => {} })
 }))
-vi.mock('../worktree/last-visited-worktree-repo', () => ({ writeLastVisitedWorktree: () => {} }))
+vi.mock('../worktree/last-visited-worktree-by-host', () => ({
+  writeLastVisitedWorktree: async () => {}
+}))
 
 import { MobileSessionSurface } from './MobileSessionSurface'
 import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
@@ -205,7 +210,12 @@ const visibleTabs = TAB_IDS.map((id) => ({
 
 function mountStrip(
   terminals: Pick<Controller['terminals'][number], 'handle' | 'agentIdentity'>[] = [],
-  initialTabs: Controller['visibleTabs'] = visibleTabs
+  initialTabs: Controller['visibleTabs'] = visibleTabs,
+  extras: {
+    showRecentSessionCardsAction?: boolean
+    showRecentSessionCards?: boolean
+    setShowRecentSessionCards?: (open: boolean) => void
+  } = {}
 ) {
   const scrollTo = vi.fn()
   const setRenameTarget = vi.fn()
@@ -254,7 +264,8 @@ function mountStrip(
         setRenameOpen(true)
       },
       visibleTabs: tabs,
-      terminals
+      terminals,
+      ...extras
     })
     return createElement(MobileSessionSurface, { controller })
   }
@@ -371,6 +382,25 @@ describe('MobileSessionTabStrip edge taps', () => {
     vi.unstubAllGlobals()
   })
 
+  it('opens recently used from the button beside New tab', () => {
+    const setShowRecentSessionCards = vi.fn()
+    const strip = mountStrip([], visibleTabs, {
+      showRecentSessionCardsAction: true,
+      showRecentSessionCards: false,
+      setShowRecentSessionCards
+    })
+    const recent = strip.root.findByProps({ accessibilityLabel: 'Recently Used' })
+    const newer = strip.root.findByProps({ accessibilityLabel: 'New tab' })
+    expect(recent.parent).toBe(newer.parent)
+    const labels = recent
+      .parent!.children.filter((child) => typeof child !== 'string')
+      .map((child) => child.props.accessibilityLabel)
+    expect(labels).toEqual(['New tab', 'Recently Used'])
+    act(() => recent.props.onPress())
+    expect(setShowRecentSessionCards).toHaveBeenCalledExactlyOnceWith(true)
+    strip.unmount()
+  })
+
   it('opens tab details in the compact Duo header while its title is absent', () => {
     work.sideRail = true
     const strip = mountStrip()
@@ -458,9 +488,10 @@ describe('MobileSessionTabStrip edge taps', () => {
     press('a')
     act(() => strip.card().props.onSettled(exiting))
     expect(strip.card().props).toMatchObject({ active: true, source: { key: 'tab:a' } })
+    strip.wait(400)
     strip.queue()
     act(() => scroll().props.onContentSizeChange(650))
-    act(() => scroll().props.onScrollBeginDrag())
+    press('a')
     strip.flush()
     expect(strip.card().props.active).toBe(false)
     strip.wait(400)
@@ -772,7 +803,7 @@ describe('MobileSessionTabStrip edge taps', () => {
       tabs.map((tab, i) => (i === 1 ? { ...tab, title: 'Renamed current tab' } : tab))
     )
     expect(strip.card().findAllByProps({ children: 'Renamed current tab' })).toHaveLength(1)
-    act(() => strip.root.find((node) => node.props.horizontal === true).props.onScrollBeginDrag())
+    strip.tapAt(150)
     expect(vi.getTimerCount()).toBe(1)
     strip.unmount()
     expect(work.back).toBeNull()

@@ -14,14 +14,75 @@ export type DetailCardSource = {
 type Request = { id: number; source: DetailCardSource }
 type Visual = { anchor: DetailCardAnchor; target: 0 | 1; motion: number; source: DetailCardSource }
 type State = { serial: number; request: Request | null; visual: Visual | null }
+type MeasureAnchor = (source: DetailCardSource) => DetailCardAnchor | null
 type Action =
   | { type: 'toggle'; eligible: boolean; source: DetailCardSource }
   | { type: 'close'; request?: number }
   | { type: 'remove'; key: string }
-  | { type: 'refresh'; source?: DetailCardSource }
-  | { type: 'geometry' }
+  | { type: 'refresh'; source?: DetailCardSource; measure?: MeasureAnchor }
+  | { type: 'geometry'; measure?: MeasureAnchor }
   | { type: 'measured'; request: number; anchor: DetailCardAnchor }
   | { type: 'settled'; motion: number }
+
+function measureDomAnchor(
+  layer: unknown,
+  source: DetailCardSource,
+  sources: Map<string, DetailCardSource>
+): DetailCardAnchor | null {
+  const anchor = source.anchorRef.current
+  const bar = source.barRef.current
+  if (
+    sources.get(source.key) !== source ||
+    typeof HTMLElement === 'undefined' ||
+    !(layer instanceof HTMLElement) ||
+    !(anchor instanceof HTMLElement) ||
+    !(bar instanceof HTMLElement)
+  ) {
+    return null
+  }
+  const rootRect = layer.getBoundingClientRect()
+  const anchorRect = anchor.getBoundingClientRect()
+  const barRect = bar.getBoundingClientRect()
+  return {
+    trigger: {
+      x: anchorRect.left - rootRect.left,
+      y: anchorRect.top - rootRect.top,
+      width: anchorRect.width,
+      height: anchorRect.height
+    },
+    top: barRect.top + barRect.height - rootRect.top,
+    origin: { x: rootRect.left, y: rootRect.top }
+  }
+}
+
+function applyAnchor(state: State, source: DetailCardSource, anchor: DetailCardAnchor): State {
+  const { visual, request, serial } = state
+  if (
+    request === null &&
+    visual?.target === 1 &&
+    visual.source === source &&
+    visual.anchor.top === anchor.top &&
+    visual.anchor.origin.x === anchor.origin.x &&
+    visual.anchor.origin.y === anchor.origin.y &&
+    visual.anchor.trigger.x === anchor.trigger.x &&
+    visual.anchor.trigger.y === anchor.trigger.y &&
+    visual.anchor.trigger.width === anchor.trigger.width &&
+    visual.anchor.trigger.height === anchor.trigger.height
+  ) {
+    return state
+  }
+  return {
+    serial: serial + 1,
+    request: null,
+    visual: {
+      anchor,
+      source,
+      target: 1,
+      // Reposition an open card without restarting its entry animation.
+      motion: visual?.target === 1 && visual.source.key === source.key ? visual.motion : serial + 1
+    }
+  }
+}
 
 function reduce(state: State, action: Action): State {
   const { visual, request, serial } = state
@@ -36,9 +97,9 @@ function reduce(state: State, action: Action): State {
         : { ...state, serial: serial + 1, request: { id: serial + 1, source: action.source } }
     case 'geometry':
       return source?.geometry === 'refresh'
-        ? reduce(state, { type: 'refresh' })
+        ? reduce(state, { type: 'refresh', measure: action.measure })
         : reduce(state, { type: 'close' })
-    case 'refresh':
+    case 'refresh': {
       if (
         !source ||
         (!action.source && source.geometry !== 'refresh') ||
@@ -46,11 +107,12 @@ function reduce(state: State, action: Action): State {
       ) {
         return state
       }
-      return {
-        ...state,
-        serial: serial + 1,
-        request: { id: serial + 1, source: action.source ?? source }
-      }
+      const nextSource = action.source ?? source
+      const anchor = action.measure?.(nextSource)
+      return anchor
+        ? applyAnchor(state, nextSource, anchor)
+        : { ...state, serial: serial + 1, request: { id: serial + 1, source: nextSource } }
+    }
     case 'remove':
       return source?.key === action.key
         ? reduce(state, { type: 'close' })
@@ -70,23 +132,9 @@ function reduce(state: State, action: Action): State {
           }
         : { ...state, request: null }
     case 'measured':
-      if (action.request !== request?.id) {
-        return state
-      }
-      return {
-        serial: serial + 1,
-        request: null,
-        visual: {
-          anchor: action.anchor,
-          source: request.source,
-          target: 1,
-          // Reposition an open card without restarting its entry animation.
-          motion:
-            visual?.target === 1 && visual.source.key === request.source.key
-              ? visual.motion
-              : serial + 1
-        }
-      }
+      return action.request === request?.id
+        ? applyAnchor(state, request.source, action.anchor)
+        : state
     case 'settled':
       return visual?.target === 0 && visual.motion === action.motion
         ? { ...state, visual: null }
@@ -119,11 +167,15 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
     (source: DetailCardSource) => dispatch({ type: 'toggle', source, eligible: !obscured }),
     [obscured]
   )
-  const refreshSource = useCallback(
-    (source?: DetailCardSource) => dispatch({ type: 'refresh', source }),
+  const measure = useCallback(
+    (source: DetailCardSource) => measureDomAnchor(layerRef.current, source, sources.current),
     []
   )
-  const onAnchorLayout = useCallback(() => dispatch({ type: 'geometry' }), [])
+  const refreshSource = useCallback(
+    (source?: DetailCardSource) => dispatch({ type: 'refresh', source, measure }),
+    [measure]
+  )
+  const onAnchorLayout = useCallback(() => dispatch({ type: 'geometry', measure }), [measure])
   const registerSource = useCallback(
     (source: DetailCardSource) => {
       sources.current.set(source.key, source)
@@ -160,29 +212,9 @@ export function useAnchoredDetailCard(placement: string, obscured: boolean) {
       }
       return
     }
-    if (
-      typeof HTMLElement !== 'undefined' &&
-      layer instanceof HTMLElement &&
-      anchor instanceof HTMLElement &&
-      bar instanceof HTMLElement
-    ) {
-      const rootRect = layer.getBoundingClientRect()
-      const anchorRect = anchor.getBoundingClientRect()
-      const barRect = bar.getBoundingClientRect()
-      dispatch({
-        type: 'measured',
-        request: id,
-        anchor: {
-          trigger: {
-            x: anchorRect.left - rootRect.left,
-            y: anchorRect.top - rootRect.top,
-            width: anchorRect.width,
-            height: anchorRect.height
-          },
-          top: barRect.top + barRect.height - rootRect.top,
-          origin: { x: rootRect.left, y: rootRect.top }
-        }
-      })
+    const domAnchor = measureDomAnchor(layer, source, sources.current)
+    if (domAnchor) {
+      dispatch({ type: 'measured', request: id, anchor: domAnchor })
       return
     }
     let disposed = false

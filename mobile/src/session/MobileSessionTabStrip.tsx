@@ -1,15 +1,17 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, ScrollView, StyleSheet } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { History, Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
-  resolveMobileTerminalTabAgentId
+  resolveMobileSessionTabDotState,
+  resolveMobileTerminalTabAgentId,
+  subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -28,6 +30,7 @@ import { MobileSessionTab } from './MobileSessionTab'
 import type { SessionTitleCard } from './use-session-title-card'
 
 const DOUBLE_TAP_RENAME_MS = 300
+export const SESSION_TAB_DOUBLE_TAP_MS = DOUBLE_TAP_RENAME_MS
 
 export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   controller,
@@ -53,6 +56,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     connState,
     createTabBusy,
     handleOpenNewTab,
+    showRecentSessionCardsAction,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -76,18 +82,24 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   )
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const now = useNow(60_000)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  useEffect(
+    () => subscribeCatalogWorktreesForTabStatus(() => setCatalogRevision((rev) => rev + 1)),
+    []
+  )
   const tabStates = useMemo(() => {
+    void catalogRevision
     const states = new Map<string, AgentDotState>()
     for (const tab of visibleTabs) {
-      // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
-      if (tab.type === 'terminal' && tab.agentStatus && !tab.agentStatus.restoredUnconfirmed) {
-        states.set(tab.id, agentDotState(tab.agentStatus, now))
-      } else if (tab.type === 'agent-session' && tab.chatStatus) {
-        states.set(tab.id, agentDotState(tab.chatStatus, now))
+      const state = resolveMobileSessionTabDotState(tab, now, {
+        isActiveOnScreen: tab.id === activeSessionTabId
+      })
+      if (state) {
+        states.set(tab.id, state)
       }
     }
     return states
-  }, [visibleTabs, now])
+  }, [visibleTabs, now, activeSessionTabId, catalogRevision])
   const tabLabels = useMemo(
     () =>
       visibleTabs.map((tab) => {
@@ -207,12 +219,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
           style={[styles.tabScroll, inTopBar && styles.tabScrollInTopBar]}
           contentContainerStyle={[styles.tabContent, inTopBar && styles.tabContentInTopBar]}
           keyboardShouldPersistTaps="handled"
-          scrollEventThrottle={16}
-          onScrollBeginDrag={() => {
-            cancelHeldTabStripReveal()
-            dismiss()
-          }}
+          scrollEventThrottle={1}
           onScroll={(e) => {
+            cancelHeldTabStripReveal()
             tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
             refreshHiddenTabs()
             refreshSource()
@@ -282,6 +291,17 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
             accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
             icon={Plus}
           />
+          {showRecentSessionCardsAction ? (
+            <NavBarButton
+              active={Boolean(showRecentSessionCards)}
+              onPress={() => {
+                dismiss()
+                setShowRecentSessionCards(true)
+              }}
+              accessibilityLabel={t('recentSessionCardsSectionTitle', 'Recently Used')}
+              icon={History}
+            />
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -291,6 +311,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
 // The right inset matches the nav bar's, so the + lines up with the ⋯ above it.
 const newTabStyles = StyleSheet.create({
   slot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingLeft: spacing.sm,
     paddingRight: spacing.md
   }

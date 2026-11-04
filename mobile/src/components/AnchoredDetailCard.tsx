@@ -94,23 +94,28 @@ function AnchoredDetailCardFrame({
     let disposed = false
     const node = detailCardElement(contentRef.current)
     if (node) {
-      if (webState.animation && webState.animation.playState !== 'finished') {
-        webState.value = detailCardPlayback(webState.animation, webState.from, webState.to)
+      if (webState.animation) {
+        webState.value =
+          webState.animation.playState === 'finished'
+            ? webState.to
+            : detailCardPlayback(webState.animation, webState.from, webState.to)
       }
       const from = webState.value
       if (target === 0 && from === 0) {
         webState.animation?.cancel()
         webState.animation = null
+        webState.from = 0
+        webState.to = 0
         onSettled(motion)
         return
       }
-      if (from === target) {
+      if (from === target && webState.to === target && webState.animation) {
         return
       }
       webState.animation?.cancel()
       // Web Animations run on the compositor, so main-thread tab work cannot drop this fade.
       const animation = node.animate(detailCardFrames(from, target, slide), {
-        duration: TRANSITION_MS,
+        duration: TRANSITION_MS * Math.abs(target - from),
         easing: EASE_OUT_CUBIC,
         fill: 'both'
       })
