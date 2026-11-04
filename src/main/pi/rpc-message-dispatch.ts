@@ -103,6 +103,7 @@ async function submitPiRpcPrompt(
   prompt: PiRpcPrompt
 ): Promise<AgentSessionDispatchOutcome> {
   let ranOptions: Record<string, string> = {}
+  await session.turns.compaction.ended(input.signal)
   const outcome = await session.submit(
     input.clientMessageId,
     input.requestedAt ?? Date.now(),

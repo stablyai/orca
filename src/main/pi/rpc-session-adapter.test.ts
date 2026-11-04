@@ -525,6 +525,30 @@ describe('Pi RPC session ownership and delivery', () => {
     await vi.waitFor(async () => expect((await h.rig.turns())[0]?.outcome).toBe('cancellation'))
   })
 
+  it('writes a send made while Pi compacts only after compaction ends, unless Stop aborts it', async () => {
+    const h = await setup()
+    const send = (clientMessageId: string, signal?: AbortSignal) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
+        ...(signal ? { signal } : {})
+      })
+    h.connection.receive({ type: 'compaction_start', reason: 'manual' })
+    const stop = new AbortController()
+    const stopped = send('stopped', stop.signal)
+    const waiting = send('waiting')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(h.connection.sent).toEqual([])
+    const reason = new Error('Stopped')
+    stop.abort(reason)
+    await expect(stopped).rejects.toBe(reason)
+    h.connection.receive({ type: 'compaction_end', reason: 'manual' })
+    await expect(waiting).resolves.toMatchObject({ state: 'admitted' })
+    expect(h.connection.sent).toMatchObject([{ type: 'prompt', message: 'waiting' }])
+  })
+
   it('keeps a pending manual compaction cancellable and reports root/tree proof honestly', async () => {
     const h = await setup()
     const turnId = 'manual-compact'

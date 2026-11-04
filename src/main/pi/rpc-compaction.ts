@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   agentSessionFailureFact,
   providerDiagnostic
@@ -7,8 +8,40 @@ import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
+import { PROVIDER_COMPACTING_ACTIVITY } from '../native-chat/agent-session-wire/provider-frame-activity'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
+import type { PiRpcContextUsage } from './rpc-context-usage'
 import type { PiRpcSession } from './rpc-session'
+
+/** Pi compacting its context: what the chat shows, and the wait a send needs meanwhile. */
+export class PiRpcCompaction {
+  private current?: PromiseWithResolvers<void>
+  constructor(private readonly context: PiRpcContextUsage) {}
+
+  get running(): boolean {
+    return this.current !== undefined
+  }
+
+  start(): ProviderTimelineEvent[] {
+    this.current ??= Promise.withResolvers()
+    return [...this.context.compacting(), { type: 'activity', text: PROVIDER_COMPACTING_ACTIVITY }]
+  }
+
+  end(result?: unknown): ProviderTimelineEvent[] {
+    this.current?.resolve()
+    this.current = undefined
+    this.context.compacted(result)
+    return [{ type: 'activity', text: null }]
+  }
+
+  /** Pi refuses prompts during a requested compaction; like Pi's own TUI, sends wait for any. */
+  async ended(signal?: AbortSignal): Promise<void> {
+    while (this.current) {
+      await waitForPromiseWithSignal(this.current.promise, signal)
+    }
+  }
+}
 
 export async function compactPiRpcSession(
   session: PiRpcSession,
