@@ -7,7 +7,7 @@ import {
 import {
   formatTerminalStartFailure,
   readTerminalStartFailure
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

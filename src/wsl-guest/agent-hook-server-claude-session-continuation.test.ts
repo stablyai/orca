@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { probeAgentProcessPresence } from '../shared/agent-status/process/agent-process-presence-probe'
-import { makePaneKey } from '../shared/stable-pane-id'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
 vi.mock('../shared/agent-status/process/agent-process-presence-probe', () => ({

@@ -12,7 +12,7 @@ import {
   type AgentPaneState,
   type SortStampEvent
 } from '../../../shared/sidebar-list/sort-stamps'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   agentPaneWorkspace,
   sameAgentPaneWorkspace,

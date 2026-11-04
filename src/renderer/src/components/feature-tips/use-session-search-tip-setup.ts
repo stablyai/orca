@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   isSessionSearchIndexReady,

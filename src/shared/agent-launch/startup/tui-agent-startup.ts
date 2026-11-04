@@ -1,6 +1,6 @@
 import { withFreshOmpLaunch, isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { withOmpDraftCleanup } from './omp-draft-launch'
-import '../../shell-process-detection'
+import '../../agent-status/process/shell-process-detection'
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import {
   clearEnvCommand,
@@ -197,7 +197,7 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
-/** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table and pin every agent in tui-agent-prompt-transport.spec.ts.
+/** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table.
  * All modes except stdin-after-start carry the prompt through the launch command; Hermes may reference an env carrier instead of literal prompt argv. */
 export function agentPromptRidesLaunchCommand(agent: TuiAgent): boolean {
   return TUI_AGENT_CONFIG[agent].promptInjectionMode !== 'stdin-after-start'

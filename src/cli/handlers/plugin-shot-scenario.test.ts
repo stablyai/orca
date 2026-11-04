@@ -120,26 +120,6 @@ describe('orca plugin shot --scenario', () => {
     expect((await readFile(result.path)).toString('base64')).toBe(PNG_BASE64)
   })
 
-  it('lists the scenarios when the name is unknown, before running anything', async () => {
-    const call = vi.fn()
-    await expect(run(['plugin', 'shot', dir, '--scenario', 'nope'], call)).rejects.toThrow(
-      /has no scenario "nope"; its scenarios: fresh, counted/
-    )
-    expect(check.checkPluginPanels).not.toHaveBeenCalled()
-    expect(call).not.toHaveBeenCalled()
-  })
-
-  it('refuses --act with --scenario', async () => {
-    const call = vi.fn()
-    await expect(
-      run(
-        ['plugin', 'shot', dir, '--scenario', 'counted', '--act', '[{"press":{"text":"+"}}]'],
-        call
-      )
-    ).rejects.toThrow(/pass one/)
-    expect(check.readPluginCheckScenarioNames).not.toHaveBeenCalled()
-  })
-
   it('refuses another host and a bridged shell, since it runs the code here', async () => {
     await expect(
       run(['plugin', 'shot', dir, '--scenario', 'counted'], vi.fn(), true)

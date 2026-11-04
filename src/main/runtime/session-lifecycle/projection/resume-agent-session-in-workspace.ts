@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,

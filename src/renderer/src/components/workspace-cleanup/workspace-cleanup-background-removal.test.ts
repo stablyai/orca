@@ -5,7 +5,7 @@ import {
   type WorkspaceCleanupBackgroundRemovalArgs
 } from './workspace-cleanup-background-removal'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
-import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 vi.mock('sonner', () => ({
   toast: {

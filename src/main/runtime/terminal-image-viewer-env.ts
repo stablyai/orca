@@ -1,4 +1,4 @@
-import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal-image-viewer-capability'
+import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../shared/terminal/images/terminal-image-viewer-capability'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RpcContext } from './rpc/core'
 

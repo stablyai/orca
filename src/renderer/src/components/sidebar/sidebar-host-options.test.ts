@@ -10,7 +10,7 @@ import {
 } from './sidebar-host-options'
 import { toggleVisibleHostRow } from '../../../../shared/workspace-view/workspace-host-visibility'
 import { filterFolderWorkspacesForVisibleHosts } from '../../../../shared/sidebar-list/host-filtering'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 

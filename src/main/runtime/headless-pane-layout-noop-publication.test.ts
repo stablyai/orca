@@ -7,7 +7,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 
 const REMOUNTS = 20
 

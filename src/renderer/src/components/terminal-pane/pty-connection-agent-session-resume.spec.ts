@@ -1,6 +1,6 @@
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   bindsPaneInStore,
@@ -16,7 +16,8 @@ import {
   LEAF_2,
   createMockTransport,
   createPane,
-  createManager
+  createManager,
+  type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
@@ -27,7 +28,7 @@ import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import type { AgentStatusSlice } from '@/store/slices/agent-status/agent-status-slice-contract'
 import { normalizeLaunchConfigRegistrationMetadata } from '@/store/slices/agent-status/agent-status-launch-config'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals

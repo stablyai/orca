@@ -5,7 +5,7 @@
 import { execFile } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
-import { readBranchCompareHead } from '../../src/shared/git-branch-compare-head.ts'
+import { readBranchCompareHead } from '../../src/shared/git/branches/git-branch-compare-head.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const ITERATIONS = Number(process.env.ORCA_BRANCH_COMPARE_BENCH_ITERATIONS ?? '8')

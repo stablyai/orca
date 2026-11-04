@@ -4,20 +4,20 @@ import { CommitMessageAiPane } from '../source-control/CommitMessageAiPane'
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { setSourceControlActionDefault } from '../../../../../shared/source-control-ai-actions'
+import { setSourceControlActionDefault } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   getDefaultSourceControlAiSettings,
-  normalizeSourceControlAiSettings,
-  projectSourceControlAiToLegacyCommitMessageAi,
-  resolveSourceControlAiForOperation
-} from '../../../../../shared/source-control-ai'
-import { planCommitMessageGeneration } from '../../../../../shared/commit-message-plan'
+  normalizeSourceControlAiSettings
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
+import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { planCommitMessageGeneration } from '../../../../../shared/source-control/ai/generation/commit-message-plan'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAiCommitPrSettings } from '../../feature-wall/useAiCommitPrSettings'
 import { useSourceControlActionRecipeDraftState } from '../source-control/source-control-action-recipe-draft-state'
 import { useAppStore } from '../../../store/index'

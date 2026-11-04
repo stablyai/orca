@@ -81,11 +81,7 @@ import {
 } from '../mobile-session-browser-group-projection'
 import { HeadlessEmulator } from '../../daemon/headless-emulator'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import {
-  TERMINAL_INPUT_CHUNK_MAX_BYTES,
-  TERMINAL_INPUT_MAX_BYTES,
-  TERMINAL_INPUT_TOO_LARGE_ERROR
-} from '../../../shared/terminal-input'
+import '../../../shared/terminal/input/terminal-input'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
@@ -108,7 +104,7 @@ import {
   getDefaultWorkspaceSession
 } from '../../../shared/constants'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import '../../../shared/workspace-layout/stable-pane-id'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
@@ -149,9 +145,7 @@ export const exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 export const exportedSETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
-export const exportedTERMINAL_INPUT_CHUNK_MAX_BYTES = TERMINAL_INPUT_CHUNK_MAX_BYTES
-export const exportedTERMINAL_INPUT_MAX_BYTES = TERMINAL_INPUT_MAX_BYTES
-export const exportedTERMINAL_INPUT_TOO_LARGE_ERROR = TERMINAL_INPUT_TOO_LARGE_ERROR
+
 export const exportedTUI_AGENT_CONFIG = TUI_AGENT_CONFIG
 export const exportedWATCHER_REMOVAL_DRAIN_BUDGET_MS = WATCHER_REMOVAL_DRAIN_BUDGET_MS
 export const exportedWORKTREE_PROCESS_SWEEP_TIMEOUT_MS = WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
@@ -209,7 +203,7 @@ export const exportedListWorktreesStrict = listWorktreesStrict
 export const exportedLoadHooks = loadHooks
 export const exportedLocalWorktreeFilesystem = localWorktreeFilesystem
 export const exportedLstat = lstat
-export const exportedMakePaneKey = makePaneKey
+
 export const exportedMkdir = mkdir
 export const exportedMkdirSync = mkdirSync
 export const exportedMkdtemp = mkdtemp

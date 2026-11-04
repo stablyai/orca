@@ -6,7 +6,7 @@ import type {
   PRConflictSummary,
   ProviderCheckSummary
 } from './github/pull-request-types'
-import type { HostedReviewDecision } from './hosted-review'
+import type { HostedReviewDecision } from './source-control/hosted-review/hosted-review-contracts'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }

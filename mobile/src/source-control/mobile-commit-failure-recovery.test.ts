@@ -3,7 +3,7 @@ import {
   buildFixCommitFailurePrompt,
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
-} from './mobile-commit-failure-recovery'
+} from '../../../src/shared/source-control/recovery/source-control-commit-failure'
 
 describe('mobile commit failure recovery', () => {
   it('summarizes hook and lint failures for the compact panel', () => {

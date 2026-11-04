@@ -5,7 +5,7 @@ import type {
 import type {
   CurrentActionSelection,
   SelectedSourceControlActionRecipe
-} from '../../../../shared/source-control-action-selection'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { getAgentCatalog } from '@/lib/agent-catalog'
 import type { useAppStore } from '@/store'
 import type { useRepoById } from '@/store/selectors'

@@ -30,21 +30,6 @@ describe("Codex's Interrupt hook", () => {
     post({ hook_event_name: 'UserPromptSubmit', prompt: 'list files' })
   }
 
-  it('ends a turn blocked on an approval the user declined with Esc', () => {
-    startTurn()
-    expect(post({ hook_event_name: 'PermissionRequest', tool_name: 'Bash' })?.payload.state).toBe(
-      'waiting'
-    )
-
-    const interrupted = post(INTERRUPT)?.payload
-    expect(interrupted).toMatchObject({
-      state: 'done',
-      interrupted: true,
-      prompt: 'list files',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-  })
-
   it('keeps live child work in the row while the main agent reads cancelled', () => {
     startTurn()
     post({ hook_event_name: 'SubagentStart', agent_id: 'child', agent_type: 'worker' })

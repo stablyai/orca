@@ -1679,7 +1679,6 @@
         "9c3ba11a05": "상태:",
         "934d87ab96": "체크 세부 정보 로드 중…",
         "71c11aff84": "모든 체크 다시 실행",
-        "e31651a224": "실패한 체크 다시 실행",
         "1b56e28faa": "재실행",
         "f4b1292569": "이 체크에 기본 AI agent 시작",
         "9a1004fc76": "체크 새로고침",
@@ -2176,7 +2175,6 @@
         "662bc2998d": "상태:",
         "d8e82b7f15": "체크 세부 정보 로드 중…",
         "54cddd1858": "모든 체크 다시 실행",
-        "68605516dd": "실패한 체크 다시 실행",
         "522d9353e1": "재실행",
         "0fa8b8faec": "이 체크에 기본 AI agent 시작",
         "5d0f42766d": "체크 새로고침",
@@ -4049,7 +4047,6 @@
             "5c938d39ac": "주간",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "다른 계정 없음",
             "d450654fa2": "Claude 계정",
             "11e2354daf": "Claude 사용 런타임",
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
@@ -7322,9 +7319,6 @@
           "browserExtensions": {
             "copy": "로컬 브라우저 프로필에 설정 › 브라우저 › 확장 프로그램을 추가합니다.",
             "toggleLabel": "브라우저 확장 프로그램 켜기/끄기"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "오케스트레이션 패널 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -9478,14 +9472,6 @@
               "extension": "확장 프로그램",
               "chrome": "크롬",
               "password": "비밀번호 관리자"
-            },
-            "orchestrationPanel": {
-              "title": "오케스트레이션 패널",
-              "description": "각 에이전트와 함께 작업하는 에이전트를 채팅 또는 터미널 옆에 표시합니다.",
-              "orchestration": "오케스트레이션",
-              "agents": "에이전트",
-              "workers": "워커",
-              "manager": "관리자"
             }
           }
         },
@@ -14415,7 +14401,6 @@
           "ae3b00ca82": "GitHub 작업 설정",
           "ff92d15436": "agents 작업이 완료되거나 도움이 필요할 때 Orca가 알려 드립니다.",
           "b054332836": "알림 설정",
-          "04ae28d8ca": "몇 시간 내내 보고 싶은 테마를 선택하세요.",
           "f396db9f20": "집처럼 느껴지도록 하세요",
           "322fc50a18": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다.",
           "198b148b3c": "기본 agent를 선택하세요",
@@ -18433,7 +18418,32 @@
           "system": "OS 설정에 맞춤",
           "dark": "눈이 편안한 화면",
           "light": "밝고 선명한 화면"
-        }
+        },
+        "looks": {
+          "activeNow": "현재",
+          "browsePlugins": "플러그인 둘러보기",
+          "browseThemePlugins": "테마 플러그인 둘러보기",
+          "colorMode": "색상 모드",
+          "colorModeCaption": "라이트, 다크 또는 OS 설정 따르기.",
+          "darkLook": "다크 룩",
+          "darkLooks": "다크 룩",
+          "lightLook": "라이트 룩",
+          "lightLooks": "라이트 룩",
+          "moreThemes": "더 많은 테마",
+          "next": "더 많은 룩",
+          "orcaDark": "Orca 다크",
+          "orcaLight": "Orca 라이트",
+          "pluginsHint": "더 많은 테마를 플러그인으로 사용할 수 있습니다.",
+          "previous": "이전 룩",
+          "showsWhenDark": "시스템이 다크 모드일 때 표시",
+          "showsWhenLight": "시스템이 라이트 모드일 때 표시",
+          "slotLabel": "편집할 룩",
+          "sourceBuiltIn": "기본 제공",
+          "sourceCommunity": "터미널 팔레트",
+          "themes": "테마",
+          "themesCaption": "선택 사항. 앱 테마와 터미널 팔레트로 더 꾸며 보세요."
+        },
+        "subtitle": "라이트 또는 다크를 고르고, 원하면 테마도 선택하세요. 둘 다 설정에서 언제든 바꿀 수 있습니다."
       },
       "integrations": {
         "capabilities": {
@@ -18847,8 +18857,6 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
-      "newRowsAnnouncement": "자리를 비운 동안 새 메시지가 도착했습니다",
-      "newRowsMarker": "새 메시지",
       "find": {
         "label": "채팅에서 찾기",
         "noResults": "결과 없음",

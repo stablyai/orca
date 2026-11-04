@@ -9,7 +9,7 @@ import {
   normalizeAndAccept,
   PANE_KEY
 } from './agent-hook-listener-test-harness'
-import '../../stable-pane-id'
+import '../../workspace-layout/stable-pane-id'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState

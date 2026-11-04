@@ -1,4 +1,4 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -7,8 +7,8 @@ import {
   decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame
 } from '../../../../shared/browser-network-tunnel-protocol'
-import type { BrowserNetworkExecutionHost } from '../../../../shared/browser-network-execution-host'
-import type { PairingOffer } from '../../../../shared/mobile-relay-pairing-offer'
+import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks

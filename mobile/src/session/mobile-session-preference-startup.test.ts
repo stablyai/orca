@@ -87,7 +87,6 @@ function sessionScope() {
     customKeys,
     setTerminalTextScale: vi.fn(),
     terminalTextScaleRevisionRef: { current: 0 },
-    setAutocompleteEnabled: vi.fn(),
     setTerminalLinkOpenMode: vi.fn(),
     setCustomKeys: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
@@ -125,9 +124,6 @@ describe('saved session settings before the first render', () => {
       if (key === 'orca:terminalTextScale') {
         return scale.promise
       }
-      if (key === 'orca:terminalAutocompleteEnabled') {
-        return 'true'
-      }
       if (key === 'orca:terminalLinkOpenMode') {
         return 'phone-browser'
       }
@@ -143,11 +139,9 @@ describe('saved session settings before the first render', () => {
       renderer = create(createElement(Harness))
     })
     expect(ready).toBe(false)
-    expect(scope.setAutocompleteEnabled).not.toHaveBeenCalled()
     await act(async () => scale.resolve('1.25'))
     expect(ready).toBe(true)
     expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.25)
-    expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(true)
     expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('phone-browser')
 
     const nextScale = deferred<string | null>()
@@ -225,7 +219,6 @@ describe('saved session settings before the first render', () => {
     await act(async () => scale.resolve('1.25'))
     expect(scope.setTerminalTextScale).toHaveBeenCalledTimes(1)
     expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.75)
-    expect(scope.setAutocompleteEnabled).toHaveBeenCalledWith(false)
   })
 
   it('lets the latest foreground layout read settle startup and ignores an older focus read', async () => {
@@ -355,7 +348,6 @@ describe('saved session settings before the first render', () => {
     expect(ready).toBe(true)
     expect(chat).toBe(false)
     expect(scope.setTerminalTextScale).toHaveBeenCalledWith(1)
-    expect(scope.setAutocompleteEnabled).toHaveBeenCalledWith(false)
     expect(scope.setCustomKeys).toHaveBeenCalledWith([])
     expect(scope.setVisibleBuiltInIds).toHaveBeenCalledWith(
       TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
@@ -437,7 +429,6 @@ it('refreshes mounted terminal settings without router focus, remount or draft w
     [layoutKey]: initial,
     [customKey]: '[]',
     'orca:terminalTextScale': '1',
-    'orca:terminalAutocompleteEnabled': 'false',
     'orca:terminalLinkOpenMode': 'orca-browser',
     [draftKey]: 'old draft'
   }
@@ -475,7 +466,6 @@ it('refreshes mounted terminal settings without router focus, remount or draft w
   await pair.flush()
   const writes = pair.storageWrites.length
   storage['orca:terminalTextScale'] = '1.5'
-  storage['orca:terminalAutocompleteEnabled'] = 'true'
   storage['orca:terminalLinkOpenMode'] = 'phone-browser'
   storage[layoutKey] = layout(['enter', 'arrowUp'], false)
   storage[customKey] = JSON.stringify([{ id: 'two', label: 'Two', bytes: '2', enter: false }])
@@ -484,7 +474,6 @@ it('refreshes mounted terminal settings without router focus, remount or draft w
     await pair.flush()
   })
   expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.5)
-  expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(true)
   expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('phone-browser')
   expect(ready).toBe(true)
   expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(false)
@@ -515,7 +504,6 @@ it('refreshes mounted terminal settings without router focus, remount or draft w
   delete storage[layoutKey]
   delete storage[customKey]
   delete storage['orca:terminalTextScale']
-  delete storage['orca:terminalAutocompleteEnabled']
   delete storage['orca:terminalLinkOpenMode']
   const afterLocalWrite = pair.storageWrites.length
   await act(async () => {
@@ -523,7 +511,6 @@ it('refreshes mounted terminal settings without router focus, remount or draft w
     await pair.flush()
   })
   expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1)
-  expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(false)
   expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('orca-browser')
   expect(await pageAsyncStorage.getItem(layoutKey)).toBeNull()
   expect(scope.setDirectionPadEnabled).toHaveBeenLastCalledWith(true)

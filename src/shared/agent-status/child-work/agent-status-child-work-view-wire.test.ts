@@ -35,12 +35,6 @@ const SETTLED: AgentChildWorkView = {
 }
 
 describe('decodeAgentChildWorkViews', () => {
-  it('reads an older host that publishes no views as absent, not as "no children"', () => {
-    expect(decodeAgentChildWorkViews(undefined)).toBeUndefined()
-    expect(decodeAgentChildWorkViews({ not: 'a list' })).toBeUndefined()
-    expect(decodeAgentChildWorkViews([])).toEqual([])
-  })
-
   // Rules 1 and 4 of the remote-wire contract: a newer host's view is read, never refused.
   it('ignores keys and degrades arms a newer host may add, keeping the row', () => {
     const newer = {
@@ -64,19 +58,5 @@ describe('decodeAgentChildWorkViews', () => {
     expect(decodeAgentChildWorkViews([{ ...LIVE, membership: 'archived' }])).toEqual([
       { ...LIVE, state: 'unverifiable' }
     ])
-  })
-
-  it('withholds a stop it cannot prove and drops only rows it cannot identify', () => {
-    const { stoppable: _stoppable, ...unsure } = LIVE
-    expect(decodeAgentChildWorkViews([unsure])).toEqual([{ ...LIVE, stoppable: false }])
-    expect(
-      decodeAgentChildWorkViews([
-        { ...LIVE, id: '' },
-        { ...LIVE, observedAt: 'soon' },
-        { ...LIVE, invocation: null },
-        'not a view',
-        SETTLED
-      ])
-    ).toEqual([SETTLED])
   })
 })

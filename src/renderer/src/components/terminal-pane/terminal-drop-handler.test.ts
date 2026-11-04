@@ -78,7 +78,8 @@ vi.mock('./terminal-input-activity', () => ({
 }))
 
 import { handleTerminalFileDrop } from './terminal-drop-handler'
-import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
+import './terminal-bracketed-paste'
+import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 
 function createTerminalTransport(
   sendInput: ReturnType<typeof vi.fn>,

@@ -1,5 +1,5 @@
 import { findOptionOccurrence } from './command-option-occurrence'
-import type { CommitMessagePlan } from './commit-message-plan'
+import type { CommitMessagePlan } from './source-control/ai/generation/commit-message-plan'
 
 export function mergeOpenCodeGenerationArgs(
   agentId: string,

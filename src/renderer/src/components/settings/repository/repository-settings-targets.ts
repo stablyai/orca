@@ -1,4 +1,4 @@
-import type { SourceControlActionId } from '../../../../../shared/source-control-ai-actions'
+import type { SourceControlActionId } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export function getRepositoryLocalCommandsSectionId(repoId: string): string {
   return `repo-${repoId}-local-commands`

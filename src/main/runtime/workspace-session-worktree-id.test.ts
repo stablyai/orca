@@ -1,7 +1,7 @@
 /** Absent tab rows mean never initialized; explicit empty rows are closed-last-tab tombstones. Re-keying must preserve that distinction. */
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-worktree-id'
 
 const SOURCE = 'repo-1::/old/path'

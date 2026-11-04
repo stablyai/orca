@@ -1,5 +1,5 @@
 import { useWorkspaceReferenceDetails } from './use-workspace-reference-details'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'

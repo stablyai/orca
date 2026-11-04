@@ -2,7 +2,7 @@ import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
-} from '../../../../shared/source-control-action-selection'
+} from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -17,16 +17,16 @@ import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe,
   type SourceControlLaunchActionId
-} from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
-} from '../../../../shared/source-control-ai-recipe-save'
+} from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
-import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control-action-launch-preferences'
+import { projectSelectedSourceControlActionLaunch } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 export type RunSourceControlAgentActionStartArgs = {

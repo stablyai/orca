@@ -1,19 +1,19 @@
 import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
-import type { BranchNameWorkContext } from '../../shared/branch-name-from-work'
-import type { ConversationNameContext } from '../../shared/conversation-name-generation'
-import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import type { BranchNameWorkContext } from '../../shared/source-control/ai/naming/branch-name-from-work'
+import type { ConversationNameContext } from '../../shared/source-control/ai/generation/conversation-name-generation'
+import type { CommitMessageDraftContext } from '../../shared/source-control/ai/generation/commit-message-generation'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/source-control/ai/generation/commit-message-host-key'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
-} from '../../shared/pull-request-generation'
+} from '../../shared/source-control/ai/generation/pull-request-generation'
 import type { Repo } from '../../shared/repo-types'
 import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams
-} from '../../shared/source-control-ai'
-import type { AiTextOperation } from '../../shared/source-control-ai-types'
+} from '../../shared/source-control/ai/source-control-ai-operation-resolution'
+import type { AiTextOperation } from '../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import {
   discoverModelsLocal,

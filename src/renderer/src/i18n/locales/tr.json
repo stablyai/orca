@@ -2116,7 +2116,6 @@
         "9c3ba11a05": "Durum:",
         "934d87ab96": "Kontrol ayrıntıları yükleniyor…",
         "71c11aff84": "Tüm kontrolleri yeniden çalıştır",
-        "e31651a224": "Başarısız kontrolleri yeniden çalıştır",
         "1b56e28faa": "Yeniden çalıştır",
         "f4b1292569": "Bu kontroller için varsayılan AI ajanını başlat",
         "9a1004fc76": "Kontrolleri yenile",
@@ -2621,7 +2620,6 @@
         "662bc2998d": "Durum:",
         "d8e82b7f15": "Kontrol ayrıntıları yükleniyor…",
         "54cddd1858": "Tüm kontrolleri yeniden çalıştır",
-        "68605516dd": "Başarısız kontrolleri yeniden çalıştır",
         "522d9353e1": "Yeniden çalıştır",
         "0fa8b8faec": "Bu kontroller için varsayılan AI ajanını başlat",
         "5d0f42766d": "Kontrolleri yenile",
@@ -4556,7 +4554,6 @@
             "5c938d39ac": "hf",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Başka hesap yok",
             "d450654fa2": "Claude Hesabı",
             "11e2354daf": "Claude kullanım çalışma zamanı",
             "3dd7ddfae1": "Claude ayrıntılarını ve hesap değiştiriciyi aç",
@@ -7954,9 +7951,6 @@
           "browserExtensions": {
             "copy": "Yerel tarayıcı profilleri için Ayarlar › Tarayıcı › Uzantılar bölümünü ekler.",
             "toggleLabel": "Tarayıcı uzantılarını aç/kapat"
-          },
-          "orchestrationPanel": {
-            "toggleLabel": "Orkestrasyon panelini aç veya kapat"
           }
         },
         "FloatingWorkspacePane": {
@@ -10157,14 +10151,6 @@
               "extension": "eklenti",
               "chrome": "chrome",
               "password": "parola yöneticisi"
-            },
-            "orchestrationPanel": {
-              "title": "Orkestrasyon paneli",
-              "description": "Her ajanın birlikte çalıştığı ajanları sohbetinin veya terminalinin yanında gösterir.",
-              "orchestration": "orkestrasyon",
-              "agents": "ajanlar",
-              "workers": "çalışanlar",
-              "manager": "yönetici"
             }
           }
         },
@@ -15061,7 +15047,6 @@
           "ae3b00ca82": "GitHub görevlerini ayarla",
           "ff92d15436": "Orca, ajanlar işlerini bitirdiğinde veya yardıma ihtiyaç duyduğunda size bildirim gönderecek.",
           "b054332836": "Bildirimleri ayarla",
-          "04ae28d8ca": "Saatlerce bakacağınız görünümü seçin.",
           "f396db9f20": "Kendi evinizdeymiş gibi hissettirin",
           "322fc50a18": "Orca her CLI ajanıyla çalışır. En sık kullanacağınızı seçin. İstediğiniz zaman değiştirin.",
           "198b148b3c": "Varsayılan ajanınızı seçin",
@@ -19077,7 +19062,32 @@
           "system": "İşletim sistemiyle eşleştir",
           "dark": "Gözü yormaz",
           "light": "Parlak ve net"
-        }
+        },
+        "looks": {
+          "activeNow": "şimdi",
+          "browsePlugins": "Eklentilere göz at",
+          "browseThemePlugins": "Tema eklentilerine göz at",
+          "colorMode": "Renk modu",
+          "colorModeCaption": "Açık, koyu veya sisteminize uygun.",
+          "darkLook": "Koyu görünüm",
+          "darkLooks": "Koyu görünümler",
+          "lightLook": "Açık görünüm",
+          "lightLooks": "Açık görünümler",
+          "moreThemes": "Daha fazla tema",
+          "next": "Daha fazla görünüm",
+          "orcaDark": "Orca Koyu",
+          "orcaLight": "Orca Açık",
+          "pluginsHint": "Daha fazla tema eklenti olarak sunulur.",
+          "previous": "Önceki görünümler",
+          "showsWhenDark": "Sisteminiz koyu olduğunda gösterilir",
+          "showsWhenLight": "Sisteminiz açık olduğunda gösterilir",
+          "slotLabel": "Düzenlenecek görünüm",
+          "sourceBuiltIn": "Yerleşik",
+          "sourceCommunity": "Terminal paleti",
+          "themes": "Tema",
+          "themesCaption": "İsteğe bağlı. Uygulama temaları ve terminal paletleriyle daha ileri gidin."
+        },
+        "subtitle": "Açık veya koyu seçin, isterseniz bir tema da seçin. İkisini de istediğiniz zaman Ayarlar’dan değiştirebilirsiniz."
       },
       "integrations": {
         "capabilities": {
@@ -19634,8 +19644,6 @@
         "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
-      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
-      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -23198,6 +23206,6 @@
     "workspaceStartupFailed": "{{agent}} başlatılamadı. Bu kurulumdaki Argümanlar'ı kontrol edip tekrar deneyin.",
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
-    "composedChoicesNote": "{{agent}} çaba ve hız seçimleri model argümanına dahil edilir."
+    "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
   }
 }

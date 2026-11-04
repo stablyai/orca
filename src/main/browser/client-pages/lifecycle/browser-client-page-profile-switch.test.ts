@@ -5,7 +5,7 @@ import {
   createHarness,
   createLifecycleClaim
 } from '../execution/browser-client-page-command-executor-test-harness'
-import type { BrowserClientHostCommandEvent } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 const switchCommand = (): BrowserClientHostCommandEvent =>
   createCommand('navigate', {

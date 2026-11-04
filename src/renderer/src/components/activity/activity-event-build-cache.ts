@@ -5,7 +5,7 @@ import type {
   AgentType
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ActivityEvent,

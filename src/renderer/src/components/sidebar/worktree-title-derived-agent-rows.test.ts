@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { createTerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'

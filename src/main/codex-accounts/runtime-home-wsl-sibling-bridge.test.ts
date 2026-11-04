@@ -26,7 +26,7 @@ const bridge = vi.hoisted(() => ({
   start: vi.fn<(target: Record<string, string>) => Promise<void>>(() => Promise.resolve())
 }))
 
-vi.mock('../codex/wsl-codex-session-bridge', () => ({
+vi.mock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
   startWslCodexSessionBridgeInBackground: bridge.start
 }))
 

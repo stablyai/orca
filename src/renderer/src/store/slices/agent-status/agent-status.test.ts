@@ -9,7 +9,7 @@ import {
   makeUnifiedTab,
   createStoreSessionMockApi
 } from '../store-session-test-harness'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   structuredAgentSessionPaneKey,

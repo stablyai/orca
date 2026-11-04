@@ -1,6 +1,6 @@
 /** Completed local agents retain cold-restore identity (#9454) without posing as unfinished work or resurrecting after pane removal. This path does not use paired-runtime web-tab recovery. */
 import { afterEach, describe, expect, it } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'

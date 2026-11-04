@@ -6,7 +6,7 @@ import {
   expectedUrlMismatchMessage,
   isSameBrowserUrl,
   type BrowserExpectedUrlMismatch
-} from '../../../../shared/browser-expected-url'
+} from '../../../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserError } from '../../browser-error'
 
 export function browserExpectedUrlMismatchError(

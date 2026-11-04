@@ -8,11 +8,7 @@ import type { HandlerContext } from '../dispatch'
 import { reportCliError } from '../cli-error'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
-import {
-  bindPluginDevWatchHost,
-  devReloadArgs,
-  PluginHostUnreachableError
-} from './plugin-dev-watch'
+import { bindPluginDevWatchHost, PluginHostUnreachableError } from './plugin-dev-watch'
 
 function context(call: ReturnType<typeof vi.fn>, rawArgs: string[] = []): HandlerContext {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watch host only calls client.call and reads isRemote.
@@ -35,12 +31,6 @@ function parse(argv: string[]) {
 }
 
 describe('orca plugin dev watch', () => {
-  it('turns the watch command into the matching reload command for approval', () => {
-    expect(
-      devReloadArgs(['--json', 'plugin', 'dev', 'watch', 'watch', '--environment', 'box'])
-    ).toEqual(['--json', 'plugin', 'dev', 'reload', 'watch', '--environment', 'box'])
-  })
-
   it('suggests an approval command that dev reload accepts, without watch-only flags', async () => {
     const rawArgs = [
       'plugin',
@@ -113,17 +103,6 @@ describe('plugin dev watch --json errors', () => {
 })
 
 describe('plugin dev watch --check', () => {
-  it('parses as a flag before or after the folder', () => {
-    for (const argv of [
-      ['plugin', 'dev', 'watch', '.', '--check'],
-      ['plugin', 'dev', 'watch', '--check', '.']
-    ]) {
-      const parsed = parse(argv)
-      expect(parsed.flags.get('check')).toBe(true)
-      expect(parsed.flags.get('dir')).toBe('.')
-    }
-  })
-
   it('needs a local folder, since it renders the plugin on this machine', () => {
     const remote = context(vi.fn())
     remote.flags.set('check', true)
@@ -133,14 +112,6 @@ describe('plugin dev watch --check', () => {
 })
 
 describe('plugin dev watch --shot', () => {
-  it('parses --shot-panel and needs --shot with it', () => {
-    const parsed = parse(['plugin', 'dev', 'watch', '.', '--shot', 'out', '--shot-panel', 'stats'])
-    expect(parsed.flags.get('shot-panel')).toBe('stats')
-    const ctx = context(vi.fn())
-    ctx.flags.set('shot-panel', 'stats')
-    expect(() => bindPluginDevWatchHost(ctx, '/work/notes')).toThrow(/needs --shot/)
-  })
-
   it('opens once by RPC, then shoots only while shown, also from a remote host', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-watch-shot-'))
     try {

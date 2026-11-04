@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
-import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal-ordered-input'
+import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal/input/terminal-ordered-input'
 import { HostStatusGatesContext } from '../components/host-protocol-gates-context'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { HostStatusGates } from '../transport/host-status-gates'

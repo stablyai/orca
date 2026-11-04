@@ -13,7 +13,7 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '@/lib/worktree-default-display-name'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '../store'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
 import {

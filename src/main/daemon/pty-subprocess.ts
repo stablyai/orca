@@ -1,4 +1,4 @@
-import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import type { PtyCreationDisposition } from '../../shared/terminal/pty/lifecycle/pty-creation-disposition'
 import { TerminalCreationWork } from './terminal-creation-work'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { normalizePtySize } from './daemon-pty-size'

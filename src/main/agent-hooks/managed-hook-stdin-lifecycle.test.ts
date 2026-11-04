@@ -1,6 +1,6 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
+import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -45,10 +45,12 @@ vi.mock('./windows-native-hook-executable', async (importOriginal) => ({
   resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
 }))
 
-vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-hash-lookup', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexHookHashLookup>()),
   resolveCodexHookAnswerForLaunch: async () =>
-    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
+    (
+      await import('../codex/hooks/installation/hook-service-test-harness')
+    ).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -68,7 +70,8 @@ vi.mock('os', async (importOriginal) => {
 import { AntigravityHookService } from '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { getRemoteManagedCommand } from '../claude/hook-settings'
-import { CodexHookService } from '../codex/hook-service'
+import '../codex/hooks/installation/hook-service'
+import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { CursorHookService } from '../cursor/hook-service'

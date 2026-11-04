@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 
-import type { ReactElement, ReactNode } from 'react'
-import { cloneElement, isValidElement, StrictMode } from 'react'
+import { type ReactElement, type ReactNode, cloneElement, isValidElement, StrictMode } from 'react'
 import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'

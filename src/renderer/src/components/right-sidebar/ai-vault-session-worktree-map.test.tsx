@@ -1,17 +1,19 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   aiVaultSessionOwnerWorkspaces,
-  resolveAiVaultSessionWorktreeDisplay,
-  useAiVaultSessionWorktreeMap,
-  withAiVaultCurrentWorktreeStatus
+  useAiVaultSessionWorktreeMap
 } from './ai-vault-session-worktree'
+import {
+  resolveAiVaultSessionWorktreeDisplay,
+  withAiVaultCurrentWorktreeStatus
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 function makeSession(overrides: Partial<AiVaultSession>): AiVaultSession {
   return {

@@ -9,7 +9,7 @@ import {
   type OrcadMigrationSnapshotChunkRequest,
   type OrcadMigrationTerminalScrollbackSnapshot
 } from './orcad-migration-scrollback'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
 
 const DIGEST = 'a'.repeat(64)
 

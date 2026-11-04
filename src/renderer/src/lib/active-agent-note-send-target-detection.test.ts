@@ -7,7 +7,7 @@ import {
   type NoteSendAppState
 } from './active-agent-note-send-test-harness'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 const NOW = 1_700_000_000_000
 

@@ -4,7 +4,7 @@ import {
   TERMINAL_COLOR_OVERRIDES_SETTING,
   terminalColorOverridesForSlot,
   type TerminalThemeSlot
-} from '../../../../../shared/terminal-color-overrides'
+} from '../../../../../shared/terminal-themes/terminal-color-overrides'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'

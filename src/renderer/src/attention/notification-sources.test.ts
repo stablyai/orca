@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NotificationDispatchRequest } from '../../../shared/notification-settings-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
   createTestStore,
@@ -262,6 +262,35 @@ it('does not invent an owner for an opaque remote PTY', () => {
   expect(sent).toHaveLength(1)
   expect(sent[0]?.notificationSourceId).toBeUndefined()
 })
+
+it.each(['missing', 'ambiguous'] as const)(
+  'preserves paired routing without claiming a physical workspace host when its catalog is %s',
+  (catalog) => {
+    const tab = seed('ssh:qa', 'remote:hub@@pty-1', false)
+    const rows = store.getState().worktreesByRepo.repo1
+    store.setState({
+      worktreesByRepo:
+        catalog === 'missing'
+          ? {}
+          : {
+              repo1: [
+                ...rows,
+                makeWorktree({
+                  id: tab.worktreeId,
+                  repoId: 'repo1',
+                  hostId: 'ssh:other',
+                  runtimeOwnerEnvironmentId: 'hub'
+                })
+              ]
+            }
+    })
+    dispatchTerminalNotification(tab.worktreeId, { source: 'terminal-bell', paneKey })
+    dispatchChat({ ...tab, executionHostId: 'runtime:hub' })
+    expect(sent).toHaveLength(2)
+    expect(sent.map((request) => request.executionHost)).toEqual(['runtime:hub', 'runtime:hub'])
+    expect(sent.map((request) => request.workspaceExecutionHostId)).toEqual([null, null])
+  }
+)
 
 it('does not list removed SSH targets or recipe VMs from leftover workspace records', () => {
   seed('ssh:qa', 'ssh:qa@@pty-1', false)

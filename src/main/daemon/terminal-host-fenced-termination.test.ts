@@ -2,7 +2,7 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
-import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 
 const streamClient = () => ({ onData: vi.fn(), onExit: vi.fn() })
 const claim = {

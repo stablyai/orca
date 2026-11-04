@@ -4,7 +4,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {

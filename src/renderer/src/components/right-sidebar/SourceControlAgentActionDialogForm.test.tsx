@@ -1,6 +1,6 @@
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'

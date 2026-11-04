@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { resolveAiVaultSessionResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 
 type ResumeInChatSession = Parameters<
