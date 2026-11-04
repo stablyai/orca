@@ -1,7 +1,7 @@
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 
 export const HERMES_PLUGIN_NAME = 'orca-status'
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'

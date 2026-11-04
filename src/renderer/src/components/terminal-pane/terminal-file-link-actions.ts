@@ -159,8 +159,8 @@ export function buildFileLinkActions(
     canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)
       ? {
           label: translate(
-            'auto.components.terminal.pane.TerminalLinkActionPopover.openInThisGroup',
-            'Open in this group'
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openInNewTab',
+            'Open in new tab'
           ),
           run: () =>
             openDetectedFilePath(filePath, line, column, {

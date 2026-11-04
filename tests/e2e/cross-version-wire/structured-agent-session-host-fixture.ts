@@ -23,6 +23,31 @@ export function structuredHostStub(
   notifySessionTabHidden: Mock<StructuredAgentSessionHost['notifySessionTabHidden']>
 } {
   let tabId: string | null = `tab-${sessionId}`
+  const attachResult = async (): ReturnType<StructuredAgentSessionHost['attach']> => {
+    const cursor = { epoch: 'epoch-a', sequence: 0 }
+    return {
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor,
+      value: {
+        sessionId,
+        fence: 1,
+        unconfirmedClientMessageIds: [],
+        page: {
+          sessionId,
+          epoch: cursor.epoch,
+          direction: 'tail',
+          items: [],
+          removedItemIds: [],
+          submissions: [],
+          window: { oldest: null, newest: null, nextCursor: cursor },
+          hasOlder: false,
+          hasNewer: false
+        }
+      }
+    }
+  }
   const tabs = {
     getSessionTabId: vi.fn<StructuredAgentSessionHost['getSessionTabId']>((id) =>
       id === sessionId ? tabId : null
@@ -62,8 +87,8 @@ export function structuredHostStub(
     continueInterrupted: vi.fn(async () => ({ sessionId, outcome: 'superseded' })),
     // Flat like restart-resume; installableHost rebuilds the nested usageLimitContinue member.
     cancelUsageLimitContinue: vi.fn(async () => {}),
-    attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
-    create: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
+    attach: vi.fn(attachResult),
+    create: vi.fn(attachResult),
     // Accept create-location probes so an unstubbed harness method cannot cause every ensure to refuse.
     supportsCreate: vi.fn(() => true),
     conversationCommand: vi.fn(async () => ({

@@ -18,7 +18,7 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data/orca' })
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => 'Ubuntu',
   getWslHome: (distro: string) => `/wsl/${distro}/home`
 }))

@@ -6,10 +6,7 @@ import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { RESOLVED_WORKTREE_CACHE_TTL_MS } from '../orca-runtime-postlude'
 import { getWorktreeScanMutationRevision } from '../../workspaces/catalog/local-worktree-scan-generation'
-import {
-  resolveLocalProjectRuntimeForRepo,
-  resolveLocalProjectRuntimesForRepos
-} from '../../workspaces/execution-host/local-project-runtime-resolution'
+import { resolveLocalProjectRuntimesForRepos } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import {
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
@@ -31,17 +28,16 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
-import {
-  getRepoExecutionHostId,
-  getRepoSshConnectionId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
+import {
+  resolveWorktreeScanCacheTtlMs,
+  resolveWorktreeScanRuntime
+} from '../runtime-worktree-scan-cache'
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
   protected abstract refreshRepoWorktreeScan(
@@ -191,6 +187,18 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       store,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
+      getCachedSuccessfulScan: (repo) => {
+        const key = `${repo.id}\0${getRepoExecutionHostId(repo)}`
+        const cached = this.worktreeScanCache.get(key)
+        if (
+          cached?.generation === (this.worktreeScanGenerations.get(key) ?? 0) &&
+          cached.runtimeKey === resolveWorktreeScanRuntime(store, repo).runtimeKey &&
+          cached.listing?.ok
+        ) {
+          return cached.listing
+        }
+        return undefined
+      },
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
@@ -235,20 +243,11 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    // Resolve executionHostId-only SSH rows too; local routing would miskey caches and miss provider replacements.
-    const sshConnectionId = getRepoSshConnectionId(repo)
-    const projectRuntime = projectRuntimeByRepoId
-      ? projectRuntimeByRepoId.get(repo.id)
-      : !sshConnectionId
-        ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-        : undefined
-    const runtimeKey = projectRuntime
-      ? projectRuntime.status === 'resolved'
-        ? projectRuntime.runtime.cacheKey
-        : projectRuntime.repair.cacheKey
-      : sshConnectionId
-        ? `ssh:${sshConnectionId}`
-        : 'local:default'
+    const { projectRuntime, runtimeKey, sshConnectionId } = resolveWorktreeScanRuntime(
+      this.requireStore(),
+      repo,
+      projectRuntimeByRepoId
+    )
     const now = Date.now()
     const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
     const retryCurrent = (): Promise<RuntimeWorktreeScanResult> => {

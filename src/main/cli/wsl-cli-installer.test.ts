@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: runWslProcessMock
 }))
 

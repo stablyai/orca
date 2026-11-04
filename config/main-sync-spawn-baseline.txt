@@ -7,8 +7,8 @@
 # Prune after removing launches: pnpm check:main-sync-spawn-ratchet --prune
 1 src/main/agent-hooks/installer-utils.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
-1 src/main/browser/browser-route-egress-electron-launch.ts
-1 src/main/browser/browser-route-partition-binding-store.ts
+1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
+1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
 3 src/main/codex-accounts/fs-utils.ts
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
@@ -36,14 +36,14 @@
 2 src/main/persistence/profile-state/profile-state-access-identity.ts
 1 src/main/persistence/profile-state/profile-state-recovery-copy.ts
 1 src/main/plugins/catalog/plugin-private-marketplace-ssh-shim.cjs
-1 src/main/pty/posix-pty-process-table.ts
-1 src/main/pwsh.ts
+1 src/main/pty/process-retirement/posix-pty-process-table.ts
+1 src/main/pty/shell-startup/pwsh.ts
 1 src/main/runtime/runtime-skill-install-authority.ts
 2 src/main/startup/cli-launch-redirect.ts
 1 src/main/startup/linux-secret-service-probe.ts
 1 src/main/workspace-hooks/worktree-runner-script.ts
-3 src/main/wsl.ts
-2 src/main/zsh-startup-hook-pty-harness.ts
+3 src/main/wsl/discovery/distro-catalog.ts
+2 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 1 src/shared/fish-binary-requirement.ts
 1 src/shared/openssh-default-shell.ts
 1 src/shared/secure-file.ts

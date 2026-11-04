@@ -1,10 +1,10 @@
-import type { WslResult } from '../wsl/wsl-runner'
+import type { WslResult } from '../wsl/execution/wsl-runner'
 import { posix as pathPosix } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { buildSkillDiscoverySources } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'

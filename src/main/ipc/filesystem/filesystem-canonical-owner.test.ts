@@ -9,8 +9,8 @@ import {
   getAllowedRoots,
   getLocalRepos,
   resolveUnanchoredWorkspaceRoot
-} from './filesystem-allowed-roots'
-import { isPathAllowed } from './filesystem-auth'
+} from './access/filesystem-allowed-roots'
+import { isPathAllowed } from './access/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

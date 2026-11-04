@@ -9,6 +9,8 @@ import { TERMINAL_DOCUMENT_MARKUP } from '../terminal/terminal-webview-html'
 import { dispatchTerminalWebViewNotification } from '../terminal/terminal-webview-notification-dispatch'
 import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 
@@ -48,7 +50,12 @@ it.each(['touch', 'wheel', 'mouse', 'tap'] as const)(
       ok: true as const,
       result: { send: { accepted: true } }
     }))
-    const client = { sendRequest: request }
+    const client = {
+      sendRequest: request,
+      getState: () => 'connected' as const,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {}
+    }
     const modes = {
       bracketedPasteMode: false,
       altScreen: true,

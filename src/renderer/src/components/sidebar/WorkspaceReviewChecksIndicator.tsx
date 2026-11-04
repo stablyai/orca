@@ -1,25 +1,39 @@
+import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
 import React from 'react'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceReviewChecksSummary } from '../../../../shared/workspace-review-checks'
-import { PullRequestIcon } from './WorktreeCardHelpers'
-import { getReviewChecksTone } from './worktree-review-helpers'
+import { ReviewIcon } from './worktree-review-helpers'
+import { reviewStateLabel } from './WorktreeCardMetadataStatusBadges'
 
 export function workspaceReviewChecksLabel(summary: WorkspaceReviewChecksSummary): string {
+  const outcome = getProviderChecksOutcome(summary)
   const status =
-    summary.state === 'failure'
-      ? translate('workspace.links.checksFailed', 'Failed')
-      : summary.state === 'pending'
-        ? translate('workspace.links.checksPending', 'Pending')
-        : summary.state === 'success'
-          ? translate('workspace.links.checksPassing', 'Passing')
-          : summary.state === 'unknown'
-            ? translate('workspace.links.checksUnknown', 'Unknown')
-            : translate('workspace.links.checksNeutral', 'Neutral')
-  return translate('workspace.links.allReviewChecks', 'Reviews: {{count}} · Checks: {{status}}', {
-    count: summary.total,
-    status
-  })
+    outcome === 'cancelled'
+      ? translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+      : outcome === 'failure'
+        ? translate('workspace.links.checksFailed', 'Failed')
+        : outcome === 'pending'
+          ? translate('workspace.links.checksPending', 'Pending')
+          : outcome === 'success'
+            ? translate('workspace.links.checksPassing', 'Passing')
+            : outcome === 'unknown'
+              ? translate('workspace.links.checksUnknown', 'Unknown')
+              : translate('workspace.links.checksNeutral', 'Neutral')
+  const checks = translate(
+    'workspace.links.allReviewChecks',
+    'Reviews: {{count}} · Checks: {{status}}',
+    {
+      count: summary.total,
+      status
+    }
+  )
+  const state =
+    summary.reviewState === 'draft'
+      ? translate('workspace.reviewStatus.draft', '{{review}}: Draft', {
+          review: translate('workspace.links.reviews', 'Reviews')
+        })
+      : reviewStateLabel(summary.reviewState, 'PR')
+  return `${state} · ${checks}`
 }
 
 export function WorkspaceReviewChecksIndicator({
@@ -29,9 +43,12 @@ export function WorkspaceReviewChecksIndicator({
   summary: WorkspaceReviewChecksSummary
   className?: string
 }): React.JSX.Element {
-  const tone =
-    summary.state === 'failure' || summary.state === 'pending' || summary.state === 'success'
-      ? getReviewChecksTone(summary.state)
-      : null
-  return <PullRequestIcon className={cn(className, tone ?? 'text-muted-foreground')} />
+  return (
+    <ReviewIcon
+      review={{ state: summary.reviewState }}
+      className={className}
+      variant="generic"
+      showChecks={false}
+    />
+  )
 }

@@ -1,6 +1,9 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import type { AgentPhase, AgentTransition } from '../../../shared/agent-transitions'
+import type {
+  AgentPhase,
+  AgentTransition
+} from '../../../shared/agent-status/lifecycle/agent-transitions'
 import {
   classifySortStampEvent,
   enterAgentPaneState,

@@ -1,4 +1,4 @@
-import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { resolveTerminalWorkspacePath } from '../../../shared/terminal-startup-cwd'
 import {

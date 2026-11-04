@@ -1,5 +1,5 @@
 // Never end work automatically; missing daemon evidence blocks rather than guessing a pane is restorable.
-import type { AgentStatusState } from '../../../shared/agent-status-types'
+import type { AgentStatusState } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES

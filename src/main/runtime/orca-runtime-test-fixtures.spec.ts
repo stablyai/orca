@@ -9,7 +9,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import {
   buildAgentPromptPasteBytes,
   getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'

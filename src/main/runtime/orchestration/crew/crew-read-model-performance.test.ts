@@ -1,7 +1,7 @@
 import { readCrewTraffic } from './crew-query'
 import { readCrewParentInputs } from './crew-parent-inputs'
 
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { RuntimeAgentOrchestrationProjection } from '../../runtime-agent-orchestration-projection'
 import { readOrchestrationFleetAgentStatusSnapshot } from '../../orchestration-fleet-agent-status-snapshot'
 import { RuntimeOrchestrationSenderNames } from '../../runtime-orchestration-sender-names'
@@ -377,4 +377,94 @@ it('drives pending questions from metadata on real N/10N mailbox wakes', async (
   expect(receipts[1].executions).toBe(receipts[0].executions)
   expect(receipts[1].rows).toBe(receipts[0].rows)
   expect(receipts[1].bytes).toBe(receipts[0].bytes)
+})
+
+it('bounds winning mail and question preview encoding across body bytes, rows and settled wakes', async () => {
+  const receipts: { rows: number; bodyLength: number; encodedBytes: number }[] = []
+  for (const rows of [1, 10]) {
+    for (const bodyLength of [4096, 40960]) {
+      const { db, deps, run, handles, assign } = fixture()
+      const body = `preview-body:${'界🙂'.repeat(bodyLength)}`
+      for (let index = 0; index < rows; index++) {
+        const handle = `term_preview_${index}`
+        handles.set(
+          handle,
+          `tab_preview_${index}:aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, '0')}`
+        )
+        const dispatch = assign(handle)
+        db.createQuestion({
+          runId: run.id,
+          dispatchId: dispatch.id,
+          askerHandle: handle,
+          question: body
+        })
+      }
+      let title = 'First title'
+      deps.name = () => title
+      const wake = new CrewChanges()
+      const model = new CrewReadModel(() => deps, wake.subscribe)
+      const frames: OrchestrationCrewFrame[] = []
+      const encode = vi.spyOn(Buffer, 'from')
+      const stop = subscribeCrew(
+        () => model.read('term_coord'),
+        model.subscribe,
+        (frame) => frames.push(frame)
+      )
+      try {
+        const snapshot = model.read('term_coord')
+        expect(snapshot.sections.managing).toHaveLength(rows)
+        const prefix = 'preview-body:'
+        const expected = `${prefix + '界🙂'.repeat(144)}…`
+        for (const row of snapshot.sections.managing) {
+          expect(row.latest?.preview).toBe(expected)
+          expect(row.pendingQuestion?.preview).toBe(expected)
+          expect(Buffer.byteLength(row.latest!.preview)).toBeLessThanOrEqual(1024)
+          expect(row.latest?.preview).not.toContain('\uFFFD')
+        }
+        encode.mockClear()
+        const published = frames.filter((frame) => frame.type === 'complete').length
+        for (let step = 0; step < 10; step++) {
+          title = `Changed title ${step}`
+          wake.notify(new Set(['names']))
+          await Promise.resolve()
+          await Promise.resolve()
+        }
+        const bodies = encode.mock.calls.flatMap(([input]) =>
+          typeof input === 'string' && input.startsWith(prefix) ? [input] : []
+        )
+        expect(bodies).toHaveLength(rows * 2 * 10)
+        const encodedBytes = bodies.reduce((total, input) => total + Buffer.byteLength(input), 0)
+        expect(encodedBytes).toBeLessThanOrEqual(rows * 2 * 10 * 3075)
+        expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(published + 10)
+        expect(model.read('term_coord').sections.managing[0].label).toBe(title)
+        receipts.push({ rows, bodyLength, encodedBytes })
+      } finally {
+        stop()
+        encode.mockRestore()
+      }
+    }
+  }
+  expect(receipts[1].encodedBytes).toBe(receipts[0].encodedBytes)
+  expect(receipts[3].encodedBytes).toBe(receipts[2].encodedBytes)
+  expect(receipts[2].encodedBytes).toBe(receipts[0].encodedBytes * 10)
+})
+
+it.each([
+  ['x'.repeat(1024), 'x'.repeat(1024)],
+  ['x'.repeat(1025), `${'x'.repeat(1021)}…`],
+  [`${'x'.repeat(1020)}🙂tail`, `${'x'.repeat(1020)}…`],
+  [`${'x'.repeat(1017)}🙂tail`, `${'x'.repeat(1017)}🙂…`]
+])('preserves the existing UTF-8 preview boundary for %#', (body, expected) => {
+  const { db, deps, run, assign } = fixture()
+  const dispatch = assign('term_worker')
+  db.createQuestion({
+    runId: run.id,
+    dispatchId: dispatch.id,
+    askerHandle: 'term_worker',
+    question: body
+  })
+  const row = new CrewReadModel(() => deps, db.crewChanges.subscribe).read('term_coord').sections
+    .managing[0]
+  expect(row.latest?.preview).toBe(expected)
+  expect(row.pendingQuestion?.preview).toBe(expected)
 })

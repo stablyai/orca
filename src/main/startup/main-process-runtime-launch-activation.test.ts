@@ -49,7 +49,9 @@ vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', ()
 vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
 vi.mock('../ipc/pty/register-headless-runtime', () => ({ registerHeadlessPtyRuntime: vi.fn() }))
 vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
-vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
+vi.mock('../browser/backends/offscreen-browser-backend', () => ({
+  OffscreenBrowserBackend: class {}
+}))
 vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
@@ -87,7 +89,9 @@ vi.mock('../runtime/runtime-rpc-startup-failure', () => ({
 }))
 vi.mock('../cli/cli-installer', () => ({ CliInstaller: class {} }))
 vi.mock('../cli/linux-bare-orca-dispatcher', () => ({ installLinuxBareOrcaDispatcher: vi.fn() }))
-vi.mock('../terminal-history-deletion', () => ({ scheduleAllPendingHistoryTreeRemovals: vi.fn() }))
+vi.mock('../pty/history/terminal-history-deletion', () => ({
+  scheduleAllPendingHistoryTreeRemovals: vi.fn()
+}))
 vi.mock('../ipc/startup-notification-registration', () => ({
   triggerStartupNotificationRegistration: vi.fn()
 }))
@@ -100,7 +104,7 @@ vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
 const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
 vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
 vi.mock('../server/serve-stdout-boundary', () => ({ emitServeBrowserIdentityActionLine: vi.fn() }))
-vi.mock('../browser/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
 }))
 const showWindowWithoutStealingFocus = vi.hoisted(() => vi.fn())

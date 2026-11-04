@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  clearWorkingIndicators,
   createAgentStatusTracker,
-  detectAgentStatusFromTitle,
-  getAgentLabel,
-  isClaudeAgent
-} from './agent-detection'
-import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import { stripLeadingAgentTitleDecoration } from './agent-title-decoration'
+  detectAgentStatusFromTitle
+} from './agent-status/title/agent-title-status'
+import { clearWorkingIndicators } from './agent-status/title/agent-title-working-indicators'
+import { getAgentLabel, isClaudeAgent } from './agent-status/title/agent-title-identity'
+import { isDecorativeAgentTitleFrameChange } from './agent-status/title/agent-decorative-title-signature'
+import { stripLeadingAgentTitleDecoration } from './agent-status/title/agent-title-decoration'
 
 // Titles captured from real `claude` binaries running the same one-line prompt.
 // 2.1.228 swapped the busy spinner from braille to quarter circles, which read as

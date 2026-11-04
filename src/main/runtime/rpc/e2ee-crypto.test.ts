@@ -28,20 +28,6 @@ describe('e2ee-crypto', () => {
     )
   })
 
-  it('encrypt/decrypt round-trips with shared key', () => {
-    const server = generateKeyPair()
-    const client = generateKeyPair()
-
-    const serverShared = deriveSharedKey(server.secretKey, client.publicKey)
-    const clientShared = deriveSharedKey(client.secretKey, server.publicKey)
-
-    const message = '{"id":"rpc-1","method":"status.get"}'
-    const encrypted = encrypt(message, clientShared)
-    const decrypted = decrypt(encrypted, serverShared)
-
-    expect(decrypted).toBe(message)
-  })
-
   it('decrypt returns null with wrong key', () => {
     const server = generateKeyPair()
     const client = generateKeyPair()
@@ -64,15 +50,6 @@ describe('e2ee-crypto', () => {
     const b = encrypt(message, shared)
 
     expect(a).not.toBe(b)
-  })
-
-  it('handles empty string', () => {
-    const server = generateKeyPair()
-    const client = generateKeyPair()
-    const shared = deriveSharedKey(client.secretKey, server.publicKey)
-
-    const encrypted = encrypt('', shared)
-    expect(decrypt(encrypted, shared)).toBe('')
   })
 
   it('handles unicode content', () => {

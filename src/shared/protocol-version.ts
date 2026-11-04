@@ -1,6 +1,6 @@
 import { PERSONAL_PROJECT_ORDER_CAPABILITY } from './personal-project-order'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
-import * as agentLaunchCapabilities from './agent-launch-runtime-capability'
+import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES

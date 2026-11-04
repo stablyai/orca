@@ -5,7 +5,7 @@ import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH
-} from '../../shared/agent-status-field-normalization'
+} from '../../shared/agent-status/contracts/agent-status-field-normalization'
 
 // Build retried/coalesced posts from the roster live at delivery.
 export function getPiSubagentSnapshotSourceLines(): string[] {

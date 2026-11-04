@@ -15,7 +15,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -60,6 +64,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     it('does not send startup command via sendInput for local connections', async () => {
       // Why: the local PTY provider already writes the command via writeStartupCommandWhenShellReady; re-sending from the renderer would double it in the terminal.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport()
@@ -81,7 +87,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       const manager = createManager(1)
       const deps = createDeps({ startup: { command: "claude 'say test'" } })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       expect(capturedDataCallback.current).not.toBeNull()
 
       capturedDataCallback.current?.('(base) user@host $ ')
@@ -93,6 +103,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('seeds a working status for Command Code startup prompts after spawn', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -110,7 +122,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks()
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
@@ -135,6 +151,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
@@ -154,7 +172,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -178,6 +200,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('ignores delayed Command Code output after the leaf rebinds to another SSH host', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const oldPtyId = toAppSshPtyId('ssh-a', 'pty-command-code')
       const newPtyId = toAppSshPtyId('ssh-b', 'pty-command-code')
@@ -196,7 +220,10 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
-        createDeps({ startup: { command: 'command-code --trust' } }) as never
+        bindPaneAgentTitleMocks(
+          createDeps({ startup: { command: 'command-code --trust' } }) as never,
+          agentTitleMocks4
+        )
       )
       await flushAsyncTicks()
       mockStoreState.setAgentStatus.mockClear()
@@ -211,6 +238,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     it('marks a Command Code no-tool turn done after the idle prompt settles', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -230,7 +259,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       })
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       vi.runOnlyPendingTimers()
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
@@ -263,6 +296,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
     it('keeps Command Code working when an active repaint follows the idle prompt before settle', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -282,7 +317,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
       })
       const paneKey = makePaneKey('tab-1', LEAF_1)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       vi.runOnlyPendingTimers()
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
@@ -302,6 +341,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('does not downgrade a completed Command Code turn back to working from stale TUI output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -330,7 +371,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         stateHistory: []
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -345,6 +390,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
     it('starts a new Command Code turn after done when TUI output carries a different prompt', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -373,7 +420,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         stateHistory: []
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -403,6 +454,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
@@ -430,7 +483,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+        )
         expect(createdTransportOptions[0]?.command).toBeUndefined()
         expect(capturedDataCallback.current).not.toBeNull()
 
@@ -460,6 +517,8 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
@@ -497,7 +556,11 @@ export function registerPtyConnectionStartupCommandDeliveryTests(): void {
         const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
         const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
 
-        connectPanePty(pane as never, manager as never, deps as never)
+        connectPanePty(
+          pane as never,
+          manager as never,
+          bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+        )
         expect(capturedDataCallback.current).not.toBeNull()
 
         capturedDataCallback.current?.('user@host $ ')

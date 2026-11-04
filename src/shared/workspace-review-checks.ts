@@ -1,5 +1,6 @@
 import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
-import { resolveProviderCheckState } from './provider-check-summary'
+import type { HostedReviewState } from './hosted-review'
+import { resolveProviderCheckState, getProviderChecksOutcome } from './provider-check-summary'
 import type { WorkspaceAttachment } from './worktree/types'
 import {
   getWorkspaceAttachmentKey,
@@ -9,11 +10,19 @@ import {
 
 export type WorkspaceReviewCheckDetails = {
   stale?: boolean
-  review?: { provider: string; number: number; url?: string; status?: CheckStatus }
+  review?: {
+    provider: string
+    number: number
+    url?: string
+    state?: HostedReviewState
+    status?: CheckStatus
+    checksSummary?: ProviderCheckSummary
+  }
 }
 
 export type WorkspaceReviewChecksSummary = Omit<ProviderCheckSummary, 'state'> & {
   state: ProviderCheckSummary['state'] | 'unknown'
+  reviewState?: HostedReviewState
   known: number
   unknown: number
   stale: number
@@ -32,9 +41,11 @@ export function summarizeWorkspaceReviewChecks(
     stale: 0,
     passed: 0,
     failed: 0,
+    cancelled: 0,
     pending: 0,
     neutral: 0
   }
+  const reviewStates = new Set<HostedReviewState | undefined>()
   for (const item of reviews) {
     const detail = details[getWorkspaceAttachmentKey(item)]
     const review = detail?.review
@@ -46,28 +57,41 @@ export function summarizeWorkspaceReviewChecks(
         (review.url &&
           getWorkspaceAttachmentUrlScope(item) ===
             getWorkspaceAttachmentUrlScope({ ...item, url: review.url })))
+    reviewStates.add(matches ? review.state : undefined)
+    if (matches && detail?.stale) {
+      summary.stale += 1
+    }
     if (!matches || !review.status) {
       summary.unknown += 1
       continue
     }
     summary.known += 1
-    if (detail?.stale) {
-      summary.stale += 1
-    }
-    if (review.status === 'failure') {
+    const outcome = getProviderChecksOutcome(review.checksSummary, review.status)
+    if (outcome === 'cancelled') {
       summary.failed += 1
-    } else if (review.status === 'pending') {
+      summary.cancelled = (summary.cancelled ?? 0) + 1
+    } else if (outcome === 'failure') {
+      summary.failed += 1
+    } else if (outcome === 'pending') {
       summary.pending += 1
-    } else if (review.status === 'success') {
+    } else if (outcome === 'success') {
       summary.passed += 1
     } else {
       summary.neutral += 1
     }
   }
+  if (reviewStates.size === 1) {
+    summary.reviewState = reviewStates.values().next().value
+  } else if (reviewStates.has('open') || reviewStates.has('draft')) {
+    summary.reviewState = 'open'
+  } else if (reviewStates.size > 1 && !reviewStates.has(undefined)) {
+    summary.reviewState = 'closed'
+  }
   const state = resolveProviderCheckState(summary)
+  const outcome = getProviderChecksOutcome({ ...summary, state })
   // Missing or stale reviews cannot certify the workspace green; known failures still count.
   summary.state =
-    state !== 'failure' && state !== 'pending' && (summary.unknown > 0 || summary.stale > 0)
+    outcome !== 'failure' && outcome !== 'pending' && (summary.unknown > 0 || summary.stale > 0)
       ? 'unknown'
       : state
   return summary

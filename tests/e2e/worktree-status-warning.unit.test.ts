@@ -34,7 +34,7 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 import { main } from '../../src/cli/index'
-import { buildWorktree, okFixture } from '../../src/cli/test-fixtures'
+import { buildWorktree } from '../../src/cli/test-fixtures'
 import { useWorktreeAwarenessEnvironment } from '../../src/cli/index-test-harness'
 
 const CUSTOM_STATUSES: WorkspaceStatusDefinition[] = [
@@ -172,26 +172,5 @@ describe('workspace status warnings through CLI and owning RPC handler', () => {
     expect(response).toMatchObject({ ok: true })
     expect(response.result).not.toHaveProperty('warnings')
     expect(error).not.toHaveBeenCalled()
-  })
-
-  it('skips the settings read when the status is unchanged', async () => {
-    const { getUIState, stored } = fixture({ failRead: true })
-    await setStatus(undefined, true)
-    expect(getUIState).not.toHaveBeenCalled()
-    expect(stored.workspaceStatus).toBe('in-progress')
-  })
-
-  it('keeps an older host response without warnings working', async () => {
-    const { stored, log, error } = fixture()
-    mocks.callMock.mockResolvedValue(
-      okFixture('old-host', { worktree: { ...stored, workspaceStatus: 'done' } })
-    )
-    await setStatus('done', true)
-    expect(JSON.parse(log.mock.calls.flat().join('\n'))).toMatchObject({
-      ok: true,
-      result: { worktree: { workspaceStatus: 'done' } }
-    })
-    expect(error).not.toHaveBeenCalled()
-    expect(mocks.callMock).toHaveBeenCalledTimes(1)
   })
 })

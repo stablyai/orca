@@ -35,11 +35,11 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   })
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
-vi.mock('../cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
 
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { runWithRequestedPageUrl } from '../browser-expected-page-url'
+import { runWithRequestedPageUrl } from '../cdp/input/browser-expected-page-url'
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
   answerAgentBrowserCommands,

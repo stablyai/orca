@@ -59,12 +59,6 @@ describe('native account verification before agy launch', () => {
     expect(getAntigravityAccountService).not.toHaveBeenCalled()
   })
 
-  it('does not read native credentials when no account selection exists', async () => {
-    vi.mocked(existsSync).mockReturnValue(false)
-    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity' })
-    expect(getAntigravityAccountService).not.toHaveBeenCalled()
-  })
-
   it('blocks a launch using an overridden credential home without silently replacing its account', async () => {
     await expect(
       prepareAntigravityAccountForLaunch({

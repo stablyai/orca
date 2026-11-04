@@ -2,9 +2,12 @@ import {
   agentChoiceSettingsOccurrences,
   rewriteAgentChoiceSettings,
   readAgentChoiceSettings
-} from '../../agent-choice-settings'
-import { hasAgentModelOptionValues, yieldAgentChoicesToArgs } from '../../agent-choice-layers'
-import type { AgentType } from '../../agent-status-types'
+} from '../../agent-launch/choices/agent-choice-settings'
+import {
+  hasAgentModelOptionValues,
+  yieldAgentChoicesToArgs
+} from '../../agent-launch/choices/agent-choice-layers'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -15,14 +18,17 @@ import type {
   CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
-import { agentPermissionArgsForLaunch } from '../../agent-permission-args'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { agentPermissionArgsForLaunch } from '../../agent-launch/permissions/agent-permission-args'
 import {
   readLaunchPermissionChoice,
   agentPermissionHasTerminalChoice
-} from '../../tui-agent-permission-choice'
-import { isTuiAgent } from '../../tui-agent-config'
-import { quoteStartupArg, tokenizeStartupCommand } from '../../tui-agent-startup-shell'
+} from '../../agent-launch/permissions/tui-agent-permission-choice'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import {
+  quoteStartupArg,
+  tokenizeStartupCommand
+} from '../../agent-launch/startup/tui-agent-startup-shell'
 import { decodeCatalogOptionValue } from './structured-agent-session-option-codec'
 
 export type ResolvedSessionOptionLaunch = {
@@ -88,19 +94,48 @@ function launchOptionsFor(
   }
 }
 
+/** Independent CLI options cannot ride the legacy model/effort/mode preferences. */
+export function hasIndependentAgentLaunchOptions(
+  agent: AgentType,
+  values: Readonly<Record<string, unknown>>
+): boolean {
+  const catalog = getAgentSessionOptionLaunchCatalog(agent)
+  return (
+    !!catalog &&
+    launchOptionsFor(
+      catalog,
+      typeof values.model === 'string' ? values.model : null,
+      values
+    ).options.some((option) => {
+      const value = values[option.id]
+      return (
+        option.id !== 'effort' &&
+        !option.apply.composedIntoModel &&
+        !!option.apply.launchArgs &&
+        decodeCatalogOptionValue(
+          option.kind,
+          typeof value === 'string' || typeof value === 'boolean' ? value : undefined
+        ) !== undefined
+      )
+    })
+  )
+}
+
 export function resolveAgentSessionOptionLaunch(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[] = [],
   includeCatalogDefaults = true,
-  permissionTrailingArgs = trailingAgentArgs
+  permissionTrailingArgs = trailingAgentArgs,
+  modelContext?: string
 ): ResolvedSessionOptionLaunch {
   const resolved = resolveModelOptionLaunch(
     agent,
     values,
     trailingAgentArgs,
     includeCatalogDefaults,
-    permissionTrailingArgs
+    permissionTrailingArgs,
+    modelContext
   )
   const permission = readLaunchPermissionChoice(values)
   if (!permission || !isTuiAgent(agent) || !agentPermissionHasTerminalChoice(agent, permission)) {
@@ -125,13 +160,15 @@ function resolveModelOptionLaunch(
   values: Record<string, SessionOptionValue> | null | undefined,
   trailingAgentArgs: readonly string[],
   includeCatalogDefaults: boolean,
-  originalArgs: readonly string[]
+  originalArgs: readonly string[],
+  modelContext?: string
 ): ResolvedSessionOptionLaunch {
   if (!hasAgentModelOptionValues(values)) {
     return { args: [], appliedValues: {} }
   }
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
-  const modelId = typeof values?.model === 'string' ? values.model : null
+  const requestedModelId = typeof values?.model === 'string' ? values.model : null
+  const modelId = requestedModelId ?? modelContext ?? null
   if (!catalog || !values) {
     return { args: [], appliedValues: {} }
   }
@@ -143,12 +180,20 @@ function resolveModelOptionLaunch(
     agent,
     {
       ...launchModelValues(model, modelOptions, values, includeCatalogDefaults),
-      ...(modelId ? { model: modelId } : {})
+      ...(requestedModelId ? { model: requestedModelId } : {})
     },
     trailingAgentArgs
   )
-  const modelOverridden = modelId !== null && modelValues.model === undefined
-  const appliesModel = Boolean(modelId && catalog.modelApply.launchArgs && !modelOverridden)
+  const modelOverridden = requestedModelId !== null && modelValues.model === undefined
+  const composedRequest = modelOptions.some(
+    (option) => option.apply.composedIntoModel && modelValues[option.id] !== undefined
+  )
+  const appliesModel = Boolean(
+    modelId &&
+    (requestedModelId || composedRequest) &&
+    catalog.modelApply.launchArgs &&
+    !modelOverridden
+  )
 
   // Why: a repeated model flag can prevent the CLI from starting.
   if (modelId && appliesModel && catalog.modelApply.launchArgs) {

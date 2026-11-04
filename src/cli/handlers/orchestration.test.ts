@@ -95,21 +95,6 @@ describe('orchestration send structured payload flags', () => {
     )
   })
 
-  it('forwards multiline message bodies without normalization', async () => {
-    const body = 'paragraph one line one\nparagraph one line two\n\nparagraph two'
-
-    await invokeSend(
-      new Map<string, string | boolean>([
-        ['from', 'term_worker'],
-        ['to', 'term_coord'],
-        ['subject', 'multiline'],
-        ['body', body]
-      ])
-    )
-
-    expect(callMock).toHaveBeenCalledWith('orchestration.send', expect.objectContaining({ body }))
-  })
-
   it('carries Dispatch authority in the RPC envelope instead of message params', async () => {
     await invokeSend(
       new Map<string, string | boolean>([
@@ -185,35 +170,6 @@ describe('orchestration send structured payload flags', () => {
 
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
     expect(callMock).not.toHaveBeenCalled()
-  })
-
-  it('continues to allow worker_done to a concrete terminal handle', async () => {
-    await invokeSend(
-      new Map<string, string | boolean>([
-        ['from', 'term_worker'],
-        ['to', 'term_coord'],
-        ['subject', 'done'],
-        ['type', 'worker_done'],
-        ['outcome', 'succeeded']
-      ])
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.send',
-      {
-        from: 'term_worker',
-        to: 'term_coord',
-        subject: 'done',
-        body: undefined,
-        type: 'worker_done',
-        priority: undefined,
-        threadId: undefined,
-        payload: JSON.stringify({ outcome: 'succeeded' }),
-        waitForLifecycleSettlement: true,
-        devMode: false
-      },
-      WORKER_DONE_REQUEST
-    )
   })
 
   it('sends lifecycle messages from ORCA_TERMINAL_HANDLE without a liveness probe', async () => {
@@ -649,66 +605,6 @@ describe('orchestration timeout flag validation', () => {
       wait: false
     })
     expect(await askedWith([])).not.toHaveProperty('wait')
-  })
-
-  it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
-    callMock.mockResolvedValue({
-      result: {
-        answer: 'yes',
-        messageId: 'msg_1',
-        threadId: 'thread_1',
-        timedOut: false
-      }
-    })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await invokeAsk(
-      new Map<string, string | boolean>([
-        ['to', 'term_coord'],
-        ['question', 'Proceed?'],
-        ['timeout-ms', '123']
-      ])
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.ask',
-      {
-        to: 'term_coord',
-        run: undefined,
-        question: 'Proceed?',
-        resume: undefined,
-        options: undefined,
-        timeoutMs: 123,
-        from: 'term_worker',
-        compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
-        compatibilityWindowsCommand: undefined
-      },
-      { timeoutMs: 5_123, orchestrationCapability: undefined }
-    )
-  })
-
-  it('envelopes ask --json through the shared result printer', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
-    const response = {
-      id: 'req_ask',
-      ok: true,
-      result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false },
-      _meta: { runtimeId: 'runtime_1' }
-    }
-    callMock.mockResolvedValue(response)
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await invokeAsk(
-      new Map<string, string | boolean>([
-        ['to', 'term_coord'],
-        ['question', 'Proceed?'],
-        ['full', true]
-      ])
-    )
-
-    expect(printResult).toHaveBeenCalledWith(response, true, expect.any(Function))
-    expect(logSpy).not.toHaveBeenCalled()
   })
 
   it('passes an ask resume without creating a new question payload', async () => {

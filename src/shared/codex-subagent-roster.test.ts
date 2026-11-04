@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_MODEL_MAX_LENGTH, AGENT_TYPE_MAX_LENGTH } from './agent-status-types'
+import {
+  AGENT_MODEL_MAX_LENGTH,
+  AGENT_TYPE_MAX_LENGTH
+} from './agent-status/contracts/agent-status-field-normalization'
 import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,

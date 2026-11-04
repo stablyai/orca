@@ -11,7 +11,6 @@ import {
   type MobileViewState,
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
-import type { Worktree } from '../worktree/workspace-list-sections'
 import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
@@ -33,7 +32,7 @@ import {
   useSwitchedHostPendingViewChanges,
   type PendingViewStatus
 } from './use-host-pending-view-changes'
-import type { FilterState } from '../worktree/workspace-list-types'
+import type { FilterState, WorkspaceListItem } from '../worktree/workspace-list-types'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
 const NOTHING_PENDING: PendingViewStatus = { pending: [], stale: false }
@@ -274,8 +273,8 @@ export function useHostViewSettings(args: {
     [client, applyViewState, persistViewSettings, pendingChanges, refused]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) =>
-      toggleCollapsed(item.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(item)),
+    ({ row, view }: WorkspaceListItem) =>
+      toggleCollapsed(view.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(row)),
     [toggleCollapsed]
   )
 

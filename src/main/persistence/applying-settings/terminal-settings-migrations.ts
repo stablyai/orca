@@ -10,7 +10,7 @@ import {
   DEFAULT_TUI_AGENT_ENV,
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../../../shared/tui-agent-launch-defaults'
+} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
 
 /** Unexpanded, a leading ~ resolves inside each repo and worktrees land in <repo>/~ (#34944). */

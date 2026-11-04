@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../src/shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import {
   canShowMobileNativeChat,
   isMobileFolderNativeChatReadable,

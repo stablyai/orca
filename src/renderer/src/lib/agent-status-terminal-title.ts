@@ -1,9 +1,9 @@
 import { classifyTitleActivity } from './pane-agent-evidence'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   getSyntheticAgentTerminalTitle,
   getSyntheticAgentTitleProfile
-} from '../../../shared/synthetic-agent-title'
+} from '../../../shared/agent-status/title/synthetic-agent-title'
 
 export function resolveAgentStatusTerminalTitle(
   payload: Pick<ParsedAgentStatusPayload, 'agentType' | 'state'>,

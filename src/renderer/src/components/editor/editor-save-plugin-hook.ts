@@ -4,11 +4,8 @@ import type { AppStoreApi } from './editor-save-queue'
 import type { OpenFile } from '@/store/slices/editor'
 import type { EditorSaveTrigger } from './editor-save-disk-precondition'
 import { hasEditorBytesDraft } from './editor-bytes-documents'
-import { flushEditorViewsForSave } from './editor-pending-flush'
-import {
-  editorBufferIdOfView,
-  editorBufferViewIds
-} from '@/store/slices/editor/buffers/editor-buffer-views'
+import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
+import { adoptEditorSaveText } from './editor-save-text-transform'
 import type { PluginHostListEntry } from '../../../../preload/api-types'
 
 const SAVE_HOOK = 'editor.save.before'
@@ -74,21 +71,7 @@ export async function applyEditorSavePluginHook(
   if (decision.kind === 'deny') {
     throw new EditorSaveDeniedByPluginError(decision.pluginKey, decision.reason)
   }
-  const decided = decision.text ?? text
-  if (decided === text) {
-    return decided
-  }
-  const open = new Set(store.getState().openFiles.map((tab) => tab.id))
-  const survivor = editorBufferViewIds(store.getState(), recordId).find((id) => open.has(id))
-  if (survivor === undefined) {
-    return decided
-  }
-  // Typing still held by a view (rich Markdown serializes on a timer) must count as a newer edit.
-  await flushEditorViewsForSave(store.getState, survivor)
-  if (store.getState().editorDrafts[survivor] === text) {
-    store.getState().setEditorDraft(survivor, decided)
-  }
-  return decided
+  return adoptEditorSaveText(store, recordId, text, decision.text ?? text)
 }
 
 /** The hook for a save the person asked for, or null (no plugin listens, or an autosave or

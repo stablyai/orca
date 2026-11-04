@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationDependencyKind } from '../../../shared/orcad-migration/orcad-migration-preflight'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { TerminalScrollbackSnapshotStorage } from '../../terminal-scrollback-snapshots'
+import type { TerminalScrollbackSnapshotStorage } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { isEmptyRetiredNameRegistry } from '../../../shared/worktree/retired-name-registry'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'

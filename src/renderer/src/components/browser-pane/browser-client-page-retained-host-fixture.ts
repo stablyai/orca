@@ -51,6 +51,7 @@ export function createRetainedHostFixture(): RetainedHostFixture {
   })
   openFixtures.push(registry)
   const container = document.createElement('div')
+  vi.spyOn(container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 800, 600))
   document.body.appendChild(container)
   return {
     registry,

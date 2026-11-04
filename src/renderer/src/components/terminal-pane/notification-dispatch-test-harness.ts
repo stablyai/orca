@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 

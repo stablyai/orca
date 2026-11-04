@@ -106,6 +106,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {!slot.drawsMessage ? null : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
+          onLinkClick={context.onLinkClick}
           disclosureId={message.id}
           awaiting={isActionableStructuredAgentSessionPrompt(
             message.id,

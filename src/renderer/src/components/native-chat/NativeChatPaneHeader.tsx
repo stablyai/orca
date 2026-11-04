@@ -1,15 +1,16 @@
 import { Fragment } from 'react'
-import { MessageSquarePlus, SquareSplitVertical, X } from 'lucide-react'
+import { MessageSquarePlus, SquareSplitVertical } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { agentForksConversations } from '../../../../shared/agent-resume-argv'
+import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { NativeChatTabSession } from '../tab-bar/tab-session-history-switch'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
+import { NativeChatSettingsButton } from './NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
 
@@ -119,27 +120,7 @@ export function NativeChatPaneHeader({
             </span>
           </TooltipContent>
         </Tooltip>
-        {actions.canClosePane ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="pane-title-close"
-                size="icon-xs"
-                aria-label={actions.closeLabel}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  actions.onClosePane()
-                }}
-              >
-                <X className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {actions.closeLabel}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
+        <NativeChatSettingsButton />
       </div>
     </div>
   )

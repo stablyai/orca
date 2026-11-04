@@ -1,7 +1,7 @@
 import { ptyIncarnationById, ptyOwnership } from '../../../../main/ipc/pty/provider/ownership-state'
 import { createLaunchRaceRuntime } from '../../../../main/ipc/pty/pty-launch-race-test-fixture'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import { setupPtyIpcSuite } from '../../../../main/ipc/pty/pty-ipc-test-harness'
 import { classifyErrorMock, statSyncMock } from '../../../../main/ipc/pty/pty-ipc-mock-registry'
 import { registerPtyHandlers } from '../../../../main/ipc/pty/register-handlers'
@@ -10,13 +10,13 @@ import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests
 } from '../../../../main/agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from '../../../../main/ipc/pty/pane/spawn-reservation'
-import { acquireWatcherRemovalGate } from '../../../../main/ipc/watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../../../../main/workspaces/removal/watcher-removal-gate'
 
 const renderer = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = {}
@@ -101,10 +101,10 @@ vi.mock('../../../../main/pi/titlebar-extension-service', () =>
     m.piTitlebarExtensionModuleMock()
   )
 )
-vi.mock('../../../../main/pwsh', () =>
+vi.mock('../../../../main/pty/shell-startup/pwsh', () =>
   import('../../../../main/ipc/pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
 )
-vi.mock('../../../../main/wsl', async (importOriginal) =>
+vi.mock('../../../../main/wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('../../../../main/ipc/pty/pty-ipc-mock-registry')).wslModuleMock(
     await importOriginal()
   )
@@ -235,7 +235,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true })
+      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true }),
+      undefined
     )
   })
 
@@ -256,7 +257,8 @@ describe('a pane that starts its own agent launch', () => {
 
     expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
       worktreeId,
-      expect.not.objectContaining({ shellOverride: expect.anything() })
+      expect.not.objectContaining({ shellOverride: expect.anything() }),
+      undefined
     )
     expect(providerSpawn.mock.calls[0]?.[0].shellOverride).toBe('/bin/planned-shell')
   })
