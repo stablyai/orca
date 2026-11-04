@@ -25,6 +25,7 @@ import {
   reserveDeadManWindowMs
 } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
+import { EdgeAssignments } from './edge-relay.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
 import { CellReserveBook } from './cell-reserve-book.js'
@@ -173,6 +174,24 @@ export function createRelayServer(
       observability.recordControlRenewal?.(durationMs, outcome),
     deadCellVerdict: (cellId, now) => pollEvidence.deadCellVerdict?.(cellId, now) ?? null
   })
+  // Relay edge: directors with an edge URL seed the edge cell and then answer the cohort there.
+  // Until the seed lands (or if it fails) the override answers nothing and today's path runs.
+  const edgeAssignments =
+    config.role === 'director' && config.edge
+      ? new EdgeAssignments(observedDatabase, config.edge, options.now)
+      : undefined
+  if (edgeAssignments) {
+    void edgeAssignments.ensureEdgeCell().then(
+      () => console.warn(JSON.stringify({ event: 'orca_relay_edge_cell_ready' })),
+      (error: unknown) =>
+        console.error(
+          JSON.stringify({
+            event: 'orca_relay_edge_cell_seed_failed',
+            reason: error instanceof Error ? error.message : 'unknown'
+          })
+        )
+    )
+  }
   const readiness = createRelayReadiness(observedDatabase, config.jwksUrl, {
     jwksGraceMs: config.readinessJwksGraceMs,
     sqlGraceMs: config.readinessSqlGraceMs,
@@ -495,6 +514,7 @@ export function createRelayServer(
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
     reservePlacement,
+    edgeAssignments,
     compareShadowSeats: shadowCompare
       ? (route, identity, answer) => {
           shadowCompare.compare(route, identity, answer)
@@ -689,8 +709,11 @@ export function createRelayServer(
               const invite = await store.resolveInviteForMove(hostId, auth.data.credential)
               const identity = invite ? { userId: invite.userId, relayHostId: hostId } : null
               // Released combined-service invites gain their first durable cell assignment here.
+              // A host on the relay edge is answered there; the liveness rule would re-place it.
               const assignment = identity
-                ? ((await assignments.resolve(identity)) ?? (await assignments.assign(identity)))
+                ? ((await edgeAssignments?.edgeAssignment(identity)) ??
+                  (await assignments.resolve(identity)) ??
+                  (await assignments.assign(identity)))
                 : null
               if (!invite || !assignment) {
                 phoneAdmission?.hostData.release()
