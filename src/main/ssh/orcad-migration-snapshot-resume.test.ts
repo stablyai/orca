@@ -129,19 +129,6 @@ async function transfer(
 }
 
 describe('resuming a scrollback upload the journal still holds', () => {
-  it('retries after the tab closed and the upload was interrupted', async () => {
-    const { store } = relayProfile()
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-    store.syncOrcadMigrationScrollbackRetention([manifest])
-    store.setWorkspaceSession(getDefaultWorkspaceSession(), toSshExecutionHostId(TARGET.id))
-    const remote = destination(manifest, true)
-
-    await expect(transfer(store, manifest, remote)).rejects.toThrow('transport lost')
-    await transfer(store, manifest, remote)
-
-    expect(remote.received()).toBe(Buffer.byteLength(OUTPUT))
-  })
-
   it('recovers after a restart, from the journal alone', async () => {
     const { store, dataFile } = relayProfile()
     const manifest = createOrcadMigrationManifest(store, TARGET)

@@ -64,7 +64,6 @@
 1 test-no-polling-loop:src/main/daemon/daemon-idle-shutdown.test.ts
 1 test-no-polling-loop:src/main/daemon/daemon-self-retirement-respawn.test.ts
 1 test-no-polling-loop:src/main/daemon/daemon-server.test.ts
-1 test-no-polling-loop:src/main/daemon/daemon-stream-backpressure-socket.test.ts
 1 test-no-polling-loop:src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts
 1 test-no-polling-loop:src/main/daemon/node-pty-conout-worker-errors.test.ts
 1 test-no-polling-loop:src/main/daemon/repro-12101-mouse-tracking-survives-agent-death.test.ts
@@ -182,7 +181,6 @@
 1 test-no-real-time-wait:src/main/claude-usage/scanner-incremental-reader.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-agent-sdk-exit-proof.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-agent-sdk-user-message-queue.test.ts
-1 test-no-real-time-wait:src/main/claude/claude-api-retry-idle-sweep.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-stop-ack-race.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-subagent-permission-request.test.ts
 1 test-no-real-time-wait:src/main/claude/claude-supervised-stop-real-cli.test.ts
@@ -203,7 +201,6 @@
 1 test-no-real-time-wait:src/main/daemon/daemon-self-retirement-respawn.test.ts
 1 test-no-real-time-wait:src/main/daemon/daemon-server.test.ts
 1 test-no-real-time-wait:src/main/daemon/daemon-shutdown-final-checkpoint-caller-deadline.test.ts
-1 test-no-real-time-wait:src/main/daemon/daemon-stream-backpressure-socket.test.ts
 1 test-no-real-time-wait:src/main/daemon/daemon-tcc-attribution.test.ts
 1 test-no-real-time-wait:src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts
 1 test-no-real-time-wait:src/main/daemon/node-pty-windows-output-error.win32.test.ts
@@ -1226,7 +1223,7 @@
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev-web.test.ts
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev.test.ts
 3 test-no-real-time-wait:src/main/windows/windows-host-job.win32.test.ts
-3 test-no-real-time-wait:src/main/wsl/execution/wsl-command-loop.test.ts
+2 test-no-real-time-wait:src/main/wsl/execution/wsl-command-loop.test.ts
 3 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-watch.test.ts
 3 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection-hidden-backlog-snapshot.test.ts
 3 test-no-real-time-wait:src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-subscribe-ack-input.test.ts

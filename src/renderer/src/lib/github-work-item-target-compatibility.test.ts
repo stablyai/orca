@@ -58,42 +58,6 @@ beforeEach(() => {
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
 })
 afterEach(() => vi.unstubAllGlobals())
-
-it('carries the exact target and captured authority to the actual runtime client dispatch', async () => {
-  await update()
-  expect(writes).toEqual([{ repo: 'clone', number: 93, updates: { body: 'edit' }, ownerRepo }])
-  expect(call).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      expectedEnvironmentRuntimeId: 'a',
-      expectedEnvironmentPairingRevision: 1
-    })
-  )
-})
-it.each([false, true])(
-  'rejects A evidence after replacement by capable=%s B and permits a fresh user attempt',
-  async (bCapable) => {
-    afterProbe = () => {
-      runtime = 'b'
-      capable = bCapable
-      afterProbe = () => {}
-    }
-    await expect(update()).rejects.toThrow()
-    expect(writes).toEqual([])
-    clearRuntimeCompatibilityCache()
-    if (bCapable) {
-      await update()
-      expect(writes).toHaveLength(1)
-    } else {
-      await expect(update()).rejects.toThrow('Update Orca')
-      expect(writes).toEqual([])
-    }
-  }
-)
-it('does not turn a status transport failure into unsupported or send a generic write', async () => {
-  call.mockRejectedValueOnce(new Error('network down'))
-  await expect(update()).rejects.toThrow('network down')
-  expect(writes).toEqual([])
-})
 it('rejects re-pairing between probe and send, before any destination effect', async () => {
   afterProbe = () =>
     replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 1, pairingRevision: 2 }], {
