@@ -297,6 +297,14 @@
       "unnamedServer": "远程服务器",
       "update": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。"
     },
+    "interruptedContinue": {
+      "continue": "继续",
+      "failed": "无法继续此聊天。请重试，或发送一条消息。",
+      "explanation": "继续后，智能体会先检查其上一步是否已完成。"
+    },
+    "sendError": {
+      "dismiss": "关闭"
+    },
     "permission": {
       "needsAccessTo": "需要访问： ",
       "newerVersionRequired": "此请求需要更新版本的 Orca。",

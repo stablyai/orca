@@ -297,6 +297,14 @@
       "unnamedServer": "dem entfernten Server",
       "update": "Orca auf {{machine}} wurde während dieser Antwort für ein Update neu gestartet."
     },
+    "interruptedContinue": {
+      "continue": "Fortfahren",
+      "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
+      "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
+    },
+    "sendError": {
+      "dismiss": "Ausblenden"
+    },
     "permission": {
       "needsAccessTo": "Benötigt Zugriff auf: ",
       "newerVersionRequired": "Diese Anfrage erfordert eine neuere Version von Orca.",

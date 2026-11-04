@@ -297,6 +297,14 @@
       "unnamedServer": "リモートサーバー",
       "update": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。"
     },
+    "interruptedContinue": {
+      "continue": "続行",
+      "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
+      "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。"
+    },
+    "sendError": {
+      "dismiss": "閉じる"
+    },
     "permission": {
       "needsAccessTo": "アクセスが必要なパス: ",
       "newerVersionRequired": "このリクエストには新しいバージョンの Orca が必要です。",

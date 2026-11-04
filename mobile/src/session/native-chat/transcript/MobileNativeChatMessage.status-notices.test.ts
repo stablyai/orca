@@ -11,7 +11,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
+  type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
@@ -104,7 +104,7 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
-  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeNames) => {
+  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
     act(() => {
       renderer = create(
         createElement(

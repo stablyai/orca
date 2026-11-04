@@ -24,6 +24,8 @@ import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-im
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/types'
+import { NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY } from '../../../../src/shared/native-chat/native-chat-interrupted-continue'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   controller: MobileNativeChatController
@@ -178,9 +180,30 @@ export function MobileNativeChatOverlay({
       onMicPressOut
     ]
   )
-  const noticeNames = useMemo(
-    () => ({ hostName, ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}) }),
-    [hostName, agent]
+  const t = useMobileTranslation()
+  const continuation = controller.nativeChatInterruptedContinue
+  const continueAvailable = continuation?.continueAvailable
+  const offeredTurnItemId = continuation?.offeredTurnItemId ?? null
+  const continueInterrupted = continuation?.continueNow
+  const noticeView = useMemo(
+    () => ({
+      hostName,
+      ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
+      ...(continueInterrupted && continueAvailable !== undefined
+        ? {
+            continuation: {
+              continueAvailable,
+              offeredTurnItemId,
+              // A Continue tap is the person's newer action, so it clears the composer's error.
+              continueNow: () => {
+                onClearSendError()
+                continueInterrupted()
+              }
+            }
+          }
+        : {})
+    }),
+    [hostName, agent, continueAvailable, offeredTurnItemId, continueInterrupted, onClearSendError]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,
@@ -190,6 +213,7 @@ export function MobileNativeChatOverlay({
     worktreePath,
     isWorking: controller.nativeChatTurnActive
   })
+  const continueFailed = sendErrorMessage === null && continuation?.failed === true
   if (!controller.showNativeChat) {
     return null
   }
@@ -205,7 +229,7 @@ export function MobileNativeChatOverlay({
             <MobileNativeChatVisualContext.Provider value={visuals}>
               <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
-                  <MobileNativeChatNoticeContext.Provider value={noticeNames}>
+                  <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
                       messages={session.messages}
                       folded={folded}
@@ -286,7 +310,15 @@ export function MobileNativeChatOverlay({
                       onMicPressIn={onMicPressIn}
                       onMicPressOut={onMicPressOut}
                       inputLockReason={inputLockReason}
-                      sendErrorMessage={sendErrorMessage}
+                      sendErrorMessage={
+                        continueFailed
+                          ? t(
+                              'chat.interruptedContinue.failed',
+                              NATIVE_CHAT_INTERRUPTED_CONTINUE_FAILED_COPY
+                            )
+                          : sendErrorMessage
+                      }
+                      onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
                       filePaths={controller.nativeChatFilePaths}
                       onNeedFiles={controller.loadNativeChatFiles}
