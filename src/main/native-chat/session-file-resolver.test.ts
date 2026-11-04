@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { resolveSessionFilePath } from './session-file-resolver'
+import SyncDatabase from '../sqlite/sync-database'
 
 let tempRoots: string[] = []
 
@@ -27,6 +28,83 @@ function restoreEnv(key: string, previous: string | undefined): void {
 }
 
 describe('resolveSessionFilePath', () => {
+  it('imports the indexed Codex continuation instead of an older same-ID rollout', async () => {
+    const home = await makeRoot('orca-native-chat-codex-head-')
+    const sessions = join(home, 'sessions')
+    const original = join(sessions, '2026', '10', '01', 'rollout-thread-a.jsonl')
+    const head = join(sessions, '2026', '11', '04', 'rollout-thread-a_segment-b.jsonl')
+    await mkdir(dirname(original), { recursive: true })
+    await mkdir(dirname(head), { recursive: true })
+    const meta = JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'thread-a', base_instructions: { text: 'x'.repeat(70_000) } }
+    })
+    await writeFile(original, `${meta}\n{"type":"event_msg","payload":{"message":"older"}}\n`)
+    await writeFile(head, `${meta}\n{"type":"event_msg","payload":{"message":"latest"}}\n`)
+    const db = new SyncDatabase(join(home, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)')
+      db.prepare('INSERT INTO threads VALUES (?, ?)').run('thread-a', head)
+    } finally {
+      db.close()
+    }
+
+    await expect(
+      resolveSessionFilePath('codex', 'thread-a', { codexSessionsDirs: [sessions] })
+    ).resolves.toBe(head)
+  })
+
+  it('refuses an indexed Codex rollout outside the requested account', async () => {
+    const home = await makeRoot('orca-native-chat-codex-foreign-')
+    const sessions = join(home, 'sessions')
+    const original = join(sessions, '2026', '10', '01', 'rollout-thread-a.jsonl')
+    const foreign = join(home, 'another-account', 'rollout-thread-a.jsonl')
+    await mkdir(dirname(original), { recursive: true })
+    await mkdir(dirname(foreign), { recursive: true })
+    const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'thread-a' } })
+    await writeFile(original, `${meta}\n`)
+    await writeFile(foreign, `${meta}\n`)
+    const db = new SyncDatabase(join(home, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)')
+      db.prepare('INSERT INTO threads VALUES (?, ?)').run('thread-a', foreign)
+    } finally {
+      db.close()
+    }
+
+    await expect(
+      resolveSessionFilePath('codex', 'thread-a', {
+        codexSessionsDirs: [sessions],
+        strictErrors: true
+      })
+    ).rejects.toThrow('The indexed Codex rollout does not match this account and session.')
+  })
+
+  it('refuses an indexed Codex rollout whose metadata names another session', async () => {
+    const home = await makeRoot('orca-native-chat-codex-wrong-id-')
+    const sessions = join(home, 'sessions')
+    const original = join(sessions, '2026', '10', '01', 'rollout-thread-a.jsonl')
+    const head = join(sessions, '2026', '11', '04', 'rollout-thread-a_segment-b.jsonl')
+    await mkdir(dirname(original), { recursive: true })
+    await mkdir(dirname(head), { recursive: true })
+    await writeFile(original, '{"type":"session_meta","payload":{"id":"thread-a"}}\n')
+    await writeFile(head, '{"type":"session_meta","payload":{"id":"other-thread"}}\n')
+    const db = new SyncDatabase(join(home, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL)')
+      db.prepare('INSERT INTO threads VALUES (?, ?)').run('thread-a', head)
+    } finally {
+      db.close()
+    }
+
+    await expect(
+      resolveSessionFilePath('codex', 'thread-a', {
+        codexSessionsDirs: [sessions],
+        strictErrors: true
+      })
+    ).rejects.toThrow('The indexed Codex rollout does not match this account and session.')
+  })
+
   it('globs Claude project subdirs for <sessionId>.jsonl', async () => {
     const root = await makeRoot('orca-native-chat-resolve-claude-')
     const claudeProjectsDir = join(root, 'claude-projects')

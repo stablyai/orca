@@ -98,6 +98,31 @@ export function readIndexedCodexThreadIds(codexHomePath: string): Set<string> | 
   }
 }
 
+/** A continuation can keep its logical ID while moving to a differently named rollout. */
+export function readIndexedCodexThreadRolloutPath(
+  codexHomePath: string,
+  threadId: string,
+  strictErrors = false
+): string | null {
+  const stateDbPath = findNewestCodexStateDbPath(codexHomePath)
+  if (!stateDbPath) {
+    return null
+  }
+  let db: SyncDatabase | null = null
+  try {
+    db = new SyncDatabase(stateDbPath, { readonly: true, fileMustExist: true, timeout: 0 })
+    const row = db.prepare('SELECT rollout_path FROM threads WHERE id = ?').get(threadId)
+    return typeof row?.rollout_path === 'string' ? row.rollout_path : null
+  } catch (error) {
+    if (strictErrors) {
+      throw error
+    }
+    return null
+  } finally {
+    db?.close()
+  }
+}
+
 export function countCodexSessionFilesUpTo(sessionsRoot: string, limit: number): number {
   let count = 0
   const pendingDirectories = [sessionsRoot]
