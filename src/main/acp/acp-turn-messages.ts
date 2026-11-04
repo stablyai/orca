@@ -1,4 +1,3 @@
-import { BoundedMap } from '../../shared/bounded-map'
 import type { SessionUpdate } from './generated/acp-protocol.generated'
 import type { ProviderTimelineTextChannel } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { providerTimelineKeyPart } from '../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -23,7 +22,8 @@ export type AcpTextDrop = {
 export class AcpTurnMessages {
   private readonly turns = new Map<string, MessagePosition>()
   private readonly owners = new Map<string, MessageOwner>()
-  private readonly settled = new BoundedMap<string, MessageOwner>({ maxEntries: 128 })
+  // Whitespace-only messages have no journal row to recover their settled ownership.
+  private readonly settled = new Map<string, MessageOwner>()
 
   /** Keep trailing chunks on the provider message's original turn. */
   owner(turn: string | undefined, update: SessionUpdate): { turn?: string; settled?: boolean } {

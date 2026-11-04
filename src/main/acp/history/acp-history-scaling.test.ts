@@ -173,7 +173,7 @@ it('imports a whole historical turn with more than 128 still-open message segmen
   if (!turn || turn.turn === null) {
     throw new Error('Missing identified historical turn')
   }
-  const items = translateHistoryTurn(scope, turn)
+  const items = translateHistoryTurn(scope, { ...turn, turn: turn.turn })
   const answers = items.flatMap((item) =>
     item.body.kind === 'message' && item.body.role === 'assistant' ? [item.body] : []
   )

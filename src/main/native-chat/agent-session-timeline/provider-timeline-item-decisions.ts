@@ -74,7 +74,7 @@ export function decideItem(
     event.type === 'item.open' ? 'open' : event.type === 'item.update' ? 'update' : 'close'
   const row = context.rows.item('item', providerKey(event.item), event.join?.thread ?? null)
   const key = row.itemId
-  const closed = state.items.get(key)?.closed === true
+  const closed = state.closedItems.has(key)
   const scope = providerTimelinePlacement(context, state, event.join)
   const placed = turnOf(scope)
   if (
@@ -102,8 +102,10 @@ export function decideItem(
       if (change === 'close') {
         next.close(key, placed)
       } else if (obligation) {
-        next.items.set(key, { kind: 'item', row, turnItemId: placed, closed: false })
-      } else if (change === 'open' || next.items.get(key)?.closed !== true) {
+        next.closedItems.delete(key)
+        next.items.set(key, { kind: 'item', row, turnItemId: placed })
+      } else if (change === 'open' || !next.closedItems.has(key)) {
+        next.closedItems.delete(key)
         next.items.delete(key)
       }
     }
@@ -126,8 +128,7 @@ export function decideRequest(
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
     row: null,
-    turnItemId: turn,
-    closed: false
+    turnItemId: turn
   }
   return {
     writes: [

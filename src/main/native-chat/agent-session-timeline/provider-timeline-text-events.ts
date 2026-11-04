@@ -67,7 +67,7 @@ export function applyProviderTimelineTextDelta(
 }
 
 function settledNamedItem(host: ProviderTimelineTextHost, key: string): boolean {
-  if (host.state.items.get(key)?.closed) {
+  if (host.state.closedItems.has(key)) {
     return true
   }
   const held = host.journal?.item(key)

@@ -1,7 +1,6 @@
 import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { BoundedMap } from '../../shared/bounded-map'
 import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
@@ -72,13 +71,11 @@ function boundedDiffPatch(path: string, oldText: string, newText: string): strin
 
 type ToolSnapshot = { body: AgentJournalToolCallItem; turn?: string }
 
-// Keep partial-update context until the provider ends its owning turn.
+// Keep partial-update context until completion or the owning turn ends.
 export class AcpToolTimeline {
   private readonly tools = new Map<string, ToolSnapshot>()
-  // Ended turns retain only placement history for late tasks and requests.
-  private readonly turns = new BoundedMap<string, string>({
-    maxEntries: 128
-  })
+  // Late requests need their original turn even when no journal lookup is available.
+  private readonly turns = new Map<string, string>()
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
 
@@ -140,7 +137,12 @@ export class AcpToolTimeline {
     }
     const turn = join.turn ?? this.turn(update.toolCallId)
     this.turns.delete(update.toolCallId)
-    this.tools.set(update.toolCallId, { body, ...(turn === undefined ? {} : { turn }) })
+    const snapshot = { body, ...(turn === undefined ? {} : { turn }) }
+    if (state === 'running') {
+      this.tools.set(update.toolCallId, snapshot)
+    } else {
+      this.retire(update.toolCallId, snapshot)
+    }
     const events: ProviderTimelineEvent[] = [
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
