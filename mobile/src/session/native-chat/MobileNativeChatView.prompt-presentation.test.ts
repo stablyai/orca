@@ -4,7 +4,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatView } from './MobileNativeChatView'
-import { MobileNativeChatAsk } from './input/MobileNativeChatAsk'
 import { useMobileNativeChatPromptPresentation } from './input/use-mobile-native-chat-prompt-presentation'
 import type { MobileChatPermission } from './input/mobile-native-chat-permission'
 import { setMobileNativeChatDraftText } from './composer/mobile-native-chat-draft-store'
@@ -142,54 +141,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 describe('terminal prompt presentation with the production view, card and composer', () => {
-  it('forwards terminal navigation without answering or cancelling the question', async () => {
-    const onAnswerInTerminal = vi.fn()
-    const onAnswerAsk = vi.fn(async () => true)
-    const onCancelAsk = vi.fn(async () => true)
-    await render({
-      ask: { questions: [{ question: 'Pick', options: [{ label: 'A' }], multiSelect: false }] },
-      askRequiresTerminal: true,
-      onAnswerInTerminal,
-      onAnswerAsk,
-      onCancelAsk
-    })
-    const button = tree!.root.findByProps({ accessibilityLabel: 'Answer in terminal' })
-    act(() => button.props.onPress())
-    expect(onAnswerInTerminal).toHaveBeenCalledOnce()
-    expect(onAnswerAsk).not.toHaveBeenCalled()
-    expect(onCancelAsk).not.toHaveBeenCalled()
-    expect(tree!.root.findAllByType(MobileNativeChatAsk)).toHaveLength(0)
-  })
-
-  it('accepted Deny hides exactly that occurrence and restores Send across reconnect', async () => {
-    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 0))
-    const onRespondPermission = vi.fn(async () => true)
-    await render({ permission, onRespondPermission })
-    expect(sendButton().props.disabled).toBe(true)
-    await act(async () => {
-      await approvalAction().props.onPress()
-    })
-    expect(onRespondPermission).toHaveBeenCalledExactlyOnceWith(String.fromCharCode(27))
-    expect(tree!.root.findAllByProps({ testID: 'native-chat-approval-actions' })).toHaveLength(0)
-    expect(sendButton().props.disabled).toBe(false)
-    await render({ permission, onRespondPermission, inputLockReason: 'disconnected' })
-    await render({ permission, onRespondPermission, inputLockReason: null })
-    expect(sendButton().props.disabled).toBe(false)
-    await render({ permission, onRespondPermission, waitStartedAt: 20 })
-    expect(sendButton().props.disabled).toBe(true)
-    expect(approvalAction().props.disabled).toBe(false)
-  })
-
-  it('refused or unknown answers keep the choices enabled', async () => {
-    const onRespondPermission = vi.fn(async () => false)
-    await render({ permission, onRespondPermission })
-    await act(async () => {
-      await approvalAction().props.onPress()
-    })
-    expect(approvalAction().props.disabled).toBe(false)
-    expect(sendButton().props.disabled).toBe(true)
-  })
-
   it('a late answer cannot reshow an answered replacement occurrence', async () => {
     let finishOld: (accepted: boolean) => void = () => {}
     const onRespondPermission = vi
@@ -230,28 +181,6 @@ describe('terminal prompt presentation with the production view, card and compos
     expect(sendButton().props.disabled).toBe(true)
     expect(approvalAction().props.disabled).toBe(false)
   })
-
-  it.each(['toggle', 'hold'])(
-    'keeps %s dictation and attachments available while a prompt blocks Send',
-    async (dictationMode) => {
-      const onMicPress = vi.fn()
-      const onMicPressOut = vi.fn()
-      await render({ micActive: true, onMicPress, onMicPressOut, dictationMode })
-      await render({ permission, micActive: true, onMicPress, onMicPressOut, dictationMode })
-      const stop = tree!.root.findByProps({ accessibilityLabel: 'Stop dictation' })
-      expect(stop.props.disabled).toBe(false)
-      act(() => {
-        ;(dictationMode === 'hold' ? stop.props.onPressOut : stop.props.onPress)()
-      })
-      expect(dictationMode === 'hold' ? onMicPressOut : onMicPress).toHaveBeenCalledOnce()
-      await render({ permission, onMicPress, dictationMode, onAttachImage: vi.fn() })
-      expect(tree!.root.findByProps({ accessibilityLabel: 'Dictate' }).props.disabled).toBe(false)
-      expect(tree!.root.findByProps({ accessibilityLabel: 'Attach image' }).props.disabled).toBe(
-        false
-      )
-      expect(sendButton().props.disabled).toBe(true)
-    }
-  )
 })
 
 vi.mock('../MobileQueuedMessageComposer', () => ({

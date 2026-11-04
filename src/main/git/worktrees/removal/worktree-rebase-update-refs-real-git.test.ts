@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GitBinaryTestFixture } from '../../../../shared/git-binary.test-fixture'
+import { GitBinaryTestFixture } from '../../../../shared/git/compatibility/git-binary.test-fixture'
 
 vi.mock('../../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

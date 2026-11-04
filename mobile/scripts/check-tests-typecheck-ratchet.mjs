@@ -36,16 +36,8 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
-    'src/test-support/rpc-recording/recorded-request-params.test.ts',
-    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
-  ],
-  [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports @orca/process-host, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop bundle RPC handlers, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])
 

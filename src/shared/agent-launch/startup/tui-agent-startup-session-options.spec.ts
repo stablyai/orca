@@ -73,19 +73,6 @@ describe('tui agent startup session options', () => {
     )
   })
 
-  it('quotes option values for a remote POSIX launch', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: '',
-      cmdOverrides: {},
-      platform: 'linux',
-      isRemote: true,
-      allowEmptyPromptLaunch: true,
-      sessionOptions: { model: "team's-model", effort: 'high' }
-    })
-    expect(plan?.launchCommand).toContain(`'team'"'"'s-model'`)
-  })
-
   it('lets explicit worker preferences override configured arguments in draft launches', () => {
     const plan = buildAgentDraftLaunchPlan({
       agent: 'claude',

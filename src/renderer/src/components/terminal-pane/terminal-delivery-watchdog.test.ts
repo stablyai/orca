@@ -1,6 +1,6 @@
 // Confirm dead push delivery over two silent ticks, then heal through invoke once per cooldown: reattach first and deliver pulled restore markers locally.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
+import type { PtyRendererDeliveryHealthReply } from '../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
 
 vi.mock('@/lib/e2e-config', () => ({ e2eConfig: { exposeStore: false } }))
 

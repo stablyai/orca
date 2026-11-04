@@ -4,7 +4,7 @@ import {
   noteUserWorkspaceSwitch,
   resetWorkspaceSwitchUserActsForTests
 } from '@/lib/workspace-switch-user-act'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { takeNativeChatOpenWake } from './native-chat-open-wake'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'

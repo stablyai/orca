@@ -2,7 +2,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from './sidebar-inputs-switch'
 import {
   getWorkspaceCleanupInactivityReasons,
   type WorkspaceCleanupCandidate
-} from './workspace-cleanup'
+} from './workspace-cleanup/workspace-cleanup'
 
 /** With the switch on, visits count because terminal start/exit no longer advance Recent; plain-shell work must not appear idle. */
 export function getWorkspaceLastActiveAt(

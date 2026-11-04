@@ -1,7 +1,7 @@
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
-} from '../../../../shared/browser-client-page-metadata-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
 
 export type BrowserClientPageMetadataSnapshot = Pick<

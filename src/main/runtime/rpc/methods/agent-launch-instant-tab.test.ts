@@ -18,7 +18,7 @@ import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests,

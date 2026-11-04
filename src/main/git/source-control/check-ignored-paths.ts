@@ -7,7 +7,7 @@ import {
   GIT_CHECK_IGNORE_TIMEOUT_MS,
   parseGitCheckIgnorePaths,
   splitGitCheckIgnorePathsByStdinBytes
-} from '../../../shared/git-check-ignore-stdio'
+} from '../../../shared/git/paths/git-check-ignore-stdio'
 
 type GitExecError = Error & { stdout?: string; code?: number | string }
 

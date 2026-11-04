@@ -1,4 +1,4 @@
-import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../src/shared/workspace-session/workspace-session-schema'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'

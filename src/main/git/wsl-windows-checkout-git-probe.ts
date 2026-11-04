@@ -7,7 +7,7 @@ import { translateArgForWsl } from './command-runner/wsl-path-translation'
 import { acquireGitAdmission } from './command-runner/git-subprocess-admission'
 import { nonInteractiveGitEnv } from './command-runner/git-process-env'
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
-import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
+import { isWslDirectGitReadCommand } from '../../shared/git/commands/git-command-classification'
 import {
   classifyLineEndingSample,
   forgetLineEndingSample,

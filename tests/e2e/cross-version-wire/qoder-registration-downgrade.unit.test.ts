@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { EnsureAgentSessionParams } from '../../../src/shared/rpc-contract/agent-session-params'
-import { normalizeAgentStatusPayload } from '../../../src/shared/agent-status-types'
+import { normalizeAgentStatusPayload } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 test.each(['v1.4.205', 'v1.4.211'])(

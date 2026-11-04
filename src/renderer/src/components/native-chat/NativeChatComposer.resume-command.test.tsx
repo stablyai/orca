@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
-vi.mock('../../store', () => {
+vi.mock('../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
@@ -53,10 +53,10 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('../right-sidebar/ai-vault-panel-workspace', () => ({
+vi.mock('../right-sidebar/ai-vault/scope/ai-vault-panel-workspace', () => ({
   selectAiVaultPanelWorkspace: () => ({ worktree: { id: 'wt-1' }, repo: null })
 }))
-vi.mock('../right-sidebar/agent-session-history-modal', () => ({
+vi.mock('../right-sidebar/ai-vault/panel/agent-session-history-modal', () => ({
   openAgentSessionHistoryModal: mocks.openHistory
 }))
 vi.mock('./native-chat-runtime-send', () => ({

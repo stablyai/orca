@@ -189,7 +189,8 @@ export function useMobileStructuredAgentSession(
     stateRef,
     stopping,
     accept: sends.accept,
-    hold: sends.hold,
+    acknowledge: sends.acknowledge,
+    reject: sends.reject,
     commandPending: commandPendingRef,
     sendsOut,
     controller: sendController,
@@ -268,6 +269,7 @@ export function useMobileStructuredAgentSession(
     visualSource,
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
+    submissions: state.submissions,
     session: {
       messages,
       status,

@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
 import { isOrcaSessionId, type OrcaSessionId } from '../orca-session-address'
 import type { OrchestrationPartyIdentity } from '../orchestration-party-identity'
-import type { AgentType } from '../agent-status-types'
-import { AGENT_TYPE_MAX_LENGTH } from '../agent-status-field-normalization'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
+import { AGENT_TYPE_MAX_LENGTH } from '../agent-status/contracts/agent-status-field-normalization'
 import { openEnum, salvagedField, salvagedOptional, salvagingArray } from '../zod-salvage'
 
 /** Resolve senders through the storing host's orchestration mailbox address (dispatch:<id> for federation), never a pane key. */

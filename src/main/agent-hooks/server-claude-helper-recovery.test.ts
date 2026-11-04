@@ -10,7 +10,7 @@ import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { ClaudeHelperKillPoller } from '../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
 import '../../shared/agent-hook-listener/providers/claude-transcript-decoder'
 import * as cursor from '../../shared/agent-hook-listener/providers/claude-transcript-cursor'
-import '../../shared/agent-transcript-poll-scheduler'
+import '../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 
 // Complete captured lifecycle records, with runtime replay seeded by real persisted HTTP state.
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

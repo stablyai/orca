@@ -3,17 +3,17 @@ import type {
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../../shared/git-status-types'
-import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
-import { resolveGitStatusLimit } from '../../../shared/git-status-limit'
+} from '../../../shared/git/status/git-status-types'
+import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
+import { resolveGitStatusLimit } from '../../../shared/git/status/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
+import { beginGitStatusLineStatsCacheWrite } from '../../../shared/git/status/git-status-line-stats-write-token'
 import {
-  beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
-} from '../../../shared/git-status-line-stats-cache'
-import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
-import { readGitCommandFailureStderr } from '../../../shared/git-command-failure-text'
+} from '../../../shared/git/status/git-status-line-stats-cache'
+import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
+import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import {
   findExistingWorktreeSymlinkPaths,
@@ -22,7 +22,7 @@ import {
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
-import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
+import { parseUnmergedEntry } from '../../../shared/git/status/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
   getShortBranchName,

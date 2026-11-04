@@ -1,4 +1,4 @@
-import { formatTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { requireAcceptedSpawn } from '../../ipc/pty/spawn-outcome'
 import { SessionNotFoundError } from '../../daemon/daemon-errors'
 import { completePaneAdoption } from '../../ipc/pty/pane/complete-pane-adoption'

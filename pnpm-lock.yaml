@@ -182,8 +182,12 @@ patchedDependencies:
   '@xterm/addon-serialize@0.15.0-beta.330': 17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e
   '@xterm/addon-webgl@0.20.0-beta.329': 3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45
   '@xterm/xterm@6.1.0-beta.336': 492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8
+  glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
+  minimatch@10.2.5: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
+  minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
+  minimatch@9.0.9: c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
   node-pty@1.1.0: 37dc98d9a4bcfc67153fa2fbf30689563ff49dcf8e6f0578484cbacdf1e38af5
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
@@ -8492,7 +8496,7 @@ snapshots:
       debug: 4.4.3(supports-color@7.2.0)
       dir-compare: 4.2.0
       fs-extra: 11.3.6
-      minimatch: 9.0.9
+      minimatch: 9.0.9(patch_hash=c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161)
       plist: 3.1.0
     transitivePeerDependencies:
       - supports-color
@@ -8599,7 +8603,7 @@ snapshots:
     dependencies:
       '@eslint/object-schema': 3.0.5
       debug: 4.4.3(supports-color@7.2.0)
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6)
     transitivePeerDependencies:
       - supports-color
     optional: true
@@ -11263,7 +11267,7 @@ snapshots:
       js-yaml: 4.3.2
       json5: 2.2.3
       lazy-val: 1.0.5
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6)
       pkijs: 3.4.0
       plist: 3.1.0
       proper-lockfile: 4.1.2
@@ -12177,7 +12181,7 @@ snapshots:
       imurmurhash: 0.1.4
       is-glob: 4.0.3
       json-stable-stringify-without-jsonify: 1.0.1
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6)
       natural-compare: 1.4.0
       optionator: 0.9.4
     optionalDependencies:
@@ -12474,9 +12478,9 @@ snapshots:
       is-glob: 4.0.3
     optional: true
 
-  glob@13.0.6:
+  glob@13.0.6(patch_hash=163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223):
     dependencies:
-      minimatch: 10.2.5
+      minimatch: 10.2.5(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6)
       minipass: 7.1.3
       path-scurry: 2.0.2
 
@@ -12766,14 +12770,14 @@ snapshots:
       chokidar: 5.0.0
       commander: 15.0.0
       execa: 10.0.1
-      glob: 13.0.6
+      glob: 13.0.6(patch_hash=163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223)
       i18next: 26.5.11(typescript@7.0.2)
       i18next-resources-for-ts: 2.1.1
       inquirer: 14.2.2(@types/node@24.19.2)
       jiti: 2.7.0
       jsonc-parser: 3.3.1
       magic-string: 1.4.2
-      minimatch: 10.2.6
+      minimatch: 10.2.6(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6)
       ora: 9.4.1
       react-i18next: 17.0.19(@types/react@19.2.18)(i18next@26.5.11(typescript@7.0.2))(react-dom@19.2.8(@types/react@19.2.18)(react@19.2.8))(react@19.2.8)(typescript@7.0.2)
       yaml: 2.9.1
@@ -13667,11 +13671,11 @@ snapshots:
 
   min-indent@1.0.1: {}
 
-  minimatch@10.2.5:
+  minimatch@10.2.5(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6):
     dependencies:
       brace-expansion: 5.0.12
 
-  minimatch@10.2.6:
+  minimatch@10.2.6(patch_hash=4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6):
     dependencies:
       brace-expansion: 5.0.12
 
@@ -13683,7 +13687,7 @@ snapshots:
     dependencies:
       brace-expansion: 2.1.7
 
-  minimatch@9.0.9:
+  minimatch@9.0.9(patch_hash=c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161):
     dependencies:
       brace-expansion: 2.1.7
 

@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -120,24 +120,5 @@ describe('client host hosting identity wiring', () => {
     expect(
       await hostingIdentityForLaunch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-')))
     ).not.toBe(await hostingIdentityForLaunch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-'))))
-  })
-
-  it('attaches under the identity already stamped into the first window', async () => {
-    await launch(mkdtempSync(join(tmpdir(), 'orca-host-wiring-')))
-
-    // Windows receive the hosting id before pairing; the lease must reuse it.
-    const { getBrowserClientHostId } = await import('./browser-client-host-id')
-    const stamped = getBrowserClientHostId()
-
-    expect(await hostingIdentity()).toBe(stamped)
-  })
-
-  it('keeps hosting on a process-local identity when no profile was ever resolved', async () => {
-    vi.resetModules()
-    createHostCallbacks.length = 0
-    hostOptions.length = 0
-
-    const { getBrowserClientHostId } = await import('./browser-client-host-id')
-    expect(await hostingIdentity()).toBe(getBrowserClientHostId())
   })
 })

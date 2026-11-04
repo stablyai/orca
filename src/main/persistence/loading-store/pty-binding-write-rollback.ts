@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
 
 function restoreBindingSlot(

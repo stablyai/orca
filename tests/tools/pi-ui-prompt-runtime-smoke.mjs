@@ -21,7 +21,7 @@ try {
     stdin: {
       contents: [
         "export { getPiAgentStatusExtensionSource } from './src/main/pi/agent-status-extension-source';",
-        "export { normalizeHookPayload } from './src/shared/agent-hook-listener';",
+        "export { normalizeHookPayload } from './src/shared/agent-hook-listener/normalization/normalize-hook-payload';",
         "export { createHookListenerState } from './src/shared/agent-hook-listener/listener-state';"
       ].join('\n'),
       resolveDir: cwd

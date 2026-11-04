@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../src/shared/source-control-group-order'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../src/shared/source-control/listing/source-control-group-order'
 import {
   sourceControlSettingsRead,
   type MobileSourceControlSettings

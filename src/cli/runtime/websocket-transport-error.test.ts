@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 const { sendRemoteRuntimeRequest, sendRemoteRuntimeRequestWithStatusPreflight } = vi.hoisted(

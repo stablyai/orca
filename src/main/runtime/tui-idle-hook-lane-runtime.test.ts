@@ -8,8 +8,8 @@ import {
 } from './agent-transcript-pane-test-harness'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { normalizeHermesEvent } from '../../shared/agent-hook-listener/providers/hermes-events'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from './orca-runtime'
 

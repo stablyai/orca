@@ -1,18 +1,19 @@
 import { createElement, memo } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
-import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
+import { STATUS_COLORS } from '@/lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitFileStatus,
   GitStagingArea,
   GitStatusEntry
-} from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/status/git-status-types'
 import {
   getCombinedDiffFileTreeSectionKey,
   type CombinedDiffBranchTreeArea,

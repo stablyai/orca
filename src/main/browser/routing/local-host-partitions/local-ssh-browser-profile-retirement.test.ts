@@ -105,6 +105,7 @@ import {
 import { isBrowserRoutePartitionRetainedByAnyOwner } from '../partitions/browser-route-partition-retention'
 import {
   isLocalSshBrowserPartition,
+  localSshBrowserProfileIdForSession,
   prepareLocalSshBrowserPartition,
   releaseLocalSshBrowserPartitionsForTarget
 } from './local-ssh-browser-partitions'
@@ -166,6 +167,12 @@ describe('deleted browser profile SSH partitions', () => {
     })
     const removed = [guest(first.partition), guest(second.partition)]
     const live = guest(survivor.partition)
+    expect(localSshBrowserProfileIdForSession(session.fromPartition(first.partition))).toBe(
+      retired.id
+    )
+    expect(localSshBrowserProfileIdForSession(session.fromPartition(survivor.partition))).toBe(
+      sibling.id
+    )
     for (const contents of removed) {
       contents.session.clearStorageData.mockImplementation(async () => {
         expect(contents.isDestroyed()).toBe(true)
@@ -177,6 +184,7 @@ describe('deleted browser profile SSH partitions', () => {
     expect(removed.every((contents) => contents.isDestroyed())).toBe(true)
     for (const { partition } of [first, second]) {
       expect(isLocalSshBrowserPartition(partition)).toBe(false)
+      expect(localSshBrowserProfileIdForSession(session.fromPartition(partition))).toBeNull()
       expect(isBrowserRoutePartitionRetainedByAnyOwner(partition)).toBe(false)
       expect(session.fromPartition(partition).clearStorageData).toHaveBeenCalledTimes(1)
       expect(session.fromPartition(partition).clearCache).toHaveBeenCalledTimes(1)

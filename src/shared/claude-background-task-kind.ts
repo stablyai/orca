@@ -1,4 +1,4 @@
-import type { AgentChildWorkKind } from './agent-status-child-work'
+import type { AgentChildWorkKind } from './agent-status/child-work/agent-status-child-work'
 
 /** Share SDK local_agent/local_bash/monitor and hook subagent/teammate/shell classification so both lanes agree which tasks are agents. */
 export function classifyClaudeBackgroundTaskKind(taskType: unknown): AgentChildWorkKind {

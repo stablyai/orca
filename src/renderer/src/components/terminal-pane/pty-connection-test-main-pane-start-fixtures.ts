@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { TerminalPaneResumeOutcome } from '@/store/terminals/terminal-state'
 import type { MockTransport } from './pty-connection-test-pane-fixtures'

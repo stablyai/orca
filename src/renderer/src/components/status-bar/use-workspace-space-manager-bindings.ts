@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../../shared/git/status/git-status-types'
 import { useAppStore } from '../../store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type {

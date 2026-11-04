@@ -7,7 +7,7 @@ import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import { getDefaultSettings } from '../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
