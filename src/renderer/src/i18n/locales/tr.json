@@ -20491,7 +20491,13 @@
         "queueSearchSteer": "yönlendir",
         "shellEnvSearchVariables": "ortam değişkenleri",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "vekil sunucu"
+        "shellEnvSearchProxy": "vekil sunucu",
+        "idleStopTitle": "Boştaki ajanları şu süre sonra durdur",
+        "idleStopCopy": "Bellek boşaltmak için, sohbet bu kadar süre boşta kaldığında sohbetin ajanını sonlandırır. Sohbet kalır ve bir sonraki mesajınız ajanı yeniden başlatır. Turlar arasında arka planda çalışmaya devam eden ajanlar için Asla seçeneğini seçin.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "zaman aşımı",
+        "idleStopSearchKeepAlive": "canlı tut",
+        "idleStopNever": "Asla"
       }
     },
     "agentChildRow": {

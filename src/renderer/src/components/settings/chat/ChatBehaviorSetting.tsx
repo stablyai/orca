@@ -11,6 +11,7 @@ import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
 import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
+import { NativeChatIdleStopSetting } from './NativeChatIdleStopSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import { nativeChatScrollsToLatestOnSend } from '../../../../../shared/native-chat/native-chat-appearance-settings'
@@ -48,6 +49,7 @@ export function ChatBehaviorSetting({
       ? [getChatPermissionSearchEntry(typedPermissions)]
       : []),
     entries.resumeOnRestart,
+    entries.idleStop,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
@@ -90,6 +92,19 @@ export function ChatBehaviorSetting({
                 onChange={() =>
                   updateSettings({ nativeChatResumeWorkOnRestart: !resumeOnRestartEnabled })
                 }
+              />
+            </SearchableSetting>
+            <SearchableSetting
+              {...entries.idleStop}
+              id={entries.idleStop.targetSectionId}
+              forceVisible={forceVisible}
+              className="max-w-none"
+            >
+              <NativeChatIdleStopSetting
+                settings={settings}
+                updateSettings={updateSettings}
+                title={entries.idleStop.title}
+                description={entries.idleStop.description}
               />
             </SearchableSetting>
             {hostContinuesUsageLimits ? (

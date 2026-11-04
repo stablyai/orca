@@ -19808,7 +19808,13 @@
         "usageLimitContinueCopy": "上限がリセットされると、Orca が「Continue where you left off.」を送信します。リセット時刻がわかっているすべてのチャットに適用されます。",
         "usageLimitContinueSearchLimit": "使用量の上限",
         "usageLimitContinueSearchReset": "リセット",
-        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える"
+        "usageLimitContinueToggleLabel": "使用量の上限リセット時にチャットを続けるかを切り替える",
+        "idleStopTitle": "アイドル状態の Agent を停止するまでの時間",
+        "idleStopCopy": "チャットがこの時間アイドル状態になると、メモリを解放するためにそのチャットの Agent を終了します。チャットは残り、次にメッセージを送ると Agent が再び起動します。ターンの合間もバックグラウンドで作業を続ける Agent には「しない」を選んでください。",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "タイムアウト",
+        "idleStopSearchKeepAlive": "キープアライブ",
+        "idleStopNever": "しない"
       }
     },
     "agentChildRow": {
