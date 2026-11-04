@@ -15,7 +15,9 @@ import {
   encodeAutomationLaunchEdit,
   foldAutomationSourceEdit
 } from '../../../../shared/automation-launch-source-edits'
-import { automationCopyLaunchSetup } from './automation-launch-surface'
+import { automationCopyLaunchSetup, automationDraftLaunchSetup } from './automation-launch-surface'
+import { buildAutomationEditDraft } from './automation-edit-draft'
+import { editAutomationLegacyDraft } from './automation-launch-draft'
 import { makeAutomation } from './automations-page-fixtures'
 
 const callRuntimeRpc = vi.fn()
@@ -452,6 +454,51 @@ const INPUT: AutomationCreateInput = {
 }
 
 describe('authored launch setup capability', () => {
+  it.each(['move', 'create', 'clear'] as const)(
+    'sends pending supplemental-only %s through the legacy destination contract',
+    async (operation) => {
+      const current = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
+      let draft = buildAutomationEditDraft(current)
+      if (operation === 'create') {
+        draft = editAutomationLegacyDraft(draft, '--add-dir docs', false)
+      }
+      draft = editAutomationLegacyDraft(
+        draft,
+        operation === 'clear' ? '' : '--add-dir docs --add-dir fixtures',
+        true
+      )
+      const source = operation === 'create' ? null : current
+      const updates = automationDraftLaunchSetup(draft, 'terminal', source)
+      const input = automationCopyLaunchSetup(source, updates, { ...INPUT, ...updates })
+      const { createAutomationForDestination } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+      callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1' } })
+      await createAutomationForDestination(RUNTIME, input, { selector: { kind: 'self' } })
+      expect(callRuntimeRpc.mock.calls[0]?.[2]).toMatchObject({
+        extraAgentArgs: operation === 'clear' ? '' : '--add-dir docs --add-dir fixtures'
+      })
+      expect(callRuntimeRpc.mock.calls[0]?.[2]).not.toHaveProperty('launchSetupPatch')
+    }
+  )
+
+  it.each([
+    { sources: { arguments: { kind: 'inherit' as const } } },
+    { copy: { surface: 'terminal' as const, extraAgentArgs: '--add-dir docs' } }
+  ])('keeps empty-result modern intent strict across copying: %j', async (launchSetupPatch) => {
+    const current = makeAutomation({ surface: 'terminal', agentArgs: '--verbose' })
+    const input = automationCopyLaunchSetup(
+      current,
+      { launchSetupPatch },
+      { ...INPUT, launchSetupPatch }
+    )
+    const { createAutomationForDestination } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(CURRENT_HOST)
+    await expect(
+      createAutomationForDestination(RUNTIME, input, { selector: { kind: 'self' } })
+    ).rejects.toThrow('Update Orca')
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
   it('moves a reopened supplemental-only edit through the existing extra-args capability', async () => {
     const current = makeAutomation({ surface: 'terminal', extraAgentArgs: '--add-dir docs' })
     const { patch } = foldAutomationSourceEdit('claude', current, undefined, {
