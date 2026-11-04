@@ -5,7 +5,7 @@ import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
@@ -253,13 +253,11 @@ export function NativeChatQuestionCard({
 
         <div className="overflow-hidden rounded-lg border border-input bg-card shadow-xs">
           <div className="flex items-start gap-2 px-3.5 py-2.5">
-            <NativeChatMarkdown
+            <NativeChatQuestionText
               data-testid="native-chat-question-card-title"
               content={q.question}
               onLinkClick={onLinkClick}
-              allowFileUriLinks={onLinkClick !== undefined}
-              linkifyFilePaths={onLinkClick !== undefined}
-              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2"
+              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground [&_p]:my-0 [&_p+p]:mt-2"
             />
             {collapse ? (
               <NativeChatPromptCollapseToggle

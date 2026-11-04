@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
@@ -203,4 +204,29 @@ export const links = defineFixture({
       />
     </NativeChatFileLinkExistenceContext.Provider>
   )
+})
+
+export const historyLinks = defineFixture({
+  width: 720,
+  render: () => (
+    <NativeChatFileLinkExistenceContext.Provider value={linkExistence}>
+      <div
+        className="native-chat-appearance bg-chat-canvas p-4"
+        style={nativeChatAppearanceStyle({})}
+      >
+        <NativeChatAwaitingInputRow
+          subject={{
+            kind: 'questions',
+            questions: [
+              'Review /tmp/question-mock.html. Which surface should carry it?',
+              'See [the proposal](https://example.com/proposal). Continue?'
+            ]
+          }}
+          pending={false}
+          onLinkClick={(event) => event.preventDefault()}
+        />
+      </div>
+    </NativeChatFileLinkExistenceContext.Provider>
+  ),
+  interact: (frame) => frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
 })

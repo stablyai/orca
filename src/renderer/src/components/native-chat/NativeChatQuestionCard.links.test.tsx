@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import {
   NativeChatFileLinkExistenceContext,
@@ -95,4 +96,44 @@ it('routes explicit file links and preserves a multiline question without enabli
     container.querySelector('[data-testid="native-chat-question-card-title"] br')
   ).not.toBeNull()
   expect(container.querySelector('a[href^="javascript:"]')).toBeNull()
+})
+
+it('keeps links usable in disclosed question history, including short and grouped questions', () => {
+  const onLinkClick = vi.fn((event: React.MouseEvent<HTMLElement>, _href: string | undefined) =>
+    event.preventDefault()
+  )
+  const { rerender } = render(
+    <NativeChatFileLinkExistenceContext.Provider value={existence}>
+      <NativeChatAwaitingInputRow
+        subject={{ kind: 'question', text: 'See /tmp/question-mock.html' }}
+        pending={false}
+        onLinkClick={onLinkClick}
+      />
+    </NativeChatFileLinkExistenceContext.Provider>
+  )
+  const expand = screen.getByRole('button', { name: /Asked:/ })
+  fireEvent.click(expand)
+  const file = screen.getByRole('link', { name: '/tmp/question-mock.html' })
+  fireEvent.click(file)
+  expect(onLinkClick).toHaveBeenLastCalledWith(expect.anything(), file.getAttribute('href'))
+  expect(expand.getAttribute('aria-expanded')).toBe('true')
+  rerender(
+    <NativeChatFileLinkExistenceContext.Provider value={existence}>
+      <NativeChatAwaitingInputRow
+        subject={{
+          kind: 'questions',
+          questions: ['See /tmp/question-mock.html', 'See https://example.com/proposal']
+        }}
+        pending={false}
+        onLinkClick={onLinkClick}
+      />
+    </NativeChatFileLinkExistenceContext.Provider>
+  )
+  // Switching between subject types can retain the disclosure's open state.
+  const group = screen.getByRole('button', { name: /Asked:/ })
+  if (group.getAttribute('aria-expanded') !== 'true') {
+    fireEvent.click(group)
+  }
+  fireEvent.click(screen.getByRole('link', { name: 'https://example.com/proposal' }))
+  expect(onLinkClick).toHaveBeenLastCalledWith(expect.anything(), 'https://example.com/proposal')
 })
