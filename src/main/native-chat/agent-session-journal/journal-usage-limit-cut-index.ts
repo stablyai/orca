@@ -1,3 +1,4 @@
+import { journalChangedItemIds } from './journal-item-address'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
@@ -27,15 +28,10 @@ export class JournalUsageLimitCutIndex {
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
     const ids =
-      row.kind === 'item' || row.kind === 'tombstone'
-        ? [row.itemId]
-        : row.kind === 'lifecycle-batch'
-          ? row.mutations.map((m) => m.itemId)
-          : row.kind === 'submission' || row.kind === 'dispatch'
-            ? [agentJournalSubmissionKey(row.clientMessageId)]
-            : []
-    for (const raw of ids) {
-      const id = state.aliases.get(raw) ?? raw
+      row.kind === 'submission' || row.kind === 'dispatch'
+        ? [agentJournalSubmissionKey(row.clientMessageId)]
+        : journalChangedItemIds(state, row)
+    for (const id of ids) {
       this.update(state, id)
       for (const dependent of this.dependents.get(id) ?? []) {
         this.update(state, dependent)
@@ -115,7 +111,9 @@ export class JournalUsageLimitCutIndex {
       item.turnScope?.kind === 'turn' &&
       fact?.kind === 'usageLimitReached'
     ) {
-      const target = state.aliases.get(item.turnScope.turnItemId) ?? item.turnScope.turnItemId
+      const target = state.items.has(item.turnScope.turnItemId)
+        ? item.turnScope.turnItemId
+        : (state.aliases.get(item.turnScope.turnItemId) ?? item.turnScope.turnItemId)
       const source = { item, failedAt: 0, ordinary: true, relevant: true }
       this.reports.set(itemId, { target, source })
       this.limits.set(target, putTurnSource(this.limits.get(target), source, false))

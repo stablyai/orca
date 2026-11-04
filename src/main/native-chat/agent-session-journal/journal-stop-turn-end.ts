@@ -53,13 +53,18 @@ function stopEndsTurnAsCancellation(
   turnId: string,
   endedAt?: number,
   userItemId?: string,
-  ownerFence?: number
+  ownerFence?: number,
+  itemId?: string
 ): boolean {
   const opener = turnOpeningClientId(state, userItemId)
+  const current =
+    itemId === undefined
+      ? state.derivedTurnScope.cancellations.turn(turnId)
+      : state.derivedTurnScope.cancellations.forItem(itemId)
   return activeCancellations(state).some(
     (stop) =>
       (ownerFence === undefined || stop.target?.ownerFence === ownerFence) &&
-      (stop.target?.turnId === turnId ||
+      ((current?.executionId !== undefined && stop.target?.executionId === current.executionId) ||
         (opener !== undefined && stop.target?.clientMessageId === opener)) &&
       (endedAt === undefined || endedAt >= stop.event.at)
   )
@@ -85,12 +90,7 @@ export function beginJournalStopSettle(
 ): JournalStopSettle | null {
   const pending = activeCancellations(state)
   const stop =
-    sequence === undefined
-      ? (pending.at(-1) ?? state.queuePauseMarks.latestStop)
-      : (pending.find((entry) => entry.sequence === sequence) ??
-        (state.queuePauseMarks.latestStop?.sequence === sequence
-          ? state.queuePauseMarks.latestStop
-          : null))
+    sequence === undefined ? pending.at(-1) : pending.find((entry) => entry.sequence === sequence)
   if (!stop || !stopIsAPersons(stop.event.reason)) {
     return null
   }
@@ -121,7 +121,8 @@ export function turnEndAfterStop(
     body.turnId,
     body.completedAt,
     body.userItemId,
-    ownerFence
+    ownerFence,
+    itemId
   )
     ? { ...body, outcome: 'cancellation' }
     : body

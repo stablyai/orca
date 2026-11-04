@@ -60,6 +60,7 @@ const pauseMarks = z.object({
         target: z
           .object({
             ownerFence: number,
+            executionId: z.string().optional(),
             turnId: z.string().optional(),
             clientMessageId: z.string().optional()
           })

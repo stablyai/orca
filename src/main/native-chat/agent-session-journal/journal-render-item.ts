@@ -21,6 +21,7 @@ export function journalRenderItem(
   sequenceIndex = 0
 ): JournalOwnedItem {
   return {
+    ...(row.kind === 'item' && row.executionOrigin ? { executionOrigin: row.executionOrigin } : {}),
     ...(row.kind === 'item' && row.executionInterruption
       ? { executionInterruption: row.executionInterruption }
       : {}),

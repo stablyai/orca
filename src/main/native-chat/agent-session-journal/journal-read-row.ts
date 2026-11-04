@@ -2,6 +2,7 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalOutcomeSource } from './journal-outcome-format'
 import { decodingOutcome, JournalOutcomeDecodeError } from './journal-outcome-codec'
+import { isJournalExecutionAlias } from './journal-execution-item'
 
 /** In-process change index only; the public wire still contains items and submissions. */
 export type JournalOutcomeReadRow = {
@@ -28,7 +29,7 @@ export function readJournalOutcomeGroups(
     WHERE generation = ? AND seq > ? AND seq <= ? ORDER BY seq LIMIT ?`)
     .all(source.generation, after, source.through, limit ?? -1)
   const touched = db.prepare(`SELECT field, entry_key FROM journal_outcomes
-    WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions') ORDER BY field, entry_key`)
+    WHERE generation = ? AND seq = ? AND field IN ('items', 'submissions', 'aliases') ORDER BY field, entry_key`)
   return groups.map(({ seq }) => {
     if (typeof seq !== 'number') {
       throw new JournalOutcomeDecodeError('invalid journal outcome group')
@@ -37,9 +38,9 @@ export function readJournalOutcomeGroups(
     const submissionIds: string[] = []
     for (const entry of touched.iterate(source.generation, seq)) {
       const key = publicOutcomeKey(entry.entry_key)
-      if (entry.field === 'items') {
+      if (entry.field === 'items' || (entry.field === 'aliases' && !isJournalExecutionAlias(key))) {
         itemIds.push(key)
-      } else {
+      } else if (entry.field === 'submissions') {
         submissionIds.push(key)
       }
     }

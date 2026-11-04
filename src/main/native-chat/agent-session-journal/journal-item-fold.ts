@@ -110,7 +110,7 @@ export function removeJournalItem(
     const turn = readAgentJournalTurn(existing.body)
     const turnId = turn?.turnId
     const target =
-      turnId === undefined ? undefined : state.derivedTurnScope.cancellations.turn(turnId)
+      turnId === undefined ? undefined : state.derivedTurnScope.cancellations.forItem(itemId)
     const clientMessageId =
       target?.clientMessageId ?? turnOpeningClientId(state, turn?.userItemId ?? itemId)
     const anchorId = target && state.derivedTurnScope.cancellations.anchor(target)
@@ -122,8 +122,8 @@ export function removeJournalItem(
       turnId === undefined &&
       existing.executionInterruption?.target.turnId !== undefined
     ) {
-      const survivorId = state.derivedTurnScope.cancellations.turnItem(
-        existing.executionInterruption.target.turnId
+      const survivorId = state.derivedTurnScope.cancellations.executionItem(
+        existing.executionInterruption.target
       )
       const survivor = survivorId === undefined ? undefined : state.items.get(survivorId)
       if (survivor && survivor.itemId !== itemId) {
@@ -136,7 +136,12 @@ export function removeJournalItem(
     if (turnId !== undefined && clientMessageId !== undefined) {
       state.derivedTurnScope.cancellations.retireSubmission(state, clientMessageId)
     }
-    state.derivedTurnScope.cancellations.remove(turnId, clientMessageId)
+    if (
+      turnId !== undefined ||
+      state.derivedTurnScope.cancellations.forItem(itemId)?.turnId === undefined
+    ) {
+      state.derivedTurnScope.cancellations.remove(turnId, clientMessageId, target)
+    }
     if (turnId !== undefined) {
       state.removedTurnIds.add(turnId)
     }
@@ -145,16 +150,9 @@ export function removeJournalItem(
   state.items.delete(itemId)
   state.itemFences.delete(itemId)
   state.itemExecutionOwners.delete(itemId)
-  const removedOpener = turnOpeningClientId(state, itemId)
-  const survivingTurn =
-    existing?.executionInterruption?.target.turnId ??
-    (removedOpener === undefined
-      ? undefined
-      : state.derivedTurnScope.cancellations.openerTurn(removedOpener))
+  const survivingTarget = state.derivedTurnScope.cancellations.forItem(itemId)
   const survivorId =
-    survivingTurn === undefined
-      ? undefined
-      : state.derivedTurnScope.cancellations.turnItem(survivingTurn)
+    survivingTarget && state.derivedTurnScope.cancellations.executionItem(survivingTarget)
   const survivor = survivorId === undefined ? undefined : state.items.get(survivorId)
   if (survivor) {
     state.derivedTurnScope.cancellations.observeTurn(state, survivor)

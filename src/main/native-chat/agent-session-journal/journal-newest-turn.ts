@@ -1,3 +1,4 @@
+import { journalChangedItemIds } from './journal-item-address'
 import { JournalUsageLimitCutIndex } from './journal-usage-limit-cut-index'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -57,15 +58,9 @@ export class JournalNewestTurn {
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
     this.usageLimitCut.afterRow(state, row)
-    const itemIds =
-      row.kind === 'item' || row.kind === 'tombstone'
-        ? [row.itemId]
-        : row.kind === 'lifecycle-batch'
-          ? row.mutations.map((mutation) => mutation.itemId)
-          : []
+    const itemIds = journalChangedItemIds(state, row)
     const touched = new Set<string>()
-    for (const raw of itemIds) {
-      const itemId = state.aliases.get(raw) ?? raw
+    for (const itemId of itemIds) {
       const item = state.items.get(itemId)
       const prior = this.sources.get(itemId)
       if (prior && !isTurnOrClear(item)) {
@@ -190,5 +185,7 @@ function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem):
   if (identity?.provider === 'orca' && identity.clientMessageId.startsWith('command-result:')) {
     return null
   }
-  return state.aliases.get(turnScope.turnItemId) ?? turnScope.turnItemId
+  return state.items.has(turnScope.turnItemId)
+    ? turnScope.turnItemId
+    : (state.aliases.get(turnScope.turnItemId) ?? turnScope.turnItemId)
 }

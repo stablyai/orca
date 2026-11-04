@@ -3,6 +3,7 @@ import {
   type JournalOwnedItem
 } from './journal-execution-interruption'
 import { z } from 'zod'
+import { executionOriginSchema } from './journal-execution-item'
 import {
   AgentJournalKnownSchemas,
   AgentJournalRenderItemSchema
@@ -168,7 +169,8 @@ export const storedProviderHandle = z.discriminatedUnion('kind', [
 
 export const storedItem = AgentJournalRenderItemSchema.extend({
   body: storedItemBody,
-  executionInterruption: executionInterruptionSchema.optional()
+  executionInterruption: executionInterruptionSchema.optional(),
+  executionOrigin: executionOriginSchema.optional()
 })
 
 export const storedSubmission = AgentJournalSubmissionSchema.extend({

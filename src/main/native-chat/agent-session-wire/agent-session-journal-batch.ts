@@ -12,6 +12,7 @@ import { isStructuredAgentSessionStopNote } from './structured-agent-session-com
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
 import type { JournalReadRow } from '../agent-session-journal/journal-read-row'
 import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
+import { isJournalExecutionItemKey } from '../agent-session-journal/journal-execution-item'
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -35,11 +36,18 @@ export function projectJournalBatch(input: {
   }
   const aliases = submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
+  const touch = (itemId: string) => {
+    const canonical = input.canonicalItemId?.(itemId) ?? aliases.get(itemId) ?? itemId
+    if (isJournalExecutionItemKey(canonical)) {
+      touchedItemIds.add(itemId)
+    }
+    touchedItemIds.add(canonical)
+  }
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
     if (row.kind === 'outcome') {
       for (const itemId of row.itemIds) {
-        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases.get(itemId) ?? itemId)
+        touch(itemId)
       }
       for (const clientMessageId of row.submissionIds) {
         touchedClientMessageIds.add(clientMessageId)
@@ -49,11 +57,7 @@ export function projectJournalBatch(input: {
     }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
-        touchedItemIds.add(
-          input.canonicalItemId?.(mutation.itemId) ??
-            aliases.get(mutation.itemId) ??
-            mutation.itemId
-        )
+        touch(mutation.itemId)
       }
       continue
     }
@@ -62,9 +66,7 @@ export function projectJournalBatch(input: {
       continue
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {
-      touchedItemIds.add(
-        input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
-      )
+      touch(row.itemId)
       continue
     }
     // Queue attempt annotations can change the linked send’s display.

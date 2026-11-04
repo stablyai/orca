@@ -12,6 +12,7 @@ import type { PendingCancellation } from './journal-stop-cancellation'
 
 export type JournalCancellationTarget = {
   ownerFence: number
+  executionId?: string
   turnId?: string
   clientMessageId?: string
 }
@@ -29,135 +30,161 @@ export function turnOpeningClientId(
 }
 type ExecutionTurn = { itemId: string; target: JournalCancellationTarget; active: boolean }
 
-/** Canonical retained ownership and a derived unresolved view; receipts never define execution life. */
+/** Canonical execution identity owns history; native names select only the current generation. */
 export class JournalCancellationTargets {
-  private turns: Record<string, ExecutionTurn> = {}
-  private linked: Record<string, string> = {}
-  private anchors: Record<string, string> = {}
-  private aliases: Record<string, string[]> = {}
-  private rawLinks: Record<string, string> = {}
-  private openers: Record<string, JournalCancellationTarget> = {}
-  private active: Record<string, JournalCancellationTarget> = {}
-  private requests: Record<string, PendingCancellation> = {}
-  private retained: Record<string, JournalCancellationTarget> = {}
+  private turns = new Map<string, ExecutionTurn>()
+  private heads = new Map<string, string>()
+  private roots = new Map<string, string>()
+  private linked = new Map<string, string>()
+  private anchors = new Map<string, string>()
+  private aliases = new Map<string, string[]>()
+  private rawLinks = new Map<string, string>()
+  private openers = new Map<string, JournalCancellationTarget>()
+  private active = new Map<string, JournalCancellationTarget>()
+  private requests = new Map<string, PendingCancellation>()
+  private retained = new Map<string, JournalCancellationTarget>()
 
   turn(turnId: string): JournalCancellationTarget | undefined {
-    return this.turns[`turn:${turnId}`]?.target
+    const id = this.heads.get(turnId)
+    return id === undefined ? undefined : this.turns.get(id)?.target
+  }
+  forItem(itemId: string): JournalCancellationTarget | undefined {
+    const id = this.roots.get(itemId) ?? this.linked.get(itemId)
+    return id === undefined ? this.openers.get(itemId) : this.turns.get(id)?.target
   }
   turnItem(turnId: string): string | undefined {
-    return this.turns[`turn:${turnId}`]?.itemId
+    const id = this.heads.get(turnId)
+    return id === undefined ? undefined : this.turns.get(id)?.itemId
+  }
+  executionItem(target: JournalCancellationTarget): string | undefined {
+    return target.executionId === undefined ? undefined : this.turns.get(target.executionId)?.itemId
   }
   openerTurn(clientMessageId: string): string | undefined {
-    return this.linked[`send:${clientMessageId}`]
+    const id = this.linked.get(agentJournalSubmissionKey(clientMessageId))
+    return id === undefined ? undefined : this.turns.get(id)?.target.turnId
+  }
+  restoreBinding(root: string, opener: string): void {
+    this.roots.set(root, opener)
+    this.linked.set(opener, opener)
   }
   restoreOwner(item: JournalOwnedItem): void {
-    const target = item.executionInterruption?.target
-    if (!target) {
+    const fact = item.executionInterruption
+    if (!fact) {
       return
     }
-    if (target.turnId !== undefined) {
-      this.retained[`turn:${target.turnId}`] = target
-    } else if (target.clientMessageId !== undefined) {
-      const key = `send:${target.clientMessageId}`
-      if (this.linked[key] === undefined) {
-        this.openers[key] = target
-        this.active[key] = target
-      }
-    }
+    const id = fact.target.executionId ?? fact.owner.itemId
+    this.retained.set(item.itemId, { ...fact.target, executionId: id })
+    this.anchors.set(id, item.itemId)
   }
   anchor(target: JournalCancellationTarget): string | undefined {
-    if (target.turnId !== undefined && this.anchors[`turn:${target.turnId}`]) {
-      return this.anchors[`turn:${target.turnId}`]
+    const id = target.executionId
+    if (id !== undefined && this.anchors.has(id)) {
+      return this.anchors.get(id)
     }
-    return target.clientMessageId !== undefined
-      ? agentJournalSubmissionKey(target.clientMessageId)
-      : target.turnId === undefined
-        ? undefined
-        : this.turnItem(target.turnId)
+    if (target.clientMessageId !== undefined) {
+      return agentJournalSubmissionKey(target.clientMessageId)
+    }
+    const canonical = target.turnId === undefined ? undefined : this.turn(target.turnId)
+    return canonical?.executionId === undefined
+      ? undefined
+      : this.anchors.get(canonical.executionId)
   }
-  history(state: JournalReducerState, turnId: string) {
-    const target = this.turn(turnId)
-    const anchor = target && this.anchor(target)
+  history(state: JournalReducerState, itemOrTurnId: string) {
+    const id =
+      this.roots.get(itemOrTurnId) ?? this.linked.get(itemOrTurnId) ?? this.heads.get(itemOrTurnId)
+    const anchor = id === undefined ? undefined : this.anchors.get(id)
     const fact = anchor === undefined ? undefined : state.items.get(anchor)?.executionInterruption
-    return fact?.target.ownerFence === target?.ownerFence && fact?.target.turnId === turnId
-      ? fact
-      : undefined
+    return fact && (fact.target.executionId ?? fact.owner.itemId) === id ? fact : undefined
   }
   pending(): PendingCancellation[] {
-    return Object.values(this.requests)
+    return [...this.requests.values()]
   }
   unresolved(): JournalCancellationTarget[] {
-    return Object.values(this.active)
+    return [...this.active.values()]
   }
 
   observeTurn(state: JournalReducerState, item: JournalOwnedItem): void {
     this.restoreOwner(item)
     const turn = readAgentJournalTurn(item.body)
     if (!turn) {
+      const fact = item.executionInterruption
+      if (fact && fact.target.turnId === undefined && fact.target.clientMessageId !== undefined) {
+        const target = { ...fact.target, executionId: fact.target.executionId ?? fact.owner.itemId }
+        this.openers.set(item.itemId, target)
+        this.active.set(target.executionId, target)
+      }
       this.refresh(state, item.itemId)
       return
     }
     const ownerFence = journalItemExecutionFence(state, item.itemId) ?? 0
-    const retained = this.retained[`turn:${turn.turnId}`]
-    const prior = this.turn(turn.turnId)
-    const previousAnchor = prior && this.anchor(prior)
-    if (prior && prior.ownerFence !== ownerFence && previousAnchor !== undefined) {
-      delete this.requests[previousAnchor]
-    }
+    const prior = this.roots.get(item.itemId)
+    const priorLife = prior === undefined ? undefined : this.turns.get(prior)
     const clientMessageId =
-      (retained?.ownerFence === ownerFence ? retained.clientMessageId : undefined) ??
-      (prior?.ownerFence === ownerFence ? prior.clientMessageId : undefined) ??
-      turnOpeningClientId(state, turn.userItemId)
-    const target = {
-      turnId: turn.turnId,
-      ownerFence,
-      ...(clientMessageId !== undefined ? { clientMessageId } : {})
-    }
-    if (turn.userItemId !== undefined) {
-      this.rawLinks[turn.userItemId] = turn.turnId
-    }
+      turnOpeningClientId(state, turn.userItemId) ??
+      priorLife?.target.clientMessageId ??
+      (prior === undefined ? undefined : this.retained.get(prior)?.clientMessageId) ??
+      item.executionInterruption?.target.clientMessageId
     const openerKey =
       clientMessageId === undefined ? undefined : agentJournalSubmissionKey(clientMessageId)
-    this.anchors[`turn:${turn.turnId}`] =
-      openerKey !== undefined && state.items.has(openerKey) ? openerKey : item.itemId
+    const opener = openerKey === undefined ? undefined : state.items.get(openerKey)
+    const saved =
+      this.retained.get(item.itemId) ??
+      (openerKey === undefined ? undefined : this.retained.get(openerKey))
+    const linked = openerKey === undefined ? undefined : this.linked.get(openerKey)
+    const ownsOpener =
+      opener &&
+      (linked === undefined || linked === prior) &&
+      (journalItemExecutionFence(state, opener.itemId) ?? ownerFence) === ownerFence
+    const id =
+      prior ??
+      (saved?.ownerFence === ownerFence ? saved.executionId : undefined) ??
+      (ownsOpener ? opener.itemId : item.itemId)
+    const target: JournalCancellationTarget = {
+      executionId: id,
+      turnId: turn.turnId,
+      ownerFence,
+      ...(clientMessageId === undefined ? {} : { clientMessageId })
+    }
+    const rememberedAnchor = this.anchors.get(id)
+    const anchorId = ownsOpener
+      ? opener.itemId
+      : rememberedAnchor && state.items.has(rememberedAnchor)
+        ? rememberedAnchor
+        : item.itemId
+    this.roots.set(item.itemId, id)
+    this.anchors.set(id, anchorId)
     const active = turn.state === 'running' || turn.state === 'unverifiable'
-    this.turns[`turn:${turn.turnId}`] = { itemId: item.itemId, target, active }
-    if (clientMessageId !== undefined) {
-      this.linked[`send:${clientMessageId}`] = turn.turnId
-      delete this.openers[`send:${clientMessageId}`]
-      delete this.active[`send:${clientMessageId}`]
+    this.turns.set(id, { itemId: item.itemId, target, active })
+    const providerId = item.executionOrigin?.providerItemId ?? item.itemId
+    if ((state.aliases.get(providerId) ?? providerId) === item.itemId) {
+      this.heads.set(turn.turnId, id)
     }
-    if (active && !state.removedTurnIds.has(turn.turnId)) {
-      this.active[`turn:${turn.turnId}`] = target
+    if (turn.userItemId !== undefined) {
+      this.rawLinks.set(turn.userItemId, id)
+    }
+    if (openerKey !== undefined && (linked === undefined || linked === id)) {
+      this.linked.set(openerKey, id)
+      this.openers.delete(openerKey)
+      this.active.delete(openerKey)
+    }
+    if (active) {
+      this.active.set(id, target)
     } else {
-      delete this.active[`turn:${turn.turnId}`]
+      this.active.delete(id)
     }
-    const anchorId = this.anchor(target)
-    const anchor = anchorId === undefined ? undefined : state.items.get(anchorId)
+    const anchor = state.items.get(anchorId)
     const fact = anchor?.executionInterruption ?? item.executionInterruption
-    if (fact && anchor && anchor.itemId !== item.itemId && item.executionInterruption) {
-      const { executionInterruption: _moved, ...provider } = item
-      state.items.set(item.itemId, provider)
-      state.items.set(anchor.itemId, {
+    if (fact && anchor && (fact.target.executionId ?? fact.owner.itemId) === id) {
+      if (anchorId !== item.itemId && item.executionInterruption) {
+        const { executionInterruption: _moved, ...provider } = item
+        state.items.set(item.itemId, provider)
+      }
+      state.items.set(anchorId, {
         ...anchor,
         executionInterruption: { ...fact, target: { ...target } }
       })
-      delete this.requests[item.itemId]
     }
-    if (
-      fact &&
-      anchor &&
-      fact.target.ownerFence === target.ownerFence &&
-      fact.target.turnId !== turn.turnId
-    ) {
-      state.items.set(anchor.itemId, {
-        ...anchor,
-        executionInterruption: { ...fact, target: { ...fact.target, turnId: turn.turnId } }
-      })
-    }
-    if (anchorId !== undefined) {
-      this.refresh(state, anchorId)
-    }
+    this.refresh(state, anchorId)
   }
 
   observeSubmission(
@@ -165,64 +192,61 @@ export class JournalCancellationTargets {
     submission: AgentJournalSubmission,
     item?: JournalOwnedItem
   ): void {
-    const id = submission.clientMessageId
-    const rawTurn =
-      submission.providerItemId === null ? undefined : this.rawLinks[submission.providerItemId]
-    const rawItemId = rawTurn === undefined ? undefined : this.turnItem(rawTurn)
-    const rawItem = rawItemId === undefined ? undefined : state.items.get(rawItemId)
+    const key = agentJournalSubmissionKey(submission.clientMessageId)
+    const rawId =
+      submission.providerItemId === null ? undefined : this.rawLinks.get(submission.providerItemId)
+    const rawRoot = rawId === undefined ? undefined : this.turns.get(rawId)?.itemId
+    const rawItem = rawRoot === undefined ? undefined : state.items.get(rawRoot)
     if (rawItem) {
       this.observeTurn(state, rawItem)
     }
-    const key = `send:${id}`
-    const opener = item ?? state.items.get(agentJournalSubmissionKey(id))
+    const opener = item ?? state.items.get(key)
     if (
-      this.linked[key] !== undefined ||
+      this.linked.has(key) ||
       (submission.dispatchState === 'rejected' &&
         agentJournalSubmissionProvenUnwritten(submission)) ||
       opener?.turnScope?.kind === 'turn'
     ) {
-      delete this.openers[key]
-      delete this.active[key]
+      this.openers.delete(key)
+      this.active.delete(key)
     } else if (opener && (submission.handedOverAt !== undefined || !submission.handoverRecorded)) {
       const target = {
+        executionId: key,
         ownerFence: journalItemExecutionFence(state, opener.itemId) ?? submission.fence,
-        clientMessageId: id
+        clientMessageId: submission.clientMessageId
       }
-      this.openers[key] = target
-      this.active[key] = target
+      this.openers.set(key, target)
+      this.anchors.set(key, key)
+      this.active.set(key, target)
     }
-    this.refresh(state, agentJournalSubmissionKey(id))
+    this.refresh(state, key)
   }
 
   refresh(state: JournalReducerState, anchorId: string): void {
     const fact = state.items.get(anchorId)?.executionInterruption
-    const target = fact?.target
-    const life = target?.turnId === undefined ? undefined : this.turns[`turn:${target.turnId}`]
-    const unresolved =
-      target &&
-      (life
-        ? life.active &&
-          life.target.ownerFence === target.ownerFence &&
-          !state.removedTurnIds.has(life.target.turnId!)
-        : (target.turnId === undefined || !state.removedTurnIds.has(target.turnId)) &&
-          target.clientMessageId !== undefined &&
-          this.openers[`send:${target.clientMessageId}`] !== undefined)
-    if (!fact || !unresolved) {
-      delete this.requests[anchorId]
+    const id = fact && (fact.target.executionId ?? fact.owner.itemId)
+    const life = id === undefined ? undefined : this.turns.get(id)
+    if (!fact || id === undefined || !(life ? life.active : this.openers.has(id))) {
+      if (id !== undefined) {
+        this.requests.delete(id)
+      }
       return
     }
-    const prior = this.requests[anchorId]
-    this.requests[anchorId] = {
+    const prior = this.requests.get(id)
+    this.requests.set(id, {
       sequence: fact.sequence,
       event: fact.first.event,
       target: fact.target,
       observedAt: fact.observedAt,
       ...(prior?.settle ? { settle: prior.settle } : {})
-    }
+    })
   }
-
   rememberAlias(alias: string, itemId: string): void {
-    const entries = (this.aliases[itemId] ??= [])
+    let entries = this.aliases.get(itemId)
+    if (!entries) {
+      entries = []
+      this.aliases.set(itemId, entries)
+    }
     if (!entries.includes(alias)) {
       entries.push(alias)
     }
@@ -231,29 +255,25 @@ export class JournalCancellationTargets {
     const key = agentJournalSubmissionKey(clientMessageId)
     state.submissions.delete(clientMessageId)
     state.receipts.delete(clientMessageId)
-    for (const alias of this.aliases[key] ?? []) {
+    for (const alias of this.aliases.get(key) ?? []) {
       state.aliases.delete(alias)
     }
-    delete this.aliases[key]
+    this.aliases.delete(key)
   }
-
-  remove(turnId?: string, clientMessageId?: string): void {
-    const target = turnId === undefined ? undefined : this.turn(turnId)
-    const anchorId = target
-      ? this.anchor(target)
-      : clientMessageId === undefined
-        ? undefined
-        : agentJournalSubmissionKey(clientMessageId)
-    if (anchorId !== undefined) {
-      delete this.requests[anchorId]
+  remove(turnId?: string, clientMessageId?: string, exact?: JournalCancellationTarget): void {
+    const target = exact ?? (turnId === undefined ? undefined : this.turn(turnId))
+    const id =
+      target?.executionId ??
+      (clientMessageId === undefined ? undefined : agentJournalSubmissionKey(clientMessageId))
+    if (id === undefined) {
+      return
     }
-    if (turnId !== undefined) {
-      delete this.turns[`turn:${turnId}`]
-      delete this.active[`turn:${turnId}`]
-    }
-    if (clientMessageId !== undefined) {
-      delete this.openers[`send:${clientMessageId}`]
-      delete this.active[`send:${clientMessageId}`]
+    this.requests.delete(id)
+    this.active.delete(id)
+    this.turns.delete(id)
+    this.openers.delete(id)
+    if (turnId !== undefined && this.heads.get(turnId) === id) {
+      this.heads.delete(turnId)
     }
   }
   capture(ownerFence: number, turnId?: string): JournalCancellationTarget[] {
@@ -261,22 +281,8 @@ export class JournalCancellationTargets {
       const target = this.turn(turnId)
       return target ? [target] : []
     }
-    return Object.values(this.active).filter((target) => target.ownerFence === ownerFence)
+    return [...this.active.values()].filter((target) => target.ownerFence === ownerFence)
   }
 }
-export function restoreJournalCancellationTargets(state: JournalReducerState): void {
-  const targets = new JournalCancellationTargets()
-  state.derivedTurnScope.cancellations = targets
-  for (const [alias, itemId] of state.aliases) {
-    targets.rememberAlias(alias, itemId)
-  }
-  for (const item of state.items.values()) {
-    targets.restoreOwner(item)
-  }
-  for (const item of state.items.values()) {
-    targets.observeTurn(state, item)
-  }
-  for (const submission of state.submissions.values()) {
-    targets.observeSubmission(state, submission)
-  }
-}
+
+export { restoreJournalCancellationTargets } from './journal-cancellation-restore'

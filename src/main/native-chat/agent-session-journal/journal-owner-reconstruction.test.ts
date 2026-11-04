@@ -162,7 +162,7 @@ it('standalone founding-item replay restores an interrupted pre-ID owner without
     expect(replay.state.submissions.size).toBe(0)
     expect(replay.state.derivedTurnScope.cancellations.pending()).toEqual(expected)
     expect(replay.state.derivedTurnScope.cancellations.unresolved()).toEqual([
-      { clientMessageId: 'report', ownerFence: 0 }
+      { clientMessageId: 'report', ownerFence: 0, executionId: openerId }
     ])
   } finally {
     await f.dispose()
@@ -185,18 +185,31 @@ it('reusing the provider turn under a new execution owner cannot inherit the old
       { kind: 'turn', turnId: 'B', state: 'running' },
       replacement
     )
-    expect(f.journal.stopMarks.cancellations()).toEqual([])
+    const freshId = f.journal.canonicalItemId(turnId)
+    expect(freshId).not.toBe(turnId)
+    expect(f.journal.stopMarks.cancellations()).toMatchObject([
+      { target: { executionId: openerId, ownerFence: 0 } }
+    ])
     expect(f.journal.stopMarks.personStopDecides('B')).toBe(false)
-    expect(f.journal.stopMarks.userStopRequestedForItem(turnId)).toBe(false)
+    expect(f.journal.stopMarks.userStopRequestedForItem(freshId)).toBe(false)
+    // The old child can still finish its own execution after the new child took the provider slot.
+    await f.journal.appendItem(
+      turnIdentity,
+      { kind: 'turn', turnId: 'B', state: 'interrupted', userItemId: openerId },
+      { ...options, fence: 1, executionOwner: 0 }
+    )
+    expect(f.journal.itemBody(turnId)).toMatchObject({ outcome: 'cancellation' })
+    expect(f.journal.stopMarks.cancellations()).toEqual([])
     await f.journal.appendItem(
       turnIdentity,
       { kind: 'turn', turnId: 'B', state: 'interrupted' },
       replacement
     )
-    expect(f.journal.itemBody(turnId)).not.toHaveProperty('outcome', 'cancellation')
+    expect(f.journal.itemBody(freshId)).not.toHaveProperty('outcome', 'cancellation')
     await f.restart()
     expect(f.journal.stopMarks.cancellations()).toEqual([])
-    expect(f.journal.stopMarks.userStopRequestedForItem(turnId)).toBe(false)
+    expect(f.journal.stopMarks.userStopRequestedForItem(freshId)).toBe(false)
+    expect(f.journal.stopMarks.userStopRequestedForItem(turnId)).toBe(true)
   } finally {
     await f.dispose()
   }

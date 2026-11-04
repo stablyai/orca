@@ -6,6 +6,7 @@ import type { JournalCancellationTarget } from './journal-cancellation-targets'
 import { restoreJournalCancellationTargets } from './journal-cancellation-targets'
 import type { JournalStopSettle } from './queued-message-pause'
 import type { AcceptedInterruption, ExecutionInterruption } from './journal-execution-interruption'
+import { carryJournalExecutionAliases, journalExecutionAlias } from './journal-execution-item'
 
 export type PendingCancellation = {
   sequence: number
@@ -26,8 +27,15 @@ export function executionCancellation(
   state: Pick<JournalReducerState, 'derivedTurnScope'>,
   turnId: string | null
 ): PendingCancellation | undefined {
+  const target =
+    turnId === null
+      ? undefined
+      : (state.derivedTurnScope.cancellations.forItem(turnId) ??
+        state.derivedTurnScope.cancellations.turn(turnId))
   return activeCancellations(state).find((entry) =>
-    turnId === null ? entry.settle?.settling === true : entry.target?.turnId === turnId
+    turnId === null
+      ? entry.settle?.settling === true
+      : target?.executionId !== undefined && entry.target?.executionId === target.executionId
   )
 }
 
@@ -56,7 +64,9 @@ export function recordStopCancellations(
       event: { ...saved, reason: event.reason }
     }
     const previous =
-      anchor.executionInterruption?.target.ownerFence === target.ownerFence
+      anchor.executionInterruption &&
+      (anchor.executionInterruption.target.executionId ??
+        anchor.executionInterruption.owner.itemId) === target.executionId
         ? anchor.executionInterruption
         : undefined
     const fact: ExecutionInterruption = {
@@ -94,15 +104,18 @@ export function carryStopCancellations(
   state: JournalReducerState,
   _items: Iterable<AgentJournalRenderItem>
 ): void {
+  carryJournalExecutionAliases(previous, state)
+  restoreJournalCancellationTargets(state)
   for (const item of previous.items.values()) {
     const fact = item.executionInterruption
     if (!fact) {
       continue
     }
     const target =
-      fact.target.turnId === undefined
+      state.derivedTurnScope.cancellations.forItem(item.itemId) ??
+      (fact.target.executionId === undefined
         ? undefined
-        : state.derivedTurnScope.cancellations.turn(fact.target.turnId)
+        : state.derivedTurnScope.cancellations.forItem(fact.target.executionId))
     if (fact.target.turnId !== undefined && !target) {
       if (fact.target.clientMessageId !== undefined) {
         state.derivedTurnScope.cancellations.retireSubmission(state, fact.target.clientMessageId)
@@ -118,7 +131,12 @@ export function carryStopCancellations(
     if (!anchor || (target && target.ownerFence !== fact.target.ownerFence)) {
       continue
     }
-    const moved = { ...fact, target: target ? { ...target } : { ...fact.target } }
+    const moved = {
+      ...fact,
+      target: target
+        ? { ...target, executionId: fact.target.executionId ?? fact.owner.itemId }
+        : { ...fact.target }
+    }
     state.items.set(anchor.itemId, { ...anchor, executionInterruption: moved })
     const id = fact.target.clientMessageId
     if (fact.target.turnId === undefined && id !== undefined) {
@@ -188,6 +206,14 @@ function legacyStopTarget(state: JournalReducerState, turnId: string, sequence: 
   const target = index.turn(turnId)
   const itemId = index.turnItem(turnId)
   const item = itemId === undefined ? undefined : state.items.get(itemId)
+  const providerId = item?.executionOrigin?.providerItemId ?? itemId
+  if (
+    providerId !== undefined &&
+    target !== undefined &&
+    state.aliases.has(journalExecutionAlias(providerId, target.ownerFence))
+  ) {
+    return undefined
+  }
   return item &&
     item.sequence <= sequence &&
     state.itemFences.get(item.itemId) === target?.ownerFence

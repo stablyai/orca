@@ -1,7 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import { restoreJournal } from '../agent-session-journal/journal-open'
 import { renderJournalState } from '../agent-session-journal/journal-reducer'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   latestNativeChatUsageLimitCut,
   type NativeChatUsageLimitCut
@@ -15,13 +14,10 @@ export function readSavedUsageLimitCut(
   const load = restoreJournal(db, id)
   const snapshot = load && !load.newer && !load.damage ? renderJournalState(load.state) : null
   const cut = snapshot ? latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions) : null
-  const turnId =
-    cut && load && readAgentJournalTurn(load.state.items.get(cut.turnItemId)?.body)?.turnId
   return cut && load
     ? {
         ...cut,
-        ...(turnId &&
-        load.state.derivedTurnScope.cancellations.history(load.state, turnId)?.userStop
+        ...(load.state.derivedTurnScope.cancellations.history(load.state, cut.turnItemId)?.userStop
           ? { personalStop: true as const }
           : {})
       }

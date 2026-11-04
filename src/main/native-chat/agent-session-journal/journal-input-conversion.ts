@@ -1,3 +1,4 @@
+import { copyJournalExecutionRemovals } from './journal-execution-restatement'
 import { normalizeStopCancellations } from './journal-stop-cancellation'
 import { restoreJournalCancellationTargets } from './journal-cancellation-targets'
 import { readJournalLegacyCards } from './journal-queue-import'
@@ -94,6 +95,7 @@ export function copyJournalNativeState(
   previous: JournalReducerState,
   state: JournalReducerState
 ): void {
+  copyJournalExecutionRemovals(previous, state)
   for (const [id, own] of previous.inputEntries) {
     state.inputEntries.set(id, {
       ...own,

@@ -1,4 +1,5 @@
 import { executionInterruptionSchema } from './journal-execution-interruption'
+import { executionOriginSchema } from './journal-execution-item'
 import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
@@ -38,7 +39,8 @@ const provenance = {
   ownerFence: value,
   executionOwner: value,
   echoOf: value,
-  executionInterruption: executionInterruptionSchema.optional()
+  executionInterruption: executionInterruptionSchema.optional(),
+  executionOrigin: executionOriginSchema.optional()
 }
 const legacyOptions = z.record(z.string(), z.unknown()).optional()
 

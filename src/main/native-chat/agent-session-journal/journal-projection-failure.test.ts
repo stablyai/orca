@@ -52,24 +52,32 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     projectionEpochRow,
     {
       ...base(2),
+      kind: 'item',
+      itemId: 'running',
+      revision: 1,
+      body: { kind: 'turn', turnId: 'running', state: 'running' },
+      turnScope: { kind: 'thread' }
+    },
+    {
+      ...base(3),
       kind: 'tombstone',
       itemId: 'stop',
       revision: 1,
-      stopEvent: { reason: 'user-stop', at: 1_002 }
+      stopEvent: { reason: 'user-stop', turnId: 'running', at: 1_002 }
     },
     ...['C', 'D'].map((id, i): JournalRow => ({
-      ...base(i + 3),
+      ...base(i + 4),
       kind: 'queue',
       messageId: id,
       change: {
         op: 'queued',
         body: id === 'C' ? { ...user, command: { name: 'compact' } } : user,
         position: i,
-        queuedAt: { epoch, sequence: i + 3 }
+        queuedAt: { epoch, sequence: i + 4 }
       }
     })),
     {
-      ...base(5),
+      ...base(6),
       kind: 'submission',
       clientMessageId: 'legacy',
       body: user,
@@ -82,6 +90,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   const writer = rig.writer
   const stops = new JournalStopMarks({ state: rig.state })
   const settle = stops.beginSettle(true)
+  expect(settle).not.toBeNull()
   const send =
     (id: string) =>
     (seq: number, ts: number): JournalRow => ({
@@ -106,10 +115,10 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     },
     committed: vi.fn()
   }
-  await expect(writer.enqueue(send('preserved'), receipt)).resolves.toMatchObject({ seq: 6 })
+  await expect(writer.enqueue(send('preserved'), receipt)).resolves.toMatchObject({ seq: 7 })
   expect(receipt.committed).toHaveBeenCalledOnce()
   expect(rig.state().submissions.has('preserved')).toBe(true)
-  expect(stops.latest()?.settle).toBe(settle)
+  expect(stops.cancellations()[0]?.settle).toBe(settle)
   expectProjectionMatches(database, rig.state())
   database.db
     .prepare(`INSERT INTO queued_messages
@@ -183,7 +192,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
     expect(rig.state()).toBe(live)
     expect(encodeJournalState(live)).toEqual(saved)
     expect(receipt.committed).toHaveBeenCalledOnce()
-    expect(stops.latest()?.settle).toBe(settle)
+    expect(stops.cancellations()[0]?.settle).toBe(settle)
     expectProjectionMatches(database, live)
   }
   const exec = database.db.exec.bind(database.db)
@@ -198,7 +207,7 @@ it('adopts nothing on an outcome, coverage, receipt, outer-abort or COMMIT failu
   unchanged()
   expect(rig.state()).toBe(live)
   expect(encodeJournalState(live)).toEqual(saved)
-  expect(stops.latest()?.settle).toBe(settle)
+  expect(stops.cancellations()[0]?.settle).toBe(settle)
   expect(receipt.committed).toHaveBeenCalledOnce()
   expect(database.db.prepare('SELECT COUNT(*) AS n FROM test_receipts').get()?.n).toBe(1)
   expectProjectionMatches(database, live)

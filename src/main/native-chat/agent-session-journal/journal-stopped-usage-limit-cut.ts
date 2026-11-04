@@ -54,10 +54,7 @@ export function journalStoppedUsageLimitCut(
     return undefined
   }
   const cut = input.newestTurn.usageLimitCut.read()
-  const turnId = cut && readAgentJournalTurn(state.items.get(cut.turnItemId)?.body)?.turnId
-  return cut &&
-    turnId !== undefined &&
-    state.derivedTurnScope.cancellations.history(state, turnId)?.userStop
+  return cut && state.derivedTurnScope.cancellations.history(state, cut.turnItemId)?.userStop
     ? cut
     : undefined
 }

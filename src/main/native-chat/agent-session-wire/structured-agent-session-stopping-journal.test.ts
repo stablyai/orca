@@ -109,21 +109,24 @@ describe("a person's Stop's Stopping", () => {
     expect(lowestRead).toBe(turnIndex)
   })
 
-  it('holds while a Stop that named no turn settles, and after only for the turn it bound', async () => {
+  it('an empty Stop never binds later work, while a fresh unnamed Stop captures that work', async () => {
     await journal.appendStopEvent({ reason: 'user-stop' }, FENCE)
     const settle = journal.stopMarks.beginSettle()
-    expect(stopping()).toBe(true)
+    expect(settle).toBeNull()
+    expect(stopping()).toBe(false)
 
     journal.stopMarks.settled(settle)
     expect(stopping()).toBe(false)
     await turn('turn-1', 'running')
     expect(stopping()).toBe(false)
 
+    await journal.appendStopEvent({ reason: 'user-stop' }, FENCE)
     journal.stopMarks.settled(journal.stopMarks.beginSettle(), 'turn-1')
     expect(stopping()).toBe(true)
   })
 
   it('tells its settle readers of each edge, which writes no row and so is no commit', async () => {
+    await turn('turn-1', 'running')
     await journal.appendStopEvent({ reason: 'user-stop' }, FENCE)
     const before = journal.stopMarks.revision()
     let commits = 0

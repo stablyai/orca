@@ -1,6 +1,7 @@
 import { journalItemEchoRestatement, type JournalItemEcho } from './journal-item-echo'
 // ownerFence preserves creation provenance; executionOwner tracks later runs resuming reusable children.
 
+import type { JournalItemProvenance } from './journal-execution-interruption'
 import type { JournalReducerState } from './journal-reducer'
 
 export function journalItemExecutionFence(
@@ -11,10 +12,13 @@ export function journalItemExecutionFence(
 }
 
 export function journalItemProvenance(
-  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners' | 'itemEchoes'>,
+  state: Pick<JournalReducerState, 'itemFences' | 'itemExecutionOwners' | 'itemEchoes' | 'items'>,
   itemId: string
-): JournalItemEcho & { ownerFence?: number; executionOwner?: number } {
+): JournalItemEcho & JournalItemProvenance {
   return {
+    ...(state.items.get(itemId)?.executionOrigin
+      ? { executionOrigin: state.items.get(itemId)!.executionOrigin }
+      : {}),
     ...journalItemEchoRestatement(state.itemEchoes, itemId),
     ownerFence: state.itemFences.get(itemId),
     executionOwner: state.itemExecutionOwners.get(itemId)

@@ -1,5 +1,4 @@
 import { journalInputOrder } from './journal-input-order'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 // Additive tombstone fields keep Stop/Resume/reopen marks compatible with older row-kind readers.
 
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -82,19 +81,23 @@ export function journalStopEventRowBuilder(
     event.reason === 'user-stop' && !(input.sendingSubmissions().length > 0)
       ? input.newestTurn.usageLimitCut.read()
       : undefined
-  const targetTurn =
-    event.turnId ??
-    (cut ? readAgentJournalTurn(current.items.get(cut.turnItemId)?.body)?.turnId : undefined)
-  const targets = current.derivedTurnScope.cancellations
-    .capture(fence, targetTurn)
-    .map((target) => ({ ...target }))
+  const index = current.derivedTurnScope.cancellations
+  const targets = index.capture(fence, event.turnId).map((target) => ({ ...target }))
+  const historical = cut && index.forItem(cut.turnItemId)
+  if (
+    event.turnId === undefined &&
+    historical &&
+    !targets.some((entry) => entry.executionId === historical.executionId)
+  ) {
+    targets.push({ ...historical })
+  }
   return (seq, ts) =>
     buildJournalStopEventRow({
       state: state(),
       seq,
       fence,
       ts,
-      event: { ...event, ...(targets.length ? { targets } : {}), at: ts }
+      event: { ...event, targets: event.targets ?? targets, at: ts }
     })
 }
 

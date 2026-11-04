@@ -1,4 +1,11 @@
+export { buildJournalTombstoneRow, journalTombstoneRowBuilder } from './journal-tombstone-row'
 import type { ExecutionInterruption } from './journal-execution-interruption'
+import { journalWriteTurnScope } from './journal-write-turn-scope'
+import {
+  journalExecutionAddress,
+  journalExecutionOriginForItem,
+  type JournalExecutionOrigin
+} from './journal-execution-item'
 import { journalInputOrder } from './journal-input-order'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
@@ -25,7 +32,6 @@ import {
   type JournalItemRow,
   type JournalLifecycleBatchRow,
   type JournalSubmissionRow,
-  type JournalTombstoneRow,
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
@@ -84,16 +90,6 @@ export function journalItemRowBuilder(
       turnScope: options.turnScope,
       revisions
     })
-}
-
-export function journalTombstoneRowBuilder(
-  state: () => JournalReducerState,
-  itemId: string,
-  fence: number,
-  revisions?: Map<string, number>
-): RowBuilder<JournalTombstoneRow> {
-  return (seq, ts) =>
-    buildJournalTombstoneRow({ state: state(), itemId, seq, fence, ts, revisions })
 }
 
 export function journalSubmissionRowBuilder(
@@ -226,6 +222,7 @@ export function buildJournalItemRow(
     ownerFence?: number
     executionOwner?: number
     executionInterruption?: ExecutionInterruption
+    executionOrigin?: JournalExecutionOrigin
     ts: number
     recovered?: true
     linkage?: AgentJournalProducerLinkage
@@ -234,50 +231,54 @@ export function buildJournalItemRow(
   }
 ): JournalItemRow {
   const itemId = journalLifecycleMutationItemId(input)
-  const resolved = input.state.aliases.get(itemId) ?? itemId
-  // Recreated items must outrank tombstones or the reducer will discard them.
-  const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = boundRunningToolOutput(
-    turnEndAfterStop(
-      input.state,
-      resolved,
-      input.body,
-      input.executionOwner ??
-        journalItemExecutionFence(input.state, resolved) ??
-        input.ownerFence ??
-        input.fence
-    )
+  const address = journalExecutionAddress(
+    input.state,
+    itemId,
+    input.body,
+    input,
+    input.itemId !== undefined
   )
+  const resolved = address.itemId ?? itemId
+  // Recreated items must outrank tombstones or the reducer will discard them.
+  const revision = nextJournalItemRevision(input.state, resolved, input.revisions)
+  const body = boundRunningToolOutput(
+    address.itemId === undefined
+      ? input.body
+      : turnEndAfterStop(
+          input.state,
+          resolved,
+          input.body,
+          input.executionOwner ??
+            journalItemExecutionFence(input.state, resolved) ??
+            input.ownerFence ??
+            input.fence
+        )
+  )
+  const executionOrigin =
+    input.executionOrigin ??
+    (input.itemId === undefined ? undefined : journalExecutionOriginForItem(input.state, itemId))
   return {
     kind: 'item',
     ...(input.executionInterruption ? { executionInterruption: input.executionInterruption } : {}),
+    ...(executionOrigin ? { executionOrigin } : {}),
     ...journalItemEchoFields(input),
     itemId,
     revision,
     body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
-    ownerFence: journalItemOwnerFence(input.state, resolved, input),
+    ownerFence:
+      address.itemId === undefined
+        ? (input.ownerFence ?? input.fence)
+        : journalItemOwnerFence(input.state, resolved, input),
     ...(input.executionOwner === undefined ? {} : { executionOwner: input.executionOwner }),
     ...(input.recovered ? { recovered: input.recovered } : {}),
-    turnScope: input.turnScope,
+    turnScope: journalWriteTurnScope(
+      input.state,
+      input.turnScope,
+      input.executionOwner ?? input.ownerFence ?? input.fence,
+      input.itemId !== undefined
+    ),
     ...agentJournalLinkageFields(input.linkage)
-  }
-}
-
-export function buildJournalTombstoneRow(input: {
-  state: JournalReducerState
-  itemId: string
-  seq: number
-  fence: number
-  ts: number
-  revisions?: Map<string, number>
-}): JournalTombstoneRow {
-  return {
-    kind: 'tombstone',
-    itemId: input.itemId,
-    // Rank above both live and tombstone revisions even if map-disjointness is later relaxed.
-    revision: nextJournalItemRevision(input.state, input.itemId, input.revisions),
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }
 
