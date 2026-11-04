@@ -212,6 +212,11 @@ describe('typed creation through the startup and recorded resume owners', () => 
           agentCmdOverrides: { pi: 'echo --provider openai && pi --api-key key' }
         })
       ).toThrow(/--provider beside/)
+      expect(() =>
+        pi('--model anthropic/claude', {
+          agentCmdOverrides: { pi: `sh -c 'exec pi --api-key key "$@"' sh` }
+        })
+      ).toThrow(/--provider beside/)
     })
 
     it('refuse a model override when the default provider beside an inline key is empty', () => {

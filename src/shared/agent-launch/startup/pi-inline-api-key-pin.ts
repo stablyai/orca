@@ -19,17 +19,14 @@ export function piInlineApiKeyIsUnpinned(
   agentArgs: string | null | undefined,
   shell: AgentStartupShell
 ): boolean {
-  const commandTokens = tokenizeStartupCommand(command?.trim() ?? '', shell)
+  // A custom Command can hide Pi behind any shell, so any inline key text there is refused.
+  if (command?.includes('--api-key')) {
+    return true
+  }
   const argTokens = tokenizeStartupCommand(agentArgs?.trim() ?? '', shell)
-  if (!commandTokens.ok || !argTokens.ok) {
-    return true
-  }
-  // A custom Command's shell scope is unknowable, so any inline key there is refused.
-  if (commandTokens.tokens.some((token) => token.startsWith('--api-key'))) {
-    return true
-  }
   return (
-    lastPiOptionValue(argTokens.tokens, '--api-key') !== undefined &&
-    !lastPiOptionValue(argTokens.tokens, '--provider')?.trim()
+    !argTokens.ok ||
+    (lastPiOptionValue(argTokens.tokens, '--api-key') !== undefined &&
+      !lastPiOptionValue(argTokens.tokens, '--provider')?.trim())
   )
 }
