@@ -75,10 +75,10 @@ export function useTerminalDockKeys({ activeHandle, sendInput }: UseTerminalDock
     return true
   }
 
-  return { modifiers, tapModifier, sendKey, interceptTypedCharacter }
+  return { modifiers, tapModifier, takeModifiers, sendKey, interceptTypedCharacter }
 }
 
-function terminalDockKeyInput(
+export function terminalDockKeyInput(
   key: string,
   modifiers: StickyModifiers
 ): TerminalLiveAccessoryInput | null {

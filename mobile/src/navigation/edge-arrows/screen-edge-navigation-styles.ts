@@ -39,48 +39,48 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     borderColor: colors.skillToken
   },
   edgeControlDisabled: {
-    opacity: feedback.disabledOpacity
+    opacity: Math.min(0.25, feedback.disabledOpacity)
   },
   edgeControlPressed: {
-    opacity: 0.96
+    opacity: 0.92
   },
 
-  // Flavour 1: Pills (glassmorphic centered capsules)
+  // Flavour 1: Pills (glassmorphic centered capsules — half-transparent at rest)
   pillHorizontal: {
     width: 56,
     height: 28,
     borderRadius: radii.pill,
-    opacity: 0.88
+    opacity: 0.5
   },
   pillVertical: {
     width: 28,
     height: 56,
     borderRadius: radii.pill,
-    opacity: 0.88
+    opacity: 0.5
   },
 
-  // Flavour 2: Strips (wide low-profile border touch rails)
+  // Flavour 2: Strips (wide low-profile border touch rails — half-transparent at rest)
   stripHorizontal: {
     height: 22,
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     borderColor: colors.borderSubtle,
-    opacity: 0.78
+    opacity: 0.5
   },
   stripVertical: {
     width: 22,
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     borderColor: colors.borderSubtle,
-    opacity: 0.78
+    opacity: 0.5
   },
 
-  // Flavour 3: Orbs (compact circular floating buttons)
+  // Flavour 3: Orbs (compact circular floating buttons — half-transparent at rest)
   orb: {
     width: 38,
     height: 38,
     borderRadius: radii.pill,
-    opacity: 0.8
+    opacity: 0.5
   },
 
   // Flavour 4: Gamepad HUD (two-thumb console D-pad + diamond action cluster)
@@ -104,13 +104,14 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     borderColor: colors.composerBorder,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    opacity: 0.5
   },
   gamepadDpadButton: {
     width: 36,
     height: 34,
     borderRadius: radii.control,
-    opacity: 0.92
+    opacity: 0.5
   },
   gamepadActionButton: {
     position: 'absolute',
@@ -122,7 +123,7 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.composerBorder,
     backgroundColor: colors.composerSurface,
-    opacity: 0.92
+    opacity: 0.5
   },
   gamepadActionPrimary: {
     borderColor: colors.accentBlue,
@@ -183,7 +184,7 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.composerBorder,
     backgroundColor: colors.composerSurface,
-    opacity: 0.88
+    opacity: 0.5
   },
   settingsIconButton: {
     width: 28,
@@ -194,11 +195,11 @@ export const screenEdgeNavigationStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.composerBorder,
     backgroundColor: colors.composerSurface,
-    opacity: 0.88
+    opacity: 0.5
   },
   flavourChipPressed: {
     backgroundColor: colors.bgRaised,
-    opacity: 1
+    opacity: 0.95
   },
   flavourDot: {
     width: 7,

@@ -8,9 +8,10 @@ import {
 } from '../navigation/edge-arrows/edge-navigation-context'
 import { createTerminalKeyChordInput } from '../terminal/terminal-key-chord-input'
 import { hasStickyModifier } from '../terminal/terminal-sticky-modifiers'
-import type { TerminalArrowKey } from './TerminalArrowPad'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { terminalDockKeyInput } from './use-terminal-dock-keys'
+
+type TerminalArrowKey = 'arrowUp' | 'arrowDown' | 'arrowLeft' | 'arrowRight'
 
 function arrowKeyForDirection(direction: EdgeDirection): TerminalArrowKey {
   switch (direction) {

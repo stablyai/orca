@@ -162,7 +162,7 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     await act(async () => {
       renderer!.root.findByProps({ testID: 'edge-arrow-settings-button' }).props.onPress()
     })
-    expect(renderer!.root.findAllByType('Modal' as unknown as string)).toHaveLength(1)
+    expect(renderer!.root.findAllByType('Modal' as unknown as React.ElementType)).toHaveLength(1)
 
     // Cycle Pills -> Strips -> Orbs -> Gamepad -> Pills via bottom-right quick-switcher chip
     await act(async () => {
@@ -358,5 +358,64 @@ describe('ScreenEdgeNavigationOverlay (sticky pane 4-side & zoom-stable gamepad 
     expect(pinched2x.top).toBe(60)
     expect(pinched2x.width).toBe(390)
     expect(pinched2x.height).toBe(700)
+  })
+
+  it('renders 4-side edge arrow keys and dock controls half-transparent (0.5) at rest and brightens on press', async () => {
+    const target: EdgeNavigationTarget = {
+      id: 'session-terminal-opacity',
+      kind: 'terminal',
+      preparePress: () => ({ tap: () => {} })
+    }
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          GlobalEdgeNavigationProvider,
+          null,
+          createElement(PaneEdgeNavigationOverlay, { target })
+        )
+      )
+    })
+
+    const layer = renderer!.root.findByProps({ testID: 'pane-edge-arrows-layer' })
+    act(() => {
+      layer.props.onLayout({ nativeEvent: { layout: { width: 360, height: 420 } } })
+    })
+
+    const resolveEffectiveOpacity = (styleEntries: readonly unknown[]): number | undefined => {
+      let current: number | undefined
+      for (const entry of styleEntries) {
+        if (entry && typeof entry === 'object' && 'opacity' in entry) {
+          const candidate = (entry as { opacity?: unknown }).opacity
+          if (typeof candidate === 'number') {
+            current = candidate
+          }
+        }
+      }
+      return current
+    }
+
+    // Check rest (0.5) and pressed (0.92) opacity across Pills -> Strips -> Orbs -> Gamepad
+    for (const expectedFlavour of ['pills', 'strips', 'orbs', 'gamepad'] as const) {
+      for (const direction of ['up', 'down', 'left', 'right'] as const) {
+        const arrow = renderer!.root.findByProps({ testID: `edge-arrow-${direction}` })
+        expect(arrow.props['data-flavour']).toBe(expectedFlavour)
+        expect(resolveEffectiveOpacity(arrow.props.style({ pressed: false }))).toBe(0.5)
+        expect(resolveEffectiveOpacity(arrow.props.style({ pressed: true }))).toBe(0.92)
+      }
+      if (expectedFlavour === 'gamepad') {
+        for (const id of ['north', 'west', 'east', 'south'] as const) {
+          const action = renderer!.root.findByProps({ testID: `gamepad-action-${id}` })
+          expect(resolveEffectiveOpacity(action.props.style({ pressed: false }))).toBe(0.5)
+          expect(resolveEffectiveOpacity(action.props.style({ pressed: true }))).toBe(0.92)
+        }
+      }
+      const chip = renderer!.root.findByProps({ testID: 'edge-arrow-flavour-chip' })
+      expect(resolveEffectiveOpacity(chip.props.style({ pressed: false }))).toBe(0.5)
+      expect(resolveEffectiveOpacity(chip.props.style({ pressed: true }))).toBe(0.95)
+      act(() => {
+        chip.props.onPress()
+      })
+    }
   })
 })
