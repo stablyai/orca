@@ -196,16 +196,13 @@ export class StructuredAgentSessionSendSettlement {
   }
 }
 
-/** Released unanswered sends end acknowledgement waits as uncertain. */
+/** Canonical attempt-end evidence completes unanswered waits without changing delivery truth. */
 export function sendSettlementReading(
   journal: AgentSessionJournal,
   work: () => StructuredAgentSessionCurrentWork
 ): SendSettlementJournal {
   return {
-    submission: (id) => {
-      const submission = journal.submission(id)
-      return submission ? work().publishedSubmission(submission) : undefined
-    },
+    submission: (id) => journal.submission(id),
     attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
     cursor: () => journal.cursor(),
     activeTurnId: () => work().activeTurnId(),

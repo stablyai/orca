@@ -19,7 +19,10 @@ import {
   readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD
+} from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
@@ -251,6 +254,57 @@ describe('a waiting card when the generation ahead of it ends', () => {
     })
   })
 })
+
+it.each(['claude', 'codex'] as const)(
+  'keeps %s observation pending through live hold loss, then accepts exact proof',
+  async (agent) => {
+    rig = await createQueuedMessageTestRig(agent === 'claude' ? { agent } : {})
+    const current = rig
+    const held = new Set<string>()
+    current.host.deps.adapter.heldSends = () => held
+    current.dispatch.mockImplementation(async (input) => {
+      held.add(input.clientMessageId)
+      return { state: 'admitted' }
+    })
+    const id = await current.workingSend()
+    const journal = currentJournal(current)
+    const observed = vi.fn()
+    const waiting = current.host.waitForSendSettlement(SESSION, id, { until: 'answered' })
+    const observation = waiting.then(observed)
+    try {
+      held.clear()
+      current.host.publishWorkChanged(SESSION)
+      await current.host.flushStreamedEvents(SESSION)
+      await current.host.collaboratorsForTests().serialize(SESSION, async () => {})
+      expect(journal.submission(id)).toMatchObject({ dispatchState: 'pending' })
+      expect(journal.queuedMessages.attemptEnded(id)).toBe(false)
+      const page = await hydration(current)
+      expect(page.submissions.find((send) => send.clientMessageId === id)).toMatchObject({
+        dispatchState: 'unknown',
+        recovered: true
+      })
+      expect(observed).not.toHaveBeenCalled()
+      held.add(id)
+      current.host.publishWorkChanged(SESSION)
+      await current.host.settleLateDispatch({
+        sessionId: SESSION,
+        clientMessageId: id,
+        providerIdentity:
+          agent === 'claude'
+            ? { provider: 'claude', sessionId: THREAD, uuid: 'exact-receipt' }
+            : { provider: 'codex', threadId: THREAD, turnId: 'receipt-turn', ordinal: 0 }
+      })
+      await expect(waiting).resolves.toMatchObject({
+        value: { submission: { clientMessageId: id, dispatchState: 'accepted' } }
+      })
+      expect(journal.submission(id)).toMatchObject({ dispatchState: 'accepted' })
+      expect(current.dispatch).toHaveBeenCalledTimes(1)
+    } finally {
+      await current.host.close(SESSION, 'evict')
+      await observation
+    }
+  }
+)
 
 describe('a live owner', () => {
   it('publishes its running turn and its prompt exactly as before', async () => {
