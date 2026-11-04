@@ -77,14 +77,15 @@ export function getFolderWorkspaceRowGeometry(args: {
 } {
   if (args.experimentalNewWorktreeCardStyle && args.isFolderBackedWorkspaceChild) {
     // Why: standalone rows get no lineage wrapper offset, so align to the grouped repo-card anchor.
+    const parentGroupDepth = Math.max(0, clampDepth(args.groupDepth) - 1)
     const contentAnchor = getWorktreeCardContentIndent({
       isGrouped: true,
-      groupDepth: args.groupDepth,
+      groupDepth: parentGroupDepth,
       lineageDepth: 0
     })
     const surfaceInset = getWorktreeCardSurfaceInset({
       isGrouped: true,
-      groupDepth: args.groupDepth
+      groupDepth: parentGroupDepth
     })
 
     return {
