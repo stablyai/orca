@@ -345,9 +345,9 @@ export function CrewPanelContent({
           <TooltipTrigger asChild>
             <Button
               ref={tab}
-              variant="outline"
+              variant="orchestration-tab"
               size="xs"
-              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-[min(20rem,100%)] border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground"
+              className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-[min(20rem,100%)]"
               aria-label={translate(
                 'components.orchestrationCrew.show',
                 'Show orchestration: {{counts}}',
