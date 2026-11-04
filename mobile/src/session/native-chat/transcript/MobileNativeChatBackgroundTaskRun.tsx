@@ -34,7 +34,7 @@ export function MobileNativeChatBackgroundTaskRun({
         </Text>
       )}
       {row.output === null ? null : (
-        <Text style={[styles.detail, styles.output]} numberOfLines={1} ellipsizeMode="middle">
+        <Text style={[styles.detail, styles.output]} numberOfLines={1}>
           {row.output}
         </Text>
       )}
