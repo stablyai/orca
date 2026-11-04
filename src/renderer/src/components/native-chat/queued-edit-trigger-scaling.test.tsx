@@ -9,7 +9,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], retry: () => {} })
@@ -115,7 +115,7 @@ it.each([10, 100])(
             setActiveSuggestion: () => {}
           },
           structuredTransport: target,
-          editing,
+          mode: editing ? 'edit' : undefined,
           setNotice: () => {}
         })
       },

@@ -2,9 +2,10 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
-} from '../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../shared/agent-status/identity/pane-agent-owner'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
@@ -92,6 +93,8 @@ export function projectRuntimeMobileSessionTabs(
   }
   // Claim each live PTY once or duplicate leaf keys crash client React.
   const claimedLivePtyIds = new Set<string>()
+  const isPtyLive = (ptyId: string): boolean =>
+    host.getPtyAvailability(ptyId) ?? host.ptysById.get(ptyId)?.connected ?? false
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
@@ -118,7 +121,7 @@ export function projectRuntimeMobileSessionTabs(
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
     const leaf = host.leaves.get(host.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-    const liveLeaf = leaf?.ptyId && leaf.connected ? leaf : null
+    const liveLeaf = leaf?.ptyId && isPtyLive(leaf.ptyId) ? leaf : null
     const liveLeafPtyId = liveLeaf?.ptyId ?? null
     const liveLeafPty = liveLeafPtyId ? (host.ptysById.get(liveLeafPtyId) ?? null) : null
     const pty = liveLeaf
@@ -126,7 +129,7 @@ export function projectRuntimeMobileSessionTabs(
       : host.findPty(snapshot.worktree, tab, {
           allowWorktreeOnlyMatch: !snapshot.publicationEpoch.startsWith('headless')
         })
-    const livePty = pty?.connected ? pty : null
+    const livePty = pty?.connected && isPtyLive(pty.ptyId) ? pty : null
     // Drop later tabs sharing an already-claimed PTY so handles stay unique.
     const resolvedLivePtyId = liveLeafPtyId ?? livePty?.ptyId ?? null
     if (resolvedLivePtyId !== null) {

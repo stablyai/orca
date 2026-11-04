@@ -2,8 +2,7 @@ import { separateImagePasteFromFollowingText } from '../../../src/shared/image-p
 import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
-} from '../../../src/shared/terminal-bracketed-paste-text'
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
+} from '../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
@@ -29,6 +28,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly sendTerminalUserInput: typeof terminalInputSend.request
   readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -49,6 +49,7 @@ type UseMobileTerminalPasteOptions = {
 }
 
 export function useMobileTerminalPaste({
+  sendTerminalUserInput,
   activeHandle,
   agent,
   activeHandleRef,
@@ -148,7 +149,7 @@ export function useMobileTerminalPaste({
         showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
         return
       }
-      const response = await terminalInputSend.request(currentClient, {
+      const response = await sendTerminalUserInput(currentClient, {
         terminal: targetHandle,
         text: payload,
         enter: false,
@@ -156,8 +157,8 @@ export function useMobileTerminalPaste({
           ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
           : {})
       })
-      if (terminalInputSend.interpret(response) === true) {
-        reportWorkerTerminalUserInput(currentClient, targetHandle)
+      if (terminalInputSend.interpret(response) !== true) {
+        throw new Error('Terminal input was not accepted')
       }
       onSuccess()
       refreshCanPaste()
@@ -181,6 +182,7 @@ export function useMobileTerminalPaste({
       }
     }
   }, [
+    sendTerminalUserInput,
     activeHandle,
     agent,
     activeHandleRef,

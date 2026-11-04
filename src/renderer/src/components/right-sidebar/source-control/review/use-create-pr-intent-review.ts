@@ -8,10 +8,10 @@ import { useAppStore } from '@/store'
 import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
 import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
-import type { HostedReviewCreationEligibility } from '../../../../../../shared/hosted-review'
+import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
-import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
-import { resolveCreateReviewSeedText } from '../../create-review-draft-title'
+import { normalizeHostedReviewHeadRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { resolveCreateReviewSeedText } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   createPrIntentRunTokenMatches,
   resolveCreatePrIntentGeneratedReviewFields,
@@ -30,6 +30,7 @@ import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-t
 import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
 import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 /** Resolve unattended review fields without a composer; reveal only while the run owns the foreground worktree. */
 export function useSourceControlCreatePrIntentReview({
@@ -228,7 +229,7 @@ export function useSourceControlCreatePrIntentReview({
             }
           )
           if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
-            window.api.shell.openUrl(result.url)
+            openAppHttpLink(result.url, { worktreeId: token.worktreeId })
           }
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
           return true

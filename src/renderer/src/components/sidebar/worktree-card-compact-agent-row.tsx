@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { cn } from '@/lib/utils'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
 import { getAgentDotState } from './worktree-card-agent-summary'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
-import { agentNoUpdateLabel } from '../../../../shared/agent-row-decay-state'
+import { agentNoUpdateLabel } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
@@ -88,8 +88,10 @@ function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string 
 }
 
 type CompactAgentRowProps = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   now: number
+  parentConversationDescription?: string
   onActivate: (tabId: string, paneKey: string) => void
   // Send-target mode temporarily turns compact rows into the picker, matching full agent rows.
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
@@ -97,6 +99,8 @@ type CompactAgentRowProps = {
   onSendTargetClick?: (paneKey: string) => void
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden sub-agent work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
@@ -106,13 +110,16 @@ type CompactAgentRowProps = {
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
   agent,
+  showModel = true,
   now,
+  parentConversationDescription,
   onActivate,
   sendTargetStatus,
   sendTargetDisabledReason,
   onSendTargetClick,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   isFocusedPane = false,
   hideIdentityIcon = false,
@@ -248,10 +255,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         </>
       )}
-      {model && (
+      {showModel && model && (
         <span
           className={cn(
-            'min-w-0 max-w-24 truncate font-mono text-[10px]',
+            'min-w-0 max-w-24 truncate font-mono text-3xs',
             highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
           title={model}
@@ -262,10 +269,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
           className={cn(
-            'shrink-0 text-[10px] tabular-nums',
+            'inline-flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums',
             highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
         >
+          {collapsedChildAgentsState && (
+            <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+          )}
           +{childAgentCount}
         </span>
       )}
@@ -304,6 +314,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
+      aria-description={parentConversationDescription}
       data-agent-send-target={sendTargetStatus}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}

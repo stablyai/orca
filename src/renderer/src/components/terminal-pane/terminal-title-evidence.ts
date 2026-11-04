@@ -1,8 +1,14 @@
-import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import {
+  isNormalizedAgentTitleStamp,
+  normalizeTerminalTitle
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   resolvePaneRendererPolicy,
   type RendererPolicyDecision,
+  type ResolvePaneRendererPolicyInput,
   type TerminalGpuAccelerationMode
 } from './terminal-renderer-policy'
 
@@ -23,6 +29,7 @@ export type PaneTitleDecision = {
 }
 
 export type ResolvePaneTitleDecisionInput = {
+  isGeminiTerminalTitle?: ResolvePaneRendererPolicyInput['isGeminiTerminalTitle']
   /** Normalized title from the transport (may already be display-shaped). */
   normalizedTitle: string
   rawTitle: string
@@ -39,13 +46,21 @@ export type ResolvePaneTitleDecisionInput = {
 }
 
 export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): PaneTitleDecision {
+  // Actual raw evidence can disprove an old producer's destructive display stamp.
+  const displayInput =
+    isNormalizedAgentTitleStamp(input.normalizedTitle) &&
+    resolveExplicitTerminalTitleAgentType(input.rawTitle) !==
+      resolveExplicitTerminalTitleAgentType(input.normalizedTitle)
+      ? normalizeTerminalTitle(input.rawTitle)
+      : input.normalizedTitle
   const displayTitle = resolvePaneDisplayTitle(
-    input.normalizedTitle,
+    displayInput,
     input.displayOwnerAgentType,
     input.displayOwnerIsLaunch === true
   )
   const rendererPolicy = resolvePaneRendererPolicy({
     rawTitle: input.rawTitle,
+    isGeminiTerminalTitle: input.isGeminiTerminalTitle,
     ownerAgentType: input.rendererOwnerAgentType,
     userGpuMode: input.userGpuMode,
     webglUnavailable: input.webglUnavailable,

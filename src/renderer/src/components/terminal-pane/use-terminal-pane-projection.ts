@@ -1,12 +1,14 @@
-import { useCallback, useEffect } from 'react'
-import type { CSSProperties } from 'react'
+import { useCallback, useEffect, type CSSProperties } from 'react'
+
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
-  isTerminalBackgroundLight,
   normalizeColor,
-  resolveEffectiveTerminalAppearance,
-  resolveOpaqueTerminalBackground
+  resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
+import {
+  isTerminalBackgroundLight,
+  resolveOpaqueTerminalBackground
+} from '../../../../shared/terminal-themes/terminal-title-contrast'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
 import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
@@ -59,8 +61,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
-  const terminalBackground =
-    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+  const terminalBackground = effectiveAppearance?.theme?.background
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity

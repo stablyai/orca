@@ -22,6 +22,8 @@ import type { MobileViewState } from '../worktree/workspace-view-settings'
 import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import { readServedProjectSections } from '../worktree/project-sections-operations'
 import type { LastVisitedWorktreeOnHost } from '../worktree/host-list-highlight'
+import type { WorktreeHostContextView } from '../worktree/workspace-list-types'
+import { NO_WORKTREE_HOST_CONTEXT } from '../worktree/worktree-host-context-labels'
 
 const catalog = buildSidebarFeedCatalog(SERVED_SECTIONS, [], [])
 
@@ -43,6 +45,8 @@ function sectionsFor(
   options: {
     showPinnedInGroups?: boolean
     live?: ReturnType<typeof liveRow>[]
+    /** Host context by worktree id, as the display pass looks it up. */
+    hostContext?: ReadonlyMap<string, WorktreeHostContextView>
     search?: string
     lastVisited?: LastVisitedWorktreeOnHost | null
   } = {}
@@ -56,6 +60,7 @@ function sectionsFor(
     rows: built.sectionRows,
     lastVisited: options.lastVisited ?? null,
     liveRows: options.live ?? [],
+    hostContextOf: (row) => options.hostContext?.get(row.worktreeId),
     repoHostIdByRepoId: new Map([['lab', 'ssh:gpu']]),
     search: options.search ?? ''
   })
@@ -72,6 +77,7 @@ function sectionsFromDomains(
     rows: built.sectionRows,
     lastVisited,
     liveRows: [],
+    hostContextOf: NO_WORKTREE_HOST_CONTEXT,
     repoHostIdByRepoId: new Map(),
     search
   })
@@ -82,7 +88,7 @@ function outline(sections: ReturnType<typeof sectionsFor>): string[] {
     `${section.key} "${section.title}" ${String(section.count)}${section.icon ? ' pin' : ''}`,
     ...section.data.map(
       (row) =>
-        `  ${row.sectionListKey} depth=${String(row.lineageDepth)}${row.isActive ? ' ACTIVE' : ''}`
+        `  ${row.view.sectionListKey} depth=${String(row.view.lineageDepth)}${row.row.isActive ? ' ACTIVE' : ''}`
     )
   ])
 }
@@ -95,26 +101,29 @@ describe('the phone list from the sidebar feed', () => {
       const live = liveRow({
         worktreeId: FEED_ROWS.remote.id,
         repoId: 'lab',
-        hostId: 'ssh:gpu',
-        hostContextLabel: 'GPU box',
-        hostContextHealthLabel: 'Disconnected'
+        hostId: 'ssh:gpu'
       })
+      const hostContext = new Map([
+        [live.worktreeId, { hostContextLabel: 'GPU box', hostContextHealthLabel: 'Disconnected' }]
+      ])
       const sections = sectionsFor(
         { ...view, filters: { ...view.filters, visibleHostIds: ['local', 'ssh:gpu'] } },
-        { live: [live] }
+        { live: [live], hostContext }
       )
       expect(
         sections.filter((section) => section.key.startsWith('host:')).map((s) => s.title)
       ).toEqual(['Local Mac', 'GPU box'])
       const rows = sections.flatMap((section) => section.data)
       expect(rows).toHaveLength(3)
-      expect(rows.every((row) => row.hostContextLabel === undefined)).toBe(true)
-      expect(rows.find((row) => row.worktreeId === live.worktreeId)?.hostContextHealthLabel).toBe(
-        'Disconnected'
-      )
+      expect(rows.every((row) => row.view.hostContextLabel === undefined)).toBe(true)
+      expect(
+        rows.find((row) => row.row.worktreeId === live.worktreeId)?.view.hostContextHealthLabel
+      ).toBe('Disconnected')
 
-      const mixed = sectionsFor(view, { live: [live] }).flatMap((section) => section.data)
-      expect(mixed.map((row) => row.hostContextLabel)).toEqual([
+      const mixed = sectionsFor(view, { live: [live], hostContext }).flatMap(
+        (section) => section.data
+      )
+      expect(mixed.map((row) => row.view.hostContextLabel)).toEqual([
         'Local Mac',
         'Local Mac',
         'GPU box'
@@ -177,6 +186,7 @@ describe('the phone list from the sidebar feed', () => {
       rows: built.sectionRows,
       lastVisited: null,
       liveRows: [],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       repoHostIdByRepoId: new Map([['lab', 'ssh:gpu']]),
       search: ''
     })
@@ -195,10 +205,13 @@ describe('the phone list from the sidebar feed', () => {
       sections
         .slice(-2)
         .map((section) =>
-          section.data.map((row) => [row.projectGroupDepth, row.inFolderScanGroup === true])
+          section.data.map((row) => [
+            row.view.projectGroupDepth,
+            row.view.inFolderScanGroup === true
+          ])
         )
     ).toEqual([[[2, true]], [[2, true]]])
-    expect(sections.at(-2)?.data.map((row) => row.worktreeId)).toEqual(['lab::/w/gpu'])
+    expect(sections.at(-2)?.data.map((row) => row.row.worktreeId)).toEqual(['lab::/w/gpu'])
   })
 
   describe('the highlight: only the workspace this phone last opened, where shown', () => {
@@ -272,7 +285,7 @@ describe('the phone list from the sidebar feed', () => {
       for (const groupBy of ['repo', 'none', 'workspace-status', 'pr-status'] as const) {
         const sections = sectionsFor({ ...view, groupBy })
         expect(
-          sections.flatMap((section) => section.data.map((row) => row.worktreeId)).sort()
+          sections.flatMap((section) => section.data.map((row) => row.row.worktreeId)).sort()
         ).toEqual([...expected].sort())
       }
     }
@@ -298,6 +311,7 @@ describe('the phone list from the sidebar feed', () => {
         rows: built.sectionRows,
         lastVisited: null,
         liveRows: [],
+        hostContextOf: NO_WORKTREE_HOST_CONTEXT,
         repoHostIdByRepoId: new Map(),
         search: ''
       })
@@ -320,15 +334,14 @@ describe('the phone list from the sidebar feed', () => {
       ]
     })
     const rows = sections.flatMap((section) => section.data)
-    expect(rows.find((row) => row.worktreeId === 'orca::/w/child')).toMatchObject({
-      liveTerminalCount: 2,
-      status: 'working',
-      lineageDepth: 1
+    expect(rows.find((row) => row.row.worktreeId === 'orca::/w/child')).toMatchObject({
+      row: { liveTerminalCount: 2, status: 'working' },
+      view: { lineageDepth: 1 }
     })
-    expect(rows.find((row) => row.worktreeId === 'lab::/w/gpu')).toMatchObject({
+    expect(rows.find((row) => row.row.worktreeId === 'lab::/w/gpu')?.row).toMatchObject({
       hasAttachedPty: true
     })
-    expect(rows.find((row) => row.worktreeId === 'orca::/w/parent')).toMatchObject({
+    expect(rows.find((row) => row.row.worktreeId === 'orca::/w/parent')?.row).toMatchObject({
       displayName: 'orca::/w/parent',
       liveTerminalCount: 0,
       isPinned: true
@@ -368,10 +381,11 @@ describe('the phone list from the sidebar feed', () => {
       rows: built.sectionRows,
       lastVisited: null,
       liveRows: [stale],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       repoHostIdByRepoId: new Map(),
       search: 'new name'
     })
-    expect(sections.flatMap((section) => section.data)).toEqual([
+    expect(sections.flatMap((section) => section.data.map((item) => item.row))).toEqual([
       expect.objectContaining({
         worktreeId: 'orca::/w/child',
         displayName: 'new name',
@@ -391,8 +405,8 @@ describe('the phone list from the sidebar feed', () => {
     })
     const remote = sections
       .flatMap((section) => section.data)
-      .find((row) => row.worktreeId === 'lab::/w/gpu')
-    expect(remote).toMatchObject({ hostId: 'ssh:gpu', liveTerminalCount: 0 })
+      .find((row) => row.row.worktreeId === 'lab::/w/gpu')
+    expect(remote?.row).toMatchObject({ hostId: 'ssh:gpu', liveTerminalCount: 0 })
   })
 
   it('keeps a collapsed section’s header and count with no rows under it', () => {
@@ -414,7 +428,7 @@ describe('the phone list from the sidebar feed', () => {
         phoneView()
       ).find((section) => section.title === 'lab')!
     expect(creating().pendingCreations).toEqual([{ key: 'pending:c1', repoName: null }])
-    expect(creating().data.map((row) => row.worktreeId)).toEqual(['lab::/w/gpu'])
+    expect(creating().data.map((row) => row.row.worktreeId)).toEqual(['lab::/w/gpu'])
     expect(creating('lab::/w/gpu').pendingCreations).toBeUndefined()
   })
 
@@ -431,7 +445,7 @@ describe('the phone list from the sidebar feed', () => {
     const lab = sectionsFromDomains(domains, phoneView(), 'gpu').find(
       (section) => section.title === 'lab'
     )
-    expect(lab?.data.map((row) => row.worktreeId)).toEqual(['lab::/w/gpu'])
+    expect(lab?.data.map((row) => row.row.worktreeId)).toEqual(['lab::/w/gpu'])
     expect(lab?.pendingCreations).toBeUndefined()
   })
 
@@ -445,7 +459,7 @@ describe('the phone list from the sidebar feed', () => {
 
   it('narrows rows by search and drops sections left with none', () => {
     const sections = sectionsFor(phoneView(), { search: 'gpu' })
-    expect(sections.flatMap((section) => section.data.map((row) => row.worktreeId))).toEqual([
+    expect(sections.flatMap((section) => section.data.map((row) => row.row.worktreeId))).toEqual([
       'lab::/w/gpu'
     ])
     expect(sections.map((section) => section.title)).toEqual(['lab'])
@@ -465,6 +479,7 @@ describe('the phone list before the first feed read', () => {
   ) =>
     buildPreFeedSections({
       rows,
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
       view: phoneView(),
       search,
       repoHostIdByRepoId: new Map(),
@@ -477,7 +492,7 @@ describe('the phone list before the first feed read', () => {
       {
         key: 'all',
         title: '',
-        data: cached.slice(0, 2).map((row) => ({ ...row, isActive: false }))
+        data: cached.slice(0, 2).map((row) => ({ row: { ...row, isActive: false }, view: {} }))
       }
     ])
   })
@@ -486,15 +501,58 @@ describe('the phone list before the first feed read', () => {
     const rows = [{ ...cached[0]!, isActive: true }, cached[1]!]
     const highlighted = (lastVisited: LastVisitedWorktreeOnHost | null) =>
       preFeedVisiting('', rows, lastVisited)[0]
-        ?.data.filter((row) => row.isActive)
-        .map((row) => row.worktreeId)
+        ?.data.filter((row) => row.row.isActive)
+        .map((row) => row.row.worktreeId)
     expect(highlighted(null)).toEqual([])
     expect(highlighted({ worktreeId: 'orca::/w/a' })).toEqual(['orca::/w/a'])
     expect(highlighted({ worktreeId: 'orca::/w/gone' })).toEqual([])
   })
 
   it('narrows them by search, and draws nothing with none', () => {
-    expect(preFeed('alp')[0]?.data.map((row) => row.worktreeId)).toEqual(['orca::/w/a'])
+    expect(preFeed('alp')[0]?.data.map((row) => row.row.worktreeId)).toEqual(['orca::/w/a'])
     expect(preFeed('', [])).toEqual([])
+  })
+})
+
+describe('a header repeated in two host sections', () => {
+  it('gets a distinct list key in each section and one shared collapse key', () => {
+    const projectHeader = {
+      type: 'header' as const,
+      key: 'project:p',
+      label: 'P',
+      count: 0,
+      icon: { kind: 'project' as const }
+    }
+    const hostHeader = (hostId: 'local' | 'ssh:gpu') => ({
+      type: 'host-header' as const,
+      key: `host:${hostId}`,
+      hostId,
+      kind: hostId === 'local' ? ('local' as const) : ('ssh' as const),
+      label: hostId,
+      detail: '',
+      health: 'available' as const,
+      collapsed: false,
+      count: 0
+    })
+    const sections = buildHostFeedSections({
+      rows: [
+        hostHeader('local'),
+        { ...projectHeader, hostId: 'local' },
+        hostHeader('ssh:gpu'),
+        { ...projectHeader, hostId: 'ssh:gpu' }
+      ],
+      lastVisited: null,
+      liveRows: [],
+      hostContextOf: NO_WORKTREE_HOST_CONTEXT,
+      repoHostIdByRepoId: new Map(),
+      search: ''
+    })
+
+    expect(sections.map(({ key, collapseKey }) => [key, collapseKey ?? key])).toEqual([
+      ['host:local', 'host:local'],
+      ['project:p@local', 'project:p'],
+      ['host:ssh:gpu', 'host:ssh:gpu'],
+      ['project:p@ssh:gpu', 'project:p']
+    ])
   })
 })

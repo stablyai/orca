@@ -1,12 +1,13 @@
 import type {
   GitStageWorktreeScope,
   GitStageWorktreeScopeReceipt
-} from '../../shared/git-stage-worktree-scope'
+} from '../../shared/git/paths/git-stage-worktree-scope'
 import {
   normalizeRuntimeGitRelativePath,
   requireRuntimeGitProvider,
   type RuntimeGitCommandHost
 } from './runtime-git-command-target'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 
 export class RuntimeGitStagingCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
@@ -15,6 +16,21 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     await requireRuntimeGitProvider(target).stageFile(target.worktree.path, relativePath)
+    return { ok: true }
+  }
+
+  async resolveRuntimeGitConflict(
+    worktreeSelector: string,
+    filePath: string,
+    resolution: ConflictResolution
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    await requireRuntimeGitProvider(target).resolveConflict(
+      target.worktree.path,
+      relativePath,
+      resolution
+    )
     return { ok: true }
   }
 

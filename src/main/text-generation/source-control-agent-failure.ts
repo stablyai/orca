@@ -2,7 +2,7 @@ import {
   cleanGeneratedCommitMessage,
   excerptAgentFailureOutput,
   sanitizeAgentFailureDetail
-} from '../../shared/commit-message-prompt'
+} from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import {
   captureAgentGenerationFailureOutput,
@@ -19,7 +19,7 @@ import {
   parseKimiGenerationOutput
 } from '../../shared/kimi-generation-output'
 import { formatKimiGenerationFailure } from './kimi-generation-failure'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
@@ -134,26 +134,12 @@ export function finalizeFromAgentOutput(args: {
     return {
       success: false,
       ...(args.outputFormat === 'kimi-stream-json'
-        ? {
-            error: formatKimiGenerationFailure(
-              findKimiGenerationFailure(stdout),
-              stderr,
-              code,
-              args
-            )
-          }
+        ? formatKimiGenerationFailure(findKimiGenerationFailure(stdout), stderr, code, args)
         : agentCliFailure(
             label,
             stdout,
-            parsed &&
-              !parsed.ok &&
-              (args.outputFormat === 'opencode-json'
-                ? parsed.error !== 'OpenCode returned invalid JSON events.'
-                : parsed.error !== 'Antigravity returned invalid JSON events.' &&
-                  parsed.error !== 'Antigravity returned an invalid result.' &&
-                  parsed.error !== 'Antigravity returned no final result.')
-              ? parsed.error
-              : stderr,
+            // Orca's own parse failures (coded) say nothing about why the agent exited.
+            parsed && !parsed.ok && parsed.errorCode === undefined ? parsed.error : stderr,
             code,
             args
           )),
@@ -164,9 +150,11 @@ export function finalizeFromAgentOutput(args: {
     const reported = sanitizeAgentFailureDetail(parsed.error)
     return {
       success: false,
-      ...(reported !== null
-        ? { error: reported }
-        : textGenerationFailure('agentReportedError', { label })),
+      ...(parsed.errorCode !== undefined
+        ? { error: parsed.error, errorCode: parsed.errorCode }
+        : reported !== null
+          ? { error: reported }
+          : textGenerationFailure('agentReportedError', { label })),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }

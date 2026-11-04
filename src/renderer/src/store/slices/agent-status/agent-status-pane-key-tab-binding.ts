@@ -1,11 +1,12 @@
+import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
   AgentType,
   ParsedAgentStatusPayload
-} from '../../../../../shared/agent-status-types'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
-import { tabHasProtectedTitle } from '../../../../../shared/agent-generated-tab-title-rules'
+import { tabHasProtectedTitle } from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
 
@@ -148,7 +149,7 @@ export function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: stri
     customTitle: null,
     color: null,
     sortOrder: 0,
-    createdAt: entry.stateStartedAt
+    createdAt: agentEntrySessionStartedAt(entry)
   }
 }
 
@@ -165,7 +166,7 @@ export function retainedAgentEntryFromLive(
     worktreeId,
     tab,
     agentType,
-    startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+    startedAt: agentEntrySessionStartedAt(entry)
   }
 }
 

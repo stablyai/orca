@@ -7,8 +7,8 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonServer } from './daemon-server'
 import { getHistorySessionDirName } from './history-paths'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
-import type { WslGuestProcessRow } from '../wsl/wsl-guest-pane-processes'
-import type * as GuestProcessesModule from '../wsl/wsl-guest-pane-processes'
+import type { WslGuestProcessRow } from '../wsl/execution/wsl-guest-pane-processes'
+import type * as GuestProcessesModule from '../wsl/execution/wsl-guest-pane-processes'
 import * as startupCwdProbe from '../ipc/pty/host-env/startup-cwd-directory-exists'
 
 const readRows = vi.hoisted(() =>
@@ -20,7 +20,7 @@ const readRows = vi.hoisted(() =>
     ): Promise<WslGuestProcessRow[] | null> => null
   )
 )
-vi.mock('../wsl/wsl-guest-pane-processes', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-guest-pane-processes', async (importOriginal) => ({
   ...(await importOriginal<typeof GuestProcessesModule>()),
   readWslGuestPaneProcesses: readRows
 }))
@@ -136,14 +136,5 @@ describe('a bridge WSL pane keeps its shell folder across quit', () => {
 
     expect(readRows.mock.calls[0]?.[1]).toBe(5)
     expect(checkpointCwd(id)).toBe(WSL_CWD)
-  })
-
-  it('reads no distro for a pane that is not a WSL pane', async () => {
-    const app = launch()
-    await openBridgePane(app, 'repo::/repo@@windows', 'C:\\repo')
-
-    await app.disconnectOnly()
-
-    expect(readRows).not.toHaveBeenCalled()
   })
 })

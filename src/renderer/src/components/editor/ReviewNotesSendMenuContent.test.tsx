@@ -2,8 +2,11 @@ import React from 'react'
 import { toast } from 'sonner'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type {
+  AgentStatusEntry,
+  AgentStatusState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -44,6 +47,9 @@ vi.mock('react', async () => {
     },
     useMemo<T>(factory: () => T): T {
       return factory()
+    },
+    useSyncExternalStore<T>(_subscribe: unknown, getSnapshot: () => T): T {
+      return getSnapshot()
     },
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
@@ -199,21 +205,23 @@ function agentRow({
   paneKey,
   tabId,
   title,
-  agentType,
+  agentType = 'claude',
   state = 'done',
-  startedAt = harness.now
+  startedAt = harness.now,
+  prompt = ''
 }: {
   paneKey: string
   tabId: string
   title: string
-  agentType: TuiAgent
+  agentType?: TuiAgent
   state?: AgentStatusState | 'idle'
   startedAt?: number
+  prompt?: string
 }): DashboardAgentRowData {
   const entryState: AgentStatusState = state === 'idle' ? 'working' : state
   return {
     paneKey,
-    entry: agentEntry(paneKey, agentType, entryState, startedAt),
+    entry: { ...agentEntry(paneKey, agentType, entryState, startedAt), prompt },
     tab: tab(tabId, { title }) as DashboardAgentRowData['tab'],
     agentType,
     state,
@@ -358,48 +366,6 @@ describe('ReviewNotesSendMenuContent', () => {
     setStore()
   })
 
-  it('enumerates each running agent of the worktree as a send target', () => {
-    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: {
-        'wt-1': [
-          tab(TAB_A, { title: 'Terminal 1' }),
-          tab(TAB_B, { title: 'Codex', launchAgent: 'codex' })
-        ]
-      },
-      terminalLayoutsByTabId: {
-        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
-        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
-      }
-    })
-    harness.noteTargets = [
-      {
-        paneKey: statusPaneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'claude',
-        tabTitle: 'Terminal 1',
-        status: 'eligible'
-      },
-      {
-        paneKey: makePaneKey(TAB_B, LEAF_B),
-        tabId: TAB_B,
-        messageTarget: { kind: 'terminal', tabId: TAB_B, leafId: LEAF_B },
-        agentType: 'codex',
-        tabTitle: 'Codex',
-        status: 'eligible'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(2)
-    expect(items.every((item) => item.props.disabled === false)).toBe(true)
-    expect(collectText(items[0])).toContain('Claude')
-    expect(collectText(items[1])).toContain('Codex')
-  })
-
   it('orders send targets by the current worktree agent rows and shows status timing', () => {
     const paneKeyA = makePaneKey(TAB_A, LEAF_A)
     const paneKeyB = makePaneKey(TAB_B, LEAF_B)
@@ -456,6 +422,45 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[0])).toContain('2m ago')
     expect(collectText(items[0])).toContain('Second session')
     expect(collectText(items[1])).toContain('Claude')
+  })
+
+  it('leads each row with the name its sidebar row shows, so same-type agents differ', () => {
+    const paneKeyA = makePaneKey(TAB_A, LEAF_A)
+    const paneKeyB = makePaneKey(TAB_B, LEAF_B)
+    harness.worktreeAgentRows = [
+      agentRow({ paneKey: paneKeyA, tabId: TAB_A, title: 'Claude Code' }),
+      agentRow({ paneKey: paneKeyB, tabId: TAB_B, title: 'Claude Code', prompt: 'Fix the login' })
+    ]
+    setStore({
+      tabsByWorktree: {
+        'wt-1': [
+          tab(TAB_A, { title: 'Claude Code', customTitle: 'Payments' }),
+          tab(TAB_B, { title: 'Claude Code' })
+        ]
+      }
+    })
+    harness.noteTargets = [
+      [paneKeyA, TAB_A, LEAF_A],
+      [paneKeyB, TAB_B, LEAF_B]
+    ].map(([paneKey, tabId, leafId]): NotesSendAgentTarget => ({
+      paneKey,
+      tabId,
+      messageTarget: { kind: 'terminal', tabId, leafId },
+      agentType: 'claude',
+      tabTitle: 'Claude Code',
+      status: 'eligible'
+    }))
+
+    const rowLines = findAllByType(render(), 'DropdownMenuItem').map((item) =>
+      findAllByType(item, 'span')
+        .filter((span) => String(span.props.className).includes('truncate'))
+        .map(collectText)
+    )
+
+    expect(rowLines).toEqual([
+      ['Payments', 'Claude · Done · just now'],
+      ['Fix the login', 'Claude · Done · just now']
+    ])
   })
 
   it('shows a chat whose turn failed as failed, as its sidebar row does', () => {
@@ -571,86 +576,6 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(stateDot.props.title).toBeNull()
     ;(item.props.onSelect as () => void)()
     expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
-  })
-
-  it('does not offer a title-detected agent row after its live PTY has exited', () => {
-    const paneKey = makePaneKey(TAB_B, LEAF_B)
-    harness.worktreeAgentRows = [
-      agentRow({
-        paneKey,
-        tabId: TAB_B,
-        title: 'Codex',
-        agentType: 'codex',
-        state: 'done',
-        startedAt: harness.now - 60_000
-      })
-    ]
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_B, { title: 'Codex' })] },
-      terminalLayoutsByTabId: { [TAB_B]: leafLayout(LEAF_B, 'pty-b') },
-      ptyIdsByTabId: { [TAB_B]: [] }
-    })
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(0)
-    expect(collectText(tree)).not.toContain('Active agent session')
-  })
-
-  it('does not render an active agent fallback alongside named targets', () => {
-    const listedPaneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A), tab(TAB_B)] },
-      terminalLayoutsByTabId: {
-        [TAB_A]: leafLayout(LEAF_A, 'pty-a'),
-        [TAB_B]: leafLayout(LEAF_B, 'pty-b')
-      }
-    })
-    harness.noteTargets = [
-      {
-        paneKey: listedPaneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'claude',
-        tabTitle: 'Terminal 1',
-        status: 'eligible'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(1)
-    expect(collectText(items[0])).toContain('Claude')
-    expect(collectText(tree)).not.toContain('Active agent session')
-    expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
-  })
-
-  it('does not render an active agent fallback when the matching derived row is disabled', () => {
-    const paneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Codex' })] },
-      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
-    })
-    harness.noteTargets = [
-      {
-        paneKey,
-        tabId: TAB_A,
-        messageTarget: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A },
-        agentType: 'codex',
-        tabTitle: 'Codex',
-        status: 'disabled',
-        disabledReason: 'Agent status is stale'
-      }
-    ]
-
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(1)
-    expect(items[0].props.disabled).toBe(true)
-    expect(collectText(tree)).not.toContain('Active agent session')
   })
 
   it('sends notes to the chosen agent and tracks the send once it succeeds', async () => {
@@ -851,28 +776,6 @@ describe('ReviewNotesSendMenuContent', () => {
       worktreeId: 'wt-1',
       prompt: 'my notes',
       target: { kind: 'terminal', tabId: TAB_A, leafId: LEAF_A }
-    })
-  })
-
-  it('does not render an active agent fallback when no agents are derived', () => {
-    const tree = render()
-    const items = findAllByType(tree, 'DropdownMenuItem')
-
-    expect(items).toHaveLength(0)
-    expect(collectText(tree)).not.toContain('Active agent session')
-    expect(harness.sendMessageToAgent).not.toHaveBeenCalled()
-  })
-
-  it('always offers the new-agent launcher', () => {
-    const onPromptHandedOff = vi.fn()
-    const tree = render({ onPromptHandedOff })
-
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
-      worktreeId: 'wt-1',
-      groupId: 'group-1',
-      prompt: 'my notes',
-      launchSource: 'notes_send',
-      onPromptHandedOff
     })
   })
 

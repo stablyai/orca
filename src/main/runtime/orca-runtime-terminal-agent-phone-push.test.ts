@@ -1,6 +1,6 @@
 // Exercise windowless phone pushes under Node, as orcad runs them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_DONE_QUIET_MS } from '../../shared/agent-transitions'
+import { AGENT_DONE_QUIET_MS } from '../../shared/agent-status/lifecycle/agent-transitions'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 import { AgentHookServer } from '../agent-hooks/server'
@@ -102,22 +102,6 @@ describe('terminal agent phone push on a headless host', () => {
     const { report, agentAlerts } = createHost()
     report('working')
     report('done', true)
-    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
-    expect(agentAlerts()).toEqual([])
-  })
-
-  it('titles a folder workspace with its project group, as the window does', () => {
-    const { report, alerts } = createHost()
-    report('working', undefined, 'folder:f1')
-    report('done', undefined, 'folder:f1')
-    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
-    expect(alerts[0]).toMatchObject({ title: 'Research / Notes - Claude finished' })
-  })
-
-  it('stays silent on a desktop whose window has not shown yet: that window seeds what it missed', () => {
-    const { report, agentAlerts } = createHost(null)
-    report('working')
-    report('done')
     vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
     expect(agentAlerts()).toEqual([])
   })

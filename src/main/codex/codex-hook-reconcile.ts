@@ -2,6 +2,7 @@ import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readKnownCodexHookAnswer,
+  resolveAppCodexPath,
   resolveCodexHookAnswer,
   startCodexHookHashLookup
 } from './codex-hook-hash-lookup'
@@ -31,6 +32,8 @@ let rerun = false
 let convertRequested = false
 // Consume launch requests on the next run; their launch proceeds even if reconciliation cannot.
 let realHomeLaunchRequested = false
+// Until its file pass, a run may still settle on a Codex an install or upgrade has since moved.
+let findingCodexAnswer = false
 
 // Leave room in the launch's 3s budget to write stopgap approvals.
 const ANSWER_WAIT_MS = 500
@@ -79,7 +82,7 @@ function reconcileAfter(ready: Promise<unknown>, request: ReconcileRequest): Pro
 
 export function scheduleCodexHookReconcile(): void {
   // One run already reads after the spawn; coalesce calls from its multiple env builders.
-  if (config && !running) {
+  if (config && (!running || findingCodexAnswer)) {
     void reconcileCodexHooks()
   }
 }
@@ -139,14 +142,13 @@ async function reconcileOnce(realHomeLaunch: boolean): Promise<void> {
   if (!current?.isEnabled() || !(realHomeLaunch || resolveHome(current).kind === 'real')) {
     return
   }
-  const lookup = resolveCodexHookAnswer()
-  const live = await withTimeout<CodexHookAnswer | null>(lookup, ANSWER_WAIT_MS, null)
-  if (!live) {
-    // Replace stopgap approvals once Codex's answer arrives.
-    void lookup.then(() => reconcileCodexHooks({ realHomeLaunch }))
+  findingCodexAnswer = true
+  let answer: CodexHookAnswer | null
+  try {
+    answer = await findCodexAnswer(realHomeLaunch)
+  } finally {
+    findingCodexAnswer = false
   }
-  // Reuse Codex's saved answer so a slow startup probe does not disturb existing hooks.
-  const answer = live && live.kind !== 'pending' ? live : readKnownCodexHookAnswer()
   if (answer?.kind === 'refused' || (answer?.kind === 'pending' && answer.codexMissing)) {
     return
   }
@@ -159,6 +161,19 @@ async function reconcileOnce(realHomeLaunch: boolean): Promise<void> {
   })
 }
 
+async function findCodexAnswer(realHomeLaunch: boolean): Promise<CodexHookAnswer | null> {
+  // Every native spawn runs this; resolve once (#35565).
+  const codexPath = await resolveAppCodexPath()
+  const lookup = resolveCodexHookAnswer(codexPath)
+  const live = await withTimeout<CodexHookAnswer | null>(lookup, ANSWER_WAIT_MS, null)
+  if (!live) {
+    // Replace stopgap approvals once Codex's answer arrives.
+    void lookup.then(() => reconcileCodexHooks({ realHomeLaunch }))
+  }
+  // Reuse Codex's saved answer so a slow startup probe does not disturb existing hooks.
+  return live && live.kind !== 'pending' ? live : readKnownCodexHookAnswer(codexPath)
+}
+
 export const _internals = {
   resetForTesting(): void {
     config = null
@@ -167,6 +182,7 @@ export const _internals = {
     rerun = false
     convertRequested = false
     realHomeLaunchRequested = false
+    findingCodexAnswer = false
   },
   async settledForTesting(): Promise<void> {
     while (running) {

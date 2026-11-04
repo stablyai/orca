@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import SourceControl from './SourceControl'
 import {
   VIRTUALIZED_LIST_MIN_ROWS,
@@ -116,7 +116,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    remoteOperations: [],
     settings: null,
     hostedReviewCache: {},
     prCache: {},

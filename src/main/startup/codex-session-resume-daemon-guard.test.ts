@@ -29,7 +29,7 @@ vi.mock('../codex/hook-service', () => ({
 vi.mock('../codex/codex-hook-reconcile', () => ({
   reconcileCodexHooksForLaunch: mocks.reconcileCodexHooksForLaunch
 }))
-vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../shared/agent-hook-listener/configuration/agent-status-hooks-setting', () => ({
   isAgentStatusHooksEnabledForAgent: () => mocks.hooksEnabled
 }))
 vi.mock('../codex/codex-home-paths', async (importOriginal) => ({

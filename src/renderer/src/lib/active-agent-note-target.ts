@@ -2,10 +2,8 @@ import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
@@ -158,7 +156,12 @@ export async function findActiveRuntimeTerminal(
   runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
-  timeoutMs: number
+  timeoutMs: number,
+  options: {
+    signal?: AbortSignal
+    expectedEnvironmentPairingRevision?: number
+    beforeSend?: () => void
+  } = {}
 ): Promise<RuntimeTerminalListResult['terminals'][number] | null> {
   const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
     runtimeTarget,
@@ -169,7 +172,7 @@ export async function findActiveRuntimeTerminal(
       limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
       includeVisualLayouts: false
     },
-    { timeoutMs }
+    { timeoutMs, ...options }
   )
   // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
   const runtimeTabId = toHostSessionTabId(noteTarget.tabId)

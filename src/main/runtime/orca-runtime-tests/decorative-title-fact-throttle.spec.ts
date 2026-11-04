@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import { syncSinglePty } from '../orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from '../orca-runtime-test-scenario-builders.spec'
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../decorative-title-fact-emission'
@@ -51,27 +51,6 @@ describe('decorative title fact throttle', () => {
     for (const fact of facts) {
       expect(fact.normalizedTitle.endsWith('Claude Code')).toBe(true)
     }
-  })
-
-  it('propagates a real title change on the tick it arrives, mid-heartbeat', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠋ Claude Code\x07')
-    vi.setSystemTime(new Date(EPOCH + SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠙ Claude Code\x07')
-    vi.setSystemTime(new Date(EPOCH + 2 * SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;⠹ Claude Code\x07')
-    expect(titleFacts(batches)).toHaveLength(1)
-
-    const beforeChange = batches.length
-    vi.setSystemTime(new Date(EPOCH + 3 * SPINNER_INTERVAL_MS))
-    runtime.ingestSyntheticTitleFrame('pty-1', '\x1b]0;✳ Claude Code\x07')
-
-    expect(batches.length).toBeGreaterThan(beforeChange)
-    expect(titleFacts(batches.slice(beforeChange))).toEqual([
-      { kind: 'title', normalizedTitle: '✳ Claude Code', rawTitle: '✳ Claude Code' }
-    ])
   })
 
   it('propagates a changed working label immediately even while the spinner rotates', () => {

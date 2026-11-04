@@ -2,7 +2,7 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitDiffResult
-} from '../../../shared/git-diff-compare-types'
+} from '../../../shared/git/diff/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -19,7 +19,7 @@ function localWakeArgs(
 
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
-  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean },
+  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean; oldPath?: string },
   options?: GitDiffWakeOptions
 ): Promise<GitDiffResult> {
   const target = context.target
@@ -29,6 +29,7 @@ export async function getRuntimeGitDiff(
       filePath: args.filePath,
       staged: args.staged,
       compareAgainstHead: args.compareAgainstHead,
+      ...(args.oldPath ? { oldPath: args.oldPath } : {}),
       connectionId: context.connectionId,
       ...localWakeArgs(context, options)
     })

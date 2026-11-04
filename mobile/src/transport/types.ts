@@ -1,17 +1,11 @@
 import { z } from 'zod'
-import {
-  PairingOfferSchema,
-  type PairingOffer
-} from '../../../src/shared/mobile-relay-pairing-offer'
+import '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
-
-export { PairingOfferSchema }
-export type { PairingOffer }
 
 export type RpcRequest = {
   id: string
@@ -43,6 +37,7 @@ export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
 
 export type ConnectionDiagnosticCode =
+  | 'native-render-failed'
   | 'client-session-started'
   | 'app-resumed'
   | 'network-changed'

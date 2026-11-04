@@ -212,7 +212,9 @@ export function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
-    if (!args.refresh.result.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
+    // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.
+    const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
+    if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {

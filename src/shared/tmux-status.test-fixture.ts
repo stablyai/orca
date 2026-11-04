@@ -1,5 +1,5 @@
 import type { ProcessTableRow } from './process-table-snapshot'
-import type { TmuxManagedPty } from './tmux-agent-hook-owner'
+import type { TmuxManagedPty } from './tmux-agent-hook-contract'
 
 export const TMUX_TEST_PANE = 'tab-tmux:22222222-2222-4222-8222-222222222222'
 export const TMUX_TEST_ROOT: TmuxManagedPty = {

@@ -190,9 +190,14 @@ export type FederatedDispatchRow = {
   remote_terminal_handle: string | null
   to_home_imported_sequence: number
   to_home_acknowledged_sequence: number
+  home_auto_release_at: string | null
+  home_auto_release_state: FederatedHomeAutoReleaseState | null
   created_at: string
   updated_at: string
 }
+
+/** The home's own deadline for a host that cannot release settled workers by itself. */
+export type FederatedHomeAutoReleaseState = 'armed' | 'ended'
 
 export type RemoteDispatchAttachmentRow = {
   home_run_id: string
@@ -313,6 +318,10 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** The settled Dispatch whose worker this follow-up continues. */
+  follow_up_of_dispatch_id: string | null
+  /** When its worker reported with coordinator mail unread, until that mail continues it. */
+  follow_up_mail_at: string | null
 }
 
 export type DecisionGateRow = {

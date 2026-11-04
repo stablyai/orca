@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   ProjectHostSetupCreateArgs,
@@ -14,11 +14,11 @@ import type {
 } from '../../../shared/project-types'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
 import { resolveImportedFolderProjectLink } from '../../../shared/imported-folder-project-identity'
-import { readCurrentGitRemoteIdentity } from '../../repo-git-remote-identity'
+import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { updateProjectHostSetupWithProvenKind } from '../../folder-repo-git-conversion'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import {

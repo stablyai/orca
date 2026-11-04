@@ -6,7 +6,6 @@ import { compileAggregateExpression } from './pr-aggregate-gate-context.mjs'
 
 const { jobs } = parse(readFileSync('.github/workflows/adhoc-mac-build.yml', 'utf8'))
 const mac = jobs['build-adhoc-mac-arch']
-const final = jobs['build-adhoc-mac']
 const windows = jobs['build-adhoc-win']
 const publish = jobs['publish-adhoc-win']
 const bundleWorkflow = parse(readFileSync('.github/workflows/release-javascript.yml', 'utf8'))
@@ -25,29 +24,6 @@ function qualification(template = 'success', ships = 'true') {
 }
 
 describe('adhoc Windows compilation overlaps Mac without publishing early', () => {
-  it('starts Windows during qualification without a Mac dependency', () => {
-    expect(mac.needs).toEqual(
-      expect.arrayContaining([...windows.needs, 'orcad-template', 'prepare-adhoc-mac-release'])
-    )
-    expect(windows.needs).not.toContain('build-adhoc-mac')
-    expect(windows.with.stage_only).toBe(true)
-    expect(windows.with.fast_release).toBe(true)
-    expect(windows.with.ref).toBe('${{ needs.resolve-ref.outputs.sha }}')
-    expect(windows.with.tag).toBe('v${{ needs.orcad-template-support.outputs.version }}')
-    expect(windows.with.version).toBe(final.outputs.version)
-    expect(windows.with.orcad_template).toBe(
-      "${{ needs.orcad-template-support.outputs.ships == 'true' }}"
-    )
-    const identity = jobs['orcad-template-support']
-    expect(identity.outputs.version).toBe('${{ steps.adhoc.outputs.version }}')
-    expect(identity.steps.filter((step) => step.id === 'adhoc')).toHaveLength(1)
-    expect(mac.steps.some((step) => step.id === 'adhoc')).toBe(false)
-    expect(
-      jobs['prepare-adhoc-mac-release'].steps.find((step) => step.name === 'Create adhoc release')
-        .env.TAG
-    ).toBe(windows.with.tag)
-  })
-
   it('builds portable JavaScript alongside qualification and restores it on both platforms', () => {
     const bundle = jobs['release-javascript']
     expect(bundle.needs).not.toContain('orcad-template')

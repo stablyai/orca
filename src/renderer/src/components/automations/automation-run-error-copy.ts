@@ -80,7 +80,15 @@ const COPY: Record<
     translate('automations.runFailures.agentNeverStarted', EN.agentNeverStarted),
   agentNoCompletion: () =>
     translate('automations.runFailures.agentNoCompletion', EN.agentNoCompletion),
-  watchTimedOut: () => translate('automations.runFailures.watchTimedOut', EN.watchTimedOut)
+  agentInterrupted: () =>
+    translate('automations.runFailures.agentInterrupted', EN.agentInterrupted),
+  watchTimedOut: () => translate('automations.runFailures.watchTimedOut', EN.watchTimedOut),
+  wslDistroStopped: (params) => {
+    const distro = params?.distro
+    return typeof distro === 'string'
+      ? translate('automations.runFailures.wslDistroStopped', EN.wslDistroStopped, { distro })
+      : null
+  }
 }
 
 function isAutomationRunFailureCode(code: unknown): code is AutomationRunFailureCode {

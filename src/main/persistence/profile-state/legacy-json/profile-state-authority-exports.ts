@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { durableWriteTempPath, writeFileDurableSync } from '../../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
 import { readProfileStateSnapshot } from '../profile-state-documents'
 import {
   stageProfileStateRecoveryJson,

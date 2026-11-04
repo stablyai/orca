@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { useAppStore } from '@/store'
 import { PreservedBranchBatchReviewDialog } from './PreservedBranchBatchReviewDialog'
 import {

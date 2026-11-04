@@ -2,9 +2,9 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { applyAgentRowLineage } from '../dashboard/agent-row-lineage'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const now = 1_792_983_600_000
 const tabs: Tab[] = [

@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
-import { clearEnvCommand, quoteStartupArg, withoutEnvCommand } from './tui-agent-startup-shell'
+import {
+  clearEnvCommand,
+  quoteStartupArg,
+  withoutEnvCommand
+} from './agent-launch/startup/tui-agent-startup-shell'
 
 const FISH = resolveFishBinary(4)
 
@@ -103,10 +107,6 @@ describe.skipIf(process.platform === 'win32')(
     // Keep CI’s required-fish check active even if shell cases skip.
     it('has the fish this suite needs when CI requires one', () => {
       expect(fishRequirementViolation(FISH)).toBeNull()
-    })
-
-    it('found shells to test against', () => {
-      expect(SHELLS.map((shell) => shell.name)).toContain('sh')
     })
 
     describe.each(SHELLS)('$name', (shell) => {

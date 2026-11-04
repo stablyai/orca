@@ -1,14 +1,15 @@
 import { DatabaseSync } from 'node:sqlite'
+import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
 import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain
 } from '../browser-cookie-import-policy'
-import { createChromiumCookieSnapshot } from '../../chromium-cookie-snapshot'
+import { createChromiumCookieSnapshot } from './chromium-cookie-snapshot'
 import { planImportWrites } from '../browser-cookie-import-write'
 import { readChromiumRowPartition } from '../sources/browser-cookie-source-partition'
 import { diag } from '../browser-cookie-import-diagnostics'
-import type { DetectedBrowser } from '../sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 import type { CookieImportOptions } from '../browser-cookie-import-pipeline'
 import type { ChromiumImportContext } from './import-context'
 import type { Session } from 'electron'
@@ -30,10 +31,7 @@ export async function prepareChromiumCookieImport(
   } catch (err) {
     diag(`  Chromium snapshot failed: ${String(err)}`)
     return {
-      result: {
-        ok: false,
-        reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
-      }
+      result: browserCookieImportFailure('databaseCopyFailed', { browser: browser.label })
     }
   }
 
@@ -57,7 +55,7 @@ export async function prepareChromiumCookieImport(
     sourceDb = null
     diag(`  source has ${sourceRows.length} cookies`)
     if (sourceRows.length === 0) {
-      return { result: { ok: false, reason: `No cookies found in ${browser.label}.` } }
+      return { result: browserCookieImportFailure('noCookies', { browser: browser.label }) }
     }
 
     // Plan partition skips before decryption so an unreadable value cannot hide a skipped family.
@@ -88,10 +86,7 @@ export async function prepareChromiumCookieImport(
       : null
     if (needsSourceKey && !sourceKey) {
       return {
-        result: {
-          ok: false,
-          reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
-        }
+        result: browserCookieImportFailure('encryptionKeyDenied', { browser: browser.label })
       }
     }
 

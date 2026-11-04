@@ -1,3 +1,6 @@
+import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './structured-agent-session-usage-limit-continue'
+import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
+import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
@@ -58,7 +61,6 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
-  OptionsParams,
   RewindParams,
   SendParams,
   SleepWorkspaceParams,
@@ -69,10 +71,11 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
 import {
-  noteStructuredAgentSessionClose,
-  refusingStructuredAgentSessionCreatesClosedFirst
-} from './structured-agent-session-close-before-create'
+  projectReceiptDeviceEvent,
+  projectReceiptDeviceHistory
+} from './structured-agent-session-receipt-devices'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -107,6 +110,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         params.worktree,
         params.agent
       )
+      if (support.supported && params.resumeFrom) {
+        // Create refuses the same writer; asked here, the client refuses before it closes or opens anything.
+        await ctx.runtime.assertStructuredAdoptionTerminalWritersExited(
+          params.agent,
+          params.resumeFrom.providerSessionId,
+          params.resumeFrom.closingPaneKeys
+        )
+      }
       // Optional: older clients ignore it, and a client seeds its picker with what create will use.
       const seedOptions = support.supported
         ? ctx.runtime.structuredAgentSessionLaunchSeedOptions(params.agent)
@@ -142,31 +153,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
-  defineMethod({
-    // Close only provider/in-memory state, preserving record/journal for future attachment.
-    name: 'agentSession.close',
-    permission: 'workspace',
-    params: OptionsParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      // Record close before requiring host so even failed closes fence racing creates.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        noteStructuredAgentSessionClose(
-          params.sessionId,
-          (getStructuredAgentSessionHost()?.deps.store.getConversation(params.sessionId) ??
-            null) !== null
-        )
-      }
-      const host = requireStructuredCleanupHost(ctx)
-      // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
-      if (typeof host.setSessionTabVisibility === 'function') {
-        await host.setSessionTabVisibility(params.sessionId, false)
-      }
-      // Clients call this only when the user closes this chat's tab or cancels its launch.
-      await host.close(params.sessionId, 'user-close')
-      return { ok: true as const }
-    }
-  }),
+  STRUCTURED_AGENT_SESSION_CLOSE_METHOD,
   defineMethod({
     name: 'agentSession.sleepWorkspace',
     permission: 'workspace',
@@ -223,20 +210,23 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: HistoryParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledHost(ctx, params.sessionId)
-      return projectTurnItemHistory(
-        projectQueuedImageCardHistory(
-          projectBackgroundTaskHistory(
-            await host.history(
-              params,
-              undefined,
-              clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+      return projectReceiptDeviceHistory(
+        projectTurnItemHistory(
+          projectQueuedImageCardHistory(
+            projectBackgroundTaskHistory(
+              await host.history(
+                params,
+                undefined,
+                clientSupportsSnapshotCatchUp(ctx) && clientReadsCurrentRequests(ctx)
+              ),
+              ctx
             ),
             ctx
           ),
-          ctx
+          ctx,
+          host.sessionAgent(params.sessionId)
         ),
-        ctx,
-        host.sessionAgent(params.sessionId)
+        ctx
       )
     }
   }),
@@ -255,6 +245,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       }
       // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
       dispose = await host.subscribe({
+        commandsOnRequest: clientRequestsCommands(ctx),
         readsCurrentRequests: clientReadsCurrentRequests(ctx),
         id: subscriptionId,
         sessionId: params.sessionId,
@@ -262,10 +253,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           projectQueuedImageCardPublication(publication, ctx),
         emit: (event) =>
           emit(
-            projectTurnItemEvent(
-              projectBackgroundTaskEvent(event, ctx),
-              ctx,
-              host.sessionAgent(params.sessionId)
+            projectReceiptDeviceEvent(
+              projectTurnItemEvent(
+                projectBackgroundTaskEvent(event, ctx),
+                ctx,
+                host.sessionAgent(params.sessionId)
+              ),
+              ctx
             )
           ),
         ...(params.cursor ? { cursor: params.cursor } : {}),
@@ -299,6 +293,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS,
   ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
   ...STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS,
   ...STRUCTURED_AGENT_SESSION_THREAD_GOAL_METHODS,

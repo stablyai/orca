@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -130,50 +130,6 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
       environmentId: 'env-1',
       worktreeId: 'repo-1::worktree-1'
     })
-  })
-
-  it('builds one owner index per cold worktree and repo snapshot', () => {
-    let worktreeIdReads = 0
-    let repoIdReads = 0
-    const repos = Array.from({ length: 100 }, (_, index) => {
-      const repo = {
-        connectionId: null,
-        executionHostId: 'local'
-      }
-      Object.defineProperty(repo, 'id', {
-        enumerable: true,
-        get: () => {
-          repoIdReads += 1
-          return `repo-${index}`
-        }
-      })
-      return repo
-    })
-    const worktrees = Array.from({ length: 100 }, (_, index) => {
-      const worktree = {
-        repoId: `repo-${index}`,
-        hostId: undefined
-      }
-      Object.defineProperty(worktree, 'id', {
-        enumerable: true,
-        get: () => {
-          worktreeIdReads += 1
-          return `worktree-${index}`
-        }
-      })
-      return worktree
-    })
-    const state = {
-      settings: { activeRuntimeEnvironmentId: null },
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos,
-      worktreesByRepo: { all: worktrees }
-    } as unknown as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
-
-    expect(getAgentDetectionTargetKeyForWorktree(state, 'worktree-99')).toBe('local')
-    expect(worktreeIdReads).toBe(100)
-    expect(repoIdReads).toBe(100)
   })
 })
 

@@ -5,7 +5,7 @@ import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../../shared/manual-repo-order'
-import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup-browse-state'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
@@ -48,8 +48,9 @@ import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
 } from '../../repos/wsl-moved-repo-ui-retention'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+
 import {
+  type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
 } from '../persisted-ui-write-baseline'
@@ -177,6 +178,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
           worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
+          showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),

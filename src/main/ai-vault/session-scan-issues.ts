@@ -1,8 +1,8 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
-} from '../../shared/ai-vault-scan-issue-copy'
+} from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
 import { errorMessage } from './session-scanner-values'
 

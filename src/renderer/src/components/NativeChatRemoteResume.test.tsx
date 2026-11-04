@@ -27,7 +27,7 @@ import {
   createNativeChatRestartStore,
   type NativeChatRestartStore
 } from './native-chat-resume-on-restart-store'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import * as runtimeRpc from '@/runtime/runtime-rpc-client'
 import * as hostOffer from './native-chat-restart-host-offer'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
@@ -210,7 +210,7 @@ it.each([513, 5_130])(
       }
     })
     useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalNativeChat: false },
+      settings: { ...getDefaultSettings(''), nativeChatProviders: {} },
       runtimeEnvironments: [pairedEnvironment('ssh')],
       runtimeStatusByEnvironmentId: new Map([['ssh', ready('r1')]])
     })
@@ -753,7 +753,7 @@ it.each(['available', 'unavailable', 'other-desktop'])(
       settings: {
         ...getDefaultSettings(''),
         ...useAppStore.getState().settings,
-        experimentalNativeChat: false
+        nativeChatProviders: {}
       },
       runtimeEnvironments: [pairedEnvironment('ssh')],
       runtimeStatusByEnvironmentId: new Map([['ssh', ready('r1')]])

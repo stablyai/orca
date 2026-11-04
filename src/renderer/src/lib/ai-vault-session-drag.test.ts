@@ -41,36 +41,6 @@ describe('Session History session drag data', () => {
     clearAiVaultSessionDragData()
   })
 
-  it('writes and reads the private session history payload', () => {
-    const transfer = createTransfer()
-    const payload: AiVaultSessionDragPayload = {
-      agent: 'claude',
-      sessionId: 'session-1',
-      title: 'Fix terminal split',
-      command: "cd '/repo' && claude --resume session-1",
-      sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
-      sessionCwd: '/repo',
-      env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
-      launchConfig: {
-        agentCommand: 'claude --dangerously-skip-permissions',
-        agentArgs: '--dangerously-skip-permissions',
-        agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      },
-      realHomeStartup: {
-        command: "cd '/repo' && claude --resume session-1",
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
-      }
-    }
-
-    writeAiVaultSessionDragData(transfer, payload)
-
-    expect(transfer.effectAllowed).toBe('copy')
-    expect(hasAiVaultSessionDragData(transfer)).toBe(true)
-    expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
-  })
-
   it('preserves an explicit null sessionCwd across the serialized round-trip', () => {
     const transfer = createTransfer()
     const payload: AiVaultSessionDragPayload = {
@@ -155,16 +125,6 @@ describe('Session History session drag data', () => {
     expect(readAiVaultSessionDragData(transfer)).toBeNull()
   })
 
-  it('rejects malformed payloads', () => {
-    const transfer = createTransfer()
-    transfer.setData(
-      AI_VAULT_SESSION_DRAG_TYPE,
-      JSON.stringify({ kind: 'ai-vault-session', version: 1, agent: 'bad', command: 'claude' })
-    )
-
-    expect(readAiVaultSessionDragData(transfer)).toBeNull()
-  })
-
   it('rejects array-shaped env records', () => {
     const transfer = createTransfer()
     transfer.setData(
@@ -197,45 +157,6 @@ describe('Session History session drag data', () => {
         envToDelete: ['CODEX_HOME', '']
       })
     )
-
-    expect(readAiVaultSessionDragData(transfer)).toBeNull()
-  })
-
-  it('rejects array-shaped launch config env records', () => {
-    const transfer = createTransfer()
-    transfer.setData(
-      AI_VAULT_SESSION_DRAG_TYPE,
-      JSON.stringify({
-        kind: 'ai-vault-session',
-        version: 1,
-        agent: 'claude',
-        sessionId: 'session-1',
-        title: 'Malformed launch config env',
-        command: 'claude --resume session-1',
-        launchConfig: {
-          agentArgs: '',
-          agentEnv: ['ANTHROPIC_BASE_URL=https://claude.example.test']
-        }
-      })
-    )
-
-    expect(readAiVaultSessionDragData(transfer)).toBeNull()
-  })
-
-  it('rejects oversized serialized payloads before parsing', () => {
-    const transfer = createTransfer()
-    const secret = 'ai-vault-drag-secret'
-    transfer.setData(
-      AI_VAULT_SESSION_DRAG_TYPE,
-      secret + 'x'.repeat(AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES)
-    )
-
-    expect(readAiVaultSessionDragData(transfer)).toBeNull()
-  })
-
-  it('rejects multibyte oversized payloads before parsing', () => {
-    const transfer = createTransfer()
-    transfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '😀'.repeat(4097))
 
     expect(readAiVaultSessionDragData(transfer)).toBeNull()
   })

@@ -1,11 +1,12 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import { getAgentResumeArgv, isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
+import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
-import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/live-resume-anchor-record'
-import { agentTurnEndedUncleanly } from '../../../shared/agent-main-agent-verdict'
+import { isLiveResumeAnchorForCompletedAgent } from '../../../shared/agent-session/lifecycle/live-resume-anchor-record'
+import { agentTurnEndedUncleanly } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 
 export type EligiblePane = {

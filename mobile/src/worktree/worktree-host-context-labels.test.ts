@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from './workspace-list-types'
+import type { Worktree, WorktreeHostContextView } from './workspace-list-types'
 import {
-  applyWorktreeHostContextLabels,
+  NO_WORKTREE_HOST_CONTEXT,
+  buildWorktreeHostContextOf,
   buildHostLabelById,
   buildRepoHostIdByRepoId,
   getWorktreeHostContextLabels,
@@ -27,6 +28,15 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 const sshHostId = 'ssh:ssh-1785104650217-eduhep' as const
+
+// Each row's host context; an unlabelled row reads as an empty view.
+function applyWorktreeHostContextLabels(
+  rows: Worktree[],
+  sources: Parameters<typeof buildWorktreeHostContextOf>[1]
+): WorktreeHostContextView[] {
+  const hostContextOf = buildWorktreeHostContextOf(rows, sources)
+  return rows.map((row) => hostContextOf(row) ?? {})
+}
 
 describe('buildHostLabelById', () => {
   it('labels SSH targets by their registered label and lets a display override win', () => {
@@ -92,7 +102,7 @@ describe('getWorktreeHostContextLabels', () => {
   it('returns nothing for a single-host list', () => {
     const rows = [worktree({ hostId: 'local' }), worktree({ hostId: 'local', worktreeId: 'b' })]
     expect(getWorktreeHostContextLabels(rows, sources)).toBeUndefined()
-    expect(applyWorktreeHostContextLabels(rows, sources)).toBe(rows)
+    expect(buildWorktreeHostContextOf(rows, sources)).toBe(NO_WORKTREE_HOST_CONTEXT)
   })
 
   it('names an unhealthy host even in a single-host list, and only that host', () => {
@@ -105,32 +115,16 @@ describe('getWorktreeHostContextLabels', () => {
       ['openclaw', 'Connecting']
     ])
     expect(
-      applyWorktreeHostContextLabels(rows, {
+      buildWorktreeHostContextOf(rows, {
         ...sources,
         hostHealthById: new Map([[sshHostId, 'available']])
       })
-    ).toBe(rows)
+    ).toBe(NO_WORKTREE_HOST_CONTEXT)
     const otherHostUnhealthy = applyWorktreeHostContextLabels(rows, {
       ...sources,
       hostHealthById: new Map([['ssh:x', 'error']])
     })
     expect(otherHostUnhealthy[0].hostContextLabel).toBeUndefined()
-  })
-
-  it('names every row by host once the list spans hosts', () => {
-    const rows = [
-      worktree({ hostId: 'local', worktreeId: 'a' }),
-      worktree({ hostId: sshHostId, worktreeId: 'b' }),
-      worktree({ hostId: 'ssh:unlabeled', worktreeId: 'c' }),
-      worktree({ hostId: 'runtime:env-1', worktreeId: 'd' })
-    ]
-    const labeled = applyWorktreeHostContextLabels(rows, sources)
-    expect(labeled.map((row) => row.hostContextLabel)).toEqual([
-      'Local Mac',
-      'openclaw',
-      'unlabeled',
-      'env-1'
-    ])
   })
 
   it('adds the health word only for hosts the desktop reports as unhealthy', () => {

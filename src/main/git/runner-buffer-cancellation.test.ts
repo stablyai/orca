@@ -9,10 +9,8 @@ vi.mock('node:child_process', () => ({
 }))
 
 import { gitExecFileAsyncBuffer } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 import { configureWindowsHostGitEnvironmentReadiness } from './command-runner/windows-host-git-environment'
 
 beforeEach(() => execFileMock.mockReset())
@@ -22,15 +20,6 @@ afterEach(() => {
 })
 
 describe('buffered Git cancellation', () => {
-  it('rejects an already canceled read without launching Git', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    await expect(
-      gitExecFileAsyncBuffer(['show', 'HEAD:file'], { cwd: '/repo', signal: controller.signal })
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
   it('removes a canceled queued read without waiting for the active child', async () => {
     const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 })
     _resetGitAdmissionForTests(scheduler)

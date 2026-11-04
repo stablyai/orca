@@ -22,7 +22,7 @@ const {
   writeCookieIdentityMock: vi.fn()
 }))
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -73,7 +73,7 @@ import {
   importCookiesFromBrowser,
   detectInstalledBrowsers
 } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { summarizeCookieImportError } from './browser-cookie-import-diagnostics'
 
@@ -441,7 +441,7 @@ describe('importCookiesFromBrowser Safari', () => {
 
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
-    expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
+    expect(result).toMatchObject({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })

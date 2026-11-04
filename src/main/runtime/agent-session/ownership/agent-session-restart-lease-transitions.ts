@@ -3,8 +3,8 @@
 import {
   adjudicateAgentSessionRestart,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { withLease } from './agent-session-lease-transitions'
 
 export function applyAgentSessionRestartAdjudication(args: {

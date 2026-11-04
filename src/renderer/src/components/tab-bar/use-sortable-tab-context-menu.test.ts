@@ -16,3 +16,19 @@ it('an old completion cannot close a reopened menu, including retained closing c
   act(result.current.onComplete)
   expect(result.current.open).toBe(false)
 })
+
+it('retires same-open completion and cannot affect a remounted owner', () => {
+  const first = renderHook(useSortableTabContextMenu)
+  act(() => first.result.current.onOpenChange(true))
+  const oldComplete = first.result.current.onComplete
+  act(() => first.result.current.onOpenChange(true))
+  act(oldComplete)
+  expect(first.result.current.open).toBe(true)
+  const unmountedComplete = first.result.current.onComplete
+  first.unmount()
+  const next = renderHook(useSortableTabContextMenu)
+  act(() => next.result.current.onOpenChange(true))
+  act(unmountedComplete)
+  expect(next.result.current.open).toBe(true)
+  next.unmount()
+})

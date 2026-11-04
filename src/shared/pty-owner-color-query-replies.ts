@@ -4,24 +4,24 @@ import {
 } from './pty-owner-color-query-colors'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import { COLOR_SCHEME_QUERY, type PtyStartupQuery } from './pty-startup-query'
-import { TerminalOscColorOverrideTracker } from './terminal-osc-color-override-tracker'
+import { TerminalOscColorOverrideTracker } from './terminal/protocol/queries/terminal-osc-color-override-tracker'
 import {
   cssColorToOscRgb,
   terminalOscColorQueryReplies,
   type TerminalOscColorQueryReplyColors,
   type TerminalOscColorQuerySlot
-} from './terminal-osc-color-reply'
+} from './terminal/protocol/queries/terminal-osc-color-reply'
 import {
   MAX_APPEARANCE_OSC_BODY_CHARS,
   SPECIAL_COLOR_IDENTS,
   terminalOscAppearanceSets,
   type TerminalOscAppearanceEntry
-} from './terminal-osc-appearance-query'
+} from './terminal/protocol/queries/terminal-osc-appearance-query'
 import {
   formatXColorRgbSpec,
   parseXColorSpec,
   terminalColorSchemeReport
-} from './terminal-view-attributes'
+} from './terminal/protocol/queries/terminal-view-attributes'
 
 const MAX_QUERY_CANDIDATE_CHARS = 64
 // Room for the `ESC ] 4 ;` prefix and terminator around the longest palette body.

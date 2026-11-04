@@ -1,9 +1,9 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
 import type {
   SshManagedServerStatus,
   SshManagedServerUpdateNote,
@@ -27,9 +27,12 @@ import {
 import { getSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from '../ssh/ssh-ipc-context'
-import { getWslHostPhoneGate, getWslHostService } from '../../wsl/wsl-host-service-instance'
-import { assertWslHostReachable } from '../../wsl/wsl-host-gate'
-import { wslHostPhoneRefusal } from '../../wsl/wsl-host-phone-reach'
+import {
+  getWslHostPhoneGate,
+  getWslHostService
+} from '../../wsl/host-lifecycle/wsl-host-service-instance'
+import { assertWslHostReachable } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { wslHostPhoneRefusal } from '../../wsl/host-lifecycle/wsl-host-phone-reach'
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
 

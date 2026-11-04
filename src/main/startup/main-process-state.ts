@@ -1,6 +1,5 @@
-import type { BrowserWindow, Tray } from 'electron'
-import { app } from 'electron'
-import type { Store } from '../persistence'
+import { type BrowserWindow, type Tray, app } from 'electron'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -17,17 +16,19 @@ import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-
 import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
-import type { AgentAwakeService } from '../agent-awake-service'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { AutomationService } from '../automations/service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
+import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
 import type { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
+import type { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { RelayBrokerStatus } from '../runtime/mobile-cloud-relay/relay-session-broker-contract'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/codex-session-migration-scheduler'
@@ -66,6 +67,8 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
 }
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
+const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
+
 export const mainProcessState = {
   mainWindow: null as BrowserWindow | null,
   // Never cleared: closing the last main window still quits on Windows/Linux.
@@ -94,8 +97,7 @@ export const mainProcessState = {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
   desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
   desktopPushService: null as DesktopPushService | null,
-  desktopRelayStatus: 'offline' as RelayBrokerStatus,
-  desktopRelayCellUrl: undefined as string | undefined,
+  desktopRelayStatus,
   pendingUnpairedDeviceAuthFailure: false,
   // Advertise headless browser panes only when offscreen display initialization succeeds.
   headlessBrowserDisplayAvailable: false,
@@ -113,10 +115,14 @@ export const mainProcessState = {
   automations: null as AutomationService | null,
   pluginService: null as PluginService | null,
   pluginKillListService: null as PluginKillListService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
+  pluginInstallStatsService: null as PluginInstallStatsService | null,
   pluginMarketplaceService: null as PluginMarketplaceService | null,
   pluginMarketplaceInstaller: null as PluginMarketplaceInstaller | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
   pluginAutoUpdater: null as PluginAutoUpdater | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once plugins start.
+  pluginUpdateReviewNotices: null as PluginUpdateReviewNotices | null,
   keybindings: null as KeybindingService | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),

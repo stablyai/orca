@@ -1,7 +1,11 @@
+import { registerPtyConnectionShutdownExitDeferralTests } from './pty-connection-pty-shutdown-exit-deferral.spec'
 import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
+import {
+  sendTerminalInputThroughPane,
+  temporarilySetNavigatorUserAgent
+} from './pty-connection-test-dom'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -20,7 +24,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -29,6 +37,7 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionPtyExitTeardownTests(): void {
+  let restoreUserAgent: (() => void) | undefined
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -92,120 +101,25 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     afterEach(async () => {
+      restoreUserAgent?.()
+      restoreUserAgent = undefined
       await restoreTerminalTestGlobals()
     })
 
-    it('keeps the surviving split pane mounted when an intentional pane-close PTY exit arrives', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-pane-2')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      const deps = createDeps({
-        consumeSuppressedPtyExit: vi.fn(() => true)
-      })
-
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string, exitCode?: number) => void)
-        | undefined
-      expect(onPtyExit).toBeTypeOf('function')
-
-      onPtyExit?.('pty-pane-2')
-
-      expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
-      expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, null)
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-pane-2')
-      expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
-      expect(manager.closePane).not.toHaveBeenCalled()
-    })
-
-    it('defers all exit-side state mutation while worktree shutdown verification is pending', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
-      const transport = createMockTransport('pty-pane-2')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      let pending = true
-      const deps = createDeps({
-        isPtyShutdownPending: vi.fn(() => pending),
-        consumeSuppressedPtyExit: vi.fn(() => true)
-      })
-
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string) => void)
-        | undefined
-
-      onPtyExit?.('pty-pane-2')
-
-      expect(deps.consumeSuppressedPtyExit).not.toHaveBeenCalled()
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearRuntimePaneTitle).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(manager.closePane).not.toHaveBeenCalled()
-
-      pending = false
-      settleDeferredPtyShutdownExits(['pty-pane-2'], 'committed')
-      expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
-      expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 2)
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-    })
-
-    it('keeps renderer state intact for an exit deferred through rollback', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
-      const transport = createMockTransport('pty-pane-2')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      let pending = true
-      const deps = createDeps({
-        isPtyShutdownPending: vi.fn(() => pending),
-        consumeSuppressedPtyExit: vi.fn(() => true)
-      })
-
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string) => void)
-        | undefined
-      onPtyExit?.('pty-pane-2')
-
-      pending = false
-      settleDeferredPtyShutdownExits(['pty-pane-2'], 'rolled-back')
-
-      expect(deps.consumeSuppressedPtyExit).not.toHaveBeenCalled()
-      expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
-      expect(deps.clearRuntimePaneTitle).not.toHaveBeenCalled()
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(manager.closePane).not.toHaveBeenCalled()
-    })
-
-    it('preserves wake identifiers when exit arrives after a committed shutdown', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const { markCommittedPtyShutdowns } = await import('./pty-shutdown-exit-deferral')
-      const transport = createMockTransport('pty-pane-2')
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      const deps = createDeps({
-        isPtyShutdownPending: vi.fn(() => false),
-        consumeSuppressedPtyExit: vi.fn(() => true)
-      })
-
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string) => void)
-        | undefined
-
-      markCommittedPtyShutdowns(['pty-pane-2'])
-      onPtyExit?.('pty-pane-2')
-
-      expect(deps.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-pane-2')
-      expect(deps.clearTabPtyId).not.toHaveBeenCalled()
-      expect(manager.closePane).not.toHaveBeenCalled()
+    registerPtyConnectionShutdownExitDeferralTests({
+      get transportQueue() {
+        return transportFactoryQueue
+      },
+      get transportOptions() {
+        return createdTransportOptions
+      },
+      createDeps
     })
 
     it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2, 2)
@@ -234,7 +148,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         })
       })
 
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -252,6 +170,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('closes a hidden split pane whose PTY exits before output instead of keeping a ghost', async () => {
       // Hidden delivery withholds bytes, so no output cannot justify retaining an exited ghost pane.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2, 2)
@@ -261,7 +181,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
 
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -281,12 +205,18 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('keeps a worktree sole terminal mounted when its freshly-spawned PTY exits before input (direnv failure)', async () => {
       // Keep an unused shell mounted after startup failure so direnv errors do not close the tab and return to Landing.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(createPane(1) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -307,6 +237,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('keeps a worktree sole terminal mounted when only a captured shortcut preceded the exit', async () => {
       // Shortcut-driven redraw activity is not typed input; Shift+Enter must not turn startup failure into tab closure.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -315,8 +247,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       const binding = connectPanePty(
         createPane(1) as never,
         manager as never,
-        deps as never
-      ) as unknown as { markShortcutTerminalInputSent: () => void }
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -334,12 +266,18 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('forwards a synthetic host-loss exit code to the tab-level handler', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(createPane(1) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
@@ -356,6 +294,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('keeps a mounted split pane binding across a synthetic host-loss exit', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
@@ -364,7 +304,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
 
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
@@ -381,13 +325,19 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('tears down the sole terminal when a freshly-spawned PTY exits after the user typed input', async () => {
       // Why: an explicit `exit` (or any typed input) is a deliberate close, not a failed-startup shell, so the worktree should deactivate as before.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -405,15 +355,21 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       expect(manager.closePane).not.toHaveBeenCalled()
     })
 
-    it('keeps a failed local terminal visible after user input', async () => {
+    it('tears down a failed local terminal after user input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps({ onPaneProcessDied: vi.fn() })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks12)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
@@ -421,74 +377,41 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       sendTerminalInputThroughPane(pane, 'agent startup\r')
       onPtyExit?.('tab-pty', 1)
 
-      expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-        paneId: 1,
-        exitCode: 1,
-        startup: null,
-        reason: 'process-failed'
-      })
-      expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+      expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+      expect(deps.onPtyExitRef.current).toHaveBeenCalled()
       expect(manager.closePane).not.toHaveBeenCalled()
     })
 
-    it('keeps a failed local split pane visible', async () => {
+    it('does not claim a capacity overlay for a failed local split pane', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
       const deps = createDeps({ onPaneProcessDied: vi.fn() })
 
-      connectPanePty(createPane(1) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks13)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
       onPtyExit?.('tab-pty', 1)
 
-      expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-        paneId: 1,
-        exitCode: 1,
-        startup: null,
-        reason: 'process-failed'
-      })
-      expect(manager.closePane).not.toHaveBeenCalled()
-    })
-
-    it('classifies the Git Bash capacity failure before retaining its pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'tab-pty'
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const manager = createManager(1)
-      const startup = { command: 'codex --resume session-1' }
-      const deps = createDeps({ onPaneProcessDied: vi.fn(), startup })
-
-      connectPanePty(createPane(1) as never, manager as never, deps as never)
-      const onPtyExit = createdTransportOptions[0]?.onPtyExit as
-        | ((ptyId: string, exitCode?: number) => void)
-        | undefined
-
-      capturedDataCallback.current?.(
-        'console device allocation failure - too many consoles in use, max consoles is 128'
-      )
-      onPtyExit?.('tab-pty', 1)
-
-      expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-        paneId: 1,
-        exitCode: 1,
-        startup,
-        reason: 'git-bash-console-capacity'
-      })
-      expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+      expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
+      expect(manager.closePane).toHaveBeenCalledWith(1)
     })
 
     it('retains the cold-restore resume startup when its replacement hits capacity', async () => {
+      restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const callbacks: ConnectCallbacks[] = []
       const transport = createMockTransport('resume-pty')
       transport.connect.mockImplementation(async (options: { callbacks: ConnectCallbacks }) => {
@@ -502,8 +425,17 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         onPaneProcessDied: vi.fn()
       })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks14)
+      )
       await flushAsyncTicks(20)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn
+      if (typeof onPtySpawn !== 'function') {
+        throw new Error('Missing production PTY spawn callback')
+      }
+      onPtySpawn('resume-pty')
       callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
@@ -525,7 +457,12 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     })
 
     it('does not carry capacity detection into a cold-restore replacement', async () => {
+      restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks15 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const callbacks: ConnectCallbacks[] = []
       let currentPtyId = 'lost-pty'
       const transport = createMockTransport(currentPtyId)
@@ -556,7 +493,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
       })
 
-      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks15)
+      )
       await flushAsyncTicks(30)
       expect(callbacks).toHaveLength(2)
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -568,23 +509,24 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         | undefined
       onPtyExit?.(currentPtyId, 1)
 
-      expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
-        paneId: 1,
-        exitCode: 1,
-        startup: null,
-        reason: 'process-failed'
-      })
+      expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
     })
 
     it('tears down the sole terminal when a reattached (not freshly spawned) PTY exits', async () => {
       // Reattach skips onPtySpawn; the unused-new-shell guard must not retain a dead previously-live session.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks16 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
       const deps = createDeps()
 
-      connectPanePty(createPane(1) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(1) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks16)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string, exitCode?: number) => void)
         | undefined
@@ -599,6 +541,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('rebinds a provider replacement without granting fresh-spawn exit protection', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks17 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -607,7 +551,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       const deps = createDeps()
       const pane = createPane(1)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks17)
+      )
       const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
         | ((ptyId: string, replacedPtyId: string) => void)
         | undefined
@@ -636,6 +584,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('ignores a late spawn callback after the pane adopted a provider replacement', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks18 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -644,7 +594,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       const deps = createDeps()
       const pane = createPane(1)
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks18)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -674,6 +628,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('ignores a late split-pane spawn callback when the tab identity belongs to pane one', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks19 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -696,7 +652,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         }
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks19)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -724,6 +684,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('accepts a fresh spawn when the persisted pane still names the retired PTY', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks20 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       let transportPtyId = 'terminal-new'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -741,7 +703,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         ptyIdsByLeafId: { [LEAF_1]: 'terminal-old' }
       }
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks20)
+      )
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
@@ -756,6 +722,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('closes a split pane when an established PTY exits after output', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks21 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-pane-2')
       transport.connect.mockImplementation(
@@ -771,7 +739,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
 
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks21)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -790,6 +762,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('removes the agent row when an established PTY exits through EOF (#12907)', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks22 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
@@ -798,7 +772,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
 
-      connectPanePty(createPane(2) as never, manager as never, deps as never)
+      connectPanePty(
+        createPane(2) as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks22)
+      )
       const onPtyExit = createdTransportOptions[0]?.onPtyExit as
         | ((ptyId: string) => void)
         | undefined
@@ -811,6 +789,8 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('closes a split pane when an established PTY exits after terminal input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks23 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(2)
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -820,7 +800,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks23)
+      )
       const onDataMock = pane.terminal.onData as unknown as {
         mock: { calls: [[(data: string) => void] | []] }
       }

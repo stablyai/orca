@@ -2,8 +2,11 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import { aiVaultLocalScanKey } from '../../shared/ai-vault-local-scan-key'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultLocalScanKey } from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import {
   localAiVaultScanProgress,
   resetLocalAiVaultScanProgressForTests,
@@ -28,22 +31,25 @@ const {
   scanAiVaultSessionsInService: vi.fn()
 }))
 
-vi.mock('./session-scanner-service-spawn', async (importOriginal) => ({
+vi.mock('./scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   scanAiVaultSessionsInService
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getCachedWslDistros,
   hasCachedWslDistros
 }))
-vi.mock('../wsl/wsl-home-unless-stopped', () => ({
+vi.mock('../wsl/discovery/wsl-home-unless-stopped', () => ({
   readRunningWslHomeDirsUnlessStopped,
   listLastKnownRunningWslHomeDirs
 }))
-vi.mock('../wsl-running-path-filter', () => ({ filterPathsToRunningWslDistrosAsync }))
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
+  filterPathsToRunningWslDistrosAsync
+}))
 
 import {
   getAiVaultWslHomeDirs,
+  getAiVaultWslScanHomeDirs,
   invalidateAiVaultSessionListCache,
   listAiVaultSessions,
   resetAiVaultSessionListCacheForTests
@@ -255,8 +261,19 @@ describe('WSL sessions while the running list cannot be confirmed', () => {
 
     expect(scanAiVaultSessionsInService.mock.calls[1]?.[0]).toMatchObject({ wslHomeDirs: [] })
     expect(unconfirmed.sessions.map((row) => row.id)).toEqual(['wsl', 'native'])
-    expect(unconfirmed.issues).toEqual([expect.objectContaining({ kind: 'notice' })])
+    expect(unconfirmed.issues).toEqual([
+      expect.objectContaining({ kind: 'notice', messageCode: 'wslSessionsFromLastScan' })
+    ])
     // Checking a delete or subagent path against a root reads nothing, so it keeps last-known-good.
+    await expect(getAiVaultWslHomeDirs()).resolves.toEqual([WSL_HOME])
+  })
+
+  // Transcript database lookups read inside the homes they get; a stopped distro's home is absent.
+  it('gives work that reads inside WSL homes only confirmed homes', async () => {
+    readRunningWslHomeDirsUnlessStopped.mockResolvedValue({ homes: [], confirmed: false })
+    listLastKnownRunningWslHomeDirs.mockResolvedValue([WSL_HOME])
+
+    await expect(getAiVaultWslScanHomeDirs()).resolves.toEqual([])
     await expect(getAiVaultWslHomeDirs()).resolves.toEqual([WSL_HOME])
   })
 

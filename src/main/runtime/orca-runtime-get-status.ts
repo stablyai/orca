@@ -1,13 +1,13 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { OrcaRuntimeWithGetRuntimeId } from './workspaces/session-hosts/get-runtime-id'
-import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
+import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
+
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from './runtime-browser-commands-factory'
-import { isBrowserIdentityModeStoreInitialized } from '../browser/browser-identity-mode-store'
+import { isBrowserIdentityModeStoreInitialized } from '../browser/identity/browser-identity-mode-store'
 import { servesLocalWslMigrationSource } from '../orcad/orcad-migration-wsl-destination'
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { advertisedOrcadMigrationDestinationCapabilities } from '../orcad/orcad-migration-destination-capabilities'
@@ -23,11 +23,15 @@ import {
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
-  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
-  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
-  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
+  TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import {
+  type RuntimeDegradation,
+  type RuntimeStatus,
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage
 } from '../../shared/runtime-types'
@@ -35,13 +39,11 @@ import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../shared/mobile-web-bundle/mob
 import { loadBundledMobileWebBundle } from './bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from './native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
-import type { RuntimeWorktreeLifecycleEvent } from './orca-runtime-core'
-import { WORKTREE_CREATE_RESULT_TTL_MS } from './orca-runtime-core'
-import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type {
-  AutomaticWorkResumeOutcome,
-  AutomaticWorkStatus
-} from '../../shared/host-spawn-admission'
+
+import {
+  type RuntimeWorktreeLifecycleEvent,
+  WORKTREE_CREATE_RESULT_TTL_MS
+} from './orca-runtime-core'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type {
   AutomationsChangedPayload,
@@ -49,7 +51,7 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
-import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 import { getManagedServerActions } from './managed-server-actions-registry'
 import type { WorktreeSortOrderUpdate } from '../../shared/worktree/sort-order-update'
@@ -67,7 +69,7 @@ type RuntimeStatusHost = {
   ): string[]
 }
 
-export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
+export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyController {
   protected abstract pruneUnregisteredWorktreeScans(): void
 
   private asRuntimeStatusHost(): RuntimeStatusHost {
@@ -180,23 +182,13 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     return this.machineName.read()
   }
 
+  readPairedDeviceName(deviceId: string): string | null {
+    return this.getPairedDeviceNameFn(deviceId)
+  }
+
   /** Bound machine-name lookup; slow lookups temporarily publish hostname, then their result on the next read. */
   machineNameReady(): Promise<void> {
     return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
-  }
-
-  setPtyController(controller: RuntimePtyController | null): void {
-    // Write through the main-owned PTY registry so renderer reloads cannot drift handle/process identity.
-    this.ptyController = controller
-  }
-
-  /** Null when the local terminal owner has no fork gate (in-process fallback, older daemon). */
-  async getAutomaticWorkStatus(): Promise<AutomaticWorkStatus | null> {
-    return (await this.ptyController?.getAutomaticWorkStatus?.()) ?? null
-  }
-
-  async resumeAutomaticWork(): Promise<AutomaticWorkResumeOutcome> {
-    return (await this.ptyController?.resumeAutomaticWork?.()) ?? null
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -316,6 +308,8 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntime
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })
+    // Automation owners are projected from projects, so open lists must re-read them (STA-12812).
+    this.notifyAutomationsChanged({ reason: 'definition' })
   }
 
   // Automation/IPC writes need a public stream entry; older clients drop this unknown event without negotiation.

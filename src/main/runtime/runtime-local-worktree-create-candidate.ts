@@ -1,4 +1,3 @@
-import { selectWorktreeCreateBranchSeed } from '../worktree-create-branch-seed'
 import type { Repo } from '../../shared/repo-types'
 import { WorktreeCreateCollisionError } from '../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
@@ -15,11 +14,11 @@ import {
   getBranchNameOverrideCandidate,
   getGeneratedWorktreeCreateCandidate,
   getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
-} from '../worktree-create-candidates'
+} from '../workspaces/creation/worktree-create-candidates'
+import { isGeneratedWorktreeCreateName } from '../../shared/new-workspace/worktree-create-retry-policy'
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
-import { getRetiredNameRegistryForRepo } from '../worktree-name-retirement'
+import { getRetiredNameRegistryForRepo } from '../workspaces/removal/retirement/worktree-name-retirement'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import {
   getSelectedReviewBranch,
@@ -33,8 +32,8 @@ import {
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from './runtime-worktree-filesystem'
-import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
-import type { WorktreeCreatePathClaim } from '../worktree-create-in-flight'
+import { findPendingWorktreeRemovalConflict } from '../workspaces/removal/worktree-removal-table'
+import type { WorktreeCreatePathClaim } from '../workspaces/creation/worktree-create-in-flight'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
@@ -56,7 +55,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   settings: ReturnType<typeof getWorktreePathSettings> & {
     branchPrefix: string
     branchPrefixCustom?: string
-    autoRenameBranchFromWork?: boolean
   }
   worktreePathSettings: ReturnType<typeof getWorktreePathSettings>
   workspaceRoot: string
@@ -68,10 +66,6 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
   pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
-  const branchSeed = selectWorktreeCreateBranchSeed(
-    args.request,
-    args.settings.autoRenameBranchFromWork
-  )
   const sanitizedName = sanitizeWorktreeName(args.request.name)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
@@ -186,7 +180,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.request.branchNameOverride, suffix),
-      branchSeed ? getWorktreeCreateCandidate(branchSeed, suffix) : effectiveSanitizedName,
+      effectiveSanitizedName,
       args.settings,
       args.username,
       args.localWorktreeGitOptions

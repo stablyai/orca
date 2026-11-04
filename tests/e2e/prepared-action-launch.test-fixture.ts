@@ -1,12 +1,12 @@
 import { eraseRpcMethods, type RpcContext } from '../../src/main/runtime/rpc/core'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'
 import { expect, vi } from 'vitest'
-import { normalizeSourceControlAiActionDefaults } from '../../src/shared/source-control-ai-actions'
-import { sourceControlActionLaunchOptions } from '../../src/shared/source-control-action-launch-preferences'
-import { agentLaunchNeedsPreparedCommand } from '../../src/shared/agent-launch-preferences'
-import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../src/shared/tui-agent-startup'
-import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session-option-launch-legacy.test-fixture'
+import { normalizeSourceControlAiActionDefaults } from '../../src/shared/source-control/ai/recipes/source-control-ai-actions'
+import { sourceControlActionLaunchOptions } from '../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { agentLaunchNeedsPreparedCommand } from '../../src/shared/agent-launch/choices/agent-launch-preferences'
+import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../src/shared/agent-launch/startup/tui-agent-startup'
+import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session/options/agent-session-option-launch-legacy.test-fixture'
 import {
   OrcaRuntimeWithResolveMobileSessionTerminalCommand,
   type MobileTerminalCommandOptions
@@ -70,7 +70,7 @@ export function independentActionEffortPlan(agent: 'claude' | 'codex') {
   expect(plan.launchCommand).toBe(
     agent === 'claude'
       ? "claude '--verbose' '--effort' 'high' 'Fix checks'"
-      : "codex '--verbose' '-c' 'model_reasoning_effort=high' 'Fix checks'"
+      : "codex '-c' 'disable_paste_burst=true' '--verbose' '-c' 'model_reasoning_effort=high' 'Fix checks'"
   )
   expect(agentLaunchNeedsPreparedCommand(agent, plan.sessionOptions)).toBe(true)
   return plan
@@ -117,7 +117,9 @@ export async function consumePreparedBackgroundCommand(
     'id:wt-1',
     undefined,
     false,
-    expect.any(Function)
+    expect.any(Function),
+    // terminal.create is the caller's own act, as its createTerminal (E9).
+    { wslUserAct: true }
   )
   return result
 }

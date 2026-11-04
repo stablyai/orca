@@ -113,7 +113,7 @@ async function wakeAfterPrior(
   }
   const liveness = await slotLiveness(options, orcadSlotDir(options, before.active))
   if (!orcadLivenessProvenExited(liveness)) {
-    await forgetSettledInterruptedWake(options, host)
+    await forgetSettledInterruptedWake(options, host, liveness === 'LIVE')
     return { outcome: liveness === 'LIVE' ? 'serving' : 'unverifiable' }
   }
   if (!(await orcadActivationFenceExists(options))) {
@@ -192,11 +192,13 @@ function wakeHostKey(options: OrcadSlotOptions): string {
 /**
  * A serving slot skips the fence branch that clears an interrupted wake's token, which would
  * keep the one-fence wake off until restart. Forget it once its fence is gone or another owner's;
- * an unanswered probe proves neither, so the token stays.
+ * an unanswered probe proves neither, so the token stays. A fence still ours whose dropped launch
+ * did start the slot (proven LIVE, no journal) is released, or deploys would wait for it to age out.
  */
 async function forgetSettledInterruptedWake(
   options: OrcadSlotOptions,
-  host: string
+  host: string,
+  slotLive: boolean
 ): Promise<void> {
   const token = interruptedWakes.get(host)
   if (!token) {
@@ -206,10 +208,15 @@ async function forgetSettledInterruptedWake(
     const owner = (await orcadActivationFenceExists(options))
       ? await readBoundedOrcadRemoteRecord(options, wakeOwnerPath(options), 64)
       : null
-    if (!owner || (owner.state === 'present' && owner.raw.trim() !== token)) {
-      if (interruptedWakes.get(host) === token) {
-        interruptedWakes.delete(host)
-      }
+    const ours = owner?.state === 'present' && owner.raw.trim() === token
+    if (ours && slotLive && !(await readOrcadActivationTransaction(options))) {
+      // The release command re-proves the owner token on the host before removing anything.
+      await releaseOrcadActivationFence(options, token)
+    } else if (ours || owner?.state === 'absent') {
+      return
+    }
+    if (interruptedWakes.get(host) === token) {
+      interruptedWakes.delete(host)
     }
   } catch {
     // Unverifiable: keep the token for the next wake.

@@ -1,19 +1,20 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,
   readProviderRetry
-} from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeNames
@@ -83,9 +84,10 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 describe('MobileNativeChatMessage status notices', () => {
   let renderer: ReactTestRenderer | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
     renderer = null
+    await activateMobileUiLocale('en')
   })
 
   function render(message: NativeChatMessage): ReactTestRenderer {
@@ -118,10 +120,39 @@ describe('MobileNativeChatMessage status notices', () => {
         )
       )
     })
-    return renderer!.root.find(
+    return renderer!.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
+    )[0]!
   }
+
+  it.each([
+    ['en', 'Claude switched models: Claude Opus 5.5 → Claude Opus 4.8.'],
+    ['ru', 'Claude переключил модель: Claude Opus 5.5 → Claude Opus 4.8.']
+  ] as const)(
+    'renders a saved fallback notice in %s without a raw JSON card',
+    async (locale, words) => {
+      await activateMobileUiLocale(locale)
+      const head = JSON.stringify({
+        type: 'fallback',
+        from: { model: 'claude-opus-5-5' },
+        to: { model: 'claude-opus-4-8' }
+      })
+      const text = renderNotice(
+        {
+          kind: 'status',
+          text: 'Claude sent content Orca cannot display yet',
+          providerFrame: {
+            provider: 'claude',
+            kind: 'message:assistant:content:fallback',
+            payload: { head, byteLength: head.length, digest: 'fixture', truncated: false }
+          }
+        },
+        { hostName: null }
+      )
+      expect(text.props.children).toBe(words)
+      expect(renderer!.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
+    }
+  )
 
   it('names the Orca host an Orca stop came from, in desktop words', () => {
     const text = renderNotice(
@@ -136,6 +167,21 @@ describe('MobileNativeChatMessage status notices', () => {
     )
     expect(text.props.children).toBe(
       'Orca on MacBook Pro stopped while this response was in progress. You can continue in this conversation.'
+    )
+  })
+
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await activateMobileUiLocale('fr')
+    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    const text = renderNotice(
+      { kind: 'status', tone: 'error', ...host },
+      { hostName: null, agentName: 'Claude' }
+    )
+    expect(text.props.children).toBe(
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
     )
   })
 
@@ -178,6 +224,16 @@ describe('MobileNativeChatMessage status notices', () => {
           colors.statusAmber
         )
         expect(markdownIn(tree.root)).toEqual([])
+        const details = tree.root.find(
+          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Details'
+        )
+        expect(details.props['aria-expanded']).toBe(false)
+        act(() => details.props.onPress())
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .flatMap((node) => node.props.children)
+        ).toContain('Internal error: Rate limit exceeded. Please try again later.')
       } finally {
         now.mockRestore()
       }
@@ -248,6 +304,86 @@ describe('MobileNativeChatMessage status notices', () => {
     expect(text.props.children).toBe(message.blocks.find((block) => block.type === 'text')?.text)
     expect(Object.assign({}, ...text.props.style)).toMatchObject({ color })
   })
+
+  // Protocol-shaped synthetic frames, not a live-provider reproduction.
+  it.each([
+    [
+      'codex',
+      'notification:guardianWarning',
+      'warning',
+      'Codex reported a safety review warning. View details.',
+      'Codex a signalé un avertissement de sécurité. Voir les détails.',
+      colors.statusAmber
+    ],
+    [
+      'claude',
+      'message:system:permission_denied',
+      'error',
+      'Claude denied permission. View details.',
+      'Claude a refusé la permission. Voir les détails.',
+      colors.statusRed
+    ]
+  ] as const)(
+    'discloses the entire available %s notice without tool-output clipping or recovery',
+    async (provider, kind, tone, heading, french, color) => {
+      const text = `${'安全 '.repeat(1500)}EXPLANATION_SENTINEL`
+      const head = `{"partial":"${'é'.repeat(4500)}PAYLOAD_SENTINEL`
+      const tree = render(
+        statusRow({
+          kind: 'status',
+          text,
+          tone,
+          providerFrame: {
+            provider,
+            kind,
+            payload: { head, byteLength: 99999, digest: 'synthetic', truncated: true }
+          }
+        })
+      )
+      const button = () =>
+        tree.root.find(
+          (node) =>
+            String(node.type) === 'Pressable' &&
+            node.props.accessibilityLabel?.includes('View details.')
+        )
+      expect(button().props.accessibilityLabel).toBe(heading)
+      expect(button().props['aria-expanded']).toBe(false)
+      const detailTexts = () =>
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Text' &&
+            node.props.selectable === true &&
+            Array.isArray(node.props.children) &&
+            node.props.children.includes(text)
+        )
+      expect(detailTexts()).toHaveLength(0)
+      act(() => button().props.onPress())
+      expect(button().props['aria-expanded']).toBe(true)
+      const detail = detailTexts()[0]
+      expect(detail.props.children.join('')).toContain(text)
+      expect(detail.props.children.join('')).toContain(head)
+      expect(detail.props.children.join('')).toContain(
+        'Provider response truncated (original size: 99999 bytes).'
+      )
+      expect(Object.assign({}, ...detail.props.style)).toMatchObject({ color })
+      expect(
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Text' && String(node.props.children).includes('Show full output')
+        )
+      ).toHaveLength(0)
+      await act(() => activateMobileUiLocale('fr'))
+      const translated = tree.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === french
+      )
+      expect(translated.props['aria-expanded']).toBe(true)
+      expect(detailTexts()[0].props.children.join('')).toContain(
+        'Réponse du fournisseur tronquée (taille d’origine : 99999 octets).'
+      )
+      act(() => translated.props.onPress())
+      expect(detailTexts()).toHaveLength(0)
+    }
+  )
 
   it('draws a compaction as a divider, not as a reply', () => {
     const tree = render(

@@ -18,25 +18,25 @@ vi.mock('electron', () => ({
       mocks.handlers.set(channel, handler)
   }
 }))
-vi.mock('../../hooks', () => ({
+vi.mock('../../workspace-hooks/hooks', () => ({
   hasHooksFile: mocks.hasHooks,
   loadHooks: mocks.loadHooks,
   getEffectiveHooks: mocks.effectiveHooks,
   hasUnrecognizedOrcaYamlKeys: () => false,
   parseOrcaYaml: () => ({ issueCommand: 'shared' })
 }))
-vi.mock('../../issue-command-file', () => ({
-  readIssueCommand: mocks.localRead,
-  writeIssueCommand: mocks.localWrite
+vi.mock('../../workspace-hooks/issue-command-file', () => ({
+  readIssueCommandUnlessWslStopped: mocks.localRead,
+  writeIssueCommandUnlessWslStopped: mocks.localWrite
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('node:fs/promises', () => ({
   readFile: mocks.localFileRead,
   stat: mocks.localStat
 }))
-vi.mock('../../../shared/setup-script-imports', () => ({
+vi.mock('../../../shared/workspace-setup/setup-script-imports', () => ({
   inspectSetupScriptImportCandidates: async (
     read: (path: string) => Promise<unknown>,
     options?: { fileExists: (path: string) => Promise<boolean> }
@@ -46,7 +46,7 @@ vi.mock('../../../shared/setup-script-imports', () => ({
     return []
   }
 }))
-vi.mock('../../effective-hook-config', () => ({
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveSetupRunPolicy: () => 'manual'
 }))
 import { RuntimeRepositoryHooksCommands } from '../../runtime/runtime-repository-hooks-commands'

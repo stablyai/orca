@@ -1,5 +1,5 @@
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
-import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import type { SpawnedSourceControlAgentProcess } from './source-control-text-generation-types'
 
 export const SOURCE_CONTROL_KILL_SITE = 'source-control-text-generation'

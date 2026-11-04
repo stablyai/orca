@@ -1,10 +1,14 @@
 import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { isAiVaultOwnershipRefusal } from '@/lib/ai-vault-resume-refusal'
 import { aiVaultCliForkHostTooOldMessage } from '@/lib/ai-vault-session-resume-preparation'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { getAgentForkArgv, isResumableTuiAgent } from '../../../../shared/agent-session-resume'
-import { agentForksThroughChat } from '../../../../shared/agent-resume-argv'
-import { getAiVaultAgentProviderSession } from '@/lib/ai-vault-resume-command'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  getAgentForkArgv,
+  agentForksThroughChat
+} from '../../../../shared/agent-launch/startup/agent-resume-argv'
+import { isResumableTuiAgent } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import '@/lib/ai-vault-resume-command'
+import { getAiVaultAgentProviderSession } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 
 /** Offer a CLI copy only for native-owned sessions with a chat copy route or buildable CLI command (Pi needs a file). */
 export function aiVaultSessionCliForkWorktreeId(

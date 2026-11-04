@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { listenForAgentHooks } from '../shared/agent-hook-startup'
+import { listenForAgentHooks } from '../shared/agent-hook-listener/transport/agent-hook-startup'
 
 export async function bindRelayHookServer(options: {
   preferredPort: number

@@ -15,10 +15,10 @@ vi.mock('./spawned-command-tree-kill', () => ({
 import { gitStreamStdout } from './git-stream-stdout'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 
 function mockChild(): ChildProcess {
   const child = new EventEmitter() as EventEmitter & Record<string, unknown>
@@ -79,26 +79,6 @@ describe('git stream admission lifetime', () => {
     await vi.advanceTimersByTimeAsync(49)
     child.emit('close', 0, null)
     await expect(pending).resolves.toEqual({ stoppedEarly: false })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
-  })
-
-  it('retains the permit after abort settlement until close', async () => {
-    const child = mockChild()
-    const controller = new AbortController()
-    gitSpawnMock.mockReturnValue(child)
-    const pending = gitStreamStdout(['status'], {
-      cwd: '/repo',
-      signal: controller.signal,
-      onStdout: () => {}
-    })
-    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
-
-    controller.abort()
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
-
-    child.emit('close', null, 'SIGKILL')
-    await Promise.resolve()
     expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
 })

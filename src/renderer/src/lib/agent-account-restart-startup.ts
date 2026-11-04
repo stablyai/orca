@@ -1,6 +1,9 @@
+import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { useAppStore, type AppState } from '@/store'
-import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
+  resolveRuntimeHostReportedPlatform,
+  resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
@@ -9,20 +12,21 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { isSessionHeldByAnotherPane } from '@/lib/claude-session-pane-holders'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
 import {
-  resolveTuiAgentLaunchArgs,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { resolveAgentLaunchCommand } from '../../../shared/tui-agent-launch-command'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveAgentLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -87,7 +91,12 @@ export function resolveAgentAccountRestartResumeStartup(
       launchConfig !== undefined
         ? launchConfig.agentArgs
         : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchArgs(agent, state.settings)
+          ? resolveTuiAgentLaunchRawArgs(
+              agent,
+              state.settings,
+              undefined,
+              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+            )
           : null,
     agentEnv:
       launchConfig !== undefined
@@ -100,6 +109,7 @@ export function resolveAgentAccountRestartResumeStartup(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
+    agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
     // Both restart executors spawn in the tab's start folder.
     launchCwd:
@@ -129,6 +139,19 @@ export function buildPaneAccountRestartStartup(
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args)
+  const sessionId = resume?.resumeProviderSession?.id
+  // Why here: a queued restart runs at idle, and another pane may have resumed the session since.
+  if (
+    agent === 'claude' &&
+    sessionId &&
+    isSessionHeldByAnotherPane(
+      useAppStore.getState(),
+      makePaneKey(args.tabId, args.leafId),
+      sessionId
+    )
+  ) {
+    return null
+  }
   return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
 }
 
@@ -145,6 +168,7 @@ export function buildCodexAccountRestartStartup(
     agent: 'codex',
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
+    agentHostPlatform: target.agentHostPlatform,
     shell: resolveStartupShell(target.platform, target.shell)
   })
   if (!command.ok) {
@@ -167,9 +191,11 @@ function resolveAccountRestartLaunchTarget(
   const repo = worktree
     ? state.repos.find((entry) => repoMatchesHostIdentity(entry, worktree.repoId, executionHostId))
     : null
+  // Why: a folder or nested-SSH workspace on a server runs on its SSH target, not the server.
+  const connectionId = repo?.connectionId ?? getConnectionIdFromState(state, args.worktreeId)
   return resolveAgentResumeLaunchTarget({
     projectRuntime,
-    connectionId: repo?.connectionId,
+    connectionId,
     executionHostId,
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell,
@@ -177,7 +203,10 @@ function resolveAccountRestartLaunchTarget(
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId)
-    )
+      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId),
+      connectionId
+    ),
+    runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, executionHostId),
+    runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(state, executionHostId)
   })
 }

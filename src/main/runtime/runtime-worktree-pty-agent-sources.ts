@@ -1,16 +1,14 @@
 import {
   pickParsedAgentStatusPayload,
-  type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
+} from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
+import { agentVerdictFields } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {
@@ -25,12 +23,11 @@ function publishedStructuredChildren(
   entry: AgentStatusIpcPayload,
   read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
 ) {
-  const prefix = structuredAgentSessionTabId('')
   const tabId = entry.tabId
-  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId?.startsWith(prefix)) {
+  const sessionId = tabId ? structuredAgentSessionIdFromTabId(tabId) : null
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId || !sessionId) {
     return undefined
   }
-  const sessionId = tabId.slice(prefix.length)
   if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
     return undefined
   }
@@ -68,6 +65,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       state: entry.state,
       ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
       agentType: entry.agentType ?? null,
+      ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
       prompt: entry.prompt,
       lastAssistantMessage: entry.lastAssistantMessage ?? null,
       toolName: entry.toolName ?? null,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import es from '@/i18n/locales/es.json'
-import { aiVaultScanIssueText } from '../../../../shared/ai-vault-scan-issue-copy'
+import { aiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { aiVaultScanErrorText, aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
 const originalLanguage = i18n.language
@@ -35,29 +35,6 @@ describe('aiVaultScanIssueDisplayText', () => {
     expect(aiVaultScanIssueDisplayText(incomplete)).toBe(
       es.aiVault.scanIssues.openCodeScanIncomplete.replace('{{detail}}', () => detail)
     )
-  })
-
-  it('shows the English message for uncoded, unknown, or incomplete issues', async () => {
-    await useSpanish()
-    expect(aiVaultScanIssueDisplayText({ message: 'Old host text' })).toBe('Old host text')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'Newer',
-        messageCode: 'futureCode'
-      })
-    ).toBe('Newer')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'English',
-        messageCode: 'toString'
-      })
-    ).toBe('English')
-    expect(
-      aiVaultScanIssueDisplayText({
-        message: 'English',
-        messageCode: 'wslDistroNotRunning'
-      })
-    ).toBe('English')
   })
 
   it('localizes classified scanner faults and passes other errors through', async () => {

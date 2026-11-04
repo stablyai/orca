@@ -1,24 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
   aiVaultSessionOwnerWorkspaces,
   aiVaultSessionWorkspaceHeading,
-  aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   aiVaultWorktreeJumpTooltip,
-  canJumpToAiVaultSessionWorktree,
   isAiVaultSessionInCurrentWorktree,
+  shouldShowAiVaultWorktreeStatusBadge,
+  shouldShowAiVaultSessionWorktreeLine
+} from './ai-vault-session-worktree'
+import {
+  aiVaultWorktreeCompactPath,
+  canJumpToAiVaultSessionWorktree,
   resolveAiVaultSessionWorktreeDisplay,
   resolveAiVaultSessionWorktreeInfo,
-  shouldShowAiVaultWorktreeStatusBadge,
-  shouldShowAiVaultSessionWorktreeLine,
-  type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
-import { extractWorktreePathFromSessionTitle } from '../../../../shared/ai-vault-session-worktree'
+  type AiVaultSessionWorktreeInfo,
+  extractWorktreePathFromSessionTitle
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 const baseSession: AiVaultSession = {
   id: 'codex:session-1',
@@ -80,6 +82,40 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('resolveAiVaultSessionWorktreeInfo', () => {
+  it('ranks each same-host candidate by its closest cwd spelling, independent of link length or alias order', () => {
+    const parent = makeWorktree({ id: 'parent', path: '/a-very-long-parent-link' })
+    const child = makeWorktree({ id: 'child', path: '/short', priorWorktreeIds: ['repo-1::/old'] })
+    const foreign = makeWorktree({ id: 'foreign', path: '/other-host', hostId: 'runtime:other' })
+    for (const cwdAliases of [
+      ['/a-very-long-parent-link/child', '/short/nested', '/short', '/other-host'],
+      ['/other-host', '/short', '/short/nested', '/a-very-long-parent-link/child']
+    ]) {
+      expect(
+        resolveAiVaultSessionWorktreeInfo({
+          session: { ...baseSession, cwd: '/physical/child', cwdAliases },
+          worktrees: [parent, foreign, child],
+          activeWorktreeId: 'parent'
+        })
+      ).toMatchObject({ worktreeId: 'child', path: '/short', status: 'active' })
+    }
+  })
+
+  it('keeps current-path ownership ahead of a prior-path alias tie', () => {
+    const prior = makeWorktree({
+      id: 'renamed',
+      path: '/renamed',
+      priorWorktreeIds: ['repo-1::/link']
+    })
+    const current = makeWorktree({ id: 'current', path: '/link' })
+    expect(
+      resolveAiVaultSessionWorktreeInfo({
+        session: { ...baseSession, cwd: '/physical', cwdAliases: ['/link'] },
+        worktrees: [prior, current],
+        activeWorktreeId: null
+      })?.worktreeId
+    ).toBe('current')
+  })
+
   it('marks the selected owning worktree as current', () => {
     const worktree = makeWorktree()
 

@@ -9,7 +9,10 @@ import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-types'
 import type { RuntimeMobileSessionTabActivationResult } from '../../../../shared/runtime-session-contracts'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { includeTargetResolvedWorktree } from '../../runtime-worktree-path-identity'
@@ -20,7 +23,12 @@ import { isAutomaticTabActivation } from '../../../../shared/tab-activation-inte
 import { isWorktreeTerminalsSleepingError } from '../../worktree-terminals-sleeping-error'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
+import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
+  protected abstract toMobileSessionTabsResult(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsResult
+
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<WorkspaceSelectors['buildResolvedWorktreeFromId']>
   ): ReturnType<WorkspaceSelectors['buildResolvedWorktreeFromId']>
@@ -121,6 +129,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     tabId: string,
     leafId?: string,
     opts: {
+      includeAgentSenders?: boolean
       notifyClients?: boolean
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
@@ -137,6 +146,7 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
     // Why: the renderer can publish the host's spelling while inventory refresh is pending.
     worktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ?? worktreeId
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    tabId = resolveChatTabActivation(snapshot?.tabs ?? [], tabId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
       ? ((directTab?.type === 'terminal' && directTab.leafId === leafId ? directTab : undefined) ??
@@ -183,7 +193,13 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
-        const trigger = { automatic, targetsHost, targetGroupId }
+        // An explicit tab open is the user's act; an automatic probe never starts a stopped distro.
+        const trigger = {
+          automatic,
+          targetsHost,
+          targetGroupId,
+          ...(automatic ? {} : { wslUserAct: true as const })
+        }
         let startupCwdFallback: RuntimeMobileSessionTabActivationResult['startupCwdFallback']
         try {
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -205,7 +221,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           if (automatic && isWorktreeTerminalsSleepingError(err)) {
             // The host may sleep this worktree while the probe waits for its spawn lock.
             return this.applyMobileSessionTabNavigation(
-              this.getMobileSessionTabsForWorktree(worktreeId),
+              this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+                includeAgentSenders: opts.includeAgentSenders
+              }),
               tab.id,
               navigation,
               opts.clientNavigationId
@@ -214,7 +232,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
           throw err
         }
         const activated = this.applyMobileSessionTabNavigation(
-          this.getMobileSessionTabsForWorktree(worktreeId),
+          this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+            includeAgentSenders: opts.includeAgentSenders
+          }),
           tab.id,
           navigation,
           opts.clientNavigationId
@@ -223,7 +243,8 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       }
       const callerSnapshot = this.getMobileSessionTabsForWorktree(
         worktreeId,
-        opts.clientNavigationId
+        opts.clientNavigationId,
+        { includeAgentSenders: false }
       )
       const activeSibling =
         tab.id === tabId || leafId
@@ -251,7 +272,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         this.notifier?.focusTerminal?.(targetTab.parentTabId, worktreeId, targetTab.leafId)
       }
       return this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
+        this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: opts.includeAgentSenders
+        }),
         targetTab.id,
         navigation,
         opts.clientNavigationId
@@ -270,7 +293,9 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       }
     }
     return this.applyMobileSessionTabNavigation(
-      this.getMobileSessionTabsForWorktree(worktreeId),
+      this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+        includeAgentSenders: opts.includeAgentSenders
+      }),
       tab.id,
       navigation,
       opts.clientNavigationId

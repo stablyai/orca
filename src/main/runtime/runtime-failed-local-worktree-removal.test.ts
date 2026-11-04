@@ -11,12 +11,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import type { Store } from '../persistence'
-import type * as HostTreeRemoval from '../host-tree-removal'
-import { removeHostTree } from '../host-tree-removal'
-import { listWorktreesStrict, removeWorktree } from '../git/worktree'
-import { areWorktreePathsEqual } from '../git/worktree-path-comparison'
-import { acquireWatcherRemovalGate, beginTerminalInstall } from '../ipc/watcher-removal-gate'
+import type { Store } from '../persistence/loading-store/store'
+import type * as HostTreeRemoval from '../filesystem/host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../git/worktrees/removal/worktree-removal'
+import { areWorktreePathsEqual } from '../git/worktrees/catalog/worktree-path-comparison'
+import {
+  acquireWatcherRemovalGate,
+  beginTerminalInstall
+} from '../workspaces/removal/watcher-removal-gate'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
@@ -25,22 +29,22 @@ import {
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval,
   waitForPendingWorktreeRemoval
-} from '../worktree-background-removal'
-import { withUnregisteredRemovalCheckouts } from '../worktree-removal-listing'
-import { retryFailedRemovalUnlessRegistered } from '../worktree-removal-leftover'
+} from '../workspaces/removal/worktree-background-removal'
+import { withUnregisteredRemovalCheckouts } from '../workspaces/removal/worktree-removal-listing'
+import { retryFailedRemovalUnlessRegistered } from '../workspaces/removal/worktree-removal-leftover'
 import {
   readWorktreeRemovalRecords,
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
-} from '../worktree-removal-records'
+} from '../workspaces/removal/worktree-removal-records'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import type { RuntimeStore } from './runtime-store-contract'
 
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../host-tree-removal', async (importOriginal) => {
+vi.mock('../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
   return { ...actual, removeHostTree: vi.fn(actual.removeHostTree) }
 })
@@ -201,6 +205,10 @@ async function failInSession(): Promise<unknown> {
 
 describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails partway', () => {
   beforeEach(async () => {
+    // A git hook's GIT_DIR/GIT_INDEX_FILE would point the scratch repo's git, and Orca's, at the outer repo.
+    for (const key of Object.keys(process.env).filter((name) => name.startsWith('GIT_'))) {
+      vi.stubEnv(key, undefined)
+    }
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-failed-removal-')))
     recordsDir = join(scratchDir, 'profile')
@@ -228,6 +236,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     _resetPendingWorktreeRemovalsForTests()
     vi.mocked(removeHostTree).mockClear()
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     await setImmutable(false, scratchDir)
     expect((await execFileAsync('find', [scratchDir, '-flags', '+uchg'])).stdout).toBe('')
     await removeTree(scratchDir)
@@ -461,7 +470,14 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(await isRegistered(worktreePath)).toBe(true)
     expect(await git(['branch', '--list', 'feature'])).not.toBe('')
     expect(purged).toEqual([])
-    expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
+    expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([
+      expect.objectContaining({
+        worktreeId,
+        failure: expect.objectContaining({
+          message: expect.stringMatching(/A different checkout is now at/)
+        })
+      })
+    ])
   })
 
   it('never deletes a worktree Git registers inside the leftover', async () => {

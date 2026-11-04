@@ -1,5 +1,19 @@
-import type { RuntimeMobileSessionTabCloseResult } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabCloseResult,
+  RuntimeSessionTabCloseReason
+} from '../../shared/runtime-types'
+import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import type { ClientSessionTabSelectionStore } from './client-session-tab-selection'
+
+export type MobileSessionTabCloseOptions = {
+  reason?: RuntimeSessionTabCloseReason
+  expectedPublicationEpoch?: string
+  expectedTerminalHandle?: string
+  clientNavigationId?: string
+  localPtyTeardownOwnedExternally?: boolean
+  expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
+  force?: boolean
+}
 
 // Tombstones hide tabs until activation; only proven host retirement may hide a still-published tab.
 

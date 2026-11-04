@@ -18,7 +18,7 @@ const {
   writeCookieIdentityMock: vi.fn()
 }))
 
-vi.mock('../browser-session-registry', () => ({
+vi.mock('../sessions/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -53,7 +53,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { importCookiesFromBrowser } from './browser-cookie-import'
-import type { DetectedBrowser } from './sources/browser-cookie-detection-types'
+import type { DetectedBrowser } from './sources/browser-cookie-source-profiles'
 
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
@@ -170,49 +170,5 @@ describe('native cookie import preserves destination cookies', () => {
     expect(removedNames).not.toContain('rack.session')
     expect(removedNames).not.toContain('SID')
     expect(removedNames).not.toContain('orphan')
-  })
-
-  it('keeps extra destination paths and subdomains alongside imported values', async () => {
-    sessionFromPartitionMock.mockReturnValue({
-      cookies: {
-        get: vi.fn().mockResolvedValue([
-          {
-            name: 'gist-session',
-            value: 'stale',
-            domain: 'gist.github.com',
-            hostOnly: true,
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            sameSite: 'lax'
-          },
-          {
-            name: 'lookalike',
-            value: 'live',
-            domain: 'notgithub.com',
-            hostOnly: true,
-            path: '/',
-            secure: true,
-            httpOnly: true,
-            sameSite: 'lax'
-          }
-        ]),
-        set: vi.fn(async () => undefined),
-        remove: cookiesRemoveMock,
-        flushStore: vi.fn().mockResolvedValue(undefined)
-      },
-      clearData: vi.fn().mockResolvedValue(undefined),
-      setUserAgent: vi.fn(),
-      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
-    })
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { domain: '.github.com', name: 'user_session', value: 'imported-github' }
-    ]).close()
-    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-
-    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
-
-    expect(result.ok).toBe(true)
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
   })
 })

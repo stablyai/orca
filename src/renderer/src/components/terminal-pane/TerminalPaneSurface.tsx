@@ -1,3 +1,4 @@
+import { TerminalCrewPortals } from '../orchestration-crew/TerminalCrewPortals'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -194,6 +195,7 @@ export function TerminalPaneSurface({
           paneTransportsRef={paneTransportsRef}
         />
       ))}
+      <TerminalCrewPortals controller={controller} />
       <TerminalPaneCodexRestartPortals controller={controller} />
       <AgentLaunchPaneNoticePortal
         refusal={visibleLaunchRefusal}
@@ -210,13 +212,14 @@ export function TerminalPaneSurface({
       activePane
         ? createPortal(
             <TerminalErrorToast
-              error={visibleTerminalError}
+              error={visibleTerminalError.error}
+              resourceLimit={visibleTerminalError.resourceLimit}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={
-                isPaneOwnerRecoveryError(visibleTerminalError)
+                isPaneOwnerRecoveryError(visibleTerminalError.error)
                   ? () =>
                       Promise.resolve(
                         paneTransportsRef.current.get(activePane.id)?.retryRecovery?.() ?? false

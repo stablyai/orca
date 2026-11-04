@@ -21,13 +21,14 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
-import { isBotPRComment } from '../../../../../shared/pr-comment-audience'
+import { isBotPRComment } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
-import { normalizePRCommentAuthorLogin } from '../../../../../shared/pr-bot-author-overrides'
+import { normalizePRCommentAuthorLogin } from '../../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from '../pr-comment-presentation'
 import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function CopyButton({
   text,
@@ -255,7 +256,7 @@ export function CommentMoreMenu({
         ) : null}
         {hasQueue && (hasGoToComment || hasEdit || hasDelete) ? <DropdownMenuSeparator /> : null}
         {hasGoToComment && (
-          <DropdownMenuItem onSelect={() => window.api.shell.openUrl(comment.url)}>
+          <DropdownMenuItem onSelect={() => openAppHttpLink(comment.url)}>
             <ExternalLink />
             {translate(
               'auto.components.right.sidebar.checks.panel.content.d3923d18fe',

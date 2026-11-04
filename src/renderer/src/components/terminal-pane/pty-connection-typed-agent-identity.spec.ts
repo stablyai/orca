@@ -11,7 +11,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildActiveRuntimeEnvironmentState
@@ -63,6 +67,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('normalizes Pi-compatible remote runtime status to OMP after typed omp command', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -71,7 +77,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       sendTerminalInputThroughPane(pane, 'omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -101,13 +111,19 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('drives runtime title, tab title, and renderer policy from one title decision', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-gemini')
       transportFactoryQueue.push(transport)
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
+      )
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -126,6 +142,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('keeps GPU enabled when a pane-scoped OMP owner emits a Gemini-looking title', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState = {
         ...mockStoreState,
@@ -147,7 +165,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks3)
+      )
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -164,6 +186,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('does not let one split pane title change another pane GPU state', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane1 = createPane(1)
       const pane2 = createPane(2)
       const transport1 = createMockTransport('pty-split-1')
@@ -171,8 +195,16 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       transportFactoryQueue.push(transport1, transport2)
       const manager = createManager(2, 1)
 
-      connectPanePty(pane1 as never, manager as never, createDeps() as never)
-      connectPanePty(pane2 as never, manager as never, createDeps() as never)
+      connectPanePty(
+        pane1 as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
+      )
+      connectPanePty(
+        pane2 as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
+      )
       await flushAsyncTicks()
       const onTitleChange1 = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -189,6 +221,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('DOM-gates a genuine Gemini split pane even when the tab launched a non-Gemini agent', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       // The shared tab.launchAgent must not veto the renderer for a sibling pane.
       mockStoreState = {
         ...mockStoreState,
@@ -203,8 +237,16 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       transportFactoryQueue.push(transport1, transport2)
       const manager = createManager(2, 2)
 
-      connectPanePty(pane1 as never, manager as never, createDeps() as never)
-      connectPanePty(pane2 as never, manager as never, createDeps() as never)
+      connectPanePty(
+        pane1 as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
+      )
+      connectPanePty(
+        pane2 as never,
+        manager as never,
+        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
+      )
       await flushAsyncTicks()
       const onTitleChange2 = createdTransportOptions[1]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -219,6 +261,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('DOM-gates a genuine Gemini title in a pane whose launch agent was non-Gemini', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-reused-gemini')
       transportFactoryQueue.push(transport)
@@ -226,7 +270,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       // Stale, never-cleared launch identity must not veto the renderer.
       const deps = createDeps({ startup: { command: 'claude', launchAgent: 'claude' } })
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks6)
+      )
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -241,6 +289,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('DOM-gates a genuine Gemini title when the only pane row is a done non-Gemini agent', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState = {
         ...mockStoreState,
@@ -262,7 +312,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks7)
+      )
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -278,6 +332,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('DOM-gates a genuine Gemini title when the only pane row is a stale non-Gemini agent', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks8 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const staleAt = Date.now() - 60 * 60 * 1000
       mockStoreState = {
@@ -300,7 +356,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks8)
+      )
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -316,6 +376,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('normalizes after shell word deletion edits a typed command to omp', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks9 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -324,7 +386,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks9)
+      )
       sendTerminalInputThroughPane(pane, 'pi \x17omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -353,6 +419,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('keeps Pi-compatible remote runtime status as Pi after typed pi command', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks10 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -361,7 +429,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks10)
+      )
       sendTerminalInputThroughPane(pane, 'pi\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -385,13 +457,14 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Pi ready')
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
+        agentType: 'pi'
       })
     })
 
     it('does not infer shell ownership from prompts typed inside an existing Pi session', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks11 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const now = Date.now()
@@ -412,7 +485,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks11)
+      )
       sendTerminalInputThroughPane(pane, 'omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -442,6 +519,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('does not infer shell ownership from prompts typed in a title-only Pi session', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks12 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: 'Pi ready' } }
@@ -451,7 +530,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks12)
+      )
       sendTerminalInputThroughPane(pane, 'omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -481,6 +564,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('lets a new typed omp command override a stale retained done status', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks13 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const now = Date.now()
@@ -500,7 +585,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks13)
+      )
       sendTerminalInputThroughPane(pane, 'omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -528,6 +617,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('tracks cursor edits when inferring a typed omp command', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks14 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -536,7 +627,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks14)
+      )
       sendTerminalInputThroughPane(pane, 'op\x1b[Dm\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -564,6 +659,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('tracks delete-key cursor edits when inferring a typed omp command', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks15 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -572,7 +669,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks15)
+      )
       sendTerminalInputThroughPane(pane, 'ommp\x1b[D\x1b[D\x1b[3~\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -599,6 +700,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('skips manual agent inference for large paste chunks', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks16 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -607,7 +710,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks16)
+      )
       sendTerminalInputThroughPane(pane, `${' '.repeat(4097)}omp\r`)
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as
@@ -628,13 +735,14 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
       expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'done',
-        agentType: 'pi',
-        terminalTitle: 'Pi ready'
+        agentType: 'pi'
       })
     })
 
     it('resumes manual agent inference when large paste input is cancelled', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks17 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const pane = createPane(1)
@@ -643,7 +751,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks17)
+      )
       sendTerminalInputThroughPane(pane, 'x'.repeat(4097))
       sendTerminalInputThroughPane(pane, '\x03')
       sendTerminalInputThroughPane(pane, 'omp\r')
@@ -672,6 +784,8 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
 
     it('preserves typed shell ownership through same-chunk command-finished side effects', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks18 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const paneKey = makePaneKey('tab-1', LEAF_1)
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -687,7 +801,11 @@ export function registerPtyConnectionTypedAgentIdentityTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(pane as never, manager as never, deps as never)
+      connectPanePty(
+        pane as never,
+        manager as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks18)
+      )
       sendTerminalInputThroughPane(pane, 'omp\r')
       await flushAsyncTicks()
       const onTitleChange = createdTransportOptions[0]?.onTitleChange as

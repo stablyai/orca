@@ -1,5 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 
 export type TerminalFrame = { width: number; height: number }
 
@@ -25,6 +25,7 @@ export type TerminalWebViewCommand =
   | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'reflow'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
   | { type: 'clear'; id?: number }
+  | { type: 'scroll-to-bottom'; id?: number }
   | { type: 'reset-zoom'; id?: number }
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }

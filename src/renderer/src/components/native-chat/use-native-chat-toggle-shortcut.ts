@@ -11,10 +11,10 @@ import {
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
 import { useAppStore } from '../../store'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
-import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
+import { canToggleNativeChat } from '../../../../shared/native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'

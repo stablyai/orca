@@ -1,8 +1,10 @@
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type * as MobileClipboardImage from './mobile-clipboard-image'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import { MobileTerminalInputSender } from '../terminal/mobile-terminal-input-sender'
 
 const pasteboard = vi.hoisted(() => {
   const state: { image: { data: string } | null } = { image: null }
@@ -18,9 +20,6 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: async () => pasteboard.image
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   ...(await importOriginal<typeof MobileClipboardImage>()),
   prepareMobileClipboardImageBase64: async () => 'png',
@@ -46,6 +45,7 @@ function setup() {
   const showToast = vi.fn()
   let beforeSend = (): boolean => true
   const options: Parameters<typeof useMobileTerminalPaste>[0] = {
+    sendTerminalUserInput: terminalInputSend.request,
     agent: null,
     activeHandle: 'term-1',
     activeHandleRef,
@@ -66,6 +66,7 @@ function setup() {
   }
   return {
     options,
+    client,
     sendRequest,
     onError,
     showToast,
@@ -123,4 +124,27 @@ describe('mobile terminal paste that sends nothing', () => {
     expect(onError).toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledWith('Paste failed', 1500)
   })
+
+  it.each(['open', 'send'])(
+    'reports a real ordered sender %s failure instead of paste success',
+    async (failure) => {
+      const { options, client, sendRequest, onError, showToast } = setup()
+      const sender = new MobileTerminalInputSender()
+      sendRequest.mockImplementation(async (method: string) => {
+        if (failure === 'send' && method === 'terminal.openInputSession') {
+          return { id: 'open', ok: true, result: { inputSessionId: 'session' } }
+        }
+        throw new Error('link failed')
+      })
+      await useMobileTerminalPaste({
+        ...options,
+        deviceTokenRef: { current: 'phone' },
+        sendTerminalUserInput: (_client, params, sendOptions) =>
+          sender.request(client, params, sendOptions, true)
+      })()
+      expect(onError).toHaveBeenCalledOnce()
+      expect(options.onSuccess).not.toHaveBeenCalled()
+      expect(showToast).toHaveBeenCalledWith('Paste failed', 1500)
+    }
+  )
 })

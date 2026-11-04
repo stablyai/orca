@@ -22,7 +22,7 @@ import {
 } from '../terminal/terminal-webview-contract'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
-import { stripTerminalSelectionGutter } from '../../../src/shared/terminal-selection-gutter'
+import { stripTerminalSelectionGutter } from '../../../src/shared/terminal/output/terminal-selection-gutter'
 import { useTerminalCopyTrimsGutter } from '../terminal/terminal-copy-gutter-preference'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
 
@@ -92,7 +92,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     () => cancelAccessoryRepeat,
     [activeHandle, client, connState, worktreeId, cancelAccessoryRepeat]
   )
-  const startAccessoryRepeat = useCallback(
+  const prepareAccessoryPress = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
       const pressedClient = clientRef.current
       const pressedGeneration = pressedClient?.getGeneration?.() ?? 0
@@ -112,7 +112,14 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
           activeSessionTabTypeRef.current === 'terminal',
         (...args) => handleAccessoryKeyRef.current(...args)
       )
-      accessoryRepeat.start(input, sender)
+      let holdStarted = false
+      return {
+        tap: () => (holdStarted ? Promise.resolve(false) : sender(input)),
+        hold: (firstRepeatDelayMs?: number) => {
+          holdStarted = true
+          accessoryRepeat.start(input, sender, firstRepeatDelayMs)
+        }
+      }
     },
     [accessoryRepeat]
   )
@@ -264,7 +271,8 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   }, [clipboardContents, setCanPaste])
   return {
     stopAccessoryRepeat,
-    startAccessoryRepeat,
+    cancelAccessoryRepeat,
+    prepareAccessoryPress,
     setMobileSessionRootRef,
     handleSelectionMode,
     handleSelectionCopy,

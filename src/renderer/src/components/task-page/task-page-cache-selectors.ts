@@ -1,4 +1,7 @@
+import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache-identity'
+import { githubTaskBinding } from '@/lib/github-task-observation'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type {
   CacheEntry,
@@ -19,14 +22,12 @@ export type TaskPageRepoCacheInput = {
   executionHostId?: string | null
   connectionId?: string | null
   sourceCacheScope?: string | null
+  candidateOwner?: string
 }
 
-export type TaskPageDialogWorkItemKey = {
-  id: string
-  repoId: string
-  url: string
-  repoHostId?: GitHubWorkItem['repoHostId']
-} | null
+/** A store row, so its cache key binds from the row exactly as the fetch that wrote it did. */
+export type TaskPageRepoCacheRowInput = Repo &
+  Pick<TaskPageRepoCacheInput, 'sourceCacheScope' | 'candidateOwner'>
 
 export type TaskPageRepoSourceState = {
   repoId: string
@@ -61,15 +62,81 @@ function taskPageRepoCacheScope(repo: TaskPageRepoCacheInput): string {
   return repo.sourceCacheScope ?? getRepoExecutionHostId(repo)
 }
 
+function taskPageRepoSourceKey(repo: TaskPageRepoCacheInput): string {
+  return `${repo.id}::${taskPageRepoCacheScope(repo)}${repo.candidateOwner ? `::${repo.candidateOwner}` : ''}`
+}
+
+export type TaskPageRepoCacheRow = { sourceKey: string; cacheKey: string; binding?: string }
+
+export function getTaskPageRepoCacheRows(
+  repos: readonly TaskPageRepoCacheRowInput[],
+  limit: number,
+  query: string
+): TaskPageRepoCacheRow[] {
+  return repos.map((repo) => {
+    const binding = githubTaskBinding(repo)
+    return {
+      sourceKey: taskPageRepoSourceKey(repo),
+      binding,
+      cacheKey: workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo), binding)
+    }
+  })
+}
+
 export function selectTaskPageWorkItemsCacheEntries(
   workItemsCache: WorkItemsCache,
-  repos: readonly TaskPageRepoCacheInput[],
+  repos: readonly TaskPageRepoCacheRowInput[],
   limit: number,
   query: string
 ): (CacheEntry<readonly GitHubWorkItem[]> | undefined)[] {
-  return repos.map(
-    (repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query, taskPageRepoCacheScope(repo))]
-  )
+  return getTaskPageRepoCacheRows(repos, limit, query).map((row) => workItemsCache[row.cacheKey])
+}
+
+type TaskPageWorkItemsCacheSelection = {
+  current: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
+  /** Source displays only: rows, notices, errors and Retry read `current`. */
+  display: (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
+}
+
+/**
+ * Entries are keyed by query but sources are repo-level, so while a row's new query has no entry, source displays
+ * keep reading (live) the row's last committed current entry. A present entry wins even when unresolved, and a
+ * query the fetch rejects as too large claims nothing. Unchanged arrays are reused so subscribers skip renders.
+ */
+export function createTaskPageWorkItemsCacheSelector(
+  rows: readonly TaskPageRepoCacheRow[],
+  queryFetchable: boolean,
+  getDisplayCacheKey: (sourceKey: string) => string | undefined,
+  getCandidates?: (sourceKey: string) => CacheEntry<readonly GitHubWorkItem[]> | undefined
+): (workItemsCache: WorkItemsCache) => TaskPageWorkItemsCacheSelection {
+  let last: TaskPageWorkItemsCacheSelection = { current: [], display: [] }
+  return (workItemsCache) => {
+    const current: TaskPageWorkItemsCacheSelection['current'] = []
+    const display: TaskPageWorkItemsCacheSelection['display'] = []
+    for (const row of rows) {
+      const entry = workItemsCache[row.cacheKey]
+      current.push(entry)
+      if (entry || !queryFetchable) {
+        display.push(entry)
+        continue
+      }
+      const displayKey = getDisplayCacheKey(row.sourceKey)
+      const previous = displayKey === undefined ? undefined : workItemsCache[displayKey]
+      display.push(
+        previous && (!row.binding || previous.sourceBinding === row.binding)
+          ? previous
+          : getCandidates?.(row.sourceKey)
+      )
+    }
+    const next = {
+      current: shallow(current, last.current) ? last.current : current,
+      display: shallow(display, last.display) ? last.display : display
+    }
+    if (next.current !== last.current || next.display !== last.display) {
+      last = next
+    }
+    return last
+  }
 }
 
 export function buildTaskPageRepoSourceState(
@@ -82,7 +149,7 @@ export function buildTaskPageRepoSourceState(
       repoId: repo.id,
       repoPath: repo.path,
       hostId: getRepoExecutionHostId(repo),
-      sourceKey: `${repo.id}::${taskPageRepoCacheScope(repo)}`,
+      sourceKey: taskPageRepoSourceKey(repo),
       sources: entry?.sources ?? null,
       error: entry?.error ?? null
     }
@@ -97,14 +164,20 @@ export type TaskPageUnresolvedSourceRepo = {
 
 /** Surface fetched both-null sources as unresolved; null means unfetched, and a non-null source can have genuine zero results. */
 export function selectTaskPageUnresolvedSourceRepos(
-  repos: readonly { id: string; displayName?: string; path: string }[],
+  repos: readonly (TaskPageRepoCacheInput & { displayName?: string })[],
   sourceState: readonly TaskPageRepoSourceState[]
 ): TaskPageUnresolvedSourceRepo[] {
-  const stateByRepoId = new Map(sourceState.map((state) => [state.repoId, state]))
+  const stateBySourceKey = new Map(sourceState.map((state) => [state.sourceKey, state]))
   const unresolved: TaskPageUnresolvedSourceRepo[] = []
   for (const repo of repos) {
-    const state = stateByRepoId.get(repo.id)
-    if (state?.sources && !state.sources.issues && !state.sources.prs && !state.error) {
+    const state = stateBySourceKey.get(taskPageRepoSourceKey(repo))
+    if (
+      state?.sources &&
+      !state.sources.ineligible &&
+      !state.sources.issues &&
+      !state.sources.prs &&
+      !state.error
+    ) {
       unresolved.push({
         repoId: repo.id,
         sourceKey: state.sourceKey,
@@ -219,28 +292,4 @@ export function reconcileTaskPagePagesAfterLandingRefresh(
     return pages as (GitHubWorkItem[] | null)[]
   }
   return [nextFirstPage, ...pages.slice(1)]
-}
-
-export function findTaskPageDialogWorkItem(
-  workItemsCache: WorkItemsCache,
-  dialogWorkItemKey: TaskPageDialogWorkItemKey
-): GitHubWorkItem | null {
-  if (!dialogWorkItemKey) {
-    return null
-  }
-
-  for (const entry of Object.values(workItemsCache)) {
-    const found = entry?.data?.find(
-      (wi) =>
-        wi.id === dialogWorkItemKey.id &&
-        wi.repoId === dialogWorkItemKey.repoId &&
-        wi.url === dialogWorkItemKey.url &&
-        // Why: a twin's other host caches the same PR; its copy routes edits to that host.
-        (!dialogWorkItemKey.repoHostId || wi.repoHostId === dialogWorkItemKey.repoHostId)
-    )
-    if (found) {
-      return found
-    }
-  }
-  return null
 }

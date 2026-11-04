@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
-import type * as GitRunner from '../../git/runner'
+import type * as GitRunner from '../../git/command-runner/wsl-aware-spawn'
 import type * as BundledRipgrepPath from '../../ripgrep/bundled-ripgrep-path'
 import { isFileListingCancellation } from '../../../shared/file-listing-cancellation'
 import { RipgrepUnavailableError } from '../../../shared/ripgrep-process-availability'
@@ -19,12 +19,12 @@ const {
   wslAwareSpawnMock: vi.fn()
 }))
 
-vi.mock('../../git/runner', async (importOriginal) => ({
+vi.mock('../../git/command-runner/wsl-aware-spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof GitRunner>()),
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 

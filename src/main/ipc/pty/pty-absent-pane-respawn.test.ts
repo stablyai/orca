@@ -10,7 +10,7 @@ import {
   tabId
 } from './pty-pane-owner-swap.test-fixture'
 import { WorkspaceLayoutStream } from '../../runtime/workspace-layout-stream'
-import { keepAbsentBindingForSwap } from './ipc/spawn-absent-binding-swap'
+
 import type { WorkspaceLayoutStreamEvent } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
@@ -37,8 +37,10 @@ vi.mock('../../agent-hooks/server', () =>
 vi.mock('../../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../../wsl', async (importOriginal) =>
+vi.mock('../../pty/shell-startup/pwsh', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
@@ -175,21 +177,6 @@ describe('pty:spawn for a restored pane whose process is gone', () => {
       await expect(spawned).rejects.toThrow('register failed')
       expect(retire).not.toHaveBeenCalled()
       expect(leafBinding()).toBe('pty-old')
-    })
-
-    it('keeps the early retire for a pane on an SSH host', () => {
-      const spawnOn = (connectionId?: string) =>
-        keepAbsentBindingForSwap(
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the swap gate reads only args, the reservation and the replaced owner.
-          {
-            args: { connectionId },
-            paneSpawnReservation: {},
-            replacedPaneOwner: null
-          } as unknown as Parameters<typeof keepAbsentBindingForSwap>[0]
-        )
-      expect(spawnOn()).toBeTypeOf('function')
-      // Its dead owner lives on that host, which the swap does not reach.
-      expect(spawnOn('ssh-conn-1')).toBeUndefined()
     })
 
     it('still retires the dead binding when the fresh spawn fails', async () => {

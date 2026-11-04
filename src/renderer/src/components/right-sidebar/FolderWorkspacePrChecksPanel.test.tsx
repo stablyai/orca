@@ -3,12 +3,12 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getGitHubRepoCacheKey } from '../../../../shared/github/github-cache-key'
@@ -54,8 +54,8 @@ vi.mock('@/i18n/i18n', () => ({
       : fallback
 }))
 
-vi.mock('@/lib/http-link-routing', () => ({
-  openHttpLink: (url: string) => {
+vi.mock('@/lib/app-http-link-open', () => ({
+  openAppHttpLink: (url: string) => {
     mockState.openedLinks.push(url)
   }
 }))

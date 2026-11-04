@@ -1,6 +1,6 @@
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import type { Store } from '../../../persistence'
+import type { Store } from '../../../persistence/loading-store/store'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/pty-binding-refusals'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from './spawn-reservation'

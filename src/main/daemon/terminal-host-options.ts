@@ -1,5 +1,6 @@
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { TerminalSpawnGate } from './terminal-spawn-gate'
@@ -19,6 +20,8 @@ export type TerminalHostOptions = {
     terminalShellArgs?: string[]
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    onCreationDisposition?: (disposition: PtyCreationDisposition) => void
+    assertCreateAllowed?: () => void
     isCanceled?: () => boolean
     cancelSignal?: AbortSignal
   }) => SubprocessHandle | Promise<SubprocessHandle>

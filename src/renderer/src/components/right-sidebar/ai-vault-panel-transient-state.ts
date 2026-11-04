@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react'
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import type { AiVaultScope } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { DEFAULT_AI_VAULT_SCOPE } from './ai-vault-scope-state'
 
 const MAX_COLLAPSED_GROUPS = 512

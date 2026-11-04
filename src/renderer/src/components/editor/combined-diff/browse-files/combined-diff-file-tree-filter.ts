@@ -1,12 +1,12 @@
 import { basename } from '@/lib/path'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { DiffSection } from '../../diff-section-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../../shared/clipboard-text'
 import {
   buildSourceControlTree,
   compactSourceControlTree,
   flattenSourceControlTree
-} from '@/components/right-sidebar/source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   getCombinedDiffFileTreeSectionKey,
   isGitStatusEntry,

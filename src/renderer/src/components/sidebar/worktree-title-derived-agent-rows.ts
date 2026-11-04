@@ -1,6 +1,10 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
-import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import {
+  isClaudeManagementTitle,
+  isCursorAgentTitle
+} from '../../../../shared/agent-status/title/agent-title-core'
+
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import type {
@@ -8,7 +12,7 @@ import type {
   AgentStatusOrchestrationContext,
   AgentStatusState,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import {
   resolveRuntimePaneTitleLeafIdFromRoot,
@@ -21,11 +25,12 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner,
   type CompatibleAgentOwnerOptions
-} from '../../../../shared/agent-title-owner'
-import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
+} from '../../../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import {
   resolveTitleDerivedAgentType,
   resolveTitleDerivedPaneAgent,
+  TITLE_AGENT_LABEL_TO_TYPE,
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
 import { translate } from '@/i18n/i18n'
@@ -179,7 +184,12 @@ function buildTitleDerivedAgentRow(args: {
   }
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
   const status = titleStatus ?? 'idle'
-  const rowLabel = agentType === titleAgentType && label ? label : formatAgentTypeLabel(agentType)
+  const rowLabel =
+    agentType === titleAgentType &&
+    label &&
+    (agentType === 'unknown' || TITLE_AGENT_LABEL_TO_TYPE[label] === agentType)
+      ? label
+      : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission'

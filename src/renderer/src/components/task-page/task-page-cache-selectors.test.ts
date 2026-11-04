@@ -4,28 +4,37 @@ import { shallow } from 'zustand/shallow'
 import { workItemsCacheKey } from '@/store/github/cache-identity'
 import type { CacheEntry } from '@/store/github/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
   deriveTaskPageGitHubWorkItemsFetchOptions,
-  findTaskPageDialogWorkItem,
   reconcileTaskPageItemsAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
   selectTaskPageWorkItemsCacheEntries,
   shouldResetTaskPagePaginationAfterLandingRefresh,
-  shouldReplaceTaskPageItemsAfterRefresh
+  shouldReplaceTaskPageItemsAfterRefresh,
+  type TaskPageRepoCacheRowInput
 } from './task-page-cache-selectors'
 import {
-  findTaskPageLinearIssue,
-  reconcileTaskPageLinearIssuesAfterLandingRefresh
-} from './linear/task-page-linear-cache-selectors'
+  createTaskPageDialogWorkItemReader,
+  findTaskPageDialogWorkItem
+} from './task-page-dialog-work-item'
+import { reconcileTaskPageLinearIssuesAfterLandingRefresh } from './linear/task-page-linear-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
 }
+
+// Rows are store rows: a row's cache key binds from the row, exactly as the fetch that wrote it.
+function repoRow(fields: Pick<Repo, 'id' | 'path'> & Partial<Repo>): Repo {
+  return { displayName: fields.path, badgeColor: '#000', addedAt: 1, ...fields }
+}
+const rowKey = (repo: Repo, scope?: string | null, owner = repo.id) =>
+  workItemsCacheKey(owner, 20, '', scope, githubTaskBinding(repo))
 
 function workItem(id: string, repoId: string): GitHubWorkItem {
   return { id, repoId, title: id } as GitHubWorkItem
@@ -78,10 +87,10 @@ describe('task page cache selectors', () => {
   })
 
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
-    const repo = { id: 'repo-1', path: '/repo/one' }
+    const repo = repoRow({ id: 'repo-1', path: '/repo/one' })
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const firstCache = {
-      [workItemsCacheKey(repo.id, 20, '')]: selectedEntry
+      [rowKey(repo)]: selectedEntry
     }
     const secondCache = {
       ...firstCache,
@@ -141,6 +150,77 @@ describe('task page cache selectors', () => {
     ])
   })
 
+  it('silently omits a proven other-forge source while keeping unknown identity retryable', () => {
+    const repos = [
+      { id: 'gitlab-only', path: '/repos/gitlab-only' },
+      { id: 'unknown', path: '/repos/unknown' }
+    ]
+    const entries = [
+      {
+        data: [],
+        fetchedAt: 1,
+        sources: {
+          issues: null,
+          prs: null,
+          originCandidate: null,
+          upstreamCandidate: null,
+          ineligible: true as const
+        }
+      },
+      {
+        data: [],
+        fetchedAt: 1,
+        sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+      }
+    ]
+
+    const sourceState = buildTaskPageRepoSourceState(repos, entries)
+
+    expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual([
+      { repoId: 'unknown', sourceKey: 'unknown::local', label: '/repos/unknown' }
+    ])
+  })
+
+  it('keeps an unknown twin retryable while omitting only its proven other-forge source', () => {
+    const unknown = repoRow({ id: 'twin', path: '/same/path', displayName: 'unknown twin' })
+    const sources = { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
+    const unknownEntry = { data: [], fetchedAt: 1, sources }
+    const ineligibleEntry = {
+      data: [],
+      fetchedAt: 1,
+      sources: { ...sources, ineligible: true as const }
+    }
+    const pairedScopes: { repoFields: Partial<TaskPageRepoCacheRowInput>; scope: string }[] = [
+      { repoFields: { executionHostId: 'runtime:paired' }, scope: 'runtime:paired' },
+      { repoFields: { connectionId: 'devbox' }, scope: 'ssh:devbox' },
+      {
+        repoFields: { sourceCacheScope: 'source:local:github:acme/widgets' },
+        scope: 'source:local:github:acme/widgets'
+      }
+    ]
+
+    for (const { repoFields, scope } of pairedScopes) {
+      const provenOther = { ...unknown, ...repoFields, displayName: 'proven other-forge twin' }
+      const cache = {
+        [rowKey(unknown, 'local')]: unknownEntry,
+        [rowKey(provenOther, scope)]: ineligibleEntry
+      }
+      for (const repos of [
+        [unknown, provenOther],
+        [provenOther, unknown]
+      ]) {
+        const entries = selectTaskPageWorkItemsCacheEntries(cache, repos, 20, '')
+        const sourceState = buildTaskPageRepoSourceState(repos, entries)
+        const expected = [{ repoId: 'twin', sourceKey: 'twin::local', label: 'unknown twin' }]
+
+        expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState)).toEqual(expected)
+        expect(selectTaskPageUnresolvedSourceRepos(repos, sourceState.toReversed())).toEqual(
+          expected
+        )
+      }
+    }
+  })
+
   it('does not flag an unresolved-source repo that already carries a per-repo error', () => {
     const repos = [{ id: 'errored', path: '/repos/errored', displayName: 'errored-repo' }]
     const erroredEntry = {
@@ -177,24 +257,24 @@ describe('task page cache selectors', () => {
   })
 
   it('selects work-item cache entries by repo id, not legacy path keys', () => {
-    const repo = { id: 'repo-1', path: '/same/path' }
+    const repo = repoRow({ id: 'repo-1', path: '/same/path' })
     const repoEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const pathEntry = entry<GitHubWorkItem[]>([workItem('stale', 'legacy')])
     const cache = {
-      [workItemsCacheKey(repo.id, 20, '')]: repoEntry,
-      [workItemsCacheKey(repo.path, 20, '')]: pathEntry
+      [rowKey(repo)]: repoEntry,
+      [rowKey(repo, undefined, repo.path)]: pathEntry
     }
 
     expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([repoEntry])
   })
 
   it('selects host-scoped work-item cache entries for remote repos', () => {
-    const repo = { id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' }
+    const repo = repoRow({ id: 'repo-1', path: '/same/path', executionHostId: 'runtime:env-1' })
     const remoteEntry = entry<GitHubWorkItem[]>([workItem('issue-remote', 'repo-1')])
     const localEntry = entry<GitHubWorkItem[]>([workItem('issue-local', 'repo-1')])
     const cache = {
-      [workItemsCacheKey(repo.id, 20, '')]: localEntry,
-      [workItemsCacheKey(repo.id, 20, '', repo.executionHostId)]: remoteEntry
+      [rowKey(repo)]: localEntry,
+      [rowKey(repo, repo.executionHostId)]: remoteEntry
     }
 
     expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([remoteEntry])
@@ -213,6 +293,44 @@ describe('task page cache selectors', () => {
     expect(
       findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2', url: item.url })
     ).toBeNull()
+  })
+
+  it('searches only the current binding once an older copy is found, and nothing on an unchanged cache', () => {
+    let rowVisits = 0
+    const counted = (row: GitHubWorkItem) => {
+      const copy = { ...row }
+      Object.defineProperty(copy, 'id', {
+        get: () => {
+          rowVisits++
+          return row.id
+        }
+      })
+      return copy
+    }
+    const picked = { ...workItem('issue:12', 'repo-1'), url: 'https://github.com/o/r/issues/12' }
+    const binding = (sourceBinding: string, rows: GitHubWorkItem[]) => ({
+      ...entry(rows.map(counted)),
+      sourceBinding
+    })
+    const current = binding('current', [picked])
+    const cache = {
+      old: binding('old', [{ ...picked, title: 'old' }]),
+      ...Object.fromEntries(
+        Array.from({ length: 40 }, (_, i) => [
+          `other-${i}`,
+          binding('other', [workItem(`issue:${i}`, 'repo-1')])
+        ])
+      ),
+      current
+    }
+    const key = { id: picked.id, repoId: picked.repoId, url: picked.url }
+    expect(findTaskPageDialogWorkItem(cache, key, 'current')).toBe(current.data?.[0])
+    expect(rowVisits).toBe(2)
+    const read = createTaskPageDialogWorkItemReader(key, 'current')
+    read(cache)
+    rowVisits = 0
+    expect(read(cache)).toBe(current.data?.[0])
+    expect(rowVisits).toBe(0)
   })
 
   it('keeps the clicked repository when a source change refreshes the same issue number', () => {
@@ -425,25 +543,5 @@ describe('task page cache selectors', () => {
     )
 
     expect(next).toEqual([refreshedFirst, refreshedSecond])
-  })
-
-  it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {
-    const issue = linearIssue('LIN-1')
-    const searchIssue = linearIssue('LIN-2')
-    const issueCache = {
-      'LIN-1': entry(issue)
-    }
-    const searchCache = {
-      assigned: entry<LinearIssue[]>([searchIssue])
-    }
-    const listIssue = linearIssue('LIN-3')
-    const listCache = {
-      all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
-    }
-
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, null)).toBeNull()
-    expect(findTaskPageLinearIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
-    expect(findTaskPageLinearIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

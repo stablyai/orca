@@ -1,24 +1,24 @@
+import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type {
-  AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
+import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import { AgentSessionStartEndings } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
 import {
   createCodexTurnOpenWaits,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSkillReport } from './codex-structured-skill-report'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
@@ -31,7 +31,7 @@ import type {
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionProviderOpen } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from './codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
@@ -41,6 +41,7 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  prefixArgs?: readonly string[]
   command: string
   args: string[]
   cwd: string
@@ -95,6 +96,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  renameInvocation?: CodexRenameInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
@@ -149,6 +151,7 @@ export type CodexSession = {
   /** Provider facts from this acquisition, not another copy of the chat's selected mode. */
   permissions?: {
     acquiredMode: AgentChatPermissionChoice
+    appliedMode?: AgentChatPermissionChoice
     acquiredSandbox?: CodexSandboxPolicy
     launchSandboxIntact: boolean
     cwd: string
@@ -254,6 +257,8 @@ export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
 
 export class CodexAcquisitionRegistry {
   private readonly attempts = new Map<string, CodexAcquisitionAttempt>()
+  /** Children that ended on their own before they were ready answer for it, open included. */
+  readonly endings = new AgentSessionStartEndings()
   private closing = false
 
   get size(): number {
@@ -314,6 +319,7 @@ export class CodexAcquisitionRegistry {
 
   close(): void {
     this.closing = true
+    this.endings.clear()
   }
 }
 

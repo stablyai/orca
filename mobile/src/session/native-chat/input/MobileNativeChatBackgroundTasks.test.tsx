@@ -1,9 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentChildRowContextForSessionStream } from '../../../../../src/shared/agent-child-row-stream-context'
-import type { AgentChildWorkView } from '../../../../../src/shared/agent-status-child-work-view'
-import type { AgentSessionBackgroundTaskState } from '../../../../../src/shared/agent-session-background-task-wire'
+import { agentChildRowContextForSessionStream } from '../../../../../src/shared/agent-status/presentation/agent-child-row-stream-context'
+import type { AgentChildWorkView } from '../../../../../src/shared/agent-status/child-work/agent-status-child-work-view'
+import type { AgentSessionBackgroundTaskState } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
 import { structuredSessionBackgroundTasksView } from '../../../../../src/shared/structured-session-background-tasks-view'
 import { MobileNativeChatBackgroundTasks } from './MobileNativeChatBackgroundTasks'
 

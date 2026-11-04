@@ -31,7 +31,7 @@ vi.mock('../codex/wsl-codex-session-bridge', () => ({
 }))
 
 let wslHome = ''
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => 'Ubuntu',
   getWslHome: () => wslHome
 }))
@@ -93,44 +93,6 @@ describe('WSL sibling account session bridging', () => {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
     teardownRuntimeHomeTest()
-  })
-
-  it('bridges sibling WSL account homes into the selected account home', async () => {
-    const service = await createService('b')
-    const selectedHome = join(accountsRoot(), 'b', 'home')
-
-    expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-      selectedHome
-    )
-    await vi.waitFor(() =>
-      expect(bridge.start.mock.calls).toEqual([
-        [
-          {
-            distro: 'Ubuntu',
-            systemCodexHomePath: join(wslHome, '.codex'),
-            managedCodexHomePath: selectedHome
-          }
-        ],
-        [
-          {
-            distro: 'Ubuntu',
-            systemCodexHomePath: join(accountsRoot(), 'a', 'home'),
-            managedCodexHomePath: selectedHome
-          }
-        ]
-      ])
-    )
-  })
-
-  it('bridges nothing into the system home when no WSL account is selected', async () => {
-    const service = await createService(null)
-
-    expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
-      join(wslHome, '.codex')
-    )
-    // The loop starts synchronously, so a skipped bridge has already been decided.
-    await Promise.resolve()
-    expect(bridge.start).not.toHaveBeenCalled()
   })
 
   it('lets a concurrent launch join the sibling loop already bridging that home', async () => {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import {
   detectOpenCodeCredentialBackend,
   resetOpenCodeCredentialBackendProbes
@@ -9,7 +9,7 @@ import {
 const files = vi.hoisted(() => ({ realpath: vi.fn(), stat: vi.fn() }))
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
-vi.mock('../ipc/command-path-resolver', () => ({ resolveCommandOnLocalPath: vi.fn() }))
+vi.mock('../ipc/command-path/command-path-resolver', () => ({ resolveCommandOnLocalPath: vi.fn() }))
 vi.mock('node:fs/promises', () => files)
 
 describe('OpenCode credential execution backend', () => {

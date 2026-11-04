@@ -1,4 +1,4 @@
-import { restoreOrStripOverlayEnv } from '../../shared/agent-overlay-env'
+import { restoreOrStripOverlayEnv } from '../../shared/agent-launch/startup/agent-overlay-env'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isOpenCodeLegacySharedConfigDir } from './legacy-shared-config-dir'
 

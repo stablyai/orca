@@ -9,7 +9,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import {
   buildAgentPromptPasteBytes,
   getTerminalPasteIngestMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
@@ -19,21 +19,19 @@ import { toComparableRelaySshPtyId } from '../../shared/ssh-pty-id'
 import { spawnedPtyEnv } from './spawned-pty-env-fixtures'
 import {
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  type ProjectGroup,
+  type RpcRequest,
+  type TerminalLayoutSnapshot,
+  type WorkspaceSessionState,
+  type WorktreeMeta
 } from './orca-runtime-test-mocks.spec'
 
-import type {
-  FolderWorkspace,
-  ProjectGroup,
-  RpcRequest,
-  TerminalLayoutSnapshot,
-  WorkspaceSessionState,
-  WorktreeMeta
-} from './orca-runtime-test-mocks.spec'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
 import type { OrchestrationDb } from './orchestration/db'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 type RuntimeService = InstanceType<typeof OrcaRuntimeService>
@@ -576,6 +574,8 @@ function makeRuntimeStoreWithWorkspaceSession(
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn<Store['setWorkspaceSession']>>
     flushOrThrow: ReturnType<typeof vi.fn<() => void>>
+    runDurableMutation: Store['runDurableMutation']
+    applyLayoutCommand: ReturnType<typeof vi.fn<Store['applyLayoutCommand']>>
     persistPtyBinding: ReturnType<typeof vi.fn<Store['persistPtyBinding']>>
   }
   getSession: () => WorkspaceSessionState

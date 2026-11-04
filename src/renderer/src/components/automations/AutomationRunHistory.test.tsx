@@ -369,12 +369,33 @@ describe('AutomationRunHistory row content', () => {
   })
 
   it('names the workspace a run is still attached to', () => {
+    const run = makeRun({ workspaceId: WORKSPACE_ID, workspaceDisplayName: null })
     renderHistory({
-      runs: [makeRun({ workspaceId: WORKSPACE_ID })],
-      worktreeMap: new Map([[WORKSPACE_ID, makeWorktree({ displayName: 'nightly-check' })]])
+      runs: [run],
+      worktreeMap: new Map([[run.id, makeWorktree({ displayName: 'nightly-check' })]])
     })
 
     expect(rows()[0].textContent).toContain('nightly-check')
+  })
+
+  it('keeps each run name when the same workspace ID appears on different hosts', () => {
+    renderHistory({
+      runs: [
+        makeRun({
+          id: 'local-run',
+          workspaceId: WORKSPACE_ID,
+          workspaceDisplayName: 'Saved local'
+        }),
+        makeRun({ id: 'server-run', workspaceId: WORKSPACE_ID, workspaceDisplayName: null })
+      ],
+      worktreeMap: new Map([
+        ['local-run', makeWorktree({ displayName: 'Current local' })],
+        ['server-run', makeWorktree({ displayName: 'Server workspace' })]
+      ])
+    })
+    expect(rows()[0].textContent).toContain('Saved local')
+    expect(rows()[0].textContent).not.toContain('Server workspace')
+    expect(rows()[1].textContent).toContain('Server workspace')
   })
 
   it('keeps the remembered name of a workspace that is gone, and says it is gone', () => {

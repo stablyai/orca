@@ -1,8 +1,8 @@
 import {
   OrcaRuntimeWithCreateMobileSessionTerminal,
+  type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
 import {
@@ -11,7 +11,7 @@ import {
 } from '../../../ai-vault/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
@@ -157,6 +157,8 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         opts.activate !== false,
         phoneAnchor,
         {
+          // The phone user's own fork.
+          wslUserAct: true,
           ...startup,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-chat-fork-tab\0${seed}`),

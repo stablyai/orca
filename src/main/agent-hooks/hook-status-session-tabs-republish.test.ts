@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
 import { installHookStatusSessionTabsRepublish } from './hook-status-session-tabs-republish'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status/contracts/agent-status-freshness'
 import {
   createMobileSessionTabsAgentStatusHeartbeat,
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS

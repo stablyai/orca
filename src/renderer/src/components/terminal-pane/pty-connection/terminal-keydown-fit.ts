@@ -3,11 +3,12 @@ import { makePaneKey } from '../../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/runtime-terminal-inspection'
-import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
+import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifecycle'
@@ -16,7 +17,7 @@ import {
   hookLaneTitleTurnEndEvidence
 } from '@/hooks/agent-hook-turn-end-ownership'
 import { absorbBurstBellForHookOwnedIdle } from './agent-task-complete-notify'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
+import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
@@ -90,8 +91,14 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     }
     // Why: override hydration can arrive before this pane knows its PTY. Once
     // data-pty-id is bound, safeFit can park xterm at the authoritative grid.
-    if (getFitOverrideForPty(ptyId)) {
+    const hasFitOverride = getFitOverrideForPty(ptyId) !== null
+    if (hasFitOverride) {
       safeFit(session.pane)
+    }
+    // Why: the overlay tick skipped that early event (no pane owned this PTY yet),
+    // so the parked grid would otherwise show no "sized for your phone" banner.
+    if (hasFitOverride || isPtyLocked(ptyId)) {
+      session.deps.refreshMobileOverlays?.()
     }
     session.claimPendingVisibleRemoteViewport()
   }

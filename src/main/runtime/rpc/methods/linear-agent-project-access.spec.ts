@@ -49,7 +49,11 @@ describe('Linear agent project access helpers', () => {
         workspaceId: 'workspace-1'
       })
     ).resolves.toMatchObject({ id: '11111111-1111-4111-8111-111111111111' })
-    expect(readById).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'workspace-1')
+    expect(readById).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      'workspace-1',
+      undefined
+    )
     expect(readByName).not.toHaveBeenCalled()
   })
 
@@ -77,8 +81,8 @@ describe('Linear agent project access helpers', () => {
     await expect(
       tester.resolveLinearCreateProject(' launch ', { id: 'team-1', workspaceId: 'workspace-1' })
     ).resolves.toMatchObject({ id: 'project-1' })
-    expect(readByName).toHaveBeenCalledWith('launch', 'workspace-1')
-    expect(readExactName).toHaveBeenCalledWith('launch', 'workspace-1')
+    expect(readByName).toHaveBeenCalledWith('launch', 'workspace-1', undefined)
+    expect(readExactName).toHaveBeenCalledWith('launch', 'workspace-1', undefined)
   })
 
   it('resolves Linear projects by URL slug without a paginated exact-name scan', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from './agent-status/contracts/agent-status-ipc-payload'
 import { mintFleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import {
   ORCHESTRATION_FLEET_PAGE_MAX,
@@ -7,7 +7,7 @@ import {
   refreshOrchestrationFleetLivenessAttention,
   type FleetDurableWorker
 } from './orchestration-fleet-projection'
-import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status/contracts/agent-status-freshness'
 
 function worker(id: string, overrides: Partial<FleetDurableWorker> = {}): FleetDurableWorker {
   return {
@@ -618,6 +618,48 @@ describe('fleet liveness and attention after a host verdict', () => {
       now: 10_000
     })
 
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+  })
+
+  // Keep open, --keep-open and new-workspace workers stay open on purpose; a release hint would close them.
+  it('asks nothing of a finished worker kept open', () => {
+    const projected = projectOrchestrationFleet({
+      workers: [
+        worker('1', {
+          workerState: 'succeeded',
+          dispatchStatus: 'completed',
+          terminalState: 'retained',
+          resource: {
+            id: 'resource-1',
+            ownerDispatchId: '1',
+            worktreeId: 'workspace-1',
+            paneKey: 'tab-1:leaf-1',
+            hostScope: null,
+            ownershipState: 'owned',
+            releaseState: 'retained',
+            updatedAt: '2026-09-04T00:00:00.000Z'
+          }
+        })
+      ],
+      statuses: [],
+      now: 10_000
+    })
+
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+  })
+
+  // A follow-up reuses the terminal while the pane still reports the earlier Dispatch's turn.
+  it('asks nothing of a settled worker whose terminal moved to a follow-up', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [worker('1', { workerState: 'succeeded', dispatchStatus: 'completed' })],
+      statuses: [
+        status('1', now - 1_000, { orchestration: { taskId: 'task-1', dispatchId: '1' } })
+      ],
+      now
+    })
+
+    expect(projected.workers[0]!.liveness.verdict).toBe('live')
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
 })

@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
 
 export class TerminalHostAgentSessionGenerations {
   private readonly byPtyId = new Map<string, string>()

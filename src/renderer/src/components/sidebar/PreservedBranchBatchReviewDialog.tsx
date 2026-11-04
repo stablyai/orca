@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
@@ -15,7 +15,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { Label } from '../ui/label'
-import { preservedBranchCleanupKey } from '@/lib/preserved-branch-cleanup'
+import { preservedBranchCleanupKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 
 type ActionablePreservedBranch = PreservedBranchCleanup & { expectedHead: string }
 

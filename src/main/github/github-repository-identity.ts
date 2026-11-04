@@ -1,6 +1,11 @@
-import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
-import { readRemoteUrl } from '../git/remote-url-probe'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
+import { readRemoteUrl } from '../git/remotes/remote-url-probe'
+import {
+  ghAccountBindingsEqual,
+  normalizeGhAccountBinding,
+  type GhAccountBinding
+} from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
@@ -9,10 +14,11 @@ import {
   type GitHubRemoteIdentity
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
-import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import { isStableMissingGitRemoteError } from '../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { resolveGitHubProjectAccount } from './github-project-account'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -38,18 +44,54 @@ export type GitHubRemoteIdentityProbeOptions = {
   requireVerifiedSshProbe?: boolean
 }
 
+const operations = new AsyncLocalStorage<GitHubRepoContext>()
+
+export async function withGitHubRepoExecution<T>(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  options: LocalGitExecOptions,
+  operation: () => Promise<T>,
+  expectedGhAccount?: GhAccountBinding | null
+): Promise<T> {
+  // Async descendants keep the selection through settlement, including detached cache work.
+  const context = githubRepoContext(repoPath, connectionId, options)
+  if (
+    expectedGhAccount !== undefined &&
+    !ghAccountBindingsEqual(
+      normalizeGhAccountBinding(context.ghAccount),
+      expectedGhAccount === null ? null : normalizeGhAccountBinding(expectedGhAccount)
+    )
+  ) {
+    throw new Error(
+      "The project's GitHub account changed. Try the action again with the current account."
+    )
+  }
+  return operations.run(context, operation)
+}
+
 export function githubRepoContext(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): GitHubRepoContext {
-  return {
+  const context = {
     repoPath,
     connectionId: connectionId ?? null,
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
     ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
   }
+  const scope = operations.getStore()
+  const pinned =
+    scope &&
+    scope.repoPath === repoPath &&
+    scope.connectionId === context.connectionId &&
+    scope.wslDistro === context.wslDistro
+      ? scope
+      : null
+  const account = pinned ?? resolveGitHubProjectAccount(context) ?? context
+  const binding = account.ghAccount ? Object.freeze({ ...account.ghAccount }) : undefined
+  return Object.freeze({ ...context, ghAccount: binding })
 }
 
 export function ghRepoExecOptions(context: GitHubRepoContext): {

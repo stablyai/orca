@@ -76,11 +76,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Pairs with attestAgentHookCompatibilityAuthority.'
   },
   {
-    wiring: 'ctor:getPairedDeviceName',
-    missingOn: 'orcad',
-    reason: 'Unwired gap (follow-up): client-hosted browser rows show no paired-device name.'
-  },
-  {
     wiring: 'ctor:orchestrationEnvironmentTransport',
     missingOn: 'orcad',
     reason: 'Cross-environment orchestration dials paired environments from the desktop only.'
@@ -117,11 +112,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'rpc.setOnUnpairedDeviceAuthFailure',
     missingOn: 'orcad',
     reason: 'It notifies a desktop window.'
-  },
-  {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
   },
   {
     wiring: 'host:setMainHttpClient',

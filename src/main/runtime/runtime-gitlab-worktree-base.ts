@@ -1,7 +1,7 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { requireRepoLocalGitRoute } from '../repo-execution-host'
+import { requireRepoLocalGitRoute } from '../workspaces/execution-host/repo-execution-host'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import { gitExecFileAsync } from '../git/runner'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
@@ -10,11 +10,12 @@ import { getGlabKnownHosts } from '../gitlab/gl-utils'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
-} from '../project-runtime-git-options'
-import type { ProjectRuntimeResolutionStore } from '../local-project-runtime-resolution'
+} from '../workspaces/execution-host/project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { resolveRuntimeGitLabForkMrBase } from './runtime-gitlab-fork-mr-base'
 import { resolveRuntimeGitLabIssueSourceRemote } from './runtime-gitlab-issue-source-remote'
 import { reviewStartPointFailure } from '../../shared/review-start-point-failure-copy'
+import { resolvePrStartPointUnlessWslStopped } from '../github/pr-start-point-wsl-gate'
 
 export type RuntimeGitLabWorktreeBaseArgs = {
   repoSelector: string
@@ -22,6 +23,8 @@ export type RuntimeGitLabWorktreeBaseArgs = {
   sourceBranch?: string
   targetBranch?: string
   isCrossRepository?: boolean
+  /** The user creating from the MR: it may start a stopped WSL distro. */
+  wakeWslDistro?: boolean
 }
 
 type RuntimeGitLabWorktreeBaseResult =
@@ -51,6 +54,20 @@ export async function resolveRuntimeGitLabWorktreeBase(
   requireRepoLocalGitRoute(repo)
   const localGitExecOptions = getLocalProjectGitExecOptions(deps.store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(deps.store, repo)
+  // Source Control's push-target ensure asks unprompted; it must not start a stopped distro (E9).
+  return resolvePrStartPointUnlessWslStopped(
+    { path: repo.path, wslDistro: localGitExecOptions.wslDistro },
+    { wakeWslDistro: args.wakeWslDistro },
+    () => resolveGitLabMrBaseInRepo(repo, args, localGitExecOptions, localWorktreeGitOptions)
+  )
+}
+
+async function resolveGitLabMrBaseInRepo(
+  repo: Repo,
+  args: RuntimeGitLabWorktreeBaseArgs,
+  localGitExecOptions: ReturnType<typeof getLocalProjectGitExecOptions>,
+  localWorktreeGitOptions: ReturnType<typeof getLocalProjectWorktreeGitOptions>
+): Promise<RuntimeGitLabWorktreeBaseResult> {
   const gitExec = (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions)
   let sourceBranch = args.sourceBranch?.trim() ?? ''
   let targetBranch = args.targetBranch?.trim() ?? ''

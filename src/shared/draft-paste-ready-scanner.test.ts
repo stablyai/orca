@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner, resolvePasteReadySignal } from './draft-paste-ready-scanner'
 import { OPENCODE_AGENT_ROW_GRACE_MS } from './opencode-agent-row-scanner'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'

@@ -2,8 +2,8 @@ import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import {
   PROCESS_BOUNDARY_GROUND,
   RESET_GRAPHIC_RENDITION
-} from '../../shared/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal-fresh-shell-viewport'
+} from '../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
+import { buildFreshShellViewportBlankingSequence } from '../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 // Reset modes after seeding the daemon too, or downstream snapshots (including mobile) re-arm dead TUI state.
 

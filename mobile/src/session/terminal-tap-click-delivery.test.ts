@@ -13,9 +13,6 @@ vi.mock('../terminal/mobile-terminal-operations', () => ({
   },
   terminalBufferClear: {}
 }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 
 const handle = 'term-tap'
 const up = '\x1b[A'
@@ -34,7 +31,10 @@ function fixture(liveField: boolean) {
   const client = {}
   const sendLiveInputClick = vi.fn(async () => true)
   const sendLiveTerminalInput = vi.fn(async () => true)
+  const legacySend: typeof terminalInputSend.request = (rpc, params, options) =>
+    terminalInputSend.request(rpc, params, options)
   const scope = {
+    sendTerminalOrderedInput: legacySend,
     client,
     clientRef: ref<object | null>(client),
     connState: 'connected',
@@ -112,7 +112,7 @@ it('sends a click at once for a terminal without the live field, past a wheel in
   expect(request).toHaveBeenCalledTimes(1)
   await actions.handleTerminalInput(handle, click, { click: true })
   await vi.advanceTimersByTimeAsync(300)
-  expect(sendLiveTerminalInput).toHaveBeenCalledWith(handle, click)
+  expect(sendLiveTerminalInput).toHaveBeenCalledWith(handle, click, 'pointer')
   expect(sendLiveInputClick).not.toHaveBeenCalled()
   release()
   await settle()

@@ -16,7 +16,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
 }))
 
 import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
 import { MobileRelayE2eeLink, RelayOuterError } from './mobile-relay-e2ee-link'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
@@ -173,7 +173,7 @@ describe('the sign-out the cell reported outranks a later plain 4404', () => {
     const controller = controllerReporting(reported)
 
     controller.assertHostReachability('signed-out')
-    controller.setActiveSession({ getFailure: () => null, probeAfterBackground: () => {} })
+    controller.setActiveSession({ getFailure: () => null, notifyForeground: () => {} })
 
     expect(reported).toEqual(['connecting', 'signed-out', 'connecting'])
   })

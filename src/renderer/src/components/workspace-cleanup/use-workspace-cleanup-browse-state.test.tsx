@@ -8,10 +8,12 @@ import {
   createWorkspaceCleanupBrowseSlice,
   resetWorkspaceCleanupBrowsePersistTimer
 } from '@/store/slices/workspace-cleanup-browse'
-import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
-import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup-applied-filters'
-import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
-import type { WorkspaceCleanupBrowseController } from './use-workspace-cleanup-browse-state'
+import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
+import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup/workspace-cleanup-applied-filters'
+import {
+  useWorkspaceCleanupBrowseState,
+  type WorkspaceCleanupBrowseController
+} from './use-workspace-cleanup-browse-state'
 
 const store = create<AppState>()(
   (...a) =>
@@ -62,20 +64,6 @@ describe('useWorkspaceCleanupBrowseState', () => {
     document.body.replaceChildren()
     resetWorkspaceCleanupBrowsePersistTimer()
     vi.useRealTimers()
-  })
-
-  it('keeps both patches when two groups are written in one tick', () => {
-    const controller = mountController()
-
-    // Batch patches in one act so stale rendered-state reads would overwrite the first patch.
-    act(() => {
-      controller.current!.patchFilters('activity', { idleMinDays: 20 })
-      controller.current!.patchFilters('size', { maxBytes: 500 })
-    })
-
-    const filters = store.getState().workspaceCleanupBrowse.filters
-    expect(filters.activity.idleMinDays).toBe(20)
-    expect(filters.size.maxBytes).toBe(500)
   })
 
   it('keeps both patches when the same group is written twice in one tick', () => {

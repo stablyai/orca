@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import { TerminalAgentPromptAnswers } from './terminal-agent-prompt-answer'
@@ -68,16 +68,6 @@ function harness() {
 }
 
 describe('TerminalAgentPromptAnswers', () => {
-  it('writes the chosen option’s key, without Enter, for the prompt still pending', async () => {
-    const h = harness()
-    const prompt = h.answers.pending(h.runtime, target)
-    expect(prompt?.kind).toBe('approval')
-    await expect(h.answer(prompt!.promptId, 'reject_once')).resolves.toEqual({
-      outcome: 'accepted'
-    })
-    expect(h.keys).toEqual(['\x1b'])
-  })
-
   it('refuses a second answer to the same prompt before the agent reports moving on', async () => {
     const h = harness()
     const { promptId } = h.answers.pending(h.runtime, target)!

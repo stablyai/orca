@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   PendingPRCommentAiAckGithubResolveTarget,
   PendingPRCommentAiAckGitlabTarget
@@ -18,6 +18,7 @@ export type SnapshottedThreadResolverDeps = {
     resolve: boolean,
     options: {
       repoId: string
+      repoOwnerExecutionHostId?: string
       prRepo?: PendingPRCommentAiAckGithubResolveTarget['prRepo']
     }
   ) => Promise<boolean>
@@ -77,6 +78,7 @@ async function resolveOnHost(
     const target = deps.githubResolveTarget
     const ok = await deps.resolveReviewThread(target.repoPath, target.prNumber, threadId, true, {
       repoId: target.repoId,
+      repoOwnerExecutionHostId: target.ownerHostId,
       prRepo: target.prRepo
     })
     return { ok }

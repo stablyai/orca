@@ -1,10 +1,9 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { openHttpLink } from '@/lib/http-link-routing'
 import { formatCreateError } from '../create-pull-request-review-copy'
 import { stripBaseRef } from '../create-pull-request-base-ref-normalization'
-import { normalizeHostedReviewHeadRef } from '../../../../../shared/hosted-review-refs'
-import { hostedReviewProviderSupportsDraft } from '../../../../../shared/hosted-review'
+import { normalizeHostedReviewHeadRef } from '../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import { hostedReviewProviderSupportsDraft } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
@@ -18,6 +17,7 @@ import {
   useChecksPanelCreatedReview,
   type ChecksPanelCreatedReviewInput
 } from './use-checks-panel-created-review'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   Pick<
@@ -183,7 +183,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             panelShowsReview
           )
           if (prCreationDefaults.openAfterCreate && foreground) {
-            openHttpLink(result.url, { worktreeId: activeWorktreeId })
+            openAppHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
           if (activePullRequestGenerationKey) {
             updatePullRequestGenerationRecord(
@@ -214,7 +214,8 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
                   'Open on {{value0}}',
                   { value0: hostedReviewCreateCopy.providerName }
                 ),
-                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+                onClick: () =>
+                  openAppHttpLink(result.existingReview!.url, { worktreeId: activeWorktreeId })
               }
             }
           )

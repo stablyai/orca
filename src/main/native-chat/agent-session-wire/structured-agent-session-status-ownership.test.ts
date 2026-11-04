@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveEvidence
-} from '../../../shared/agent-status-child-work-evidence'
-import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { makeStructuredAgentStatusSubject } from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../../agent-hooks/server'
 import { StructuredAgentSessionStatusOwnership } from './structured-agent-session-status-ownership'
 

@@ -2,6 +2,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useGitHubTaskProjectTable } from '@/hooks/useGitHubTaskItems'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { projectViewCacheKey, projectViewSourceScope } from '@/store/github/cache-identity'
@@ -104,7 +105,10 @@ export function useProjectViewTable(
           activeProject.host
         )
       : null
-  const table = currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null
+  const table = useGitHubTaskProjectTable(
+    currentCacheKey ? (projectViewCache[currentCacheKey]?.data ?? null) : null,
+    sourceTarget
+  )
 
   useEffect(() => {
     if (!activeProject || !viewId || !currentCacheKey || projectViewCache[currentCacheKey]?.data) {
@@ -132,6 +136,7 @@ export function useProjectViewTable(
       return
     }
     let cancelled = false
+    // No wake: this also runs on a restored page with no click, so a stopped distro stays stopped.
     void listProjectViewsForRuntime(sourceTarget, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,

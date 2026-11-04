@@ -1,9 +1,8 @@
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { dismissRetainedProgramResult } from '@/lib/program-status/result-retention'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
+import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
@@ -13,9 +12,11 @@ import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-track
 import { isRemoteExecutionHostPtyId } from '../../../../../shared/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 
 import {
   paneShouldAnswerOscColorQueries,
@@ -127,13 +128,13 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     // WSL/remote panes cannot authorize native ConPTY bytes, so skip Windows scans that cannot affect routing.
     return isLocalNativeWindowsConpty({
       userAgent: navigator.userAgent,
-      connectionId: getConnectionId(session.deps.worktreeId) ?? null,
+      connectionId: session.worktreeConnectionId ?? null,
       cwd: session.deps.cwd,
       shellOverride: resolveWindowsShellOverride(
         tab?.shellOverride,
         state.settings?.terminalWindowsShell
       ),
-      executionHostId: getExecutionHostIdForWorktree(state, session.deps.worktreeId)
+      executionHostId: session.executionHostId
     })
   }
   session.paneForegroundAgentTracker = createPaneForegroundAgentTracker({

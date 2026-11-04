@@ -6,15 +6,15 @@ import type {
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
 import { relayIdentityKey } from './relay-auth-identity'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelayUnavailableError } from './relay-readiness'
 import { RelaySessionBroker } from './relay-session-broker'
-import type { RelayBrokerStatus } from './relay-session-broker-contract'
-import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
+import type { MobileRelayStatusPublisher } from '../../../shared/remote-runtime/relay/mobile-relay-status'
+import type { PairingRelay } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
   RelayRevokeOutbox,
   RelayDeviceBinding,
@@ -30,7 +30,7 @@ type DesktopRelayServiceOptions = {
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+  onStatus: MobileRelayStatusPublisher
 }
 
 // Revive dead brokers lacking retry timers (sleep/token expiry) without requiring user Retry.

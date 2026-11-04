@@ -4,22 +4,26 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
+import {
+  createStore,
+  closeTestStores,
+  makeRepo,
+  testState
+} from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from './orchestration/db'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
 import {
   attachParams,
@@ -38,6 +42,7 @@ export const WORKER_2_PANE = 'tab_worker2:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 export let codex: ReturnType<typeof fakeCodex>
 export let root: string
+let profile: ReturnType<typeof createStore>
 export let runtime: OrcaRuntimeService
 export let db: OrchestrationDb
 export let host: StructuredAgentSessionHost
@@ -236,6 +241,9 @@ export async function startClearedContext(sessionId: string): Promise<void> {
 beforeEach(async () => {
   resetProviderFaults()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
+  testState.dir = root
+  profile = createStore()
+  profile.addRepo(makeRepo({ id: 'workspace-1', path: root, executionHostId: 'local' }))
   codex = fakeCodex()
   db = new OrchestrationDb(':memory:')
   runtime = startRuntime()
@@ -244,8 +252,8 @@ beforeEach(async () => {
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
-    resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-    resolveCodexCommand: () => '/usr/local/bin/codex',
+    resolveWorkspacePath: async () => root,
+    resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
@@ -254,14 +262,15 @@ beforeEach(async () => {
     onSessionStatusChanged: (summary) => {
       runtime.onStructuredSessionStatusForMail(summary)
     },
-    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId)
+    onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
+    queuedAgentMessageOwed: (sessionId, from) => runtime.structuredChatMailOwed(sessionId, from)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })
 
 /** Restart reuses the same database with a fresh runtime. */
 export function startRuntime(): OrcaRuntimeService {
-  const started = new OrcaRuntimeService()
+  const started = new OrcaRuntimeService(profile)
   started.setOrchestrationDb(db)
   vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
   vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -279,6 +288,7 @@ afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
     db.close()
     await observationClock.drainClosedDatabaseRepair()
+    await closeTestStores()
     vi.restoreAllMocks()
     await rm(root, { recursive: true, force: true })
   } finally {
@@ -289,12 +299,9 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** Exact PTY mailbox pointer, including CLI spelling. */
-export function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[Reply: orca(-dev)? orchestration reply --id /.test(text)
 }
 
 export function turnText(turn: { text: string }): string {

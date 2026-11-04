@@ -1,5 +1,5 @@
-import { resolveAgentStatusWorktreeId } from '../../shared/agent-status-worktree-attribution'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { resolveAgentStatusWorktreeId } from '../../shared/agent-status/identity/agent-status-worktree-attribution'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentPhaseTransition,
   hookRowAgentPhase,
@@ -8,8 +8,8 @@ import {
   titleAgentPhase,
   type AgentPhase,
   type AgentTransition
-} from '../../shared/agent-transitions'
-import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+} from '../../shared/agent-status/lifecycle/agent-transitions'
+import type { TerminalSideEffectBatch } from '../../shared/terminal/output/terminal-side-effect-facts'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -252,6 +252,10 @@ export class AgentTransitionDetector {
     } else {
       this.panes.set(paneKey, { workspace, phase })
     }
+  }
+
+  phaseOf(paneKey: string): AgentPhase {
+    return this.panes.get(paneKey)?.phase ?? 'rest'
   }
 
   /** Use the newest row to match the window's arrival-order projection. */

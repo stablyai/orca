@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { __resetPowerShellProfileEnvCache } from '../pty/powershell-profile-env'
+import { __resetPowerShellProfileEnvCache } from '../pty/shell-startup/powershell-profile-env'
 import { CodexRuntimeHomeService } from './runtime-home-service'
 
 // Keep the host's registry-named Documents directory outside the sandbox probe.
-vi.mock('../windows-native-registry', () => ({
+vi.mock('../windows/windows-native-registry', () => ({
   loadWindowsNativeRegistry: () => {
     throw new Error('no registry in tests')
   }

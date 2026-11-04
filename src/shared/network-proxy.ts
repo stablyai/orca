@@ -33,6 +33,8 @@ const PROXY_ENV_KEYS = [
   'http_proxy'
 ] as const
 const NO_PROXY_ENV_KEYS = ['NO_PROXY', 'no_proxy'] as const
+/** Every variable the environment proxy readers below consult. */
+export const PROXY_ENVIRONMENT_KEYS: readonly string[] = [...PROXY_ENV_KEYS, ...NO_PROXY_ENV_KEYS]
 
 function formatProxyUrl(url: URL): string {
   const auth =

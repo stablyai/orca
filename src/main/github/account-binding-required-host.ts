@@ -1,7 +1,7 @@
 import {
   isUnresolvedSshHostAlias,
   foldComparableGitHubHost
-} from '../../shared/git-remote-host-alias'
+} from '../../shared/git/remotes/git-remote-host-alias'
 import { githubHostFromIdentityKey } from '../../shared/github/repository-identity-key'
 import { rawSshTransportHost, remoteUrlUsesSshTransport } from './github-remote-identity-parsing'
 import {

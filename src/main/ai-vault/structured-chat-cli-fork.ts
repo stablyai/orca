@@ -2,15 +2,18 @@ import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { codexDatedRolloutRelativePath } from '../codex/codex-session-resume-home'
-import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { pendingAgentSessionRewindFork } from '../../shared/agent-session-rewind'
+import {
+  agentForksConversations,
+  agentForksThroughChat
+} from '../../shared/agent-launch/startup/agent-resume-argv'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { pendingAgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import type {
   AiVaultPrepareChatForkArgs,
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -18,11 +21,11 @@ import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runt
 import { readPiSessionHeader } from '../pi/rpc-launch-resolution'
 import { copyStructuredChatRecordConversation } from './structured-chat-conversation-copy'
 import { isAiVaultAgent } from './session-list-result-validation'
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 function assertNativeConversationContent(snapshot: AgentJournalSnapshot): void {
   const submissions = new Map(

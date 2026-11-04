@@ -1,10 +1,14 @@
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
-import type { HostedReviewProvider } from '../../shared/hosted-review'
-import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
-import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'
+import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
+import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
+import type { SourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
 
 export type GitOperationApi = {
@@ -46,6 +50,10 @@ export type GitOperationApi = {
   commit: (args: {
     worktreePath: string
     message: string
+    connectionId?: string
+  }) => Promise<{ success: boolean; error?: string }>
+  completeMerge: (args: {
+    worktreePath: string
     connectionId?: string
   }) => Promise<{ success: boolean; error?: string }>
   generateCommitMessage: (args: {
@@ -98,6 +106,12 @@ export type GitOperationApi = {
     connectionId?: string
   }) => Promise<void>
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>
+  resolveConflict: (args: {
+    worktreePath: string
+    filePath: string
+    resolution: ConflictResolution
+    connectionId?: string
+  }) => Promise<void>
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]
