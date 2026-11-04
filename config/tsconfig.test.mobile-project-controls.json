@@ -3,7 +3,6 @@
   "files": [
     "../mobile/src/mobile-web-shell/mobile-web-shell-project-controls.test.ts",
     "../mobile/src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts",
-    "../mobile/src/components/new-workspace-owner-controls.test.tsx",
     "../.cache/typecheck/mobile-project-controls-host/src/renderer/src/env.d.ts",
     "../.cache/typecheck/mobile-project-controls-host/src/preload/api-types.d.ts",
     "../src/types/build-constants.d.ts"

@@ -112,7 +112,6 @@ describe('typecheck project coverage', () => {
     expect(read('config/tsconfig.test.mobile-project-controls.json').files).toEqual([
       '../mobile/src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
       '../mobile/src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
-      '../mobile/src/components/new-workspace-owner-controls.test.tsx',
       '../.cache/typecheck/mobile-project-controls-host/src/renderer/src/env.d.ts',
       '../.cache/typecheck/mobile-project-controls-host/src/preload/api-types.d.ts',
       '../src/types/build-constants.d.ts'

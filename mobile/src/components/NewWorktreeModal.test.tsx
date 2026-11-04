@@ -53,7 +53,13 @@ vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
-import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
+import {
+  buildMobileProjectSectionCatalog,
+  MOBILE_PROJECT_SECTIONS_METHOD
+} from '../../../src/shared/mobile-project-sections-contract'
+import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import type { Repo } from '../../../src/shared/repo-types'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import { setCachedRepos } from '../cache/repo-cache'
 import { recordHostDescriptor } from '../transport/host-descriptor-store'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
@@ -340,6 +346,143 @@ describe('NewWorktreeModal project targets', () => {
 
     act(() => form.props.onClose())
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers rendered creation controls after a failed owner read and same-client wake', async () => {
+    const localRepo: Repo = { ...repos[0]!, kind: 'git', badgeColor: '', addedAt: 0 }
+    const serverRepo: Repo = {
+      ...localRepo,
+      id: 'server-repo',
+      path: '/srv/orca',
+      executionHostId: 'runtime:env-1'
+    }
+    const allRepos = [localRepo, serverRepo]
+    const catalog = buildMobileProjectSectionCatalog(
+      allRepos,
+      projectHostSetupProjectionFromRepos(allRepos),
+      'manual',
+      undefined,
+      { projectGroupingMode: 'repository' }
+    )
+    let answerCatalog: ((reply: RpcResponse) => void) | undefined
+    const delayedCatalog = new Promise<RpcResponse>((resolve) => {
+      answerCatalog = resolve
+    })
+    let catalogReads = 0
+    const events = new Set<Parameters<RpcClient['subscribe']>[2]>()
+    const reply = (method: string, listed: Repo[], hostPlatform: string) => {
+      if (method === 'repo.list') {
+        return replied({ repos: listed })
+      }
+      if (method === 'status.get') {
+        return replied({ hostPlatform })
+      }
+      if (method === 'settings.get') {
+        return replied({ settings: {} })
+      }
+      if (method === 'worktree.create') {
+        return replied({ worktree: { id: 'srv-wt', displayName: 'srv-wt', path: '/srv/orca-wt' } })
+      }
+      return replied({})
+    }
+    const desktop = vi.fn((method: string): Promise<RpcResponse> => {
+      if (method === MOBILE_PROJECT_SECTIONS_METHOD) {
+        catalogReads++
+        return catalogReads === 1
+          ? Promise.resolve({
+              id: 'owner-unavailable',
+              ok: false,
+              error: { code: 'runtime_unavailable', message: 'runtime_unavailable' }
+            })
+          : delayedCatalog
+      }
+      return reply(method, [localRepo], 'darwin')
+    })
+    const client = stubRpcClient({
+      sendRequest: desktop,
+      subscribe: (_method, _params, listener) => {
+        events.add(listener)
+        return () => events.delete(listener)
+      }
+    })
+    const server = vi.fn((method: string) => reply(method, [serverRepo], 'linux'))
+    const onCreated = vi.fn()
+    setCachedRepos('owner-recovery', [localRepo])
+    recordHostDescriptor('owner-recovery', { machineName: null, platform: 'darwin' })
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(server)]
+          ]),
+          hostId: 'owner-recovery',
+          hostLabelById: new Map<ExecutionHostId, string>([['runtime:env-1', 'scratch-server']]),
+          onCreated,
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+    act(() => sourceInputs(renderer)[0]!.props.onChangeText('owner-recovery'))
+    const control = (label: string) => {
+      const matches = findAllByHostType(renderer.root, 'Pressable').filter((node) =>
+        node.props.accessibilityLabel?.startsWith(label)
+      )
+      expect(matches).toHaveLength(1)
+      return matches[0]!
+    }
+    const expectDisabled = (disabled: boolean) => {
+      for (const label of ['Project,', 'Run on,', 'Create worktree']) {
+        expect(control(label).props.disabled).toBe(disabled)
+        expect(control(label).props.accessibilityState.disabled).toBe(disabled)
+      }
+    }
+    expect(catalogReads).toBe(1)
+    expectDisabled(true)
+    expect(events.size).toBeGreaterThan(0)
+    await act(async () => {
+      for (const listener of events) {
+        listener({ type: 'reposChanged' })
+      }
+    })
+    await flushUpdates()
+    expect(catalogReads).toBe(2)
+    expectDisabled(true)
+    await act(async () => answerCatalog?.({ id: 'owner-ready', ok: true, result: { catalog } }))
+    await flushUpdates()
+    expectDisabled(false)
+    expect(pickerItems(renderer, 'Project').map((item) => [item.label, item.detail])).toEqual([
+      ['orca', 'stablyai/orca']
+    ])
+    expect(pickerItems(renderer, 'Run on').map((item) => [item.label, item.detail])).toEqual([
+      [LOCAL_HOST_LABEL, '/src/orca'],
+      ['scratch-server', '/srv/orca']
+    ])
+    const picker = runTargetPicker(renderer)
+    await act(async () => picker.props.onSelect(picker.props.items[1]))
+    await flushUpdates()
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1::server-repo')
+    await act(async () => control('Create worktree').props.onPress())
+    await flushUpdates()
+    expect(server).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:server-repo' }),
+      expect.anything()
+    )
+    expect(desktop).not.toHaveBeenCalledWith(
+      'worktree.create',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(
+      'srv-wt',
+      expect.any(String),
+      undefined,
+      'runtime:env-1'
+    )
   })
 
   it("lists the desktop's repos at once while a server has not answered", async () => {

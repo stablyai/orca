@@ -24,10 +24,6 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Normal publisher/persistence/socket join: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
   ],
   [
-    'src/components/new-workspace-owner-controls.test.tsx',
-    'Real publisher/controller creation joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Bun role'
-  ],
-  [
     'src/worktree/project-sections-owner-recovery.test.ts',
     'Node-side: imports the desktop runtime and RPC handlers; checked by config/tsconfig.node.json against Node libraries'
   ],

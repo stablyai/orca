@@ -146,7 +146,7 @@ describe('moved-code matcher and changed-line gate', () => {
         )
       )
       const joined = config.files
-        .find((entry) => entry.endsWith('new-workspace-owner-controls.test.tsx'))
+        .find((entry) => entry.endsWith('mobile-web-shell-project-controls.test.ts'))
         .slice(3)
       const files = hasJoined ? ['fixture.mjs', joined] : ['fixture.mjs']
       for (const entry of files) {
