@@ -723,7 +723,7 @@ it.each([false, true])(
   async (resumesTranscript) => {
     const claude = fakeClaude()
     const adapter = adapterFor(claude, { resumesTranscript })
-    const saved = { effort: 'ultracode', fastMode: 'true' }
+    const saved = { effort: 'ultracode', fastMode: 'true' } as const
     await adapter.acquire({
       identity: identityFor(),
       fence: 7,

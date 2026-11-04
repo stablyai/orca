@@ -514,7 +514,7 @@ describe('Claude Ultracode effort', () => {
   it('enters the workflow and explicitly leaves it at the same numeric effort', async () => {
     const session = sessionFor(vi.fn(async () => undefined))
     let workflow = false
-    const applyFlagSettings = vi.fn(async (settings: { ultracode?: boolean }) => {
+    const applyFlagSettings = vi.fn(async (settings: { ultracode?: boolean | null }) => {
       workflow = settings.ultracode ?? workflow
     })
     session.connection.applyFlagSettings = applyFlagSettings
