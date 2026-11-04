@@ -191,6 +191,29 @@ describe('the native paired E2EE codec', () => {
     }
   })
 
+  // The host may send the full ordinary maximum; the phone's own decoder must open it whole.
+  it('opens a maximum ordinary reply and the next frame, on native and fallback paths', async () => {
+    const prefix = '{"id":"max","result":"'
+    const reply = `${prefix}${'r'.repeat(4 * 1024 * 1024 - prefix.length - 6)}tail"}`
+    expect(new TextEncoder().encode(reply).length).toBe(4 * 1024 * 1024)
+    for (const withNative of [true, false]) {
+      const { session, schedule } = pairedSession((await load(withNative)).primitives)
+      const seal = (payload: string, counter: bigint) =>
+        b64(
+          sealMobileE2EEV2Frame({
+            payload: new TextEncoder().encode(payload),
+            key: schedule.desktopToMobileKey,
+            sessionId: schedule.sessionId,
+            direction: 'desktop-to-mobile',
+            payloadKind: 'text',
+            counter
+          })
+        )
+      expect(session.openText(seal(reply, 0n))).toBe(reply)
+      expect(session.openText(seal('{"next":true}', 1n))).toBe('{"next":true}')
+    }
+  })
+
   it('uses native once provided, even after a lookup with no provider', async () => {
     const { native: before } = await load(false)
     expect(before).toBeNull()

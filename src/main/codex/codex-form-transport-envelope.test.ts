@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { certifyBody } from './codex-settled-body-contract-fixture'
+import { throughInstalledChannel } from './codex-installed-channel-contract-fixture'
 import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { NativeChatResolutionReceipt } from '@orca/test-host/renderer/src/components/native-chat/NativeChatResolutionReceipt'
@@ -9,7 +10,6 @@ import { openTestJournalHostDatabase } from '@orca/test-host/main/native-chat/ag
 import {
   replaceHostTestState,
   attach,
-  CALLER,
   envelope,
   hostTestState
 } from '@orca/test-host/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
@@ -21,12 +21,7 @@ import { createBridgePortPair } from '@orca/test-mobile/mobile-web-shell/bridge/
 import { BridgeReplyPayloadSchema } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-envelope'
 import { createFakeRpcClient } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from '@orca/test-host/main/runtime/rpc/methods/structured-agent-session-prompt-response'
-import {
-  createSharedControlTestServer,
-  closeSharedControlTestServers
-} from '@orca/test-host/shared/remote-runtime/control/remote-runtime-shared-control-test-server'
 import { RemoteRuntimeRequestConnection } from '@orca/test-host/shared/remote-runtime/requests/remote-runtime-request-connection'
-import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '@orca/test-host/shared/runtime-ordinary-message-capability'
 import type {
   AgentSessionMutationResult,
   AgentSessionSubscribeEvent
@@ -53,11 +48,16 @@ import {
   splitBridgeReply,
   BridgeReplyAssembler
 } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-reply-chunking'
-import { encrypt, decrypt } from '@orca/test-host/shared/e2ee-crypto'
-import {
-  sealMobileE2EEV2Frame,
-  openMobileE2EEV2Frame
-} from '@orca/test-host/shared/mobile-e2ee-v2-framing'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '@orca/test-host/shared/paired-e2ee-node-primitives'
+import { WEB_PAIRED_E2EE_PRIMITIVES } from '@orca/test-host/renderer/src/web/web-paired-e2ee-primitives'
+import { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
+import { OrcaRuntimeRpcServer } from '@orca/test-host/main/runtime/runtime-rpc'
+import { STATUS_METHODS } from '@orca/test-host/main/runtime/rpc/methods/status'
+import { parsePairingCode } from '@orca/test-host/shared/pairing'
+import { pairedRuntimeConnectionFromOffer } from '@orca/test-host/shared/paired-runtime-connection'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '@orca/test-host/shared/electron-remote-runtime-client-capabilities'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createAgentSessionSettledBodyReader } from '@orca/test-host/shared/agent-session-settled-body-reader'
 import {
   AgentSessionSettledBodyPieceSchema,
@@ -79,9 +79,12 @@ import { DeviceRegistry } from '@orca/test-host/main/runtime/device-registry'
 import { rewriteRelayedPhoneRequest } from '@orca/test-host/main/runtime/mobile-desktop-relay/relayed-phone-frames'
 
 let adapter: ReturnType<typeof adapterFor> | undefined
+const stopServers: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   cleanup()
-  await closeSharedControlTestServers()
+  for (const stop of stopServers.splice(0)) {
+    await stop()
+  }
   setStructuredAgentSessionHost(null)
   await adapter?.closeAll()
   vi.restoreAllMocks()
@@ -261,44 +264,50 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
     for (const raw of [direct, remote, page]) {
       expect(Buffer.byteLength(raw)).toBeLessThanOrEqual(M)
     }
-    const key = new Uint8Array(32).fill(1)
-    const sealed = encrypt(direct, key)
-    expect(decrypt(sealed, key)).toBe(direct)
-    const frameArgs = {
-      key,
-      sessionId: new Uint8Array(32).fill(2),
-      direction: 'mobile-to-desktop' as const,
-      payloadKind: 'text' as const
+    // The installed v2 host decode, for the phone direct and through a relaying desktop's host, both ways.
+    const replyPrefix = '{"id":"reply","result":"'
+    const reply = `${replyPrefix}${'r'.repeat(M - replyPrefix.length - 6)}tail"}`
+    expect(Buffer.byteLength(reply)).toBe(M)
+    let v2FrameLength = 0
+    for (const [primitives, transport] of [
+      [NODE_PAIRED_E2EE_PRIMITIVES, 'direct'],
+      [WEB_PAIRED_E2EE_PRIMITIVES, 'relay']
+    ] as const) {
+      const crossed = await throughInstalledChannel({
+        primitives,
+        transport,
+        request: direct,
+        reply
+      })
+      v2FrameLength = crossed.frame.length
+      expect(v2FrameLength).toBe(4 * Math.ceil((Buffer.byteLength(direct) + 82) / 3))
+      expect(crossed.received).toEqual([direct, '{"next":true}'])
+      expect(crossed.opened).toBe(reply)
+      expect(crossed.next).toBe('{"next":true}')
     }
-    const v2 = sealMobileE2EEV2Frame({ ...frameArgs, payload: Buffer.from(direct), counter: 0n })
-    expect(
-      Buffer.from(
-        openMobileE2EEV2Frame({ ...frameArgs, frame: v2, expectedCounter: 0n })!
-      ).toString()
-    ).toBe(direct)
-    expect(Buffer.from(v2).toString('base64').length).toBe(
-      4 * Math.ceil((Buffer.byteLength(direct) + 82) / 3)
-    )
     // Actual page -> shell request owner -> authenticated ordinary socket -> dispatcher -> journal/adapter.
-    const server = await createSharedControlTestServer({
-      resultForRequest: async (method, params) => {
-        if (method === 'status.get') {
-          return { capabilities: [RUNTIME_ORDINARY_MESSAGE_CAPABILITY] }
-        }
-        const reply = await call(
-          method,
-          params,
-          { ...STRUCTURED_MOBILE_CLIENT, clientId: CALLER.callerKey },
-          {},
-          STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS
-        )
-        if (!reply.ok) {
-          throw new Error(JSON.stringify(reply.error))
-        }
-        return reply.result
-      }
+    // The paired server's installed receiver: production socket transport, channel decode and dispatcher.
+    const pairedServer = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-form-envelope-')),
+      methods: [...STATUS_METHODS, ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS],
+      enableWebSocket: true,
+      wsPort: 0
     })
-    const sender = new RemoteRuntimeRequestConnection(server.pairing)
+    await pairedServer.start()
+    stopServers.push(() => pairedServer.stop())
+    const offer = pairedServer.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'Envelope desktop',
+      scope: 'runtime'
+    })
+    if (!offer.available) {
+      throw new Error('pairing unavailable')
+    }
+    const sender = new RemoteRuntimeRequestConnection(
+      pairedRuntimeConnectionFromOffer(parsePairingCode(offer.pairingUrl)!),
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    )
     const rpc = createFakeRpcClient()
     rpc.sendRequest = async (method, params) => {
       const wire = JSON.stringify(
@@ -537,8 +546,8 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
         remoteQ: Buffer.byteLength(remote),
         P: Buffer.byteLength(page),
         S: replySizes,
-        sealed: sealed.length,
-        v2: Buffer.from(v2).toString('base64').length,
+        sealed: 4 * Math.ceil((Buffer.byteLength(direct) + 40) / 3),
+        v2: v2FrameLength,
         fullRow: Buffer.byteLength(JSON.stringify(saved)),
         historyRow: Buffer.byteLength(JSON.stringify(historical)),
         shortened: historical.shortened,
@@ -555,11 +564,11 @@ it.each(['WF1', 'WF2', 'literal', 'enum', 63, 64] as const)(
           legacyUtf8: Buffer.byteLength(direct),
           legacyCipher: Buffer.byteLength(direct) + 16,
           legacyBundle: Buffer.byteLength(direct) + 40,
-          legacyBase64Js: sealed.length * 2,
+          legacyBase64Js: 4 * Math.ceil((Buffer.byteLength(direct) + 40) / 3) * 2,
           v2HeaderPlaintext: Buffer.byteLength(direct) + 42,
           v2Cipher: Buffer.byteLength(direct) + 58,
-          v2Bundle: v2.length,
-          v2Base64Js: Buffer.from(v2).toString('base64').length * 2
+          v2Bundle: Buffer.byteLength(direct) + 82,
+          v2Base64Js: v2FrameLength * 2
         },
         providerEffects: codex.connections[0].replies.length
       })}\n`

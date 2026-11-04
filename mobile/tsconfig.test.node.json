@@ -38,6 +38,7 @@
     "../src/main/codex/codex-url-opener-contract.test.ts",
     "../src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx",
     "../src/main/codex/codex-settled-body-contract-fixture.ts",
+    "../src/main/codex/codex-installed-channel-contract-fixture.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": [],
