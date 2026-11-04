@@ -565,7 +565,7 @@ describe('buildSections', () => {
       catalogOf([['orca', 'repo-1']])
     )
 
-    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual([
+    expect(sections[0]?.data.map((item) => item.row.worktreeId)).toEqual([
       'main-a',
       'feature',
       'main-b'
