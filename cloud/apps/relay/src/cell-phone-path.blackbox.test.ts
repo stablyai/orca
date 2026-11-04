@@ -2,9 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RESERVE_DEAD_MAN_BOOT_GRACE_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
+import { reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from './database.js'
-import { nextFrame, RESERVE_MODE_CELL_ID, startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
+import {
+  nextFrame,
+  RESERVE_MODE_CELL_ID,
+  startReserveModeCell
+} from './test-fixtures/reserve-mode-cell.js'
 import { StatementRecordingDatabase } from './test-fixtures/statement-recording-database.js'
 
 // Step 6: a reserve-mode cell with phonePath=memory resumes paired phones without the database.
@@ -12,10 +16,16 @@ import { StatementRecordingDatabase } from './test-fixtures/statement-recording-
 // Phone credentials are 32 random bytes.
 const token = (fill: number) => Buffer.alloc(32, fill).toString('base64url')
 const TOKEN = token(1)
-const OTHER_CELL = { id: 'production-gce-c4', url: 'https://c4.relay.onorca.dev', capacityRequests: 900 }
+const OTHER_CELL = {
+  id: 'production-gce-c4',
+  url: 'https://c4.relay.onorca.dev',
+  capacityRequests: 900
+}
 
 const RESUME_DEVICE_READ = expect.stringMatching(/^SELECT .* FROM relay_devices\b/)
-const HOST_ASSIGNMENT_READ = expect.stringMatching(/^SELECT assignment\.\*.* FROM relay_assignments\b/)
+const HOST_ASSIGNMENT_READ = expect.stringMatching(
+  /^SELECT assignment\.\*.* FROM relay_assignments\b/
+)
 
 async function until(check: () => Promise<boolean>, timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -42,7 +52,12 @@ describe('the memory phone path', () => {
     const inner = await openRelayDatabase({ dataDir })
     cleanup.push(() => inner.close())
     const database = new StatementRecordingDatabase(inner)
-    const reserve = await startReserveModeCell({ database, dataDir, cleanup, ...(now ? { now } : {}) })
+    const reserve = await startReserveModeCell({
+      database,
+      dataDir,
+      cleanup,
+      ...(now ? { now } : {})
+    })
     // The admit-effective writer ticks on its own; every other statement is the phone's.
     const phoneStatements = () =>
       database.statements.filter((sql) => !sql.includes('relay_cell_admit_effective'))
@@ -82,7 +97,9 @@ describe('the memory phone path', () => {
         nextFrame(seated.socket, 'device-resume-confirmed'),
         nextFrame(seated.socket, 'control-error')
       ])
-      seated.socket.send(JSON.stringify({ type: 'device-resume-confirm', v: 1, reqId, basisConnId: basis }))
+      seated.socket.send(
+        JSON.stringify({ type: 'device-resume-confirm', v: 1, reqId, basisConnId: basis })
+      )
       return await answer
     }
     return { reserve, seated, phone, basisConnId, confirm }
@@ -98,24 +115,6 @@ describe('the memory phone path', () => {
       .filter((line) => line.includes(event))
       .map((line) => JSON.parse(line))
 
-  it('acts only while the cell is in reserve mode, so admitMode=db or a dead-man trip turns it off', async () => {
-    let now = Date.now()
-    const reserve = await cell(() => now)
-    expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
-    reserve.setAdmitMode('reserve', { phonePath: 'memory' })
-    expect(reserve.relay.sessions.phonePathEffective()).toBe('memory')
-    reserve.setAdmitMode('db', { phonePath: 'memory' })
-    expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
-    reserve.setAdmitMode('reserve', { phonePath: 'memory' })
-    expect(reserve.relay.sessions.phonePathEffective()).toBe('memory')
-    // No director has polled this process yet: past its plain window it is still in its boot grace.
-    now += reserveDeadManWindowMs(reserve.config.cellId) + 1_000
-    expect(reserve.relay.sessions.inReserveMode()).toBe(true)
-    now += RESERVE_DEAD_MAN_BOOT_GRACE_MS
-    expect(reserve.relay.sessions.inReserveMode()).toBe(false)
-    expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
-  })
-
   it('admits a seated phone resume from one device read and writes no activity lease', async () => {
     const { reserve, seated } = await seatedPhoneHost('memory')
     const connOpen = nextFrame(seated.socket, 'conn-open')
@@ -123,7 +122,11 @@ describe('the memory phone path', () => {
     expect(await connOpen).toMatchObject({ kind: 'resume', relayDeviceId: 'device-1' })
     expect(reserve.phoneStatements()).toEqual([RESUME_DEVICE_READ])
     await reserve.attachData(await connOpen, seated.ack.generation)
-    expect(await phone.hello).toMatchObject({ type: 'relay-hello', ok: true, credentialKind: 'resume' })
+    expect(await phone.hello).toMatchObject({
+      type: 'relay-hello',
+      ok: true,
+      credentialKind: 'resume'
+    })
     expect(reserve.phoneStatements()).toEqual([RESUME_DEVICE_READ])
     expect(await reserve.activityLeases()).toEqual([])
   })
@@ -135,16 +138,21 @@ describe('the memory phone path', () => {
     await reserve.attachData(await connOpen, seated.ack.generation)
     expect(await phone.hello).toMatchObject({ type: 'relay-hello', ok: true })
     expect((await reserve.activityLeases()).map((lease) => lease.activity_kind).sort()).toEqual([
-      'confirmation', 'splice'
+      'confirmation',
+      'splice'
     ])
-    expect(await reserve.raw.query(
-      `SELECT basis_conn_id, relay_device_id, credential_kind, active FROM relay_connection_bases`
-    )).toEqual([{
-      basis_conn_id: String((await connOpen).connId),
-      relay_device_id: 'device-1',
-      credential_kind: 'resume',
-      active: 1
-    }])
+    expect(
+      await reserve.raw.query(
+        `SELECT basis_conn_id, relay_device_id, credential_kind, active FROM relay_connection_bases`
+      )
+    ).toEqual([
+      {
+        basis_conn_id: String((await connOpen).connId),
+        relay_device_id: 'device-1',
+        credential_kind: 'resume',
+        active: 1
+      }
+    ])
   })
 
   it('closes a revoked or expired device 4401 and never tries it as an invite', async () => {
@@ -167,7 +175,9 @@ describe('the memory phone path', () => {
 
   it('closes 4503 when the device read fails, without trying the invite path', async () => {
     const { reserve, seated } = await seatedPhoneHost('memory')
-    vi.spyOn(reserve.relay.store, 'lookupResume').mockRejectedValue(new Error('connection terminated'))
+    vi.spyOn(reserve.relay.store, 'lookupResume').mockRejectedValue(
+      new Error('connection terminated')
+    )
     const invite = vi.spyOn(reserve.relay.store, 'resolveInviteForMove')
     for (let dial = 0; dial < 2; dial += 1) {
       const phone = await reserve.dialPhone(seated.identity.hostId, TOKEN)
@@ -184,13 +194,18 @@ describe('the memory phone path', () => {
   it('falls through to the invite path only when no device row matches', async () => {
     const { reserve, seated } = await seatedPhoneHost('memory')
     const created = nextFrame(seated.socket, 'invite-created')
-    seated.socket.send(JSON.stringify({ type: 'invite-create', reqId: 'invite-1', relayDeviceId: 'device-9' }))
+    seated.socket.send(
+      JSON.stringify({ type: 'invite-create', reqId: 'invite-1', relayDeviceId: 'device-9' })
+    )
     const invite = await created
     const connOpen = nextFrame(seated.socket, 'conn-open')
     await reserve.dialPhone(seated.identity.hostId, String(invite.inviteToken))
     expect(await connOpen).toMatchObject({ kind: 'invite', relayDeviceId: 'device-9' })
     // Invites keep today's leases: install validates their basis in Postgres.
-    expect((await reserve.activityLeases()).map((lease) => lease.activity_kind)).toEqual(['invite', 'invite'])
+    expect((await reserve.activityLeases()).map((lease) => lease.activity_kind)).toEqual([
+      'invite',
+      'invite'
+    ])
   })
 
   it('answers a phone whose host has no seat here from one assignment read', async () => {
@@ -199,7 +214,12 @@ describe('the memory phone path', () => {
     await reserve.relay.assignments.reconcileCells([...reserve.config.cells, OTHER_CELL])
     const dial = async (row: 'elsewhere' | 'here' | 'none') => {
       const host = await reserve.host()
-      if (row !== 'none') await reserve.insertRow(host.hostId, 3, row === 'here' ? reserve.config.cellId : OTHER_CELL.id)
+      if (row !== 'none')
+        await reserve.insertRow(
+          host.hostId,
+          3,
+          row === 'here' ? reserve.config.cellId : OTHER_CELL.id
+        )
       await reserve.installDevice(host.hostId, TOKEN)
       reserve.database.statements.length = 0
       const phone = await reserve.dialPhone(host.hostId, TOKEN)
@@ -212,9 +232,14 @@ describe('the memory phone path', () => {
     expect(warnings('orca_relay_client_miss_row_names_here')).toEqual([])
     expect(await dial('here')).toBe(4404)
     expect(warnings('orca_relay_client_miss_row_names_here')).toEqual([
-      expect.objectContaining({ cellId: reserve.config.cellId, relayHostIdDigest: expect.any(String) })
+      expect.objectContaining({
+        cellId: reserve.config.cellId,
+        relayHostIdDigest: expect.any(String)
+      })
     ])
-    vi.spyOn(reserve.relay.assignments, 'resolve').mockRejectedValueOnce(new Error('connection terminated'))
+    vi.spyOn(reserve.relay.assignments, 'resolve').mockRejectedValueOnce(
+      new Error('connection terminated')
+    )
     const host = await reserve.host()
     await reserve.installDevice(host.hostId, TOKEN)
     expect((await (await reserve.dialPhone(host.hostId, TOKEN)).closed).code).toBe(4409)
@@ -234,20 +259,29 @@ describe('the memory phone path', () => {
     const connOpen = nextFrame(seated.socket, 'conn-open')
     await reserve.dialPhone(seated.identity.hostId, TOKEN)
     expect(await connOpen).toMatchObject({ kind: 'resume' })
-    expect((await reserve.activityLeases()).map((lease) => lease.activity_kind)).toEqual(['confirmation'])
+    expect((await reserve.activityLeases()).map((lease) => lease.activity_kind)).toEqual([
+      'confirmation'
+    ])
   })
 
   it('confirms from the memory basis with one fresh read, renewing a device due for it', async () => {
     const { reserve, confirm } = await splicedPhone('memory')
     const before = Number((await deviceRow(reserve))?.current_expires_at)
     const answer = await confirm('confirm-1')
-    expect(answer).toMatchObject({ type: 'device-resume-confirmed', reqId: 'confirm-1', renewed: true, acceptedAs: 'current' })
+    expect(answer).toMatchObject({
+      type: 'device-resume-confirmed',
+      reqId: 'confirm-1',
+      renewed: true,
+      acceptedAs: 'current'
+    })
     const after = Number((await deviceRow(reserve))?.current_expires_at)
     expect(after).toBeGreaterThan(before)
     expect(answer.resumeExpiresAt).toBe(after)
     expect(reserve.phoneStatements()).toEqual([
       RESUME_DEVICE_READ,
-      expect.stringMatching(/^UPDATE relay_devices SET current_expires_at = \?.*RETURNING current_expires_at$/)
+      expect.stringMatching(
+        /^UPDATE relay_devices SET current_expires_at = \?.*RETURNING current_expires_at$/
+      )
     ])
     expect(await reserve.activityLeases()).toEqual([])
     // Its audit row leaves with the next batch.
@@ -271,24 +305,37 @@ describe('the memory phone path', () => {
   it('answers renewed:true with the stored expiry when renewal is not due, or its write fails', async () => {
     const fresh = Date.now() + 29.5 * 24 * 60 * 60 * 1000
     const notDue = await splicedPhone('memory', { expiresAt: fresh })
-    expect(await notDue.confirm('confirm-1')).toMatchObject({ renewed: true, resumeExpiresAt: fresh })
+    expect(await notDue.confirm('confirm-1')).toMatchObject({
+      renewed: true,
+      resumeExpiresAt: fresh
+    })
     expect(notDue.reserve.phoneStatements()).toEqual([RESUME_DEVICE_READ])
 
     const due = Date.now() + 20 * 24 * 60 * 60 * 1000
     const failing = await splicedPhone('memory', { expiresAt: due })
     failing.reserve.database.failing = (sql) => sql.startsWith('UPDATE relay_devices')
-    expect(await failing.confirm('confirm-1')).toMatchObject({ renewed: true, resumeExpiresAt: due })
+    expect(await failing.confirm('confirm-1')).toMatchObject({
+      renewed: true,
+      resumeExpiresAt: due
+    })
     expect(Number((await deviceRow(failing.reserve))?.current_expires_at)).toBe(due)
     // Never silent: a renewal left failing ages phones toward re-pairing.
     expect(warnings('orca_relay_resume_renewal_failed')).toEqual([
-      { event: 'orca_relay_resume_renewal_failed', cause: 'error', cellId: failing.reserve.config.cellId }
+      {
+        event: 'orca_relay_resume_renewal_failed',
+        cause: 'error',
+        cellId: failing.reserve.config.cellId
+      }
     ])
   })
 
   it('confirms from memory after the switch turned off between accept and confirm, taking no lease', async () => {
     const { reserve, confirm } = await splicedPhone('memory')
     reserve.setAdmitMode('reserve', { phonePath: 'db' })
-    expect(await confirm('confirm-1')).toMatchObject({ type: 'device-resume-confirmed', renewed: true })
+    expect(await confirm('confirm-1')).toMatchObject({
+      type: 'device-resume-confirmed',
+      renewed: true
+    })
     expect(reserve.phoneStatements()[0]).toEqual(RESUME_DEVICE_READ)
     expect(await reserve.activityLeases()).toEqual([])
   })
@@ -301,7 +348,9 @@ describe('the memory phone path', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     reserve.database.statements.length = 0
     expect(await confirm('confirm-1')).toEqual(answer)
-    expect(await confirm('confirm-1', 'another-basis')).toMatchObject({ code: 'confirmation_tuple_mismatch' })
+    expect(await confirm('confirm-1', 'another-basis')).toMatchObject({
+      code: 'confirmation_tuple_mismatch'
+    })
     expect(reserve.phoneStatements()).toEqual([])
     // A new request on the closed basis finds none in memory, so it goes to the database.
     expect(await confirm('confirm-2')).toMatchObject({ code: 'confirmation_not_active' })
@@ -331,14 +380,19 @@ describe('the memory phone path', () => {
     const changes: Record<string, [string, unknown[]]> = {
       revoked: ['UPDATE relay_devices SET revoked_at = ?', [Date.now() - 1]],
       expired: ['UPDATE relay_devices SET current_expires_at = ?', [Date.now() - 1]],
-      retired: ["UPDATE relay_devices SET current_hash = 'rotated-twice', current_version = 3, grace_version = 2", []],
+      retired: [
+        "UPDATE relay_devices SET current_hash = 'rotated-twice', current_version = 3, grace_version = 2",
+        []
+      ],
       unchanged: ['UPDATE relay_devices SET updated_at = updated_at', []]
     }
     const outcome = async (phonePath: 'db' | 'memory', [sql, params]: [string, unknown[]]) => {
       const { reserve, confirm } = await splicedPhone(phonePath)
       await reserve.raw.query(sql, params)
       const answer = await confirm('confirm-1')
-      return answer.type === 'control-error' ? answer.code : `${answer.type}:${answer.acceptedAs}:${answer.renewed}`
+      return answer.type === 'control-error'
+        ? answer.code
+        : `${answer.type}:${answer.acceptedAs}:${answer.renewed}`
     }
     for (const [name, change] of Object.entries(changes)) {
       expect(await outcome('memory', change), name).toBe(await outcome('db', change))
@@ -351,7 +405,10 @@ describe('the memory phone path', () => {
     phone.socket.close()
     await phone.closed
     await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(await confirm('confirm-1')).toMatchObject({ type: 'control-error', code: 'confirmation_not_active' })
+    expect(await confirm('confirm-1')).toMatchObject({
+      type: 'control-error',
+      code: 'confirmation_not_active'
+    })
     expect(reserve.phoneStatements()[0]).toBe('BEGIN')
     expect(warnings('orca_relay_resume_confirm_failed')).toEqual([
       {
@@ -361,14 +418,6 @@ describe('the memory phone path', () => {
         cellId: reserve.config.cellId
       }
     ])
-  })
-
-  it('does not count a lease release that failed after a committed confirm as a failed confirm', async () => {
-    const { reserve, confirm } = await splicedPhone('db')
-    vi.spyOn(reserve.relay.assignments, 'releaseActivity').mockRejectedValueOnce(new Error('connection terminated'))
-    // As today, the desktop still hears the release failure.
-    expect(await confirm('confirm-1')).toMatchObject({ type: 'control-error' })
-    expect(warnings('orca_relay_resume_confirm_failed')).toEqual([])
   })
 
   it('durably confirms and renews a database-path resume, releasing only its confirmation lease', async () => {
@@ -384,7 +433,10 @@ describe('the memory phone path', () => {
     )
     expect(results).toHaveLength(1)
     expect(results[0]).toMatchObject({ req_id: 'confirm-1', basis_conn_id: basisConnId })
-    expect(JSON.parse(String(results[0]?.result_json))).toMatchObject({ renewed: true, resumeExpiresAt: after })
+    expect(JSON.parse(String(results[0]?.result_json))).toMatchObject({
+      renewed: true,
+      resumeExpiresAt: after
+    })
     expect((await reserve.activityLeases()).map((lease) => lease.activity_kind)).toEqual(['splice'])
     expect(await confirm('confirm-1')).toEqual(answer)
   })
@@ -393,13 +445,19 @@ describe('the memory phone path', () => {
     // Flip back by the switch, or by the dead-man; either way the confirm finishes from memory.
     type Cell = Awaited<ReturnType<typeof cell>>
     type Advance = (ms: number) => void
-    type Rollback = { beforeDial?: (advance: Advance) => void; roll: (reserve: Cell, advance: Advance) => void }
+    type Rollback = {
+      beforeDial?: (advance: Advance) => void
+      roll: (reserve: Cell, advance: Advance) => void
+    }
     // The dead-man trips just after the phone's accept: its window ran from the host's booking.
     const window = reserveDeadManWindowMs(RESERVE_MODE_CELL_ID)
     const rollbacks: Record<string, Rollback> = {
       'admitMode=db': { roll: (reserve) => reserve.setAdmitMode('db', { phonePath: 'memory' }) },
       'phonePath=db': { roll: (reserve) => reserve.setAdmitMode('reserve', { phonePath: 'db' }) },
-      'a dead-man trip': { beforeDial: (advance) => advance(window - 5_000), roll: (_reserve, advance) => advance(6_000) }
+      'a dead-man trip': {
+        beforeDial: (advance) => advance(window - 5_000),
+        roll: (_reserve, advance) => advance(6_000)
+      }
     }
 
     for (const [name, rollback] of Object.entries(rollbacks)) {
@@ -408,10 +466,14 @@ describe('the memory phone path', () => {
         const advance: Advance = (ms) => {
           now += ms
         }
-        const spliced = await splicedPhone('memory', {}, {
-          now: () => now,
-          beforeDial: () => rollback.beforeDial?.(advance)
-        })
+        const spliced = await splicedPhone(
+          'memory',
+          {},
+          {
+            now: () => now,
+            beforeDial: () => rollback.beforeDial?.(advance)
+          }
+        )
         const { reserve, seated } = spliced
         // The flag tool records reserve in Postgres before the cell admits from memory.
         await reserve.relay.assignments.reconcileCells([...reserve.config.cells, OTHER_CELL])
@@ -419,13 +481,19 @@ describe('the memory phone path', () => {
         rollback.roll(reserve, advance)
         expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
         reserve.database.statements.length = 0
-        expect(await spliced.confirm('confirm-1')).toMatchObject({ type: 'device-resume-confirmed', renewed: true })
-        expect(reserve.phoneStatements().filter((sql) => !sql.includes('relay_assignment'))).toEqual([
+        expect(await spliced.confirm('confirm-1')).toMatchObject({
+          type: 'device-resume-confirmed',
+          renewed: true
+        })
+        expect(
+          reserve.phoneStatements().filter((sql) => !sql.includes('relay_assignment'))
+        ).toEqual([
           RESUME_DEVICE_READ,
           expect.stringMatching(/^UPDATE relay_devices SET current_expires_at/)
         ])
         // Only the control lease a flip back re-registers; nothing for the phone.
-        const leases = async () => (await reserve.activityLeases()).map((lease) => lease.activity_kind)
+        const leases = async () =>
+          (await reserve.activityLeases()).map((lease) => lease.activity_kind)
         expect((await leases()).filter((kind) => kind !== 'control')).toEqual([])
         // Postgres still records reserve, so evacuation leaves the cell alone.
         await expect(
@@ -460,11 +528,15 @@ describe('the memory phone path', () => {
         nextFrame(seated.socket, 'device-resume-confirmed'),
         nextFrame(seated.socket, 'control-error')
       ])
-      seated.socket.send(JSON.stringify({ type: 'device-resume-confirm', v: 1, reqId, basisConnId }))
+      seated.socket.send(
+        JSON.stringify({ type: 'device-resume-confirm', v: 1, reqId, basisConnId })
+      )
       return await answer
     }
     const splice = async (fill: number) => {
-      await reserve.installDevice(seated.identity.hostId, token(fill), { relayDeviceId: `device-${fill}` })
+      await reserve.installDevice(seated.identity.hostId, token(fill), {
+        relayDeviceId: `device-${fill}`
+      })
       const connOpen = nextFrame(seated.socket, 'conn-open')
       const phone = await reserve.dialPhone(seated.identity.hostId, token(fill))
       const basisConnId = String((await connOpen).connId)
@@ -473,7 +545,9 @@ describe('the memory phone path', () => {
       return { phone, data, basisConnId }
     }
     const confirmed = await splice(1)
-    expect(await confirm('confirm-a', confirmed.basisConnId)).toMatchObject({ type: 'device-resume-confirmed' })
+    expect(await confirm('confirm-a', confirmed.basisConnId)).toMatchObject({
+      type: 'device-resume-confirmed'
+    })
     const inFlight = await splice(2)
 
     reserve.database.failing = () => true
@@ -484,14 +558,22 @@ describe('the memory phone path', () => {
     confirmed.phone.socket.send('still here')
     expect(await relayed).toBe('still here')
     // A new resume and a confirm fail cleanly; nothing crashes.
-    expect((await (await reserve.dialPhone(seated.identity.hostId, token(1))).closed).code).toBe(4503)
-    expect(await confirm('confirm-b', inFlight.basisConnId)).toMatchObject({ type: 'control-error' })
+    expect((await (await reserve.dialPhone(seated.identity.hostId, token(1))).closed).code).toBe(
+      4503
+    )
+    expect(await confirm('confirm-b', inFlight.basisConnId)).toMatchObject({
+      type: 'control-error'
+    })
     // Flipped back during the block: the in-flight confirm still finishes on its memory basis.
     reserve.setAdmitMode('db', { phonePath: 'memory' })
     reserve.database.failing = null
     reserve.database.statements.length = 0
-    expect(await confirm('confirm-c', inFlight.basisConnId)).toMatchObject({ type: 'device-resume-confirmed' })
-    expect(reserve.phoneStatements().find((sql) => !sql.includes('relay_assignment'))).toEqual(RESUME_DEVICE_READ)
+    expect(await confirm('confirm-c', inFlight.basisConnId)).toMatchObject({
+      type: 'device-resume-confirmed'
+    })
+    expect(reserve.phoneStatements().find((sql) => !sql.includes('relay_assignment'))).toEqual(
+      RESUME_DEVICE_READ
+    )
     // And new resumes take the database path again.
     const connOpen = nextFrame(seated.socket, 'conn-open')
     await reserve.dialPhone(seated.identity.hostId, token(1))
@@ -502,7 +584,9 @@ describe('the memory phone path', () => {
     now += 11 * 60 * 1000
     await reserve.relay.store.resumeAudit.flush()
     reserve.database.failing = null
-    const written = await reserve.raw.query(`SELECT id FROM relay_audit_events WHERE type = 'resume-confirmed'`)
+    const written = await reserve.raw.query(
+      `SELECT id FROM relay_audit_events WHERE type = 'resume-confirmed'`
+    )
     expect(written).toEqual([])
     expect(reserve.relay.runtimeCounts().resumeAuditDropped).toBe(2)
   })

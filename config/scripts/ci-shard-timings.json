@@ -538,8 +538,6 @@
       "src/cli/handlers/orchestration/worker-list-run-scope.test.ts": 495,
       "src/cli/handlers/orchestration/worker-output.test.ts": 79,
       "src/cli/handlers/orchestration/worker-start-implicit-coordinator.test.ts": 522,
-      "src/cli/handlers/plugin-dev-emit.test.ts": 347,
-      "src/cli/handlers/plugin-dev-request.test.ts": 321,
       "src/cli/handlers/plugin-dev-watch.test.ts": 942,
       "src/cli/handlers/plugin-shot-chrome.test.ts": 378,
       "src/cli/handlers/plugin-shot-default-dir.test.ts": 60,
