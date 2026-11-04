@@ -71,6 +71,11 @@ export function getContextualTourMeasurementAction(args: {
     if (alternateIndex !== undefined) {
       return { kind: alternateIndex < args.activeStepIndex ? 'regress' : 'advance' }
     }
+    // A just-opened terminal or chat pane mounts after the tab switch; don't skip its split lesson.
+    const activeTabType = useAppStore.getState().activeTabType
+    if (activeTabType === 'terminal' || activeTabType === 'agent-session') {
+      return { kind: 'wait' }
+    }
   }
   if (args.visibleStepIndexes.some((index) => index > args.activeStepIndex)) {
     return { kind: 'advance' }

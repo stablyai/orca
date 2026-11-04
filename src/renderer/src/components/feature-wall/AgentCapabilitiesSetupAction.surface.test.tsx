@@ -49,7 +49,7 @@ vi.mock('@/lib/telemetry', () => ({ track: vi.fn() }))
 
 const initialApi = window.api
 const initialState = useAppStore.getState()
-const NAMES = ['orca-cli', 'computer-use', 'orchestration']
+const NAMES = ['orca-cli', 'orca-computer-use', 'orchestration']
 const SERVER = { kind: 'environment', environmentId: 'agents-host' } as const
 const browserChanged = vi.fn()
 
