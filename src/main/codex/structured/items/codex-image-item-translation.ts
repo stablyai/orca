@@ -6,8 +6,6 @@ import type { CodexThreadItem } from './codex-thread-item-identity'
 
 // Leave room for operation text and the journal envelope beside inline image bytes.
 const MAX_IMAGE_REFERENCE_BYTES = 8 * 1024
-// Codex passes the Responses API status through, not the app-server's camelCase enum.
-const RUNNING_IMAGE_GENERATION_STATUSES = new Set(['in_progress', 'generating'])
 
 export function imagePath(item: CodexThreadItem, key: string): string | null {
   const value = readString(item, key)
@@ -42,8 +40,9 @@ export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageIt
     if (item.failure || status === 'failed') {
       text = 'Image generation failed'
     } else if (status !== 'completed') {
+      // Codex passes the Responses API status through, not the app-server's camelCase enum.
       text =
-        status !== null && RUNNING_IMAGE_GENERATION_STATUSES.has(status)
+        status === 'in_progress' || status === 'generating'
           ? 'Generating image…'
           : 'Image generation: preview unavailable'
     } else {
