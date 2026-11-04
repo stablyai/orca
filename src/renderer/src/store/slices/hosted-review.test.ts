@@ -189,7 +189,7 @@ describe('hosted review slice', () => {
             mergeable: 'MERGEABLE',
             headSha: 'aaaaaaa'
           },
-          fetchedAt: Date.now(),
+          fetchedAt: 1,
           linkedReviewHintKey: ''
         }
       }
