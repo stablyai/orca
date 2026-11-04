@@ -1,3 +1,4 @@
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
@@ -16,7 +17,8 @@ const NO_DETECTED_WORKTREES: readonly WorktreeOwnerRecord[] = []
  */
 export function findIndexedDetectedWorktrees(
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListing> | undefined,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): readonly WorktreeOwnerRecord[] {
   if (!detectedWorktreesByRepo) {
     return NO_DETECTED_WORKTREES
@@ -26,18 +28,24 @@ export function findIndexedDetectedWorktrees(
     const next = new Map<string, WorktreeOwnerRecord[]>()
     for (const listing of Object.values(detectedWorktreesByRepo)) {
       for (const worktree of listing.worktrees) {
-        const matches = next.get(worktree.id)
-        if (matches) {
-          matches.push(worktree)
-        } else {
-          next.set(worktree.id, [worktree])
+        const hostId = parseExecutionHostId(worktree.hostId)?.id
+        for (const key of hostId ? [worktree.id, `${worktree.id}\0${hostId}`] : [worktree.id]) {
+          const matches = next.get(key)
+          if (matches) {
+            matches.push(worktree)
+          } else {
+            next.set(key, [worktree])
+          }
         }
       }
     }
     index = next
     detectedWorktreeIndexCache.set(detectedWorktreesByRepo, index)
   }
-  return index.get(worktreeId) ?? NO_DETECTED_WORKTREES
+  return (
+    index.get(executionHostId ? `${worktreeId}\0${executionHostId}` : worktreeId) ??
+    NO_DETECTED_WORKTREES
+  )
 }
 
 export function hasIndexedDetectedWorktree(

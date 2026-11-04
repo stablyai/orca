@@ -158,7 +158,7 @@ function renderUnavailableMappedComposer(
     includeSetupHint?: boolean
     emptyRepoOverride?: boolean
     missingSshSetup?: boolean
-    canonicalSameHostSetup?: boolean
+    sameHostSiblingCheckout?: boolean
   } = {}
 ) {
   const mappedRepo: Repo = {
@@ -166,11 +166,11 @@ function renderUnavailableMappedComposer(
     id: options.repeatedId ? currentRepo.id : 'mapped',
     path: '/mapped',
     connectionId: 'builder',
-    ...(options.canonicalSameHostSetup ? { upstream: { owner: 'fixture', repo: 'app' } } : {})
+    ...(options.sameHostSiblingCheckout ? { upstream: { owner: 'fixture', repo: 'app' } } : {})
   }
-  const canonicalRepo: Repo = { ...mappedRepo, id: 'canonical', path: '/canonical' }
-  const repos = options.canonicalSameHostSetup
-    ? [currentRepo, canonicalRepo, mappedRepo]
+  const siblingRepo: Repo = { ...mappedRepo, id: 'sibling', path: '/sibling' }
+  const repos = options.sameHostSiblingCheckout
+    ? [currentRepo, siblingRepo, mappedRepo]
     : [currentRepo, mappedRepo]
   const projection = projectHostSetupProjectionFromRepos(repos)
   const initialWorkspaceTarget: WorkspaceCreationTargetHint = {
@@ -216,7 +216,7 @@ function renderUnavailableMappedComposer(
     const source = useComposerSourceState(target, external)
     return { ...target, source }
   })
-  return { ...hook, mappedRepo, canonicalRepo }
+  return { ...hook, mappedRepo }
 }
 
 describe('unavailable mapped Jira destinations', () => {
@@ -257,7 +257,9 @@ describe('unavailable mapped Jira destinations', () => {
 
   it('allows the user to replace an unavailable mapped target with a local project', () => {
     const { result } = renderUnavailableMappedComposer()
-    act(() => result.current.source.projectTargetActions.handleProjectChange('repo:current'))
+    act(() =>
+      result.current.source.projectTargetActions.handleProjectChange('project:repo:current')
+    )
 
     expect(result.current.runtimeTargetSelection.selectedRepo).toBe(currentRepo)
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget).toMatchObject({
@@ -301,7 +303,7 @@ describe('unavailable mapped Jira destinations', () => {
 
   it('keeps the explicit mapped checkout when another checkout is first on the recovered host', () => {
     const { result, mappedRepo } = renderUnavailableMappedComposer({
-      canonicalSameHostSetup: true
+      sameHostSiblingCheckout: true
     })
     expect(result.current.runtimeTargetSelection.selectedWorkspaceTarget.status).toBe('unavailable')
     act(() => useAppStore.setState({ sshTargetLabels: new Map([['builder', 'Builder']]) }))

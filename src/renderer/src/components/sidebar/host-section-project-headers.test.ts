@@ -25,6 +25,7 @@ import {
   project,
   describeHostSectionRow
 } from './worktree-list-groups-test-fixtures'
+
 describe('a project checked out on two hosts, in host sections', () => {
   it("heads each host's rows with that host's own project header", () => {
     expect(hostSectionRows(new Set()).map(describeHostSectionRow)).toEqual([
@@ -78,6 +79,7 @@ describe('one repo id registered on two hosts, in host sections', () => {
     const repoMap = new Map(repoMapOrder.map((entry) => [entry.id, entry]))
     const rows = planSidebarRows({
       groupBy: 'repo',
+      sortBy: 'smart',
       worktrees,
       repoMap,
       repoOfWorktree: createHostScopedRepoOf([localTwin, sshTwin, runtimeRepo], repoMap),

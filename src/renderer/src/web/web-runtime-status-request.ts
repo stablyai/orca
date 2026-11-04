@@ -1,8 +1,8 @@
-import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing-verification'
+import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import {
   runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { WebRuntimeConnectionTransport } from './web-runtime-connection-transport'
 
 export async function readWebRuntimeStatus(

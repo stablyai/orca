@@ -150,11 +150,11 @@ ITEM rowKey=pinned:|orca::/w/feat-c depth=2 groupDepth=0 lastChild=true children
 ITEM rowKey=pinned:|lab::/w/gitlab-mr depth=1 groupDepth=0 lastChild=true children=0 showProject=true placement=pinned owning=project:repo:lab parent=pinned:|orca::/w/feat-a
 HEADER key=project-group:pg-work label="Work" count=2 tone="text-foreground" icon=FolderTree projectGroup=pg-work projectGroupDepth=0
 HEADER key=project:p-orca label="orca" count=6 tone="text-foreground" icon=FolderTree repo=orca projectGroupDepth=1
-ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 ITEM rowKey=project:p-orca:|orca::/w/feat-a depth=0 groupDepth=1 children=2 lineageKey=lineage:orca::/w/feat-a hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 ITEM rowKey=project:p-orca:|orca::/w/feat-b depth=1 groupDepth=1 children=1 lineageKey=lineage:orca::/w/feat-b hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
 ITEM rowKey=project:p-orca:|orca::/w/feat-c depth=2 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-b
 ITEM rowKey=project:p-orca:|lab::/w/gitlab-mr depth=1 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" showProject=true placement=natural owning=project:repo:lab path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
+ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 ITEM rowKey=project:p-orca:|orca::/w/Zeta depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 HEADER key=project-group:pg-nested label="Nested" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-nested projectGroupDepth=1
 HEADER key=project:repo:lab label="lab" count=1 tone="text-foreground" icon=FolderTree repo=lab projectGroupDepth=2
@@ -173,10 +173,10 @@ PREFERRED |orca::/w/feat-c -> project:p-orca:|orca::/w/feat-c
 PREFERRED |lab::/w/gitlab-mr -> project:p-orca:|lab::/w/gitlab-mr
 renderedKeys: 26
 placeholders: -
-selectionOrder: |orca::/orca |orca::/w/feat-a |orca::/w/feat-b |orca::/w/feat-c |lab::/w/gitlab-mr |orca::/w/Zeta |lab::/lab local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote
-cmd1-9 mounted: 1=orca::/orca 2=orca::/w/feat-a#lineage:orca::/w/feat-a 3=orca::/w/feat-b#lineage:orca::/w/feat-b 4=orca::/w/feat-c 5=lab::/w/gitlab-mr 6=orca::/w/Zeta 7=lab::/lab 8=folder:fw-review@local 9=folder:fw-notes@local
-cmd1-9 unmounted: 1=orca::/orca 2=orca::/w/feat-a 3=orca::/w/feat-b 4=orca::/w/feat-c 5=lab::/w/gitlab-mr 6=orca::/w/Zeta 7=lab::/lab 8=folder:fw-review@local 9=folder:fw-notes@local
-cmd ids unmounted: orca::/orca orca::/w/feat-a orca::/w/feat-b orca::/w/feat-c lab::/w/gitlab-mr orca::/w/Zeta lab::/lab folder:fw-review folder:fw-notes folder:fw-remote
+selectionOrder: |orca::/w/feat-a |orca::/w/feat-b |orca::/w/feat-c |lab::/w/gitlab-mr |orca::/orca |orca::/w/Zeta |lab::/lab local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote
+cmd1-9 mounted: 1=orca::/w/feat-a#lineage:orca::/w/feat-a 2=orca::/w/feat-b#lineage:orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca::/orca 6=orca::/w/Zeta 7=lab::/lab 8=folder:fw-review@local 9=folder:fw-notes@local
+cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/w/feat-b 3=orca::/w/feat-c 4=lab::/w/gitlab-mr 5=orca::/orca 6=orca::/w/Zeta 7=lab::/lab 8=folder:fw-review@local 9=folder:fw-notes@local
+cmd ids unmounted: orca::/w/feat-a orca::/w/feat-b orca::/w/feat-c lab::/w/gitlab-mr orca::/orca orca::/w/Zeta lab::/lab folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned project:p-orca project:repo:lab project-group:pg-remote-folders lineage:orca::/w/feat-a --
 visible: orca::/w/feat-a orca::/w/feat-b lab::/w/gitlab-mr orca::/orca orca::/w/Zeta orca::/w/feat-c lab::/lab
 HEADER key=pinned label="Pinned" count=4 tone="text-foreground" icon=Pin hostCounts={local:4} hostIds={local:[orca::/w/feat-a,orca::/w/feat-b,lab::/w/gitlab-mr,orca::/w/feat-c]} ids=[orca::/w/feat-a,orca::/w/feat-b,lab::/w/gitlab-mr,orca::/w/feat-c]
@@ -191,7 +191,7 @@ HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="
 HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1
 SECTION pinned: pinned:|orca::/w/feat-a pinned:|orca::/w/feat-b pinned:|orca::/w/feat-c pinned:|lab::/w/gitlab-mr
-SECTION project:p-orca: project:p-orca:|orca::/orca project:p-orca:|orca::/w/feat-a project:p-orca:|orca::/w/feat-b project:p-orca:|orca::/w/feat-c project:p-orca:|lab::/w/gitlab-mr project:p-orca:|orca::/w/Zeta
+SECTION project:p-orca: project:p-orca:|orca::/w/feat-a project:p-orca:|orca::/w/feat-b project:p-orca:|orca::/w/feat-c project:p-orca:|lab::/w/gitlab-mr project:p-orca:|orca::/orca project:p-orca:|orca::/w/Zeta
 SECTION repo:api: -
 SECTION project:repo:lab: project:repo:lab:|lab::/lab
 PREFERRED |orca::/w/feat-a -> project:p-orca:|orca::/w/feat-a

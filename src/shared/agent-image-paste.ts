@@ -3,7 +3,7 @@ import {
   separateImagePasteFromFollowingText
 } from './image-paste-following-text'
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
-import { filesystemPathToFileUri } from './file-uri-path'
+import { filesystemPathToFileUri } from './file-links/file-uri-path'
 
 // Whether raw-path paste is verified to create an attachment; others use file references.
 export type AgentImageHandling = 'attachment' | 'unsupported'

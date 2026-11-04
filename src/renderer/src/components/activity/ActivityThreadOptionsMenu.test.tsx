@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { ActivityThreadOptionsMenu } from './activity-thread-controls'
-import type { ActivityGroupBy } from './activity-thread-types'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
 import { makeRepo } from './ActivityPrototypePage-test-fixtures'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true

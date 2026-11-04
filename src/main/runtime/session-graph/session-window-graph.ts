@@ -33,7 +33,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
 
   syncWindowGraph(
     windowId: number,
-    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
+    options?: { includeAgentSenders?: boolean }
   ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
@@ -88,7 +89,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     const graphWasReady = this.graphStatus === 'ready'
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
-    this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
+    this.terminalIdentity.replaceTabs(graph.tabs)
     const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
     const mobileSessionResyncWorktrees = new Set<string>()
     const changedMobileWorktrees = this.syncMobileSessionTabs(
@@ -102,7 +103,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     // Stamp this graph's surfaces; newer records survive until the next statement (pty-recorded-surface-topology.ts).
     // Exempt the one-shot headless placeholder: it names no renderer panes and cannot re-stamp later claims (#18191).
     if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
-      this.graphSequence += 1
+      this.terminalIdentity.advanceGraphSequence()
     }
 
     // Preserve live CLI handles while reload briefly publishes leaves without PTYs.
@@ -221,7 +222,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
             oldHandle !== undefined &&
             (oldHandle === this.handleByPtyId.get(oldLeaf.ptyId) || oldHandle === incarnationHandle)
           ) {
-            this.handleByLeafKey.delete(oldLeafKey)
+            this.terminalIdentity.unbindLeaf(oldLeafKey)
           } else {
             this.invalidateLeafHandle(oldLeafKey)
           }
@@ -240,7 +241,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       nextPtyIds.add(ptyId)
     }
 
-    this.leaves = nextLeaves
+    this.terminalIdentity.replaceLeaves(nextLeaves)
     this.rebuildLeafPtyIndex()
     this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
@@ -318,6 +319,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       )
     return {
       ...this.getStatus(),
+      ...(options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+        ? {}
+        : this.agentSenderGraphReply(graph.agentSenderBase)),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
       ...(mobileSessionResyncWorktrees.size > 0

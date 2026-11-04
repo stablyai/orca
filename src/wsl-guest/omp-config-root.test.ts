@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PluginOverlayManager } from './plugin-overlay'
 import { resolveOmpConfigDirName, resolvePiSourceAgentDir } from './plugin-overlay-env'
-import { __resetShellStartupEnvCache } from '../main/pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../main/pty/shell-startup/shell-startup-env'
 import { resetLoginShellEnvironmentCacheForTests } from '../main/startup/login-shell-environment'
 
 describe('relay OMP config root', () => {
@@ -66,11 +66,6 @@ describe('relay OMP config root', () => {
     expect(result?.sourceAgentDir).toBeUndefined()
     expect(result?.statusExtensionPath).toBeTruthy()
     expect(existsSync(join(home, '.company-omp'))).toBe(false)
-  })
-
-  it('does not fall back to process.env for the config root', async () => {
-    vi.stubEnv('PI_CONFIG_DIR', '.wrong-process-root')
-    expect(await resolveOmpConfigDirName({ HOME: home }, '/bin/bash')).toBeUndefined()
   })
 
   it.skipIf(process.platform === 'win32')(

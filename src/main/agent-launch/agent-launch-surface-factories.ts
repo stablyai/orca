@@ -9,12 +9,12 @@ import type {
   AgentLaunchIntent,
   AgentLaunchPrompt,
   AgentLaunchMode
-} from '../../shared/agent-launch-intent'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
-import type { TuiAgent } from '../../shared/tui-agent'
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
-import { toAgentLaunchPreferences } from '../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 
 /** Inject creation so orchestration can add subscriptions without duplicating launch sequencing. */

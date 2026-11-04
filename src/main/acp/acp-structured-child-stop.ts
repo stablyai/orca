@@ -6,7 +6,7 @@ import { AcpAgentError } from './acp-errors'
 import type {
   AgentChildWorkStopAcknowledgement,
   AgentSessionBackgroundTaskStops
-} from '../../shared/agent-child-work-stop-targets'
+} from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
 import { acpBackgroundTaskStopId } from './acp-background-task-child-work'
 import { acpSubagentOutcome } from './acp-subagents'
 

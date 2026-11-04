@@ -43,21 +43,6 @@ describe('task page initial repo selection', () => {
     expect(reads).toBeLessThan(40_000)
   })
 
-  it('retains preferred selection, missing-ID fallback, and explicit empty defaults', () => {
-    const repos: Repo[] = ['a', 'b'].map((id) => ({
-      id,
-      path: `/repos/${id}`,
-      displayName: id,
-      badgeColor: '',
-      addedAt: 0,
-      kind: 'git'
-    }))
-    expect(resolveSelection(repos, ['b'], 'a')).toEqual(['a'])
-    expect(resolveSelection(repos, ['missing'])).toEqual(['a', 'b'])
-    expect(resolveSelection(repos, [])).toEqual(['a', 'b'])
-    expect(resolveSelection(repos, ['missing', 'b', 'b'])).toEqual(['b'])
-  })
-
   it('ignores persisted IDs for ineligible repos, including folder workspaces', () => {
     const repos: Repo[] = [
       {

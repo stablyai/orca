@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState } from '@/store/selectors'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,

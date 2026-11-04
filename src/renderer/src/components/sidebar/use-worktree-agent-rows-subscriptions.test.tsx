@@ -7,15 +7,13 @@ import { readStoreListenerCount } from '@/store/store-listener-census'
 import { makeTab } from '@/store/slices/store-test-helpers'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { verifyMirroredTerminalLineage } from './mirrored-terminal-lineage.test-fixture'
 import type { RuntimeAgentLineageTestModule } from '../../../../shared/runtime-agent-lineage-consumer.test-fixture'
-import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -235,7 +233,7 @@ it.each([20, 200])(
   'shares canonical receiving/alias work and preserves unaffected mounted rows at %i worktrees',
   async (n) => {
     const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
-      await import('../../../../shared/structured-agent-session-projection')
+      await import('../../../../shared/agent-session/view/structured-agent-session-projection')
     const { makeUnifiedTab } = await import('@/store/slices/store-test-helpers')
     const { visibleOrchestrationWorkForTest } =
       await import('@/runtime/visible-agent-orchestration')
@@ -427,7 +425,7 @@ it('joins production mirrored custom/collision rows locally and keeps canonical 
     await import('@/components/native-chat/structured-agent-session-tabs')
   const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
-    await import('../../../../shared/structured-agent-session-projection')
+    await import('../../../../shared/agent-session/view/structured-agent-session-projection')
   const { selectWorktreeAgentActivitySummary } = await import('./worktree-agent-activity-summary')
   const { selectDashboardOrchestration } =
     await import('@/components/dashboard/dashboard-orchestration-selection')
@@ -652,7 +650,7 @@ it('settles the production graph subscription/scheduler/publication/receiver loo
   const { makeUnifiedTab } = await import('@/store/slices/store-test-helpers')
   const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')
   const { structuredAgentSessionPaneKey: pane } =
-    await import('../../../../shared/structured-agent-session-projection')
+    await import('../../../../shared/agent-session/view/structured-agent-session-projection')
   const f = publicLineageFixture('folder-a')
   const response = {
     runtimeId: 'lineage',

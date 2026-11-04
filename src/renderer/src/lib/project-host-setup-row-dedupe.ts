@@ -7,12 +7,30 @@ import type {
   ReadyProjectHostSetupOption
 } from './project-host-setup-options'
 
+export type SelectedProjectHostSetup = { projectHostSetupId: string; hostId: ExecutionHostId }
+
 /** Collapses equivalent checkout registrations, including aliases of a merged machine. */
 export function dedupeReadySetupRows(
   options: readonly ReadyProjectHostSetupOption[],
-  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>
+  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>,
+  selected?: SelectedProjectHostSetup | null
 ): ReadyProjectHostSetupOption[] {
-  return collapseMergedHostCheckouts(options.filter(dedupeByCheckout()), hostById)
+  return collapseMergedHostCheckouts(
+    selectedFirst(options, selected).filter(dedupeByCheckout()),
+    hostById
+  )
+}
+
+// Per-host dedupe keeps the first row, so a host with several checkouts shows the selected one.
+function selectedFirst(
+  options: readonly ReadyProjectHostSetupOption[],
+  selected: SelectedProjectHostSetup | null | undefined
+): readonly ReadyProjectHostSetupOption[] {
+  const isSelected = (option: ReadyProjectHostSetupOption): boolean =>
+    option.id === selected?.projectHostSetupId && option.hostId === selected.hostId
+  return selected
+    ? [...options.filter(isSelected), ...options.filter((option) => !isSelected(option))]
+    : options
 }
 
 function dedupeByCheckout(): (option: ReadyProjectHostSetupOption) => boolean {

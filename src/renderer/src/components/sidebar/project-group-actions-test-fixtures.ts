@@ -1,4 +1,4 @@
-import type { Store } from '../../../../main/persistence'
+import type { Store } from '../../../../main/persistence/loading-store/store'
 import { ProjectGroupMoveProjectArgs } from '../../../../main/ipc/repos/repo-ipc-arg-schemas'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'

@@ -1,7 +1,7 @@
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   SSH_SIGN_IN_AWAITED_SUFFIX,
   SSH_SIGN_IN_CANCELLED_SUFFIX

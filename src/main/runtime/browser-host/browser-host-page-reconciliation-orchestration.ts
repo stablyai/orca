@@ -1,4 +1,4 @@
-import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import type { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'
 import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'

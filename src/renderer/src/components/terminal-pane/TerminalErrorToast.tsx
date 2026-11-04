@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { unwrapHostRefusalIpcLines } from './terminal-error-ipc-unwrap'
 import { translate } from '@/i18n/i18n'
-import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import {
-  humanizeFolderWorkspacePathError,
+  humanizeFolderWorkspacePathErrors,
   isFolderWorkspacePathError
 } from '@/lib/folder-workspace-path-status'
 import { Button } from '@/components/ui/button'
@@ -13,9 +12,11 @@ import {
   stripClientEnvironmentFooter
 } from '../../../../shared/client-environment-info'
 import {
+  failedSpawnEnvironmentFooter,
   localizeTerminalSpawnHints,
   withoutTerminalSpawnIssueRequest
 } from './terminal-spawn-error-display'
+import { isWslDistroHoldText, localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError
@@ -142,22 +143,13 @@ function isFolderWorkspacePathOnlyError(error: string): boolean {
   return lines.length > 0 && lines.every(isFolderWorkspacePathError)
 }
 
-// Why: a moved or deleted folder is the user's to fix, so it gets actionable copy, not an issue link.
-function humanizeFolderWorkspacePathErrors(error: string): string {
-  return error.split('\n').map(humanizeFolderWorkspacePathError).join('\n')
-}
-
-/** An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report. */
-function isSshHostStateTerminalError(error: string): boolean {
-  return isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
-}
-
 /** Swaps raw daemon-boundary codes for copy a user can act on. */
 export function humanizeTerminalError(error: string, agentId?: string | null): string {
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
-  const unwrapped = unwrapHostRefusalIpcLines(error)
+  // Hosts send a held start as its code (older) or English sentence (newer); either reads in the user's language.
+  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error))
   let humanized = humanizeFolderWorkspacePathErrors(
     localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId) ?? unwrapped)
   )
@@ -223,6 +215,7 @@ export function humanizeTerminalError(error: string, agentId?: string | null): s
 
 export function TerminalErrorToast({
   error,
+  resourceLimit = false,
   agentId,
   paneOnClient = true,
   onDismiss,
@@ -232,6 +225,8 @@ export function TerminalErrorToast({
   onClosePane
 }: {
   error: string
+  /** Classified from separate source events before their display text is joined. */
+  resourceLimit?: boolean
   agentId?: string | null
   /** False for a pane on an SSH or remote host, or one whose host is not yet known. */
   paneOnClient?: boolean
@@ -243,7 +238,8 @@ export function TerminalErrorToast({
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
   onClosePane?: () => void
 }): React.JSX.Element {
-  const ssh = isSshHostStateTerminalError(error)
+  // An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report.
+  const ssh = isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
   const showClientEnvironment = paneOnClient && !ssh
   const paneOwnerUnverified = isPaneOwnerRecoveryError(error)
@@ -255,17 +251,19 @@ export function TerminalErrorToast({
     !showDaemonRestart &&
     !isAgentLaunchOnlyError(error) &&
     !isExplainedTerminalError(error) &&
-    !isFolderWorkspacePathOnlyError(error)
+    !isFolderWorkspacePathOnlyError(error) &&
+    !isWslDistroHoldText(error)
   const humanizedError = humanizeTerminalError(error, agentId)
   // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
   const displayError = showIssueLink
     ? withoutTerminalSpawnIssueRequest(humanizedError)
     : humanizedError
-  const tint = paneOwnerUnverified
-    ? null
-    : ssh
-      ? 'color-mix(in srgb, var(--color-amber-500) 20%, var(--popover))'
-      : 'color-mix(in srgb, var(--destructive) 20%, var(--popover))'
+  const tint =
+    paneOwnerUnverified || resourceLimit
+      ? null
+      : ssh
+        ? 'color-mix(in srgb, var(--color-amber-500) 20%, var(--popover))'
+        : 'color-mix(in srgb, var(--destructive) 20%, var(--popover))'
   const [retrying, setRetrying] = useState(false)
   const [retryFailed, setRetryFailed] = useState(false)
   const [environmentFooter, setEnvironmentFooter] = useState<{
@@ -279,7 +277,7 @@ export function TerminalErrorToast({
       return
     }
     let cancelled = false
-    void resolveClientEnvironmentFooter().then((footer) => {
+    void failedSpawnEnvironmentFooter(displayError).then((footer) => {
       if (!cancelled) {
         setEnvironmentFooter({ error: displayError, footer })
       }
@@ -324,7 +322,9 @@ export function TerminalErrorToast({
           ? '1px solid var(--color-amber-500)'
           : ssh
             ? '1px solid rgba(234, 179, 8, 0.35)'
-            : '1px solid rgba(220, 38, 38, 0.4)',
+            : resourceLimit
+              ? '1px solid var(--border)'
+              : '1px solid rgba(220, 38, 38, 0.4)',
         color: 'var(--popover-foreground)',
         fontSize: 12,
         fontFamily: 'monospace',

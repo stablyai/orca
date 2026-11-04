@@ -121,7 +121,7 @@ describe('Mobile declaration consumer lifetime', () => {
     )
     mkdirSync(join(root, 'src/renderer/src'), { recursive: true })
     writeFileSync(join(root, 'src/renderer/src/env.d.ts'), '// ambient lifetime sentinel\n')
-    const declarationConfig = 'config/tsconfig.test.mobile-host-declarations.json'
+    const declarationConfig = 'config/tsconfig.test.project-grouping-host-declarations.json'
     mkdirSync(join(root, 'config'), { recursive: true })
     const configSource = readFileSync(join(repoRoot, declarationConfig), 'utf8')
     writeFileSync(join(root, declarationConfig), configSource)
@@ -132,7 +132,7 @@ describe('Mobile declaration consumer lifetime', () => {
       if (spec.program === 'fixture-analyzer') {
         return analyze(spec)
       }
-      if (spec.args.includes('config/tsconfig.test.mobile-host-declarations.json')) {
+      if (spec.args.includes('config/tsconfig.test.project-grouping-host-declarations.json')) {
         for (const input of inputs.filter((file) => !file.endsWith('.d.ts'))) {
           const file = join(output, input.slice(3).replace(/\.tsx?$/, '.d.ts'))
           mkdirSync(join(file, '..'), { recursive: true })

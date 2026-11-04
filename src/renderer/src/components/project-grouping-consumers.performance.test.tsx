@@ -11,7 +11,7 @@ import {
   getProjectGroupingIndexFromState
 } from '../store/project-host-setup-selector'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
-import { buildSettingsProjectList } from './settings/settings-project-list'
+import { buildSettingsProjectList } from './settings/navigation/settings-project-list'
 import { buildNewWorkspaceProjectOptions } from '../lib/new-workspace-project-options'
 import { useProjectFilterOptions } from './sidebar/use-project-filter-options'
 import { useRecentProjectIds } from './new-workspace/use-recent-project-ids'

@@ -2,40 +2,40 @@ import {
   projectRawTaskRepoSelection,
   replaceRawTaskRepoSelection
 } from '../../shared/task-repo-selection'
-import { publishedLegacyChatPermissionMode } from '../../shared/agent-chat-permission-mode'
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { publishedLegacyChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../shared/agent-skill-sharing-gate'
-import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../shared/terminal-quick-commands'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
-import { normalizeSourceControlGroupOrder } from '../../shared/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control-ai-actions'
+} from '../../shared/terminal/quick-commands/terminal-quick-commands'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control/ai/settings/source-control-ai-settings'
+import { normalizeSourceControlGroupOrder } from '../../shared/source-control/listing/source-control-group-order'
+import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
-import { nativeChatQueueFollowUps } from '../../shared/native-chat-follow-up-behavior'
-import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
+import { nativeChatQueueFollowUps } from '../../shared/native-chat/input/native-chat-follow-up-behavior'
+import type { TerminalQuickCommand } from '../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from './runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
-} from '../../shared/agent-launch-settings'
-import { legacyLaunchTextUpdates } from '../../shared/agent-launch-permission-updates'
-import { composeAgentLaunchProfile } from '../../shared/tui-agent-launch-defaults'
+} from '../../shared/agent-launch/choices/agent-launch-settings'
+import { legacyLaunchTextUpdates } from '../../shared/agent-launch/choices/agent-launch-permission-updates'
+import { composeAgentLaunchProfile } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { agentLaunchSettingsRollbackUpdates } from './agent-launch-settings-rollback'
 import type {
   RuntimeClientSettings,
@@ -111,6 +111,8 @@ export class RuntimeClientSettingsController {
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
+      nativeChatAutoContinueAfterUsageLimit:
+        settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Mirror the host preference; delivery still depends on queue capability.

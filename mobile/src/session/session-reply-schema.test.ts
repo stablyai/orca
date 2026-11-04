@@ -21,6 +21,7 @@ import {
   githubWorkItemDetailsSchema,
   hostedReviewForBranchSchema
 } from './github-pr-read-reply-schema'
+import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
 import { prChecksSchema } from './github-pr-entity-reply-schema'
 import {
   reviewCreatedTerminalSchema,
@@ -119,6 +120,25 @@ describe('required members', () => {
     expect(tabs).toEqual([{ id: 'tab-1', terminal: 'terminal-1', title: 'Terminal' }])
     expect(refuses(reviewTerminalTabsSchema, {})).toBe(true)
     expect(refuses(reviewTerminalTabsSchema, { tabs: 'none' })).toBe(true)
+  })
+
+  it('keeps which agent a terminal runs, so a note can go straight to the only one', () => {
+    const tabs = reads(reviewTerminalTabsSchema, {
+      tabs: [
+        { id: 'tab-1', type: 'terminal', terminal: 't-1', launchAgent: 'claude' },
+        { id: 'tab-2', type: 'terminal', terminal: 't-2', agentStatus: { agentType: 'codex' } },
+        { id: 'tab-3', type: 'terminal', terminal: 't-3', agentStatus: null },
+        {
+          id: 'tab-4',
+          type: 'terminal',
+          terminal: 't-4',
+          title: 'zsh',
+          launchAgent: 'claude',
+          agentStatus: { agentType: 'claude', state: 'done' }
+        }
+      ]
+    })
+    expect(tabs?.map((tab) => tab.agent)).toEqual(['claude', 'codex', undefined, undefined])
   })
 
   it('requires the three compare members every summary line reads', () => {
@@ -363,6 +383,40 @@ describe('closed arm sets drop rather than default', () => {
     })
     expect(details?.comments[0]?.reactions).toEqual([{ content: '+1', count: 2 }])
   })
+
+  it('keeps the PR files the diff screen reads viewed state and commentable lines from', () => {
+    const details = reads(githubWorkItemDetailsSchema, {
+      item: { id: 'i-1', number: 7, type: 'pr', state: 'open' },
+      files: [
+        {
+          path: 'src/a.ts',
+          status: 'modified',
+          additions: 2,
+          deletions: 1,
+          isBinary: false,
+          reviewCommentLineNumbers: [3, 4],
+          viewerViewedState: 'DISMISSED'
+        },
+        { path: 'src/b.ts', status: 'moved', viewerViewedState: 'SOMETIMES' },
+        { status: 'added' }
+      ]
+    })
+    expect(details?.files).toEqual([
+      {
+        path: 'src/a.ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 1,
+        isBinary: false,
+        reviewCommentLineNumbers: [3, 4],
+        viewerViewedState: 'DISMISSED'
+      },
+      { path: 'src/b.ts', status: 'modified', additions: 0, deletions: 0, isBinary: false }
+    ])
+    expect(
+      reads(githubWorkItemDetailsSchema, { item: { id: 'i-1', number: 7, type: 'pr' } })?.files
+    ).toBeUndefined()
+  })
 })
 
 // Preserve null as explicit no; undefined means the host omitted the flag.
@@ -498,4 +552,45 @@ describe('a newer host is not refused', () => {
     })
     expect(inventory.layoutVersion).toBe(3)
   })
+})
+
+it('keeps additive cancellation summaries through explicit PR and hosted-review parsers', () => {
+  const summary = {
+    state: 'failure',
+    total: 1,
+    passed: 0,
+    failed: 1,
+    pending: 0,
+    neutral: 0,
+    cancelled: 1
+  }
+  const pr = reads(githubPrForBranchSchema, {
+    number: 4,
+    state: 'open',
+    checksStatus: 'failure',
+    checksSummary: summary
+  })
+  expect(pr?.kind === 'found' && pr.pr.checksSummary).toEqual(summary)
+  const readReview = (checksSummary: unknown) =>
+    reads(hostedReviewForBranchSchema, {
+      provider: 'github',
+      number: 4,
+      status: 'failure',
+      checksSummary
+    })
+  expect(readReview(summary)?.checksSummary).toEqual(summary)
+  expect(readReview({ ...summary, scope: 'pipeline' })?.checksSummary?.scope).toBe('pipeline')
+  for (const invalid of [
+    undefined,
+    { ...summary, cancelled: -1 },
+    { ...summary, cancelled: 2 },
+    { ...summary, cancelled: '1' },
+    { ...summary, scope: 'future_scope' },
+    { ...summary, passed: undefined },
+    { ...summary, failed: 0, pending: 1, cancelled: 0 }
+  ]) {
+    const review = readReview(invalid)
+    expect(review?.number).toBe(4)
+    expect(getProviderChecksOutcome(review?.checksSummary, 'failure')).toBe('failure')
+  }
 })

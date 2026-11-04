@@ -15,10 +15,10 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 
 import { TooltipProvider } from '../ui/tooltip'
-import { buildSettingsProjectList } from './settings-project-list'
-import { useConcreteProjectContinuity } from './settings-view-model'
-import type { SettingsStoreModel } from './use-settings-store-model'
-import type { SettingsInteractionController } from './use-settings-interaction-controller'
+import { buildSettingsProjectList } from './navigation/settings-project-list'
+import { useConcreteProjectContinuity } from './page/settings-view-model'
+import type { SettingsStoreModel } from './page/use-settings-store-model'
+import type { SettingsInteractionController } from './page/use-settings-interaction-controller'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
   cleanup()

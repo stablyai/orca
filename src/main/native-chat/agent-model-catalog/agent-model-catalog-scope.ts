@@ -1,16 +1,16 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import { homedir } from 'node:os'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import { agentModelCatalogScopeFingerprint } from './agent-model-catalog-fingerprint'
-import {
-  independentAgentModelCatalog,
-  type AgentModelCatalogLookup,
-  type AgentModelCatalogResolvedProbe
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import type {
+  AgentModelCatalogLookup,
+  AgentModelCatalogResolvedProbe
 } from './agent-model-catalog-discovery'
 import { sessionWorkspacePath, type AgentModelCatalogRecord } from './agent-model-catalog-workspace'
 

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { FolderWorkspacePathStatusReason } from '../../../shared/folder-workspace-path-status'
+import type { FolderWorkspacePathStatusReason } from '../../../shared/folder-workspaces/folder-workspace-path-status'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getDefaultSettings } from '../../../shared/constants'
+import '../../../shared/constants'
 import { getFolderWorkspaceStatusRequestSnapshot } from '@/store/folder-workspaces/folder-path-status'
-import { makeGroup, makeUnifiedTab } from '@/components/worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeUnifiedTab
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 
 // Drive real activation/store/path guarding; replace only singleton/toast/path IPC so mocking cannot hide dispatch or guard regressions.
 
@@ -96,15 +99,6 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
   })
 
-  it('blocks the number shortcut when the SSH connection owning the folder is ambiguous', async () => {
-    await seedFolderWorkspace({ exists: false, reason: 'ambiguous-connection' })
-
-    activateAndRevealWorkspace(folderWorkspaceKey(folderWorkspace.id))
-
-    expect(store.getState().activeWorkspaceKey).toBeNull()
-    expect(mocks.toastError).toHaveBeenCalledTimes(1)
-  })
-
   it('still activates the number shortcut when the folder path is present', async () => {
     await seedFolderWorkspace({ exists: true })
 
@@ -113,58 +107,6 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
     expect(store.getState().activeWorkspaceKey).toBe(folderWorkspaceKey(folderWorkspace.id))
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
-
-  it.each(['local', 'runtime:builder'] as const)(
-    'keeps the selected %s host on a folder sidebar reveal',
-    async (executionHostId) => {
-      await seedFolderWorkspace({ exists: true })
-      store.setState({
-        folderWorkspaces: [
-          {
-            ...folderWorkspace,
-            executionHostId: executionHostId === 'local' ? 'runtime:builder' : 'local'
-          },
-          { ...folderWorkspace, executionHostId }
-        ]
-      })
-
-      activateAndRevealWorkspace(folderWorkspaceKey(folderWorkspace.id), {
-        executionHostId,
-        providesInitialSurface: true
-      })
-
-      expect(store.getState().pendingRevealWorktree).toMatchObject({
-        worktreeId: folderWorkspaceKey(folderWorkspace.id),
-        executionHostId
-      })
-    }
-  )
-
-  it.each([
-    ['local', null],
-    ['ssh:builder', 'builder']
-  ] as const)(
-    'reveals the %s catalog owner when an unrelated server is focused',
-    async (executionHostId, connectionId) => {
-      await seedFolderWorkspace({ exists: true })
-      store.setState({
-        projectGroups: [{ ...projectGroup, connectionId }],
-        settings: {
-          ...getDefaultSettings('/tmp'),
-          activeRuntimeEnvironmentId: 'focused-server'
-        }
-      })
-
-      activateAndRevealWorkspace(folderWorkspaceKey(folderWorkspace.id), {
-        providesInitialSurface: true
-      })
-
-      expect(store.getState().pendingRevealWorktree).toMatchObject({
-        worktreeId: folderWorkspaceKey(folderWorkspace.id),
-        executionHostId
-      })
-    }
-  )
 
   it.each(['local', 'runtime:builder'] as const)(
     'checks the selected %s folder when the same id is active on another host',

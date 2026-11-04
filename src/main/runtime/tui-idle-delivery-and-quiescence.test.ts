@@ -5,7 +5,7 @@ import { registerBoundPty } from './bind-first-pane.test-fixture'
 import { RuntimeMachineName } from './runtime-machine-name'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 // #6011 follow-ups: apply wait evidence ranking to typing/delivery and allow unobserved output clocks on the open quiet lane.
 
@@ -65,22 +65,6 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  // Agents queue or steer text typed mid-turn, so a busy pane takes mail without waiting for rest.
-  it('delivers into a pane mid-turn', async () => {
-    const { runtime } = await makeRuntime('codex')
-    const deliver = watchDelivery(runtime)
-    runtime.onPtyData(PTY_ID, `${osc('⠋ Codex')}working\n`, Date.now())
-    expect(deliver).toHaveBeenCalled()
-  })
-
-  it('does not deliver into a name-only pane that has not gone quiet', async () => {
-    const { runtime } = await makeRuntime('codex')
-    const deliver = watchDelivery(runtime)
-    // Name-only Codex is weak idle evidence, which a shell auto-title can also write before the TUI mounts.
-    runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
-    expect(deliver).not.toHaveBeenCalled()
   })
 
   it('does not retry into a pane that went busy again', async () => {

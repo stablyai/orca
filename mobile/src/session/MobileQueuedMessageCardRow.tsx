@@ -10,8 +10,8 @@ import {
   Send,
   Trash2
 } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { queuedMessageCardSteers } from '../../../src/shared/structured-agent-session-queued-cards'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import { queuedMessageCardSteers } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedMessageInlineEditor } from './use-mobile-structured-queued-edit'
@@ -189,6 +189,7 @@ function QueuedMessageCardContents({
         <View style={styles.expandedBody}>
           {expanded ? (
             <Pressable
+              style={({ pressed }) => pressed && pressedStyle}
               accessibilityRole="button"
               accessibilityState={{ expanded: true }}
               accessibilityHint={t(

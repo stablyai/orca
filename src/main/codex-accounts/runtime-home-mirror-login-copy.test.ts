@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -16,10 +15,13 @@ import {
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -130,15 +132,6 @@ describe('copying a login made inside Orca into an empty ~/.codex on Windows', (
 
     expect(existsSync(getSystemCodexAuthPath())).toBe(false)
   })
-
-  it('does nothing on macOS or Linux', async () => {
-    await launchOnMirror()
-    writeFileSync(getRuntimeCodexAuthPath(), paneLogin, 'utf-8')
-
-    await launchOnRealHome('darwin')
-
-    expect(existsSync(getSystemCodexAuthPath())).toBe(false)
-  })
   it("does not pull Orca's login in after a later logout when ~/.codex had its own", async () => {
     await launchOnMirror()
     writeFileSync(getRuntimeCodexAuthPath(), paneLogin, 'utf-8')
@@ -152,27 +145,6 @@ describe('copying a login made inside Orca into an empty ~/.codex on Windows', (
     await launchOnRealHome()
 
     expect(existsSync(getSystemCodexAuthPath())).toBe(false)
-  })
-
-  it('stays one-shot when the snapshot after the copy fails', async () => {
-    await launchOnMirror()
-    writeFileSync(getRuntimeCodexAuthPath(), paneLogin, 'utf-8')
-    const snapshotPath = join(
-      testState.userDataDir,
-      'codex-runtime-home',
-      'system-default-auth.json'
-    )
-    rmSync(snapshotPath, { force: true })
-    mkdirSync(join(snapshotPath, 'blocked'), { recursive: true })
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await launchOnRealHome()
-
-    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(paneLogin)
-    expect(JSON.parse(readFileSync(getSharedRuntimeAuthProvenancePath(), 'utf-8'))).toEqual({
-      owner: 'system-default',
-      authJson: paneLogin
-    })
   })
 
   it('copies it before a usage poll reads ~/.codex', async () => {

@@ -32,7 +32,8 @@ import type {
 } from '../../../src/shared/workspace-view/workspace-view-options'
 import { hostSortsByStamps, sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
-import { resolveWorktreeHostId } from './worktree-host-context-labels'
+import { NO_WORKTREE_HOST_CONTEXT, resolveWorktreeHostId } from './worktree-host-context-labels'
+import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   buildProjectGroupingIndex,
@@ -43,10 +44,8 @@ import {
 } from '../../../src/shared/project-section-grouping'
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
-import {
-  filterWorkspaceRows,
-  type WorkspaceRowFactReader
-} from '../../../src/shared/workspace-view/workspace-row-filters'
+import { filterWorktrees } from './workspace-row-filtering'
+export { filterWorktrees, isWorktreeActive } from './workspace-row-filtering'
 import { translate } from '../i18n/mobile-i18n'
 
 export type { FilterState, Section, SectionRepo, Worktree } from './workspace-list-types'
@@ -70,12 +69,15 @@ export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
 
 export { getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
+// A section before lineage expansion: host rows only, no per-row view yet.
+type PlannedSection = Omit<Section, 'data'> & { data: Worktree[] }
+
 function makeSection(
   key: string,
   title: string,
   data: readonly Worktree[],
   decoration: { icon?: 'pin'; repo?: SectionRepo } = {}
-): Section {
+): PlannedSection {
   return {
     key,
     title,
@@ -83,64 +85,6 @@ function makeSection(
     ...(decoration.repo ? { repo: decoration.repo } : {}),
     data: [...data]
   }
-}
-
-// Idle prompts have no recent output; live terminals or unread output still count as active.
-export function isWorktreeActive(
-  w: Pick<Worktree, 'hasHostSidebarActivity' | 'status' | 'liveTerminalCount'> & {
-    unread?: boolean
-  }
-): boolean {
-  return w.hasHostSidebarActivity !== undefined
-    ? w.hasHostSidebarActivity
-    : Boolean(w.unread) || (w.status ? w.status !== 'inactive' : w.liveTerminalCount > 0)
-}
-
-// Older hosts omit the main-worktree flag; use the legacy branch heuristic.
-function guessDefaultBranchWorkspace(w: Worktree): boolean {
-  if (w.isMainWorktree !== undefined) {
-    return w.isMainWorktree && w.branch.trim() !== ''
-  }
-  const branch = w.branch.replace(/^refs\/heads\//, '')
-  return branch === 'main' || branch === 'master'
-}
-
-function phoneRowFacts(
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
-): WorkspaceRowFactReader<Worktree> {
-  return {
-    isArchived: (w) => w.isArchived === true,
-    isFolderWorkspace: (w) => w.workspaceKind === 'folder-workspace',
-    repoId: (w) => w.repoId,
-    hostId: (w) => resolveWorktreeHostId(w, repoHostIdByRepoId),
-    isOtherClient: (w) => w.desktopOtherClient === true,
-    isDefaultBranch: (w) => w.defaultBranch ?? guessDefaultBranchWorkspace(w),
-    isAutomationCreated: (w) => w.automationCreated === true,
-    isCliCreated: (w) => w.cliCreated === true,
-    isDetachedHead: (w) => w.detachedHead === true,
-    // Why the guess: #8873's exemption must fail open on hosts that predate isMainWorktree.
-    isMainWorktree: (w) => w.isMainWorktree ?? guessDefaultBranchWorkspace(w),
-    isSleeping: (w) => !isWorktreeActive(w)
-  }
-}
-
-export function filterWorktrees(
-  worktrees: Worktree[],
-  filters: FilterState,
-  search: string,
-  repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId> = new Map()
-): Worktree[] {
-  const result = filterWorkspaceRows(worktrees, filters, phoneRowFacts(repoHostIdByRepoId))
-  const q = search.trim().toLowerCase()
-  if (!q) {
-    return result
-  }
-  return result.filter(
-    (w) =>
-      w.displayName.toLowerCase().includes(q) ||
-      w.branch.toLowerCase().includes(q) ||
-      w.repo.toLowerCase().includes(q)
-  )
 }
 
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
@@ -194,7 +138,7 @@ export function buildMobileWorkspacePlan(
       ),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural: canonicalGroupWorktrees, displayRootByIdentity }) => {
-      const sections: Section[] = []
+      const sections: PlannedSection[] = []
       if (pinned.length > 0) {
         sections.push(makeSection('pinned', groupLabels.pinned, pinned, { icon: 'pin' }))
       }
@@ -236,7 +180,7 @@ export function buildMobileWorkspacePlan(
         )
         for (const [key, section] of projectSections) {
           sections.push(
-            makeSection(key, section.label, orderMainWorktreeFirst(section.items), {
+            makeSection(key, section.label, orderMainWorktreeFirst(section.items, sortMode), {
               repo: section.repo
             })
           )
@@ -290,7 +234,7 @@ export function buildMobileWorkspacePlan(
           }
         }
       }
-      return sections.map((section): Section & WorktreeOccurrenceSection<Worktree> => ({
+      return sections.map((section): PlannedSection & WorktreeOccurrenceSection<Worktree> => ({
         ...section,
         items: section.data,
         placement: section.key === 'pinned' ? 'pinned' : 'natural'
@@ -299,13 +243,16 @@ export function buildMobileWorkspacePlan(
   })
   return {
     occurrencePlan,
-    render: (collapsed: ReadonlySet<string>): Section[] =>
+    render: (
+      collapsed: ReadonlySet<string>,
+      hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
+    ): Section[] =>
       occurrencePlan.sections.map((section) => ({
         key: section.key,
         title: section.title,
         ...(section.icon ? { icon: section.icon } : {}),
         ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed)
+        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
       }))
   }
 }

@@ -13,8 +13,11 @@ vi.mock('@/store', () => ({
     })
 }))
 
-vi.mock('@/store/worktree-diff-comments-selector', () => ({
-  selectWorktreeDiffCommentsOrEmpty: () => []
+vi.mock('@/store/diff-comment-owner', () => ({
+  sourceParts: () => [],
+  createDiffCommentViewSelector: () => () => ({ owner: null, comments: [] }),
+  createOwnedDiffCommentsSelector: () => () => undefined,
+  diffCommentOwnerKey: () => ''
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -51,7 +54,7 @@ vi.mock('@/components/artifacts/ArtifactPublishButton', () => ({
   ArtifactPublishButton: () => <button data-artifact-publish />
 }))
 
-vi.mock('./diff-navigation-context', () => ({
+vi.mock('./diff/review/diff-navigation-context', () => ({
   useDiffNavigation: () => ({
     changeCount: 2,
     goToPreviousDiff: vi.fn(),

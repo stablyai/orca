@@ -3,7 +3,7 @@ import {
   getPRCommentGroupId,
   groupPRComments,
   type PRCommentGroup
-} from '../../../../shared/pr-comment-groups'
+} from '../../../../shared/source-control/review-comments/pr-comment-groups'
 import { isPRCommentGroupQueueableForAI } from '@/lib/pr-comment-action-state'
 import type { PRComment } from '../../../../shared/github/comment-types'
 

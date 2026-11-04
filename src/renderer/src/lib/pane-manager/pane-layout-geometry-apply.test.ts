@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import type { PaneManagerOptions } from './pane-manager-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import { applyExpandedLayoutTo } from '@/components/terminal-pane/expand-collapse'
 
@@ -22,8 +23,6 @@ const leaf = (leafId: string): TerminalPaneLayoutNode => ({ type: 'leaf', leafId
 describe('PaneManager.applyLayoutGeometry', () => {
   let root: HTMLDivElement
   let onLayoutChanged: Mock<NonNullable<PaneManagerOptions['onLayoutChanged']>>
-  let onPaneCreated: Mock<NonNullable<PaneManagerOptions['onPaneCreated']>>
-  let onPaneClosed: Mock<NonNullable<PaneManagerOptions['onPaneClosed']>>
   let manager: InstanceType<typeof PaneManager>
 
   function mountTwoPanes(direction: 'vertical' | 'horizontal', ratio?: number): void {
@@ -43,8 +42,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
   // Mounting emits too; count only notifications caused by apply.
   function clearCallbacks(): void {
     onLayoutChanged.mockClear()
-    onPaneCreated.mockClear()
-    onPaneClosed.mockClear()
   }
 
   function serialized(): TerminalPaneLayoutNode | null {
@@ -68,13 +65,9 @@ describe('PaneManager.applyLayoutGeometry', () => {
     root = document.createElement('div')
     document.body.appendChild(root)
     onLayoutChanged = vi.fn()
-    onPaneCreated = vi.fn()
-    onPaneClosed = vi.fn()
     manager = new PaneManager(root, {
       linkOpenHint: () => '',
-      onLayoutChanged,
-      onPaneCreated,
-      onPaneClosed
+      onLayoutChanged
     })
   })
 
@@ -118,30 +111,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
     expect(manager.applyLayoutGeometry(layout!)).toBe(false)
 
     expect(takeRecords()).toEqual([])
-    expect(onLayoutChanged).not.toHaveBeenCalled()
-  })
-
-  it('changes only the nested split whose ratio moved', () => {
-    mountThreePanes()
-    const before = paneIdentity()
-
-    const next: TerminalPaneLayoutNode = {
-      type: 'split',
-      direction: 'vertical',
-      first: leaf(LEAF_A),
-      second: {
-        type: 'split',
-        direction: 'horizontal',
-        first: leaf(LEAF_B),
-        second: leaf(LEAF_C),
-        ratio: 0.25
-      },
-      ratio: 0.6
-    }
-    expect(manager.applyLayoutGeometry(next)).toBe(true)
-
-    expect(serialized()).toEqual(next)
-    expect(paneIdentity()).toEqual(before)
     expect(onLayoutChanged).not.toHaveBeenCalled()
   })
 

@@ -5,7 +5,7 @@ import type { BrowserWorkspace } from '../../../../shared/browser-workspace-type
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { DaemonSession } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { useResourceUsageDerivedModel } from './use-resource-usage-derived-model'
 
 const local = {

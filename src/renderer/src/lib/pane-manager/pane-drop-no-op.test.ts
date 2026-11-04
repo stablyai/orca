@@ -9,7 +9,7 @@ import {
   type DragReorderCallbacks
 } from './pane-drag-reorder'
 
-import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
 import {
   insertLeafBeside,
@@ -69,12 +69,8 @@ function createVerticalSplit(paneIds: readonly number[]): Map<number, ManagedPan
 }
 
 describe('handlePaneDrop with a drop taker', () => {
-  function callbacksFor(
-    panes: Map<number, ManagedPaneInternal>,
-    takePaneDrop?: DragReorderCallbacks['takePaneDrop']
-  ) {
+  function callbacksFor(panes: Map<number, ManagedPaneInternal>) {
     const root = panes.get(1)!.container.parentElement!
-    const onLayoutChanged = vi.fn()
     const callbacks: DragReorderCallbacks = {
       getPanes: () => panes,
       getRoot: () => root,
@@ -83,27 +79,10 @@ describe('handlePaneDrop with a drop taker', () => {
       safeFit: vi.fn(),
       applyPaneOpacity: vi.fn(),
       applyDividerStyles: vi.fn(),
-      refitPanesUnder: vi.fn(),
-      onLayoutChanged,
-      ...(takePaneDrop ? { takePaneDrop } : {})
+      refitPanesUnder: vi.fn()
     }
-    return { callbacks, onLayoutChanged }
+    return { callbacks }
   }
-
-  it('moves a taken drop only when the taker runs the move', () => {
-    const panes = createVerticalSplit([1, 2, 3])
-    let move: (() => void) | undefined
-    const { callbacks, onLayoutChanged } = callbacksFor(panes, (_drop, later) => {
-      move = later
-      return true
-    })
-
-    handlePaneDrop(3, 1, 'left', createDragReorderState(), callbacks)
-    expect(onLayoutChanged).not.toHaveBeenCalled()
-
-    move?.()
-    expect(onLayoutChanged).toHaveBeenCalledOnce()
-  })
 
   it('draws the same tree main saves for a move out of a nested, resized split', () => {
     const panes = createVerticalSplit([1, 2])
@@ -135,35 +114,5 @@ describe('handlePaneDrop with a drop taker', () => {
     )
     expect(serializePaneTree(outer)).toEqual(saved)
     expect(saved).toMatchObject({ ratio: 0.7 })
-  })
-
-  it('drops a taken move whose pane closed before the taker ran it', () => {
-    const panes = createVerticalSplit([1, 2, 3])
-    let move: (() => void) | undefined
-    const { callbacks, onLayoutChanged } = callbacksFor(panes, (_drop, later) => {
-      move = later
-      return true
-    })
-
-    handlePaneDrop(3, 1, 'left', createDragReorderState(), callbacks)
-    panes.delete(3)
-    move?.()
-
-    expect(onLayoutChanged).not.toHaveBeenCalled()
-  })
-
-  it('drops a taken move once the manager is destroyed', () => {
-    const panes = createVerticalSplit([1, 2, 3])
-    let move: (() => void) | undefined
-    const { callbacks, onLayoutChanged } = callbacksFor(panes, (_drop, later) => {
-      move = later
-      return true
-    })
-
-    handlePaneDrop(3, 1, 'left', createDragReorderState(), callbacks)
-    callbacks.isDestroyed = () => true
-    move?.()
-
-    expect(onLayoutChanged).not.toHaveBeenCalled()
   })
 })

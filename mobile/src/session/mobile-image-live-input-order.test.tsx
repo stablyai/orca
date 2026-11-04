@@ -2,7 +2,7 @@ import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
@@ -81,6 +81,8 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
   const sendLiveTerminalInputRef = ref<TerminalLiveInputSender>(async () => false)
   const scope = {
     sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client,
     clientRef: ref(client),
     activeHandle: 'term-1',
@@ -92,7 +94,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
     deviceTokenRef: ref('phone'),
     ptyModesRef: ref(new Map()),
     liveInputRef,
-    commandInputRef: ref(null),
     liveInputFocusTimerRef: ref(null),
     sendLiveTerminalInputRef,
     showToast: vi.fn()
@@ -108,8 +109,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
       activeSessionTabTypeRef,
       connected: true,
       liveInputRef,
-      liveInputTerminalHandles: new Set(['term-1']),
-      liveInputTerminalHandlesRef: ref(new Set(['term-1'])),
       sendLiveTerminalInputRef,
       setLiveInputCapture: vi.fn()
     })

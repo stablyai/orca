@@ -6,14 +6,30 @@ import type {
 import { type ReactNode, act } from 'react'
 import { type Root, createRoot } from 'react-dom/client'
 
-import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 export const SCRATCH_PATH = '/repo/.claude/worktrees/scratch-1'
 
-const mocks = vi.hoisted(() => ({
+type VisibilityDialogMocks = {
+  state: {
+    activeModal: string | null
+    modalData: Record<string, unknown>
+    closeModal: Mock
+    openSettingsTarget: Mock
+    openSettingsPage: Mock
+    repos: unknown[]
+    updateRepo: Mock
+    fetchWorktrees: Mock
+    detectedWorktreesByRepo: Record<string, unknown>
+    settings: Record<string, unknown>
+    worktreeVisibilityDefaultsByHost: Record<string, unknown>
+  }
+}
+
+const mocks: VisibilityDialogMocks = vi.hoisted(() => ({
   state: {
     activeModal: 'worktree-visibility' as string | null,
     modalData: { repoId: 'repo-1' } as Record<string, unknown>,

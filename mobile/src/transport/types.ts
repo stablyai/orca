@@ -1,20 +1,16 @@
+import type { RelayHostReachability } from './relay-host-reachability'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 import { z } from 'zod'
-import {
-  PairingOfferSchema,
-  type PairingOffer
-} from '../../../src/shared/mobile-relay-pairing-offer'
+import '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
-
-export { PairingOfferSchema }
-export type { PairingOffer }
 
 export type RpcRequest = {
   id: string
@@ -169,6 +165,7 @@ type StreamingListener = (result: unknown) => void
 
 // Holding a client also exposes the raw port, so the boundary inventory must cover client holders.
 export type RpcClient = UnvalidatedRpcRequestPort & {
+  requestRoute?: (params: unknown) => { client: RpcClient; intermediary?: RpcClient }
   subscribe: (
     method: string,
     params: unknown,
@@ -185,6 +182,11 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getLastInboundAt?: () => number | null
   // Optional logical authority epoch for scoping cached work across migrateTo; physical clients need no counter.
   getGeneration?: () => number
+  getActivePath?: () => MobileConnectionPath
+  getPendingPath?: () => MobileConnectionPath | null
+  getRelayHostReachability?: () => RelayHostReachability
+  onConnectionPathChange?: (listener: () => void) => () => void
+  getShellHostStatus?: () => unknown
   /** False when this transport would refuse an `envelope`; absent means it carries one. */
   carriesRpcEnvelope?: () => boolean
   onStateChange: (listener: (state: ConnectionState) => void) => () => void

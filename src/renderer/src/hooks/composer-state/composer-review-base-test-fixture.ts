@@ -169,6 +169,7 @@ export function useReviewBaseSelectionFixture(
     actionableHostIds: new Set([LOCAL_EXECUTION_HOST_ID]),
     projectGroups: [folderGroup],
     projectHostSetups: [],
+    projectOptions: [],
     projects: [],
     repos: [repo, replacementRepo],
     setRepoId,

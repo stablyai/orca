@@ -2,6 +2,8 @@ import { getProjectHostSetupProjectionFromState } from '../project-host-setup-se
 import { buildProjectGroupingIndex } from '../../../../shared/project-section-grouping'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
+import { setPendingLaunchReadoptions } from '@/components/native-chat/native-chat-launch-draft-source'
+import { continueReadoptedLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-continuity'
 import type { AppState } from '../types'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -27,12 +29,16 @@ export type FetchedRepoCatalog = {
   hostId: ReturnType<typeof getRuntimeTargetHostId>
   /** This store's repo rows when the request went out; a registration added since is not its to drop. */
   reposAtRequest: readonly Repo[]
+  sourceWrites?: ReturnType<AppState['githubSourceCollections']['catalogSnapshot']>
+  sourceOwner?: AppState['githubSourceCollections']
 }
 
 export async function fetchRepoCatalogForTarget(
   target: RuntimeClientTarget,
-  reposAtRequest: readonly Repo[]
+  reposAtRequest: readonly Repo[],
+  sourceOwner?: AppState['githubSourceCollections']
 ): Promise<FetchedRepoCatalog> {
+  const sourceWrites = sourceOwner?.catalogSnapshot()
   const fetchedRepos =
     target.kind === 'local'
       ? await window.api.repos.list()
@@ -47,7 +53,9 @@ export async function fetchRepoCatalogForTarget(
     repos,
     projectHostSetupCompatibility: await fetchProjectHostSetupCompatibility(target, repos),
     hostId: getRuntimeTargetHostId(target),
-    reposAtRequest
+    reposAtRequest,
+    sourceOwner,
+    sourceWrites
   }
 }
 
@@ -61,7 +69,10 @@ export function mergeFetchedRepoCatalog(
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
-  const fetched = withoutPendingRuntimeRepoRemovals(catalog.repos, catalog.hostId)
+  const fetched = withoutPendingRuntimeRepoRemovals(
+    catalog.repos.map((repo) => catalog.sourceOwner?.adopt(repo, catalog.sourceWrites) ?? repo),
+    catalog.hostId
+  )
   const combinedRepos = [...currentRepos, ...fetched]
   const rows = mergeFetchedHostProjectCatalog({
     previous: previous ?? { projects: [], projectHostSetups: [] },
@@ -75,7 +86,14 @@ export function mergeFetchedRepoCatalog(
     projectHostSetups: projection.setups,
     settings
   })
-  const repos = mergeFetchedReposForHost(currentRepos, fetched, catalog.hostId, settings, grouping)
+  const repos = mergeFetchedReposForHost(
+    currentRepos,
+    fetched,
+    catalog.hostId,
+    settings,
+    grouping,
+    catalog.reposAtRequest
+  )
   return {
     repos,
     projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,
@@ -115,8 +133,11 @@ export function filterSetupsForPrunedRepoRows(
 
 export function reconcileReadoptedSshWorktreeState(
   state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
-  readoptions: readonly SshRepoReadoption[]
+  readoptions: readonly SshRepoReadoption[],
+  remainingReadoptions: readonly SshRepoReadoption[] = readoptions
 ): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
+  continueReadoptedLaunchDrafts(readoptions)
+  setPendingLaunchReadoptions(remainingReadoptions)
   const worktreesByRepo = reconcileReadoptedSshWorktreesByRepo(state.worktreesByRepo, readoptions)
   const detectedRows = Object.fromEntries(
     Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
@@ -152,9 +173,14 @@ export function reconcileFetchedCatalogWorktreeState(
     | 'sortEpoch'
   >,
   catalog: Pick<FetchedRepoCatalog, 'reposAtRequest'>,
-  nextRepos: readonly Repo[]
+  nextRepos: readonly Repo[],
+  remainingReadoptions: readonly SshRepoReadoption[]
 ): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
-  const readopted = reconcileReadoptedSshWorktreeState(state, state.pendingSshRepoReadoptions)
+  const readopted = reconcileReadoptedSshWorktreeState(
+    state,
+    state.pendingSshRepoReadoptions,
+    remainingReadoptions
+  )
   // Why: a catalog requested before an add may omit it; that add's rows are not this answer's to drop.
   const requested = new Set(catalog.reposAtRequest.map(getRepoHostIdentity))
   const previous = state.repos.filter((repo) => requested.has(getRepoHostIdentity(repo)))

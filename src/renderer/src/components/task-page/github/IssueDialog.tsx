@@ -37,7 +37,7 @@ export function TaskPageGitHubIssueDialog({
     setIssueSourcePreference,
     submitShortcutLabel,
     selectedRepos,
-    perRepoSourceState,
+    githubSourceDisplayState,
     newIssueOpen,
     setNewIssueOpen,
     newIssueTitle,
@@ -81,7 +81,7 @@ export function TaskPageGitHubIssueDialog({
           {(() => {
             // Use the resolved slug as the source indicator, falling back to displayName.
             const entry = newIssueTargetRepo
-              ? perRepoSourceState.find((s) =>
+              ? githubSourceDisplayState.find((s) =>
                   repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
                 )
               : undefined
@@ -107,7 +107,7 @@ export function TaskPageGitHubIssueDialog({
             if (!newIssueTargetRepo) {
               return null
             }
-            const entry = perRepoSourceState.find((s) =>
+            const entry = githubSourceDisplayState.find((s) =>
               repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
             )
             if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {

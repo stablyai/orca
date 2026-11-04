@@ -82,7 +82,7 @@ import {
 import {
   MOBILE_RELAY_HOSTS_LIST_METHOD,
   type MobileRelayHost
-} from '../../../src/shared/mobile-relay-hosts-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { HostStatusGates } from '../transport/host-status-gates'
 import type { ConnectionState } from '../transport/types'
 import { createBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'

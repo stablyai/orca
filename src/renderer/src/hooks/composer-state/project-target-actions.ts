@@ -14,10 +14,9 @@ type ProjectTargetActionsInput = Pick<
   | 'linkedWorkItem'
   | 'projectGroups'
   | 'projectHostSetups'
+  | 'projectOptions'
   | 'projects'
   | 'settings'
-  | 'setSelectedProjectHostSetupOverrideId'
-  | 'setSelectedProjectHostSetupOverrideHostId'
   | 'repos'
   | 'setBaseBranch'
   | 'setBranchNameOverride'
@@ -35,6 +34,8 @@ type ProjectTargetActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setSelectedProjectGroupId'
+  | 'setSelectedProjectHostSetupOverrideHostId'
+  | 'setSelectedProjectHostSetupOverrideId'
   | 'setSparseDirectories'
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
@@ -48,10 +49,11 @@ import { useCallback } from 'react'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
   getProjectGroupIdFromNewWorkspaceOptionId,
+  getProjectRowHostSetups,
   findActionableFolderProjectGroup
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
-import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
+import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 
@@ -63,8 +65,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     isProjectGroupTarget,
     linkedWorkItem,
     projectGroups,
-    setSelectedProjectHostSetupOverrideId,
-    setSelectedProjectHostSetupOverrideHostId,
+    projectOptions,
     repos,
     setBaseBranch,
     setBranchNameOverride,
@@ -82,6 +83,8 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setSelectedProjectGroupId,
+    setSelectedProjectHostSetupOverrideHostId,
+    setSelectedProjectHostSetupOverrideId,
     setSparseDirectories,
     setSparseEnabled,
     setSparseSelectedPresetId,
@@ -192,6 +195,15 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       }
 
       setSelectedProjectGroupId(null)
+      const option = projectOptions.find((candidate) => candidate.id === projectId)
+      const checkout = option?.kind === 'project' ? option.checkout : undefined
+      if (checkout) {
+        handleRepoChange(checkout.repoId, { forceResetStartFrom: isProjectGroupTarget })
+        // After handleRepoChange, which clears the override; a same-host sibling checkout needs the exact setup.
+        setSelectedProjectHostSetupOverrideId(checkout.projectHostSetupId)
+        setSelectedProjectHostSetupOverrideHostId(checkout.hostId)
+        return
+      }
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Prefer focusedHostScope rather than hard-pin hostId, so projects available only on another host remain selectable.
@@ -201,7 +213,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         settings: state.settings,
         eligibleRepos: getComposerEligibleRepos(state.repos),
         projects: state.projects,
-        projectHostSetups: state.projectHostSetups,
+        projectHostSetups: getProjectRowHostSetups(projectOptions, state.projectHostSetups),
         projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
@@ -219,13 +231,14 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       handleRepoChange,
       isProjectGroupTarget,
       projectGroups,
+      projectOptions,
       repos,
-      setSelectedProjectHostSetupOverrideId,
-      setSelectedProjectHostSetupOverrideHostId,
       selectedWorkspaceTarget,
       workspaceHostScope,
       initialProjectGroupAppliedRef,
       setSelectedProjectGroupId,
+      setSelectedProjectHostSetupOverrideHostId,
+      setSelectedProjectHostSetupOverrideId,
       setProjectError
     ]
   )

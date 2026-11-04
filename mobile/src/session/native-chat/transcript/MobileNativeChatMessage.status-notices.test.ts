@@ -1,18 +1,18 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
+import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
+import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   agentSessionFailureFact,
   readProviderRetry
-} from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
@@ -120,10 +120,39 @@ describe('MobileNativeChatMessage status notices', () => {
         )
       )
     })
-    return renderer!.root.find(
+    return renderer!.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
+    )[0]!
   }
+
+  it.each([
+    ['en', 'Claude switched models: Claude Opus 5.5 → Claude Opus 4.8.'],
+    ['ru', 'Claude переключил модель: Claude Opus 5.5 → Claude Opus 4.8.']
+  ] as const)(
+    'renders a saved fallback notice in %s without a raw JSON card',
+    async (locale, words) => {
+      await activateMobileUiLocale(locale)
+      const head = JSON.stringify({
+        type: 'fallback',
+        from: { model: 'claude-opus-5-5' },
+        to: { model: 'claude-opus-4-8' }
+      })
+      const text = renderNotice(
+        {
+          kind: 'status',
+          text: 'Claude sent content Orca cannot display yet',
+          providerFrame: {
+            provider: 'claude',
+            kind: 'message:assistant:content:fallback',
+            payload: { head, byteLength: head.length, digest: 'fixture', truncated: false }
+          }
+        },
+        { hostName: null }
+      )
+      expect(text.props.children).toBe(words)
+      expect(renderer!.root.findAll((node) => String(node.type) === 'Pressable')).toHaveLength(0)
+    }
+  )
 
   it('names the Orca host an Orca stop came from, in desktop words', () => {
     const text = renderNotice(
@@ -138,6 +167,21 @@ describe('MobileNativeChatMessage status notices', () => {
     )
     expect(text.props.children).toBe(
       'Orca on MacBook Pro stopped while this response was in progress. You can continue in this conversation.'
+    )
+  })
+
+  it("rewords the host's missing saved conversation words in the reader's language", async () => {
+    await activateMobileUiLocale('fr')
+    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
+      surface: 'row',
+      agentName: 'Claude'
+    })
+    const text = renderNotice(
+      { kind: 'status', tone: 'error', ...host },
+      { hostName: null, agentName: 'Claude' }
+    )
+    expect(text.props.children).toBe(
+      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
     )
   })
 
@@ -180,6 +224,16 @@ describe('MobileNativeChatMessage status notices', () => {
           colors.statusAmber
         )
         expect(markdownIn(tree.root)).toEqual([])
+        const details = tree.root.find(
+          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Details'
+        )
+        expect(details.props['aria-expanded']).toBe(false)
+        act(() => details.props.onPress())
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .flatMap((node) => node.props.children)
+        ).toContain('Internal error: Rate limit exceeded. Please try again later.')
       } finally {
         now.mockRestore()
       }

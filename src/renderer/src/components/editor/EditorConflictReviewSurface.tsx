@@ -4,7 +4,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import { ImageViewer, MonacoEditor } from './editor-lazy-views'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
@@ -161,6 +161,7 @@ export function EditorConflictReviewSurface({
             worktreeId={contentFile.worktreeId}
             // Borrowed views reload through their owning workspace.
             onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
+            onHostStarted={() => reloadContent(recordView ?? contentFile)}
           />
         </div>
       )
@@ -223,6 +224,7 @@ export function EditorConflictReviewSurface({
             key={`${viewStateScopeId}:${contentFile.id}:${viewStateKeySuffix}`}
             fileId={contentFile.id}
             filePath={contentFile.filePath}
+            noteSource={contentFile}
             viewStateKey={selectedViewStateKey}
             viewStateId={editorViewStateId}
             relativePath={contentFile.relativePath}

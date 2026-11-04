@@ -9,6 +9,7 @@ import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
+import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
 import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
 import { buildSidebarFeedCatalog } from '../../../src/shared/sidebar-list/sidebar-feed-catalog'
@@ -25,6 +26,7 @@ export type HostListSectionsInputs = {
   /** Null in a build that lists without the feed. */
   feed: HostSidebarFeed | null
   displayWorktrees: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   /** The desktop's platform, which names its own host; never the phone's. */
   hostPlatform: NodeJS.Platform | null
   state: HostScreenState
@@ -56,6 +58,7 @@ function useFilterRepos(
 
 function useLegacyHostListSections({
   displayWorktrees,
+  hostContextOf,
   state,
   exactProjectRepoFilters
 }: HostListSectionsInputs): HostListSections {
@@ -78,6 +81,7 @@ function useLegacyHostListSections({
   const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
+    hostContextOf,
     sortMode: state.view.sortBy,
     filters: rowFilters,
     search: state.search,
@@ -101,6 +105,7 @@ function useFeedHostListSections({
   hostId,
   feed,
   displayWorktrees,
+  hostContextOf,
   hostPlatform,
   state,
   exactProjectRepoFilters
@@ -143,12 +148,14 @@ function useFeedHostListSections({
             rows: built.sectionRows,
             lastVisited,
             liveRows: displayWorktrees,
+            hostContextOf,
             repoHostIdByRepoId: state.repoHostIdByRepoId,
             search: state.search
           })
         : preFeed
           ? buildPreFeedSections({
               rows: displayWorktrees,
+              hostContextOf,
               view: state.view,
               search: state.search,
               repoHostIdByRepoId: state.repoHostIdByRepoId,
@@ -159,6 +166,7 @@ function useFeedHostListSections({
       built,
       preFeed,
       displayWorktrees,
+      hostContextOf,
       state.view,
       state.repoHostIdByRepoId,
       state.search,

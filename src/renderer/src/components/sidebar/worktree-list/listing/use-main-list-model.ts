@@ -1,4 +1,3 @@
-export { withWindowCreations } from './pending-worktree-creation-keys'
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -10,8 +9,9 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,
@@ -39,10 +39,9 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { sidebarWorkspaceRowFilters } from '../../sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
-import {
-  withWindowCreations,
-  selectPendingWorktreeCreationKeys
-} from './pending-worktree-creation-keys'
+import { withWindowCreations } from './window-worktree-creations'
+export { withWindowCreations } from './window-worktree-creations'
+import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
@@ -78,6 +77,9 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
+  const hiddenCreationKeys = useAppStore(
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
+  )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const domains = useMemo(
@@ -88,9 +90,18 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           lineageById: args.worktreeLineageById
         }),
         pendingCreationKeys,
-        endedCreationIds
+        endedCreationIds,
+        hiddenCreationKeys
       ),
-    [feed, pending, pendingCreationKeys, endedCreationIds, repos, args.worktreeLineageById]
+    [
+      feed,
+      pending,
+      pendingCreationKeys,
+      endedCreationIds,
+      hiddenCreationKeys,
+      repos,
+      args.worktreeLineageById
+    ]
   )
   const catalog = useMemo(
     () => ({ repos, projectGroups: args.projectGroups, projectGrouping: args.projectGrouping }),

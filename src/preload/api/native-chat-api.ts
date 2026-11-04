@@ -1,8 +1,9 @@
+import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatVisualTheme } from '../../shared/native-chat/native-chat-visual-shell'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
@@ -55,6 +56,8 @@ export type NativeChatSubscribeArgs = {
 }
 
 export type NativeChatApi = {
+  /** Desktop-only appearance snapshot for ordinary chat-created HTML file guests. */
+  publishVisualGuestTheme?: (theme: NativeChatVisualTheme) => void
   /** Reads the latest limit turns; the hook-reported transcriptPath takes precedence over ID globbing. */
   readSession: (
     agent: AgentType,

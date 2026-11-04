@@ -12,7 +12,7 @@ import {
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
-import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -23,7 +23,8 @@ import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import {
   dedupeReadySetupRows,
-  compareProjectHostSetupOptions
+  compareProjectHostSetupOptions,
+  type SelectedProjectHostSetup
 } from './project-host-setup-row-dedupe'
 
 export type ProjectHostSetupSelection = { id: string; hostId: ExecutionHostId }
@@ -70,6 +71,7 @@ type BuildReadySetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 type BuildNeedsSetupOptionsInput = {
@@ -87,6 +89,8 @@ type BuildProjectHostSetupOptionsInput = {
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
   hosts: readonly ExecutionHostRegistryEntry[]
+  /** Shown as its host's row when that host has several checkouts of the project. */
+  selectedSetup?: SelectedProjectHostSetup | null
 }
 
 export function buildProjectHostSetupOptions({
@@ -96,7 +100,8 @@ export function buildProjectHostSetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildProjectHostSetupOptionsInput): ProjectHostSetupOption[] {
   if (!projectId) {
     return []
@@ -117,7 +122,8 @@ export function buildProjectHostSetupOptions({
   const readyOptions = buildReadySetupOptions({
     projectHostSetups: groupedSetups,
     eligibleRepos,
-    hosts
+    hosts,
+    selectedSetup
   })
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
   const pendingSetupByHost = getPendingSetupByHost(groupedSetups)
@@ -150,7 +156,8 @@ function getPendingSetupByHost(
 function buildReadySetupOptions({
   projectHostSetups,
   eligibleRepos,
-  hosts
+  hosts,
+  selectedSetup
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const repoLookup = buildProjectSetupRepoLookup(eligibleRepos)
   const hostById = new Map(hosts.map((host) => [host.id, host]))
@@ -175,7 +182,7 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
-  return dedupeReadySetupRows(options, hostById)
+  return dedupeReadySetupRows(options, hostById, selectedSetup)
 }
 
 function buildNeedsSetupOptions({

@@ -323,7 +323,8 @@ export async function runTypecheckProjects({
 }
 
 export const MOBILE_JOINED_PROJECT = 'config/tsconfig.test.mobile-project-controls.json'
-const MOBILE_HOST_DECLARATIONS_PROJECT = 'config/tsconfig.test.mobile-host-declarations.json'
+const MOBILE_HOST_DECLARATIONS_PROJECT =
+  'config/tsconfig.test.project-grouping-host-declarations.json'
 function mobileHostDeclarationRoots(root) {
   const configPath = join(root, MOBILE_HOST_DECLARATIONS_PROJECT)
   const { files, compilerOptions } = JSON.parse(readFileSync(configPath, 'utf8'))

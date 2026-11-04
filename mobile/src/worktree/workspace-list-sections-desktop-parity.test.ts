@@ -199,10 +199,9 @@ it('keeps a local section label while an ordinary SSH raw twin has no exact Repo
     ['project:repo:shared', 'shared'],
     ['repo:shared', 'Unknown']
   ])
-  expect(sections.flatMap((section) => section.data.map((row) => row.worktreeId)).sort()).toEqual([
-    'local-shared',
-    'ssh-shared'
-  ])
+  expect(
+    sections.flatMap((section) => section.data.map(({ row }) => row.worktreeId)).sort()
+  ).toEqual(['local-shared', 'ssh-shared'])
   const current = buildSections(
     worktrees,
     'recent',

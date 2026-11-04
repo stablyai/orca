@@ -8,7 +8,7 @@ import {
   project,
   projectHostSetups
 } from '../../worktree-list-groups-test-fixtures'
-import { makeProjectGroup } from '../../folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '../../workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { getWorktreeRevealCollapsedGroupKeys } from '../navigation/worktree-reveal-group-keys'
 import { buildRows, buildSidebarRowPlan } from './build-rows.test-fixture'
 import {

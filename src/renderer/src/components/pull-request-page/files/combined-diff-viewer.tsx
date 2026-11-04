@@ -1,19 +1,18 @@
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
-} from '@/components/editor/combined-diff-viewport'
+} from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
@@ -51,7 +50,6 @@ export function PRFilesCombinedDiffViewer({
   onCommentAdded,
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
   const isDark = useDocumentDarkTheme()
   const diffEntrySignature = useMemo(
     () =>
@@ -359,7 +357,6 @@ export function PRFilesCombinedDiffViewer({
                     isBranchMode={false}
                     sideBySide={sideBySide}
                     isDark={isDark}
-                    settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}
                     inlineComments={inlineReviewComments}

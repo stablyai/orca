@@ -13,7 +13,7 @@ import {
   makeRepo,
   makeUnifiedTab,
   makeWorktree
-} from '../worktree-jump-palette-test-fixtures'
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import * as subjects from '../tab-bar/tab-session-history-switch'
 import * as history from '../right-sidebar/ai-vault-panel-session-list-request'
 import type { NativeChatCliForkPreparation } from '@/lib/native-chat-cli-fork-preparation'
@@ -145,7 +145,7 @@ it.each([10, 100])(
     const view = render(overlay(true))
     const retained = chat(view.container, 'chat-0').querySelector('output')
     const unfocused = chat(view.container, `chat-${size - 1}`)
-    expect(within(unfocused).getByRole('button', { name: 'Close Pane' })).toBeTruthy()
+    expect(within(unfocused).queryByRole('button', { name: 'Close Pane' })).toBeNull()
     for (const operation of [
       () => useAppStore.getState().setTabLabel('chat-0', 'Changed title'),
       () => useAppStore.getState().activateTab('chat-1', { worktreeId: workspace })
@@ -174,11 +174,7 @@ it.each([10, 100])(
     const shown = chat(view.container, 'chat-1')
     expect(within(shown).queryByRole('button', { name: 'Close tab' })).toBeNull()
     act(() => useAppStore.getState().unpinTab('chat-1', { recordInteraction: false }))
-    fireEvent.click(within(shown).getByRole('button', { name: 'Close tab' }))
-    expect(mocks.close).toHaveBeenCalledExactlyOnceWith({
-      type: 'close',
-      target: { kind: 'tab', worktreeId: workspace, tabId: 'chat-1' }
-    })
+    expect(within(shown).queryByRole('button', { name: 'Close tab' })).toBeNull()
     expect(chat(view.container, 'chat-0').querySelector('output')).toBe(retained)
     expect(fullRequest).not.toHaveBeenCalled()
   }

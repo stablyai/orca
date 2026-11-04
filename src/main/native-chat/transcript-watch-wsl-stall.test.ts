@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\session.jsonl'
 
@@ -11,10 +11,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./session-file-resolver', () => ({ resolveSessionFilePath: mocks.resolve }))
-vi.mock('../wsl-running-path-filter', () => ({
+vi.mock('../wsl/filesystem/wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
-vi.mock('./transcript-native-watcher', () => ({
+vi.mock('../../shared/transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: () => true,
     needsRebind: () => false,

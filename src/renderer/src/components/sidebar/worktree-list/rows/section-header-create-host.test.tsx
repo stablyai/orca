@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
@@ -43,6 +44,7 @@ function localOnlyViewHeader(
   const repoMap = new Map([[keptRegistration.id, keptRegistration]])
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees,
     repoMap,
     repoOfWorktree: createHostScopedRepoOf([localTwin, serverTwin], repoMap),
@@ -133,7 +135,10 @@ function headerContext(): SectionHeaderRowContext {
   }
 }
 
-function clickCreate(row: GroupHeaderRow, catalog: Partial<ProjectSectionModel> = {}): void {
+function clickCreate(
+  row: GroupHeaderRow,
+  catalog: Partial<Pick<AppState, 'projects' | 'projectHostSetups'>> = {}
+): void {
   useAppStore.setState({ repos: [localTwin, serverTwin], ...catalog })
   const view = render(
     <TooltipProvider>

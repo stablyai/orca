@@ -1,9 +1,9 @@
 import { useRef, type JSX } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
-import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'
+import { getChatUiHereVariantCopy, type ShownChatUiLaunchTipVariant } from './chat-ui-here-copy'
 import { FeatureTipActions } from './FeatureTipActions'
 import {
   FeatureTipDialogFrame,
@@ -11,53 +11,15 @@ import {
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
 
-type ShownVariant = Exclude<ChatUiLaunchTipVariant, 'none'>
-
 // Side by side, the outer edge of the primary button's 3px focus ring sits on the bottom of the
 // visual's centered 22rem card; the column is the frame less its 1px borders.
 const BUTTONS_ON_CARD_EDGE = 'md:pb-[calc((min(27rem,100vh-2rem)-2px-22rem)/2+3px)]'
-
-function variantCopy(variant: ShownVariant): {
-  paragraphs: string[]
-  secondaryLabel: string | null
-  primaryLabel: string
-} {
-  if (variant === 'chat-ui-off') {
-    return {
-      paragraphs: [
-        translate(
-          'featureTips.chatUiHere.offIntro',
-          'Agents can now open as a chat, with rich messages, visuals and images.'
-        ),
-        translate(
-          'featureTips.chatUiHere.offTerminal',
-          'Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.'
-        )
-      ],
-      secondaryLabel: translate('featureTips.chatUiHere.stayInTerminal', 'Stay in terminal'),
-      primaryLabel: translate('featureTips.chatUiHere.cta', 'Use Chat UI')
-    }
-  }
-  return {
-    paragraphs: [
-      translate(
-        'featureTips.chatUiHere.onIntro',
-        'Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.'
-      ),
-      translate(
-        'featureTips.chatUiHere.onTerminal',
-        'The terminal stays fully supported too. Switch any agent back anytime.'
-      )
-    ],
-    secondaryLabel: null,
-    primaryLabel: translate('featureTips.gotIt', 'Got it')
-  }
-}
 
 export function ChatUiHereTipDialog({
   open,
   tip,
   variant,
+  swapButtons = false,
   onOpenChange,
   onPrimaryAction,
   onSkip,
@@ -65,14 +27,15 @@ export function ChatUiHereTipDialog({
 }: {
   open: boolean
   tip: FeatureTip
-  variant: ShownVariant
+  variant: ShownChatUiLaunchTipVariant
+  swapButtons?: boolean
   onOpenChange: (open: boolean) => void
   onPrimaryAction: () => void
   onSkip: () => void
   onSettingsClick: () => void
 }): JSX.Element {
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const { paragraphs, secondaryLabel, primaryLabel } = variantCopy(variant)
+  const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy(variant)
 
   return (
     <FeatureTipDialogFrame
@@ -111,10 +74,11 @@ export function ChatUiHereTipDialog({
         </div>
       </DialogHeader>
 
-      <DialogFooter className="mt-8 flex sm:justify-stretch">
+      <DialogFooter className="mt-8 flex sm:justify-end sm:[&>button]:w-auto sm:[&>button]:flex-none md:justify-stretch md:[&>button[data-variant=default]]:w-full md:[&>button[data-variant=default]]:flex-1">
         <FeatureTipActions
           currentTip={tip}
           primaryBusy={false}
+          swapButtons={swapButtons && variant === 'chat-ui-off'}
           onPrimaryAction={onPrimaryAction}
           onSkip={onSkip}
           showSkip={secondaryLabel !== null}

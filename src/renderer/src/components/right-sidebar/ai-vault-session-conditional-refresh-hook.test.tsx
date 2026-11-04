@@ -2,10 +2,13 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { filterAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
+import { filterAiVaultSessions } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import {
   markInputQuietSchedulerInput,
@@ -16,7 +19,7 @@ import {
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
 
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 const statusFrames = vi.hoisted(() => ({ emit: (_event: AgentSessionStatusEvent): void => {} }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

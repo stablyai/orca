@@ -694,6 +694,7 @@ it('retains exact same-ID pinned owners and last-occurrence fallback sequence at
     const first = repos[0]
     const input = {
       groupBy: 'none' as const,
+      sortBy: 'smart' as const,
       worktrees: pinned,
       repos,
       repoMap: new Map([[repo.id, first]]),

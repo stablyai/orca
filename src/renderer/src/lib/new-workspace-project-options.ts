@@ -18,6 +18,13 @@ import {
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
 
+/** One of several same-host checkouts of a project; the sidebar shows each as its own section. */
+export type NewWorkspaceProjectCheckout = {
+  projectHostSetupId: string
+  hostId: ExecutionHostId
+  repoId: string
+}
+
 export type NewWorkspaceProjectOption =
   | {
       kind: 'project'
@@ -26,6 +33,7 @@ export type NewWorkspaceProjectOption =
       displayName: string
       badgeColor: string
       detail: string
+      checkout?: NewWorkspaceProjectCheckout
     }
   | {
       kind: 'project-group'
@@ -138,22 +146,31 @@ export function buildNewWorkspaceProjectOptions(
       if (!project) {
         return []
       }
+      const readySetups = group.registrations.filter(
+        (setup) =>
+          projectHostSetupsById.get(`${setup.hostId}\0${setup.id}`)?.setupState === 'ready' &&
+          repoLookup.resolve(setup) &&
+          (!liveHostIds || liveHostIds.has(setup.hostId))
+      )
       setupDirectoriesByProjectId.set(
         group.key,
-        group.registrations
-          .filter(
-            (setup) =>
-              projectHostSetupsById.get(`${setup.hostId}\0${setup.id}`)?.setupState === 'ready' &&
-              repoLookup.resolve(setup) &&
-              (!liveHostIds || liveHostIds.has(setup.hostId))
-          )
-          .map((setup) => ({ path: setup.path, hostId: setup.hostId }))
+        readySetups.map((setup) => ({ path: setup.path, hostId: setup.hostId }))
       )
+      const checkout = group.members.length === 1 ? readySetups[0] : undefined
       return [
         {
           kind: 'project' as const,
           id: group.key,
           projectId: group.key,
+          ...(checkout
+            ? {
+                checkout: {
+                  projectHostSetupId: checkout.id,
+                  hostId: checkout.hostId,
+                  repoId: checkout.repoId
+                }
+              }
+            : {}),
           displayName: group.label,
           badgeColor: project.badgeColor,
           detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0),
@@ -174,6 +191,45 @@ export function buildNewWorkspaceProjectOptions(
       return directoryDetail ? { ...option, detail: directoryDetail } : option
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
+}
+
+// Setup ids can repeat across hosts, so a checkout is keyed by both.
+function getCheckoutKey(projectHostSetupId: string, hostId: ExecutionHostId): string {
+  return JSON.stringify([hostId, projectHostSetupId])
+}
+
+/** The picker row for the composer's resolved setup: its checkout row when it has one, else its project row. */
+export function getSelectedNewWorkspaceProjectOptionId(
+  options: readonly NewWorkspaceProjectOption[],
+  selectedProjectId: string | null,
+  projectHostSetupId: string | null | undefined,
+  hostId: ExecutionHostId | null | undefined
+): string | null {
+  const checkoutOption = options.find(
+    (option) =>
+      option.kind === 'project' &&
+      option.checkout !== undefined &&
+      option.checkout.projectHostSetupId === projectHostSetupId &&
+      option.checkout.hostId === hostId
+  )
+  return checkoutOption?.id ?? selectedProjectId
+}
+
+/** Setups a project row stands for; its checkout rows own the rest. */
+export function getProjectRowHostSetups(
+  options: readonly NewWorkspaceProjectOption[],
+  projectHostSetups: readonly ProjectHostSetup[]
+): readonly ProjectHostSetup[] {
+  const checkoutKeys = new Set(
+    options.flatMap((option) =>
+      option.kind === 'project' && option.checkout
+        ? [getCheckoutKey(option.checkout.projectHostSetupId, option.checkout.hostId)]
+        : []
+    )
+  )
+  return checkoutKeys.size === 0
+    ? projectHostSetups
+    : projectHostSetups.filter((setup) => !checkoutKeys.has(getCheckoutKey(setup.id, setup.hostId)))
 }
 
 function getProjectGroupOptionId(projectGroupId: string): string {

@@ -3,12 +3,12 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
-import { BaseRefPicker } from '../../BaseRefPicker'
+import { BaseRefPicker } from '../../../source-control/BaseRefPicker'
 import {
   RepoSettingsDraftInput,
   type useRepoSettingsTextDraft
 } from '../RepositorySettingsDraftInput'
-import { SearchableSetting } from '../../SearchableSetting'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {

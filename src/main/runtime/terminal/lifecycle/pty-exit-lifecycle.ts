@@ -1,15 +1,17 @@
 import { OrcaRuntimeWithOnClientDisconnected } from '../layout/terminal-client-disconnect'
-import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
-import type { TerminalExitCause } from '../../../../shared/terminal-exit-cause'
+import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
+
 import {
+  type TerminalExitCause,
   OPERATOR_CLOSE_EXIT_CAUSE,
   resolveUnreportedExitCause
-} from '../../../../shared/terminal-exit-cause'
-import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/pty-liveness-verdict'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RetiredTerminalSurface } from '../../mobile-session-terminal-retirement'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
@@ -32,6 +34,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
   protected abstract cancelPendingDriverMutations(ptyId: string): void
 
   protected abstract rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void
+
+  /** Its process ended on its own: no close, kill, sleep or restart, nor a lost host or replayed exit. */
+  protected notePtyEndedOnItsOwn(_pty: RuntimePtyWorktreeRecord): void {}
 
   /** The pane main's close already dropped, from its closed-pane record; null while main holds it. */
   private closedPaneOfExit(
@@ -71,6 +76,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       return
     }
     pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
+    // A stop's cleanup can report the exit again, after its stop request is spent.
+    const priorExit = this.getPtyLivenessVerdict(ptyId)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
@@ -105,6 +112,14 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     }
     const processDeathCertified =
       exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true
+    const endedOnItsOwn =
+      processDeathCertified &&
+      !stopRequested &&
+      options.hostLost !== true &&
+      !(
+        priorExit?.status === 'exited' &&
+        priorExit.incarnationId === (pty?.incarnationId ?? undefined)
+      )
     if (processDeathCertified) {
       // An unverifiable exit keeps the facet tracked until a certified exit or prune.
       this.clearLiveProgramStatusFacet(ptyId)
@@ -118,6 +133,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
     this.advancePtyLifecycleGeneration(ptyId)
     let retirement: Promise<void> | undefined
+    let preservesIntentionallyStoppedSurface = false
     try {
       const exactSurfaceByKey = new Map<
         string,
@@ -155,7 +171,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       }
       const exactSurfaces = [...exactSurfaceByKey.values()]
       // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
-      const preservesIntentionallyStoppedSurface =
+      preservesIntentionallyStoppedSurface =
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
         0
       advertisedUrlWatcher.unbindPty(ptyId)
@@ -233,7 +249,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         })
       }
       if (pty) {
-        pty.connected = false
+        this.terminalIdentity.setPtyConnected(pty, false)
         pty.runtimeSessionOwned = false
         this.setPairedRendererSessionOwnership(pty.ptyId, false)
         pty.disconnectedAt = Date.now()
@@ -278,7 +294,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)
-      leaf.connected = false
+      this.terminalIdentity.updateLeafConnected(leaf, false)
       leaf.writable = false
       leaf.lastExitCode = exitCode
       leaf.lastExitCause = exitCause
@@ -302,6 +318,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       }
     }
     this.pruneDisconnectedPtyRecords()
+    if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {
+      this.notePtyEndedOnItsOwn(pty)
+    }
     return retirement
   }
 

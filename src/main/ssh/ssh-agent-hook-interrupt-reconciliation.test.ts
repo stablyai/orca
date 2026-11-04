@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
-import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../../shared/agent-hook-interrupt-reconciliation'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 import { bindRemoteClaudeInterruptReconciliation } from './ssh-agent-hook-interrupt-reconciliation'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

@@ -7,7 +7,7 @@ import {
 
 export type { SettingsProjectRemoval } from './settings-project-removal-description'
 
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
+import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh-selectors'
@@ -26,12 +26,12 @@ import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
 import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
 import { getRepoRowIdentity } from '@/store/slices/repo-host-identity'
 import { worktreeMatchesHost } from '@/store/slices/worktrees/listing/worktree-host-ownership'
-import { getPtyExecutionHost } from '../../../../../shared/terminal-execution-host'
+import { getPtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
-import { lastViewUnsavedFiles } from '@/components/editor/removal-unsaved-editor-files'
+import { lastViewUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import {
   getExecutionHostLabel,
   getRepoExecutionHostId,
@@ -46,7 +46,7 @@ import { Trash2 } from 'lucide-react'
 
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 export { getRemoveProjectDescription } from './settings-project-removal-description'

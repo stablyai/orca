@@ -16,10 +16,12 @@ import {
   type Worktree
 } from './workspace-list-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
+import type { WorktreeHostContextOf } from './worktree-host-context-labels'
 
 export function useWorkspaceSections(args: {
   exactProjectRepoFilters?: boolean
   displayWorktrees: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   sortMode: WorkspaceSortBy
   filters: FilterState
   search: string
@@ -42,6 +44,7 @@ export function useWorkspaceSections(args: {
   const t = useMobileTranslation()
   const {
     displayWorktrees,
+    hostContextOf,
     sortMode,
     filters,
     search,
@@ -100,7 +103,10 @@ export function useWorkspaceSections(args: {
     ]
   )
 
-  const rawSections = useMemo(() => plan.render(collapsedGroups), [plan, collapsedGroups])
+  const rawSections = useMemo(
+    () => plan.render(collapsedGroups, hostContextOf),
+    [plan, collapsedGroups, hostContextOf]
+  )
 
   const sections = useMemo(
     () =>

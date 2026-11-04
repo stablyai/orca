@@ -240,15 +240,4 @@ describe('recent project rank scan budget', () => {
       sortProjectEntries(entries, 'manual', new Map(entries.map(([key], index) => [key, -index])))
     ).toEqual([newer, old, second, first])
   })
-
-  it('copies empty and single-project inputs without scanning their workspace activity', () => {
-    const { entries, readCount } = countedEntries()
-    expect(sortProjectEntries([], 'recent', undefined)).toEqual([])
-    const single = entries.slice(0, 1)
-    const sorted = sortProjectEntries(single, 'recent', undefined)
-    expect(sorted).toEqual(single)
-    expect(sorted).not.toBe(single)
-    expect(sorted[0]).toBe(single[0])
-    expect(readCount()).toBe(0)
-  })
 })

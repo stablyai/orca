@@ -1,6 +1,6 @@
 // Replay Claude Code 2.1.280 PTY captures; recorded Esc cancellations stand in for Orca Ctrl+C inference.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/claude-owed-task-notifications'
+import { CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS } from '../../shared/agent-hook-listener/providers/claude-owed-task-notifications'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import {

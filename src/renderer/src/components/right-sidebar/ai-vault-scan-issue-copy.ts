@@ -4,8 +4,8 @@ import {
   AI_VAULT_SCAN_ISSUE_COPY_ONE as EN_ONE,
   type AiVaultScanIssueCode,
   type AiVaultScanIssueText
-} from '../../../../shared/ai-vault-scan-issue-copy'
-import { classifyAiVaultScanError } from '../../../../shared/ai-vault-scan-error-message'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
+import { classifyAiVaultScanError } from '../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 
 type Values = {
   distro: string | null
@@ -22,6 +22,10 @@ const COPY: Record<AiVaultScanIssueCode, (values: Values) => string | null> = {
   issuesOmitted: () => translate('aiVault.scanIssues.issuesOmitted', EN.issuesOmitted),
   sessionMetadataUnreadable: () =>
     translate('aiVault.scanIssues.sessionMetadataUnreadable', EN.sessionMetadataUnreadable),
+  transcriptTooLarge: ({ label }) =>
+    label === null
+      ? null
+      : translate('aiVault.scanIssues.transcriptTooLarge', EN.transcriptTooLarge, { label }),
   openCodeScannerUnavailable: () =>
     translate('aiVault.scanIssues.openCodeScannerUnavailable', EN.openCodeScannerUnavailable),
   openCodeScanIncomplete: ({ detail }) =>

@@ -6,8 +6,8 @@ import { structuredAgentConfiguredArgs } from '../native-chat/structured-agent-c
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
-import { agentLaunchSettingsMutationUpdates } from '../../shared/agent-launch-settings'
+} from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { agentLaunchSettingsMutationUpdates } from '../../shared/agent-launch/choices/agent-launch-settings'
 import { AgentLaunchSettingsMutation } from '../../shared/rpc-contract/agent-launch-settings-params'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -234,6 +234,6 @@ describe('execution-host agent launch settings', () => {
   })
 })
 
-vi.mock('../claude/agent-view-service', () => ({
+vi.mock('../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))

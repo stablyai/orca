@@ -1,6 +1,7 @@
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
@@ -79,13 +80,16 @@ export function FolderWorkspacePrChecksRow({
         <div className="min-w-0 flex-1">
           <PrChecksRowHeader row={row} />
           <div className="mt-1 truncate text-[12px] text-foreground/90">{row.title}</div>
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div
+            ref={animateStatusIcon ? observeOffscreenAnimation : undefined}
+            className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+          >
             {showStatusIcon ? (
               <StatusIcon
                 className={cn(
                   'size-3 shrink-0',
                   CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin'
+                  animateStatusIcon && 'animate-spin motion-reduce:animate-none'
                 )}
               />
             ) : null}

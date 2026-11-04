@@ -4,15 +4,15 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { sendSnapshotFrames } from './terminal/terminal-snapshot-publication'
 import { publishMultiplexInitialSnapshot } from './terminal/terminal-multiplex-initial-snapshot'
 
 import type { TerminalMultiplexConnection } from './terminal/terminal-multiplex-connection'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { TerminalMultiplexStream } from './terminal/terminal-stream-types'
-import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../shared/terminal-reply-query-scan'
-import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../shared/terminal-multiplex-flow-control'
+import { EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE } from '../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import { TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES } from '../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 
 // These assertions protect the permanent binary publication seam while its state machine
 // lives in concrete terminal domain modules.

@@ -1,4 +1,4 @@
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
@@ -8,6 +8,7 @@ import { sendTerminalOscColorQueryReplies } from '../terminal-capability-replies
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { registerE2eTerminalPtyDataInjection } from './e2e-terminal-pty-harness'
+import { admitResumedAppChunk } from './resume-escape-admission'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -21,6 +22,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       return
     }
     const arrivedData = data
+    const arrivedMeta = meta
     if (session.deferredReattachLiveData !== null) {
       const ackCredit = takeCurrentTerminalDeliveryCredit()
       session.deferredReattachLiveData.enqueue({
@@ -175,7 +177,16 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
           hiddenStartupRendererQuery: true
         })
       }
-      session.writePtyOutputToXterm(orderedRendererData, foreground, { liveStartupBatch: true })
+      session.writePtyOutputToXterm(
+        foreground
+          ? admitResumedAppChunk(session, orderedRendererData, {
+              ...arrivedMeta,
+              data: arrivedData
+            })
+          : orderedRendererData,
+        foreground,
+        { liveStartupBatch: true }
+      )
       if (foreground) {
         session.recordRendererOrderedSeq(rendererMeta)
       }

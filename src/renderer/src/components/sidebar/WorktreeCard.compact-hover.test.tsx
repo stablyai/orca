@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import React, { type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
@@ -294,7 +294,7 @@ describe('WorktreeCard compact hover details', () => {
     expectIdentityBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
     expect(markup).toContain('ENG-123</span>')
-    expect(markup).toContain('· Linear')
+    expect(markup).toContain('aria-label="Linear"')
     expect(markup).toContain('Reviewer handoff note')
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')

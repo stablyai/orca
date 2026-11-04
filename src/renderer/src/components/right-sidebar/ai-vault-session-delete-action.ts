@@ -1,15 +1,16 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/ai-vault-runtime-capabilities'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { AI_VAULT_DELETE_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { useAppStore } from '@/store'
-import { agentLabel } from './ai-vault-session-filters'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   aiVaultSessionHostUpdateRequiredReason,
   aiVaultSessionRuntimeEnvironmentId,

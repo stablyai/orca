@@ -104,6 +104,9 @@ export const styles = themedStyleSheet(() => ({
     lineHeight: 17,
     color: colors.textPrimary
   },
+  imageParagraph: {
+    gap: spacing.sm
+  },
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,

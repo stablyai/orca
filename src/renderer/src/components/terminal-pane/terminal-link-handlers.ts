@@ -1,10 +1,10 @@
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
-import { extractTerminalFileLinkReadings } from '../../../../shared/terminal-links'
+import { extractTerminalFileLinkReadings } from '../../../../shared/terminal/links/terminal-links'
 import { preferLongestNonOverlappingMatches } from '@/lib/longest-non-overlapping-matches'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal-link-buffer-hit-testing'
+import { buildCandidateLogicalLinesForBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 import { shouldOpenTerminalFileWithSystemDefault } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
@@ -12,7 +12,7 @@ import { fileLinkTargetExists, resolveFileLinkTarget } from './terminal-file-lin
 import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
-} from '../../../../shared/wrapped-terminal-link-ranges'
+} from '../../../../shared/terminal/links/wrapped-terminal-link-ranges'
 import {
   getTerminalHtmlFileOpenHint,
   getTerminalOrcaFileOpenHint,

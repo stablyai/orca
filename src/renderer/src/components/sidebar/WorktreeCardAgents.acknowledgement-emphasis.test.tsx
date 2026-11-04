@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   clearWorktreeAgentExpansionStateForTests,
   seedWorktreeAgentExpansionStateForTests
@@ -113,7 +113,8 @@ beforeEach(() => {
   clearWorktreeAgentExpansionStateForTests()
   seedWorktreeAgentExpansionStateForTests(WORKSPACE, {
     compactRootListExpanded: true,
-    collapsedLineageParents: new Set()
+    expandedLineageParents: new Set(),
+    expandedIdleChildGroups: new Set()
   })
 })
 

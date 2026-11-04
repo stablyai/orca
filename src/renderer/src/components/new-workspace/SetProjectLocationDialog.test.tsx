@@ -15,7 +15,7 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(storeMocks)
 }))
 
-vi.mock('@/components/sidebar/RemoteFileBrowser', () => ({
+vi.mock('@/components/sidebar/host-path-browser/RemoteFileBrowser', () => ({
   RemoteFileBrowser: ({
     targetId,
     onSelect,

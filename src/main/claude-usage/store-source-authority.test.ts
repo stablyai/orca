@@ -1,6 +1,6 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
+import { UsageCacheSnapshotWriter } from '../usage/usage-cache-snapshot-writer'
 import * as sourceCacheWriter from '../usage/usage-source-cache-file'
 import { readClaudeUsageSourceCache, writeClaudeUsageSourceCache } from './persisted-source-cache'
 import { serializeClaudeUsageReport } from './persisted-usage-report'

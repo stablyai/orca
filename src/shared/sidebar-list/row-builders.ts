@@ -9,7 +9,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
-import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan
@@ -91,9 +91,17 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
-  const occurrences = getExpandedWorktreeOccurrences(
-    plan.bySection.get(options.sectionKey) ?? [],
-    (worktree) => options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
+  const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
+  const childIdsByParent = new Map<string, string[]>()
+  for (const occurrence of sectionOccurrences) {
+    if (occurrence.parent) {
+      const children = childIdsByParent.get(occurrence.parent.key) ?? []
+      children.push(occurrence.row.id)
+      childIdsByParent.set(occurrence.parent.key, children)
+    }
+  }
+  const occurrences = getExpandedWorktreeOccurrences(sectionOccurrences, (worktree) =>
+    options.collapsedGroups.has(getWorktreeLineageGroupKey(worktree))
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
@@ -108,6 +116,7 @@ export function appendWorktreeRows(
       groupDepth: options.groupDepth,
       isLastLineageChild: occurrence.isLastChild,
       lineageChildCount: occurrence.childCount,
+      lineageChildWorktreeIds: childIdsByParent.get(occurrence.key),
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??

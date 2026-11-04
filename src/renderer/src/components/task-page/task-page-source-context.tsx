@@ -1,3 +1,9 @@
+import { githubCandidateOwner } from '@/store/github/source-collections'
+import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+export {
+  getTaskPageRepoSourceContext,
+  buildGitLabProviderIdentity
+} from '@/lib/task-repo-source-context'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter
@@ -6,20 +12,23 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
+import {
+  getLinkedWorkItemWorkspaceName,
+  getLinkedWorkItemSuggestedName
+} from '../../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
 } from '../../../../shared/task-source-context'
-import { getTaskPageRepoSourceContext } from './task-page-repo-source-context'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
 import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 export function isGitLabMRFilter(
@@ -72,10 +81,6 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
-export {
-  getTaskPageRepoSourceContext,
-  buildGitLabProviderIdentity
-} from './task-page-repo-source-context'
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,
   hostId: TaskSourceContext['hostId']
@@ -122,19 +127,11 @@ export function getGitHubProjectSourceSummary(args: {
     hostAvailability: availability && !availability.reason ? [availability] : []
   })
 }
-export function getTaskPageRepoCacheInput(repo: Repo): {
-  id: string
-  path: string
-  executionHostId?: string | null
-  connectionId?: string | null
-  sourceCacheScope?: string | null
-} {
+export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
   return {
-    id: repo.id,
-    path: repo.path,
-    executionHostId: repo.executionHostId,
-    connectionId: repo.connectionId,
+    ...repo,
+    candidateOwner: githubCandidateOwner(repo),
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

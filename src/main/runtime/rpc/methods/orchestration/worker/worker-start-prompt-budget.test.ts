@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { getTerminalPasteIngestMs } from '../../../../../../shared/agent-prompt-injection'
+import { getTerminalPasteIngestMs } from '../../../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import {
   isWorkerStartTaskSpecTooLarge,
   ORCHESTRATION_WORKER_START_PROMPT_MAX_BYTES,
   ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES
 } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
-import { getTerminalInputByteLength } from '../../../../../../shared/terminal-input'
+import { getTerminalInputByteLength } from '../../../../../../shared/terminal/input/terminal-input'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 
 describe('worker-start prompt budget', () => {

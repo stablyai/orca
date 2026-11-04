@@ -1,20 +1,18 @@
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import {
-  buildAgentResumeStartupPlan,
-  buildAgentStartupPlan
-} from '../../../../shared/tui-agent-startup'
-import { resolveResumeLaunchRecipe } from '../../../../shared/tui-agent-launch-defaults'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   resolveWslHostAgentLaunchInputs,
   resolveWslHostAgentResumeInputs
@@ -22,7 +20,7 @@ import {
 import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime
-} from '../../../../shared/agent-launch-runtime'
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 
 export type MobileTerminalCommandOptions = {
   command?: string

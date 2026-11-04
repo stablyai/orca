@@ -1,5 +1,5 @@
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentModelCatalogLiveListing } from './agent-model-catalog-store'
 import type {
   AgentModelCatalogServiceDeps,
@@ -7,7 +7,7 @@ import type {
 } from './agent-model-catalog-service-contract'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { catalogFolder, recordConfiguredDefault } from './agent-model-catalog-workspace'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 
 export function createAgentModelCatalogLiveListings(
   deps: AgentModelCatalogServiceDeps,

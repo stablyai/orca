@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
@@ -26,8 +26,8 @@ import {
   nativeChatTranscriptOuterClass
 } from '@/components/native-chat/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
@@ -71,6 +71,7 @@ export default function PendingNativeChatCreation({
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
   const { composerError, reportComposerError } = useNativeChatComposerError(NO_COMMAND_CAUSES)
   const status = entry?.status
+  const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
   // Like t3code, progress shows only in the steps card after a send, never above the composer.
@@ -78,8 +79,12 @@ export default function PendingNativeChatCreation({
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 
   const transport = React.useMemo((): NativeChatStructuredComposerTransport => {
-    const sendBlockedReason =
-      status === 'error'
+    const sendBlockedReason = handedOff
+      ? translate(
+          'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
+          'Opening chat…'
+        )
+      : status === 'error'
         ? translate(
             'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
             'Retry creating the worktree to send'
@@ -100,6 +105,7 @@ export default function PendingNativeChatCreation({
         if (
           !current ||
           current.status !== 'creating' ||
+          current.chatInputHandedOff ||
           pendingCreationHeldChatMessage(current) !== null
         ) {
           return false
@@ -116,7 +122,7 @@ export default function PendingNativeChatCreation({
       sessionId: pendingCreationChatDraftScopeKey(creationId),
       runtimeEnvironmentId: null
     }
-  }, [creationId, held, reportComposerError, status])
+  }, [creationId, handedOff, held, reportComposerError, status])
 
   const notices = React.useMemo(
     (): NativeChatComposerNotice[] =>

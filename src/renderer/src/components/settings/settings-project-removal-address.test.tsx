@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { nestedRemovalCatalog } from './settings-project-continuity-test-fixtures'
 import * as removalProduct from './repository/RepositoryRemoveProjectButton'
-import { removeCurrentSettingsProject } from './use-settings-store-model'
+import { removeCurrentSettingsProject } from './page/use-settings-store-model'
 import { makeWorktree, makeOpenFile, makeTab } from '@/store/slices/store-test-helpers'
 import { toast } from 'sonner'
 import {
@@ -19,7 +19,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../ui/tooltip'
-import { getSettingsProjectHostRepo } from './settings-project-list'
+import { getSettingsProjectHostRepo } from './navigation/settings-project-list'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
   cleanup()

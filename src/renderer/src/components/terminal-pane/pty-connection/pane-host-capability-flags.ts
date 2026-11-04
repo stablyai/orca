@@ -18,7 +18,7 @@ import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-tit
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
-} from '../../../../../shared/agent-title-owner'
+} from '../../../../../shared/agent-status/title/agent-title-owner'
 import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect-facts-handler'
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../terminal-hidden-delivery-gate'
 import {

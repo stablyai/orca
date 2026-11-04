@@ -222,6 +222,32 @@ describe('buildSidebarFeedRows keeps same-id workspaces on two hosts apart', () 
   })
 })
 
+describe('repo sections respect manual workspace order', () => {
+  it('interleaves primaries by manual rank but keeps them first under automatic sorting', () => {
+    const repos = [repo('r')]
+    const rows = [
+      worktree('r::/w/main-a', { isMainWorktree: true, manualOrder: 30, lastActivityAt: 30 }),
+      worktree('r::/w/feature', { manualOrder: 20, lastActivityAt: 20 }),
+      worktree('r::/w/main-b', { isMainWorktree: true, manualOrder: 10, lastActivityAt: 10 })
+    ]
+    const workspaces = buildWorkspaceRows({
+      worktrees: rows,
+      folderWorkspaces: [],
+      repos,
+      lineageById: {}
+    })
+    const renderedIds = (sortBy: SidebarFeedView['sortBy']) =>
+      buildSidebarFeedRows(
+        domains({ workspaces }),
+        catalog(repos),
+        view({ groupBy: 'repo', sortBy })
+      ).sectionRows.flatMap((row) => (row.type === 'item' ? [row.worktree.id] : []))
+
+    expect(renderedIds('manual')).toEqual(['r::/w/main-a', 'r::/w/feature', 'r::/w/main-b'])
+    expect(renderedIds('recent')).toEqual(['r::/w/main-a', 'r::/w/main-b', 'r::/w/feature'])
+  })
+})
+
 describe('buildSidebarFeedRows nests each paired server’s own lineage', () => {
   const serverRows = (hostId: 'runtime:a' | 'runtime:b', recentAt: number) =>
     [

@@ -272,6 +272,7 @@ it.each(['github', 'gitlab'] as const)(
         setTasksRefreshing: noop,
         setTasksError: noop,
         setFailedCount: noop,
+        setLandingRequestKey: noop,
         setGithubUnavailable: noop
       } satisfies Partial<LandingInput>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked supplied landing model retains every runner read/ref/setter and real fetch/count signatures; unused layered-model members are not implemented.
@@ -512,7 +513,7 @@ it.each(['local', 'runtime:server'] as const)(
         activeGithubTaskKind: 'issues',
         getTaskPickerRepoHostLabel: (repo: Repo) =>
           repo.executionHostId === 'runtime:server' ? 'Server' : 'Local',
-        perRepoSourceState: [],
+        githubSourceDisplayState: [],
         setIssueSourcePreference: vi.fn(),
         submitShortcutLabel: 'Cmd+Enter'
       } as unknown as TaskPageComposerActionsModel
@@ -605,7 +606,7 @@ it('shows and edits the selected concrete fork source in the actual issue dialog
     newIssueSubmitting: false,
     newIssueRepoId: 'runtime:server\0same',
     submitShortcutLabel: 'Cmd+Enter',
-    perRepoSourceState: [
+    githubSourceDisplayState: [
       {
         repoId: 'same',
         hostId: 'local',
@@ -646,7 +647,7 @@ it('shows and edits the selected concrete fork source in the actual issue dialog
 
 it('initializes the real store and keeps prefetch and page source-context exports on the same pure product', async () => {
   const { getTaskPageRepoSourceContext: pureSource } =
-    await import('./task-page-repo-source-context')
+    await import('@/lib/task-repo-source-context')
   expect(getTaskPageRepoSourceContext).toBe(pureSource)
   const repo: Repo = {
     id: 'same',

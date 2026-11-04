@@ -1,6 +1,6 @@
 // Keep this mapping independent of React Native so diagnostics can import it.
 import { describe, expect, it } from 'vitest'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode

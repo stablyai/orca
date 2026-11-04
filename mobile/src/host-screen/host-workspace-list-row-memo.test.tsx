@@ -2,13 +2,21 @@ import { createElement, Fragment, type ReactNode } from 'react'
 import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Section, Worktree } from '../worktree/workspace-list-types'
+import type { Section, WorkspaceListItem, Worktree } from '../worktree/workspace-list-types'
 
 const { rowRenders, agentRenders } = vi.hoisted(() => ({
   rowRenders: vi.fn(),
   agentRenders: vi.fn()
 }))
 
+// Banner and chevron motion run on Reanimated and Animated, which these mocks leave out.
+vi.mock('../components/AutoHeight', () => ({
+  Presence: ({ children }: { children: unknown }) => children || null,
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
@@ -20,8 +28,8 @@ vi.mock('react-native', () => ({
       renderItem
     }: {
       sections: Section[]
-      keyExtractor: (item: Worktree) => string
-      renderItem: (info: { item: Worktree }) => ReactNode
+      keyExtractor: (item: WorkspaceListItem) => string
+      renderItem: (info: { item: WorkspaceListItem }) => ReactNode
     }) =>
       sections.flatMap((section) =>
         section.data.map((item) =>

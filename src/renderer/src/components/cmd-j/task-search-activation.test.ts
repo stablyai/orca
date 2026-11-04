@@ -2,8 +2,12 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { findCmdJTaskWorkspace, openCmdJTask } from './task-search-activation'
 import { jiraTaskIssue, jiraTaskSource, jiraTaskResult } from './task-search.test-fixture'
-import { makeWorktree, makeFolderWorkspace } from '../worktree-jump-palette-test-fixtures'
-import { getFolderWorkspaceWorktree } from '@/store/workspace-record-selectors'
+import {
+  makeWorktree,
+  makeFolderWorkspace
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
+import '@/store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => useAppStore.setState(initial, true))

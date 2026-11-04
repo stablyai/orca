@@ -9,9 +9,9 @@ import { REPO_METHODS } from './repo'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { CLIENT_UI_METHODS } from './client-ui'
 import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import * as updatesModule from '../../../../shared/agent-launch-permission-updates'
-import * as launchProfile from '../../../../shared/tui-agent-launch-defaults'
-import * as shell from '../../../../shared/tui-agent-startup-shell'
+import * as updatesModule from '../../../../shared/agent-launch/choices/agent-launch-permission-updates'
+import * as launchProfile from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import * as shell from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   measureSettingsWork,
   expectSettingsWorkScale,
@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/global-settings-test-fixture'
 import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
 
-vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
+vi.mock('../../../codex/hooks/installation/managed-wsl-home-shell-preflight', () => ({
   prepareManagedWslCodexHomeBeforeShellLaunch: async ({
     hooksEnabled
   }: {
@@ -27,7 +27,7 @@ vi.mock('../../../codex/managed-wsl-home-shell-preflight', () => ({
   }) => (hooksEnabled ? { agent: 'codex', state: 'installed' } : null)
 }))
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
-vi.mock('../../../claude/agent-view-service', () => ({
+vi.mock('../../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({ reconcile: async () => {} })
 }))
 afterEach(() => vi.restoreAllMocks())

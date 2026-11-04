@@ -1,6 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 
@@ -9,7 +9,7 @@ export type SummaryAgentGroup = {
   agents: DashboardAgentRowData[]
 }
 
-const SUMMARY_STATE_ORDER: AgentDotState[] = [
+export const SUMMARY_STATE_ORDER: readonly AgentDotState[] = [
   'waiting',
   'blocked',
   // Failures outrank live work, but pending questions come first.
@@ -57,7 +57,7 @@ export function formatSummaryStateLabel(state: AgentDotState): string {
 }
 
 // Per-state plural keys let locales inflect the status word for its count.
-function formatStateCount(state: AgentDotState, count: number): string {
+export function formatStateCount(state: AgentDotState, count: number): string {
   switch (state) {
     case 'waiting':
       return translate('sidebar.agentSummary.stateCount.waiting', '{{count}} waiting', {

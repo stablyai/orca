@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react'
 import { z } from 'zod'
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../src/shared/agent-session-option-catalog'
+import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
+import type { CatalogModel } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
-} from '../../../src/shared/native-chat-discovered-catalog-models'
+} from '../../../src/shared/native-chat/input/native-chat-discovered-catalog-models'
 import { defineRpcOperation, runRpcOperation } from '../transport/rpc-operation'
 
 const discoveredModel = z.object({

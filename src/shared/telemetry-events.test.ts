@@ -394,6 +394,22 @@ describe('agent_started schema', () => {
 })
 
 describe('agent_prompt_sent schema', () => {
+  it('accepts the capture sampling rate and rejects other rates', () => {
+    const props = {
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup'
+    }
+    expect(eventSchemas.agent_prompt_sent.safeParse({ ...props, sample_rate: 0.01 }).success).toBe(
+      true
+    )
+    for (const sample_rate of [0, 0.1, 1, '0.01', -0.01]) {
+      expect(eventSchemas.agent_prompt_sent.safeParse({ ...props, sample_rate }).success).toBe(
+        false
+      )
+    }
+  })
+
   it('accepts a hook-confirmed prompt-send payload with cohort context', () => {
     const parsed = eventSchemas.agent_prompt_sent.safeParse({
       agent_kind: 'codex',

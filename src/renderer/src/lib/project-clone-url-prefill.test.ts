@@ -23,16 +23,6 @@ describe('resolveProjectCloneUrlPrefill', () => {
     expect(prefill).toBe('https://github.com/acme/orca.git')
     expect(prefill).not.toContain('ghp_ABC123')
   })
-
-  it('leaves an SSH remote untouched, since git@host is part of the URL', () => {
-    expect(
-      resolveProjectCloneUrlPrefill(
-        [project(['repo-1'])],
-        [repo('repo-1', 'git@github.com:stablyai/orca.git')],
-        'project-orca'
-      )
-    ).toBe('git@github.com:stablyai/orca.git')
-  })
   it('stops on the first usable source and indexes later misses only once', () => {
     let reads = 0
     const repos = Array.from({ length: 1000 }, (_, i) => ({

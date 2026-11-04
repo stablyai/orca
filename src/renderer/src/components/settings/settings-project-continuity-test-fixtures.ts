@@ -9,7 +9,7 @@ import { getProjectGroupingModelFromState } from '@/store/project-host-setup-sel
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 
-import { buildSettingsProjectList } from './settings-project-list'
+import { buildSettingsProjectList } from './navigation/settings-project-list'
 export function nestedRemovalCatalog(
   mode: 'repository' | 'host' | 'folder' = 'host',
   author?: (repos: Repo[]) => void

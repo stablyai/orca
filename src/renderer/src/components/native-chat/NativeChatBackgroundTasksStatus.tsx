@@ -4,8 +4,8 @@ import type { AgentSessionBackgroundTask } from '../../../../shared/agent-sessio
 import type {
   AgentChildRowContext,
   AgentChildRowModel
-} from '../../../../shared/agent-child-row-model'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+} from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
@@ -169,7 +169,7 @@ export function NativeChatBackgroundTasksStatus(props: {
   return (
     <div
       data-native-chat-background-tasks="true"
-      className="group/tasks shrink-0 bg-chat-canvas px-3 pt-2 sm:px-4"
+      className="group/tasks shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
     >
       {/* When the goal tab is the next sibling, take its width and share its top edge. */}
       <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:px-2">

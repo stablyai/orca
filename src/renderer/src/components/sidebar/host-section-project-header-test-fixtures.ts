@@ -45,6 +45,7 @@ export function hostSectionRows(collapsedGroups: Set<string>): HostSectionRow[] 
   const worktrees = [worktree, otherWorktree, remoteWorktree]
   const rows = planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees,
     repoMap: new Map([repo, otherRepo, remoteRepo].map((entry) => [entry.id, entry])),
     prGroupOf: () => 'in-progress',
@@ -108,6 +109,7 @@ export function prepareSections(
   const repoMap = extra.repoMap ?? new Map(entries.map((entry) => [entry.id, entry]))
   return planSidebarRows({
     groupBy: 'repo',
+    sortBy: 'smart',
     worktrees: rows,
     repos: entries,
     repoMap,

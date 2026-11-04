@@ -1,6 +1,6 @@
 import './mobile-web-shell-protocol-test-fixtures'
 import type { FakeGenerationFileSystem } from './generation-file-system-fake'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 
 import type {
   MobileWebShellUpdateNotice,
@@ -16,11 +16,11 @@ import {
   MOBILE_WEB_BUNDLE_SCHEMA_VERSION
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
-import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
+import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
 import {
   type MobileWebBundleManifestRead,
   MobileWebBundleManifestReadSchema
-} from '../transport/mobile-web-bundle-reply-schemas'
+} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 
 import { createGenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'

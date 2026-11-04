@@ -1,3 +1,7 @@
+import {
+  RepositoryFormatterSection,
+  getRepositoryFormatterSearchEntry
+} from './RepositoryFormatterSection'
 import type { RepositoryPaneProps } from './repository-pane-types'
 import type { RepositorySettingsSessionState } from './RepositorySettingsSession'
 import type { RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
@@ -9,24 +13,24 @@ import { Label } from '../../ui/label'
 import { Separator } from '../../ui/separator'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './execution/RepositoryHooksSection'
-import { McpConfigSection } from '../McpConfigSection'
-import { WorktreeSymlinksSection } from '../WorktreeSymlinksSection'
-import { SparsePresetSettingsSection } from '../SparsePresetSettingsSection'
+import { McpConfigSection } from './mcp/McpConfigSection'
+import { WorktreeSymlinksSection } from './execution/WorktreeSymlinksSection'
+import { SparsePresetSettingsSection } from './execution/SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
-import { SearchableSetting } from '../SearchableSetting'
+import { SearchableSetting } from '../section-layout/SearchableSetting'
 import {
   useSettingsProjectRemovalDescription,
   prepareSettingsProjectRemoval,
   RepositoryRemoveProjectButton
 } from './RepositoryRemoveProjectButton'
-import { matchesSettingsSearch } from '../settings-search'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
 import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries, projectGroupingSearchEntry } from './repository-search'
 import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
-import { RepositoryForkSyncSection } from './identity/RepositoryForkSyncSection'
+import { RepositoryForkSyncSection } from './execution/RepositoryForkSyncSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
@@ -57,7 +61,8 @@ export function RepositoryPaneView({
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  updateProject
+  updateProject,
+  writeSourceControlAiSettings
 }: RepositoryPaneProps & { session: RepositorySettingsSessionState }): React.JSX.Element {
   const removal = useSettingsProjectRemovalDescription(
     repo,
@@ -361,10 +366,20 @@ export function RepositoryPaneView({
       </section>
     ) : null,
     hooksSection,
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry()]) ? (
+      <RepositoryFormatterSection
+        key={`formatter-${repo.id}-${selectedHostId}`}
+        repo={repo}
+        updateRepo={updateSelectedRepo}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
+    ) : null,
     !isFolder &&
     (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
       <RepositorySourceControlAiSection
         controller={session.ai}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
         key="source-control-ai"
         repo={repo}
         updateRepo={updateSelectedRepo}

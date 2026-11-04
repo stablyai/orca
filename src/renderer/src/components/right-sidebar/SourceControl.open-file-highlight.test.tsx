@@ -4,8 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import type { GitBranchCompareSummary } from '../../../../shared/git/diff/git-diff-compare-types'
 import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import SourceControl from './SourceControl'
 
@@ -113,7 +113,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     gitConflictOperationByWorktree: {},
     remoteStatusesByWorktree: {},
     isRemoteOperationActive: false,
-    inFlightRemoteOpKind: null,
+    remoteOperations: [],
     settings: null,
     hostedReviewCache: {},
     prCache: {},

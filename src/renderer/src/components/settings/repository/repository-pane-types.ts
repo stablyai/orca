@@ -1,3 +1,4 @@
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
@@ -7,7 +8,7 @@ import type {
   ProjectUpdateArgs
 } from '../../../../../shared/project-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { SettingsProjectRemovalScope } from '../settings-project-list'
+import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import type { SettingsProjectRemoval } from './RepositoryRemoveProjectButton'
 import type { RepositorySettingsSessionState } from './RepositorySettingsSession'
 
@@ -21,6 +22,7 @@ export type RepositoryPaneRepoUpdate = Omit<
 }
 
 export type RepositoryPaneProps = {
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   session?: RepositorySettingsSessionState
   repo: Repo
   yamlHooks: OrcaHooks | null

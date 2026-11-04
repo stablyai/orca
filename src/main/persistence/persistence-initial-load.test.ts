@@ -14,9 +14,9 @@ import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
-import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session/workspace-session-terminal-tab-close'
 
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
@@ -24,7 +24,7 @@ import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlit
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
-} from '../local-worktree-scan-generation'
+} from '../workspaces/catalog/local-worktree-scan-generation'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

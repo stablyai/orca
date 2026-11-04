@@ -1,7 +1,7 @@
 import {
   isMobileRelayCloseCode,
   mobileRelayRecoveryFor
-} from '../../../src/shared/mobile-relay-close-codes'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'

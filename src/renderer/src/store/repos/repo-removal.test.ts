@@ -5,7 +5,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import { afterEach, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { cleanup, render, fireEvent, screen } from '@testing-library/react'
-import { useAppStore } from '../../store'
+import { useAppStore } from '..'
 import { registerUIHandlers } from '../../../../main/ipc/ui'
 import { hydratePersistedUIAfterStartupRead } from '../../lib/startup-ui-hydration'
 import {
@@ -51,13 +51,13 @@ import { registerRepoCatalogHandlers } from '../../../../main/ipc/repos/repo-cat
 import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
-} from '../../components/settings/settings-project-list'
+} from '../../components/settings/navigation/settings-project-list'
 import {
   prepareSettingsProjectRemoval,
   RepositoryRemoveProjectButton
 } from '../../components/settings/repository/RepositoryRemoveProjectButton'
 import { TooltipProvider } from '../../components/ui/tooltip'
-import { removeCurrentSettingsProject } from '../../components/settings/use-settings-store-model'
+import { removeCurrentSettingsProject } from '../../components/settings/page/use-settings-store-model'
 import { getProjectGroupingModelFromState } from '../project-host-setup-selector'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import {

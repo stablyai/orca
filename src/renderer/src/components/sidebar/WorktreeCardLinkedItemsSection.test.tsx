@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from './workspace-reference-details'
 
@@ -139,7 +139,7 @@ describe('workspace linked references in hover details', () => {
     expect(screen.getByLabelText('State: Merged')).toBeTruthy()
     expect(screen.queryByText('State: Merged')).toBeNull()
     expect(screen.getByText('Target: release')).toBeTruthy()
-    expect(screen.getByText('State: In Progress')).toBeTruthy()
+    expect(screen.getByLabelText('State: In Progress')).toBeTruthy()
     expect(screen.getAllByLabelText('Checks: Passing')).toHaveLength(1)
     expect(screen.queryByText('Used for checks')).toBeNull()
     const siblingRow = Array.from(

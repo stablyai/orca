@@ -1,6 +1,7 @@
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../claude/structured/claude-structured-session-id'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { CREATE_TEST_CALLER } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -8,16 +9,25 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import * as transcriptNaming from '../claude/claude-provider-session-rename'
 import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { HOST_TEST_SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 import {
   createClaudeNamingRuntime,
   nativeNamingTitle,
   writeNativeNamingConversation
 } from './structured-claude-naming-test-support'
 
-vi.mock('./structured-agent-model-catalog-wiring', () => ({
-  modelCatalogHostDeps: async () => ({})
-}))
+vi.mock('./structured-agent-model-catalog-wiring', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelCatalogWiring>()
+  return {
+    ...actual,
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => ({
+      ...(await actual.ensureStructuredAgentModelCatalogOwner(...args)),
+      modelCatalog: undefined
+    })
+  }
+})
 
 it.each([10, 100])(
   'coalesces %i applied commits while joining real append, then honors a fresh equal-text occurrence',

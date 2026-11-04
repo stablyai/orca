@@ -47,10 +47,12 @@ for (const [name, value] of [
 }
 
 const { capTerminalScrollbackSessionBuffer } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/workspace-session-terminal-buffers.ts')).href
+  pathToFileURL(
+    path.join(ROOT, 'src/shared/workspace-session/workspace-session-terminal-buffers.ts')
+  ).href
 )
 const { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/terminal-scrollback-limits.ts')).href
+  pathToFileURL(path.join(ROOT, 'src/shared/terminal/replay/terminal-scrollback-limits.ts')).href
 )
 const { remapAcknowledgedAgentPaneKeys } = await import(
   pathToFileURL(path.join(ROOT, 'src/main/persistence/restoring-sessions/pane-key-remapping.ts'))
@@ -60,7 +62,7 @@ const { clampUtf8TextTail, measureUtf8ByteLength } = await import(
   pathToFileURL(path.join(ROOT, 'src/shared/utf8-byte-limits.ts')).href
 )
 const { isTerminalLeafId, makePaneKey, parsePaneKey } = await import(
-  pathToFileURL(path.join(ROOT, 'src/shared/stable-pane-id.ts')).href
+  pathToFileURL(path.join(ROOT, 'src/shared/workspace-layout/stable-pane-id.ts')).href
 )
 
 function median(samples) {

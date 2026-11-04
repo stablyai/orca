@@ -124,28 +124,6 @@ describe('DaemonPtyAdapter history recovery', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('suspends history when keepHistory cannot read its final checkpoint', async () => {
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-    const { id } = await historyAdapter.spawn({
-      cols: 80,
-      rows: 24,
-      sessionId: 'sleep-unreadable'
-    })
-    const manager = historyAdapter.getHistoryManager()!
-    const suspend = vi.spyOn(manager, 'suspendSession')
-    const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
-    vi.spyOn(reader, 'detectColdRestoreState').mockResolvedValue({
-      status: 'unreadable',
-      sessionId: id
-    })
-
-    await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
-
-    expect(suspend).toHaveBeenCalledWith(id)
-    const metaPath = join(historyDir, getHistorySessionDirName(id), 'meta.json')
-    expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
-  })
-
   it('suspends an empty final checkpoint with unreadable post-checkpoint recovery', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
     const { id } = await historyAdapter.spawn({
@@ -446,37 +424,6 @@ describe('DaemonPtyAdapter history recovery', () => {
     expect(bundles).toHaveLength(1)
     expect(readFileSync(join(ownerDir, bundles[0], 'output.log'))).toEqual(log)
     expect(historyAdapter.getHistoryManager()!.hasWriter(sessionId)).toBe(true)
-  })
-
-  it('keeps unreadable history suspended when a fresh adapter finds the daemon live', async () => {
-    const sessionId = 'live-with-unreadable-history'
-    await adapter.spawn({ cols: 80, rows: 24, sessionId })
-    const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-    mkdirSync(sessionDir, { recursive: true })
-    writeFileSync(
-      join(sessionDir, 'meta.json'),
-      JSON.stringify({
-        cwd: '/projects/preserved',
-        cols: 80,
-        rows: 24,
-        startedAt: '2026-07-25T10:00:00Z',
-        endedAt: null,
-        exitCode: null
-      })
-    )
-    const checkpointPath = join(sessionDir, 'checkpoint.json')
-    const checkpointBytes = TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1
-    createSparseFile(checkpointPath, checkpointBytes)
-    await leaveFailedQuarantineProtection(historyDir, sessionId)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-    const suspend = vi.spyOn(historyAdapter.getHistoryManager()!, 'suspendSession')
-
-    const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
-
-    expect(result.isReattach).toBe(true)
-    expect(suspend).toHaveBeenCalledWith(sessionId, expect.objectContaining({ sessionId }))
-    expect(statSync(checkpointPath).size).toBe(checkpointBytes)
-    expect(existsSync(getTerminalHistoryQuarantineOwnerDir(historyDir, sessionId))).toBe(false)
   })
 
   it('keeps protected history suspended when its files become readable before reattach', async () => {

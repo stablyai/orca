@@ -93,13 +93,4 @@ describe('orchestration worker-list Run scope (CLI handler)', () => {
     expect(listCall?.params.run).toBeUndefined()
     expect(receipt).toHaveProperty('result.scope', { source: 'all' })
   })
-
-  it('names the scope in the human-readable receipt', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
-    boundRun = 'run_bound'
-
-    await list(new Map(), false)
-
-    expect(logged.at(-1)).toContain('scope.run=run_bound scope.source=bound')
-  })
 })

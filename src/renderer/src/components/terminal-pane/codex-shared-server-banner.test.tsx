@@ -14,7 +14,7 @@ import {
   CODEX_STOP_SHARED_SERVER_COMMAND,
   type CodexSharedServerStatus
 } from '../../../../shared/codex-shared-server-command'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 
 const routing = vi.hoisted(() => ({

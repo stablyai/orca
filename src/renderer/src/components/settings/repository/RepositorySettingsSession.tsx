@@ -4,11 +4,11 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-identity'
 import type { RepositoryPaneRepoUpdate } from './RepositoryPane'
 import { useRepositorySourceControlAiSession } from './source-control/RepositorySourceControlAiSection'
-import { useSparsePresetSettingsDraft } from '../SparsePresetSettingsSection'
+import { useSparsePresetSettingsDraft } from './execution/SparsePresetSettingsSection'
 import { useRepoSettingsTextDraft } from './RepositorySettingsDraftInput'
-import { useWorktreeSymlinkInput } from '../WorktreeSymlinksSection'
-import { useRepositoryHookSettingsDraft } from '../use-repository-hook-settings-draft'
-import { useRepositoryIssueCommand } from '../use-repository-issue-command'
+import { useWorktreeSymlinkInput } from './execution/WorktreeSymlinksSection'
+import { useRepositoryHookSettingsDraft } from './execution/use-repository-hook-settings-draft'
+import { useRepositoryIssueCommand } from './execution/use-repository-issue-command'
 
 export type RepositorySettingsSessionProps = {
   repo: Repo | undefined

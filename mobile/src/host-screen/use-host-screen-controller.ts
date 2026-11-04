@@ -24,7 +24,7 @@ import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
 import { useHostProjectSections } from './use-host-project-sections'
 import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
-import { useHostScreenIdentity } from './use-host-screen-identity'
+import { peekStoredHost, useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
@@ -65,7 +65,7 @@ export function useHostScreenController({
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled, exactProjectRepoFilters } =
     useHostProtocolGates()
-  const state = useHostScreenState(hostId)
+  const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
@@ -131,7 +131,11 @@ export function useHostScreenController({
   })
 
   const hostPlatform = useResolvedHostPlatform(state, hostId)
-  const displayWorktrees = useHostDisplayWorktrees(connState, state, hostPlatform)
+  const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
+    connState,
+    state,
+    hostPlatform
+  )
   const feed = sidebarFeed?.feed ?? null
   const sectionsResult = useHostListSections({
     exactProjectRepoFilters,
@@ -139,6 +143,7 @@ export function useHostScreenController({
     hostId,
     feed,
     displayWorktrees,
+    hostContextOf,
     hostPlatform,
     state
   })

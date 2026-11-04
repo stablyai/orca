@@ -1,5 +1,5 @@
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
 import type { AppState } from '@/store/types'
+import { pendingWorktreeCreationIsVisible } from '@/lib/pending-worktree-creation'
 
 // Why frozen: the sidebar row model is always mounted and this list is empty
 // almost always, so one shared identity serves every read.
@@ -7,51 +7,43 @@ export const EMPTY_PENDING_WORKTREE_CREATION_KEYS: string[] = Object.freeze(
   []
 ) as unknown as string[]
 
-const keysBySource = new WeakMap<object, string[]>()
+const keysBySource = new WeakMap<object, { visible: string[]; hidden: string[] }>()
 
 /** Cache creationId/repoId keys per slice; split on the first space because UUID creation IDs cannot contain spaces. */
 export function selectPendingWorktreeCreationKeys(
-  pendingWorktreeCreations: AppState['pendingWorktreeCreations'] | undefined
+  pendingWorktreeCreations: AppState['pendingWorktreeCreations'] | undefined,
+  visibility: 'visible' | 'hidden' = 'visible'
 ): string[] {
   if (!pendingWorktreeCreations) {
     return EMPTY_PENDING_WORKTREE_CREATION_KEYS
   }
   const cached = keysBySource.get(pendingWorktreeCreations)
   if (cached) {
-    return cached
+    return cached[visibility]
   }
-  const creations = Object.values(pendingWorktreeCreations)
-  const keys =
-    creations.length === 0
-      ? EMPTY_PENDING_WORKTREE_CREATION_KEYS
-      : creations.map(
-          (creation) =>
-            `${creation.creationId} ${creation.request.executionHostId ?? creation.request.workspaceRunContext?.hostId ?? 'local'}\0${creation.request.repoId}`
-        )
+  const keys: { visible: string[]; hidden: string[] } = { visible: [], hidden: [] }
+  for (const creation of Object.values(pendingWorktreeCreations)) {
+    keys[pendingWorktreeCreationIsVisible(creation) ? 'visible' : 'hidden'].push(
+      `${creation.creationId} ${creation.request.executionHostId ?? creation.request.workspaceRunContext?.hostId ?? 'local'}\0${creation.request.repoId}`
+    )
+  }
+  if (keys.visible.length === 0) {
+    keys.visible = EMPTY_PENDING_WORKTREE_CREATION_KEYS
+  }
+  if (keys.hidden.length === 0) {
+    keys.hidden = EMPTY_PENDING_WORKTREE_CREATION_KEYS
+  }
   keysBySource.set(pendingWorktreeCreations, keys)
-  return keys
+  return keys[visibility]
 }
 
-/** Combine main’s shared creations with window-only preflight/server work and exclude locally completed requests. */
-export function withWindowCreations(
-  domains: SidebarFeedDomains,
-  pendingCreationKeys: readonly string[],
-  endedCreationIds: ReadonlySet<string>
-): SidebarFeedDomains {
-  let creations: Map<string, { repoId: string }> | null = null
-  for (const creationId of endedCreationIds) {
-    if (domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.delete(creationId)
-    }
-  }
-  for (const key of pendingCreationKeys) {
+export function decodePendingWorktreeCreationKeys(pendingCreationKeys: readonly string[]) {
+  return pendingCreationKeys.map((key) => {
     const separator = key.indexOf(' ')
-    const creationId = key.slice(0, separator)
-    if (!domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.set(creationId, { repoId: key.slice(key.indexOf('\0', separator) + 1) })
+    return {
+      creationId: key.slice(0, separator),
+      repoId: key.slice(key.indexOf('\0', separator) + 1),
+      hostId: key.slice(separator + 1, key.indexOf('\0', separator))
     }
-  }
-  return creations ? { ...domains, creations } : domains
+  })
 }

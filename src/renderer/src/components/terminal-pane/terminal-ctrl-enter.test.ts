@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeTerminalTitle } from '../../../../shared/agent-title-status'
+import { normalizeTerminalTitle } from '../../../../shared/agent-status/title/agent-title-status'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
 
 const PANE_KEY = 'tab:pane'

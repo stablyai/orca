@@ -77,6 +77,7 @@ function sections(
   return renderHook(() =>
     useSidebarSectionRows({
       groupBy,
+      sortBy: 'smart',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',
@@ -252,6 +253,7 @@ it.each(['custom-row', 'palette-store'] as const)(
     )!.key
     const inputs: SectionRowsArgs = {
       groupBy: 'repo',
+      sortBy: 'smart',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',
@@ -391,6 +393,7 @@ it.each([100, 1000])(
     const projectGrouping = { projects: project.projects, projectHostSetups: project.setups }
     const inputs: SectionRowsArgs = {
       groupBy: 'repo',
+      sortBy: 'smart',
       projectOrderBy: 'manual',
       pinnedDisplayPolicy: 'single-location',
       defaultHostId: 'local',

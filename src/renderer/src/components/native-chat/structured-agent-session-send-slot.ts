@@ -1,9 +1,9 @@
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionSendOutcome } from './structured-agent-session-send-runtime'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
@@ -29,12 +29,13 @@ export type StructuredAgentSessionSendInput = {
   skills?: readonly AgentJournalSkillRef[]
   /** Made while the chat read Stopping: drawn after that turn until the host records it. */
   sentWhileStopping?: true
+  onCreated?: (clientMessageId: string) => void
   now?: number
 }
 
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
-  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
+  'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills' | 'onCreated'
 > & {
   onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
   /** Do the other thing than the follow-up setting: Cmd/Ctrl+Enter, or the phone's hold menu. */

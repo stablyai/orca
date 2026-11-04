@@ -6,15 +6,15 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../shared/mobile-e2ee-v2-framing'
-import { deriveSharedKey } from '../../../shared/e2ee-crypto'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { deriveSharedKey } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import type { RpcBinarySendResult } from './rpc-binary-sender'
 import { E2EEChannel } from './e2ee-channel'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 
 const server = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))

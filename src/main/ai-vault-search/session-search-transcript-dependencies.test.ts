@@ -3,7 +3,7 @@ import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault/contracts/ai-vault-types'
 import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from '../ai-vault/session-scanner-agent-parser'
 import { AI_VAULT_AGENT_SOURCES } from '../ai-vault/session-scanner-agent-sources'
@@ -13,15 +13,13 @@ import {
   type EveryAgentVault
 } from '../ai-vault/session-scanner-every-agent-fixture'
 import { geminiJsonlFixture } from '../ai-vault/session-scanner-incremental-fixtures'
-import {
-  parseAgentSessionFileCached,
-  resetSessionParseCacheForTests
-} from '../ai-vault/session-scanner-parse-cache'
+import { parseAgentSessionFileCached } from '../ai-vault/parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests,
   type TranscriptMessage
-} from '../ai-vault/session-transcript-consumers'
+} from '../ai-vault/transcripts/session-transcript-consumers'
 import { SELF_CONTAINED_TRANSCRIPT_AGENTS } from './session-search-index-consumer'
 
 vi.mock('node:fs', async (importOriginal) => {

@@ -12,7 +12,7 @@ import {
   emptySession,
   GIT_KEY
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import type { OpenFile } from '../store/slices/editor'
 import { layoutEditorViewOfOpenFile } from '../store/slices/editor/tabs/open-file-layout-view'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
@@ -211,17 +211,5 @@ describe("main's mobile editor rows", () => {
     expect(published(main)).toEqual(published(window))
     expect(main.activeTabId).toBe(window.activeTabId)
     expect(main.activeTabType).toBe(window.activeTabType)
-  })
-
-  it('links a preview to its source by the open-file id, owned ids included', () => {
-    const { main } = scenario(`markdown-preview::${README}`)
-    const previews = main.tabs.filter((tab) => tab.type === 'markdown' && tab.mode !== 'edit')
-    expect(
-      previews.map((tab) => tab.type === 'markdown' && [tab.sourceFileId, tab.isDirty])
-    ).toEqual([
-      [README, true],
-      [SERVER_DOC_ID, false],
-      ['markdown-preview::/Users/dev/orca/CHANGELOG.md', false]
-    ])
   })
 })

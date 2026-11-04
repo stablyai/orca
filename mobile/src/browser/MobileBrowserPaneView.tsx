@@ -4,7 +4,6 @@ import {
   Image,
   Pressable,
   Text,
-  TextInput,
   View,
   type PanResponderInstance,
   type StyleProp,
@@ -12,7 +11,7 @@ import {
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
@@ -34,6 +33,7 @@ import type {
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import type { MobileBrowserTab } from './MobileBrowserPane'
 import type { BrowserDialogState } from './mobile-browser-stream-events'
+import { FieldTextInput } from '../components/composer-input/FieldTextInput'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
@@ -314,19 +314,22 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
           onKeypress={(key) => void sendKeypress(key)}
         />
         <View style={styles.inputRow}>
-          <TextInput
+          <FieldTextInput
             style={styles.keyboardInput}
             value={keyboardValue}
             onChangeText={setKeyboardValue}
             placeholder={t('browser.paneView.keyboardPlaceholder', 'Type on page…')}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             editable={!controlsDisabled}
             onSubmitEditing={() => void sendKeyboardText()}
           />
           <Pressable
-            style={[styles.sendButton, (controlsDisabled || !keyboardValue) && styles.disabled]}
+            style={({ pressed }) => [
+              styles.sendButton,
+              (controlsDisabled || !keyboardValue) && styles.disabled,
+              pressed && pressedStyle
+            ]}
             disabled={controlsDisabled || !keyboardValue}
             onPress={() => void sendKeyboardText()}
             accessibilityLabel={t('browser.paneView.sendText', 'Send text to browser')}

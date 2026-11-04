@@ -8,6 +8,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/\{\{(value\d)\}\}/g, (_match, name: string) => values?.[name] ?? '')
 }))
@@ -33,7 +34,7 @@ vi.mock('@/store', () => ({
     getState: () => store
   }
 }))
-vi.mock('./ExternalFileChangeBanner', () => ({
+vi.mock('./external-changes/ExternalFileChangeBanner', () => ({
   ExternalFileChangeBanner: () => <div data-testid="banner" />
 }))
 

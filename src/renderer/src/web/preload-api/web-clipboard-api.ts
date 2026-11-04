@@ -1,4 +1,4 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {

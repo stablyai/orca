@@ -160,12 +160,12 @@ vi.mock('../transport/host-store', () => ({
 
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
+import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { NewWorkspacePageScreen } from '../new-workspace/NewWorkspacePageScreen'
 import { HostScreenOverlays } from '../host-screen/host-screen-overlays'
 import { useHostScreenController } from '../host-screen/use-host-screen-controller'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
-import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer/bottom-drawer-constants'
 import type * as PublisherFixture from '@project-grouping-test-host/renderer/src/runtime/project-grouping-owner-publication.test-fixture'
 
 let renderer: ReactTestRenderer | undefined

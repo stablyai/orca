@@ -4,9 +4,9 @@
 import {
   agentSessionLeaseAdmitsWriter,
   agentSessionLeaseIsReleased
-} from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import {
   ORCA_SESSION_ADDRESS_PREFIX,
   isOrcaSessionId,
@@ -25,7 +25,7 @@ import {
 } from '../orchestration/orchestration-party'
 import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
 import { conversationRecordReader } from '../orchestration/structured-session-lineage'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'

@@ -7,7 +7,7 @@ import {
   createFakeEditorDisk,
   createUntitledNoteStore,
   type FakeEditorDisk
-} from './editor-autosave-controller-test-fixture'
+} from './autosave/editor-autosave-controller-test-fixture'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 import { useTerminalSaveDialog } from '../terminal/useTerminalSaveDialog'
 import {

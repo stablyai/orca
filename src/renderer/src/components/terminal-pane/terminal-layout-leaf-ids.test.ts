@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'

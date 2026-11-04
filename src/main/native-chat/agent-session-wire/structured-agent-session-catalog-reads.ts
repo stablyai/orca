@@ -1,12 +1,11 @@
 import type { AgentModelCatalogReadParams } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import { withinAgentModelCatalogRead } from '../agent-model-catalog/agent-model-catalog-operation'
 import { resolveAgentModelCatalogReadRecords } from '../agent-model-catalog/agent-model-catalog-running-account'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
-import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 
 /** The caller already owns the conversation; every projection of this invocation shares this scope. */
 export function structuredAgentSessionCatalogScopeOwned(
@@ -20,8 +19,7 @@ export function structuredAgentSessionCatalogScopeOwned(
       getRecord: (id) => deps.store.getRecord(id) ?? undefined,
       drivesRecord: () => true,
       liveAccountHome: () => session?.child?.accountHome,
-      launchAccountHome: async (record) =>
-        (await structuredAgentSessionReceivingAccount(deps, record, session)).home
+      launchAccountHome: async (record) => (await deps.launchAccountHome?.(record)) ?? null
     },
     params
   )

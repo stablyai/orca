@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
-import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from './setup/AgentSkillSetupPanel'
 import { SkillFreshnessUpdateDialog } from './SkillFreshnessUpdateDialog'
 import { consumeSkillFreshnessUpdateDialogRequest } from './skill-freshness-update-dialog'
 

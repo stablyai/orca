@@ -1,5 +1,5 @@
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type * as HostProtocolGatesModule from '../components/host-protocol-gates-context'
 import type * as RpcOperationModule from '../transport/rpc-operation'
 

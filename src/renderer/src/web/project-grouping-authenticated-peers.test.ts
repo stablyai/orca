@@ -19,7 +19,11 @@ import {
 } from '../../../main/runtime/rpc/mobile-socket-wiring'
 import { CLIENT_UI_METHODS } from '../../../main/runtime/rpc/methods/client-ui'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../../main/runtime/rpc/methods/runtime-client-capabilities'
-import { generateKeyPair, deriveSharedKey, encrypt } from '../../../shared/e2ee-crypto'
+import {
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
 import { mobileRuntimeClientCapabilityUpdateParams } from '../../../../mobile/src/transport/mobile-runtime-client-capabilities'
 import WebSocket, { WebSocketServer } from 'ws'

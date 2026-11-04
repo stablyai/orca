@@ -6,7 +6,7 @@ import {
   flushRemovalPendingEdits,
   lastViewUnsavedFiles,
   collectRemovalUnsavedFiles
-} from '@/components/editor/removal-unsaved-editor-files'
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getKnownRepoWorktreeIds } from '@/store/repos/repo-removal'
 

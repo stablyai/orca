@@ -37,6 +37,7 @@ export function TaskPageGitHubFilters({
     setActiveTaskPreset,
     setTaskRefreshNonce,
     perRepoSourceState,
+    githubSourceDisplayState,
     handleRefreshGithubTasks,
     setNewIssueOpen,
     setNewIssueTitle,
@@ -225,7 +226,7 @@ export function TaskPageGitHubFilters({
 
       {(() => {
         // Why: show the source-slug chip only when the selector can't render (no upstream to toggle); otherwise it duplicates the selector.
-        const rows = perRepoSourceState.filter(
+        const rows = githubSourceDisplayState.filter(
           (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
         )
         if (rows.length === 0) {
@@ -274,6 +275,7 @@ export function TaskPageGitHubFilters({
                     preference={repo.issueSourcePreference}
                     origin={s.sources.originCandidate}
                     upstream={s.sources.upstreamCandidate}
+                    issueSource={s.sources.issues}
                     onChange={(next) => {
                       void setIssueSourcePreference(repo.id, repo.path, next, s.hostId)
                     }}

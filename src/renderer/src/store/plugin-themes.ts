@@ -11,7 +11,7 @@ import { createPluginContentListStore } from './plugin-content-list-store'
 import { refreshedTerminalPluginPalettes } from '../lib/terminal-plugin-palettes'
 import { applyPluginAppTheme, readCachedPluginAppTheme } from '../lib/document-theme'
 import { useAppStore } from './index'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { pluginAppThemeSlotUpdate } from '../../../shared/plugin-theme-settings'
 import { isPluginContentSwitchedOff } from '../../../shared/plugins/plugin-system-settings'
 
@@ -52,7 +52,7 @@ export function usePluginAppThemeSync(): void {
   const loaded = usePluginThemeStore((s) => s.loaded)
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const dark = useDocumentDarkTheme()
+  const dark = useSettingsDarkTheme()
   const selected = (dark ? settings?.pluginAppThemeDark : settings?.pluginAppThemeLight) ?? null
   const disabled = !selected || isPluginContentSwitchedOff(settings ?? undefined, selected)
 

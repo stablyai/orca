@@ -1,8 +1,9 @@
+import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { shallow } from 'zustand/shallow'
 import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
@@ -33,7 +34,10 @@ import {
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
 } from '../../sidebar-host-options'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  selectPendingWorktreeCreationKeys,
+  decodePendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 function createSidebarHostOptionsSelector() {
@@ -54,7 +58,7 @@ function createSidebarHostOptionsSelector() {
       state.runtimeEnvironments,
       hostLabelOverrides,
       state.wslHostStatuses,
-      settings?.experimentalWslHosts === true,
+      selectWslHostsServing(state),
       state.wslHostServerFiles === 'missing'
     ]
     if (shallow(inputs, nextInputs)) {
@@ -70,7 +74,7 @@ function createSidebarHostOptionsSelector() {
       runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: settings?.experimentalWslHosts === true,
+      wslHostsEnabled: selectWslHostsServing(state),
       wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
     })
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
@@ -109,15 +113,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
   const pendingCreations = useMemo(
-    () =>
-      pendingCreationKeys.map((key) => {
-        const separator = key.indexOf(' ')
-        return {
-          creationId: key.slice(0, separator),
-          repoId: key.slice(key.indexOf('\0', separator) + 1),
-          hostId: key.slice(separator + 1, key.indexOf('\0', separator))
-        }
-      }),
+    () => decodePendingWorktreeCreationKeys(pendingCreationKeys),
     [pendingCreationKeys]
   )
   const hostLabelOverrides = useMemo(
@@ -142,6 +138,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
         repos,
@@ -168,6 +165,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [
       args.groupBy,
       repos,
+      args.sortBy,
       worktrees,
       repoMap,
       repoOfWorktree,

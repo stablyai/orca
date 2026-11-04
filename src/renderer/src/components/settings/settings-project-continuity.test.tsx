@@ -18,17 +18,17 @@ import {
   getSettingsEntryHostSelection,
   getSettingsProjectHostRepo,
   removeSettingsProjectFromAllHosts
-} from './settings-project-list'
-import { buildSettingsViewModel, useSettingsNavigationActions } from './settings-view-model'
-import { renderSettingsPage } from './settings-page-renderer'
-import { LOCAL_SETTINGS_HOST_SCOPE } from './settings-host-scope'
-import type { SettingsStoreModel } from './use-settings-store-model'
-import { useSettingsInteractionController } from './use-settings-interaction-controller'
-import type { SettingsRenderContext } from './settings-render-context'
-import { useSettingsPageEffects } from './use-settings-page-effects'
-import { useSettingsRepoScrollEffects } from './use-settings-repo-scroll-effects'
-import { useSettingsNavigationModel } from './use-settings-navigation-model'
-import type { SettingsTerminalModel } from './use-settings-terminal-model'
+} from './navigation/settings-project-list'
+import { buildSettingsViewModel, useSettingsNavigationActions } from './page/settings-view-model'
+import { renderSettingsPage } from './page/settings-page-renderer'
+import { LOCAL_SETTINGS_HOST_SCOPE } from './host-scope/settings-host-scope'
+import type { SettingsStoreModel } from './page/use-settings-store-model'
+import { useSettingsInteractionController } from './page/use-settings-interaction-controller'
+import type { SettingsRenderContext } from './page/settings-render-context'
+import { useSettingsPageEffects } from './page/use-settings-page-effects'
+import { useSettingsRepoScrollEffects } from './navigation/use-settings-repo-scroll-effects'
+import { useSettingsNavigationModel } from './navigation/use-settings-navigation-model'
+import type { SettingsTerminalModel } from './page/use-settings-terminal-model'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
   cleanup()

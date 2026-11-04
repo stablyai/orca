@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
-import { removeHostTree } from '../host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
 import { ensurePrivateDir } from './daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
 import { getTerminalHistoryQuarantineOwnerDir } from './terminal-history-recovery-quarantine'

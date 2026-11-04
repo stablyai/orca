@@ -2,7 +2,8 @@ import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { KeyRound } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../components/list/ListGroup'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
@@ -11,6 +12,7 @@ import {
 } from '../transport/host-credential-cleanup'
 import { retryPendingHostCredentialCleanup } from '../transport/host-store'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsSection } from './settings-screen-frame'
 
 export function PendingCredentialCleanupCard() {
   useMobileColorScheme()
@@ -73,8 +75,9 @@ export function PendingCredentialCleanupCard() {
   }
 
   return (
-    <View style={[styles.section, styles.sectionSpacer]}>
-      <View style={styles.credentialCleanupRow}>
+    // A custom row: the status line is a live region and Retry sits inline.
+    <SettingsSection>
+      <View key="cleanup" style={styles.credentialCleanupRow}>
         <KeyRound size={16} color={colors.statusAmber} />
         <View style={styles.credentialCleanupCopy}>
           <Text style={styles.credentialCleanupTitle}>
@@ -129,40 +132,32 @@ export function PendingCredentialCleanupCard() {
           )}
         </Pressable>
       </View>
-    </View>
+    </SettingsSection>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden'
-  },
-  sectionSpacer: {
-    marginTop: spacing.md
-  },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    opacity: feedback.pressedOpacity
   },
   credentialCleanupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm + 2,
+    gap: spacing.md,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
+    paddingHorizontal: LIST_ROW_PADDING
   },
   credentialCleanupCopy: {
     flex: 1,
     gap: spacing.xs
   },
   credentialCleanupTitle: {
-    fontSize: typography.bodySize,
+    fontSize: 15,
     fontWeight: '500',
     color: colors.textPrimary
   },
   rowHint: {
-    fontSize: typography.metaSize,
+    fontSize: 13,
     color: colors.textSecondary,
     lineHeight: 17
   },

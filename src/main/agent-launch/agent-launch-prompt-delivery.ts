@@ -1,15 +1,16 @@
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
-import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type {
   AgentLaunchIntent,
   AgentLaunchPromptDisposal,
-  AgentLaunchResult
-} from '../../shared/agent-launch-intent'
-import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
-import type { AgentLaunchModeReceipt } from './agent-launch-mode'
+  AgentLaunchResult,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-startup'
+
 import type { CreatedSurface } from './agent-launch-executor'
 import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()

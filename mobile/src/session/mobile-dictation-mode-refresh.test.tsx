@@ -44,9 +44,6 @@ vi.mock('../platform/haptics', () => ({
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('./use-terminal-live-input-mode-preference', () => ({
-  useTerminalLiveInputModePreference: () => ({ liveInputTerminalHandles: new Set<string>() })
-}))
 // Stub unused capture/native-chat paths to avoid Expo runtime imports.
 vi.mock('../hooks/use-mobile-dictation', () => ({
   useMobileDictation: (options: { enabled: boolean }) => {
@@ -81,7 +78,7 @@ vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
     clear: () => {}
   })
 }))
-vi.mock('./use-mobile-native-chat-controller', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-controller', () => ({
   useMobileNativeChatController: () => ({
     toggleTabChatView: () => {},
     showNativeChat: false,
@@ -132,7 +129,6 @@ function Probe() {
   } as never)
   const activeHandleRef = useRef('terminal')
   const dictationRouteContextRef = useRef(null)
-  const commandFieldAnchorRef = useRef(null)
   const deviceTokenRef = useRef('device')
   const scope = {
     ...screen,
@@ -145,12 +141,10 @@ function Probe() {
     activeSessionTab: null,
     activeHandleRef,
     dictationRouteContextRef,
-    commandFieldAnchorRef,
     deviceTokenRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: env.connected,
     canCompose: true,
-    liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}
   }

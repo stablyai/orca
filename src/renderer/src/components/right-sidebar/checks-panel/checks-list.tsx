@@ -11,16 +11,20 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
+import { getCheckStatusLabel } from '../../../../../shared/source-control/checks/pr-check-status-label'
+import { getCheckStatusLabel as getLocalizedCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const {
     checks,
+    pipelineCheck,
     checksError,
     checksLoading,
     checkDetailsContextKey,
@@ -40,6 +44,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     rows,
     passingCount,
     failingCount,
+    cancelledCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,
@@ -47,6 +52,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
   } = useChecksListState(props)
   return (
     <>
+      {pipelineCheck && <PipelineCheckRow check={pipelineCheck} />}
       {checks.length > 0 && (
         <button
           type="button"
@@ -77,6 +83,13 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               )}
             </span>
           )}
+          {cancelledCount > 0 && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <CircleDashed className="size-3" />
+              {cancelledCount}{' '}
+              {translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}
+            </span>
+          )}
           {pendingCount > 0 && (
             <span className="flex items-center gap-1">
               <LoaderCircle className="size-3 text-amber-500" />
@@ -103,7 +116,10 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </button>
       )}
 
-      {checksLoading && checks.length === 0 ? (
+      {/* A kept parent stands in for an empty job list, but a failed read still reports itself. */}
+      {pipelineCheck && checks.length === 0 && !checksError ? null : checksLoading &&
+        checks.length === 0 &&
+        !pipelineCheck ? (
         <div className="flex items-center justify-center py-8">
           <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
         </div>
@@ -134,6 +150,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
               return (
                 <div key={row.key} className="min-w-0">
                   <div
+                    ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
                     className={cn(
                       'group/check-row flex min-w-0 cursor-pointer items-center gap-2 px-3 py-1.5 transition-colors hover:bg-accent/40',
                       expanded && 'bg-accent/25'
@@ -150,7 +167,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                       className={cn(
                         'size-3.5 shrink-0',
                         color,
-                        conclusion === 'pending' && 'animate-spin'
+                        conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
                       )}
                     />
                     <span className="flex-1 truncate text-[12px] text-foreground">
@@ -231,5 +248,43 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         </>
       )}
     </>
+  )
+}
+
+// The parent pipeline opens on the provider; it has no inline job log to expand.
+function PipelineCheckRow({ check }: { check: PRCheckDetail }): React.JSX.Element {
+  const conclusion = check.conclusion ?? 'pending'
+  const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+  const content = (
+    <>
+      <Icon
+        className={cn(
+          'size-3.5 shrink-0',
+          CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
+          conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+        )}
+      />
+      <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+      <span className="text-[11px] text-muted-foreground">
+        {getLocalizedCheckStatusLabel(check)}
+      </span>
+      {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground" />}
+    </>
+  )
+  const className = 'flex min-w-0 items-center gap-2 border-b border-border px-3 py-1.5'
+  const animationRef = conclusion === 'pending' ? observeOffscreenAnimation : undefined
+  return check.url ? (
+    <a
+      ref={animationRef}
+      href={check.url}
+      onClick={openAppHttpLinkFromAnchor}
+      className={cn(className, 'transition-colors hover:bg-accent/40')}
+    >
+      {content}
+    </a>
+  ) : (
+    <div ref={animationRef} className={className}>
+      {content}
+    </div>
   )
 }

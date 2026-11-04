@@ -12,6 +12,7 @@ import type { WorktreeOccurrenceSection } from '../worktree-occurrence-plan'
 import type { WorktreeGroupEntry, OrderedGroupEntry } from './worktree-group-entry'
 import { PINNED_GROUP_KEY, ALL_GROUP_KEY } from './group-keys'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
+import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 export function getRenderedNaturalAnchorRepoIds({
   groupBy,
@@ -84,8 +85,12 @@ export function getRenderedNaturalAnchorRepoIds({
 }
 
 export function orderMainWorktreeFirst<T extends { isMainWorktree?: boolean }>(
-  worktrees: T[]
+  worktrees: T[],
+  sortBy: WorkspaceSortBy
 ): T[] {
+  if (sortBy === 'manual') {
+    return worktrees
+  }
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
     return worktrees

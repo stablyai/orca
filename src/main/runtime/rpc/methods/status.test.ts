@@ -38,7 +38,7 @@ describe('status.get', () => {
     expect(runtime.readMachineName()).toBe(normalizeMachineName(os.hostname()))
 
     // The call is issued while the lookup is still in flight; the answer must carry what it returns.
-    const pending = STATUS_METHODS[0].handler(undefined, { runtime })
+    const pending = STATUS_METHODS[0].handler({}, { runtime })
     finishLookup?.({
       code: 0,
       signal: null,

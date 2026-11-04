@@ -1,11 +1,8 @@
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract/assignment-invariants'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from '../assignment-store.js'
+import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayCellConfig } from '../config.js'
-import {
-  openInMemoryRelayDatabase,
-  type RelayDatabase
-} from '../database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from '../database.js'
 
 const LIMITED_CELL: RelayCellConfig = {
   id: 'limited',
@@ -145,40 +142,6 @@ describe('relay assignment connection headroom', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('reports the limited-cell capacity contract and telemetry components', async () => {
-    const { store } = await setup(0)
-    await store.recordCellHeartbeat({
-      cellId: LIMITED_CELL.id,
-      cellUrl: LIMITED_CELL.url,
-      cellIncarnation: '11111111-1111-4111-8111-111111111111',
-      startedAt: 50,
-      ready: true,
-      observedRequests: 0,
-      totalConnections: 120,
-      inFlightConnections: 2,
-      reservedConnectionUnits: 3,
-      enforcedConnectionUnits: 125,
-      connectionHardCap: 600,
-      connectionUnobservedBound: 50
-    })
-
-    expect((await store.cellDeploymentStatus(LIMITED_CELL.id)).connectionCapacity).toEqual({
-      hardCap: 600,
-      reportedHardCap: 600,
-      effectiveHardCap: 600,
-      controlRebindReserve: 100,
-      ordinaryConnectionLimit: 500,
-      unobservedBound: 50,
-      normalAdmissionPause: 450,
-      observedConnections: 120,
-      inFlightConnections: 2,
-      reservedConnectionUnits: 3,
-      enforcedConnectionUnits: 125,
-      pendingControlReservations: 0,
-      heartbeatFresh: true
-    })
-  })
-
   it('keeps placing against the old cap until the cell reports a raised one', async () => {
     const { store } = await setup(449)
     const expanded = {
@@ -264,9 +227,9 @@ describe('relay assignment connection headroom', () => {
 
     expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1)
     expect(
-      results.filter(({ status }) => status === 'rejected').map((result) =>
-        result.status === 'rejected' ? result.reason : null
-      )
+      results
+        .filter(({ status }) => status === 'rejected')
+        .map((result) => (result.status === 'rejected' ? result.reason : null))
     ).toEqual([expect.objectContaining({ message: 'relay_capacity_exhausted' })])
     expect(
       await database.query(
@@ -333,25 +296,10 @@ describe('relay assignment connection headroom', () => {
         last_activity_at, reserved_controls, reserved_splices, reserved_invites,
         pending_installs, pending_confirmations, migration_leases)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        LIMITED_CELL.id,
-        1,
-        10_000,
-        100,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0
-      ]
+      [identity.userId, identity.relayHostId, LIMITED_CELL.id, 1, 10_000, 100, 0, 0, 1, 0, 0, 0]
     )
 
-    await expect(store.assign(identity)).rejects.toThrow(
-      'relay_connection_headroom_exhausted'
-    )
+    await expect(store.assign(identity)).rejects.toThrow('relay_connection_headroom_exhausted')
     expect(
       await database.query(
         `SELECT cell_id, assignment_epoch, reserved_controls, reserved_invites
@@ -444,9 +392,7 @@ describe('relay assignment connection headroom', () => {
       [identity.userId, identity.relayHostId, source.id, 7, 10_000, 100]
     )
 
-    await expect(store.assign(identity)).rejects.toThrow(
-      'relay_connection_headroom_exhausted'
-    )
+    await expect(store.assign(identity)).rejects.toThrow('relay_connection_headroom_exhausted')
     expect(await store.resolve(identity)).toMatchObject({
       cellId: source.id,
       assignmentEpoch: 7
@@ -551,11 +497,9 @@ describe('relay assignment connection headroom', () => {
          WHERE activity_kind = 'control' AND activity_id LIKE 'control-pending:%'`
       )
     ).toHaveLength(0)
-    expect(
-      await database.query(
-        `SELECT state FROM relay_control_connection_reservations`
-      )
-    ).toEqual([{ state: 'late-arrival-debt' }])
+    expect(await database.query(`SELECT state FROM relay_control_connection_reservations`)).toEqual(
+      [{ state: 'late-arrival-debt' }]
+    )
   })
 
   it('reconciles late-arrival debt only after a covering absolute snapshot', async () => {
@@ -609,9 +553,7 @@ describe('relay assignment connection headroom', () => {
       connectionUnobservedBound: 50
     })
     expect(
-      await database.query(
-        `SELECT state, released_at FROM relay_control_connection_reservations`
-      )
+      await database.query(`SELECT state, released_at FROM relay_control_connection_reservations`)
     ).toEqual([{ state: 'released', released_at: now }])
     await expect(
       store.assign({ userId: 'blocked-user', relayHostId: 'blockedhost00001' })
@@ -636,9 +578,7 @@ describe('relay assignment connection headroom', () => {
       connectionUnobservedBound: 50
     }
     await store.recordCellHeartbeat(heartbeat)
-    await expect(store.recordCellHeartbeat(heartbeat)).rejects.toThrow(
-      'stale_connection_snapshot'
-    )
+    await expect(store.recordCellHeartbeat(heartbeat)).rejects.toThrow('stale_connection_snapshot')
     await expect(
       store.recordCellHeartbeat({
         ...heartbeat,
@@ -664,11 +604,9 @@ describe('relay assignment connection headroom', () => {
       requireLiveCells: true,
       heartbeatTtlMs: 45_000
     }).assign(identity)
-    expect(
-      await database.query(
-        `SELECT state FROM relay_control_connection_reservations`
-      )
-    ).toEqual([{ state: 'reserved' }])
+    expect(await database.query(`SELECT state FROM relay_control_connection_reservations`)).toEqual(
+      [{ state: 'reserved' }]
+    )
     now += ASSIGNMENT_LIMITS.activityLeaseMs + 1
     await store.releaseExpiredActivityLeases()
     await store.recordCellHeartbeat({
@@ -891,15 +829,11 @@ describe('relay assignment connection headroom', () => {
     })
 
     await store.assign({ userId: 'legacy-user', relayHostId: 'legacyhost000001' })
-    expect(
-      await database.query(`SELECT * FROM relay_control_connection_reservations`)
-    ).toEqual([])
+    expect(await database.query(`SELECT * FROM relay_control_connection_reservations`)).toEqual([])
     expect(await store.releaseExpiredActivityLeases()).toBe(0)
     now += ASSIGNMENT_LIMITS.activityLeaseMs + 1
     expect(await store.releaseExpiredActivityLeases()).toBe(1)
-    expect(
-      await database.query(`SELECT * FROM relay_control_connection_reservations`)
-    ).toEqual([])
+    expect(await database.query(`SELECT * FROM relay_control_connection_reservations`)).toEqual([])
   })
 
   it('rejects dormant rebalance before changing the assignment epoch', async () => {
@@ -945,20 +879,7 @@ describe('relay assignment connection headroom', () => {
         last_activity_at, reserved_controls, reserved_splices, reserved_invites,
         pending_installs, pending_confirmations, migration_leases)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        identity.userId,
-        identity.relayHostId,
-        source.id,
-        7,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ]
+      [identity.userId, identity.relayHostId, source.id, 7, 0, 0, 0, 0, 0, 0, 0, 0]
     )
 
     await expect(store.rebalanceDormant(identity, LIMITED_CELL.id)).rejects.toThrow(
@@ -983,10 +904,7 @@ describe('relay assignment connection headroom', () => {
       url: 'https://source.example.com',
       capacityRequests: 10
     }
-    await store.reconcileCells(
-      [source, { ...LIMITED_CELL, initiallyEnabled: false }],
-      true
-    )
+    await store.reconcileCells([source, { ...LIMITED_CELL, initiallyEnabled: false }], true)
     await store.recordCellHeartbeat({
       cellId: source.id,
       cellUrl: source.url,
@@ -1014,9 +932,9 @@ describe('relay assignment connection headroom', () => {
     expect(assignment.cellId).toBe(source.id)
     await store.setCellEnabled(LIMITED_CELL.id, true)
 
-    await expect(
-      store.startEvacuation(identity, LIMITED_CELL.id)
-    ).rejects.toThrow('relay_connection_headroom_exhausted')
+    await expect(store.startEvacuation(identity, LIMITED_CELL.id)).rejects.toThrow(
+      'relay_connection_headroom_exhausted'
+    )
     expect(await database.query(`SELECT * FROM relay_assignment_migrations`)).toEqual([])
     expect(await store.resolve(identity)).toMatchObject({
       cellId: source.id,

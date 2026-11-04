@@ -9,7 +9,7 @@ import {
   resolveVanishedNewIssueRepoReset,
   isNewIssueDraftContentful
 } from '@/components/task-page/task-page-new-issue-draft'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconciliationModel) {
   const { settings, repos, selectedRepos } = model
   const [newIssueOpen, setNewIssueOpen] = useState(false)

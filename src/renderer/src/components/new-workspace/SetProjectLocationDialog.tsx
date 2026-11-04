@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { CreateProjectParentBrowser } from '@/components/sidebar/CreateProjectLocationField'
+import { CreateProjectParentBrowser } from '@/components/sidebar/project-admission/create/CreateProjectLocationField'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption

@@ -1,14 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { buildQuickComposerStartup } from '../hooks/composer-state/quick-startup-plan'
-import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { buildAgentResumeStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   buildAiVaultLocalResumeStartup,
   buildAiVaultForkStartup,
   resolveAiVaultCopiedSessionAgentArgs
-} from '../../../shared/ai-vault-resume-startup'
-import { buildAntigravityReferenceStartup } from './ai-vault-antigravity-reference-startup'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 vi.mock('@/lib/telemetry', () => ({ tuiAgentToAgentKind: (agent: string) => agent }))
 
 it.each(['claude', 'codex'] as const)(
@@ -93,25 +92,3 @@ it.each(['claude', 'codex'] as const)(
     ).toContain('picked')
   }
 )
-
-it('uses fresh typed defaults for an Antigravity reference rather than continuing its provider identity', () => {
-  const settings = {
-    ...getDefaultSettings('/test'),
-    agentPermissionDefault: 'own' as const,
-    agentLaunchChoices: { antigravity: { model: 'fresh-reference' } },
-    agentDefaultArgs: { antigravity: '--verbose' }
-  }
-  const result = buildAntigravityReferenceStartup({
-    settings,
-    platform: 'linux',
-    shell: 'posix',
-    cwd: '/project',
-    session: {
-      sessionId: 'reference',
-      filePath: '/home/test/.gemini/antigravity-ide/brain/reference/transcript_full.jsonl'
-    }
-  })
-  expect(result?.command).toContain('fresh-reference')
-  expect(result?.command).not.toContain('--conversation')
-  expect(result?.launchConfig?.agentArgs).toBe('--verbose')
-})

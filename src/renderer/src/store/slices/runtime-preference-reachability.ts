@@ -16,5 +16,5 @@ export async function verifyRuntimeEnvironmentReachable(
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)
   // Switch already proved compatibility; avoid the heavier generic RPC re-probe during hydration.
-  markRuntimeEnvironmentCompatible(environmentId)
+  markRuntimeEnvironmentCompatible(environmentId, status)
 }

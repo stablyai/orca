@@ -4,7 +4,7 @@ import {
   getProjectGroupForRepo,
   type ProjectGroupingIndex
 } from '../../../shared/project-section-grouping'
-import { stripCredentialsFromMessage } from '../../../shared/git-remote-error'
+import { stripCredentialsFromMessage } from '../../../shared/git/remotes/git-remote-error'
 import type { Project } from '../../../shared/project-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'

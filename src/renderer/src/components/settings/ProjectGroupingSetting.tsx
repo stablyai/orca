@@ -2,9 +2,9 @@ import type { SettingsUpdate } from '@/store/slices/settings'
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveProjectGroupingMode } from '../../../../shared/project-grouping'
-import { SettingsRow } from './SettingsFormControls'
+import { SettingsRow } from './form-controls/SettingsFormControls'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
-import { SearchableSetting } from './SearchableSetting'
+import { SearchableSetting } from './section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
 function groupingOptions() {

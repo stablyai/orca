@@ -19,8 +19,8 @@ import {
   PANE_KEY_3,
   makeTab
 } from './ActivityPrototypePage-test-fixtures'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   buildActivityVirtualItems,
   findActivityThreadItemIndex,
@@ -310,20 +310,21 @@ import {
     }
   }
 
-  describe('collectChildAgentPaneKeys', () => {
+  describe('collectHiddenChildAgentPaneKeys', () => {
     it('returns an empty set when no thread carries orchestration', () => {
       const threads = [makeTestThread(PANE_KEY), makeTestThread(PANE_KEY_2)]
-      expect(collectChildAgentPaneKeys(threads).size).toBe(0)
+      expect(collectHiddenChildAgentPaneKeys(threads).size).toBe(0)
     })
 
     it('classifies a thread whose parent pane is listed as a child', () => {
       const parent = makeTestThread(PANE_KEY)
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
       })
-      expect(collectChildAgentPaneKeys([parent, child])).toEqual(new Set([PANE_KEY_2]))
+      expect(collectHiddenChildAgentPaneKeys([parent, child])).toEqual(new Set([PANE_KEY_2]))
     })
 
     it('promotes an orphan whose parent pane is no longer listed', () => {
@@ -332,7 +333,7 @@ import {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
       })
-      expect(collectChildAgentPaneKeys([orphan]).size).toBe(0)
+      expect(collectHiddenChildAgentPaneKeys([orphan]).size).toBe(0)
     })
 
     it('ignores a self-referencing parentPaneKey', () => {
@@ -341,7 +342,7 @@ import {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
       })
-      expect(collectChildAgentPaneKeys([thread]).size).toBe(0)
+      expect(collectHiddenChildAgentPaneKeys([thread]).size).toBe(0)
     })
 
     it('resolves coordinatorHandle through a listed thread terminal handle', () => {
@@ -349,6 +350,7 @@ import {
         currentAgentEntry: makeTestEntry(PANE_KEY, { terminalHandle: 'terminal-coord' })
       })
       const worker = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           terminalHandle: 'terminal-worker',
           orchestration: {
@@ -358,7 +360,7 @@ import {
           }
         })
       })
-      expect(collectChildAgentPaneKeys([coordinator, worker])).toEqual(new Set([PANE_KEY_2]))
+      expect(collectHiddenChildAgentPaneKeys([coordinator, worker])).toEqual(new Set([PANE_KEY_2]))
     })
 
     it('promotes a worker whose coordinator handle matches no listed thread', () => {
@@ -372,7 +374,7 @@ import {
           }
         })
       })
-      expect(collectChildAgentPaneKeys([worker]).size).toBe(0)
+      expect(collectHiddenChildAgentPaneKeys([worker]).size).toBe(0)
     })
 
     it('keeps child classification from an older event while the parent is listed', () => {
@@ -381,26 +383,61 @@ import {
         orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
       })
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2),
         events: [makeEventFor(childEntry)]
       })
-      expect(collectChildAgentPaneKeys([parent, child])).toEqual(new Set([PANE_KEY_2]))
+      expect(collectHiddenChildAgentPaneKeys([parent, child])).toEqual(new Set([PANE_KEY_2]))
     })
 
     it('classifies a grandchild chained through a listed child', () => {
       const root = makeTestThread(PANE_KEY)
       const child = makeTestThread(PANE_KEY_2, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_2, {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-1', dispatchId: 'ctx-1' }
         })
       })
       const grandchild = makeTestThread(PANE_KEY_3, {
+        currentAgentState: null,
         currentAgentEntry: makeTestEntry(PANE_KEY_3, {
           orchestration: { parentPaneKey: PANE_KEY_2, taskId: 'task-2', dispatchId: 'ctx-2' }
         })
       })
-      expect(collectChildAgentPaneKeys([root, child, grandchild])).toEqual(
+      expect(collectHiddenChildAgentPaneKeys([root, child, grandchild])).toEqual(
         new Set([PANE_KEY_2, PANE_KEY_3])
+      )
+    })
+
+    it('keeps a live worker listed after its coordinator ends its turn', () => {
+      const workerOf = (paneKey: string, overrides: Partial<AgentPaneThread>) =>
+        makeTestThread(paneKey, {
+          currentAgentEntry: makeTestEntry(paneKey, {
+            orchestration: { parentPaneKey: PANE_KEY, taskId: paneKey, dispatchId: paneKey }
+          }),
+          ...overrides
+        })
+      const coordinator = makeTestThread(PANE_KEY, { currentAgentState: null })
+      const working = workerOf(PANE_KEY_2, { currentAgentState: 'working' })
+      const finished = workerOf(PANE_KEY_3, { currentAgentState: null })
+      expect(collectHiddenChildAgentPaneKeys([coordinator, working, finished])).toEqual(
+        new Set([PANE_KEY_3])
+      )
+    })
+
+    it('keeps live workers listed while their coordinator resumes its turn', () => {
+      const workerOf = (paneKey: string, overrides: Partial<AgentPaneThread>) =>
+        makeTestThread(paneKey, {
+          currentAgentEntry: makeTestEntry(paneKey, {
+            orchestration: { parentPaneKey: PANE_KEY, taskId: paneKey, dispatchId: paneKey }
+          }),
+          ...overrides
+        })
+      const coordinator = makeTestThread(PANE_KEY, { currentAgentState: 'working' })
+      const blocked = workerOf(PANE_KEY_2, { currentAgentState: 'blocked' })
+      const finished = workerOf(PANE_KEY_3, { currentAgentState: null })
+      expect(collectHiddenChildAgentPaneKeys([coordinator, blocked, finished])).toEqual(
+        new Set([PANE_KEY_3])
       )
     })
 
@@ -415,7 +452,7 @@ import {
           orchestration: { parentPaneKey: PANE_KEY, taskId: 'task-2', dispatchId: 'ctx-2' }
         })
       })
-      expect(collectChildAgentPaneKeys([a, b]).size).toBe(0)
+      expect(collectHiddenChildAgentPaneKeys([a, b]).size).toBe(0)
     })
   })
 }

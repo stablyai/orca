@@ -34,6 +34,7 @@ import {
 import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -91,7 +92,12 @@ export function createAllHostRepoCatalogActions(
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(finalizedRepos, s.repos)
               ? {}
@@ -101,6 +107,7 @@ export function createAllHostRepoCatalogActions(
             setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
           }
         })
+        noteLiveRepoCatalogApplied(get, catalog.hostId)
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         carryFetchedProjectGroupingOverrides(get, previousProjects)
         scheduleSafeAutoForkSync(hostRepos)
@@ -152,7 +159,14 @@ export function createAllHostRepoCatalogActions(
       const localFence = claimHostCatalogFence(get, 'repos', { kind: 'local' })
       try {
         if (
-          !applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }, get().repos), localFence)
+          !applyCatalog(
+            await fetchRepoCatalogForTarget(
+              { kind: 'local' },
+              get().repos,
+              get().githubSourceCollections
+            ),
+            localFence
+          )
         ) {
           failed = true
         }
@@ -179,7 +193,7 @@ export function createAllHostRepoCatalogActions(
         'repos',
         async (target, fence) => {
           const [catalogResult, visibilitySnapshot] = await Promise.all([
-            fetchRepoCatalogForTarget(target, get().repos).then(
+            fetchRepoCatalogForTarget(target, get().repos, get().githubSourceCollections).then(
               (catalog) => ({ ok: true as const, catalog }),
               (error: unknown) => ({ ok: false as const, error })
             ),

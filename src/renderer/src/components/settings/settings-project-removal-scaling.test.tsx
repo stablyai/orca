@@ -19,7 +19,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-
 import {
   buildSettingsProjectList,
   removeSettingsProjectFromAllHosts
-} from './settings-project-list'
+} from './navigation/settings-project-list'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 afterEach(() => {
   cleanup()

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { renderToStaticMarkup } from 'react-dom/server'
 import * as repoLookups from '@/lib/project-setup-repo-lookup'
-import { SettingsSidebar } from './SettingsSidebar'
+import { SettingsSidebar } from './navigation/SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
 import { act, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -11,20 +11,20 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
-import { ActiveSettingsSectionProvider } from './SettingsSection'
+import { ActiveSettingsSectionProvider } from './section-layout/SettingsSection'
 import {
   buildRepoIdToHostSelection,
   buildRepoIdToRepresentative,
   buildSettingsProjectList
-} from './settings-project-list'
+} from './navigation/settings-project-list'
 import { buildSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
-import { buildSettingsViewModel } from './settings-view-model'
-import type { SettingsNavigationModel } from './use-settings-navigation-model'
-import { renderProjectSettingsSections } from './settings-project-section-renderer'
-import { useSettingsPageEffects } from './use-settings-page-effects'
-import type { SettingsRenderContext } from './settings-render-context'
-import type { SettingsStoreModel } from './use-settings-store-model'
-import type { SettingsInteractionController } from './use-settings-interaction-controller'
+import { buildSettingsViewModel } from './page/settings-view-model'
+import type { SettingsNavigationModel } from './navigation/use-settings-navigation-model'
+import { renderProjectSettingsSections } from './page/settings-project-section-renderer'
+import { useSettingsPageEffects } from './page/use-settings-page-effects'
+import type { SettingsRenderContext } from './page/settings-render-context'
+import type { SettingsStoreModel } from './page/use-settings-store-model'
+import type { SettingsInteractionController } from './page/use-settings-interaction-controller'
 
 vi.mock('./repository/RepositoryPane', () => ({
   RepositoryPane: () => <output>Project pane</output>

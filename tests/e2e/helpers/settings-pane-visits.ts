@@ -6,8 +6,8 @@ import {
   buildSettingsProjectList,
   buildRepoIdToRepresentative,
   buildRepoIdToHostSelection
-} from '../../../src/renderer/src/components/settings/settings-project-list'
-import { getSettingsSectionId } from '../../../src/renderer/src/components/settings/settings-navigation-foundations'
+} from '../../../src/renderer/src/components/settings/navigation/settings-project-list'
+import { getSettingsSectionId } from '../../../src/renderer/src/components/settings/navigation/settings-navigation-foundations'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 
 /**

@@ -1,27 +1,31 @@
 {
-  "extends": "./tsconfig.test.pane-launch.json",
-  "files": [
-    "../src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture.ts",
-    "../src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture.ts",
-    "../src/main/persistence/persistence-test-harness.ts",
-    "../src/main/runtime/mobile-project-sections-snapshot.ts",
-    "../src/renderer/src/runtime/project-grouping-owner-publication.test-fixture.tsx",
-    "../src/renderer/src/env.d.ts",
-    "../src/preload/api-types.ts",
-    "../src/types/build-constants.d.ts"
-  ],
-  "include": [],
-  "exclude": [],
+  "extends": "./tsconfig.node.json",
   "compilerOptions": {
     "composite": false,
     "incremental": false,
     "noEmit": false,
+    "noEmitOnError": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "noEmitOnError": true,
     "declarationMap": false,
-    "sourceMap": false,
     "rootDir": "..",
-    "outDir": "../.cache/typecheck/mobile-project-controls-host"
-  }
+    "outDir": "../mobile/node_modules/.cache/phone-host-contract-types"
+  },
+  "files": [
+    "../src/main/runtime/runtime-github-repository-query-commands.ts",
+    "../src/main/runtime/rpc/methods/github-repo-work-item-methods.ts",
+    "../src/main/runtime/orca-runtime.ts",
+    "../src/main/runtime/rpc/core.ts",
+    "../src/main/runtime/rpc/dispatcher-request-parsing.ts",
+    "../src/main/github/issue-field-options.ts",
+    "../src/main/runtime/runtime-worktree-ps-summaries.ts",
+    "../src/types/build-constants.d.ts"
+  ],
+  "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx"],
+  "exclude": [
+    "../src/shared/**/*.test.ts",
+    "../src/shared/**/*.test.tsx",
+    "../src/shared/**/*.spec.ts",
+    "../src/shared/**/*.spec.tsx"
+  ]
 }

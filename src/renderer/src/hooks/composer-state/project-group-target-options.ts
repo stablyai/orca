@@ -55,13 +55,16 @@ export function useComposerProjectOptions(
         grouping,
         projectHostSetups,
         eligibleRepos,
-        hosts: hostOptions
+        hosts: hostOptions,
+        selectedSetup:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target : null
       }),
     [
       eligibleRepos,
       hostOptions,
       projectHostSetups,
       selectedRepoProjectId,
+      selectedWorkspaceTarget,
       selectedProjectId,
       settings,
       grouping

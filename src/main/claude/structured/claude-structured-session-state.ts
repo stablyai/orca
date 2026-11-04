@@ -1,29 +1,30 @@
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { ClaudeStartupOutcome } from './claude-structured-startup-outcome'
 import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-support'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
-import type { ClaudeStructuredLaunch } from '../claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import type { StructuredLaunchRequest } from '../../runtime/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
-import type { AgentSessionFastModeState } from '../../../shared/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
 
@@ -166,20 +167,17 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
+    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean
     reportedPermissionMode?: string | null
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
-  appliedOptions?: { model?: string; effort?: string }
+  appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
-  /** Mutation at which the provider last reported its Fast routing state. */
-  fastModeReportedMutation?: number
   fastModeState?: AgentSessionFastModeState
-  fastModeDisabledReason?: string
-  fastModeDisabledMutation?: number
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
@@ -190,6 +188,8 @@ export type ClaudeSession = {
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
+  /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
+  orderedPermissionMode?: (() => string | null | undefined) | null
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */
@@ -233,6 +233,7 @@ export type ClaudeSession = {
     cwd: string
     history: { leafUuid: string | null; covered: boolean; contextActivity: number }
     onLateRefusal: (error: Error) => void
+    startup: ClaudeStartupOutcome
   }
 }
 
@@ -358,6 +359,8 @@ export async function cancelClaudeAcquisitionAttempt(
 }
 
 export type ClaudeAcquireCallbacks = {
+  /** Publishes the session, its start ending admitted first so its exit is never missed. */
+  publish: (session: ClaudeSession) => void
   deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
   emit: (
     session: ClaudeSession | null,

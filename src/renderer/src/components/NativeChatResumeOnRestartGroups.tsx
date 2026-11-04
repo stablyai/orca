@@ -1,6 +1,6 @@
 import { getIndexedRepoHostMap, getIndexedRepoMap } from '@/store/worktree-repo-index'
 import { findIndexedProjectGroupDisplay } from '@/lib/worktree-runtime-owner-index'
-import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
+import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { memo, useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'

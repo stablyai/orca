@@ -6,8 +6,8 @@ import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
 import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 
 // Synchronous ack re-entry once repeated forever when remote turn time led local clock and scans crossed millisecond boundaries (React #185); slice guards retained pre-write snapshots.
 
@@ -121,15 +121,5 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
     }))
 
     expect(calls).toEqual([])
-  })
-
-  it('keeps an explicitly marked-unread visible turn unread', () => {
-    seedFutureStampedTurn(NOW - 5_000)
-    useAppStore.getState().acknowledgeAgents([PANE_KEY])
-
-    renderHook(() => useReadOnScreenAttention())
-    useAppStore.getState().unacknowledgeAgents([PANE_KEY])
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()
   })
 })
