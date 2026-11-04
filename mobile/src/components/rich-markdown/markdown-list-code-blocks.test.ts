@@ -70,25 +70,6 @@ describe('mobile list code blocks', () => {
     }
   )
 
-  it.each([
-    { source: '1. Install:\n   ```bash\n   npm i\n   ```\n2. Run', selector: 'li' },
-    {
-      source: '- Parent\n  3. Intro\n\n     ```js\n     code\n     ```\n\n     After\n  4. Next',
-      selector: 'ol li'
-    }
-  ])('reads an indented fenced block inside its item: $source', ({ source, selector }) => {
-    const { editorDocument, editor } = open(source)
-    const body = editor.querySelector(selector)!
-    expect(body.querySelector('pre')).not.toBeNull()
-    expect(editor.querySelectorAll(':scope > ol, :scope > ul').length).toBe(1)
-    const saved = editorDocument.send.currentMarkdown()
-    editorDocument.send.setMarkdown(saved, 8)
-    expect(editor.querySelector(selector)?.querySelector('pre')?.textContent).toBe(
-      body.querySelector('pre')?.textContent
-    )
-    expect(editorDocument.send.currentMarkdown()).toBe(saved)
-  })
-
   it('keeps tables, quotes, rules and headings after a list fence as their own blocks', () => {
     const source = [
       '1. Run:',

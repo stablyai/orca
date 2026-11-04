@@ -40,7 +40,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     pendingBrowserFocusPageIdRef,
     pendingTerminalActivationAttemptRef,
     initialSessionAutoCreateRef,
-    bufferedTerminalDraftState,
     clearPendingLiveInputCommit,
     clearDelayedActionTimers,
     showToast,
@@ -68,7 +67,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
-    bufferedTerminalDraftState.resetDrafts()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
         clearTimeout(queued.timer)
@@ -88,19 +86,16 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
-      bufferedTerminalDraftState.clearPendingRestorations()
       clearPendingLiveInputCommit()
       clearDelayedActionTimers()
     }
   }, [
     clearDelayedActionTimers,
     clearPendingLiveInputCommit,
-    bufferedTerminalDraftState.clearPendingRestorations,
     clearTerminalCache,
     setSplitTerminalHandles,
     terminalPaneViewportsRef,
     hostId,
-    bufferedTerminalDraftState.resetDrafts,
     worktreeId
   ])
 

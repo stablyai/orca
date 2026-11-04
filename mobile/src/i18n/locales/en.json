@@ -270,11 +270,6 @@
       "textSizeHeading": "TEXT SIZE",
       "textSizeDescription": "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal.",
       "textSize": "Text size",
-      "keyboardInputHeading": "KEYBOARD INPUT",
-      "keyboardInputDescription": "Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.",
-      "autocomplete": "Autocomplete & autocorrect",
-      "autocompleteOn": "On",
-      "autocompleteOff": "Off",
       "restoreHost": "Restore {{name}}",
       "textSizePickerTitle": "Terminal text size"
     }
@@ -1904,22 +1899,21 @@
     "accessoryKeys": {
       "dismissKeyboard": "Dismiss keyboard",
       "sendKey": "Send {{label}}",
-      "modifierHint": "Applies to the next key. Double tap to keep it on.",
       "typeCharacter": "Type {{character}}",
       "control": "Control",
-      "escape": "Escape",
-      "shiftTab": "Shift Tab",
-      "enter": "Enter",
       "interrupt": "Interrupt terminal",
-      "tab": "Tab",
       "alt": "Alt",
       "shift": "Shift",
       "keysModeLabel": "Keys mode: typing goes straight to the terminal. Switch to Message mode",
       "messageModeLabel": "Message mode: write, then send. Switch to Keys mode",
-      "keysMode": "Keys",
-      "messageMode": "Message",
       "moreKeys": "More keys and actions",
-      "showKeyboard": "Show keyboard"
+      "showKeyboard": "Show keyboard",
+      "dismissKeyboardHint": "Hides the software keyboard and keeps the current terminal session open.",
+      "switchToDesktopMode": "Switch to desktop mode",
+      "switchToPhoneMode": "Switch to phone mode",
+      "pasteFromClipboard": "Paste from clipboard",
+      "paste": "Paste",
+      "addCustomShortcut": "Add custom shortcut"
     },
     "activeContent": {
       "noTabs": "No tabs in this session",
@@ -1933,10 +1927,7 @@
     "commandDock": {
       "liveInputLabel": "Live terminal input",
       "liveInputHint": "Typed text is sent directly to the active terminal",
-      "sendCommand": "Send command",
-      "messageAgentPlaceholder": "Message {{agent}}",
-      "theAgent": "the agent",
-      "writeCommandPlaceholder": "Write a command, then send"
+      "tapToShowKeyboard": "Tap to show keyboard"
     },
     "contentRow": {
       "dismissCreationWarning": "Dismiss workspace creation warning"
@@ -2653,14 +2644,6 @@
       "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
       "keepOpen": "Keep open"
     },
-    "terminalArrowPad": {
-      "label": "Arrow keys",
-      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
-      "up": "Up",
-      "down": "Down",
-      "left": "Left",
-      "right": "Right"
-    },
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",
       "paste": "Paste",
@@ -2846,6 +2829,7 @@
       "showAll": "Full task list"
     },
     "sessionOptionCopy": {
+      "ultracode": "Ultracode",
       "on": "On",
       "off": "Off",
       "permissions": "Permissions",
