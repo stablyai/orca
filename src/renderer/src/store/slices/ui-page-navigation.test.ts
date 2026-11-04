@@ -256,11 +256,13 @@ describe('createUISlice settings navigation', () => {
         defaultTaskSource: 'linear'
       } as unknown as AppState['settings'],
       linearStatus: { connected: true } as AppState['linearStatus'],
-      linearStatusChecked: true,
-      // Why: these settings name no paired server, so Linear was checked on this app.
-      linearStatusContextKey: getProviderRuntimeContextKey(null),
       prefetchLinearIssues
     } as unknown as Partial<AppState>)
+    // Why: these settings name no paired server, so Linear was checked on this app.
+    store.setState({
+      linearStatusChecked: true,
+      linearStatusContextKey: getProviderRuntimeContextKey(null)
+    })
 
     store.getState().openTaskPage({
       taskSource: 'linear',
