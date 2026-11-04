@@ -103,9 +103,15 @@ describe('provider-exit settlement', () => {
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
+        lifecycleItems: () => [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })],
         itemFence: () => 7,
         lastProviderActivityAt: () => undefined,
-        stopMarks: { latest: () => null, personStopDecides: () => false },
+        stopMarks: {
+          latest: () => null,
+          observedLiveAtItem: () => undefined,
+          personStopDecides: () => false,
+          personStopDecidesItem: () => false
+        },
         submissions: () => [],
         appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
@@ -179,6 +185,8 @@ describe('provider-exit settlement', () => {
         itemBody: () => null,
         itemFence: () => undefined,
         snapshot: () => ({ items }),
+        lifecycleItems: () => items,
+        stopMarks: { personStopDecidesItem: () => false },
         submissions: () => [],
         appendPlannedLifecycleBatch: plannedBatchThrough(appendLifecycleBatch)
       }
