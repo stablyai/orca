@@ -19632,8 +19632,6 @@
         "stateUnverifiableCount_other": "Durum bilgisi alınamıyor: {{value0}}"
       },
       "jumpToLatest": "En son öğeye git",
-      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
-      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
