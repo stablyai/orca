@@ -19,7 +19,13 @@ type StatusRow = {
   interrupted?: boolean
 }
 
-function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boolean }) {
+function createPane(initial: {
+  idle: boolean
+  tail: string[]
+  idleEdgeOnly?: boolean
+  /** Model status cleanup landing while the observer reads the screen. */
+  clearRowsOnRead?: boolean
+}) {
   let idle = initial.idle
   // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
@@ -28,7 +34,12 @@ function createPane(initial: { idle: boolean; tail: string[]; idleEdgeOnly?: boo
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
-    readTerminal: async () => ({ tail }),
+    readTerminal: async () => {
+      if (initial.clearRowsOnRead) {
+        rows = []
+      }
+      return { tail }
+    },
     waitForTerminal: (_handle, options) => {
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
@@ -149,6 +160,18 @@ describe('observing a run with agent evidence', () => {
     } else {
       await vi.advanceTimersByTimeAsync(90_000)
     }
+    await run.promise
+    expect(run.settled).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })
+    )
+  })
+
+  it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
+    const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
+    const run = observe(pane)
+    await vi.advanceTimersByTimeAsync(AGENT_START_GRACE_MS)
+    pane.report({ interrupted: true })
+    await vi.advanceTimersByTimeAsync(90_000)
     await run.promise
     expect(run.settled).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'dispatch_failed', errorCode: 'agentInterrupted' })

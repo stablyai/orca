@@ -10,9 +10,10 @@ import {
   type AutomationRunFailure
 } from '../../shared/automation-run-failure-copy'
 import {
-  hasHeldRunTurnDone,
+  judgeHeldRunTurn,
   judgeIdleRun,
-  type AutomationRunAgentEvidence
+  type AutomationRunAgentEvidence,
+  type IdleRunVerdict
 } from './automation-run-agent-evidence'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
@@ -59,9 +60,13 @@ async function judgeIdleTail(
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
   const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
-  if (verdict.kind === 'wait') {
-    return null
-  }
+  return verdict.kind === 'wait' ? null : observationOf(verdict, tail)
+}
+
+function observationOf(
+  verdict: Exclude<IdleRunVerdict, { kind: 'wait' }>,
+  tail: readonly string[]
+): AutomationRunCompletionObservation {
   if (verdict.kind === 'completed') {
     return { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
   }
@@ -258,26 +263,17 @@ export function createRuntimeAutomationRunTerminalObserver(
           if (signal.aborted || !isTerminalWaitTimeout(error)) {
             throw error
           }
-          if (
-            judged &&
-            hasHeldRunTurnDone(
-              judged.evidence,
-              judged.run,
-              runStartedAt,
-              Date.now(),
-              HELD_DONE_SETTLE_MS
-            )
-          ) {
-            // A held done is decided by the same verdict, so an interrupted turn still fails.
-            const observation = await judgeIdleTail(
-              await readTail(runtime, handle),
-              judged.evidence,
-              judged.run,
-              runStartedAt
-            )
-            if (observation) {
-              return observation
-            }
+          const held = judged
+            ? judgeHeldRunTurn(
+                judged.evidence,
+                judged.run,
+                runStartedAt,
+                Date.now(),
+                HELD_DONE_SETTLE_MS
+              )
+            : null
+          if (held) {
+            return observationOf(held, await readTail(runtime, handle))
           }
         }
       }

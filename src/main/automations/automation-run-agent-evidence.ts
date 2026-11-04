@@ -52,20 +52,26 @@ export function judgeIdleRun(
   return verdict.kind === 'completed' ? { kind: 'completed' } : verdict
 }
 
-/** The agent reported this run's turn done at least `heldForMs` ago, and no row of its pane says otherwise. */
-export function hasHeldRunTurnDone(
+/** The run's verdict once the agent reported its turn done at least `heldForMs` ago and no row of its pane says otherwise; null until then. Decided from one read of the rows, so a row cleared afterwards cannot change it. */
+export function judgeHeldRunTurn(
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
   runStartedAt: number,
   now: number,
   heldForMs: number
-): boolean {
+): Exclude<IdleRunVerdict, { kind: 'wait' }> | null {
   const sentAt = run.dispatchedAt ?? runStartedAt
   const rows = (
     run.terminalPaneKey ? evidence.getAgentStatusRowsForPane(run.terminalPaneKey) : []
   ).filter((row) => !row.providerSessionOnly)
-  return (
-    rows.every((row) => row.state === 'done') &&
-    rows.some((row) => isTurnDoneSince(row, sentAt) && now - row.stateStartedAt >= heldForMs)
-  )
+  const done = rows.filter((row) => isTurnDoneSince(row, sentAt))
+  if (
+    !rows.every((row) => row.state === 'done') ||
+    !done.some((row) => now - row.stateStartedAt >= heldForMs)
+  ) {
+    return null
+  }
+  return done.some((row) => row.interrupted === true)
+    ? { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+    : { kind: 'completed' }
 }
