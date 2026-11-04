@@ -2556,6 +2556,14 @@
       "saveFailedTitle": "Não foi possível salvar o layout",
       "saveFailedMessage": "Este layout está aplicado por enquanto. Selecione-o novamente para tentar salvar."
     },
+    "terminalArrowPad": {
+      "label": "Teclas de direção",
+      "hint": "Toque em um lado para pressionar uma seta ou mantenha pressionado e arraste para repetir",
+      "up": "Para cima",
+      "down": "Para baixo",
+      "left": "Esquerda",
+      "right": "Direita"
+    },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Colar",

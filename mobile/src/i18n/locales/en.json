@@ -2639,6 +2639,14 @@
       "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
       "keepOpen": "Keep open"
     },
+    "terminalArrowPad": {
+      "label": "Arrow keys",
+      "hint": "Tap a side for one arrow press, or hold and drag to repeat",
+      "up": "Up",
+      "down": "Down",
+      "left": "Left",
+      "right": "Right"
+    },
     "terminalMoreKeys": {
       "sendKey": "Send {{label}}",
       "paste": "Paste",

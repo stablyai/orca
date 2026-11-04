@@ -2485,6 +2485,14 @@
       "saveFailedTitle": "レイアウトを保存できませんでした",
       "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
     },
+    "terminalArrowPad": {
+      "label": "矢印キー",
+      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
     "terminalMoreKeys": {
       "sendKey": "{{label}}を送信",
       "paste": "貼り付け",

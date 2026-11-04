@@ -2485,6 +2485,14 @@
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
       "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
     },
+    "terminalArrowPad": {
+      "label": "방향키",
+      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
+      "up": "위",
+      "down": "아래",
+      "left": "왼쪽",
+      "right": "오른쪽"
+    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",
       "paste": "붙여넣기",

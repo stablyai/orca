@@ -2485,6 +2485,14 @@
       "saveFailedTitle": "無法儲存版面配置",
       "saveFailedMessage": "此版面配置暫時生效。請再次選取以重試儲存。"
     },
+    "terminalArrowPad": {
+      "label": "方向鍵",
+      "hint": "點按一側可按一次方向鍵，或按住並拖曳以重複",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
     "terminalMoreKeys": {
       "sendKey": "傳送 {{label}}",
       "paste": "貼上",

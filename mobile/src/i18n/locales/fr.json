@@ -2556,6 +2556,14 @@
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
       "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
     },
+    "terminalArrowPad": {
+      "label": "Touches fléchées",
+      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
+      "up": "Haut",
+      "down": "Bas",
+      "left": "Gauche",
+      "right": "Droite"
+    },
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
       "paste": "Coller",

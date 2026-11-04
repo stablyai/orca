@@ -2485,6 +2485,14 @@
       "saveFailedTitle": "无法保存布局",
       "saveFailedMessage": "此布局暂时生效。请再次选择以重试保存。"
     },
+    "terminalArrowPad": {
+      "label": "方向键",
+      "hint": "点击一侧可按一次方向键，或按住并拖动以重复",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
     "terminalMoreKeys": {
       "sendKey": "发送 {{label}}",
       "paste": "粘贴",

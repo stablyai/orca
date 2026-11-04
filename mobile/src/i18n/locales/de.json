@@ -2489,6 +2489,14 @@
       "saveFailedTitle": "Layout konnte nicht gespeichert werden",
       "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
     },
+    "terminalArrowPad": {
+      "label": "Pfeiltasten",
+      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
+      "up": "Nach oben",
+      "down": "Nach unten",
+      "left": "Nach links",
+      "right": "Nach rechts"
+    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} senden",
       "paste": "Einfügen",

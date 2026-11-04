@@ -2489,6 +2489,14 @@
       "saveFailedTitle": "Düzen kaydedilemedi",
       "saveFailedMessage": "Bu düzen şimdilik uygulanır. Kaydetmeyi yeniden denemek için tekrar seçin."
     },
+    "terminalArrowPad": {
+      "label": "Ok tuşları",
+      "hint": "Bir oka bir kez basmak için bir tarafa dokunun; tekrarlamak için basılı tutup sürükleyin",
+      "up": "Yukarı",
+      "down": "Aşağı",
+      "left": "Sol",
+      "right": "Sağ"
+    },
     "terminalMoreKeys": {
       "sendKey": "{{label}} gönder",
       "paste": "Yapıştır",

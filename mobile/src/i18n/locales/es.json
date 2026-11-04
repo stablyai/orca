@@ -2556,6 +2556,14 @@
       "saveFailedTitle": "No se pudo guardar el diseño",
       "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
     },
+    "terminalArrowPad": {
+      "label": "Teclas de dirección",
+      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
+      "up": "Arriba",
+      "down": "Abajo",
+      "left": "Izquierda",
+      "right": "Derecha"
+    },
     "terminalMoreKeys": {
       "sendKey": "Enviar {{label}}",
       "paste": "Pegar",
