@@ -7561,6 +7561,7 @@
           "d9657ac204": "Terminal session shutdown requested.",
           "e8f25bd903": "Couldn’t finish terminal cleanup.",
           "a702d4196e": "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone.",
+          "killAllRemoteTabsStayOpen": "Tabs from remote hosts and paired computers stay open, and their sessions keep running there.",
           "confirmRestart": "Restart",
           "busyRestarting": "Restarting…",
           "confirmKillAll": "Kill all sessions",

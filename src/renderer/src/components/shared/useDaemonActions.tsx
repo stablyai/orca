@@ -255,6 +255,10 @@ function getCopy(kind: DaemonActionKind): DaemonActionCopy {
         {translate(
           'auto.components.shared.useDaemonActions.a702d4196e',
           "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
+        )}{' '}
+        {translate(
+          'auto.components.shared.useDaemonActions.killAllRemoteTabsStayOpen',
+          'Tabs from remote hosts and paired computers stay open, and their sessions keep running there.'
         )}
       </>
     ),

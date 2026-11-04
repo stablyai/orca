@@ -7159,6 +7159,7 @@
           "d9657ac204": "Arrêt de la session de terminal demandé.",
           "e8f25bd903": "Impossible de terminer le nettoyage des terminaux.",
           "a702d4196e": "Ceci ferme tous les onglets de terminal de tous les espaces de travail et demande l'arrêt des sessions de terminal en cours. Tout travail non enregistré dans un terminal est perdu. Le daemon continue de tourner et de nouveaux terminaux peuvent être ouverts immédiatement. Cette action est irréversible.",
+          "killAllRemoteTabsStayOpen": "Les onglets des hôtes distants et des ordinateurs associés restent ouverts, et leurs sessions continuent de s'exécuter là-bas.",
           "01d6b7c64e": "Les terminaux ouverts et les agents redémarreront. Les terminaux sur les hôtes distants ne sont pas affectés.",
           "922548bc66": "Redémarrer le service du terminal ?",
           "confirmRestart": "Redémarrer",
