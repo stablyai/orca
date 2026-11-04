@@ -7,6 +7,8 @@ import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal/
 import { useRouteCapability } from '../transport/use-workspace-client'
 import { pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'
+import { getMobileViewerColorQueryReplies } from '../terminal/resolve-mobile-terminal-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { TerminalFrame } from '../terminal/terminal-webview-messages'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
@@ -50,6 +52,22 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameWidth
   } = scope
   const orderedInputSupported = useRouteCapability(TERMINAL_ORDERED_INPUT_CAPABILITY)
+  const colorScheme = useMobileColorScheme()
+  const prevColorSchemeRef = useRef(colorScheme)
+  useEffect(() => {
+    if (prevColorSchemeRef.current === colorScheme) {
+      return
+    }
+    prevColorSchemeRef.current = colorScheme
+    if (!client || connState !== 'connected') {
+      return
+    }
+    void client
+      .sendRequest('terminal.setViewerColors', {
+        colors: getMobileViewerColorQueryReplies(colorScheme)
+      })
+      .catch(() => {})
+  }, [client, colorScheme, connState])
   const inputSender = useRef(new MobileTerminalInputSender()).current
   useEffect(() => {
     const unsubscribe = client?.onStateChange((state) => {

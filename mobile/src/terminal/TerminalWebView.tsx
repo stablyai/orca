@@ -2,6 +2,9 @@ import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from '
 import { Platform, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { resolveEffectiveMobileTerminalTheme } from './resolve-mobile-terminal-theme'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -15,6 +18,9 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    const colorScheme = useMobileColorScheme()
+    const resolvedTheme = resolveEffectiveMobileTerminalTheme(props.terminalTheme, colorScheme)
+    const frameBg = resolvedTheme.theme.background ?? colors.terminalBg
     const t = useMobileTranslation()
     const webViewRef = useRef<WebView>(null)
 
@@ -38,7 +44,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     useImperativeHandle(ref, () => handle, [handle])
     // Seed scale in page source before document startup; Android injected scripts may run too late.
     const [source] = useState(() =>
-      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
+      xtermWebViewSource({
+        textScale: props.textScale ?? 1,
+        shown: props.shownAtMount ?? true,
+        backgroundColor: frameBg,
+        foregroundColor: resolvedTheme.theme.foreground
+      })
     )
 
     const handleMessage = useCallback(
@@ -67,11 +78,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [clearEngineError, resetReadiness])
 
     return (
-      <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
+      <View
+        style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, { backgroundColor: frameBg }, props.style]}
+      >
         <WebView
           ref={webViewRef}
           source={source}
-          style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+          style={[TERMINAL_WEBVIEW_FRAME_STYLES.webview, { backgroundColor: frameBg }]}
           originWhitelist={['*']}
           javaScriptEnabled
           scrollEnabled={false}

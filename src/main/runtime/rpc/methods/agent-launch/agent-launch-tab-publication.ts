@@ -82,6 +82,20 @@ export type EarlyAgentLaunchTab = {
 export type AgentLaunchView = {
   early: EarlyAgentLaunchTab | null
   presentation: AgentLaunchParams['presentation']
+  terminalColorQueryReplies?: AgentLaunchParams['terminalColorQueryReplies']
+}
+
+export function agentLaunchView(
+  early: EarlyAgentLaunchTab | null,
+  params: Pick<AgentLaunchParams, 'presentation' | 'terminalColorQueryReplies'>
+): AgentLaunchView {
+  return {
+    early,
+    presentation: params.presentation,
+    ...(params.terminalColorQueryReplies
+      ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+      : {})
+  }
 }
 
 export function withPlacement(result: AgentLaunchResult, view: AgentLaunchView): AgentLaunchResult {

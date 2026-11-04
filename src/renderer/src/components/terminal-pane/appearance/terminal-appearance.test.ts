@@ -453,6 +453,23 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
     expect(publishTerminalViewAttributesAtAppStart(null, true, send)).toBe(false)
     expect(send).not.toHaveBeenCalled()
   })
+
+  it('aligns published colorSchemeMode with terminal background polarity when terminalUseSeparateLightTheme is false', () => {
+    _resetTerminalViewAttributesPublisherForTest()
+    const sent: unknown[] = []
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      theme: 'light' as const,
+      terminalUseSeparateLightTheme: false
+    }
+    expect(
+      publishTerminalViewAttributesAtAppStart(settings, false, (attrs) => {
+        sent.push(attrs)
+        return true
+      })
+    ).toBe(true)
+    expect(sent[0]).toMatchObject({ colorSchemeMode: 'dark' })
+  })
 })
 
 describe('hexToRgba', () => {

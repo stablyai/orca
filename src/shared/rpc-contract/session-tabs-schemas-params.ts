@@ -6,7 +6,11 @@ import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { ResumeProviderSessionParam, WindowsShellOverrideParam } from './terminal-unary-params'
+import {
+  ResumeProviderSessionParam,
+  TerminalColorQueryReplyColorsParam,
+  WindowsShellOverrideParam
+} from './terminal-unary-params'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -184,6 +188,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     })
     .optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
+  terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   activate: z.boolean().optional(),
   select: z.boolean().optional(),
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),

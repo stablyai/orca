@@ -29,6 +29,7 @@ import { publishTerminalViewAttributes } from '../terminal-view-attributes-publi
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
+import { isTerminalBackgroundLight } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
 import { windowBackdropActive } from '@/lib/window-backdrop'
 import { contrastRatio, over, type Rgba } from '@/lib/plugin-theme-tokens'
@@ -119,6 +120,16 @@ export function composeActiveTerminalTheme(
   return theme
 }
 
+function resolveEffectiveTerminalColorMode(
+  themeBackground: string | undefined,
+  fallbackMode: 'dark' | 'light'
+): 'dark' | 'light' {
+  if (!themeBackground) {
+    return fallbackMode
+  }
+  return isTerminalBackgroundLight(themeBackground) ? 'light' : 'dark'
+}
+
 /** Publish at startup so hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; returns whether sent (terminal-query-authority.md). */
 export function publishTerminalViewAttributesAtAppStart(
   settings: GlobalSettings | null | undefined,
@@ -130,9 +141,13 @@ export function publishTerminalViewAttributesAtAppStart(
   }
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const theme = composeActiveTerminalTheme(appearance.theme, settings)
+  const effectiveMode = resolveEffectiveTerminalColorMode(
+    appearance.theme?.background,
+    appearance.mode
+  )
   return send !== undefined
-    ? publishTerminalViewAttributes(theme, appearance.mode, settings, send)
-    : publishTerminalViewAttributes(theme, appearance.mode, settings)
+    ? publishTerminalViewAttributes(theme, effectiveMode, settings, send)
+    : publishTerminalViewAttributes(theme, effectiveMode, settings)
 }
 
 // Value equality over composed ITheme objects (flat string slots plus the extendedAnsi array); gates the options.theme write.
@@ -172,7 +187,11 @@ export function applyTerminalAppearance(
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
   const theme = composeActiveTerminalTheme(appearance.theme, settings)
-  publishTerminalViewAttributes(theme, appearance.mode, settings)
+  const effectiveMode = resolveEffectiveTerminalColorMode(
+    appearance.theme?.background,
+    appearance.mode
+  )
+  publishTerminalViewAttributes(theme, effectiveMode, settings)
   const paneBackground = theme?.background ?? '#000000'
   // Why: over a window backdrop the split root is the one translucent paint; xterm's viewport,
   // scrollable element and canvas each repainting it compounded 0.82 to ~0.99 (#36196).
@@ -198,7 +217,7 @@ export function applyTerminalAppearance(
     // Use configured background: preserving live OSC-11 mutations above means a TUI background change does not re-gate contrast.
     const minimumContrastRatio = resolveTerminalMinimumContrastRatio(
       theme?.background,
-      appearance.mode,
+      effectiveMode,
       settings.terminalMinimumContrastRatio
     )
     if (pane.terminal.options.minimumContrastRatio !== minimumContrastRatio) {
@@ -244,7 +263,7 @@ export function applyTerminalAppearance(
     )
     const transport = paneTransports.get(pane.id)
     if (transport) {
-      maybePushMode2031Flip(pane.id, appearance.mode, transport, paneMode2031, paneLastThemeMode)
+      maybePushMode2031Flip(pane.id, effectiveMode, transport, paneMode2031, paneLastThemeMode)
     }
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.
     const appearancePtyId = transport?.getPtyId()

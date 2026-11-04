@@ -2,6 +2,9 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { View } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { resolveEffectiveMobileTerminalTheme } from './resolve-mobile-terminal-theme'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -27,6 +30,9 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
     useMobileTranslation()
+    const colorScheme = useMobileColorScheme()
+    const resolvedTheme = resolveEffectiveMobileTerminalTheme(props.terminalTheme, colorScheme)
+    const frameBg = resolvedTheme.theme.background ?? colors.terminalBg
     const hostRef = useRef<View>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // Readiness fires inside mount before a handle exists; buffer its synchronous controller flush until the handle returns.
@@ -51,10 +57,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     const { clearEngineError, engineError, handle, receive, resetReadiness } = controller
     // Reload replaces the host div as well as the document so xterm cannot inherit the old mount.
     const [generation, setGeneration] = useState(0)
-    // Seed shown/scale before document startup, matching native pre-content state.
+    // Seed shown/scale/theme before document startup, matching native pre-content state.
     const [atMount] = useState(() => ({
       textScale: props.textScale ?? 1,
-      shown: props.shownAtMount ?? true
+      shown: props.shownAtMount ?? true,
+      backgroundColor: frameBg,
+      foregroundColor: resolvedTheme.theme.foreground
     }))
 
     useImperativeHandle(ref, () => handle, [handle])
@@ -105,12 +113,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [clearEngineError, resetReadiness])
 
     return (
-      <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
+      <View
+        style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, { backgroundColor: frameBg }, props.style]}
+      >
         {/* onLayout makes react-native-web observe the box the document sizes to. */}
         <View
           key={generation}
           ref={hostRef}
-          style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+          style={[TERMINAL_WEBVIEW_FRAME_STYLES.webview, { backgroundColor: frameBg }]}
           onLayout={handleHostLayout}
         />
         {engineError ? (

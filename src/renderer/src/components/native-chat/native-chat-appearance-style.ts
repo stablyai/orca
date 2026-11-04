@@ -181,7 +181,7 @@ export function nativeChatAppearanceStyle(
         theme: settings?.theme ?? 'dark',
         terminalThemeDark: settings?.terminalThemeDark ?? '',
         terminalThemeLight: settings?.terminalThemeLight ?? '',
-        terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? false,
+        terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? true,
         terminalCustomThemes: settings?.terminalCustomThemes,
         terminalPluginPalettes: settings?.terminalPluginPalettes,
         pluginSystemEnabled: settings?.pluginSystemEnabled,
@@ -195,7 +195,11 @@ export function nativeChatAppearanceStyle(
       colors.background && colors.foreground
         ? { background: colors.background, foreground: colors.foreground }
         : null
-    const { background, foreground } = readable ?? { background: '#000000', foreground: '#fafafa' }
+    const { background, foreground } =
+      readable ??
+      (light
+        ? { background: '#ffffff', foreground: '#0a0a0a' }
+        : { background: '#000000', foreground: '#fafafa' })
     // Why also for the app theme: Match Terminal can paint the mode the setting doesn't ask for;
     // an unreadable palette keeps the requested mode, as the app does.
     if (readable || matching) {
