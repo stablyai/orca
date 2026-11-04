@@ -1,8 +1,8 @@
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { CombinedDiffFileTreeMode } from './combined-diff-section-identity'
 import { getCombinedDiffFileTreeSectionKey } from './combined-diff-section-identity'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 
 export function combinedDiffSectionMatchesEntryMetadata(
   section: DiffSection,

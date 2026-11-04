@@ -1,4 +1,4 @@
-import { formatNativeChatDuration } from '../../native-chat-turn-status'
+import { formatNativeChatDuration } from '../transcript/native-chat-turn-status'
 
 export type NativeChatWebSearchResult = { title: string; url: string }
 

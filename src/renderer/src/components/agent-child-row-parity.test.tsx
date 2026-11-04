@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentChildRowContextForParent,
   type AgentChildRowContext
-} from '../../../shared/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+} from '../../../shared/agent-status/presentation/agent-child-row-model'
+import type { AgentSessionBackgroundTask } from '../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
+import { structuredRunningChildWork } from '../../../shared/agent-status/child-work/agent-child-work-listing'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { NativeChatBackgroundTasksStatus } from '@/components/native-chat/NativeChatBackgroundTasksStatus'
 import { buildBackgroundTaskGroupsFromViews } from '../../../shared/background-task-roster'

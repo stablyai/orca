@@ -3,7 +3,7 @@ import {
   MAX_ORCAD_MIGRATION_SCROLLBACK_SNAPSHOTS,
   MAX_ORCAD_MIGRATION_SCROLLBACK_TOTAL_BYTES
 } from '../../../shared/orcad-migration/orcad-migration-scrollback'
-import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal-scrollback-limits'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
 import { assessWslMoveTerminals, type WslMovePaneFacts } from './wsl-move-terminal-gate'
 
 const pane = (paneKey: string, extra: Partial<WslMovePaneFacts> = {}): WslMovePaneFacts => ({

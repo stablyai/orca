@@ -19,9 +19,6 @@ vi.mock('react-native', () => ({
   Keyboard: { dismiss: vi.fn(), addListener: () => ({ remove: vi.fn() }) }
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerMediumImpact: vi.fn() }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('../terminal/mobile-terminal-operations', () => ({
   terminalInputSend: {
     request: async (_client: unknown, params: Record<string, unknown>) => {
@@ -44,24 +41,22 @@ type Session = {
   readonly client: unknown
   readonly activeHandle: string | null
   readonly canSend: boolean
-  readonly draft: string
   readonly modes?: TerminalModes
 }
 
-const OFFLINE: Session = { client: null, activeHandle: null, canSend: false, draft: '' }
+const OFFLINE: Session = { client: null, activeHandle: null, canSend: false }
 const READY: Session = {
   client: { getState: () => 'connected' },
   activeHandle: 'terminal-a',
-  canSend: true,
-  draft: 'ls -la'
+  canSend: true
 }
-
-let restoredDrafts: string[] = []
 
 function buildScope(session: Session): MobileSessionTerminalWebviewModel {
   const noop = (): void => {}
   const scope = {
     sendTerminalUserInput: terminalInputSend.request,
+    sendTerminalOrderedInput: terminalInputSend.request,
+    terminalRefs: { current: new Map() },
     client: session.client,
     activeHandle: session.activeHandle,
     activeSessionTab: null,
@@ -75,7 +70,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     clientRef: { current: session.client },
     connStateRef: { current: 'connected' },
     liveInputRef: { current: null },
-    commandInputRef: { current: null },
     ptyModesRef: {
       current: new Map(
         session.activeHandle && session.modes ? [[session.activeHandle, session.modes]] : []
@@ -87,17 +81,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     sessionTabActionSheetRequestSeqRef: { current: 0 },
     activeHandleRef: { current: session.activeHandle },
     activeSessionTabTypeRef: { current: 'terminal' },
-    sendingRef: { current: false },
-    bufferedTerminalDraftState: {
-      input: session.draft,
-      beginBufferedTerminalDraftSend: (handle: string, draft: string) => ({
-        draft,
-        handle,
-        token: { handle }
-      }),
-      restoreRejectedDraft: (send: { draft: string }) => restoredDrafts.push(send.draft),
-      settleBufferedTerminalDraftSend: () => true
-    },
     getSendCompletionGeneration: () => 0,
     getLiveInteractionGeneration: () => 0,
     handleLiveInputAccessoryBytes: async () => ({ kind: 'allow-raw' }),
@@ -122,14 +105,12 @@ const liveFieldRef = liveField as unknown as RefObject<never>['current']
 function LiveHarness({ session }: { readonly session: Session }): null {
   const current = buildScope(session)
   const refs = useRef(current).current
-  const liveHandles = useRef(new Set<string>())
   const sender = useRef<TerminalLiveInputSender>(async () => false)
   const handle = session.activeHandle
   refs.activeHandleRef.current = handle
   refs.activeSessionTabTypeRef.current = 'terminal'
   refs.connStateRef.current = session.canSend ? 'connected' : 'disconnected'
   refs.clientRef.current = current.client
-  liveHandles.current = new Set(handle ? [handle] : [])
   const commit = useTerminalLiveInputCommit({
     activeHandle: handle,
     activeHandleRef: refs.activeHandleRef,
@@ -137,8 +118,6 @@ function LiveHarness({ session }: { readonly session: Session }): null {
     activeSessionTabTypeRef: refs.activeSessionTabTypeRef,
     connected: session.canSend,
     liveInputRef: refs.liveInputRef,
-    liveInputTerminalHandles: liveHandles.current,
-    liveInputTerminalHandlesRef: liveHandles,
     sendLiveTerminalInputRef: sender,
     setLiveInputCapture: () => {}
   })

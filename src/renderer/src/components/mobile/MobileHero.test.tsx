@@ -20,7 +20,7 @@ vi.mock('./NetworkInterfacePicker', () => ({
   NetworkInterfacePicker: () => null
 }))
 
-vi.mock('../settings/MobilePairingConnectionOptions', () => ({
+vi.mock('../settings/mobile/pairing/MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: () => null
 }))
 
@@ -28,7 +28,7 @@ vi.mock('./WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: () => null
 }))
 
-vi.mock('../settings/MachineNameField', () => ({
+vi.mock('../machine-identity/MachineNameField', () => ({
   MachineNameField: ({ id, className }: { id?: string; className?: string }) => (
     <div data-testid="machine-name-field" data-id={id} className={className} />
   )

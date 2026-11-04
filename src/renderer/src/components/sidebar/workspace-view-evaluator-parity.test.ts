@@ -15,12 +15,14 @@ import { countActiveWorkspaceFilters } from '../../../../shared/workspace-view/w
 import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-creator-visibility'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 
-// Compare the shared evaluator against the previous sidebar filter/comparator over every filter combination.
+// Parity with the sidebar's own filter chain and comparator as they stood before the shared
+// Workspace options evaluator, over every combination of the filter toggles, except that
+// folder project roots now stay visible under "Hide default branch" (#29720).
 
 const repos: Repo[] = [
   { id: 'git', path: '/git', displayName: 'Git', badgeColor: '#000', addedAt: 0 },
@@ -170,14 +172,15 @@ function* everyToggleCombination(): Generator<Toggles> {
   }
 }
 
-// The sidebar's filter chain before the shared evaluator, verbatim apart from inlined predicates.
+// The prior filter chain with inlined predicates and the folder-root correction (#29720).
 function previousDesktopFilter(t: Toggles): string[] {
   const detached = (w: Worktree) =>
     w.branch.replace(/^refs\/heads\//, '').trim() === '' && w.head.trim().slice(0, 7) !== ''
   const defaultBranch = (w: Worktree, repo: Repo | undefined) =>
     w.isMainWorktree &&
     w.ephemeralVmCheckoutMode !== 'provisioned-root' &&
-    (w.branch.trim() !== '' || repo?.kind === 'folder')
+    w.branch.trim() !== '' &&
+    repo?.kind !== 'folder'
   let all = rows.filter((w) => !w.isArchived)
   if (t.hideWorkspacesFromOtherDevices) {
     all = all.filter((w) => !isWorkspaceOwnedBySomeoneElse(w, pairedDeviceIdsByEnvironment))

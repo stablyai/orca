@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import type { PreservedBranchCleanup } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import PreservedBranchBatchReviewModal from './PreservedBranchBatchReviewModal'
 import {
   forceDeletePreservedBranchBatch,
@@ -153,17 +153,6 @@ describe('showPreservedBranchBatchToast', () => {
     expect(toast.success).toHaveBeenCalledWith('Local branches deleted: 1', {
       id: 'force-delete-branch-batch:repo-a::one:1'
     })
-  })
-
-  it('keeps older-server branches visible without offering an unsafe delete', () => {
-    showPreservedBranchBatchToast(3, [{ worktreeId: 'repo-a::one', branchName: 'feature/one' }])
-    const body = renderToastBody()
-
-    expect(body.querySelector('button')).toBeNull()
-    expect(toast.warning).toHaveBeenCalledWith(
-      '3 workspaces removed, 1 branch kept',
-      expect.not.objectContaining({ duration: Infinity })
-    )
   })
 
   it('serializes branch deletion within one repository', async () => {

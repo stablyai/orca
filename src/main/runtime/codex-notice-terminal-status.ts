@@ -4,11 +4,9 @@ import {
   createCodexReconnectFailedNoticeTracker,
   type CodexNoticeTracker
 } from '../../shared/codex-native-notice'
-import type {
-  AgentStatusIpcPayload,
-  ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 
 const capacityTrackers = new WeakMap<HeadlessEmulator, CodexNoticeTracker>()

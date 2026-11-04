@@ -1,10 +1,10 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
-import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PrimaryAction } from '../../source-control-primary-action'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -278,7 +278,7 @@ export function SourceControlHeaderToolbar({
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'
                 )}
-                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
+                className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
                 aria-label={translate(
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'

@@ -10,7 +10,7 @@ import {
   canHoldDocLink,
   DOC_LINK_PATTERN,
   isDocLinkLiteralCodeTextNode
-} from '../../src/renderer/src/components/editor/rich-markdown-doc-link-scan.ts'
+} from '../../src/renderer/src/components/editor/rich-markdown/doc-links/rich-markdown-doc-link-scan.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const ITERATIONS = Number(process.env.ORCA_DOC_LINK_BENCH_ITERATIONS ?? '41')

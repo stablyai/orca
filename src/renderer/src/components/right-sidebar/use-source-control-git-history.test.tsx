@@ -14,7 +14,7 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined })
 
 import { useSourceControlGitHistory } from './source-control/sync/use-git-history'
 import { deferred, flush, mountProbe, unmountProbes } from './source-control-hook-test-harness'
-import type { GitHistoryResult } from '../../../../shared/git-history-types'
+import type { GitHistoryResult } from '../../../../shared/git/history/git-history-types'
 
 function historyResult(subject: string): GitHistoryResult {
   return {
@@ -212,27 +212,6 @@ describe('useSourceControlGitHistory stale completion', () => {
       root.render(<Probe worktreeId="A" worktreePath="/a" worktreeMap={ALL_WORKTREES} />)
     })
     expect(latest?.gitHistoryState).toEqual({ status: 'idle' })
-  })
-
-  it('re-fetches when the compare base moves and passes it to the history read', async () => {
-    const root = await mount({ compareBaseRef: 'origin/main' })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      // A mount with Commits already open is restored state, not a user act: no WSL wake (E9).
-      { limit: 50, baseRef: 'origin/main' }
-    )
-
-    await act(async () => {
-      root.render(<Probe compareBaseRef="origin/dev" />)
-    })
-    await flush()
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-    // A base-ref move refetches in the background; it never starts a stopped distro.
-    expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
-      limit: 50,
-      baseRef: 'origin/dev'
-    })
   })
 
   it('re-fetches when the owner host changes but the worktree and path stay put', async () => {

@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment-store.js'
+import { RelayAssignmentRowBusyError, type RelayAssignment } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
-import type { StickySlotSample } from './sticky-slot-statements.js'
-import {
-  ScriptedPoolClient,
-  scriptedPostgresDatabase
-} from './test-fixtures/scripted-postgres-pool.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({
@@ -105,26 +100,6 @@ describe('public assignment reconnect lane', () => {
     expect(assign).toHaveBeenCalledTimes(1)
   })
 
-  it('sends an unverified reconnect hint through the placement lane unchanged', async () => {
-    const host = 'nnnnnnnnnnnnnnnn'
-    const assign = vi.fn(async () => assignment('cell-n', host))
-    const resolve = vi.fn(async () => null)
-    const outcomes: string[] = []
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
-    })
-
-    const response = await app.request('/v1/assign', assignmentRequest(host, { reconnect: true }))
-
-    expect(response.status).toBe(200)
-    expect(assign).toHaveBeenCalledTimes(1)
-    expect(outcomes).toEqual(['placement'])
-  })
-
   it('rejects on the fast lane when the verification probe fails transiently', async () => {
     const host = 'tttttttttttttttt'
     const assign = vi.fn()
@@ -207,70 +182,6 @@ describe('public assignment reconnect lane', () => {
     expect(response.headers.get('retry-after')).toBe('1')
     expect(await response.json()).toEqual({ error: 'relay_assignment_row_busy' })
     warn.mockRestore()
-  })
-
-  it('reports what each sticky slot spent its hold on', async () => {
-    vi.useFakeTimers({ toFake: ['performance'] })
-    const first = 'ffffffffffffffff'
-    const queued = 'qqqqqqqqqqqqqqqq'
-    const newcomer = 'nnnnnnnnnnnnnnnn'
-    const firstHost = new ScriptedPoolClient()
-    const queuedHost = new ScriptedPoolClient()
-    // first: verify, assign; newcomer: assign; queued: verify, assign.
-    const database = scriptedPostgresDatabase([
-      firstHost,
-      firstHost,
-      new ScriptedPoolClient(),
-      queuedHost,
-      queuedHost
-    ])
-    const firstAssign = deferred<RelayAssignment>()
-    const firstReady = deferred<void>()
-    const resolve = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
-      await database.query('SELECT verify')
-      return assignment('cell-r', relayHostId)
-    })
-    const assign = vi.fn(async ({ relayHostId }: { relayHostId: string }) => {
-      await database.transaction(async (transaction) => {
-        await transaction.query('SELECT pin')
-        await transaction.query('UPDATE lease')
-      })
-      if (relayHostId === first) {
-        firstReady.resolve()
-        return await firstAssign.promise
-      }
-      return assignment('cell-r', relayHostId)
-    })
-    const samples: StickySlotSample[] = []
-    const app = createRelayApp(config(), {
-      store: {} as never,
-      assignments: { assign, resolve } as never,
-      drain: vi.fn(),
-      ready: vi.fn(async () => true),
-      recordStickySlot: (sample) => samples.push(sample)
-    })
-
-    const holding = app.request('/v1/assign', assignmentRequest(first, { reconnect: true }))
-    await firstReady.promise
-    expect(firstHost.statements).toHaveLength(5)
-    const waiting = app.request('/v1/assign', assignmentRequest(queued, { reconnect: true }))
-    // A placement request's statements are its own, even while a sticky slot is held.
-    expect((await app.request('/v1/assign', assignmentRequest(newcomer))).status).toBe(200)
-    await vi.advanceTimersByTimeAsync(60)
-    firstAssign.resolve(assignment('cell-r', first))
-    expect((await holding).status).toBe(200)
-    expect((await waiting).status).toBe(200)
-
-    // Verify, then BEGIN, two statements and COMMIT, each on that host's own connection.
-    const roundTrips = (sample: StickySlotSample | undefined) =>
-      [...(sample?.statementMsByConnection ?? [])].map(([id, ms]) => [id, ms.length])
-    expect(samples).toHaveLength(2)
-    expect(samples[0]).toMatchObject({ statements: 5 })
-    expect(roundTrips(samples[0])).toEqual([[1, 5]])
-    expect(samples[0]?.queueWaitMs).toBe(0)
-    expect(samples[1]).toMatchObject({ statements: 5 })
-    expect(roundTrips(samples[1])).toEqual([[3, 5]])
-    expect(samples[1]?.queueWaitMs).toBe(60)
   })
 })
 

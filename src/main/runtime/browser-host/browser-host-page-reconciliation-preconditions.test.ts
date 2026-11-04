@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserClientHostedPageInventory } from '../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { createBrowserHostLeaseState } from './browser-host-lease-attachment'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'
 import { BrowserHostPagePlacementRegistry } from './browser-host-page-placement'

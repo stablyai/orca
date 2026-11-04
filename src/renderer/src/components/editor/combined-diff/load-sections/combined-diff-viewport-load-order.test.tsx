@@ -2,26 +2,23 @@
 
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../../../shared/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { GitDiffResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 
-const transport = vi.hoisted(() => ({ diff: vi.fn() }))
+const transport = vi.hoisted(() => ({ diff: vi.fn(), getState: vi.fn() }))
 vi.mock('@/runtime/runtime-git-diff-client', () => ({
   getRuntimeGitDiff: transport.diff,
   getRuntimeGitBranchDiff: transport.diff,
   getRuntimeGitCommitDiff: transport.diff
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
-  requireRuntimeTargetForFileOwner: () => ({ kind: 'local' })
-}))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/store', () => ({ useAppStore: { getState: transport.getState } }))
 
 const file: OpenFile = {
   id: 'review',
@@ -124,6 +121,17 @@ function captureReads() {
   }
   return { started, settle }
 }
+
+beforeEach(() => {
+  const store = createTestStore()
+  store.setState({
+    openFiles: [file],
+    worktreesByRepo: {
+      repo: [makeWorktree({ id: file.worktreeId, repoId: 'repo', path: '/repo', hostId: 'local' })]
+    }
+  })
+  transport.getState.mockImplementation(store.getState)
+})
 
 afterEach(() => {
   cleanup()

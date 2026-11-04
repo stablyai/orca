@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Reopen the real ledger with no in-flight launches to test both surface and prompt writes across restart.
  * A recorded surface replays the surviving agent under its current pane handle; an unrecorded outcome remains unknown, never relaunched. */
@@ -9,11 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
-import { isAgentLaunchResult, type AgentLaunchResult } from '../../../../shared/agent-launch-intent'
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -198,6 +202,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

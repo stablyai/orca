@@ -6,11 +6,11 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow
 } from '../../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 import { readFreshTerminalInventory } from './terminal-inventory-observation'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 const RECOVERY_DEADLINE_MS = 8_000
 

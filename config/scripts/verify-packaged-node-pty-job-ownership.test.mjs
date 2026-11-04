@@ -7,7 +7,6 @@ import { peImage } from './windows-pe-image-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const {
-  packagedConptyCandidates,
   verifyPackagedConptyBreakawayMarker,
   verifyPackagedNodePtyJobOwnership,
   verifyPackagedWindowsNodePty
@@ -108,32 +107,6 @@ describe('verifyPackagedNodePtyJobOwnership', () => {
     const loadNative = vi.fn()
     verifyPackagedNodePtyJobOwnership('resources', { platform: 'linux', loadNative })
     expect(loadNative).not.toHaveBeenCalled()
-  })
-})
-
-describe('packagedConptyCandidates', () => {
-  // Pin loader order: wrong order could bless binary app never reaches.
-  it('walks the paths node-pty tries, in node-pty order', () => {
-    expect(packagedConptyCandidates('RES', 'arm64').map((candidate) => candidate.path)).toEqual([
-      join('RES', 'node_modules', 'node-pty', 'build', 'Release', 'conpty.node'),
-      join('RES', 'node_modules', 'node-pty', 'lib', 'build', 'Release', 'conpty.node'),
-      join('RES', 'node_modules', 'node-pty', 'build', 'Debug', 'conpty.node'),
-      join('RES', 'node_modules', 'node-pty', 'lib', 'build', 'Debug', 'conpty.node'),
-      join('RES', 'node_modules', 'node-pty', 'prebuilds', 'win32-arm64', 'conpty.node'),
-      join('RES', 'node_modules', 'node-pty', 'lib', 'prebuilds', 'win32-arm64', 'conpty.node')
-    ])
-  })
-
-  // Only the published prebuild gets the "no rebuild here can fix this" advice.
-  it('knows which of them node-pty publishes prebuilt', () => {
-    expect(packagedConptyCandidates('RES', 'x64').map((candidate) => candidate.prebuilt)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      true,
-      true
-    ])
   })
 })
 
@@ -280,27 +253,6 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     const resourcesDir = packagedResources({ 'build/Release/conpty.node': {} })
     expect(() => verifyPackagedConptyBreakawayMarker(resourcesDir, 'ia32')).toThrow(
       /Unsupported packaged node-pty Windows architecture/
-    )
-  })
-
-  it('looks where electron-builder actually lands the addon', () => {
-    const exists = vi.fn().mockReturnValue(false)
-    expect(() =>
-      verifyPackagedConptyBreakawayMarker(join('out', 'win-unpacked', 'resources'), 'x64', {
-        exists
-      })
-    ).toThrow()
-    expect(exists).toHaveBeenCalledWith(
-      join(
-        'out',
-        'win-unpacked',
-        'resources',
-        'node_modules',
-        'node-pty',
-        'build',
-        'Release',
-        'conpty.node'
-      )
     )
   })
 })

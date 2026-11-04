@@ -1,8 +1,10 @@
+import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { release } from 'node:os'
 import type { SessionOptions } from './session-options'
 import { windowsPtyForOwnerBackend } from '../../shared/xterm-conpty-options'
+import { createWslGuestRootObserver } from '../../shared/wsl-guest-root-marker'
 
 /** Couple barrier emissions and snapshot ownership so neither can lag the output plane. */
 export function createSessionOutputPipeline(
@@ -27,4 +29,28 @@ export function createSessionOutputPipeline(
   })
   barrier = recoveryBarrier
   return { output, recoveryBarrier }
+}
+
+export function createSessionShellReady(
+  opts: SessionOptions,
+  output: SessionOutputPlane,
+  acceptStartupIngress: (data: string) => void
+): SessionShellReadyBarrier {
+  const observeRoot = opts.onWslGuestRoot && createWslGuestRootObserver(opts.onWslGuestRoot)
+  return new SessionShellReadyBarrier({
+    sessionId: opts.sessionId,
+    subprocess: opts.subprocess,
+    responderParser: output.responderParser,
+    shellReadySupported: opts.shellReadySupported,
+    ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
+    shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
+    installDeviceAttributesFilter: () => output.installDeviceAttributesFilter(),
+    releaseDeviceAttributesFilter: () => output.releaseDeviceAttributesFilter(),
+    acceptStartupIngress: observeRoot
+      ? (data) => {
+          observeRoot(data)
+          acceptStartupIngress(data)
+        }
+      : acceptStartupIngress
+  })
 }

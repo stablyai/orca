@@ -1,7 +1,8 @@
 import type { Repo } from '../repo-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../worktree/types'
-import type { AgentStatusEntry, MigrationUnsupportedPtyEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../agent-status/contracts/agent-status-ipc-payload'
 import { tabHasLivePty } from '../tab-has-live-pty'
 import { getRuntimePathBasename } from '../cross-platform-path'
 import {

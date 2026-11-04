@@ -1,5 +1,5 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -93,7 +93,7 @@ async function resolvePortsTarget(
   const explicit = getOptionalStringFlag(flags, 'worktree')
   const selector =
     !explicit || explicit === 'active' || explicit === 'current'
-      ? await resolveCurrentAgentWorkspaceSelector(cwd, client)
+      ? await resolveCurrentAgentWorkspaceSelector(cwd, client, 'ports')
       : await resolveNativeFolderPathSelector(
           await normalizeWorktreeSelectorForCaller(explicit, cwd, client),
           client

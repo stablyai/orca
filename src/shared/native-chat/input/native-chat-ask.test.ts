@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
+import recordedQuestion from './fixtures/codex-weekend-question.json'
+import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import {
   readAgentMessageSource,
   type AgentMessageSource
 } from '../../agent-session/agent-session-message-source'
-import { nativeChatAskDismissKey } from '../../native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from './native-chat-ask-dismiss-key'
+import { projectStructuredItemToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
 import {
   extractPendingAsk,
   extractPendingMessageReplyAsk,
@@ -56,6 +61,114 @@ function toolTurn(id: string): NativeChatMessage {
 const QUESTIONS_INPUT = {
   questions: [{ question: 'Deploy?', options: [{ label: 'Yes' }, { label: 'No' }] }]
 }
+
+describe('blocking abandonment boundary', () => {
+  // Mixed-source scanner contract: Claude-shaped calls/results plus projected journal notices, not a live capture.
+  const notice = projectStructuredItemToNativeChat({
+    itemId: 'notice',
+    sequence: 2,
+    revision: 1,
+    observedAt: 2,
+    body: {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+      from: {
+        kind: 'agent',
+        senders: [],
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: 'term_b',
+          dispatchId: null,
+          messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+        }
+      }
+    }
+  })!
+  const boundaries = [
+    notice,
+    {
+      ...notice,
+      from: readAgentMessageSource({ kind: 'agent', senders: null, orchestration: null })
+    },
+    {
+      ...notice,
+      from: readAgentMessageSource({
+        kind: 'agent',
+        senders: [],
+        orchestration: { message: 'future-notice' }
+      })
+    },
+    ...(
+      ['queued', 'unsent', 'stoppedBeforeStart', 'awaitsRetry', 'sentWhileStopping'] as const
+    ).map((flag) => ({ ...notice, from: undefined, [flag]: true }))
+  ]
+  it.each(boundaries)('preserves blocking FIFO across non-answer row %#', (boundary) => {
+    const rows = [
+      message('ordinary', [call('Bash', { command: 'ls' })]),
+      message('ask', [call('AskUserQuestion', QUESTIONS_INPUT)]),
+      boundary,
+      toolTurn('ordinary-result'),
+      toolTurn('ask-result')
+    ]
+    const scanner = createPendingAskScanner()
+    const replay: NativeChatMessage[] = []
+    for (const row of rows) {
+      replay.push(row)
+      scanner.append(row)
+      expect(scanner.current()).toEqual(scanPendingAsks(replay))
+      if (replay.length >= 2 && replay.length < rows.length) {
+        expect(scanner.current().blocking?.questions[0]?.question).toBe('Deploy?')
+      }
+    }
+    expect(scanner.current().blocking).toBeNull()
+    expect(
+      scanPendingAsks([rows[0]!, rows[1]!, userTurn('human', 'never mind, do this instead')])
+        .blocking
+    ).toBeNull()
+  })
+
+  // Normalized source-shaped inputs: OMP toolCall.arguments and OpenCode pending state.input; no decoder imports.
+  // Grok question definition copied from src/main/acp/fixtures/s5-plan-approved.jsonl:6 (recorded ACP, not terminal delivery).
+  it.each([
+    ['OMP/OpenCode canonical shape', 'ask', QUESTIONS_INPUT],
+    [
+      'Grok',
+      'ask_user_question',
+      {
+        questions: [
+          {
+            question: 'Which test approach do you want for the subtract function?',
+            options: [
+              {
+                label: 'node:test (Recommended)',
+                description:
+                  "A math.test.js file using Node's built-in test runner. Run it with node --test. No new dependencies or package.json."
+              },
+              {
+                label: 'Plain assert script',
+                description:
+                  'A small math.test.js that uses node:assert and exits non-zero on failure. Run it with node math.test.js. No test framework.'
+              },
+              {
+                label: 'Add a package.json and a test script',
+                description:
+                  'Add package.json with a test script that runs the same Node built-in tests, so npm test works.'
+              }
+            ],
+            multiSelect: null
+          }
+        ]
+      }
+    ]
+  ])('retains %s normalized blocking input across a projected notice', (_agent, name, input) => {
+    const asked = message('ask', [call(String(name), input)])
+    const pending = scanPendingAsks([asked]).blocking
+    expect(pending).not.toBeNull()
+    expect(scanPendingAsks([asked, notice]).blocking).toEqual(pending)
+    expect(scanPendingAsks([asked, notice, toolTurn('answered')]).blocking).toBeNull()
+  })
+})
 
 describe('extractPendingAsk', () => {
   it('recognizes an unregistered tool whose input matches the canonical questions shape', () => {
@@ -335,7 +448,7 @@ describe('async questions', () => {
     expect(isDeliveredNativeChatUserMessage(notice)).toBe(false)
     scanner.append(notice)
     expect(scanner.current().contributors).toBe(pending)
-    expect(scanner.current().blocking).toBeNull()
+    expect(scanner.current().blocking).not.toBeNull()
     expect(scanner.append(message('replay', [asyncCall('same-call', 'duplicate')]))).toEqual([])
     scanner.append({ ...notice, id: 'legacy-human', from: undefined })
     expect(scanner.current().contributors).toEqual([])
@@ -345,21 +458,148 @@ describe('async questions', () => {
     ).toEqual(pending)
   })
 
-  it.each(['queued', 'unsent', 'stoppedBeforeStart', 'awaitsRetry', 'sentWhileStopping'] as const)(
-    'stays open while a human row is marked %s',
-    (flag) => {
-      const asked = message('a', [asyncCall('call-a', 'A?'), result()])
-      const waiting = userRow('waiting', { [flag]: true })
-      expect(extractPendingAsk([asked, waiting])?.questions.map((q) => q.question)).toEqual(['A?'])
-      const scanner = createPendingAskScanner()
-      scanner.append(asked)
-      const pending = scanner.current().contributors
-      scanner.append(waiting)
-      expect(scanner.current().contributors).toBe(pending)
-      expect(isDeliveredNativeChatUserMessage(waiting)).toBe(false)
-      expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+  it.each([
+    { queued: true },
+    { unsent: true },
+    { stoppedBeforeStart: true },
+    { awaitsRetry: true },
+    { sentWhileStopping: true },
+    { pendingSend: 'active' },
+    { pendingSend: 'queued' },
+    { deliveryState: 'pending' },
+    { deliveryState: 'unknown' }
+  ] as const)('stays open while a human row is marked %s', (flag) => {
+    const asked = message('a', [asyncCall('call-a', 'A?'), result()])
+    const waiting = userRow('waiting', flag)
+    expect(extractPendingAsk([asked, waiting])?.questions.map((q) => q.question)).toEqual(['A?'])
+    const scanner = createPendingAskScanner()
+    scanner.append(asked)
+    const pending = scanner.current().contributors
+    scanner.append(waiting)
+    expect(scanner.current().contributors).toBe(pending)
+    expect(isDeliveredNativeChatUserMessage(waiting)).toBe(false)
+    expect(extractPendingAsk([asked, userRow('sent')])).toBeNull()
+  })
+
+  it.each([false, true])(
+    'does not let a host-held answer affect a later repeated question (queued: %s)',
+    (queued) => {
+      const question: AgentJournalRenderItem = {
+        itemId: 'first',
+        sequence: 1,
+        revision: 0,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'request_user_input_async',
+              callId: 'first-call',
+              input: recordedQuestion
+            }
+          ]
+        }
+      }
+      const answer: AgentJournalRenderItem = {
+        itemId: agentJournalSubmissionKey('answer'),
+        sequence: 2,
+        revision: 0,
+        observedAt: 1,
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [
+            { type: 'text', text: `> ${recordedQuestion.questions[0].title}\n\nGet outside` }
+          ]
+        }
+      }
+      const later: AgentJournalRenderItem = {
+        ...question,
+        itemId: 'later',
+        sequence: 3,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'request_user_input_async',
+              callId: 'later-call',
+              input: recordedQuestion
+            }
+          ]
+        }
+      }
+      const rows = projectStructuredAgentSessionMessages(
+        [question, answer, later],
+        [],
+        [
+          {
+            clientMessageId: 'answer',
+            fence: 1,
+            payloadFingerprint: 'answer',
+            dispatchState: 'pending',
+            providerItemId: null,
+            reason: null,
+            submittedAt: 1,
+            resolvedAt: null,
+            handoverRecorded: true,
+            ...(queued ? { queuedMessageId: 'queue-answer' } : {})
+          }
+        ]
+      )
+      const scan = scanPendingAsks(rows)
+      expect(scan.contributors.map((contributor) => contributor.sourceRowId)).toEqual(
+        queued ? ['later'] : ['first', 'later']
+      )
+      expect(scan.answerPending).toBeUndefined()
     }
   )
+
+  it('uses write index when a held answer and a newer question share a journal sequence', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const later = {
+      ...message('later', [asyncCall('later', 'A?')]),
+      journalPosition: { sequence: 2, index: 1 }
+    }
+    const held = userRow('answer', {
+      deliveryState: 'pending',
+      queuedMessageId: 'queue',
+      journalPosition: { sequence: 2, index: 0 },
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
+    })
+    const result = scanPendingAsks([first, later, held])
+    expect(result.contributors.map((row) => row.sourceRowId)).toEqual(['later'])
+    expect(result.answerPending).toBeUndefined()
+  })
+
+  it('leaves questions available for positionless composer previews, including revised existing rows', () => {
+    const first = {
+      ...message('first', [asyncCall('first', 'A?')]),
+      journalPosition: { sequence: 1, index: 0 }
+    }
+    const revised = {
+      ...message('revised', [asyncCall('revised', 'A?')]),
+      journalPosition: { sequence: 2, index: 0 }
+    }
+    const preview = userRow('preview', {
+      deliveryState: 'pending',
+      queuedMessageId: 'queue',
+      blocks: [{ type: 'text', text: '> A?\n\nYes' }]
+    })
+    const scan = scanPendingAsks([first, revised, preview])
+    expect(scan.contributors.map((row) => row.sourceRowId)).toEqual(['first', 'revised'])
+    expect(scan.answerPending).toBeUndefined()
+    expect(
+      scanPendingAsks([first, revised, { ...preview, journalPosition: { sequence: 3, index: 0 } }])
+        .contributors
+    ).toEqual([])
+  })
 
   it('keeps async controls across agent notices and replay until human input or interruption', () => {
     const asked = message('a', [asyncCall('call-a', 'A?'), result()])

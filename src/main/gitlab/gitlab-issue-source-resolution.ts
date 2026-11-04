@@ -1,4 +1,4 @@
-import { listCachedRemoteNames, shouldProbeGitRemote } from '../git/remote-name-listing'
+import { listCachedRemoteNames, shouldProbeGitRemote } from '../git/remotes/remote-name-listing'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { readLocalGitConfigSignature } from '../github/local-git-config-signature'
 import {

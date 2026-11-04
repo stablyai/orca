@@ -10,11 +10,11 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, inspectGitRepoForRegistrationAsync } from '../git/repo'
-import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
-import { findProjectAtSameRealPath } from '../project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import { findProjectAtSameRealPath } from '../workspaces/catalog/project-realpath-identity'
+import { detectRepoIconAndUpstream } from '../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
@@ -23,7 +23,9 @@ import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
 } from '../../shared/wsl-host-windows-drive-refusal'
-import { describeWslUncAccessDenied } from '../wsl/wsl-unc-access-denied'
+import { describeWslUncAccessDenied } from '../wsl/filesystem/wsl-unc-access-denied'
+import { getResolvedFolderWorkspacePathStatus } from '../project-groups/folder-workspace-path-status'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { repoCreateFailure, type RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
@@ -47,13 +49,34 @@ export class RuntimeRepositoryRegistrationController {
       throw new Error('Project path must be an absolute path')
     }
     await refuseWslHostWindowsDrivePath(path)
+    if (kind === 'folder') {
+      await runAsWslUserAct(wslDistroForPath(path), async () => {
+        // This controller serves this filesystem even when a paired client names it runtime:.
+        const status = await getResolvedFolderWorkspacePathStatus(
+          { folderPath: path },
+          LOCAL_EXECUTION_HOST_ID
+        )
+        if (!status.exists) {
+          const accessDenied = await describeWslUncAccessDenied(path, store.getSettings())
+          throw new Error(
+            accessDenied ??
+              (status.reason === 'missing'
+                ? `Folder does not exist: ${path}. Choose an existing folder.`
+                : status.reason === 'not-directory'
+                  ? `Path is not a folder: ${path}. Choose a folder instead.`
+                  : `Cannot access folder: ${path}. Check its permissions and try again.`)
+          )
+        }
+      })
+    }
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
     const gitInfo = kind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
     if (gitInfo && !gitInfo.isRepo) {
       throw new Error(
-        (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+          `Not a valid git repository: ${path}`
       )
     }
     // Store Git's resolved toplevel; symlink aliases/subfolders hide the main checkout as external.

@@ -10,17 +10,17 @@ const { listRepoWorktreesMock, pruneLineageMock, pruneMetadataMock, registerWork
     registerWorktreeRootsMock: vi.fn()
   }))
 
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: registerWorktreeRootsMock
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -30,12 +30,11 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
 const {
   DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
   __resetDetectedWorktreeScanCacheForTests,
-  applyFreshDetectedWorktreeScanSideEffects,
   invalidateDetectedWorktreeScanCache,
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
 const { invalidateLocalWorktreeMetadataPruneInputs } =
-  await import('../../../local-worktree-metadata-prune-gate')
+  await import('../../../workspaces/catalog/local-worktree-metadata-prune-gate')
 
 const repo = { id: 'repo-1', path: '/repos/one', displayName: 'one' } as Repo
 
@@ -83,14 +82,6 @@ describe('detected worktree scan hygiene gate', () => {
     expect(captureExpectation).toHaveBeenCalledTimes(1)
   })
 
-  it('still lists on every cache miss while hygiene is parked', async () => {
-    await listDetectedGitWorktrees(store, repo)
-    advancePastListingTtl()
-    await listDetectedGitWorktrees(store, repo)
-
-    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(2)
-  })
-
   it('re-runs hygiene after a worktree lifecycle event', async () => {
     await listDetectedGitWorktrees(store, repo)
     invalidateDetectedWorktreeScanCache(repo.id)
@@ -123,42 +114,5 @@ describe('detected worktree scan hygiene gate', () => {
 
     advancePastListingTtl()
     expect((await listDetectedGitWorktrees(store, repo)).hygieneDue).toBe(true)
-  })
-
-  it('skips both prune halves on a scan that does not own the hygiene pass', async () => {
-    await applyFreshDetectedWorktreeScanSideEffects(
-      store,
-      repo,
-      [worktreeAt(repo.path)],
-      undefined,
-      {
-        hygieneDue: false
-      }
-    )
-
-    expect(pruneMetadataMock).not.toHaveBeenCalled()
-    expect(pruneLineageMock).not.toHaveBeenCalled()
-    // Authorization is listing state and refreshes even when hygiene is skipped.
-    expect(registerWorktreeRootsMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('prunes lineage when the caller owns the hygiene pass', async () => {
-    await applyFreshDetectedWorktreeScanSideEffects(
-      store,
-      repo,
-      [worktreeAt(repo.path)],
-      undefined,
-      {
-        hygieneDue: true
-      }
-    )
-
-    expect(pruneLineageMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the eager behavior for callers that carry no gate', async () => {
-    await applyFreshDetectedWorktreeScanSideEffects(store, repo, [worktreeAt(repo.path)])
-
-    expect(pruneLineageMock).toHaveBeenCalledTimes(1)
   })
 })

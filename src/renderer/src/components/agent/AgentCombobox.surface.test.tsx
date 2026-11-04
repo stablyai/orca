@@ -1,14 +1,18 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement } from 'react'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { buildNewTabAgentMenuRows, type NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import {
+  buildNewTabAgentMenuRows,
+  type NewTabAgentMenuRow
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { NewTabAgentMenuModel } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 import AgentCombobox from './AgentCombobox'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
@@ -55,7 +59,7 @@ function renderPicker(
         selection: resolveAgentMenuSelection({
           agent: value,
           surface,
-          settings: { experimentalNativeChat: true },
+          settings: { nativeChatProviders: EVERY_AGENT_CHAT },
           inventoryReady: model.state === 'settled',
           answer:
             model.state === 'settled' &&
@@ -182,7 +186,7 @@ it('keeps a recorded host chat without its CLI on CHAT after ArrowRight and Ente
   // QA controls/phase-matrix/probe.json: external.raw.inventory + streams.health[0].result.
   const detectedOnHost: TuiAgent[] = ['codex', 'opencode', 'pi', 'omp']
   const rows = buildNewTabAgentMenuRows({
-    settings: { experimentalNativeChat: true, defaultTuiAgent: 'antigravity' },
+    settings: { nativeChatProviders: EVERY_AGENT_CHAT, defaultTuiAgent: 'antigravity' },
     detectedOnHost,
     chatAgents: ['antigravity'],
     hostChatAnswer: () => 'yes',

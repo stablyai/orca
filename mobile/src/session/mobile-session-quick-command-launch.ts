@@ -1,9 +1,12 @@
-import { buildMobileQuickCommandLaunch } from '../terminal/quick-commands'
-import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
+import {
+  buildMobileQuickCommandLaunch,
+  type MobileQuickCommandLaunch
+} from '../terminal/quick-commands'
+
 import { triggerError } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import { getTerminalQuickCommandArguments } from '../../../src/shared/terminal-quick-command-arguments'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import { getTerminalQuickCommandArguments } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-arguments'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 

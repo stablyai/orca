@@ -3,17 +3,20 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
-import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
-import * as correspondence from '../../../../shared/ai-vault-session-cwd-aliases'
+import { searchHit } from '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import * as correspondence from '../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { makeFolderWorkspace, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  makeFolderWorkspace,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import { aiVaultSessionOwnerWorkspaces } from './ai-vault-session-worktree'
 import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import { useSubagentSessions } from './use-subagent-sessions'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { reuseAiVaultListResult } from './ai-vault-session-identity'
 
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({

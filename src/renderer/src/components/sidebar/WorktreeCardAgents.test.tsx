@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
@@ -396,7 +396,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:2"')
   })
 
-  it('shows orchestration child agent rows under their parent by default', async () => {
+  it('keeps orchestration child agent rows collapsed under their parent by default', async () => {
     mockAgentActivityDisplayMode = 'full'
     mockAgents = [
       mockAgent({
@@ -427,9 +427,9 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
-    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).not.toContain('data-pane-key="tab-child:1"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
+    expect(markup).toContain('aria-expanded="false"')
   })
 
   it('shows orchestration children under a retained parent matched by terminal handle', async () => {
@@ -452,8 +452,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
   })
 
   it('shows orchestration children under a visible coordinator when parent handle is absent', async () => {
@@ -476,8 +475,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('aria-label="Hide 1 child agent"')
+    expect(markup).toContain('aria-label="Show 1 child agent"')
   })
 
   it('keeps partially cyclic orchestration rows visible as flat roots', async () => {

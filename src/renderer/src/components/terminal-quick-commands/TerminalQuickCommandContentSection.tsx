@@ -1,14 +1,14 @@
 import { useId, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
   formatKilobytes,
   type TerminalQuickCommandBodySize
-} from '../../../../shared/terminal-quick-command-prompt-limit'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -20,7 +20,7 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { parseTerminalQuickCommandArguments } from '../../../../shared/terminal-quick-command-arguments'
+import { parseTerminalQuickCommandArguments } from '../../../../shared/terminal/quick-commands/terminal-quick-command-arguments'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'

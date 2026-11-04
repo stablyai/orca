@@ -2,7 +2,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamJson,
   type TerminalStreamFrame
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSnapshotRequestFrame

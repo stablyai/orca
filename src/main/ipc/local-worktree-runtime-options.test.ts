@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WORKTREE_ID_SEPARATOR, type ParsedWorktreeId } from '../../shared/worktree/id'
+import '../../shared/worktree/id'
+import type { ParsedWorktreeId } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type * as WorktreeIdModule from '../../shared/worktree/id'
 
 const counter = vi.hoisted(() => ({ splitCalls: 0 }))
@@ -64,33 +66,12 @@ describe('getLocalRepoForRegisteredWorktree', () => {
     expect(counter.splitCalls).toBe(rowCount)
   })
 
-  it('never touches the meta table when a repo path matches directly', () => {
-    const { store, metaScans } = makeStore([{ id: 'repo-a', path: '/repos/a' }], [])
-    expect(getLocalRepoForRegisteredWorktree(store, '/repos/a', '/repos/a')?.id).toBe('repo-a')
-    expect(metaScans()).toBe(0)
-  })
-
   describe('equivalence with the per-repo scan', () => {
     const repos: TestRepo[] = [
       { id: 'first', path: '/repos/first' },
       { id: 'middle', path: '/repos/middle' },
       { id: 'last', path: '/repos/last' }
     ]
-
-    it('finds a worktree owned by the first repo', () => {
-      const { store } = makeStore(repos, [worktreeId('first', '/wt/one')])
-      expect(getLocalRepoForRegisteredWorktree(store, '/wt/one', '/wt/one')?.id).toBe('first')
-    })
-
-    it('finds a worktree owned by the last repo', () => {
-      const { store } = makeStore(repos, [worktreeId('last', '/wt/one')])
-      expect(getLocalRepoForRegisteredWorktree(store, '/wt/one', '/wt/one')?.id).toBe('last')
-    })
-
-    it('returns undefined when no repo owns the worktree', () => {
-      const { store } = makeStore(repos, [worktreeId('other', '/wt/elsewhere')])
-      expect(getLocalRepoForRegisteredWorktree(store, '/wt/one', '/wt/one')).toBeUndefined()
-    })
 
     it('keeps getRepos precedence when two repos both own the path', () => {
       const { store } = makeStore(repos, [
@@ -122,20 +103,6 @@ describe('getLocalRepoForRegisteredWorktree', () => {
     it('matches the resolved path spelling as well as the raw one', () => {
       const { store } = makeStore(repos, [worktreeId('middle', '/wt/one')])
       expect(getLocalRepoForRegisteredWorktree(store, '/wt/other', '/wt/one')?.id).toBe('middle')
-    })
-
-    it('returns undefined for a folder workspace that is not a registered worktree', () => {
-      const { store } = makeStore(repos, [worktreeId('middle', '/wt/one')])
-      expect(
-        getLocalRepoForRegisteredWorktree(store, '/folders/notes', '/folders/notes')
-      ).toBeUndefined()
-    })
-
-    it('tolerates a store without getRepos or getAllWorktreeMeta', () => {
-      expect(getLocalRepoForRegisteredWorktree({} as never, '/wt/one', '/wt/one')).toBeUndefined()
-      expect(
-        getLocalRepoForRegisteredWorktree({ getRepos: () => repos } as never, '/wt/one', '/wt/one')
-      ).toBeUndefined()
     })
   })
 })

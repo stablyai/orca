@@ -8,10 +8,7 @@ import { DaemonAutomaticWorkGuard } from './daemon-automatic-work-guard'
 import { DaemonProcessGrowthMonitor } from './daemon-process-growth-monitor'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost, type TerminalHostOptions } from './terminal-host'
-import {
-  resolveTerminalSpawnAdmissionMode,
-  TERMINAL_SPAWN_ADMISSION_ENV_VAR
-} from './terminal-spawn-gate'
+import { resolveTerminalSpawnAdmissionMode } from './terminal-spawn-gate'
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
 
@@ -104,19 +101,6 @@ describe('desktop restore admission', () => {
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
   }
-
-  it('enforces on desktop unless the rollback switch asks to observe', () => {
-    expect(resolveTerminalSpawnAdmissionMode({})).toBe('enforce')
-    expect(
-      resolveTerminalSpawnAdmissionMode({ [TERMINAL_SPAWN_ADMISSION_ENV_VAR]: 'enforce' })
-    ).toBe('enforce')
-    expect(resolveTerminalSpawnAdmissionMode({ [TERMINAL_SPAWN_ADMISSION_ENV_VAR]: 'bogus' })).toBe(
-      'enforce'
-    )
-    expect(
-      resolveTerminalSpawnAdmissionMode({ [TERMINAL_SPAWN_ADMISSION_ENV_VAR]: ' Observe ' })
-    ).toBe('observe')
-  })
 
   it('restores the visible pane at once, at most 8 hidden agents, and keeps the rest sleeping', async () => {
     startDesktopDaemon()

@@ -19,13 +19,14 @@ import { GROK_STARTUP_PTY_TRACE } from '../../shared/__fixtures__/grok-startup-p
 import { waitForWorkerStartComposer } from './launched-agent-composer-readiness'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { extractLastOscTitle } from '../../shared/osc-title-extraction'
-import { getAgentLabel, normalizeTerminalTitle } from '../../shared/agent-detection'
+import { extractLastOscTitle } from '../../shared/agent-status/title/osc-title-extraction'
+import { getAgentLabel } from '../../shared/agent-status/title/agent-title-identity'
+import { normalizeTerminalTitle } from '../../shared/agent-status/title/agent-title-status'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import {
   getSyntheticAgentTerminalTitle,
   shouldDriveSyntheticAgentTitleFromHook
-} from '../../shared/synthetic-agent-title'
+} from '../../shared/agent-status/title/synthetic-agent-title'
 import { hasExplicitIdleTitle } from './tui-idle-evidence'
 
 vi.mock('electron', () => ({
@@ -335,7 +336,11 @@ describe('ZCode captured composer readiness', () => {
       expect(getSyntheticAgentTerminalTitle('zcode', 'waiting')).toBe('ZCode - action required')
       expect(shouldDriveSyntheticAgentTitleFromHook('zcode', 'working')).toBe(true)
       expect(
-        hasExplicitIdleTitle({ lastAgentStatus: 'idle', lastOutputAt: Date.now() }, 'ZCode ready')
+        hasExplicitIdleTitle({
+          lastAgentStatus: 'idle',
+          lastOutputAt: Date.now(),
+          lastOscTitle: 'ZCode ready'
+        })
       ).toBe(true)
     })
 

@@ -267,6 +267,16 @@ describe('plugin list entries', () => {
     expect(bare.name).not.toBe('')
   })
 
+  it("names a catalog entry's publisher from its key, not the catalog owner", () => {
+    const community = pluginListEntryFromListing(
+      listing('vale-c.catppuccin', { marketplaceName: 'Orca Community Plugins', official: false })
+    )
+    expect(community.publisher).toBe('vale-c')
+    expect(pluginListEntryFromListing(listing('stablyai.orca-nord-theme')).publisher).toBe(
+      'stablyai'
+    )
+  })
+
   it('strips characters that reorder or hide text, even from an older host', () => {
     const spoofed = pluginListEntryFromListing(
       listing('acme.dusk', { name: 'Dusk \u202elaiciffO', description: 'Quiet\n\u200btheme' })
@@ -283,5 +293,56 @@ describe('plugin list entries', () => {
     expect(matchesPluginSearch(entry!, 'official plugins')).toBe(true)
     expect(matchesPluginSearch(entry!, 'gleam')).toBe(false)
     expect(matchesPluginSearch(entry!, '  ')).toBe(true)
+  })
+
+  it('allows install counts only for official and community catalog plugins installed from them', () => {
+    const sources = [
+      catalog('official', 'https://github.com/stablyai/orca-plugins.git'),
+      catalog('community', 'https://github.com/stablyai/orca-community-plugins'),
+      catalog('private', 'https://gitlab.com/acme/catalog.git')
+    ]
+    const listings = [
+      listing('stablyai.orca-nord-theme'),
+      listing('acme.notes', { marketplaceSourceId: 'community', official: false }),
+      listing('acme.secret', { marketplaceSourceId: 'private', official: false }),
+      listing('acme.dev', { marketplaceSourceId: 'community', official: false }),
+      listing('acme.git', { marketplaceSourceId: 'community', official: false }),
+      listing('acme.mirror', { marketplaceSourceId: 'community', official: false }),
+      listing('stablyai.orca-midnight-theme')
+    ]
+    const marketplaceInstall = fromCatalog(
+      { ...installed('acme.notes', 'Notes'), official: false },
+      'https://github.com/stablyai/orca-community-plugins'
+    )
+    const devInstall = { ...installed('acme.dev', 'Dev'), isDev: true }
+    const gitInstall: PluginHostListEntry = {
+      ...installed('acme.git', 'Git'),
+      source: {
+        kind: 'git',
+        reference: 'https://example.invalid/git.git',
+        resolvedCommit: null,
+        contentHash: 'd'.repeat(64)
+      }
+    }
+    const fromPrivate = fromCatalog(
+      installed('acme.mirror', 'Mirror'),
+      'https://gitlab.com/acme/catalog.git'
+    )
+    const bundled = { ...installed('stablyai.orca-midnight-theme', 'Midnight'), bundled: true }
+    const entries = buildPluginListEntries(
+      [marketplaceInstall, devInstall, gitInstall, fromPrivate, bundled],
+      listings,
+      { sources }
+    )
+    const eligible = (pluginKey: string): boolean | undefined =>
+      [...entries.installed, ...entries.available].find((entry) => entry.pluginKey === pluginKey)
+        ?.installCountEligible
+    expect(eligible('stablyai.orca-nord-theme')).toBe(true)
+    expect(eligible('acme.notes')).toBe(true)
+    expect(eligible('acme.secret')).toBe(false)
+    expect(eligible('acme.dev')).toBe(false)
+    expect(eligible('acme.git')).toBe(false)
+    expect(eligible('acme.mirror')).toBe(false)
+    expect(eligible('stablyai.orca-midnight-theme')).toBe(true)
   })
 })

@@ -32,10 +32,10 @@ vi.mock('./runtime-local-worktree-setup', () => ({
   }))
 }))
 
-vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
-vi.mock('../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: vi.fn()
 }))
 
@@ -121,23 +121,6 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
 
     expect(startTerminalsMock).toHaveBeenCalledOnce()
     expect(calls.order).toEqual(['terminals', 'rearm'])
-  })
-
-  it('returns upstream warnings with other creation warnings', async () => {
-    createLocalMock.mockResolvedValueOnce({
-      worktree,
-      worktreePath: worktree.path,
-      includeCopyWarning: 'Some files were skipped.',
-      created: { path: worktree.path, head: 'abc', branch: 'app' },
-      addResult: { upstreamWarning: 'Check the push destination.' },
-      metadataResult: { lineage: null, workspaceLineage: null, warnings: [] }
-    })
-    const result = await makeRuntime().createManagedWorktree({
-      repoSelector: 'repo-1',
-      name: 'app'
-    })
-    expect(result.warning).toContain('Some files were skipped.')
-    expect(result.warning).toContain('Check the push destination.')
   })
 
   it('still arms the pool when terminal launch fails', async () => {

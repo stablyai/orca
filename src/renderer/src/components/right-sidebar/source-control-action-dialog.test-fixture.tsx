@@ -1,27 +1,31 @@
-import { terminalSessionOptionInputs } from '../../../../shared/tui-agent-launch-command'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
+import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   SourceControlAgentActionDialog,
   type SourceControlAgentActionDialogProps
 } from './SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import type { Repo } from '../../../../shared/repo-types'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT
-} from '../../../../shared/protocol-version'
-import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  type SourceControlActionRecipe,
+  normalizeSourceControlActionRecipe
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { useSourceControlAgentActionDialog } from './useSourceControlAgentActionDialog'
+import * as dialogController from './useSourceControlAgentActionDialog'
 import {
   render,
   renderHook,
@@ -42,6 +46,7 @@ type MountedSourceDialog = {
   onStart: Mock<NonNullable<RunSourceControlAgentActionStartArgs['onStart']>>
   props: SourceControlAgentActionDialogProps
   repo: Repo
+  readonly controller: ReturnType<typeof useSourceControlAgentActionDialog>
 }
 
 type RenderedSourceDialog = RenderHookResult<
@@ -60,12 +65,16 @@ export function mountSourceDialog(
   onStart = vi
     .fn<NonNullable<RunSourceControlAgentActionStartArgs['onStart']>>()
     .mockResolvedValue(true),
-  scope: 'global' | 'repo' = 'repo'
+  scope: 'global' | 'repo' = 'repo',
+  execution?: Pick<
+    SourceControlAgentActionDialogProps,
+    'worktreeId' | 'promptDelivery' | 'launchPlatform'
+  >
 ): MountedSourceDialog {
   const settings = {
     ...getDefaultSettings('/tmp/fc1-action'),
     defaultTuiAgent: 'claude' as const,
-    experimentalNativeChat: true,
+    nativeChatProviders: EVERY_AGENT_CHAT,
     agentPermissionDefault: 'own' as const
   }
   settings.sourceControlAi!.actions = { resolveConflicts: global }
@@ -104,7 +113,7 @@ export function mountSourceDialog(
         })
       })
   )
-  const props = {
+  const props: SourceControlAgentActionDialogProps = {
     open: true,
     onOpenChange: vi.fn(),
     actionId: 'resolveConflicts' as const,
@@ -114,28 +123,50 @@ export function mountSourceDialog(
     launchSource: 'source_control_recovery' as const,
     repoId: scope === 'repo' ? repo.id : undefined,
     connectionId: null,
-    onStart,
+    ...(execution ?? { onStart }),
     onSaveAgentDefault: persist
   }
+  let controller: ReturnType<typeof useSourceControlAgentActionDialog> | undefined
+  const original = dialogController.useSourceControlAgentActionDialog
+  vi.spyOn(dialogController, 'useSourceControlAgentActionDialog').mockImplementation((props) => {
+    controller = original(props)
+    return controller
+  })
   const mount = () =>
     render(<SourceControlAgentActionDialog {...props} />, { wrapper: TooltipProvider })
-  return { view: mount(), mount, persist, onStart, props, repo }
+  return {
+    view: mount(),
+    mount,
+    persist,
+    onStart,
+    props,
+    repo,
+    get controller() {
+      if (!controller) {
+        throw new Error('Dialog has not rendered')
+      }
+      return controller
+    }
+  }
 }
 
 export async function pickDialogAgent(label: string, terminal: boolean) {
-  await waitFor(() =>
-    expect(screen.getAllByRole('combobox')[0].hasAttribute('disabled')).toBe(false)
-  )
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  if (terminal) {
-    fireEvent.click(await screen.findByRole('button', { name: `Start ${label} in a terminal` }))
-  } else {
-    const row = screen.getAllByRole('option').find((item) => item.textContent?.startsWith(label))
-    if (!row) {
-      throw new Error(`Missing agent row ${label}`)
-    }
-    fireEvent.click(row)
+  const trigger = screen.getByRole('button', { name: 'Select agent' })
+  await waitFor(() => expect(trigger.hasAttribute('disabled')).toBe(false))
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  if (!terminal) {
+    // Chat is chosen inside the setup popover. A row click keeps the saved surface.
+    fireEvent.click(await screen.findByRole('button', { name: `Configure ${label}` }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Launch chat' }))
+    return
   }
+  const row = (await screen.findAllByRole('menuitem')).find((item) =>
+    item.textContent?.startsWith(label)
+  )
+  if (!row) {
+    throw new Error(`Missing agent row ${label}`)
+  }
+  fireEvent.click(row)
 }
 
 export function renderDialog(
@@ -150,7 +181,7 @@ export function renderDialog(
   )!.launchPreferences!
   settings.sourceControlAi!.actions = { resolveConflicts: { agentId: null, launchPreferences } }
   useAppStore.setState({
-    settings: { ...settings, experimentalNativeChat: chat },
+    settings: { ...settings, nativeChatProviders: chat ? EVERY_AGENT_CHAT : {} },
     detectedAgentIds: ['claude', 'codex'],
     localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
   })
@@ -185,7 +216,7 @@ export function freshDialogRecipe(repoId: string) {
 }
 
 export async function pickDialogSaveTarget(label: string) {
-  fireEvent.click(screen.getAllByRole('combobox')[1])
+  fireEvent.click(screen.getByRole('combobox'))
   fireEvent.click(await screen.findByRole('option', { name: label }))
 }
 

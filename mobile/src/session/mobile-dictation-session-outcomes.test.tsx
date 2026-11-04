@@ -72,7 +72,7 @@ vi.mock('./native-chat/use-mobile-native-chat-send-error', async (importOriginal
     bannerMountedRef: { current: false }
   })
 }))
-vi.mock('./use-mobile-native-chat-readability', () => ({
+vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
 vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
@@ -84,7 +84,7 @@ vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
     clear: () => {}
   })
 }))
-vi.mock('./use-mobile-native-chat-controller', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-controller', () => ({
   useMobileNativeChatController: () => ({
     nativeChatSession: { messages: [] },
     toggleTabChatView: () => {},
@@ -110,9 +110,15 @@ import { useMobileSessionNativeChatDictation } from './use-mobile-session-native
 
 type Model = ReturnType<typeof useMobileSessionNativeChatDictation>
 
+// Every terminal takes dictation as live input, so the words are typed into it.
+const typeIntoTerminal = async (_handle: string, text: string): Promise<boolean> => {
+  seen.inputs.push(text)
+  return true
+}
+
 function mount(
   client: FakeRpcClient,
-  options: { liveInput: boolean; sendLive: () => Promise<boolean> }
+  sendLive: (handle: string, text: string) => Promise<boolean> = typeIntoTerminal
 ): { current: () => Model } {
   const held: { model: Model | null } = { model: null }
 
@@ -123,10 +129,6 @@ function mount(
       client,
       connState: 'connected',
       agentSessionHostSupport: { promptCancel: true, questionAnswers: false },
-      setInput: (update: (current: string) => string) => {
-        seen.inputs.push(update(''))
-      },
-      liveInputTerminalHandles: new Set<string>(options.liveInput ? ['t1'] : []),
       activeHandle: 't1',
       activeSessionTabId: 'tab1',
       activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1' },
@@ -142,19 +144,17 @@ function mount(
       setDictationEnabled: () => {},
       deviceTokenRef: useRef('dev'),
       dictationRouteContextRef: useRef(null),
-      commandFieldAnchorRef: useRef(null),
       activeHandleRef: useRef('t1'),
       flushPendingLiveInputBeforeExternalSend: async () => true,
       canSend: true,
       canCompose: true,
-      liveInputEnabled: options.liveInput,
       showToast: (message: string) => {
         seen.toasts.push(message)
       },
       resetLiveInputFocus: () => {}
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scope carries every member this hook destructures; the rest of the session model is unreachable from the mic path.
-    held.model = useMobileSessionNativeChatDictation(scope as never, options.sendLive)
+    held.model = useMobileSessionNativeChatDictation(scope as never, sendLive)
     return null
   }
 
@@ -201,12 +201,9 @@ async function settle(
 
 async function startRecording(
   rpc: FakeRpcClient,
-  options: { liveInput: boolean; sendLive?: () => Promise<boolean> }
+  sendLive?: (handle: string, text: string) => Promise<boolean>
 ): Promise<{ current: () => Model }> {
-  const mounted = mount(rpc, {
-    liveInput: options.liveInput,
-    sendLive: options.sendLive ?? (async () => true)
-  })
+  const mounted = mount(rpc, sendLive)
   act(() => mounted.current().handleDictationToggle())
   await settle(rpc, '')
   expect(mounted.current().dictation.isRecording).toBe(true)
@@ -227,7 +224,7 @@ beforeEach(() => {
 
 async function tapAndRefuseStart(code: string): Promise<void> {
   const rpc = createFakeRpcClient()
-  const mounted = mount(rpc, { liveInput: false, sendLive: async () => true })
+  const mounted = mount(rpc)
   act(() => mounted.current().handleDictationToggle())
   await settle(rpc, '', code)
 }
@@ -246,7 +243,7 @@ describe('a mic tap the desktop refuses because dictation is not set up', () => 
 describe('a mic tap after the host reported dictation is not set up', () => {
   it('opens setup without asking for the microphone, then lets the host judge the tap after the sheet closes', async () => {
     const rpc = createFakeRpcClient()
-    const mounted = mount(rpc, { liveInput: false, sendLive: async () => true })
+    const mounted = mount(rpc)
     await act(async () => {
       const read = mounted.current().refreshDictationMode()
       for (const request of rpc.requests.splice(0)) {
@@ -284,18 +281,18 @@ describe('a mic tap the desktop refuses for a reason setup cannot fix', () => {
 describe('an audio interruption while recording', () => {
   it('finishes the dictation and keeps what was said', async () => {
     const rpc = createFakeRpcClient()
-    await startRecording(rpc, { liveInput: false })
+    await startRecording(rpc)
     act(() => seen.audioListeners.get('onAudioInterruption')?.({ data: 'began' }))
     const methods = await settle(rpc, 'call me back')
     expect(methods).toContain('speech.dictation.finish')
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['call me back'])
-    expect(seen.toasts).toEqual([])
+    expect(seen.toasts).toEqual(['Dictation inserted'])
   })
 
   it('says the microphone was interrupted when nothing was transcribed', async () => {
     const rpc = createFakeRpcClient()
-    await startRecording(rpc, { liveInput: false })
+    await startRecording(rpc)
     act(() => seen.audioListeners.get('onAudioInterruption')?.({ data: 'blocked' }))
     await settle(rpc, '')
     expect(seen.toasts).toEqual([
@@ -307,7 +304,7 @@ describe('an audio interruption while recording', () => {
 describe('leaving the session while recording', () => {
   it('stops and inserts what was said instead of leaving, and lets the next leave go', async () => {
     const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc, { liveInput: false })
+    const mounted = await startRecording(rpc)
     const held: boolean[] = []
     act(() => {
       held.push(mounted.current().dictationLeaveHold.hold())
@@ -322,14 +319,14 @@ describe('leaving the session while recording', () => {
     expect(methods.filter((method) => method === 'speech.dictation.finish')).toHaveLength(1)
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['one more thing'])
-    expect(seen.toasts).toEqual([])
+    expect(seen.toasts).toEqual(['Dictation inserted'])
   })
 })
 
 describe('a mic tap while the transcript is processing', () => {
   it('keeps the transcript that comes back', async () => {
     const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc, { liveInput: false })
+    const mounted = await startRecording(rpc)
     act(() => mounted.current().handleDictationToggle())
     expect(mounted.current().dictation.isProcessing).toBe(true)
     act(() => mounted.current().handleDictationToggle())
@@ -352,7 +349,7 @@ describe('a live terminal insert that fails', () => {
   for (const [label, sendLive] of failures) {
     it(`copies the transcript to the clipboard and says so when the send ${label}`, async () => {
       const rpc = createFakeRpcClient()
-      const mounted = await startRecording(rpc, { liveInput: true, sendLive })
+      const mounted = await startRecording(rpc, sendLive)
       act(() => mounted.current().handleDictationToggle())
       await settle(rpc, 'git status')
       expect(seen.clipboard).toEqual(['git status'])
@@ -365,7 +362,7 @@ describe('a dictation that ends after switching between chat and terminal', () =
   it('lands in the chat it started in, where its words were shown', async () => {
     seen.chat = { shown: true, scope: 'chat-a' }
     const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc, { liveInput: false })
+    const mounted = await startRecording(rpc)
     seen.chat = { shown: false, scope: 'chat-b' }
     act(() => mounted.current().handleDictationToggle())
     await settle(rpc, 'ship it')
@@ -375,7 +372,7 @@ describe('a dictation that ends after switching between chat and terminal', () =
 
   it('lands in the chat that replaced the terminal it started in', async () => {
     const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc, { liveInput: false })
+    const mounted = await startRecording(rpc)
     seen.chat = { shown: true, scope: 'chat-b' }
     act(() => mounted.current().handleDictationToggle())
     await settle(rpc, 'ship it')

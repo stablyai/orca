@@ -7,26 +7,27 @@ import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation
 } from '../../shared/jira/jira-saved-filters'
+import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
-import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
 } from '../../shared/project-move-pause'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
@@ -44,18 +45,18 @@ import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../../shared/terminal-tab-close'
+} from '../../shared/workspace-layout/terminal-tab-close'
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
@@ -115,18 +116,7 @@ export type UiCommandEventApi = {
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
-  onRequestTabCreate: (
-    callback: (data: {
-      requestId: string
-      url: string
-      worktreeId?: string
-      browserPageId?: string
-      sessionProfileId?: string | null
-      sessionPartition?: string
-      activate?: boolean
-      fallbackWorktreeId?: string
-    }) => void
-  ) => () => void
+  onRequestTabCreate: (callback: (data: BrowserTabCreateRequest) => void) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
   /** Tells main this window can take browser tab requests: listening, with its workspaces restored. */
   browserTabRequestsReady: () => void

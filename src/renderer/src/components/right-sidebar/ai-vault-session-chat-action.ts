@@ -1,5 +1,5 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import { canResumeAiVaultSearchHit } from './ai-vault-search-session'
 import {

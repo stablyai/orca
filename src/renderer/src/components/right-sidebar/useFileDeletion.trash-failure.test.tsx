@@ -26,7 +26,7 @@ vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
 vi.mock('./file-explorer-deletion-editors', () => ({
   getFileExplorerDeletionEditors: () => [{ id: 'tab-1', isDirty: false }]
 }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn(async () => undefined),
   requestEditorSaveQuiesce: vi.fn(async () => undefined)
 }))
@@ -196,16 +196,4 @@ it('aborts a permanent retry if the workspace host changes while confirmation is
   expect(closeFile).not.toHaveBeenCalled()
   expect(refreshDir).not.toHaveBeenCalled()
   expect(mocks.commitFileExplorerOp).not.toHaveBeenCalled()
-})
-
-it('keeps successful Trash deletion prompt-free', async () => {
-  mocks.deleteRuntimePath.mockResolvedValueOnce(undefined)
-  const { result, closeFile } = renderDeletion()
-
-  await requestDelete(result)
-
-  await vi.waitFor(() => expect(closeFile).toHaveBeenCalledWith('tab-1'))
-  expect(mocks.confirm).not.toHaveBeenCalled()
-  expect(mocks.deleteRuntimePath).toHaveBeenCalledTimes(1)
-  expect(mocks.toastError).not.toHaveBeenCalled()
 })

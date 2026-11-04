@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../shared/tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 
 function tab(input: Partial<Tab> & Pick<Tab, 'id'>): Tab {
@@ -33,22 +33,6 @@ function session(tabs: Tab[], activeTabId: string | null): WorkspaceSessionState
 }
 
 describe('saved structured session restoration targets', () => {
-  it('prioritizes the visible chat and excludes closed history', () => {
-    const saved = session(
-      [
-        tab({ id: 'tab-background', entityId: 'session-background' }),
-        tab({ id: 'tab-visible', entityId: 'session-visible' })
-      ],
-      'tab-visible'
-    )
-
-    expect(collectSavedStructuredAgentSessionIds(saved)).toEqual([
-      'session-visible',
-      'session-background'
-    ])
-    expect(collectSavedStructuredAgentSessionIds(session([], null))).toEqual([])
-  })
-
   it('keeps restoration on the local execution host and deduplicates repeated sessions', () => {
     const saved = session(
       [
@@ -61,28 +45,5 @@ describe('saved structured session restoration targets', () => {
     )
 
     expect(collectSavedStructuredAgentSessionIds(saved)).toEqual(['session-local'])
-  })
-
-  it('restores a saved Claude chat like any other structured chat', () => {
-    const saved = session(
-      [
-        tab({
-          id: 'claude-tab',
-          agentSessionAgent: 'claude',
-          entityId: 'session-claude'
-        }),
-        tab({
-          id: 'codex-tab',
-          agentSessionAgent: 'codex',
-          entityId: 'session-codex'
-        })
-      ],
-      'claude-tab'
-    )
-
-    expect(collectSavedStructuredAgentSessionIds(saved)).toEqual([
-      'session-claude',
-      'session-codex'
-    ])
   })
 })

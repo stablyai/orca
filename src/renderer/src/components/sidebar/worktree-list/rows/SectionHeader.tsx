@@ -6,8 +6,11 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
+
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
@@ -17,6 +20,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import {
   getHeaderDragRepo,
+  isSingleHostProjectHeader,
   type GroupHeaderRow,
   type WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
@@ -396,7 +400,7 @@ export function renderWorktreeSectionHeaderRow(args: {
                 key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
                 repo={row.repo}
                 label={label}
-                pinHost={row.hostId !== undefined}
+                pinHost={isSingleHostProjectHeader(row)}
                 onCreateForRepo={ctx.projectActions.onCreateForRepo}
               />
             ) : null}

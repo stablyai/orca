@@ -17,12 +17,12 @@ vi.mock('./wsl-transcript-fs-process-dispatch', async (importOriginal) => ({
   closeWslTranscriptFsProcess: async () => {}
 }))
 
-import { _resetWslCachesForTests } from '../wsl'
+import { _resetWslCachesForTests } from '../wsl/discovery/distro-catalog'
 import {
   _resetWslBackgroundDistroGateForTests,
   noteWslDistroMayHaveStopped
-} from '../wsl-background-distro-gate'
-import { runAsWslUserAct } from '../wsl/wsl-unc-access-gate'
+} from '../wsl/discovery/wsl-background-distro-gate'
+import { runAsWslUserAct } from '../wsl/filesystem/wsl-unc-access-gate'
 import { openTranscriptFile, readTranscriptFile, wslGatedReaddir } from './wsl-transcript-fs-access'
 import { resetWslTranscriptFsGateForTests, WslTranscriptFsError } from './wsl-transcript-fs-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from './wsl-transcript-running-admission'

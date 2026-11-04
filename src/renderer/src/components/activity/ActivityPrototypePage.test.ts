@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
   activityThreadMatchesSearchQuery,

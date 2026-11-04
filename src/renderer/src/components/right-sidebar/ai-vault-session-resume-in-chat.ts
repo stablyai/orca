@@ -1,14 +1,14 @@
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 // Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
-import { isWslStoredAiVaultSessionFile } from '../../../../shared/ai-vault-resume-target'
+import { isWslStoredAiVaultSessionFile } from '../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
 import { adoptsCliConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 export type AiVaultResumeInChatBlockedReason =
   | 'agent'
@@ -63,7 +63,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
-  /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat UI switch does not apply. */
+  /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat | CLI choice does not apply. */
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 
-import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorktreeSlice } from '@/store/slices/worktree-helpers'
 

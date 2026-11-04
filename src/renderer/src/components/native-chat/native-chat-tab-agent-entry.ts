@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 /** Return the first status entry under the tabId: prefix; callers needing the active split must resolve its leaf. */
 export function findTabAgentEntry(

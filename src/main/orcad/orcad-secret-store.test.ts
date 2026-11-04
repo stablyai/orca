@@ -17,7 +17,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 import { classifyUnenvelopedCredential } from '../../shared/secret-at-rest-protection'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
-import { readStoredCredentialToken, writeEncryptedCredential } from '../integration-credential-file'
+import {
+  readStoredCredentialToken,
+  writeEncryptedCredential
+} from '../credentials/integration-credential-file'
 import type { OrcadLegacyKeyLookup, OrcadLegacyKeyringReader } from './orcad-legacy-keyring-key'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
 import {

@@ -2,15 +2,16 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
-} from '../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../shared/pane-agent-owner'
-import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
+} from '../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../shared/agent-status/identity/pane-agent-owner'
+import type { AgentStatusEntry } from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import {

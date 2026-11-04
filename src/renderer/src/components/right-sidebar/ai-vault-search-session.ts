@@ -1,7 +1,7 @@
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault-session-cwd-aliases'
+import { withAiVaultSessionCwdAliases } from '../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 
 export function aiVaultSearchHitToSession(
   hit: AiVaultSearchHit,
@@ -31,6 +31,9 @@ export function aiVaultSearchHitToSession(
     subagentTranscriptCount: 0,
     resumeCommand: hit.resumeCommand ?? '',
     subagent: null,
+    ...(hit.accountHome !== undefined
+      ? { accountHome: hit.accountHome, accountWslDistro: hit.accountWslDistro }
+      : {}),
     ...(hit.structuredSession ? { structuredSession: hit.structuredSession } : {})
   }
 }

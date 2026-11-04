@@ -7,7 +7,7 @@ import { dfAvailableKb, formatKb } from '../host-state/remote-filesystem-space'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 const DIAGNOSIS_TIMEOUT_MS = 15_000
 const SSH_FX_FAILURE = 4

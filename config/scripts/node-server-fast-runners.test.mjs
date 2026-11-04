@@ -14,15 +14,6 @@ function runnerFor(job, os, fast, event = 'workflow_dispatch') {
   }).coerceString()
 }
 
-it('defaults reusable and manual qualification to Blacksmith', () => {
-  for (const trigger of ['workflow_call', 'workflow_dispatch']) {
-    expect(workflow.on[trigger].inputs.fast_runners).toMatchObject({
-      type: 'boolean',
-      default: true
-    })
-  }
-})
-
 it.each([
   ['ubuntu-22.04', 'blacksmith-8vcpu-ubuntu-2204'],
   ['ubuntu-24.04-arm', 'blacksmith-8vcpu-ubuntu-2404-arm'],

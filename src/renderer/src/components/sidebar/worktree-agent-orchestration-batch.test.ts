@@ -3,9 +3,9 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-statu
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   EMPTY_WORKTREE_AGENT_ORCHESTRATION,
   selectRuntimeAgentOrchestrationBatch

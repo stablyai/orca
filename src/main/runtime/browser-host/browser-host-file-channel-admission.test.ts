@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser-client-automation-protocol'
-import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../shared/browser-client-file-channel-protocol'
+import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { assertBrowserHostPageCommandAdmission } from './browser-host-page-command-admission'
 import type { BrowserHostLease } from './browser-host-lease-records'
 

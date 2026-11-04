@@ -1,11 +1,11 @@
 import { useCallback, useContext } from 'react'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   fillTerminalQuickCommandArguments,
   getTerminalQuickCommandArguments
-} from '../../../../shared/terminal-quick-command-arguments'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-arguments'
 
 export type ResolveQuickCommandArguments = (
   command: TerminalQuickCommand

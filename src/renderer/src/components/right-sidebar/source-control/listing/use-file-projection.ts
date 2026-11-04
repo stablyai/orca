@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { compareFileNames } from '../../../../../../shared/file-name-sort'
 import {
@@ -16,7 +16,7 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   buildSourceControlDisplaySections,
   groupSourceControlEntries,
@@ -24,7 +24,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from '../../../../../../shared/source-control-section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,

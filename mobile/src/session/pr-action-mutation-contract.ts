@@ -23,6 +23,10 @@ export type PrActionMutations = {
     prNumber: number
     prRepo?: GitHubPrRepoSlug | null
   }) => Promise<GitHubPrMutationOutcome>
+  markDraft: (args: {
+    prNumber: number
+    prRepo?: GitHubPrRepoSlug | null
+  }) => Promise<GitHubPrMutationOutcome>
   requestReviewers: (args: {
     prNumber: number
     reviewers: string[]

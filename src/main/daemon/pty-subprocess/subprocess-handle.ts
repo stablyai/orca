@@ -1,10 +1,14 @@
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
-import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
-import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
-import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
-import { readPtsName } from '../../pty/node-pty-pts-name'
+import type { RecognizedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
+import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posix-pty-foreground-group'
+import {
+  observePtyForeground,
+  readPtyForegroundGroup
+} from '../../pty/process-retirement/pty-master-foreground-observation'
+import { readPtsName } from '../../pty/process-retirement/node-pty-pts-name'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
 import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
@@ -39,7 +43,7 @@ export function createDaemonPtySubprocessHandle(args: {
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
   const nativeProc: DisposableNativePty = proc
-  const physical = args.physicalOwner ?? createDaemonPtyPhysicalOwner(proc)
+  const physical = args.physicalOwner ?? createDaemonPtyPhysicalOwner(proc, args.shellPath)
   physical.observeExit()
   const events = new PtyPreListenerEvents()
   let dead = false
@@ -115,11 +119,14 @@ export function createDaemonPtySubprocessHandle(args: {
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
-    events.acceptExit({
+    events.acceptExit(
       exitCode,
-      signal,
-      hostReportsChildExitStatus: reportsChildExitStatus
-    })
+      physical.resolveExitCause({
+        exitCode,
+        signal,
+        hostReportsChildExitStatus: reportsChildExitStatus
+      })
+    )
   }
   const exitSubscription = physical.onExit(acceptExit)
 
@@ -142,6 +149,7 @@ export function createDaemonPtySubprocessHandle(args: {
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    observeForeground: () => observePtyForeground(proc, () => !dead && !ioFailed && !masterRetired),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
@@ -223,6 +231,7 @@ export function createDaemonPtySubprocessHandle(args: {
       // SIGWINCH belongs to the tty foreground group; destructive signals keep the root-pid target.
       if (sig === 'SIGWINCH') {
         void signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid, {
+          readForegroundGroup: () => readPtyForegroundGroup(proc),
           ownsRoot: () => !physical.hasExited()
         })
         return

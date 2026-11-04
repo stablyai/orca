@@ -6,7 +6,7 @@ import {
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost
-} from '../../../src/shared/folder-workspace-execution-host'
+} from '../../../src/shared/folder-workspaces/folder-workspace-execution-host'
 import {
   newTabFolderWorkspaceListRead,
   newTabFolderProjectGroupListRead,

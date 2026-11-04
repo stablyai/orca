@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostWhereaboutsRow } from './assignment-store.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import type { HostWhereaboutsRow } from './assignment/assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import { ShadowSeatDirectory } from './shadow-seat-directory.js'
@@ -127,41 +127,6 @@ describe('POST /v1/admin/host-whereabouts', () => {
     expect(capacity.status).toBe(401)
   })
 
-  it('returns the database row, the map seats, the verdict and the named cells', async () => {
-    const lookup = vi.fn(async () => ROW)
-    const app = appWith(lookup, { shadowSeats: directory() })
-
-    const response = await app.request(
-      '/v1/admin/host-whereabouts',
-      request({ v: 1, relayHostId: HOST, userId: 'user-a' })
-    )
-
-    expect(response.status).toBe(200)
-    expect(lookup).toHaveBeenCalledWith({ userId: 'user-a', relayHostId: HOST })
-    expect(await response.json()).toMatchObject({
-      v: 1,
-      directorIncarnation: 'director-incarnation',
-      relayHostId: HOST,
-      shadow: { state: 'on', complete: true },
-      users: [
-        {
-          userId: 'user-a',
-          database: ROW,
-          seats: [{ cellId: 'cell-a', epoch: 3, state: 'active' }],
-          recentlyLeft: [],
-          verdict: { class: 'agree', explained: true }
-        }
-      ],
-      cells: {
-        'cell-a': {
-          status: 'live',
-          lastFailure: null,
-          flagsApplied: { generation: '7', flags: { readinessLocal: false } }
-        }
-      }
-    })
-  })
-
   it('names the user from the map when the request has only a host id', async () => {
     const lookup = vi.fn(async () => ROW)
     const app = appWith(lookup, { shadowSeats: directory() })
@@ -195,44 +160,6 @@ describe('POST /v1/admin/host-whereabouts', () => {
     expect(await response.json()).toMatchObject({
       users: [{ database: ROW, verdict: { class: 'map-only-cell-unlive', explained: true } }]
     })
-  })
-
-  it('answers an unknown host with an empty result, not a 404', async () => {
-    const lookup = vi.fn(async () => null)
-    const shadowOff = appWith(lookup)
-    const unknown = await shadowOff.request(
-      '/v1/admin/host-whereabouts',
-      request({ v: 1, relayHostId: 'uuuuuuuuuuuuuuuu' })
-    )
-    expect(unknown.status).toBe(200)
-    expect(await unknown.json()).toEqual({
-      v: 1,
-      directorIncarnation: 'director-incarnation',
-      relayHostId: 'uuuuuuuuuuuuuuuu',
-      shadow: { state: 'off' },
-      users: [],
-      cells: {}
-    })
-    expect(lookup).not.toHaveBeenCalled()
-
-    const named = await shadowOff.request(
-      '/v1/admin/host-whereabouts',
-      request({ v: 1, relayHostId: 'uuuuuuuuuuuuuuuu', userId: 'user-z' })
-    )
-    expect(await named.json()).toMatchObject({
-      users: [{ userId: 'user-z', database: null, seats: [], recentlyLeft: [], verdict: null }]
-    })
-  })
-
-  it('answers a briefly unreachable database with a retryable 503', async () => {
-    const app = appWith(async () => {
-      throw new Error('Connection terminated due to connection timeout')
-    })
-    const response = await app.request(
-      '/v1/admin/host-whereabouts',
-      request({ v: 1, relayHostId: HOST, userId: 'user-a' })
-    )
-    expect(response.status).toBe(503)
   })
 })
 

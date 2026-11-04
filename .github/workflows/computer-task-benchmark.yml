@@ -66,7 +66,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb openbox dbus-x11 at-spi2-core python3-gi \
-            gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip ripgrep libnss3 libgbm1 libasound2t64
+            gir1.2-atspi-2.0 gir1.2-gtk-3.0 python3-tk xdotool xclip x11-xserver-utils x11-xkb-utils ripgrep libnss3 libgbm1 libasound2t64
       - name: Download and verify pinned cua-driver
         env:
           GH_TOKEN: ${{ github.token }}
@@ -87,6 +87,11 @@ jobs:
           export CANDIDATE_SHA="$(git rev-parse HEAD)"
           xvfb-run -a --server-args='-screen 0 1280x1024x24' dbus-run-session -- bash -euc '
             openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+            if [ "$BENCH_TARGET" = electron ]; then
+              /usr/bin/python3 config/benchmarks/computer-use/linux_typing_probe.py \
+                --electron "$RUNNER_TEMP/electron/node_modules/electron/dist/electron" \
+                --source "$CANDIDATE_SHA" --out "out/typing-linux-$BENCH_TARGET"
+            fi
             /usr/bin/python3 config/benchmarks/computer-use/bench.py --target "$BENCH_TARGET" \
               --baseline "$BASELINE_SHA" --candidate "$CANDIDATE_SHA" \
               --cua "$RUNNER_TEMP/cua/cua-driver" \
@@ -104,6 +109,13 @@ jobs:
         with:
           name: computer-task-linux-${{ matrix.target }}
           path: out/task-linux-${{ matrix.target }}
+          if-no-files-found: warn
+
+      - if: always() && matrix.target == 'electron'
+        uses: actions/upload-artifact@v4
+        with:
+          name: computer-typing-linux-electron
+          path: out/typing-linux-electron
           if-no-files-found: warn
 
   windows:

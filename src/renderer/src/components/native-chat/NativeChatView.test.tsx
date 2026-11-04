@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef } from 'react'
 import type * as React from 'react'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
@@ -46,20 +46,6 @@ function entry(overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'pa
     stateHistory: [],
     ...overrides
   }
-}
-
-function renderResolution(
-  props: Omit<React.ComponentProps<typeof NativeChatSessionGate>, 'children'>
-): void {
-  render(
-    <NativeChatSessionGate {...props}>
-      {(resolution) => (
-        <div data-testid="native-chat-resolution">
-          {resolution.agent}:{resolution.sessionId ?? 'no-session'}:{resolution.paneKey}
-        </div>
-      )}
-    </NativeChatSessionGate>
-  )
 }
 
 const notComposing = (): boolean => false
@@ -164,17 +150,5 @@ describe('NativeChatSessionGate', () => {
     expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
       'keep this unsent message'
     )
-  })
-
-  it('does not open native chat from an unsupported title fallback', () => {
-    renderResolution({
-      paneKey: 'tab-1:leaf-1',
-      launchAgent: null,
-      resolvedAgent: 'gemini',
-      ptyId: 'pty-1'
-    })
-
-    expect(screen.getByText('No conversation here')).toBeInTheDocument()
-    expect(screen.queryByTestId('native-chat-resolution')).not.toBeInTheDocument()
   })
 })

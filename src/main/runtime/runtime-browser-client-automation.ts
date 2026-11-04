@@ -1,4 +1,5 @@
-import { BrowserClientAutomationMethod } from '../../shared/browser-client-automation-protocol'
+import { BrowserClientAutomationMethod } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { browserExpectedUrlMismatchError } from '../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -36,7 +37,9 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   )
   const result = await issued.result
   if (result.status === 'failed') {
-    throw new Error(result.errorCode)
+    throw result.expectedUrlMismatch
+      ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
+      : new Error(result.errorCode)
   }
   return { handled: true, result: result.value }
 }

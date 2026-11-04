@@ -1,3 +1,4 @@
+import { sessionCrewChanges } from '../../runtime/orchestration/crew/crew-changes'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 let host: StructuredAgentSessionHost | null = null
@@ -33,7 +34,11 @@ function publishHeld(): void {
 export function setStructuredAgentSessionHost(next: StructuredAgentSessionHost | null): void {
   stopWatchingHost?.()
   stopWatchingHost = null
+  const changed = host !== next
   host = next
+  if (changed) {
+    sessionCrewChanges.notify()
+  }
   try {
     stopWatchingHost =
       typeof next?.onSessionsHeld === 'function' ? next.onSessionsHeld(publishHeld) : null

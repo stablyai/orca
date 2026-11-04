@@ -1,20 +1,23 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
-import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
-import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
+import {
+  DEFAULT_TERMINAL_FONT_WEIGHT,
+  DEFAULT_TERMINAL_FONT_WEIGHT_BOLD
+} from './terminal/appearance/terminal-fonts'
+import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from './task-providers'
-import { getDefaultSourceControlAiSettings } from './source-control-ai-settings'
+import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
-import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
+import { DEFAULT_DISABLED_TUI_AGENTS } from './agent-launch/catalog/tui-agent-selection'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
-import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -44,6 +47,8 @@ export function buildDefaultSettings(args: {
     pluginAppTheme: null,
     pluginAppThemeLight: null,
     pluginAppThemeDark: null,
+    editorThemeLight: null,
+    editorThemeDark: null,
     pluginIconTheme: null,
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -53,6 +58,8 @@ export function buildDefaultSettings(args: {
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: args.appFontFamily,
     editorAutoSave: false,
+    editorFormatOnSave: false,
+    editorInsertFinalNewline: false,
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
@@ -85,6 +92,7 @@ export function buildDefaultSettings(args: {
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
+    terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
@@ -108,7 +116,10 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
+    terminalScrollOnUserInput: true,
     windowBackgroundBlur: false,
+    reduceVisualEffects: false,
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
@@ -132,10 +143,11 @@ export function buildDefaultSettings(args: {
     terminalLinkActionPopoverEnabled: true,
     terminalLinkClickBehavior: 'actions',
     terminalUrlMiddleClickBehavior: 'open',
-    experimentalNativeChat: false,
     experimentalBrowserExtensions: false,
+    agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: false,
     nativeChatQueueFollowUps: true,
+    nativeChatAutoContinueAfterUsageLimit: false,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
     nativeChatInheritShellEnvironment: true,
@@ -157,9 +169,7 @@ export function buildDefaultSettings(args: {
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: 1,
-    orchestrationChatErrorEscalationEnabled: true,
-    orchestrationHeartbeatsEnabled: true,
-    orchestrationHeartbeatIntervalMinutes: 5,
+    orchestrationWorkerAutoReleaseEnabled: true,
     showArtifactsButton: false,
     showSkillsButton: false,
     showMobileButton: true,
@@ -229,6 +239,7 @@ export function buildDefaultSettings(args: {
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},
+    agentLaunchChoices: {},
     agentDefaultEnv: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
@@ -268,6 +279,7 @@ export function buildDefaultSettings(args: {
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,
+    experimentalOrchestrationPanel: false,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,

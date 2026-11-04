@@ -1,18 +1,19 @@
-import type {
-  AgentJournalPlainStatusItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat/native-chat-provider-frame-summary'
 import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
-import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
+import {
+  codexGoalRowText,
+  codexThreadGoalState
+} from '../../codex/structured/journal/codex-goal-journal-rows'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
-import { hookOutcomeRowBody } from '../../../shared/agent-session-hook-outcome'
+import { hookOutcomeRowBody } from '../../../shared/agent-session/journal/agent-session-hook-outcome'
 
 export type UnhandledProviderFrameJournalItem = {
   body: AgentJournalPlainStatusItem

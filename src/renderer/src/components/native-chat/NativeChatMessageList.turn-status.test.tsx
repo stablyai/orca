@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -26,18 +26,25 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalTurnItem
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
+import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { latestStructuredAgentSessionRequest } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 
 let restoreViewport = (): void => {}
 beforeAll(() => {
@@ -55,6 +62,13 @@ const usageLimitView = {
   continueNow: vi.fn(),
   usageLimitTurnItemId: 'item-2',
   continueUsageLimit
+}
+// A host that could continue, with no turn the selectors offered.
+const commandView = {
+  ...usageLimitView,
+  continueAvailable: true,
+  offeredTurnItemId: null,
+  usageLimitTurnItemId: null
 }
 
 {
@@ -256,7 +270,7 @@ const usageLimitView = {
   }
 
   it.each(['claude', 'codex', 'grok'] as const)(
-    'keeps a collapsed %s quota warning visible without a continuation action',
+    'keeps a collapsed %s quota warning visible and continues once the limit resets',
     (agent) => {
       continueUsageLimit.mockClear()
       const items: AgentJournalRenderItem[] = [
@@ -289,7 +303,7 @@ const usageLimitView = {
             ...agentSessionFailureWords(
               {
                 kind: 'usageLimitReached',
-                usageLimit: { window: 'session', resetsAt: Date.now() + 3600_000 },
+                usageLimit: { window: 'session', resetsAt: Date.now() - 60_000 },
                 detail: { text: 'The provider refused this request.', audience: 'person' }
               },
               { surface: 'row' }
@@ -321,8 +335,10 @@ const usageLimitView = {
       expect(screen.queryByText('Earlier work')).toBeNull()
       expect(screen.getByText(/hit its session limit/)).toBeVisible()
       expect(screen.getByText('Details')).toBeVisible()
-      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-      expect(screen.queryByText(/Send a message once it resets/)).toBeNull()
+      const button = screen.getByRole('button', { name: 'Continue Now' })
+      expect(button).toBeVisible()
+      fireEvent.click(button)
+      expect(continueUsageLimit).toHaveBeenCalledOnce()
     }
   )
 
@@ -408,5 +424,141 @@ const usageLimitView = {
       const stopping = screen.getByText('Stopping…')
       expect(sent.compareDocumentPosition(stopping)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     })
+  })
+}
+
+{
+  const compactEntry = agentJournalSubmissionKey('cmd-1')
+  const commandTurn = agentJournalItemKey({
+    provider: 'orca',
+    clientMessageId: 'command-turn:cmd-1'
+  })
+  const row = (
+    itemId: string,
+    sequence: number,
+    body: AgentJournalItemBody,
+    turnItemId?: string
+  ): AgentJournalRenderItem => ({
+    itemId,
+    revision: 1,
+    sequence,
+    observedAt: sequence,
+    body,
+    turnScope: turnItemId ? { kind: 'turn', turnItemId } : { kind: 'thread' }
+  })
+  const settled = (
+    itemId: string,
+    userItemId: string,
+    outcome: 'success' | 'failure',
+    at: number
+  ) =>
+    row(itemId, at, {
+      kind: 'turn',
+      turnId: itemId,
+      userItemId,
+      state: 'completed',
+      outcome,
+      startedAt: at * 1000,
+      completedAt: at * 1000 + 4000
+    })
+  const failures: [string, AgentJournalItemBody, RegExp][] = [
+    [
+      'usage-limit warning',
+      {
+        kind: 'status',
+        tone: 'warning',
+        ...agentSessionFailureWords(
+          {
+            kind: 'usageLimitReached',
+            usageLimit: { window: 'session', resetsAt: 1_700_000_000_000 },
+            detail: { text: "You've hit your limit", audience: 'person' }
+          },
+          { surface: 'row', agentName: 'Claude' }
+        )
+      },
+      /hit its session limit/
+    ],
+    [
+      'compaction failure',
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(
+          { kind: 'compactionFailed', detail: { text: 'nothing to compact', audience: 'person' } },
+          { surface: 'row', agentName: 'Grok' }
+        )
+      },
+      /Compaction failed: nothing to compact/
+    ],
+    [
+      'fact-less provider error',
+      { kind: 'status', tone: 'error', text: 'API Error: 529 upstream overloaded' },
+      /API Error: 529 upstream overloaded/
+    ]
+  ]
+
+  describe('a failed /compact command turn', () => {
+    it.each(failures)(
+      'shows its %s with no recovery controls, leaving the request before it as it was',
+      (_name, failure, words) => {
+        const items = [
+          row('u1', 1, {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'Fix it' }]
+          }),
+          settled('t1', 'u1', 'success', 2),
+          row(
+            't1-answer',
+            3,
+            { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Fixed.' }] },
+            't1'
+          ),
+          row(compactEntry, 10, {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: '/compact' }],
+            command: { name: 'compact' }
+          }),
+          settled(commandTurn, compactEntry, 'failure', 11),
+          row('command-failure', 12, failure, commandTurn)
+        ]
+        // The live list's Continue targets come from these selectors; neither offers the command.
+        expect(latestNativeChatOrcaStopCut(items, [])).toBeNull()
+        expect(latestNativeChatUsageLimitCut(items, [])).toBeNull()
+        render(
+          <NativeChatOrcaStopContext.Provider value={commandView}>
+            <NativeChatMessageList
+              session={{
+                messages: projectStructuredAgentSessionMessages(items, [], []),
+                status: 'ready',
+                sessionId: 'session-1',
+                agent: 'claude',
+                hasMore: false,
+                loadingEarlier: false,
+                olderHistoryGeneration: 0,
+                loadEarlier: vi.fn(),
+                readPhase: 'ready'
+              }}
+              journalItems={items}
+              settledTurns={selectStructuredAgentSettledTurns(items)}
+              isWorking={false}
+              expandSignal={false}
+            />
+          </NativeChatOrcaStopContext.Provider>
+        )
+        expect(screen.getByText('/compact')).toBeVisible()
+        expect(screen.getAllByText(words)).toHaveLength(1)
+        expect(screen.getByText(words)).toBeVisible()
+        expect(screen.queryByRole('button', { name: /Continue/ })).toBeNull()
+        expect(screen.queryByRole('separator', { name: 'Context compacted' })).toBeNull()
+        expect(screen.getByText('Fixed.')).toBeVisible()
+        // Status readers keep the last real request's verdict through the failed command.
+        expect(latestStructuredAgentSessionRequest(items, [])).toMatchObject({
+          id: 't1',
+          outcome: 'success'
+        })
+      }
+    )
   })
 }
