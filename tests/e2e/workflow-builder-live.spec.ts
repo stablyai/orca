@@ -86,6 +86,7 @@ test('a Claude-only preset runs through real Orca workers and settles from Orca 
   orcaPage,
   electronApp
 }, testInfo) => {
+  // Real agents do real work: the run budget plus launch and teardown headroom.
   test.setTimeout(RUN_BUDGET_MS + 5 * 60_000)
   await waitForSessionReady(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)

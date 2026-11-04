@@ -30,6 +30,7 @@ import {
 import { workflowNodeKindLabel } from './workflow-editor-mutations'
 import { WORKFLOW_TASK_STATUS_STYLE, workflowNodeRunSummary } from './workflow-status-style'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export const WORKFLOW_NODE_ICONS: Record<WorkflowNodeKind, LucideIcon> = {
   agent: Bot,
@@ -73,6 +74,7 @@ function WorkflowNodeCardImpl({
   selected,
   data
 }: NodeProps<WorkflowFlowNode>): React.JSX.Element | null {
+  useUiLanguageRevision()
   // The store shares unchanged node objects across commits, so edits elsewhere keep this reference.
   const node = useWorkflowEditorStore(
     (state) => state.preset?.definition.nodes.find((candidate) => candidate.id === id) ?? null

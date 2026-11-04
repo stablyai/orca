@@ -12,6 +12,7 @@ import type { WorkflowFlowEdge } from './workflow-flow-mapping'
 import { useWorkflowEditorStore } from './workflow-editor-store'
 import { useWorkflowRunViewStore, WORKFLOW_EDGE_ACTIVITY_MS } from './workflow-run-view-store'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function EdgeChip({
   x,
@@ -68,6 +69,7 @@ function loopPath(
 }
 
 function DependencyEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.Element {
+  useUiLanguageRevision()
   // A number selector stays stable, so only real layout changes re-route loops.
   const leftmostNodeX = useStore((state) => {
     let min = Number.POSITIVE_INFINITY
@@ -143,6 +145,7 @@ function useRecentActivity(edgeId: string | undefined): boolean {
 }
 
 function CommunicationEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.Element {
+  useUiLanguageRevision()
   const [path, labelX, labelY] = getBezierPath({ ...props, curvature: 0.35 })
   const edgeId = props.data?.edgeId
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
