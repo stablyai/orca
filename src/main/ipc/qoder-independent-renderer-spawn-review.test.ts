@@ -3,8 +3,8 @@ import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { detectAgentCommandsOnHost } from '../preflight/agent-command-detection'
-import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
+import { buildAgentStartupPlan } from '../../shared/agent-launch/startup/tui-agent-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { trackMock } from './pty/pty-ipc-mock-registry'
 
@@ -52,10 +52,10 @@ vi.mock('../memory/pty-registry', () =>
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
-vi.mock('../codex/codex-pane-account-registry', () =>
+vi.mock('../codex/configuration/homes/codex-pane-account-registry', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
-vi.mock('../codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 

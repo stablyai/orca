@@ -1,7 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { pr } from '@/hooks/composer-state/composer-review-base-test-fixture'
@@ -154,6 +154,27 @@ it('adapts only absent publication on older hosts and shares the saved Checks ga
     openModalFallback: vi.fn()
   })
   expect(rpc.direct.mock.lastCall?.[0].agentOverride).toBe('antigravity')
+  settings.nativeChatProviders = { antigravity: false }
+  useAppStore.setState({ settings: { ...settings } })
+  expect(checksAgent('fixChecks')).toBeNull()
+  settings.sourceControlAi.actions = { fixChecks: { agentId: 'antigravity', surface: 'chat' } }
+  useAppStore.setState({ settings: { ...settings } })
+  expect(checksAgent('fixChecks')).toBe('antigravity')
+  expect(chat.agentsOfferedForLaunch(useAppStore.getState(), local, [])).toEqual([])
+  expect(chat.agentsOfferedForLaunch(useAppStore.getState(), local, [], 'antigravity')).toEqual([
+    'antigravity'
+  ])
+  await startFixChecksAgent({
+    repoId: 'missing',
+    basePrompt: 'saved Chat',
+    item: { ...pr, repoId: 'missing' },
+    launchSource: 'task_page',
+    openModalFallback: vi.fn()
+  })
+  expect(rpc.direct.mock.lastCall?.[0].resolveLaunchInputs('antigravity')).toMatchObject({
+    requestedSurface: undefined,
+    preferredSurface: 'chat'
+  })
   useAppStore.setState({ settings: { ...settings, disabledTuiAgents: ['antigravity'] } })
   expect(checksAgent('fixChecks')).toBeNull()
   const localChat = { executionHostId: 'local', hostCapabilities: [CHAT] }

@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../shared/workspace-layout/terminal-tab-types'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'

@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import type { CdpWsProxy } from '../cdp-ws-proxy'
+import type { CdpWsProxy } from '../cdp/transport/cdp-ws-proxy'
 import type { BrowserError } from '../browser-error'
 
 // Exceed agent-browser's internal navigation (30s) and default wait (25s) timeouts.
@@ -50,8 +50,6 @@ export type AgentBrowserCleanupOptions = {
   /** Preserve queued commands for the replacement session. */
   keepQueuedCommands?: boolean
 }
-
-export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
 
 export type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv

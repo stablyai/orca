@@ -11,7 +11,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { readAutomationRunReceipt } from './automation-run-receipt'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
-import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 
 export async function observeAutomationChatRun(
   runtime: OrcaRuntimeService,

@@ -1,7 +1,7 @@
 import type { WebRuntimeClient } from './web-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { vi } from 'vitest'
-import { NODE_PAIRED_E2EE_PRIMITIVES as crypto } from '../../../shared/paired-e2ee-node-primitives'
+import { NODE_PAIRED_E2EE_PRIMITIVES as crypto } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 
 const host = crypto.generateKeyPair()
 export const publicKeyB64 = crypto.publicKeyToBase64(host.publicKey)

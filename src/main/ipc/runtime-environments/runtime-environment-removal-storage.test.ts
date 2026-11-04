@@ -11,14 +11,14 @@ const { handleMock, clearStorageMock, removeEnvironmentMock, resolveEnvironmentM
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   addEnvironmentFromPairingCode: vi.fn(),
   listEnvironments: vi.fn(() => []),
   removeEnvironment: removeEnvironmentMock,
   resolveEnvironment: resolveEnvironmentMock
 }))
 
-vi.mock('../../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   clearBrowserRoutePartitionStorageForEnvironment: clearStorageMock
 }))
 

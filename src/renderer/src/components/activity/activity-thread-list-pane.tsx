@@ -27,10 +27,9 @@ import { ActivityThreadCollapseContext } from './activity-thread-collapse-contex
 import { useActivityThreadSelection } from './use-activity-thread-selection'
 import type {
   ActivityGroupBy,
-  ActivityThreadGroup,
-  AgentPaneThread,
   ThreadReadFilter
-} from './activity-thread-types'
+} from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 const ZERO_RECT_FALLBACK_VIEWPORT = { width: 320, height: 600 }
 const observeActivityListRect: typeof observeElementRect = (instance, cb) =>

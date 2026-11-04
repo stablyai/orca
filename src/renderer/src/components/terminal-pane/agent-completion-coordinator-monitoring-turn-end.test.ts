@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import { useAgentCompletionCoordinatorLifecycle } from './agent-completion-coordinator-test-harness'
-import { normalizeHookPayload } from '../../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 // Feed real hook-listener output to the real coordinator to verify monitoring turn boundaries agree across layers.
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')

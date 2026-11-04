@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { RuntimeEnvironmentSshBucket } from '@/store/slices/runtime-environment-ssh'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'

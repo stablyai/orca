@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import { MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES } from '../../../../shared/terminal-quick-command-prompt-limit'
+import { MAX_QUICK_COMMAND_AGENT_PROMPT_MESSAGE_BYTES } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 

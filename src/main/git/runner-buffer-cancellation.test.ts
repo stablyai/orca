@@ -9,10 +9,8 @@ vi.mock('node:child_process', () => ({
 }))
 
 import { gitExecFileAsyncBuffer } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 import { configureWindowsHostGitEnvironmentReadiness } from './command-runner/windows-host-git-environment'
 
 beforeEach(() => execFileMock.mockReset())

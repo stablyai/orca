@@ -1,8 +1,8 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import type { listWorktrees } from '../git/worktree-scan-cache'
-import type { listWorktreesStrict } from '../git/worktree-listing'
+import type { listWorktrees } from '../git/worktrees/catalog/worktree-scan-cache'
+import type { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 export const makeStore = (overrides?: { isUnread?: boolean }) => ({
   getRepo: (id: string) =>
     makeStore(overrides)

@@ -1,5 +1,5 @@
 import { posix as posixPath } from 'node:path'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
 
 const MIN_HOST_NODE_MAJOR = 18

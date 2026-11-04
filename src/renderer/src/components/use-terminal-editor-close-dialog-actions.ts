@@ -6,12 +6,12 @@ import {
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   type EditorRequestFileCloseDetail,
   type EditorSaveAndCloseDetail
-} from './editor/editor-autosave'
+} from './editor/autosave/editor-autosave'
 import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,
   EDITOR_STALE_SAVE_MESSAGE
-} from './editor/editor-save-disk-precondition'
-import { discardEditorFileChangesAndClose } from './editor/discard-editor-file-changes'
+} from './editor/save/queue/editor-save-disk-precondition'
+import { discardEditorFileChangesAndClose } from './editor/save/flush/discard-editor-file-changes'
 import { translate } from '@/i18n/i18n'
 import type { TerminalEditorCloseQueueController } from './use-terminal-editor-close-queue'
 

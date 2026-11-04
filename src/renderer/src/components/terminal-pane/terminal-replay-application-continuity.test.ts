@@ -4,7 +4,7 @@ import {
   buildParityMainBufferSnapshot,
   createRendererParityTerminal,
   writeToTerminal
-} from '../../../../shared/terminal-restore-parity-fixture'
+} from '../../../../shared/terminal/replay/testing/terminal-restore-parity-fixture'
 import { buildMainModelSnapshotReplayWrites } from './terminal-snapshot-replay-paint'
 
 /** Replay must preserve live application state that snapshots do not redeclare; use real terminfo families so one-time charset initialization stays covered. */

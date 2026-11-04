@@ -10,7 +10,7 @@ import type { AgentMessageSource } from '../../../../shared/agent-session/agent-
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
+import { codexDispatchRejection } from '../../../codex/structured/turns/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<
   StructuredAgentSessionHost,

@@ -11,7 +11,7 @@ import { dirname, extname, join, parse, relative } from 'node:path'
 import { writeFileAtomically } from './fs-utils'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from './runtime-selection'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { CodexRuntimeHomePaths } from './runtime-home-service-paths'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {

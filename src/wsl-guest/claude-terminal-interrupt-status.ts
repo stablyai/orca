@@ -1,7 +1,7 @@
 import { ClaudeTerminalInterruptTracker } from '../shared/claude-terminal-interrupt'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status/contracts/agent-status-freshness'
 import {
   applyRelayClaudeInterrupt,
   type RelayInterruptHost

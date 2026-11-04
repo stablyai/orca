@@ -1,4 +1,4 @@
-import { skipOpenEscapeContinuation } from '../../../../shared/terminal-partial-escape-tail'
+import { skipOpenEscapeContinuation } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 const CAN = '\x18'
 

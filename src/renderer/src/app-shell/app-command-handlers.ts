@@ -10,12 +10,12 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspace
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
-} from '../components/sidebar/child-workspaces-toggle-target'
+} from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
+} from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'

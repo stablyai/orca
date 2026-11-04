@@ -1,4 +1,4 @@
-import type { PRCommentAudienceFilter } from '../../../shared/pr-comment-audience'
+import type { PRCommentAudienceFilter } from '../../../shared/source-control/review-comments/pr-comment-audience'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 

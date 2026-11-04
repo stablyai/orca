@@ -23,7 +23,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/components/sidebar/use-worktree-agent-activation', () => ({
+vi.mock('@/components/sidebar/workspace-card/activity/use-worktree-agent-activation', () => ({
   activateWorktreeAgentPane: mocks.activatePane
 }))
 vi.mock('@/components/terminal-pane/stale-agent-row', async (original) => ({
@@ -52,7 +52,7 @@ import {
 } from './native-chat-agent-message-sender-target'
 import { unnamedSenderLabel } from './native-chat-agent-message-sender-label'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { sameAgentIdentity } from '../../../../shared/agent-title-owner'
+import { sameAgentIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
 import { initialStore, resetSenderStore, status } from './native-chat-agent-sender.test-fixture'
 import type { AgentSenderPublication } from '../../../../shared/agent-sender-associations'
 import type {

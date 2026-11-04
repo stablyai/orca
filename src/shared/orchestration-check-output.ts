@@ -1,5 +1,5 @@
 import { ORCHESTRATION_LEGACY_RUN_ID } from './orchestration-rpc-contract'
-import { escapeTerminalControlCharacters } from './terminal-control-character-escape'
+import { escapeTerminalControlCharacters } from './terminal/output/terminal-control-character-escape'
 
 export type OrchestrationMessageSummary = {
   id: string

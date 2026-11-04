@@ -10,23 +10,23 @@ import { expect, it, vi } from 'vitest'
 import {
   AGENT_LAUNCH_CHOICES_CAPABILITY,
   AGENT_LAUNCH_SETTINGS_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   compatibilityEntry,
   rememberRuntimeEnvironmentCompatibility
 } from '@/runtime/runtime-compatibility-cache'
 import { useAppStore } from '@/store'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree
-} from '../settings/use-host-agent-launch-preferences'
+} from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   useAgentLaunchPickerInventorySource,
   useAgentPickerInventoryEntries
@@ -241,7 +241,7 @@ it.each([20, 200])(
     const route = await import('@/lib/agent-launch-route-input')
     const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
     const profiles = vi.spyOn(
-      await import('../../../../shared/agent-launch-profile'),
+      await import('../../../../shared/agent-launch/choices/agent-launch-profile'),
       'projectAgentLaunchProfile'
     )
     try {

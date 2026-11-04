@@ -11,6 +11,7 @@ import {
   settleStructuredAgentSessionBuiltinCatalog
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
+import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 
 const SEED = getAgentSessionOptionCatalog('codex')!
 
@@ -229,7 +230,15 @@ it('keeps one flat selection across inventory/answer arrival order and child rep
       effort: 'high'
     })
     // A replacement child drops live capabilities while the conversation keeps its flat record.
-    state = { ...createStructuredAgentSessionOptionState('claude', SEED), record: state.record }
+    state = {
+      ...state,
+      record: cloneStructuredAgentSessionOptionRecord(state.record),
+      catalog: SEED,
+      catalogSource: 'seed',
+      verifiedModelIds: undefined,
+      reportedEffort: undefined,
+      reportedPermissionMode: undefined
+    }
     state = inventory(state)
     expect(structuredAgentSessionSendSelection(state)).toMatchObject({
       model: 'omitted',

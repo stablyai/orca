@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import WorktreeCard from './WorktreeCard'
+import WorktreeCard from './workspace-card/surface/WorktreeCard'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

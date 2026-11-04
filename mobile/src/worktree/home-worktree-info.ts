@@ -1,4 +1,4 @@
-import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 
 export type HomeWorktreeSummary = {

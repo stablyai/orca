@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { resolveGitAdmissionTier } from './git-operation-executor'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _resetGitAdmissionForTests,
   _gitAdmissionSnapshotForTests
 } from './git-subprocess-admission'
-import { worktreeCreateGit, worktreePreparationGit } from '../worktree-create-git-executor'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
+import {
+  worktreeCreateGit,
+  worktreePreparationGit
+} from '../worktrees/creation/worktree-create-git-executor'
 
 afterEach(() => _resetGitAdmissionForTests())
 

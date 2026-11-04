@@ -5,13 +5,10 @@ import { CLI_MAIN_ENTRY_NAMES } from './plain-node-entry-guard'
 /** Main-build Rollup inputs: output file name (without .js) to its source entry. */
 export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   index: resolve('src/main/index.ts'),
-  // Why: sandboxed webview preloads cannot load Rollup helper chunks.
-  'browser-window-close-preload': resolve('src/preload/browser-window-close.ts'),
-  'doc-preview-link-preload': resolve('src/preload/doc-preview-link.ts'),
   'plugin-frame-guest-preload': resolve('src/preload/plugin-frame-guest.ts'),
   'browser-extension-preload': resolve('src/preload/browser-extension-preload.ts'),
   'browser-extension-native-host-supervisor-entry': resolve(
-    'src/main/browser/extensions/browser-extension-native-host-supervisor-entry.ts'
+    'src/main/browser/extensions/native-messaging/browser-extension-native-host-supervisor-entry.ts'
   ),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/workers/plugin-host-entry.ts'),
@@ -33,7 +30,7 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   // libuv spawns inline; run port probes on a worker to keep the UI loop free.
   'port-scan-command-worker-entry': resolve('src/main/ports/port-scan-command-worker-entry.ts'),
   'command-path-directory-worker-entry': resolve(
-    'src/main/ipc/command-path-directory-worker-entry.ts'
+    'src/main/ipc/command-path/command-path-directory-worker-entry.ts'
   ),
   // Focus-triggered usage probes must not block UI on cold CreateProcessW (#27362).
   'worker-thread-child-process-entry': resolve(

@@ -8,7 +8,7 @@ import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
@@ -161,20 +161,14 @@ export function useOnboardingFlow(
   useEffect(() => {
     paintedThemeRef.current = paintedTheme
   }, [paintedTheme])
-  const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
-  const themeStepEntryCapturedRef = useRef(false)
-  useEffect(() => {
-    if (currentStep.id !== 'theme') {
-      themeStepEntryCapturedRef.current = false
-      return
-    }
-    if (!settings || themeStepEntryCapturedRef.current) {
-      return
-    }
-    // Why: capture entry theme so "Skip to project setup" keeps the preference the user arrived with.
-    themeStepEntryCapturedRef.current = true
-    themeStepEntryThemeRef.current = settings.theme
-  }, [currentStep.id, settings])
+  // Why per entry: "Skip to project setup" keeps the look the user arrived with, and each pick
+  // replaces only its own mode's slot from here.
+  const [themeLookBaseline, setThemeLookBaseline] = useState<GlobalSettings | null>(null)
+  if (currentStep.id !== 'theme' && themeLookBaseline) {
+    setThemeLookBaseline(null)
+  } else if (currentStep.id === 'theme' && settings && !themeLookBaseline) {
+    setThemeLookBaseline(settings)
+  }
 
   const previewTheme = resolvePaintedTheme(settings, theme)
   useEffect(() => {
@@ -286,7 +280,7 @@ export function useOnboardingFlow(
     stepIndex,
     setStepIndex,
     selectedAgent,
-    themeStepEntryThemeRef,
+    themeLookBaseline,
     setTheme,
     updateSettings,
     skipOptions
@@ -305,6 +299,8 @@ export function useOnboardingFlow(
     setYoloPermissions: setYoloPermissionsInteractive,
     theme,
     setTheme: setThemeInteractive,
+    themeLookBaseline,
+    setThemeLookBaseline,
     busyLabel,
     detectedSet,
     isDetectingAgents,

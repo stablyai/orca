@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
-} from '../browser-extension-namespace-registry'
-import { openBrowserExtensionTab } from '../browser-extension-tab-model'
+} from '../api-runtime/browser-extension-namespace-registry'
+import { openBrowserExtensionTab } from '../tabs-and-windows/browser-extension-tab-model'
 
 function optionsPagePath(extension: Electron.Extension): string | null {
   const manifest: { options_ui?: { page?: unknown }; options_page?: unknown } =

@@ -80,19 +80,6 @@ describe('readAiVaultSessionTitlesFromFiles', () => {
     ).resolves.toEqual({ titles: [] })
   })
 
-  it('uses the bounded worker index when no transcript path is available', async () => {
-    const cached = { agent: 'claude' as const, sessionId: 'session-1', title: 'Cached title' }
-    const cache = { get: vi.fn(() => cached), set: vi.fn() }
-
-    await expect(
-      readAiVaultSessionTitlesFromFiles([{ agent: 'claude', sessionId: 'session-1' }], {
-        cache
-      })
-    ).resolves.toEqual({ titles: [cached] })
-    expect(parseAgentSessionFileCached).not.toHaveBeenCalled()
-    expect(cache.set).not.toHaveBeenCalled()
-  })
-
   it('caps exact transcript reads at 64 identities', async () => {
     const path = await transcriptPath()
     parseAgentSessionFileCached.mockResolvedValue({

@@ -2,9 +2,10 @@ import type { Terminal } from '@xterm/headless'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import {
   buildAbsoluteCursorRestoreSequence,
-  readSavedCursorRegister
-} from '../../shared/terminal-serialize-absolute-cursor'
-import type { SavedCursorRegister } from '../../shared/terminal-serialize-absolute-cursor'
+  readSavedCursorRegister,
+  type SavedCursorRegister
+} from '../../shared/terminal/replay/terminal-serialize-absolute-cursor'
+
 import type { TerminalModes } from './types'
 
 export function buildFrameRestoreSnapshotFields(

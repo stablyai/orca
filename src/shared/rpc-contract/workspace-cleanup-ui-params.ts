@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { normalizeWorkspaceCleanupBrowseState } from '../workspace-cleanup-browse-state'
-import type { WorkspaceCleanupBrowseState } from '../workspace-cleanup-browse-state'
+import {
+  normalizeWorkspaceCleanupBrowseState,
+  type WorkspaceCleanupBrowseState
+} from '../workspace-cleanup/workspace-cleanup-browse-state'
 
 export const WorkspaceCleanupDismissal = z.object({
   worktreeId: z.string(),

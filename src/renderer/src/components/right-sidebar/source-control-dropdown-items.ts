@@ -4,17 +4,17 @@ import { translate } from '@/i18n/i18n'
 import {
   COMMIT_MESSAGE_REQUIRED_REASON,
   type CommitDisabledReason
-} from '../../../../shared/source-control-commit-eligibility'
+} from '../../../../shared/source-control/decisions/source-control-commit-eligibility'
 import type {
   DropdownActionInputs,
   DropdownEntry
-} from '../../../../shared/source-control-dropdown-item-types'
-import { deriveDropdownActionContext } from '../../../../shared/source-control-dropdown-action-context'
+} from '../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
+import { deriveDropdownActionContext } from '../../../../shared/source-control/dropdown/source-control-dropdown-action-context'
 import {
   buildCommitDropdownItems,
   type CommitDropdownCopy
-} from '../../../../shared/source-control-dropdown-commit-items'
-import { buildRemoteDropdownItems } from '../../../../shared/source-control-dropdown-remote-items'
+} from '../../../../shared/source-control/dropdown/source-control-dropdown-commit-items'
+import { buildRemoteDropdownItems } from '../../../../shared/source-control/dropdown/source-control-dropdown-remote-items'
 import { localizedRemoteCopy } from './source-control-dropdown-remote-localized-copy'
 import { buildHostedReviewDropdownItems } from './source-control-dropdown-review-items'
 

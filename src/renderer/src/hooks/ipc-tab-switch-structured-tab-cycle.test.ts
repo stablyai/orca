@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '@/store/types'
 import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
 import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'

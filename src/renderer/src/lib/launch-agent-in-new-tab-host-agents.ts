@@ -1,5 +1,5 @@
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store'
 import {
   awaitStructuredRouteHostAnswer,

@@ -24,7 +24,17 @@ describe('prepareSkippedOnboardingPreferences', () => {
     await expect(
       prepareSkippedOnboardingPreferences({
         currentStepId: 'theme',
-        themeBeforePreview: 'dark',
+        lookBeforePreview: {
+          theme: 'dark',
+          pluginAppThemeDark: null,
+          pluginAppThemeLight: null,
+          terminalThemeDark: 'Ghostty Default Style Dark',
+          terminalThemeLight: 'Builtin Tango Light',
+          terminalUseSeparateLightTheme: true,
+          terminalColorOverrides: undefined,
+          terminalColorOverridesLight: undefined,
+          terminalPluginPalettes: []
+        },
         settingsTheme: 'light',
         selectedAgent: null,
         setTheme,
@@ -36,7 +46,14 @@ describe('prepareSkippedOnboardingPreferences', () => {
 
     expect(setTheme).toHaveBeenCalledWith('dark')
     expect(applyTheme).toHaveBeenCalledWith('dark')
-    expect(updateSettings).toHaveBeenCalledWith({ theme: 'dark' })
+    // Restores the app and terminal slots a picked look replaced, not just the mode.
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theme: 'dark',
+        pluginAppThemeDark: null,
+        terminalThemeDark: 'Ghostty Default Style Dark'
+      })
+    )
     expect(setError).toHaveBeenCalledWith('settings IPC failed')
     expect(toast.error).toHaveBeenCalledWith('Could not save progress', {
       description: 'settings IPC failed'
@@ -52,7 +69,7 @@ describe('prepareSkippedOnboardingPreferences', () => {
     await expect(
       prepareSkippedOnboardingPreferences({
         currentStepId: 'agent',
-        themeBeforePreview: null,
+        lookBeforePreview: null,
         settingsTheme: 'light',
         selectedAgent: 'codex',
         setTheme,
