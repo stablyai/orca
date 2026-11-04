@@ -14402,7 +14402,6 @@
           "ff92d15436": "agents 작업이 완료되거나 도움이 필요할 때 Orca가 알려 드립니다.",
           "b054332836": "알림 설정",
           "f396db9f20": "집처럼 느껴지도록 하세요",
-          "322fc50a18": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다.",
           "198b148b3c": "기본 agent를 선택하세요",
           "windowsTerminalTitle": "Windows terminal 기본값 설정",
           "windowsTerminalSubtitle": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요.",

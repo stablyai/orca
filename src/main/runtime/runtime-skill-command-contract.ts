@@ -38,10 +38,10 @@ import type {
 import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
 import type {
   BundledSkillAutoUpdateRequest,
-  BundledSkillExecuteRequest,
+  LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
-  BundledSkillPlanRequest
+  LocalBundledSkillPlanRequest
 } from '../../shared/bundled-skill-plan'
 export type RuntimeSkillCommandSurface = {
   setSkillCloudService(service: SkillCloudService): void
@@ -100,8 +100,10 @@ export type RuntimeSkillCommandSurface = {
     signal?: AbortSignal,
     onProgress?: (progress: SkillBundleInstallProgress) => void
   ): Promise<SkillBundleInstallResult>
-  planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan>
-  executeLocalBundledSkills(request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult>
+  planLocalBundledSkills(request: LocalBundledSkillPlanRequest): Promise<BundledSkillPlan>
+  executeLocalBundledSkills(
+    request: LocalBundledSkillExecuteRequest
+  ): Promise<BundledSkillInstallResult>
   autoUpdateLocalBundledSkills(
     request: BundledSkillAutoUpdateRequest
   ): Promise<BundledSkillInstallResult>
