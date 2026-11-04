@@ -10,9 +10,9 @@ import {
 } from './host-chat-program-acquisition'
 import { agentChoicePending } from './host-chat-program'
 import { worktreeLaunchWorkspace } from './agent-launch-route-input'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   adoptAgentSessionLaunchVerdict,
   planAgentSessionLaunch

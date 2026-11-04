@@ -3,7 +3,7 @@ import { pasteDraftWhenAgentReady, type GeneratedPasteRefusal } from '@/lib/agen
 import { canMirrorLaunchDraftToNativeChat } from '../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 /** Mirror TUI-only launch context into supported native-chat composers, using the same eligibility predicate as chat opening. */
 export function seedNativeChatLaunchDraftForAgentTab(args: {

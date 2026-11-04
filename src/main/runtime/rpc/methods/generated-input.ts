@@ -6,7 +6,7 @@ import {
   TerminalSendGeneratedInputParams
 } from '../../../../shared/rpc-contract/generated-input-params'
 import { generatedInputNoticeFrames } from '../../../../shared/generated-agent-input-notice'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { deliverGeneratedTerminalInput } from '../../terminal/input/generated-terminal-input-delivery'
 import { GeneratedInputParts } from './generated-input-parts'
 import {

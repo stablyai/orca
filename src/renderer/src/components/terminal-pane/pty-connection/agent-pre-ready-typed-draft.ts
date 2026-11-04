@@ -1,7 +1,7 @@
 // Pre-bind keys would prefix the launch command; draft until agent readiness and recover if the user starts driving the live screen.
 
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../../../shared/generated-agent-input-readiness'
 import { deliverGeneratedPaste } from '@/lib/agent-paste-draft'
 import { waitForPaneAgentToLookReady } from '@/lib/agent-draft-readiness'

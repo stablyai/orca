@@ -1,4 +1,8 @@
-import { getTuiAgentDetectCommands, isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import {
+  getTuiAgentDetectCommands,
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from './agent-launch/catalog/tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from './agent-status-types'
@@ -11,7 +15,7 @@ import {
   PYTHON_PROCESS_RE,
   tokenizeCommandLine
 } from './agent-command-line-entrypoint'
-import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
+import { isFreshOmpLaunchCommand } from './agent-launch/startup/omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TerminalAgent; processName: string }
 

@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
+import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** Absolute registration-time ceiling, independent of shorter protocol-step bounds. */
 export const STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS = 10 * 60_000

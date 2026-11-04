@@ -7,12 +7,12 @@ import {
   iterateAgentDraftPasteContentChunks,
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
-  POST_PASTE_SUBMIT_DELAY_MS,
   sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent,
   submitPromptToAgentPty
 } from './agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS as POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({

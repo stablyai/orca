@@ -13,7 +13,7 @@ import { GENERATED_INPUT_METHODS } from '../../../main/runtime/rpc/methods/gener
 import type { OrcaRuntimeService } from '../../../main/runtime/orca-runtime'
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuledScreen } from '../../../shared/screen-input-veto'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type * as RuntimeTerminalStreamModule from '@/runtime/runtime-terminal-stream'
 import type * as AgentInputDialogModule from '../../../shared/agent-input-dialog'
 

@@ -6,7 +6,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { fishRequirementViolation, resolveFishBinary } from './fish-binary-requirement'
-import { clearEnvCommand, quoteStartupArg, withoutEnvCommand } from './tui-agent-startup-shell'
+import {
+  clearEnvCommand,
+  quoteStartupArg,
+  withoutEnvCommand
+} from './agent-launch/startup/tui-agent-startup-shell'
 
 const FISH = resolveFishBinary(4)
 

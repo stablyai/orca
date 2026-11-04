@@ -62,6 +62,9 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -286,10 +289,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "structuredOpen": {
-      "worktreeDeleted": "The worktree was deleted.",
-      "folderWorkspaceRemoved": "The folder workspace was removed."
     }
   },
   "settings": {

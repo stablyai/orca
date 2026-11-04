@@ -7,7 +7,7 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs
-} from '../../shared/agent-prompt-injection'
+} from '../../shared/agent-launch/startup/agent-prompt-injection'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime

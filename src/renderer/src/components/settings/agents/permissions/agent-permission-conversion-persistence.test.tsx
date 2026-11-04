@@ -1,5 +1,5 @@
-import * as updatesModule from '../../../../../../shared/agent-launch-permission-updates'
-import * as liftModule from '../../../../../../shared/tui-agent-permission-lift'
+import * as updatesModule from '../../../../../../shared/agent-launch/choices/agent-launch-permission-updates'
+import * as liftModule from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import * as envDraftModule from '../../../agent/launch-settings/agent-default-env-draft'
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -16,7 +16,7 @@ import {
   measureSettingsWork,
   expectSettingsWorkScale
 } from '../../../../../../shared/global-settings-test-fixture'
-import { resolveTuiAgentLaunchArgs } from '../../../../../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchArgs } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }

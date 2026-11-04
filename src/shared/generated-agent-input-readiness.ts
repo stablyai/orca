@@ -1,5 +1,5 @@
 import { GeneratedInputObservation } from './generated-input-observation'
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config'
 
 export const GENERATED_AGENT_INPUT_TIMEOUT_MS = 60_000
 export const GENERATED_AGENT_INPUT_QUIET_MS = 1500

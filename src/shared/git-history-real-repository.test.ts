@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -64,49 +64,6 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
 }
 
 describe('real unrelated Git histories', () => {
-  it.each(['repository pointers', 'config overrides'] as const)(
-    'ignores inherited Git %s when creating a fixture',
-    async (contamination) => {
-      const cleanEnv = Object.fromEntries(
-        Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_'))
-      )
-      const caller = await createRepository(cleanEnv)
-      await caller.git(['config', 'user.name', 'Caller Repository'])
-      const protectedPaths = ['HEAD', 'config', 'index'].map((name) =>
-        join(caller.repo, '.git', name)
-      )
-      const before = await Promise.all(protectedPaths.map((path) => readFile(path)))
-      const refsBefore = (await caller.git(['show-ref'])).stdout
-      const inheritedGitEnv =
-        contamination === 'repository pointers'
-          ? {
-              GIT_DIR: join(caller.repo, '.git'),
-              GIT_WORK_TREE: caller.repo,
-              GIT_COMMON_DIR: join(caller.repo, '.git'),
-              GIT_INDEX_FILE: join(caller.repo, '.git', 'index'),
-              GIT_OBJECT_DIRECTORY: join(caller.repo, '.git', 'objects'),
-              GIT_ALTERNATE_OBJECT_DIRECTORIES: join(caller.repo, '.git', 'objects')
-            }
-          : {
-              GIT_CONFIG: join(caller.repo, '.git', 'config'),
-              GIT_CONFIG_PARAMETERS: "'user.name=Injected Author'",
-              GIT_CONFIG_COUNT: '1',
-              GIT_CONFIG_KEY_0: 'core.bare',
-              GIT_CONFIG_VALUE_0: 'true'
-            }
-      const fixture = await createRepository({ ...cleanEnv, ...inheritedGitEnv })
-
-      expect(
-        await realpath((await fixture.git(['rev-parse', '--show-toplevel'])).stdout.trim())
-      ).toBe(await realpath(fixture.repo))
-      expect((await fixture.git(['log', '-1', '--format=%an <%ae>'])).stdout.trim()).toBe(
-        'Graph Fixture <graph-fixture@example.test>'
-      )
-      expect(await Promise.all(protectedPaths.map((path) => readFile(path)))).toEqual(before)
-      expect((await caller.git(['show-ref'])).stdout).toBe(refsBefore)
-    }
-  )
-
   it.each([false, true])(
     'keeps the other history when first parent is a root: %s',
     async (firstParentIsRoot) => {

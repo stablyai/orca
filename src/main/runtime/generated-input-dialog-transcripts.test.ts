@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { findAgentInputDialogIndex } from '../../shared/agent-input-dialog'
 import { finalReplayFrame } from './agent-transcript-replay-test-harness'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readiness'
 
 afterEach(() => vi.useRealTimers())

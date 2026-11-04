@@ -16,9 +16,9 @@ import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
+import { applyBrowserSessionProxies } from '../browser/sessions/browser-session-proxy'
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
@@ -31,7 +31,7 @@ import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/cre
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses

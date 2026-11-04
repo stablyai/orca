@@ -32,7 +32,6 @@ import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
@@ -114,13 +113,16 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
+      if (options?.failWhenDisconnected && state !== 'connected') {
+        throw new Error(`Not connected: ${method}`)
+      }
       throwIfSignalAborted(options?.signal)
       const budget = openRpcRequestBudget(options)
       const connectTimeoutMs = budget.timeoutMs ?? requestTimeoutMs
       await waitForPromiseWithSignal(connectWaiters.wait(connectTimeoutMs), options?.signal)
       throwIfSignalAborted(options?.signal)
-      options?.beforeSend?.()
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
+      options?.beforeSend?.()
       return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.signal)
     },
 
@@ -178,7 +180,7 @@ export function connectMobileRelayRpcSession(args: {
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
     idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
+    probeTimeoutMs: 4_000,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
     sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
@@ -278,14 +280,12 @@ export function connectMobileRelayRpcSession(args: {
     } catch {
       return
     }
-    if (!isRpcResponse(value)) {
-      return
+    if (isRpcResponse(value)) {
+      livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
+      if (!pending.settle(value)) {
+        streams.handleResponse(value)
+      }
     }
-    livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
-    if (pending.settle(value)) {
-      return
-    }
-    streams.handleResponse(value)
   }
 
   function publishState(next: ConnectionState): void {

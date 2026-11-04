@@ -9,7 +9,7 @@ import {
 import { projectSourceControlAiToLegacyCommitMessageAi } from './source-control-ai-legacy-projection'
 import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
 import type { SourceControlAiModelChoice, SourceControlAiSettings } from './source-control-ai-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 type LegacyCoreChanges = Record<
   'enabled' | 'agentId' | 'customPrompt' | 'customAgentCommand',

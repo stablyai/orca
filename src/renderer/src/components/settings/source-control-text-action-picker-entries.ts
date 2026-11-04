@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { getCommitMessageAgentSpec } from '../../../../shared/commit-message-agent-spec'
 import { removeSourceControlAiArgumentFlag } from '../../../../shared/source-control-ai-argument-flags'
 

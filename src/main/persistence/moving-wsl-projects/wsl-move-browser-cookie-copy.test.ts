@@ -15,8 +15,8 @@ import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-g
 import { parseWslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { deriveBrowserRoutePartitionStorageScope } from '../../browser/browser-route-identity'
-import { wslHostBrowserRouteStorage } from '../../browser/wsl-host-browser-route-partition'
+import { deriveBrowserRoutePartitionStorageScope } from '../../browser/routing/partitions/browser-route-identity'
+import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import type { WslMoveBrowserCookieCopyDependencies } from './wsl-move-browser-cookie-copy'
 import {
@@ -33,17 +33,19 @@ import {
   setWslMoveDesktopRewriteRegistryCompleteForTests
 } from './wsl-move-desktop-rewrite-stores'
 
-vi.mock('../../browser/browser-partition-cookie-copy', () => ({
+vi.mock('../../browser/cookies/browser-partition-cookie-copy', () => ({
   copyBrowserPartitionCookies: vi.fn(),
   flushBrowserPartitionCookies: vi.fn()
 }))
-vi.mock('../../browser/browser-session-registry', () => ({ browserSessionRegistry: {} }))
-vi.mock('../../browser/browser-session-startup', () => ({ browserSessionsInitialized: vi.fn() }))
-vi.mock('../../browser/browser-route-partition-binding-runtime', () => ({
+vi.mock('../../browser/sessions/browser-session-registry', () => ({ browserSessionRegistry: {} }))
+vi.mock('../../browser/sessions/browser-session-startup', () => ({
+  browserSessionsInitialized: vi.fn()
+}))
+vi.mock('../../browser/routing/partitions/browser-route-partition-binding-runtime', () => ({
   activeBrowserRoutePartitionOrcaProfileId: vi.fn(),
   currentBrowserRoutePartitionBindingStore: vi.fn()
 }))
-vi.mock('../../browser/browser-route-partition-storage-dependencies', () => ({
+vi.mock('../../browser/routing/partitions/browser-route-partition-storage-dependencies', () => ({
   releaseEvictedBrowserRoutePartitionStorage: vi.fn()
 }))
 

@@ -6,7 +6,7 @@ import {
   isResumableTuiAgent,
   type SleepingAgentSessionRecord
 } from './agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentResumeArgv } from './agent-launch/startup/agent-resume-argv'
 import { isPiCompatibleAgentType } from './pi-agent-kind'
 
 /** Identify a completed pane’s own live resume anchor written at turn end, not a sleep capture.

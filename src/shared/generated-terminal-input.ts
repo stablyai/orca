@@ -1,4 +1,4 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 /** The host runs generated input as one admitted transaction (terminal.sendGeneratedInput). */
 export const GENERATED_INPUT_RUNTIME_CAPABILITY = 'terminal.generated-input.v1' as const

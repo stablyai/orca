@@ -38,7 +38,7 @@ import {
 } from '../../provider-process/provider-executable-missing'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import { agentCliInstallationProblemOf } from '../agent-cli-installation-error'
-import { agentCliInstallationFacts } from '../../../shared/agent-cli-installation-problem'
+import { agentCliInstallationFacts } from '../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 export type FailedAcquisitionWording = {
   record: AgentSessionRecord | null

@@ -2,10 +2,9 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
-import type {
-  AgentLaunchPublishedSurface,
-  AgentLaunchSurfaceExecution
-} from '../agent-launch/agent-launch-execution'
+import type { AgentLaunchResult as AgentLaunchPublishedSurface } from '../../shared/agent-launch/contracts/agent-launch-intent'
+
+import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { Automation, AutomationRun } from '../../shared/automations-types'

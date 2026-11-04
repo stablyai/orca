@@ -33,7 +33,10 @@ export default defineConfig({
         replacement: fileURLToPath(
           new URL('./src/test-support/expo-haptics-node.ts', import.meta.url)
         )
-      }
+      },
+      // Phone/host contract tests import original sources at runtime; only their Node type check reads declarations.
+      { find: '@orca/test-mobile', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      { find: '@orca/test-host', replacement: fileURLToPath(new URL('../src', import.meta.url)) }
     ]
   },
   test: {

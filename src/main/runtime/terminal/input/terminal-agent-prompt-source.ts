@@ -13,7 +13,7 @@ import {
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
@@ -23,7 +23,7 @@ import type {
   GeneratedInputSource
 } from '../../../../shared/generated-input-operation'
 import type { GeneratedInputLifetime } from '../../../../shared/generated-input-lifetime'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
 import { OrcaRuntimeWithObserveAgentPromptTurn } from './terminal-agent-prompt-turn'
 

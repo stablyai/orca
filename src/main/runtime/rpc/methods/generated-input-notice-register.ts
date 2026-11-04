@@ -1,6 +1,6 @@
 import { defineMethod, type RpcContext } from '../core'
 import { RegisterGeneratedInputNoticeParams } from '../../../../shared/rpc-contract/generated-input-params'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { GeneratedInputParts } from './generated-input-parts'
 
 const parts = new GeneratedInputParts()

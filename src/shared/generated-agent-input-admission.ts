@@ -1,5 +1,5 @@
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 import { findAgentInputDialogIndex, type TypedText } from './agent-input-dialog'
 import { readScreenInputVeto, type RuledScreen } from './screen-input-veto'
 import {

@@ -2,14 +2,19 @@
 
 import type {
   AgentMessageSource,
-  AgentMessageSender
+  AgentMessageSender,
+  OrchestrationMailNotice
 } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
-import { formatMessageBanner, formatMessagePointer } from './formatter'
+import {
+  formatMessageBanner,
+  formatMessageBannerWithContent,
+  formatMessagePointer
+} from './formatter'
 import { structuredAgentSessionBlocksTooLarge } from '../../../shared/rpc-contract/structured-agent-session-message-params'
 
 export type MailSourceMessage = Pick<
@@ -23,7 +28,7 @@ export function structuredMailSource(input: {
   dispatchId: string | null
   batch: readonly MailSourceMessage[]
   senderSnapshot: SenderSnapshotResolver
-}): AgentMessageSource {
+}): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
   const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
   for (const message of input.batch) {
     let group = groups.get(message.from_handle)
@@ -97,9 +102,27 @@ export function structuredMailMessage(input: {
   senderSnapshot: SenderSnapshotResolver
 }): { body: AgentJournalMessageItem; whole: boolean } {
   const from = structuredMailSource({ ...input, batch: [input.message] })
-  const whole = wholeMailBlocks(input.message, input.cliCommand)
+  const formatted = formatMessageBannerWithContent(input.message, { cliCommand: input.cliCommand })
+  const whole = [{ type: 'text' as const, text: formatted.text }]
   if (!structuredAgentSessionBlocksTooLarge(whole)) {
-    return { body: { kind: 'message', role: 'user', blocks: whole, from }, whole: true }
+    return {
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: whole,
+        from: {
+          ...from,
+          orchestration: {
+            ...from.orchestration,
+            messages: from.orchestration.messages.map((message) => ({
+              ...message,
+              content: formatted.content
+            }))
+          }
+        }
+      },
+      whole: true
+    }
   }
   const pointer = formatMessagePointer(1, input.mailboxHandle, input.cliCommand).trim()
   return {

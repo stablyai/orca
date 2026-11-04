@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultSettings } from '../../../shared/constants'
-import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import {
   getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,

@@ -1,7 +1,10 @@
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_CONFIG, type DraftPasteReadySignal } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import {
+  TUI_AGENT_CONFIG,
+  type DraftPasteReadySignal
+} from './agent-launch/catalog/tui-agent-config'
 import { resolvePasteReadySignal } from './draft-paste-ready-scanner'
-import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from './agent-prompt-injection'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from './agent-launch/startup/agent-prompt-injection'
 import { signalAllowsCompatibilityEvidence } from './generated-agent-input-readiness'
 
 // The checks before Enter end early enough for Enter's own check and write to land in the budget.

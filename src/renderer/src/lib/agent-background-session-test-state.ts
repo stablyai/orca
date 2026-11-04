@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import { projectAgentLaunchSettings } from '../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'

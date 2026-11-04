@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { generatedInputAgentName } from '../../../shared/generated-agent-input-notice'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { keepGeneratedInputNotice } from './generated-paste-notice'
 
 export function showGeneratedInputNotice(args: {

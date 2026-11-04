@@ -3,13 +3,13 @@ import type {
   AgentPromptExpectedBinding,
   RuntimeAgentPromptWriteOptions
 } from '../../runtime-terminal-contracts'
-import { isHeldAgentPromptDraft } from '../../../../shared/agent-prompt-injection'
+import { isHeldAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { AgentPromptActivity } from '../../agent-prompt-submission-verification'
 import {
   isAgentPromptStalledError,
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { waitForAgentPromptPromise } from '../../orca-runtime-core'
 
 type HeldAgentPrompt = {

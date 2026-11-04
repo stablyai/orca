@@ -1,6 +1,6 @@
 import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './agent-launch/catalog/tui-agent-config'
 
 // PTY mode resets end the agent's current input region and revoke readiness seen before them.
 // oxlint-disable-next-line no-control-regex -- the handoff bytes are escape sequences.

@@ -19,7 +19,7 @@ import {
 import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
-} from '../../../../shared/agent-prompt-injection'
+} from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {

@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -14,6 +14,7 @@ import {
 import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
+import type * as AgentPickerRowsModule from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type * as ZustandShallow from 'zustand/react/shallow'
 import type * as HostAgentSettingsTransport from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
@@ -67,15 +68,24 @@ vi.mock('zustand/react/shallow', async (importOriginal) => {
       })
   }
 })
+vi.mock(
+  '../../../../shared/agent-launch/picker/agent-launch-picker-rows',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AgentPickerRowsModule>()
+    return {
+      ...actual,
+      buildNewTabAgentMenuRows: (...args: Parameters<typeof actual.buildNewTabAgentMenuRows>) => {
+        const rows = actual.buildNewTabAgentMenuRows(...args)
+        mocks.metadata += rows.length
+        return rows
+      }
+    }
+  }
+)
 vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof MenuRows>()
   return {
     ...actual,
-    buildNewTabAgentMenuRows: (...args: Parameters<typeof actual.buildNewTabAgentMenuRows>) => {
-      const rows = actual.buildNewTabAgentMenuRows(...args)
-      mocks.metadata += rows.length
-      return rows
-    },
     hostChatAnswer: (input: Parameters<typeof actual.hostChatAnswer>[0]) => {
       mocks.answers.push(input)
       if (mocks.realRoutes) {

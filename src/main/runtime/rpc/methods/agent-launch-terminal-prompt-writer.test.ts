@@ -4,7 +4,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
  *  whichever later check the abort then trips. */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { createAgentPromptSubmissionRuntime } from '../../agent-prompt-submission-runtime-test-fixture'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 

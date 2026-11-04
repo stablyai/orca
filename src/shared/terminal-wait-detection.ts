@@ -2,7 +2,7 @@ import { isQoderComposerReady } from './qoder-terminal-readiness'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { detectAgentStatusFromTitle, type AgentStatus } from './agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from './runtime-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import {
   evaluateAgentStateRules,
   hasQuietReadyRules,

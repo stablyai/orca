@@ -1,6 +1,6 @@
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
-import { isTuiAgent } from './tui-agent-config'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import { TUI_AGENT_DISPLAY_NAMES } from './agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from './agent-launch/catalog/tui-agent-config'
 import type { GeneratedInputOutcome } from './generated-terminal-input'
 
 /** Runtime-session notices recover generated text whose detached delivery failed. */

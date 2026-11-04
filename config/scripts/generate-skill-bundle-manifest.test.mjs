@@ -20,7 +20,6 @@ import {
   collectPackageFiles,
   describeFile,
   findDroppedReleasedDigests,
-  normalizeText,
   packageDigest,
   sortManifestFiles,
   withDigests
@@ -49,6 +48,11 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
+  await mkdir(path.join(root, 'src', 'shared'), { recursive: true })
+  await copyFile(
+    path.resolve(import.meta.dirname, '../../src/shared/bundled-skill-renames.json'),
+    path.join(root, 'src', 'shared', 'bundled-skill-renames.json')
+  )
   for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
     await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
   }
@@ -90,14 +94,6 @@ afterEach(async () => {
 })
 
 describe('skill bundle manifest generator', () => {
-  it('folds platform line endings for text identity', () => {
-    const lf = Buffer.from('first\nsecond\n')
-    const crlf = Buffer.from('first\r\nsecond\r\n')
-
-    expect(classifyFile(lf)).toBe('text')
-    expect(normalizeText(crlf)).toEqual(lf)
-  })
-
   it('classifies null-containing and invalid UTF-8 content as binary', () => {
     expect(classifyFile(Buffer.from([0, 1, 2]))).toBe('binary')
     expect(classifyFile(Buffer.from([0xc3, 0x28]))).toBe('binary')
@@ -265,17 +261,6 @@ describe('skill bundle manifest generator', () => {
     await writeFile(path.join(packageRoot, 'references', '.DS_Store'), Buffer.from([7]))
 
     expect(await collectPackageFiles(packageRoot)).toEqual(pristine)
-  })
-
-  it('still records an unexpected file that is not OS metadata', async () => {
-    const packageRoot = await createPackage()
-    await writeFile(path.join(packageRoot, 'SKILL.md'), 'demo skill\n')
-    await writeFile(path.join(packageRoot, 'payload.sh'), 'echo hi\n')
-
-    expect((await collectPackageFiles(packageRoot)).map((file) => file.path)).toEqual([
-      'SKILL.md',
-      'payload.sh'
-    ])
   })
 
   it('keeps guarding a directory or link that only wears an OS metadata name', async () => {

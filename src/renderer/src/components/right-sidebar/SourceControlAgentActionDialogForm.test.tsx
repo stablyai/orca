@@ -1,4 +1,4 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
 import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
 import React, { type ReactNode } from 'react'

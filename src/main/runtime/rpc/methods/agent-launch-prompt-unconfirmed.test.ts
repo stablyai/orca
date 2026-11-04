@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RpcContext } from '../core'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 

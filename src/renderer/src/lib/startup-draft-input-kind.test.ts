@@ -3,7 +3,7 @@
 // startup paste, or the draft helper that waits for the agent. Both must write it as launch input.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { GENERATED_AGENT_INPUT_TIMEOUT_MS } from '../../../shared/generated-agent-input-readiness'
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'

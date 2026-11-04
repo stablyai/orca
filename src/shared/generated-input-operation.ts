@@ -1,4 +1,4 @@
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import { admitsGeneratedInput } from './generated-agent-input-admission'
 import {
   GENERATED_AGENT_INPUT_QUIET_MS,

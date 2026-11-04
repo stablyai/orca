@@ -3672,7 +3672,7 @@
             "copyLinkFailed": "No se pudo copiar el enlace",
             "downloadOpenWithDefaultApp": "Descargar y abrir con la aplicación predeterminada",
             "downloadOpenFailed": "No se pudo descargar '{{value0}}'.",
-            "openInThisGroup": "Abrir en este grupo",
+            "openInNewTab": "Abrir en una pestaña nueva",
             "openInThisGroupRefused": "No se pudo abrir {{value0}} en este grupo"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -7319,7 +7319,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Abrir Computer Use",
-          "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Computer Use; macOS también requiere permisos de privacidad.",
+          "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Orca Computer Use; macOS también requiere permisos de privacidad.",
           "333984cf90": "Usar una sesión de navegador existente"
         },
         "BrowserUseEnableSwitch": {
@@ -7439,7 +7439,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "Permite a los agents inspeccionar y operar apps de escritorio locales.",
-          "93255aaf18": "Skill Computer Use",
+          "93255aaf18": "Skill Orca Computer Use",
           "45f8e22c2e": "Abrir",
           "d95d1cfab8": "Actualizar",
           "0c29da5805": "Listo",
@@ -8823,7 +8823,7 @@
           "902f5dee1f": "Copiar al seleccionar",
           "9129b7e805": "Al pasar el cursor sobre un panel de terminal, se activa sin necesidad de hacer clic.",
           "8eefeaa3da": "El foco sigue al ratón",
-          "96fe15def8": "Comportamiento del mouse y del portapapeles en los paneles de terminal.",
+          "96fe15def8": "Comportamiento del desplazamiento, el mouse y el portapapeles en los paneles de terminal.",
           "45721f3e67": "Interacción del terminal",
           "9c0b1c1792": "Activado",
           "c1fc9e9444": "Aceleración de GPU",
@@ -19838,7 +19838,8 @@
         "cancelled": "Orca no continuará este chat automáticamente.",
         "scheduled": "Orca continuará este chat a las {{time}}.",
         "cancel": "No continuar"
-      }
+      },
+      "settings": "Configuración del chat"
     },
     "tab": {
       "bar": {
@@ -20220,7 +20221,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "Recortar margen al copiar",
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",
-        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat."
+        "copyOnSelectDescription": "Copia automáticamente al portapapeles el texto que selecciones en un terminal o un chat.",
+        "scrollOnUserInput": "Desplazar al final al escribir",
+        "scrollOnUserInputDescription": "Escribir o pegar con el panel desplazado hacia arriba salta a la salida más reciente. Desactívalo para mantener tu posición."
       },
       "terminal": {
         "clipboard": {
@@ -20235,6 +20238,15 @@
             "highlight": "resaltar",
             "chat": "chat"
           }
+        },
+        "search": {
+          "typing": "escritura",
+          "input": "entrada",
+          "jump": "saltar",
+          "bottom": "final",
+          "scrollback": "historial",
+          "snap": "ajustar",
+          "position": "posición"
         }
       }
     },

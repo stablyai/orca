@@ -1,7 +1,7 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-launch/startup/agent-prompt-injection'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime

@@ -7,7 +7,7 @@ import {
   OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
   OPENCODE_STARTUP_PROMPT_CLAIM_PATH,
   OPENCODE_STARTUP_PROMPT_BODY_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 
 export function getOpenCodeStartupPromptSource(): string {
   return String.raw`

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendFollowupPromptWhenAgentReady } from './agent-followup-delivery'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn()

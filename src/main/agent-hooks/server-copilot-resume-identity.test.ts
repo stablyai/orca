@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { resumeRecordFromStatus } from '../../shared/agent-resume-record-from-status'
-import { getAgentResumeArgv } from '../../shared/agent-resume-argv'
+import { getAgentResumeArgv } from '../../shared/agent-launch/startup/agent-resume-argv'
 import { AgentHookServer } from './server'
 import { type Body, buildBody, PANE, postHookEvent } from './server.test-fixtures'
 

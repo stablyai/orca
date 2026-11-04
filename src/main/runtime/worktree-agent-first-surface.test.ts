@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { beginCreatedWorkspaceLaunch } from '../agent-launch/agent-launch-created-workspace'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 const createStructured = vi.hoisted(() =>
   vi.fn(async (args: { envelope: { sessionId: string } }) => ({

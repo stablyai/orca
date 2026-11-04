@@ -1,7 +1,7 @@
 /** Deliver text the startup command cannot carry: stdin prompts, long/multiline text and reused terminals.
  * Reuse worker readiness and sendTerminalAgentPrompt for serialized, generation-fenced bracketed paste and per-agent Enter timing across local, WSL and SSH. */
 
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import { deliverGeneratedTerminalInput } from '../../terminal/input/generated-terminal-input-delivery'
 import type { GeneratedInputOutcome } from '../../../../shared/generated-terminal-input'

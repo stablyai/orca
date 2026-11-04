@@ -6,8 +6,8 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { measureSettingsWork } from '../../../../shared/global-settings-test-fixture'
-import * as profile from '../../../../shared/tui-agent-launch-defaults'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import * as profile from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,

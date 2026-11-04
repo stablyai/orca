@@ -1,4 +1,5 @@
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd, type AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -48,6 +49,7 @@ export function createAgentStatusEventApplicator(args: {
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   } = args
+  const attributionDiagnostics = new AgentHookAttributionDiagnostics()
   const applyAgentStatus = (
     data: AgentStatusIpcPayload,
     options?: AgentStatusApplyOptions
@@ -80,6 +82,7 @@ export function createAgentStatusEventApplicator(args: {
       titleUsesTabTitle,
       tabTitle
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
+    const indexedPaneExists = exists
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
         ? options?.batch?.projectedTitlesByTabId.get(ownerTabId)
@@ -122,7 +125,15 @@ export function createAgentStatusEventApplicator(args: {
         return 'dropped'
       }
       if (options?.retry !== true) {
-        track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+        if (
+          attributionDiagnostics.shouldReport('unknown_tab_id', {
+            paneKey,
+            connectionId: data.connectionId,
+            worktreeId: data.worktreeId
+          })
+        ) {
+          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+        }
         enqueuePendingAgentStatus(data)
       }
       return 'pending'
@@ -159,6 +170,13 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const existingStatus = store.agentStatusByPaneKey[paneKey]
+    if (indexedPaneExists) {
+      attributionDiagnostics.resolved({
+        paneKey,
+        connectionId: data.connectionId,
+        worktreeId: data.worktreeId
+      })
+    }
     if (data.programStatusOnly === true) {
       // Why after ownership but before staleness: the republished row keeps its old receivedAt.
       return applyProgramStatusOnlyUpdate(store, options?.batch, paneKey, programStatus)

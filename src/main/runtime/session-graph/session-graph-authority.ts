@@ -27,7 +27,7 @@ import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-term
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../browser/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
 import type { ClientHostedBrowserRpcRoute } from '../runtime-browser-client-automation'
 import { routeRuntimeBrowserClientAutomation } from '../runtime-browser-client-automation'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'

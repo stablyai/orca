@@ -1,6 +1,6 @@
 import { noticeGeneratedInputFailure } from './launch-agent-paste-timeout-notice'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 export function showAutomationPromptNotSentToast(
   agent: TuiAgent,

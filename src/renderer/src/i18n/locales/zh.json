@@ -3601,7 +3601,7 @@
             "copyLinkFailed": "复制链接失败",
             "downloadOpenWithDefaultApp": "下载并使用默认应用程序打开",
             "downloadOpenFailed": "无法下载“{{value0}}”。",
-            "openInThisGroup": "在此分组中打开",
+            "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
           },
           "TerminalQuickCommandsSubmenu": {
@@ -7026,7 +7026,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "开放计算机使用",
-          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装计算机使用技能； macOS 还需要隐私权限。",
+          "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
           "333984cf90": "使用现有的浏览器会话"
         },
         "BrowserUseEnableSwitch": {
@@ -7146,7 +7146,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "使智能体能够检查和操作本地桌面应用程序。",
-          "93255aaf18": "计算机控制技能",
+          "93255aaf18": "Orca Computer Use 技能",
           "45f8e22c2e": "打开",
           "d95d1cfab8": "刷新",
           "0c29da5805": "就绪",
@@ -8528,7 +8528,7 @@
           "902f5dee1f": "选择时复制",
           "9129b7e805": "将鼠标悬停在终端窗格上即可将其激活，无需单击。",
           "8eefeaa3da": "焦点跟随鼠标",
-          "96fe15def8": "终端窗格的鼠标和剪贴板行为。",
+          "96fe15def8": "终端窗格的滚动、鼠标和剪贴板行为。",
           "45721f3e67": "终端交互",
           "9c0b1c1792": "开",
           "c1fc9e9444": "GPU加速",
@@ -19270,7 +19270,8 @@
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
         "cancel": "不要继续"
-      }
+      },
+      "settings": "聊天设置"
     },
     "tab": {
       "bar": {
@@ -19668,7 +19669,9 @@
       "TerminalInteraction": {
         "copyTrimsGutter": "修剪副本上的装订线",
         "copyTrimsGutterDescription": "将左侧装订线智能体输出绘制在后面，因此复制的文本不会缩进。仅删除每个选定行共享的缩进。",
-        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。"
+        "copyOnSelectDescription": "自动将在终端或聊天中选择的文本复制到剪贴板。",
+        "scrollOnUserInput": "输入时滚动到底部",
+        "scrollOnUserInputDescription": "向上滚动时键入或粘贴会跳至最新输出。关闭此项可保持当前位置。"
       },
       "terminal": {
         "clipboard": {
@@ -19683,6 +19686,15 @@
             "highlight": "高亮",
             "chat": "聊天"
           }
+        },
+        "search": {
+          "typing": "键入",
+          "input": "输入",
+          "jump": "跳转",
+          "bottom": "底部",
+          "scrollback": "回滚",
+          "snap": "吸附",
+          "position": "位置"
         }
       },
       "nativeChat": {

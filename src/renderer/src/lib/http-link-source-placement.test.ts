@@ -111,7 +111,7 @@ it('the native chat context menu pins the owning tab when the action runs, even 
     runtimeEnvironmentId: null,
     sourceTabId: 'source'
   })
-  const row = actions?.secondaryActions?.find((action) => action.label === 'Open in this group')
+  const row = actions?.secondaryActions?.find((action) => action.label === 'Open in new tab')
   expect(row).toBeDefined()
   store.setState((state) => ({
     unifiedTabsByWorktree: {
@@ -132,7 +132,7 @@ it('refuses a stale explicit chat action when its source closed before activatio
     runtimeEnvironmentId: null,
     sourceTabId: 'source'
   })
-  const action = actions?.secondaryActions?.find((row) => row.label === 'Open in this group')
+  const action = actions?.secondaryActions?.find((row) => row.label === 'Open in new tab')
   expect(action).toBeDefined()
   store.setState((state) => ({
     unifiedTabsByWorktree: {

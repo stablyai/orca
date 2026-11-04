@@ -5,10 +5,10 @@ import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'
 import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type * as SessionSnapshot from '@/runtime/web-runtime-session-snapshot'
 
 const actualSnapshots = await vi.importActual<typeof SessionSnapshot>(

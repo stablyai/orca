@@ -1,7 +1,7 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
+import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import {
   admitsGeneratedInput,
   type GeneratedInputProcess
