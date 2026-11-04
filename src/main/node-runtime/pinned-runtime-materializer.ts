@@ -9,6 +9,13 @@ import {
   ReleaseMismatchError
 } from './runtime-archive-download'
 import { findOrcadCachePath } from './orcad-cache-path'
+import {
+  bundledNodeRuntimeArchiveDir,
+  nodeRuntimeArchiveDir,
+  seedNodeRuntimeArchiveFromBundle
+} from './node-runtime-archive-cache'
+
+export { nodeRuntimeArchiveCachePath } from './node-runtime-archive-cache'
 import { orcadNodeRuntimeExecutable } from '../../shared/orcad-artifacts'
 import { nodeDistMirrorUrl } from '../../shared/node-dist-mirror'
 import { configuredNodeDistMirror } from './node-dist-mirror-setting'
@@ -256,22 +263,17 @@ function errorReason(error: unknown): string {
   return error instanceof DesktopDownloadUnreachableError ? error.reason : errorMessage(error)
 }
 
-export function materializeNodeRuntimeArchive(
+export async function materializeNodeRuntimeArchive(
   target: NodeRuntimeTarget,
   cacheRoot: string,
-  options: PinnedRuntimeMaterializeOptions
+  options: PinnedRuntimeMaterializeOptions & { bundledArchiveDir?: string }
 ): Promise<string> {
+  const bundled =
+    'bundledArchiveDir' in options ? options.bundledArchiveDir : bundledNodeRuntimeArchiveDir()
+  await seedNodeRuntimeArchiveFromBundle(target, cacheRoot, bundled)
   return withNodeDistMirror(target, options, (archive, download) =>
     materializeVerifiedRuntimeArchive(archive, nodeRuntimeArchiveDir(cacheRoot), download)
   )
-}
-
-export function nodeRuntimeArchiveCachePath(target: NodeRuntimeTarget, cacheRoot: string): string {
-  return join(nodeRuntimeArchiveDir(cacheRoot), pinnedNodeRuntimeAsset(target).archive)
-}
-
-function nodeRuntimeArchiveDir(cacheRoot: string): string {
-  return join(cacheRoot, 'node', 'archives')
 }
 
 /** Content-keyed executable cache for hosts unable to extract archives, e.g. Windows SSH vault reads. */

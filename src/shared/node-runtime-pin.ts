@@ -200,3 +200,11 @@ export function nodeRuntimeExecutablePath(target: NodeRuntimeTarget, archive: st
   const topLevel = archive.replace(/\.(?:tar\.gz|tar\.xz|zip)$/, '')
   return target.startsWith('win32-') ? `${topLevel}/node.exe` : `${topLevel}/bin/node`
 }
+
+/** Windows installers bundle the pinned Linux archive for their architecture, so a first WSL deploy needs no network. */
+export const BUNDLED_NODE_RUNTIME_ARCHIVE_DIRNAME = 'node-runtime-archives'
+
+/** The WSL guest target whose archive a Windows installer for `arch` bundles. */
+export function windowsInstallerBundledNodeTarget(arch: 'x64' | 'arm64'): NodeRuntimeTarget {
+  return arch === 'arm64' ? 'linux-arm64-glibc' : 'linux-x64-glibc'
+}

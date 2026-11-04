@@ -77,6 +77,43 @@ describe.skipIf(process.platform === 'win32')('pinned Node runtime materializer'
     expect(signals.every((signal) => !signal.aborted)).toBe(true)
   })
 
+  it('uses an installer-bundled archive before any download, copied into the cache', async () => {
+    const archive = await nodeDistArchiveFixture(new TextEncoder().encode('node'))
+    Object.assign(NODE_RUNTIME_ASSETS[TARGET], { archiveSha256: sha256(archive) })
+    const bundledArchiveDir = join(root, 'resources', 'node-runtime-archives')
+    await mkdir(bundledArchiveDir, { recursive: true })
+    await writeFile(join(bundledArchiveDir, originalAsset.archive), archive)
+    const fetcher = fetcherFor(new TextEncoder().encode('never fetched'))
+
+    const cached = await materializeNodeRuntimeArchive(TARGET, join(root, 'cache'), {
+      fetcher,
+      bundledArchiveDir
+    })
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(cached.startsWith(join(root, 'cache'))).toBe(true)
+    expect(sha256(new Uint8Array(await readFile(cached)))).toBe(sha256(archive))
+    // The bundled copy stays untouched for the next profile.
+    expect(
+      sha256(new Uint8Array(await readFile(join(bundledArchiveDir, originalAsset.archive))))
+    ).toBe(sha256(archive))
+  })
+
+  it('downloads instead when the bundled archive does not match the pin', async () => {
+    const archive = await nodeDistArchiveFixture(new TextEncoder().encode('node'))
+    Object.assign(NODE_RUNTIME_ASSETS[TARGET], { archiveSha256: sha256(archive) })
+    const bundledArchiveDir = join(root, 'bundled')
+    await mkdir(bundledArchiveDir, { recursive: true })
+    await writeFile(join(bundledArchiveDir, originalAsset.archive), 'tampered')
+    const fetcher = fetcherFor(archive)
+
+    const cached = await materializeNodeRuntimeArchive(TARGET, join(root, 'cache'), {
+      fetcher,
+      bundledArchiveDir
+    })
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(sha256(new Uint8Array(await readFile(cached)))).toBe(sha256(archive))
+  })
+
   it('refuses an archive that does not match the pin before caching it', async () => {
     const archive = await nodeDistArchiveFixture(new TextEncoder().encode('node'))
     await expect(
