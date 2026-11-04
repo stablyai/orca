@@ -237,4 +237,32 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
     expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(NEW)
   })
+
+  it('re-keys a cross-store link by its child and never touches a parent in another store', () => {
+    const link = (child: string) => ({
+      childWorkspaceKey: worktreeWorkspaceKey(child),
+      childInstanceId: 'child-instance',
+      // A copied profile can name the same locator in the other store.
+      parent: {
+        installationId: 'other-install',
+        workspaceKey: worktreeWorkspaceKey(OLD),
+        instanceId: 'parent-instance'
+      },
+      origin: 'manual' as const,
+      capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+      createdAt: 1
+    })
+    const sibling = `${REPO}::/sibling`
+    const state = persistedState(getDefaultWorkspaceSession())
+    state.crossStoreLineageByChildKey = {
+      [worktreeWorkspaceKey(OLD)]: link(OLD),
+      [worktreeWorkspaceKey(sibling)]: link(sibling)
+    }
+
+    expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
+    expect(state.crossStoreLineageByChildKey).toEqual({
+      [worktreeWorkspaceKey(NEW)]: link(NEW),
+      [worktreeWorkspaceKey(sibling)]: link(sibling)
+    })
+  })
 })

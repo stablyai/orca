@@ -13,6 +13,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
 import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
+import { normalizeCrossStoreLineageByChildKey } from '../../shared/worktree/cross-store-lineage-records'
 import { getOrcaProfileDataFile, getOrcaProfileStateDatabaseFile } from './profile-index-store'
 import {
   importProfileStateJson,
@@ -141,6 +142,9 @@ export function normalizeProfileProjectState(
     worktreeMeta: recordOrEmpty(parsed.worktreeMeta),
     worktreeLineageById: recordOrEmpty(parsed.worktreeLineageById),
     workspaceLineageByChildKey: recordOrEmpty(parsed.workspaceLineageByChildKey),
+    crossStoreLineageByChildKey: normalizeCrossStoreLineageByChildKey(
+      parsed.crossStoreLineageByChildKey
+    ),
     settings: isRecord(parsed.settings)
       ? { ...settingsDefaults, ...parsed.settings }
       : settingsDefaults,

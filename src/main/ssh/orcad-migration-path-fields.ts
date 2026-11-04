@@ -48,6 +48,8 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
   { at: 'dormantState.workspaceLineage[].childWorkspaceKey', kind: 'owner-key' },
   { at: 'dormantState.workspaceLineage[].lineage.childWorkspaceKey', kind: 'owner-key' },
   { at: 'dormantState.workspaceLineage[].lineage.parentWorkspaceKey', kind: 'owner-key' },
+  { at: 'dormantState.crossStoreLineage[].childWorkspaceKey', kind: 'owner-key' },
+  { at: 'dormantState.crossStoreLineage[].lineage.childWorkspaceKey', kind: 'owner-key' },
 
   { at: 'dormantState.workspaceSession.activeWorktreeId', kind: 'worktree-id' },
   { at: 'dormantState.workspaceSession.activeWorkspaceKey', kind: 'owner-key' },
@@ -180,6 +182,11 @@ export const ORCAD_MIGRATION_UNREWRITTEN_PATH_FIELDS: readonly { at: string; why
   { at: 'dormantState.worktreeMeta[].sourceKey', why: 'source-side key' },
   { at: 'dormantState.worktreeLineage[].sourceKey', why: 'source-side key' },
   { at: 'dormantState.workspaceLineage[].sourceKey', why: 'source-side key' },
+  { at: 'dormantState.crossStoreLineage[].sourceKey', why: 'source-side key' },
+  {
+    at: 'dormantState.crossStoreLineage[].lineage.parent.workspaceKey',
+    why: 'names a workspace in another store; the move never rewrites it'
+  },
   { at: 'dormantState.retiredWorktreeNamespaces[].sourceNamespaceKeys[]', why: 'source-side key' },
   {
     at: 'dormantState.retiredWorktreeNamespaces[].namespaceKey',

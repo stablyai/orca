@@ -259,6 +259,16 @@ export function migrateWorktreeIdentity(
     delete state.workspaceLineageByChildKey[oldWorkspaceKey]
     changed = true
   }
+  // Only the child moves; a cross-store parent names another store's workspace, never this one.
+  const crossStoreLineage = state.crossStoreLineageByChildKey?.[oldWorkspaceKey]
+  if (state.crossStoreLineageByChildKey && crossStoreLineage) {
+    state.crossStoreLineageByChildKey[newWorkspaceKey] = {
+      ...crossStoreLineage,
+      childWorkspaceKey: newWorkspaceKey
+    }
+    delete state.crossStoreLineageByChildKey[oldWorkspaceKey]
+    changed = true
+  }
   for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
     if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
       state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {

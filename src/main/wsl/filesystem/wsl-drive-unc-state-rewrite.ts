@@ -15,7 +15,8 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
@@ -59,6 +60,12 @@ export function rewriteWslDriveUncState(
       Object.assign(next, { [field]: rewriteWslDriveUncValue(state[field], rewriter) })
     }
   }
+  if (state.crossStoreLineageByChildKey) {
+    next.crossStoreLineageByChildKey = withRewrittenChildKeys(
+      state.crossStoreLineageByChildKey,
+      rewriter
+    )
+  }
   next.projects = sameIfUnchanged(
     next.projects,
     withWindowsGit(next.projects, repoIds, scope.distro)
@@ -78,6 +85,25 @@ export function rewriteWslDriveUncState(
     )
   }
   return { state: next, worktreeIds }
+}
+
+/** 'rewrite-child-key': the parent names a workspace in another store, so it is never mapped. */
+function withRewrittenChildKeys(
+  record: NonNullable<PersistedState['crossStoreLineageByChildKey']>,
+  rewriter: WslDriveUncRewriter
+): NonNullable<PersistedState['crossStoreLineageByChildKey']> {
+  let changed = false
+  const next: NonNullable<PersistedState['crossStoreLineageByChildKey']> = {}
+  for (const [key, lineage] of Object.entries(record)) {
+    const childWorkspaceKey = rewriter.identity(key)
+    if (childWorkspaceKey === key || !isWorkspaceKey(childWorkspaceKey)) {
+      next[key as WorkspaceKey] = lineage
+      continue
+    }
+    changed = true
+    next[childWorkspaceKey] = { ...lineage, childWorkspaceKey }
+  }
+  return changed ? next : record
 }
 
 /** Keeps the original array when no row changed, so an unchanged field is not written. */
@@ -140,6 +166,9 @@ function collectRewrittenWorktreeIds(
     if (disposition === 'rewrite' && isStateField(field)) {
       rewriteWslDriveUncValue(state[field], recorder)
     }
+  }
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    recorder.identity(childKey)
   }
   for (const repo of state.repos) {
     recorder.identity(getRepoMainWorktreeId(repo))

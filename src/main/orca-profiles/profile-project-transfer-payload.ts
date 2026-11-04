@@ -22,7 +22,12 @@ import {
   extractSessionForTransfer
 } from './profile-project-session-transfer'
 import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
-import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-identity'
+import {
+  isRepoWorktreeId,
+  rekeyWorktreeId,
+  rekeyWorkspaceKey
+} from './profile-project-worktree-identity'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export type TransferPayload = {
   repo: Repo
@@ -33,6 +38,7 @@ export type TransferPayload = {
   worktreeMeta: PersistedState['worktreeMeta']
   worktreeLineageById: PersistedState['worktreeLineageById']
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
+  crossStoreLineageByChildKey: NonNullable<PersistedState['crossStoreLineageByChildKey']>
   workspaceSession?: PersistedState['workspaceSession']
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
   sshTargets: SshTarget[]
@@ -125,6 +131,24 @@ function rekeyWorkspaceLineageRecord(
   return next
 }
 
+/** Rekeys the child only; the parent lives in another store and keeps its own key. */
+function rekeyCrossStoreLineageRecord(
+  record: PersistedState['crossStoreLineageByChildKey'],
+  oldRepoId: string,
+  newRepoId: string
+): NonNullable<PersistedState['crossStoreLineageByChildKey']> {
+  const next: NonNullable<PersistedState['crossStoreLineageByChildKey']> = {}
+  for (const [oldKey, lineage] of Object.entries(record ?? {})) {
+    const child = parseWorkspaceKey(oldKey)
+    if (child?.type !== 'worktree' || !isRepoWorktreeId(oldRepoId, child.worktreeId)) {
+      continue
+    }
+    const newChildKey = rekeyWorkspaceKey(oldRepoId, newRepoId, oldKey as WorkspaceKey)
+    next[newChildKey] = { ...structuredClone(lineage), childWorkspaceKey: newChildKey }
+  }
+  return next
+}
+
 export function createTransferPayload(args: {
   sourceState: TransferProfileState
   sourceRepo: Repo
@@ -169,6 +193,11 @@ export function createTransferPayload(args: {
     ),
     workspaceLineageByChildKey: rekeyWorkspaceLineageRecord(
       sourceState.workspaceLineageByChildKey,
+      oldRepoId,
+      newRepoId
+    ),
+    crossStoreLineageByChildKey: rekeyCrossStoreLineageRecord(
+      sourceState.crossStoreLineageByChildKey,
       oldRepoId,
       newRepoId
     ),
@@ -218,6 +247,10 @@ export function applyPayloadToTarget(
     workspaceLineageByChildKey: {
       ...targetState.workspaceLineageByChildKey,
       ...payload.workspaceLineageByChildKey
+    },
+    crossStoreLineageByChildKey: {
+      ...targetState.crossStoreLineageByChildKey,
+      ...payload.crossStoreLineageByChildKey
     },
     sshTargets: mergeSshTargets(targetState.sshTargets, payload.sshTargets)
   }

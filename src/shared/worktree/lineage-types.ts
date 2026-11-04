@@ -44,6 +44,28 @@ export type WorkspaceLineage = {
   createdAt: number
 }
 
+/** A parent saved in another Orca store; `instanceId` is identity, `workspaceKey` only a hint. */
+export type CrossStoreParentRef = {
+  /** The parent store's installationId (host-installation.json). */
+  installationId: string
+  workspaceKey: WorkspaceKey
+  instanceId: string
+}
+
+/** Owned by the child's store; maintenance acts on it only through the child. */
+export type CrossStoreWorkspaceLineage = {
+  childWorkspaceKey: WorkspaceKey
+  childInstanceId: string
+  parent: CrossStoreParentRef
+  origin: WorktreeLineageOrigin
+  capture: WorktreeLineageCapture
+  taskId?: string
+  orchestrationRunId?: string
+  coordinatorHandle?: string
+  createdByTerminalHandle?: string
+  createdAt: number
+}
+
 export type WorktreeLineageWarningCode =
   | 'LINEAGE_PARENT_CONTEXT_MISSING'
   | 'LINEAGE_PARENT_CONTEXT_CONFLICT'

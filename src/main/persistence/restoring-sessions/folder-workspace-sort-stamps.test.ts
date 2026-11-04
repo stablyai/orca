@@ -14,7 +14,7 @@ function createOperations() {
   const operations = new FolderWorkspacePersistenceOperations({
     state,
     scheduleSave: () => {},
-    removeWorkspaceLineageForFolderParent: () => {},
+    removeWorkspaceLineageForRemovedFolder: () => {},
     pruneMobileClientTabSelections: () => {},
     hydrateRepo: (repo) => repo
   })

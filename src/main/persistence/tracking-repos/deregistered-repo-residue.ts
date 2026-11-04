@@ -87,6 +87,10 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
     addOwnerKey(childKey)
     addOwnerKey(lineage.parentWorkspaceKey)
   }
+  // Never the cross-store parent: its repo id belongs to another store.
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    addOwnerKey(childKey)
+  }
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
     for (const worktreeId of Object.keys(selections)) {
       addWorktreeId(worktreeId)

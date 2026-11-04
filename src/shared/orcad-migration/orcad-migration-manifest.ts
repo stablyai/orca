@@ -4,7 +4,11 @@ import type { OrcadMigrationManifestVersion } from './orcad-migration-manifest-v
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import type { SparsePreset } from '../worktree/create-types'
-import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../worktree/lineage-types'
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/retired-name-registry'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
@@ -64,6 +68,12 @@ export type OrcadMigrationDormantWorkspaceLineage = {
   lineage: WorkspaceLineage
 }
 
+export type OrcadMigrationDormantCrossStoreLineage = {
+  sourceKey: string
+  childWorkspaceKey: string
+  lineage: CrossStoreWorkspaceLineage
+}
+
 export type OrcadMigrationDormantRetiredNames = {
   repoId: string
   registry: RetiredNameRegistry
@@ -80,6 +90,8 @@ export type OrcadMigrationDormantStatePayload = {
   worktreeMeta: OrcadMigrationDormantWorktreeMeta[]
   worktreeLineage: OrcadMigrationDormantWorktreeLineage[]
   workspaceLineage: OrcadMigrationDormantWorkspaceLineage[]
+  /** Optional: older hosts drop it, and older desktops never send it. */
+  crossStoreLineage?: OrcadMigrationDormantCrossStoreLineage[]
   sparsePresets: SparsePreset[]
   retiredWorktreeNames: OrcadMigrationDormantRetiredNames[]
   retiredWorktreeNamespaces: OrcadMigrationDormantRetirementNamespace[]

@@ -4,7 +4,11 @@ import type {
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { omitDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
 import { assertOrcadDestinationCanonicalMetadata } from './orcad-destination-worktree-metadata'
@@ -38,6 +42,7 @@ export type PreparedOrcadMigrationDormantState = {
   newWorktreeMeta: KeyedRow<WorktreeMeta>[]
   newWorktreeLineage: KeyedRow<WorktreeLineage>[]
   newWorkspaceLineage: KeyedRow<WorkspaceLineage>[]
+  newCrossStoreLineage: KeyedRow<CrossStoreWorkspaceLineage>[]
   newSparsePresets: SparsePreset[]
   retiredNameUpdates: RegistryUpdate[]
   retirementNamespaceUpdates: RegistryUpdate[]
@@ -64,6 +69,10 @@ export function prepareOrcadMigrationDormantState(
     value: structuredClone(entry.lineage)
   }))
   const workspaceLineage = payload.workspaceLineage.map((entry) => ({
+    key: entry.childWorkspaceKey,
+    value: structuredClone(entry.lineage)
+  }))
+  const crossStoreLineage = (payload.crossStoreLineage ?? []).map((entry) => ({
     key: entry.childWorkspaceKey,
     value: structuredClone(entry.lineage)
   }))
@@ -97,6 +106,11 @@ export function prepareOrcadMigrationDormantState(
       workspaceLineage,
       state.workspaceLineageByChildKey,
       'workspace_lineage'
+    ),
+    newCrossStoreLineage: selectNewKeyedRows(
+      crossStoreLineage,
+      state.crossStoreLineageByChildKey ?? {},
+      'cross_store_lineage'
     ),
     newSparsePresets,
     retiredNameUpdates: payload.retiredWorktreeNames.map((entry) => ({
@@ -138,6 +152,12 @@ export function applyPreparedOrcadMigrationDormantState(
   }
   for (const entry of prepared.newWorkspaceLineage) {
     state.workspaceLineageByChildKey[entry.key] = entry.value
+  }
+  if (prepared.newCrossStoreLineage.length > 0) {
+    state.crossStoreLineageByChildKey ??= {}
+    for (const entry of prepared.newCrossStoreLineage) {
+      state.crossStoreLineageByChildKey[entry.value.childWorkspaceKey] = entry.value
+    }
   }
   for (const preset of prepared.newSparsePresets) {
     state.sparsePresetsByRepo[preset.repoId] = [
@@ -191,6 +211,7 @@ function emptyPreparedDormantState(): PreparedOrcadMigrationDormantState {
     newWorktreeMeta: [],
     newWorktreeLineage: [],
     newWorkspaceLineage: [],
+    newCrossStoreLineage: [],
     newSparsePresets: [],
     retiredNameUpdates: [],
     retirementNamespaceUpdates: [],

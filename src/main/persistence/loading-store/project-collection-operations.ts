@@ -29,7 +29,7 @@ import {
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import {
   type MetadataLineageOperations,
-  removeWorkspaceLineageForFolderParent
+  removeWorkspaceLineageForRemovedFolder
 } from './metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
@@ -222,8 +222,8 @@ export function getProjectGroupOperations(
     new ProjectGroupPersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),
@@ -243,8 +243,8 @@ export function getFolderWorkspaceOperations(
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),

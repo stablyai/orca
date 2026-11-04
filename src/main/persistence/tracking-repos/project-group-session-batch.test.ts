@@ -82,7 +82,7 @@ function fixture(folderCount: number) {
     'runtime:remote': session([...removedIds, 'kept'])
   }
   const scheduleSave = vi.fn()
-  const removeWorkspaceLineageForFolderParent = vi.fn()
+  const removeWorkspaceLineageForRemovedFolder = vi.fn()
   const selected = new Set([...removedIds, 'kept'].map(folderWorkspaceKey))
   const pruneMobileClientTabSelections = vi.fn((matches: (owner: string) => boolean) => {
     for (const owner of selected) {
@@ -94,7 +94,7 @@ function fixture(folderCount: number) {
   const operations = new ProjectGroupPersistenceOperations({
     state,
     scheduleSave,
-    removeWorkspaceLineageForFolderParent,
+    removeWorkspaceLineageForRemovedFolder,
     pruneMobileClientTabSelections
   })
   return {
@@ -103,7 +103,7 @@ function fixture(folderCount: number) {
     selected,
     operations,
     scheduleSave,
-    removeWorkspaceLineageForFolderParent,
+    removeWorkspaceLineageForRemovedFolder,
     pruneMobileClientTabSelections
   }
 }
@@ -132,7 +132,7 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
-    expect(setup.removeWorkspaceLineageForFolderParent.mock.calls).toEqual(
+    expect(setup.removeWorkspaceLineageForRemovedFolder.mock.calls).toEqual(
       setup.removedIds.map((id) => [id])
     )
     expect(setup.pruneMobileClientTabSelections).toHaveBeenCalledTimes(1)
@@ -156,7 +156,7 @@ describe('project group session removal', () => {
     const before = structuredClone(setup.state)
     expect(setup.operations.deleteProjectGroup('missing')).toBe(false)
     expect(setup.state).toEqual(before)
-    expect(setup.removeWorkspaceLineageForFolderParent).not.toHaveBeenCalled()
+    expect(setup.removeWorkspaceLineageForRemovedFolder).not.toHaveBeenCalled()
     expect(setup.pruneMobileClientTabSelections).not.toHaveBeenCalled()
     expect(setup.scheduleSave).not.toHaveBeenCalled()
   })

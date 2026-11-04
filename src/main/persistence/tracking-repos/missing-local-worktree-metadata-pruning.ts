@@ -173,6 +173,7 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     }
     delete state.worktreeLineageById[worktreeId]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktreeId)]
     removedIds.push(worktreeId)
   }
   if (removedIds.length > 0) {

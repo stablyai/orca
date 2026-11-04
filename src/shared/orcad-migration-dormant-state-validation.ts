@@ -25,6 +25,7 @@ import {
   requiredRecord
 } from './orcad-migration/orcad-migration-dormant-value-validation'
 import {
+  parseCrossStoreLineageEntry,
   parseRetiredNames,
   parseRetirementNamespace,
   parseSparsePreset,
@@ -57,6 +58,15 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
       parseWorkspaceLineageEntry,
       'workspace_lineage'
     ),
+    ...(record.crossStoreLineage === undefined
+      ? {}
+      : {
+          crossStoreLineage: boundedArray(
+            record.crossStoreLineage,
+            parseCrossStoreLineageEntry,
+            'cross_store_lineage'
+          )
+        }),
     sparsePresets: boundedArray(record.sparsePresets, parseSparsePreset, 'sparse_presets'),
     retiredWorktreeNames: boundedArray(
       record.retiredWorktreeNames,
@@ -95,6 +105,9 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
   assertUnique(payload.worktreeLineage, (entry) => entry.sourceKey, 'worktree_lineage_source')
   assertUnique(payload.workspaceLineage, (entry) => entry.childWorkspaceKey, 'workspace_lineage')
   assertUnique(payload.workspaceLineage, (entry) => entry.sourceKey, 'workspace_lineage_source')
+  const crossStoreLineage = payload.crossStoreLineage ?? []
+  assertUnique(crossStoreLineage, (entry) => entry.childWorkspaceKey, 'cross_store_lineage')
+  assertUnique(crossStoreLineage, (entry) => entry.sourceKey, 'cross_store_lineage_source')
   assertUnique(payload.sparsePresets, (entry) => `${entry.repoId}\0${entry.id}`, 'sparse_preset')
   assertUnique(payload.retiredWorktreeNames, (entry) => entry.repoId, 'retired_names')
   assertUnique(
@@ -139,6 +152,15 @@ export function assertOrcadMigrationDormantStateReferences(args: {
       !owns(entry.lineage.parentWorkspaceKey)
     ) {
       throw new Error('orcad_migration_dormant_workspace_lineage_scope_invalid')
+    }
+  }
+  // Only the child must belong to the move; the parent names another store.
+  for (const entry of args.dormantState.crossStoreLineage ?? []) {
+    if (
+      entry.childWorkspaceKey !== entry.lineage.childWorkspaceKey ||
+      !owns(entry.childWorkspaceKey)
+    ) {
+      throw new Error('orcad_migration_dormant_cross_store_lineage_scope_invalid')
     }
   }
   for (const preset of args.dormantState.sparsePresets) {

@@ -1,4 +1,5 @@
 import type {
+  OrcadMigrationDormantCrossStoreLineage,
   OrcadMigrationDormantRetiredNames,
   OrcadMigrationDormantRetirementNamespace,
   OrcadMigrationDormantWorktreeLineage,
@@ -10,6 +11,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-type
 import type { WorktreeMeta } from '../worktree/meta-types'
 import type { RetiredNameRegistry } from '../worktree/retired-name-registry'
 import { parseWorkspaceKey } from '../workspace-scope'
+import { isCrossStoreWorkspaceLineage } from '../worktree/cross-store-lineage-records'
 import {
   isString,
   optionalNullableString,
@@ -65,6 +67,24 @@ export function parseWorktreeLineageEntry(value: unknown): OrcadMigrationDormant
 export function parseWorkspaceLineageEntry(value: unknown): OrcadMigrationDormantWorkspaceLineage {
   const record = requiredRecord(value, 'orcad_migration_dormant_workspace_lineage_invalid')
   const lineage = parseWorkspaceLineage(record.lineage)
+  return {
+    sourceKey: requiredString(record.sourceKey, 'orcad_migration_dormant_source_key_invalid'),
+    childWorkspaceKey: requiredString(
+      record.childWorkspaceKey,
+      'orcad_migration_dormant_workspace_key_invalid'
+    ),
+    lineage
+  }
+}
+
+export function parseCrossStoreLineageEntry(
+  value: unknown
+): OrcadMigrationDormantCrossStoreLineage {
+  const record = requiredRecord(value, 'orcad_migration_dormant_cross_store_lineage_invalid')
+  const lineage = structuredClone(record.lineage)
+  if (!isCrossStoreWorkspaceLineage(lineage)) {
+    throw new Error('orcad_migration_dormant_cross_store_lineage_value_invalid')
+  }
   return {
     sourceKey: requiredString(record.sourceKey, 'orcad_migration_dormant_source_key_invalid'),
     childWorkspaceKey: requiredString(

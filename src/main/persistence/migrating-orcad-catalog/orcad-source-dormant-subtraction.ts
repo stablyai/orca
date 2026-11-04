@@ -21,6 +21,9 @@ export function subtractOrcadMigrationSourceDormantState(
   dormant.workspaceLineage.forEach(
     (entry) => delete state.workspaceLineageByChildKey[entry.sourceKey]
   )
+  dormant.crossStoreLineage?.forEach(
+    (entry) => delete state.crossStoreLineageByChildKey?.[entry.sourceKey]
+  )
   for (const preset of dormant.sparsePresets) {
     const remaining = (state.sparsePresetsByRepo[preset.repoId] ?? []).filter(
       (entry) => entry.id !== preset.id
