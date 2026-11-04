@@ -20144,9 +20144,7 @@
         "browse": {
           "noSizes": "Es wurden noch keine Arbeitsbereichsgrößen gemessen.",
           "noSizesDescription": "Die Größen werden nach der Messung des Speicherplatzbedarfs angezeigt.",
-          "measureSizes": "Scannen",
           "measureSizesTitle": "Arbeitsbereichsgrößen erfassen",
-          "measureSizesDescription": "Speicherplatzbedarf erfassen, um Arbeitsbereiche nach Größe zu vergleichen, zu sortieren und zu filtern.",
           "sizeOnDisk": "Speicherplatzbedarf: {{value0}}",
           "checkingGitRow": "Git-Status wird geprüft",
           "searchPlaceholder": "Name, Repo, Branch, Pfad, Host suchen",

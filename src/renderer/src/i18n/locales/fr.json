@@ -20170,9 +20170,7 @@
         "browse": {
           "noSizes": "Aucune taille d'espace de travail mesurée pour l'instant.",
           "noSizesDescription": "Les tailles apparaissent une fois l'utilisation disque mesurée.",
-          "measureSizes": "Analyser",
           "measureSizesTitle": "Analyser les tailles des espaces de travail",
-          "measureSizesDescription": "Analysez l'utilisation disque pour comparer, trier et filtrer les espaces de travail par taille.",
           "sizeOnDisk": "Taille sur disque : {{value0}}",
           "checkingGitRow": "Vérification de l'état git",
           "searchPlaceholder": "Rechercher par nom, dépôt, branche, chemin, hôte",

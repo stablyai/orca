@@ -19441,9 +19441,7 @@
         "browse": {
           "noSizes": "ワークスペースのサイズはまだ測定されていません。",
           "noSizesDescription": "サイズは、ディスク使用量が測定された後に表示されます。",
-          "measureSizes": "スキャン",
           "measureSizesTitle": "スキャンワークスペースのサイズ",
-          "measureSizesDescription": "ディスク使用量をスキャンして、サイズ別にワークスペースを比較、並べ替え、フィルター処理します。",
           "sizeOnDisk": "ディスク上のサイズ: {{value0}}",
           "checkingGitRow": "gitのステータスを確認する",
           "searchPlaceholder": "名前、リポジトリ、ブランチ、パス、ホストを検索します",

@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Minus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Minus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -20,14 +20,22 @@ export function WorkspaceCleanupSortHeader({
   sort,
   selectableCount,
   selectedCount,
+  queuedCount,
+  deleteDisabled,
   onToggleSortField,
-  onToggleSelectAll
+  onToggleSelectAll,
+  onDeleteSelected
 }: {
   sort: WorkspaceCleanupSortState
   selectableCount: number
+  /** Visible selected rows; drives the select-all checkbox state. */
   selectedCount: number
+  /** Every selected row, including ones hidden by filters; what Delete acts on. */
+  queuedCount: number
+  deleteDisabled: boolean
   onToggleSortField: (field: WorkspaceCleanupSortField) => void
   onToggleSelectAll: (selectAll: boolean) => void
+  onDeleteSelected: () => void
 }): React.JSX.Element {
   const allSelected = selectableCount > 0 && selectedCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
@@ -37,7 +45,7 @@ export function WorkspaceCleanupSortHeader({
     { count: selectableCount, defaultValue_one: 'Select {{count}} safety-checked workspace' }
   )
   return (
-    <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">
+    <div className="flex h-13 items-center gap-2 border-b border-border bg-muted/25 px-4">
       <button
         type="button"
         role="checkbox"
@@ -53,13 +61,39 @@ export function WorkspaceCleanupSortHeader({
           <Minus className="size-3" strokeWidth={3} />
         ) : null}
       </button>
-      <span className="min-w-0 flex-1 text-xs text-muted-foreground">{selectAllLabel}</span>
+      {/* Bulk action sits beside the selection it acts on; it appears once something is selected. */}
+      {queuedCount > 0 ? (
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="truncate text-xs font-medium text-foreground">
+            {translate('components.workspace.cleanup.browse.selectedCount', '{{value0}} selected', {
+              value0: queuedCount
+            })}
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="shrink-0"
+            onClick={onDeleteSelected}
+            disabled={deleteDisabled}
+          >
+            <Trash2 className="size-3.5" />
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b771c92598',
+              'Delete selected'
+            )}
+          </Button>
+        </div>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {selectAllLabel}
+        </span>
+      )}
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="xs"
-            className="shrink-0 text-[11px] text-muted-foreground"
+            className="-mr-2.5 shrink-0 text-[11px] text-muted-foreground"
             aria-label={translate(
               'components.workspace.cleanup.browse.sortByField',
               'Sort by {{value0}}',

@@ -1,8 +1,9 @@
 import React from 'react'
-import { Loader2, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
+import { HardDrive, Loader2, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { translate } from '@/i18n/i18n'
 import {
@@ -19,6 +20,14 @@ export type WorkspaceCleanupGitEvidenceProgress = {
   totalCount: number
 }
 
+/** Present while sizes are unmeasured or a scan runs; the button is the one way to fill sizes. */
+export type WorkspaceCleanupSizeScanAction = {
+  scanning: boolean
+  scannedCount: number
+  totalCount: number
+  onRun: () => void
+}
+
 export function WorkspaceCleanupFilterBar({
   facetProps,
   facetPanelOpen,
@@ -27,6 +36,7 @@ export function WorkspaceCleanupFilterBar({
   matchedCount,
   hasActiveFilters,
   gitEvidence,
+  sizeScan,
   onQueryChange,
   onClearFilters,
   onClearAppliedFilter
@@ -38,6 +48,7 @@ export function WorkspaceCleanupFilterBar({
   matchedCount: number
   hasActiveFilters: boolean
   gitEvidence: WorkspaceCleanupGitEvidenceProgress
+  sizeScan: WorkspaceCleanupSizeScanAction | null
   onQueryChange: (query: string) => void
   onClearFilters: () => void
   onClearAppliedFilter: (filter: WorkspaceCleanupAppliedFilter) => void
@@ -45,7 +56,7 @@ export function WorkspaceCleanupFilterBar({
   const { filters, totalCount } = facetProps
   const applied = useAppliedWorkspaceCleanupFilters(filters)
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/15 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
       <div className="relative min-w-[180px] flex-1">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -102,12 +113,24 @@ export function WorkspaceCleanupFilterBar({
         </PopoverContent>
       </Popover>
 
-      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-        {translate(
-          'components.workspace.cleanup.browse.showingCount',
-          'Showing {{value0}} of {{value1}}',
-          { value0: matchedCount, value1: totalCount }
-        )}
+      {sizeScan ? <SizeScanButton {...sizeScan} /> : null}
+
+      <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-xs tabular-nums text-muted-foreground">
+        <GitCheckIndicator pendingCount={gitEvidence.pendingCount} />
+        {hasActiveFilters
+          ? translate(
+              'components.workspace.cleanup.browse.showingCount',
+              'Showing {{value0}} of {{value1}}',
+              { value0: matchedCount, value1: totalCount }
+            )
+          : translate(
+              'components.workspace.cleanup.browse.workspaceCount',
+              '{{count}} workspaces',
+              {
+                count: totalCount,
+                defaultValue_one: '{{count}} workspace'
+              }
+            )}
       </span>
 
       {/* Why out here and not only in the popover: a filter narrowing the list must be
@@ -119,18 +142,68 @@ export function WorkspaceCleanupFilterBar({
         </Button>
       ) : null}
 
-      {gitEvidence.pendingCount > 0 ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
-          {translate(
-            'components.workspace.cleanup.browse.checkingGit',
-            'Checking git status: {{value0}} left',
-            { value0: gitEvidence.pendingCount }
-          )}
-        </span>
-      ) : null}
-
       <WorkspaceCleanupAppliedFilterChips applied={applied} onClear={onClearAppliedFilter} />
     </div>
+  )
+}
+
+function SizeScanButton({
+  scanning,
+  scannedCount,
+  totalCount,
+  onRun
+}: WorkspaceCleanupSizeScanAction): React.JSX.Element {
+  const idleLabel = translate(
+    'components.workspace.cleanup.browse.measureSizesTitle',
+    'Scan workspace sizes'
+  )
+  const label = !scanning
+    ? idleLabel
+    : totalCount > 0
+      ? translate(
+          'components.workspace.cleanup.browse.measuringSizesProgress',
+          'Scanning {{value0}}/{{value1}}',
+          { value0: scannedCount, value1: totalCount }
+        )
+      : translate('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
+  return (
+    <Button variant="outline" size="sm" className="shrink-0" disabled={scanning} onClick={onRun}>
+      {scanning ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <HardDrive className="size-3.5" />
+      )}
+      {/* Stack the idle label under the live one so the button never changes width. */}
+      <span className="grid tabular-nums">
+        <span className="invisible col-start-1 row-start-1" aria-hidden="true">
+          {idleLabel}
+        </span>
+        <span className="col-start-1 row-start-1">{label}</span>
+      </span>
+    </Button>
+  )
+}
+
+// Reserve the spinner's slot so the count beside it stays put while git checks finish.
+function GitCheckIndicator({ pendingCount }: { pendingCount: number }): React.JSX.Element {
+  if (pendingCount === 0) {
+    return <span className="size-3.5" aria-hidden="true" />
+  }
+  const label = translate(
+    'components.workspace.cleanup.browse.checkingGit',
+    'Checking git status: {{value0}} left',
+    { value0: pendingCount }
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="status" aria-label={label} className="flex">
+          <Loader2 className="size-3.5 animate-spin" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

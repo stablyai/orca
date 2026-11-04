@@ -19837,9 +19837,7 @@
         "browse": {
           "noSizes": "尚未測量工作區大小。",
           "noSizesDescription": "測量磁碟用量後會顯示大小。",
-          "measureSizes": "掃描",
           "measureSizesTitle": "掃描工作區大小",
-          "measureSizesDescription": "掃描磁碟用量，以依大小比較、排序與篩選工作區。",
           "sizeOnDisk": "磁碟用量：{{value0}}",
           "checkingGitRow": "正在檢查 Git 狀態",
           "searchPlaceholder": "搜尋名稱、存放庫、分支、路徑、主機",

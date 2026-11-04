@@ -20128,9 +20128,7 @@
         "browse": {
           "noSizes": "Henüz hiçbir çalışma alanı boyutu ölçülmedi.",
           "noSizesDescription": "Boyutlar, disk kullanımı ölçüldükten sonra görünür.",
-          "measureSizes": "Tara",
           "measureSizesTitle": "Çalışma alanı boyutlarını tara",
-          "measureSizesDescription": "Çalışma alanlarını boyuta göre karşılaştırmak, sıralamak ve filtrelemek için disk kullanımını tarayın.",
           "sizeOnDisk": "Disk üzerindeki boyut: {{value0}}",
           "checkingGitRow": "Git durumu kontrol ediliyor",
           "searchPlaceholder": "İsim, repo, branch, yol, ana makine ara",

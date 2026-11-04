@@ -20555,9 +20555,7 @@
         "browse": {
           "noSizes": "No workspace sizes measured yet.",
           "noSizesDescription": "Sizes appear after disk usage has been measured.",
-          "measureSizes": "Scan",
           "measureSizesTitle": "Scan workspace sizes",
-          "measureSizesDescription": "Scan disk usage to compare, sort, and filter workspaces by size.",
           "sizeOnDisk": "Size on disk: {{value0}}",
           "checkingGitRow": "Checking git status",
           "searchPlaceholder": "Search name, repo, branch, path, host",
@@ -20744,7 +20742,9 @@
           "moreFlags": "Show {{value0}} more flags",
           "pathLabel": "Path",
           "copyPath": "Copy path",
-          "gitNotChecked": "Not checked"
+          "gitNotChecked": "Not checked",
+          "workspaceCount_one": "{{count}} workspace",
+          "workspaceCount_other": "{{count}} workspaces"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",

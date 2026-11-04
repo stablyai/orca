@@ -152,7 +152,7 @@ export const CandidateRow = React.memo(function CandidateRow({
   return (
     <div
       className={cn(
-        'group w-full border-b border-border/60 px-3 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
+        'group w-full border-b border-border/60 px-4 py-2.5 text-left text-foreground transition-colors hover:bg-accent/40',
         selected && 'bg-accent/30',
         deleting && 'opacity-70',
         last && 'border-b-0'

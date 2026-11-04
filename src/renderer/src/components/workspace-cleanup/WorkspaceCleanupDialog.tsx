@@ -344,14 +344,9 @@ function WorkspaceCleanupDialogContent({
         ) : !removal.confirming ? (
           <>
             <WorkspaceCleanupDialogHeader
-              selectedCount={selectedCount}
               loading={loading}
               scannedAt={scan?.scannedAt ?? null}
               scanProgress={scanProgress}
-              deleteDisabled={
-                selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
-              }
-              onDeleteSelected={() => openConfirmRemove(selectedCandidates)}
               onRefresh={() => startWorkspaceCleanupScan({ notifyWhenReady: true })}
               onClose={closeModal}
             />
@@ -372,6 +367,11 @@ function WorkspaceCleanupDialogContent({
               onFacetPanelOpenChange={setFacetPanelOpen}
               selectableCount={selectableIdentities.length}
               selectedCount={selectedSelectableCount}
+              queuedCount={selectedCount}
+              deleteDisabled={
+                selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
+              }
+              onDeleteSelected={() => openConfirmRemove(selectedCandidates)}
               spaceScanning={workspaceSpaceScanning}
               spaceProgress={workspaceSpaceProgress}
               gitPendingCount={gitEvidence.pendingWorktreeIds.size}

@@ -21099,9 +21099,7 @@
         "browse": {
           "noSizes": "Nenhum tamanho de espaço de trabalho medido ainda.",
           "noSizesDescription": "Os tamanhos aparecem após o uso de disco ser medido.",
-          "measureSizes": "Verificar",
           "measureSizesTitle": "Verificar tamanhos dos espaços de trabalho",
-          "measureSizesDescription": "Verifique o uso de disco para comparar, ordenar e filtrar espaços de trabalho por tamanho.",
           "sizeOnDisk": "Tamanho em disco: {{value0}}",
           "checkingGitRow": "Verificando status do git",
           "searchPlaceholder": "Pesquisar nome, repositório, branch, caminho, host",
