@@ -16,16 +16,18 @@ const TIMEOUT_MS = 180_000
 
 let candidate: TerminalWireBuild
 let reportedHost: TerminalWireBuild
+let originalWindow: PropertyDescriptor | undefined
 
 beforeAll(async () => {
   ;[candidate, reportedHost] = await Promise.all([
     loadTerminalWireBuild(WORKING_TREE),
     loadTerminalWireBuild(REPORTED_HOST_REF)
   ])
+  originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
 }, TIMEOUT_MS)
 
 afterEach(() => {
-  expect(typeof globalThis.window).toBe('undefined')
+  expect(Object.getOwnPropertyDescriptor(globalThis, 'window')).toEqual(originalWindow)
 })
 
 async function runLossyInitialSnapshotPair(args: {
