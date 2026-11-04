@@ -168,14 +168,12 @@ export async function openProjectDefaultCheckout({
       reason
     })
     const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
-    if (initialCwd || executionHostId) {
-      activateAndRevealWorktree(defaultCheckout.id, {
-        ...(initialCwd ? { initialCwd } : {}),
-        ...(executionHostId ? { executionHostId } : {})
-      })
-    } else {
-      activateAndRevealWorktree(defaultCheckout.id)
-    }
+    // Why user-open: adding the project is the user's open, so its first tab follows their Chat UI/Terminal choice.
+    activateAndRevealWorktree(defaultCheckout.id, {
+      navigationIntent: 'user-open',
+      ...(initialCwd ? { initialCwd } : {}),
+      ...(executionHostId ? { executionHostId } : {})
+    })
     return
   }
 

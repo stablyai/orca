@@ -165,7 +165,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('activates only the captured host default checkout when repo IDs collide', async () => {
@@ -209,6 +211,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      navigationIntent: 'user-open',
       executionHostId: 'runtime:env-1'
     })
   })
@@ -229,6 +232,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      navigationIntent: 'user-open',
       executionHostId: 'runtime:env-1'
     })
   })
@@ -246,6 +250,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open',
       initialCwd: '/repo/packages/web'
     })
   })
@@ -262,7 +267,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       setHideDefaultBranchWorkspace: vi.fn()
     })
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('opens a picked linked worktree without revealing its hidden main checkout', async () => {
@@ -304,7 +311,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'detected_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo-feature')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo-feature', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('shows the project when no detected checkout is its own selected checkout', async () => {
@@ -335,7 +344,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     expect(mocks.state.updateRepo).toHaveBeenCalledWith('repo-1', {
       externalWorktreeVisibility: 'show'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('keeps detected sibling external worktrees hidden', async () => {
@@ -360,7 +371,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('reveals the project if no default checkout is available', async () => {

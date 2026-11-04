@@ -75,17 +75,29 @@ export function getContextualTourStartStepIndex(
   targetExists: (selector: string) => boolean,
   isStepDone: (step: ContextualTourStep) => boolean = () => false
 ): number | null {
-  const requiredStepIndex = tour.steps.findIndex((step) => step.requiredForStart === true)
-  let startIndex = Math.max(requiredStepIndex, 0)
-  // Resume at the first unfinished step; a finished action step never shows again.
-  while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
-    startIndex += 1
+  const requiredStepIndexes = tour.steps.flatMap((step, index) =>
+    step.requiredForStart === true ? [index] : []
+  )
+  const candidates = requiredStepIndexes.length > 0 ? requiredStepIndexes : [0]
+  for (const candidate of candidates) {
+    let startIndex = candidate
+    while (startIndex < tour.steps.length - 1 && isStepDone(tour.steps[startIndex])) {
+      const nextIndex = getNextVisibleContextualTourStepIndex({
+        tour,
+        currentStepIndex: startIndex,
+        targetExists
+      })
+      if (nextIndex === null) {
+        return null
+      }
+      startIndex = nextIndex
+    }
+    const step = tour.steps[startIndex]
+    if (step && targetExists(step.targetSelector)) {
+      return startIndex
+    }
   }
-  const step = tour.steps[startIndex]
-  if (!step || !targetExists(step.targetSelector)) {
-    return null
-  }
-  return startIndex
+  return null
 }
 
 export function getVisibleContextualTourStepIndexes(
