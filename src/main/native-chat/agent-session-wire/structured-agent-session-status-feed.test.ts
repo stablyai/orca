@@ -27,6 +27,7 @@ import {
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { releasedStructuredStatusSummary } from './structured-agent-session-status-summary'
 
 const SESSION = 'status-session'
 const TURN_IDENTITY = {
@@ -107,6 +108,24 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it("retains the saved model but drops the released child's reported model", () => {
+    const released = releasedStructuredStatusSummary({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'claude',
+      status: 'idle',
+      latestPrompt: 'hello',
+      model: 'claude-opus-5-5',
+      reportedModel: 'claude-opus-4-8',
+      hostExecutionOwned: true,
+      hostExecutionPhase: 'ready',
+      updatedAt: 1_000
+    })
+
+    expect(released.model).toBe('claude-opus-5-5')
+    expect(released).not.toHaveProperty('reportedModel')
+  })
+
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
     const sessions = new Map<string, Indexed>([

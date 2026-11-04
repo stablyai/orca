@@ -44,7 +44,7 @@ const gitStatusEntrySchema = z.looseObject({
   removed: z.number().optional()
 })
 
-const gitUpstreamStatusSchema = z.looseObject({
+export const gitUpstreamStatusSchema = z.looseObject({
   hasUpstream: z.boolean(),
   ahead: z.number(),
   behind: z.number(),

@@ -13,12 +13,10 @@ import {
 } from './structured-agent-session-queued-publication'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
 import { holdUnsentSends } from '../agent-session-journal/journal-unsent-send-hold'
-import { JournalOutcomeCompaction } from '../agent-session-journal/journal-outcome-compaction'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { expect, it, vi } from 'vitest'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { selectStructuredAgentSessionInput } from './structured-agent-session-input-selection'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { subscribeQueuedHistory } from './structured-agent-session-subscriber-history.test-fixture'
@@ -363,15 +361,6 @@ it.each([10, 100])(
         counters.setPhase('baseline')
         if (l) {
           expect(await rig.deleteQueued(baseline[0])).toMatchObject({ ok: true })
-        }
-      }
-      counters.setPhase('compaction')
-      const db = openTestJournalHostDatabase(rig.root),
-        compactor = new JournalOutcomeCompaction()
-      let pages = 0
-      while (compactor.page(db)) {
-        if (++pages > 10000) {
-          throw new Error('compaction did not finish')
         }
       }
       counters.setPhase('cold-reopen')

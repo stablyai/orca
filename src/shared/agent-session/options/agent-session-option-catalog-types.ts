@@ -1,4 +1,4 @@
-import type { AgentChoiceCliForm } from '../../agent-launch-choices'
+import type { AgentChoiceCliForm } from '../../agent-launch/choices/agent-launch-choices'
 import type { AgentType } from '../../agent-status-types'
 import type {
   SessionOptionDescriptor,
@@ -47,6 +47,7 @@ export type CatalogOption = {
 }
 
 export type CatalogModel = {
+  effortsKnown?: false
   declaredDefaultEffort?: string | null
   id: string
   label: string

@@ -25,7 +25,7 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { CustomAgentId } from './commit-message-agent-spec'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 
 function readRepoInstructionOverride(
   instructions: RepoSourceControlAiOverrides['instructionsByOperation'],

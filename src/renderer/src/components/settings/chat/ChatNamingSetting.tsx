@@ -11,7 +11,7 @@ import {
   setSourceControlActionDefault
 } from '../../../../../shared/source-control-ai-actions'
 import { CUSTOM_AGENT_ID } from '../../../../../shared/commit-message-agent-spec'
-import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { Switch } from '../../ui/switch'

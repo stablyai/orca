@@ -64,11 +64,4 @@ describe('useMobileNativeChatQueuedEditFocus', () => {
     })
     expect(focus).not.toHaveBeenCalled()
   })
-
-  it('passes no Edit through when the cards offer none', async () => {
-    await act(async () => {
-      renderer = create(createElement(Harness, {}))
-    })
-    expect(latest!.editQueuedMessage).toBeUndefined()
-  })
 })

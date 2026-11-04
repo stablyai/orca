@@ -17,7 +17,7 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { codexAuthenticationFailure } from './codex-authentication-failure'
 // Turn ends release execution holds; only a user-message receipt confirms delivery.
 

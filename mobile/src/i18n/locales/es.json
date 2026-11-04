@@ -287,7 +287,8 @@
       "stoppedManually": "Detenido manualmente",
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
-      "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes)."
+      "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
+      "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -334,7 +335,10 @@
       "emptyAnswer": "Respuesta vacía",
       "resolved": "Resuelto",
       "resolver": "Respondido en {{device}}",
-      "unavailable": "Respuesta seleccionada no disponible"
+      "unavailable": "Respuesta seleccionada no disponible",
+      "thisPhone": "este teléfono",
+      "computer": "el ordenador",
+      "otherDevice": "otro dispositivo"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
@@ -564,6 +568,24 @@
     "agentMessage": {
       "handedOffToAgent": "Entregado a un agente",
       "startedAgent": "Agente iniciado"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
+      "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
+      "notText": "No se puede previsualizar este archivo como texto. Guárdalo para abrirlo en otra aplicación.",
+      "openFailed": "No se pudo abrir el adjunto. Inténtalo de nuevo.",
+      "hostUpdate": "Este host aún no puede abrir adjuntos de texto. Actualiza Orca en ese host y vuelve a intentarlo.",
+      "copyTooLarge": "Este archivo es demasiado grande para copiarlo. Guárdalo.",
+      "connectionChanged": "La conexión cambió. Vuelve a intentar abrir el adjunto.",
+      "hostChanged": "El host del adjunto cambió. Ciérralo y vuelve a abrirlo.",
+      "readFailed": "No se pudo leer el adjunto. Vuelve a conectarte e inténtalo de nuevo. Es posible que el archivo se haya eliminado o modificado.",
+      "copyFrame": "Copiar todo para este adjunto requiere la próxima actualización del teléfono.",
+      "copyFailed": "No se pudo copiar el adjunto. Inténtalo de nuevo.",
+      "pastedText": "Texto pegado",
+      "textAttachment": "Adjunto de texto",
+      "byteSize": "{{size}} bytes",
+      "saveUpdate": "Guardar estará disponible en una actualización del teléfono.",
+      "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
     }
   },
   "common": {
@@ -840,7 +862,8 @@
     },
     "prSidebar": {
       "loading": "Cargando pull request…",
-      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada."
+      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada.",
+      "retryLoading": "Reintentar cargar la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Volver a hosts",
@@ -2108,7 +2131,8 @@
       "promptUnconfirmed": "El agente se inició, pero no se pudo confirmar el envío del prompt."
     },
     "prActionsEngine": {
-      "mergeFailed": "No se pudo hacer merge de la pull request."
+      "mergeFailed": "No se pudo hacer merge de la pull request.",
+      "refreshFailed": "No se pudo actualizar la solicitud de extracción."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agente iniciado",

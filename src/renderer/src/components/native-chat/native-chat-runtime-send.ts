@@ -27,7 +27,7 @@ import {
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand
-} from '../../../../shared/agent-tui-command-typing'
+} from '../../../../shared/agent-launch/startup/agent-tui-command-typing'
 // Runtime send for native chat: clear any unsubmitted TUI line, write the framed
 // body, then Enter as a SEPARATE delayed pty write. Kept apart from the pure
 // byte builders in native-chat-send.ts so those stay IO-free and unit-testable.

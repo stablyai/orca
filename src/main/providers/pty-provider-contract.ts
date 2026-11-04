@@ -3,11 +3,11 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../shared/pty-fenced-termination'
 import type { SpawnIntent } from '../../shared/host-spawn-admission'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
 import type { PtySpawnResult } from './pty-spawn-result'

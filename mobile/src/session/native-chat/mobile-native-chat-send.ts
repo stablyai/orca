@@ -2,13 +2,13 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
-import { typeAgentTuiCommand } from '../../../../src/shared/agent-tui-command-typing'
+import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
 import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal-send-acknowledgment'
 import {
   AGENT_TUI_CLEAR_MAX_LINES,
   countAgentTuiInputLines,
   buildAgentTuiClearInputForText
-} from '../../../../src/shared/agent-tui-input-clear'
+} from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
@@ -34,7 +34,10 @@ type MobileNativeChatSendArgs = {
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
 /** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
-export type MobileNativeChatSendIntent = { alternate?: true }
+export type MobileNativeChatSendIntent = {
+  alternate?: true
+  onCreated?: (clientMessageId: string) => void
+}
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 

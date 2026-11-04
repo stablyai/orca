@@ -283,7 +283,8 @@
       "stoppedManually": "已手動停止",
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
-      "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
+      "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
+      "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -330,7 +331,10 @@
       "emptyAnswer": "回答內容為空",
       "resolved": "已解決",
       "resolver": "已在 {{device}} 回答",
-      "unavailable": "無法顯示所選的答案"
+      "unavailable": "無法顯示所選的答案",
+      "thisPhone": "這支手機",
+      "computer": "電腦",
+      "otherDevice": "其他裝置"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "工作階段開始後可用。",
@@ -525,6 +529,24 @@
     "agentMessage": {
       "handedOffToAgent": "已交接給代理程式",
       "startedAgent": "已啟動代理程式"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "無法讀取附件回應。請重試。",
+      "incompleteReply": "附件已變更或回應不完整。請關閉後重試。",
+      "notText": "無法以文字預覽此檔案。請儲存後在其他應用程式中開啟。",
+      "openFailed": "無法開啟附件。請重試。",
+      "hostUpdate": "此主機尚無法開啟文字附件。請更新該主機上的 Orca，然後重試。",
+      "copyTooLarge": "檔案太大，無法複製。請改為儲存。",
+      "connectionChanged": "連線已變更。請重試以重新開啟附件。",
+      "hostChanged": "附件所在的主機已變更。請關閉附件並重新開啟。",
+      "readFailed": "無法讀取附件。請重新連線後重試。檔案可能已被移除或變更。",
+      "copyFrame": "完整複製此附件需要即將推出的手機更新。",
+      "copyFailed": "無法複製附件。請重試。",
+      "pastedText": "貼上的文字",
+      "textAttachment": "文字附件",
+      "byteSize": "{{size}} 位元組",
+      "saveUpdate": "儲存功能將在手機更新中提供。",
+      "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
     }
   },
   "common": {
@@ -799,7 +821,8 @@
     },
     "prSidebar": {
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
+      "retryLoading": "重新嘗試載入 PR"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
@@ -2038,7 +2061,8 @@
       "promptUnconfirmed": "代理程式已啟動，但無法確認提示詞是否已傳送。"
     },
     "prActionsEngine": {
-      "mergeFailed": "合併 PR 失敗。"
+      "mergeFailed": "合併 PR 失敗。",
+      "refreshFailed": "無法重新整理提取要求。"
     },
     "prAiTriageLaunch": {
       "agentStarted": "代理程式已啟動",

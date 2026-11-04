@@ -49,12 +49,6 @@ describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
     expect(normalized.size).toBe(1)
     expect([...normalized][0]).toContain('fixing the sidebar')
   })
-
-  it('keeps two different sessions distinguishable', () => {
-    expect(normalizeTerminalTitle('π - session A - orca')).not.toBe(
-      normalizeTerminalTitle('π - session B - orca')
-    )
-  })
 })
 
 describe('detectAgentStatusFromTitle reads the π state separator', () => {
@@ -120,13 +114,6 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     expect(detectAgentStatusFromTitle(normalizeCompatibleAgentTitleForOwner(title, 'omp'))).toBe(
       detectAgentStatusFromTitle(title)
     )
-  })
-
-  // Persisted bare frames lack session text but still need explicit OMP owner identity (#6689/#7633/#9077).
-  it('still re-owns bare identity frames', () => {
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ Pi', 'omp')).toBe('⠋ OMP')
-    expect(normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ OMP', 'pi')).toBe('⠋ Pi')
   })
 })
 

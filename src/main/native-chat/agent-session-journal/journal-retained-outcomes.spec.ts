@@ -9,7 +9,6 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import { openAgentSessionJournal } from './journal-store-factory'
-import { JournalOutcomeCompaction } from './journal-outcome-compaction'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   AGENT_JOURNAL_THREAD_SCOPE as thread,
@@ -32,7 +31,8 @@ import { openStructuredAgentSessionConversationJournal } from '../agent-session-
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
-function retainExpectedRecords(database: JournalHostDatabase): () => void {
+// Author a sparse history left by the retired compactor; current writes use the production writer.
+function authorPreviouslyCompactedHistory(database: JournalHostDatabase): () => void {
   const records = () =>
     database.db
       .prepare(
@@ -64,6 +64,14 @@ function retainExpectedRecords(database: JournalHostDatabase): () => void {
     database.db.prepare('SELECT * FROM journal_outcome_epochs ORDER BY generation').all()
   const rawBefore = raw()
   const sourcesBefore = sources()
+  const remove = database.db.prepare(
+    'DELETE FROM journal_outcomes WHERE generation=? AND seq=? AND field=? AND entry_key=?'
+  )
+  for (const row of before) {
+    if (!keep.has(row)) {
+      remove.run(row.generation, row.seq, row.field, row.entry_key)
+    }
+  }
   return () => {
     expect(records()).toEqual(expected)
     expect(raw()).toEqual(rawBefore)
@@ -72,7 +80,7 @@ function retainExpectedRecords(database: JournalHostDatabase): () => void {
 }
 
 export function registerRetainedOutcomeContract() {
-  it('retained-facts-next-action compacts real prefix0 outcomes and reopens actual image/action/echo consumers', async () => {
+  it('retained-facts-next-action reopens previously compacted prefix0 outcomes through actual image/action/echo consumers', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-pr-32267-retained-'))
     let journal: Awaited<ReturnType<typeof openAgentSessionJournal>> | undefined
     try {
@@ -247,9 +255,7 @@ export function registerRetainedOutcomeContract() {
           .filter((row) => row.field === 'queue.cards')
           .every((row) => !String(row.value_json).includes('recovers'))
       ).toBe(true)
-      const expectRetention = retainExpectedRecords(database)
-      const compactor = new JournalOutcomeCompaction()
-      while (compactor.page(database)) {}
+      const expectRetention = authorPreviouslyCompactedHistory(database)
       expectRetention()
       const retained = inventory()
       expect(retained.length).toBeLessThan(all.length)
@@ -332,9 +338,7 @@ export function registerRetainedOutcomeContract() {
       )
       expect(journal.receiptFor('U')).toEqual(receipt)
       expect(journal.queuedMessages.get('Q')).toEqual(returned)
-      const expectEchoRetention = retainExpectedRecords(database)
-      const echoCompactor = new JournalOutcomeCompaction()
-      while (echoCompactor.page(database)) {}
+      const expectEchoRetention = authorPreviouslyCompactedHistory(database)
       expectEchoRetention()
       const keptEcho = inventory()
       expect(keptEcho).not.toEqual(retained)
@@ -403,9 +407,7 @@ export function registerRetainedOutcomeContract() {
       await journal.queuedMessages.withdraw(['Q'])
       const selectedAfterRemoval = journal.presentationRemoved('orca:U')
       expect(selectedAfterRemoval).toBe(false)
-      const expectRemovalRetention = retainExpectedRecords(database)
-      const removalCompactor = new JournalOutcomeCompaction()
-      while (removalCompactor.page(database)) {}
+      const expectRemovalRetention = authorPreviouslyCompactedHistory(database)
       expectRemovalRetention()
       await journal.close()
       journal = undefined
@@ -618,9 +620,7 @@ export function registerRetainedEchoBoundaryContract() {
                 "UPDATE journal_outcomes SET format=1 WHERE field='items' AND entry_key=? AND seq=?"
               )
               .run(JSON.stringify(agentJournalItemKey(revisionControl)), middle[0].seq)
-            const expectRetention = retainExpectedRecords(database)
-            const compactor = new JournalOutcomeCompaction()
-            while (compactor.page(database)) {}
+            const expectRetention = authorPreviouslyCompactedHistory(database)
             expectRetention()
             expect(
               database.db

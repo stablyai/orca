@@ -7,10 +7,14 @@ import {
 } from '@/lib/editor-file-operation-owner'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import type { AppStoreApi } from './editor-save-queue'
-import type { EditorSaveAcquisition } from './editor-save-slots'
-import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { EditorSaveTrigger } from './editor-save-disk-precondition'
+import type { EditorSaveAcquisition, EditorSaveRequest } from './editor-save-slots'
+import {
+  editorBufferIdOfView,
+  editorBufferSiblingViewIds
+} from '@/store/slices/editor/buffers/editor-buffer-views'
+import { isCodeViewTab, type EditorSaveTrigger } from './editor-save-disk-precondition'
 import { canAutoSaveOpenFile } from './editor-autosave'
+import { editorDiscardEpoch } from './editor-discard-epoch'
 
 export function sameEditorSaveResource(state: AppState, source: OpenFile, view: OpenFile): boolean {
   const key = editorSaveResourceKey(source, state)
@@ -105,5 +109,28 @@ export function captureEditorSave(
     return { operation, access: editorTabFileAccess(store.getState(), operation.file) }
   } catch (error) {
     return { error }
+  }
+}
+
+export function captureEditorSaveRequest(
+  store: AppStoreApi,
+  file: OpenFile,
+  fallbackContent: string,
+  trigger: EditorSaveTrigger
+): EditorSaveRequest {
+  const invocation = captureEditorSave(store, file, trigger)
+  const captured = 'operation' in invocation ? invocation.operation.file : file
+  const state = store.getState()
+  const recordId = editorBufferIdOfView(state, captured.id)
+  return {
+    fileId: captured.id,
+    fallbackContent,
+    trigger,
+    invocation,
+    viewIds: editorBufferSiblingViewIds(state, captured.id),
+    requestedDirty: state.openFiles.some((tab) => tab.id === captured.id && tab.isDirty),
+    requestedFromCodeView: isCodeViewTab(state, captured),
+    recordId,
+    discardEpoch: editorDiscardEpoch(recordId)
   }
 }

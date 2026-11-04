@@ -18,16 +18,16 @@ import { structuredCallerFor } from './structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
-import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch-session-already-exists'
+import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { createStructuredAgentSessionId } from '../../../../shared/agent-session/structured-agent-session-create'
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
 import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
-import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
+import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import {
   agentLaunchMovesHostWindow,
   agentLaunchTabViewerRule,

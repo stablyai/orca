@@ -1,6 +1,6 @@
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NotesSendAgentTarget } from '@/lib/notes-send-agent-targets'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'

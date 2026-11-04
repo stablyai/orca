@@ -24,7 +24,7 @@ import {
 } from '../native-chat/native-chat-composer-draft-store'
 import * as sources from '../native-chat/native-chat-launch-draft-source'
 import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))

@@ -2,7 +2,7 @@ import {
   AGENT_TUI_CLEAR_MAX_LINES,
   countAgentTuiInputLines,
   buildAgentTuiClearInputForText
-} from '../../../../shared/agent-tui-input-clear'
+} from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 
 export type NativeChatLaunchDraftSendPlan =
   /** Input line holds a stale injected draft — replace it, clearing every line. */

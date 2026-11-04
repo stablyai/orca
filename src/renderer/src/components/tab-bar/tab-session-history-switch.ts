@@ -24,7 +24,7 @@ import {
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { agentForksConversations } from '../../../../shared/agent-resume-argv'
+import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolveAiVaultSessionSurfaceSwitchTargets } from '../right-sidebar/ai-vault-session-surface-switch'

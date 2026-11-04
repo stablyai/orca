@@ -1,4 +1,4 @@
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { peekRuntimeEnvironmentCapability } from '@/runtime/runtime-compatibility-cache'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {

@@ -7,7 +7,7 @@ import {
 import { toast } from 'sonner'
 import { type AppState, useAppStore } from '@/store'
 
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
@@ -21,7 +21,7 @@ import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
 } from '../../../../../../shared/source-control-launch-agent-selection'
-import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   projectSelectedSourceControlActionLaunch,
   resolveSourceControlActionPreferredSurface

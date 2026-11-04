@@ -37,7 +37,7 @@ vi.mock('../../../store/index', () => ({
   ) => selector({ settingsSearchQuery: '', runtimeEnvironments: mocks.environments })
 }))
 import { mutateHostAgentLaunchSettings } from '../../../runtime/agent-launch-settings/agent-launch-settings-transport'
-import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 beforeEach(() => {
   mocks.web = false
   mocks.capability = 'unsupported'

@@ -186,6 +186,42 @@ describe('mobile structured queued messages', () => {
     await unmountSession()
   })
 
+  it('exposes the existing operation id before RPC and retains its real accepted echo until read coverage', async () => {
+    await mountSession(LEGACY)
+    let reply = (_response: RpcResponse) => {}
+    sendRequest.mockImplementation((method) =>
+      method === 'agentSession.send'
+        ? new Promise((resolve) => {
+            reply = resolve
+          })
+        : Promise.resolve(normalReply(method))
+    )
+    const created = vi.fn()
+    let sending!: ReturnType<NonNullable<typeof hook>['sendWithOutcome']>
+    await act(async () => {
+      sending = hook!.sendWithOutcome('answer', undefined, undefined, undefined, undefined, {
+        onCreated: created
+      })
+    })
+    expect(created).toHaveBeenCalledOnce()
+    const id = String(requestOf('agentSession.send').envelope.clientOperationId)
+    expect(created).toHaveBeenCalledWith(id)
+    expect(created.mock.invocationCallOrder[0]).toBeLessThan(callOrderOf('agentSession.send')!)
+    await act(async () => {
+      reply(mutationOk({ clientMessageId: id, submission: acceptedSubmission(id) }))
+      expect(await sending).toBe('accepted')
+    })
+    expect(
+      hook!.session.messages.find((row) => row.id === agentJournalSubmissionKey(id))
+    ).toMatchObject({ deliveryState: 'pending' })
+    act(() => listener?.(batchEvent()))
+    await vi.waitFor(() =>
+      expect(
+        hook!.session.messages.find((row) => row.id === agentJournalSubmissionKey(id))
+      ).toBeUndefined()
+    )
+  })
+
   it('reverts an optimistic relative move when the host reports a changed queue', async () => {
     const mail = queuedDraft({
       messageId: 'mail',

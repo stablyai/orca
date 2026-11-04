@@ -1,4 +1,4 @@
-import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
+import { dropAgentResumeArgvFromCommand } from '../../shared/agent-launch/startup/agent-resume-argv-drop'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
 export const UNVERIFIED_CODEX_RESUME_ERROR =

@@ -133,7 +133,9 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
     dataFile: join(mocks.profileDirectory, 'data.json')
   })
 }))
-vi.mock('../browser/browser-client-host-id', () => ({ initializeBrowserClientHostId: vi.fn() }))
+vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
+  initializeBrowserClientHostId: vi.fn()
+}))
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
@@ -165,43 +167,45 @@ vi.mock('./dev-education-suppression', () => ({
   shouldSuppressDevEducation: () => false,
   suppressDevEducationForStore: vi.fn()
 }))
-vi.mock('../browser/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/browser-session-proxy', () => ({
   awaitBrowserSessionProxies: vi.fn(async () => {}),
   setBrowserNetworkProxySettingsResolver: vi.fn(),
   invalidateBrowserSessionProxyApplication: vi.fn()
 }))
-vi.mock('../browser/doc-preview-protocol', () => ({ installDocPreviewProtocolHandler: vi.fn() }))
+vi.mock('../browser/document-preview/doc-preview-protocol', () => ({
+  installDocPreviewProtocolHandler: vi.fn()
+}))
 vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolHandler: vi.fn() }))
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // Keep registry/startup real through meta load, retired-choice inspection and identity write; stub only surrounding route/policy/cookie machinery.
-vi.mock('../browser/browser-route-session-runtime', () => ({
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
   configureRouteSessionsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
+vi.mock('../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   configurePairedRuntimeBrowserClientHostsForOrcaProfile: vi.fn()
 }))
-vi.mock('../browser/browser-route-partition-storage-runtime', () => ({
+vi.mock('../browser/routing/partitions/browser-route-partition-storage-runtime', () => ({
   collectOrphanedBrowserRoutePartitionStorage: vi.fn(async () => {})
 }))
-vi.mock('../browser/browser-session-partition-policies', () => ({
+vi.mock('../browser/sessions/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: vi.fn(async () => {}),
   forgetBrowserSessionPartitionConfiguration: vi.fn(),
   clearBrowserSessionPartitionPolicies: vi.fn()
 }))
-vi.mock('../browser/browser-session-cookie-staging', () => ({
+vi.mock('../browser/cookies/staging/browser-session-cookie-staging', () => ({
   applyPendingBrowserCookieImports: vi.fn(),
   clearPendingBrowserCookieImport: vi.fn(),
   setPendingBrowserCookieImport: vi.fn()
 }))
-vi.mock('../browser/browser-session-route-policies', () => ({
+vi.mock('../browser/routing/sessions/browser-session-route-policies', () => ({
   installBrowserRoutePartitionPolicies: vi.fn(),
   clearBrowserRoutePartitionPolicies: vi.fn()
 }))
-vi.mock('../browser/browser-session-profile-retirement', () => ({
+vi.mock('../browser/sessions/browser-session-profile-retirement', () => ({
   retireFailedBrowserSessionProfile: vi.fn(async () => {})
 }))
-vi.mock('../browser/browser-webauthn-account-picker', () => ({
+vi.mock('../browser/webauthn/browser-webauthn-account-picker', () => ({
   cancelBrowserWebAuthnAccountRequestsForSession: vi.fn()
 }))
 
@@ -242,8 +246,8 @@ import {
   BROWSER_IDENTITY_MODE_FILE,
   BROWSER_IDENTITY_MODE_VERSION,
   readBrowserIdentityModeRecord
-} from '../browser/browser-identity-mode-record'
-import { BROWSER_SESSION_META_FILE_NAME } from '../browser/browser-session-meta-store'
+} from '../browser/identity/browser-identity-mode-record'
+import { BROWSER_SESSION_META_FILE_NAME } from '../browser/sessions/browser-session-meta-store'
 import { getOrcaProfileBrowserSessionPartition } from '../../shared/orca-profiles'
 // Transform the ready graph at collection, outside any test timeout; tests re-evaluate it after resetModules.
 import './main-process-ready'
@@ -285,7 +289,7 @@ function seedRetiredProfile(): void {
 
 /** Use fresh module graphs to reset the registry's initialization latch. */
 async function runReady(): Promise<void> {
-  const identity = await import('../browser/browser-identity-mode-store')
+  const identity = await import('../browser/identity/browser-identity-mode-store')
   // Preflight fixes identity for this launch.
   identity.initializeBrowserIdentityModeStore(mocks.userDataPath)
   const { initializeMainProcessReady } = await import('./main-process-ready')
