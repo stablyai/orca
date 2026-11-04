@@ -5,13 +5,7 @@ import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
-
-export type {
-  ShellOpenExternalEditorRequest,
-  ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
-} from '../../shared/shell-open-types'
+} from '../../shared/shell/opening/shell-open-types'
 
 export type ShellApi = {
   /** Every OS open names the path's owner; main refuses anything not owned by this computer. */

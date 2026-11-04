@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../shared/browser-client-host-protocol'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserHostLeaseRegistry } from './browser-host/browser-host-lease-registry'
 import { routeRuntimeBrowserClientAutomation } from './runtime-browser-client-automation'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
@@ -32,9 +30,49 @@ describe('runtime browser client automation routing', () => {
     failed.settle({ status: 'failed', errorCode: 'browser_client_page_automation_failed' })
     await expect(routing).rejects.toThrow('browser_client_page_automation_failed')
   })
+
+  it('refuses --expect-url for a client that would drop it, without sending the command', async () => {
+    const older = await createFixture()
+    await expect(
+      routeRuntimeBrowserClientAutomation({
+        method: 'browser.click',
+        params: { page: 'page-a', element: '@e1', expectUrl: 'https://example.test/a' },
+        pages: older.pages,
+        leases: older.leases,
+        resolveWorkspace: older.resolveWorkspace
+      })
+    ).rejects.toMatchObject({ code: 'browser_expect_url_unsupported' })
+  })
+
+  it('brings back the client’s URL mismatch with its diagnostics', async () => {
+    const mismatch = {
+      expectedUrl: 'https://example.test/a',
+      actualUrl: 'https://example.test/b',
+      browserPageId: 'page-a',
+      mayHaveStarted: false
+    }
+    const fixture = await createFixture({ expectUrl: true })
+    const routing = routeRuntimeBrowserClientAutomation({
+      method: 'browser.click',
+      params: { page: 'page-a', element: '@e1', expectUrl: mismatch.expectedUrl },
+      pages: fixture.pages,
+      leases: fixture.leases,
+      resolveWorkspace: fixture.resolveWorkspace
+    })
+    await fixture.waitForCommand()
+    fixture.settle({
+      status: 'failed',
+      errorCode: 'browser_expected_url_mismatch',
+      expectedUrlMismatch: mismatch
+    })
+    await expect(routing).rejects.toMatchObject({
+      code: 'browser_expected_url_mismatch',
+      data: mismatch
+    })
+  })
 })
 
-async function createFixture(options: { automation?: boolean } = {}) {
+async function createFixture(options: { automation?: boolean; expectUrl?: boolean } = {}) {
   const leases = new BrowserHostLeaseRegistry({
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a'
@@ -43,7 +81,10 @@ async function createFixture(options: { automation?: boolean } = {}) {
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
     pairedDeviceId: 'device-a',
-    hostCapabilities: options.automation === false ? ['webview'] : ['webview', 'automation-v1'],
+    hostCapabilities:
+      options.automation === false
+        ? ['webview']
+        : ['webview', 'automation-v1', ...(options.expectUrl ? ['expect-url-v1'] : [])],
     pageCommandProtocolVersion: 1,
     pageInventoryProtocolVersion: 1,
     pageInventory: [],

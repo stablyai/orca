@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import {
   isProvenProcessExit,
   UNVERIFIED_PROCESS_EXIT_CODE
-} from '../../../shared/terminal-exit-cause'
+} from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 /** Missing wait status means no observed exit; inventing zero would falsely report a clean finish. */
 export function runtimeWaitExitCode(wait: { exitCode?: number | null }): number {

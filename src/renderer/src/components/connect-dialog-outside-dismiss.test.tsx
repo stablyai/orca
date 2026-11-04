@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
-import type { ReactElement } from 'react'
+import { act, type ReactElement } from 'react'
+
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JiraConnectDialog } from './jira-connect-dialog'
 import { LinearApiKeyDialog } from './linear-api-key-dialog'
-import { BitbucketCredentialsDialog } from './settings/bitbucket-credentials-dialog'
+import { BitbucketCredentialsDialog } from './integrations/source-control/bitbucket-credentials-dialog'
 
 type StoreState = {
   settings: { activeRuntimeEnvironmentId: string | null }

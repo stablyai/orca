@@ -18,7 +18,7 @@ on:
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
-      - 'skills/computer-use/SKILL.md'
+      - 'skills/orca-computer-use/SKILL.md'
       - 'src/main/computer/**'
       - 'src/shared/computer-use-*.ts'
   workflow_dispatch:

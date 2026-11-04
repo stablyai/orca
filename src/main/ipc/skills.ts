@@ -17,7 +17,7 @@ import {
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
 import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
-import { runAsWslUserAct, wslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 

@@ -33,6 +33,19 @@ describe('getActivityThreadTaskTitle', () => {
     ).toBe('Fix logout')
   })
 
+  it('skips pasted data for the newest prompt the user wrote', () => {
+    expect(
+      getActivityThreadTaskTitle({
+        entry: {
+          prompt: '{ "tool": "orca diagnostics", "takenAt": "2026"',
+          stateHistory: [{ state: 'done', prompt: 'Fix logout', startedAt: 1 }]
+        },
+        tab: { ...tab, generatedTitle: undefined },
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Fix logout')
+  })
+
   it('keeps orchestration labels across terse follow-ups but yields to new work', () => {
     const orchestration = {
       taskId: 'task-1',

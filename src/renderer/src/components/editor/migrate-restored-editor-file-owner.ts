@@ -9,11 +9,14 @@ import {
   captureEditorFileOperationProvenance,
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
-import { requestEditorSaveQuiesce } from './editor-autosave'
-import type { RestoredEditorOwnerResult } from '@/store/slices/editor'
+import { requestEditorSaveQuiesce } from './autosave/editor-autosave'
+import type { OpenFile, RestoredEditorOwnerResult } from '@/store/slices/editor'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store'
 
 export type RestoredEditorOwnerMigrationResult = RestoredEditorOwnerResult
 
@@ -29,6 +32,26 @@ export function restoredOwnerMigrationErrorMessage(
         'auto.components.editor.EditorPanel.siblingFileOwnerChanged',
         'The sibling file owner changed while the tab was restoring.'
       )
+}
+
+/** The workspace an absolute-path tab must move to before it can be read, or null to read it in place. */
+export function findAbsoluteTabOwnerRoute(
+  state: AppState,
+  worktreeId: string | null | undefined,
+  tab: Pick<OpenFile, 'worktreeId' | 'filePath'>,
+  executionHostId: ExecutionHostId
+): RuntimeWorkspaceFileRoute | null {
+  // Floating files stay in their panel even when a project also contains the path.
+  if (isFloatingWorkspaceId(worktreeId)) {
+    return null
+  }
+  const route = findWorkspaceFileRoute(state, executionHostId, tab.filePath)
+  // Why: this computer reads any absolute path, so a local tab never moves to another workspace;
+  // that move switched the user away from where they opened it. Servers read only
+  // workspace-relative paths, so their tabs still move to the owner.
+  return route && executionHostId === LOCAL_EXECUTION_HOST_ID && route.worktreeId !== tab.worktreeId
+    ? null
+    : route
 }
 
 export async function migrateRestoredEditorFileOwner(

@@ -24,7 +24,7 @@ import {
 import type * as RecordPatch from '../../shared/workspace-layout/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
 import { SSH_KEY } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { moveTabAcrossPartitions } from './terminal-topology/cross-partition-tab-move'
 import {
   admitPaneToSession,

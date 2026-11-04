@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocket as NodeWebSocket, WebSocketServer } from 'ws'
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   connectMobileRelayForPairing,
   type PairingCandidateClient

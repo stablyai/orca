@@ -6,16 +6,16 @@ import type {
   RuntimeTerminalAgentStatusEvent,
   RuntimeTerminalProgramStatusFacetEvent
 } from '../runtime-terminal-contracts'
-import type { TerminalSideEffectBatch } from '../../../shared/terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
-import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server'
+import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
@@ -35,7 +35,7 @@ export type RuntimeConstructionDependencies = {
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
-  getAgentProviderSessionSnapshot?: () => AgentStatusIpcPayload[]
+  getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
   getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void

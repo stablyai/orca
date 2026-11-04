@@ -1,7 +1,7 @@
 import type * as PtySpawnValidationTypes from '../providers/working-directory-validation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty/local-pty-executable-spawn'
-import type * as PosixPtyProcessTable from '../pty/posix-pty-process-table'
+import type * as PosixPtyProcessTable from '../pty/process-retirement/posix-pty-process-table'
 
 const {
   spawnMock,
@@ -30,12 +30,12 @@ vi.mock('node-pty', () => ({
 }))
 
 // Fixture pids must never be looked up in, or signalled through, the real host process table.
-vi.mock('../pty/posix-pty-process-table', async (importOriginal) => ({
+vi.mock('../pty/process-retirement/posix-pty-process-table', async (importOriginal) => ({
   ...(await importOriginal<typeof PosixPtyProcessTable>()),
   readPosixPtyProcessTable: readProcessTableMock
 }))
 
-vi.mock('../pwsh', () => ({
+vi.mock('../pty/shell-startup/pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 

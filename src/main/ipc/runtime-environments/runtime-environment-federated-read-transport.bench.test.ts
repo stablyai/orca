@@ -1,11 +1,11 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
-import { RuntimeEnvironmentStoreSchema } from '../../../shared/runtime-environments'
+import { RuntimeEnvironmentStoreSchema } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 const runLiveBenchmark = isFederatedReadBenchmarkEnabled(process.env.ORCA_FEDERATED_READ_BENCH)
 

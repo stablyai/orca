@@ -4,9 +4,10 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
-import type { TuiAgent } from '../../src/shared/tui-agent'
+import type { TuiAgent } from '../../src/shared/agent-launch/catalog/tui-agent'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/onboarding-defaults'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
+import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 type OnboardingState = {
   closedAt: number | null

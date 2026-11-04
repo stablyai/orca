@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../terminal-tab-types'
+import type { TerminalTab } from './terminal-tab-types'
 
 /** The lowest free "Terminal N", so a fresh terminal is "Terminal 1" again after older tabs close. */
 export function getNextTerminalOrdinal(

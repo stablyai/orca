@@ -110,13 +110,8 @@
       "tryAgain": "다시 시도"
     },
     "terminalSettings": {
-      "autocomplete": "자동 완성 및 자동 수정",
-      "autocompleteOff": "꺼짐",
-      "autocompleteOn": "켜짐",
       "defaultText": "기본 (100%)",
       "keepPhoneSize": "휴대폰 크기로 유지(기본값)",
-      "keyboardInputDescription": "자동 완성, 자동 수정, 맞춤법 제안은 버퍼 방식의 명령어 입력에만 적용됩니다. 키보드 위의 이중 화살표 버튼을 눌러 실시간 입력에서 전환한 다음, 명령어를 수정하고 '보내기'를 누르세요. 명령어, 플래그, 경로가 자동으로 바뀌지 않도록 기본적으로 꺼져 있습니다.",
-      "keyboardInputHeading": "키보드 입력",
       "largeText": "크게 (125%)",
       "largerText": "더 크게 (150%)",
       "largestText": "가장 크게 (200%)",
@@ -283,7 +278,8 @@
       "stoppedManually": "수동으로 중지됨",
       "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
       "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
-      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
+      "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
+      "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -330,7 +326,10 @@
       "emptyAnswer": "빈 답변",
       "resolved": "해결됨",
       "resolver": "{{device}}에서 답변됨",
-      "unavailable": "선택한 답변을 사용할 수 없습니다."
+      "unavailable": "선택한 답변을 사용할 수 없습니다.",
+      "thisPhone": "이 휴대전화",
+      "computer": "컴퓨터",
+      "otherDevice": "다른 기기"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "세션이 시작된 후 사용할 수 있습니다.",
@@ -525,6 +524,24 @@
     "agentMessage": {
       "handedOffToAgent": "에이전트에게 넘김",
       "startedAgent": "에이전트 시작됨"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
+      "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
+      "notText": "이 파일은 텍스트로 미리 볼 수 없습니다. 저장한 후 다른 앱에서 여세요.",
+      "openFailed": "첨부 파일을 열 수 없습니다. 다시 시도하세요.",
+      "hostUpdate": "이 호스트는 아직 텍스트 첨부 파일을 열 수 없습니다. 해당 호스트에서 Orca를 업데이트한 후 다시 시도하세요.",
+      "copyTooLarge": "파일이 너무 커서 복사할 수 없습니다. 대신 저장하세요.",
+      "connectionChanged": "연결이 변경되었습니다. 첨부 파일을 다시 열어 보세요.",
+      "hostChanged": "첨부 파일의 호스트가 변경되었습니다. 닫은 후 다시 여세요.",
+      "readFailed": "첨부 파일을 읽을 수 없습니다. 다시 연결한 후 시도하세요. 파일이 삭제되었거나 변경되었을 수 있습니다.",
+      "copyFrame": "이 첨부 파일을 전체 복사하려면 예정된 휴대전화 업데이트가 필요합니다.",
+      "copyFailed": "첨부 파일을 복사할 수 없습니다. 다시 시도하세요.",
+      "pastedText": "붙여넣은 텍스트",
+      "textAttachment": "텍스트 첨부 파일",
+      "byteSize": "{{size}}바이트",
+      "saveUpdate": "저장 기능은 휴대전화 업데이트에서 제공될 예정입니다.",
+      "fullCopySaveUpdate": "이 첨부 파일의 전체 복사와 저장 기능은 휴대전화 업데이트에서 제공될 예정입니다."
     }
   },
   "common": {
@@ -799,7 +816,8 @@
     },
     "prSidebar": {
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
+      "retryLoading": "PR 로드 다시 시도"
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
@@ -1639,7 +1657,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "현재 브랜치를 확인할 수 없습니다.",
-      "providerUnavailable": "이 제공자에서는 호스팅 PR 패널을 사용할 수 없습니다."
+      "githubRemoteRequired": "이 탭에서 풀 리퀘스트 세부 정보를 보려면 GitHub 원격 저장소가 필요합니다. 지원되는 다른 서비스에서는 변경 사항에서 리뷰를 만들고 브라우저에서 여세요."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "사용자 목록을 불러오지 못했습니다.",
@@ -1662,15 +1680,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "키보드 닫기",
       "sendKey": "{{label}} 보내기",
-      "modifierHint": "다음 키에 적용됩니다. 두 번 탭하면 계속 켜집니다.",
       "typeCharacter": "{{character}} 입력",
       "interrupt": "터미널 중단",
       "keysModeLabel": "키 모드: 입력 내용이 터미널로 바로 전송됩니다. 메시지 모드로 전환",
       "messageModeLabel": "메시지 모드: 작성한 뒤 전송합니다. 키 모드로 전환",
-      "keysMode": "키",
-      "messageMode": "메시지",
       "moreKeys": "더 많은 키와 작업",
-      "showKeyboard": "키보드 표시"
+      "showKeyboard": "키보드 표시",
+      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 현재 터미널 세션을 열린 상태로 유지합니다.",
+      "switchToDesktopMode": "데스크톱 모드로 전환",
+      "switchToPhoneMode": "휴대폰 모드로 전환",
+      "pasteFromClipboard": "클립보드에서 붙여넣기",
+      "paste": "붙여넣기",
+      "addCustomShortcut": "사용자 지정 단축키 추가"
     },
     "activeContent": {
       "createTab": "탭 만들기",
@@ -1781,11 +1802,7 @@
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
-      "liveInputLabel": "실시간 터미널 입력",
-      "sendCommand": "명령 보내기",
-      "messageAgentPlaceholder": "{{agent}}에게 메시지 보내기",
-      "writeCommandPlaceholder": "명령을 작성한 후 전송",
-      "theAgent": "에이전트"
+      "liveInputLabel": "실시간 터미널 입력"
     },
     "contentRow": {
       "dismissCreationWarning": "워크스페이스 생성 경고 닫기"
@@ -1834,6 +1851,7 @@
       "attachmentAtMost": "{{agent}}은(는) 메시지 하나에 이미지를 최대 {{limit}}개까지 받을 수 있어 이 메시지가 전송되지 않았습니다.",
       "attachmentEmpty": "이 메시지의 이미지가 비어 있어 메시지가 전송되지 않았습니다.",
       "attachmentInvalid": "이 메시지의 첨부 파일은 에이전트에 보낼 수 없습니다.",
+      "attachmentsExpired": "{{names}}이(가) 만료되었습니다.",
       "attachmentLargerThan": "이 메시지의 이미지가 {{size}}MB보다 커서 메시지가 전송되지 않았습니다.",
       "attachmentNoSource": "이 메시지의 이미지에 보낼 파일이 없어 메시지가 전송되지 않았습니다.",
       "attachmentNotAFile": "이 메시지의 이미지가 파일이 아니어서 메시지가 전송되지 않았습니다.",
@@ -2038,7 +2056,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "PR을 병합하지 못했습니다.",
-      "refreshFailed": "PR을 새로고침하지 못했습니다."
+      "refreshFailed": "풀 리퀘스트를 새로 고치지 못했습니다."
     },
     "prAiTriageLaunch": {
       "agentStarted": "에이전트 시작됨",
@@ -2419,6 +2437,7 @@
       "queueTooLarge": "대기열에 쌓인 텍스트가 너무 많습니다.",
       "quitTerminalAgent": "여기에서 채팅을 계속하려면 해당 에이전트를 종료하세요.",
       "reattachFile": "제거한 후 다시 첨부하세요.",
+      "reattachFiles": "제거한 후 다시 첨부하세요.",
       "recordFailed": "Orca가 이 내용을 채팅 기록에 저장하지 못했습니다.",
       "recordUnreadable": "Orca가 이 채팅의 저장된 상태를 읽지 못했습니다.",
       "reopenChat": "다시 확인하려면 채팅을 다시 여세요.",
@@ -2465,14 +2484,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
       "saveFailedMessage": "현재는 이 레이아웃이 적용됩니다. 다시 선택하여 저장을 재시도하세요."
-    },
-    "terminalArrowPad": {
-      "label": "방향키",
-      "hint": "한쪽을 탭하면 방향키를 한 번 누르고, 길게 눌러 드래그하면 반복합니다",
-      "up": "위",
-      "down": "아래",
-      "left": "왼쪽",
-      "right": "오른쪽"
     },
     "terminalMoreKeys": {
       "sendKey": "{{label}} 보내기",
@@ -2645,6 +2656,9 @@
       "title": "음성",
       "toggleMode": "토글",
       "updateFailed": "업데이트하지 못했습니다."
+    },
+    "agents": {
+      "permissionOwnAll": "에이전트 자체 설정"
     }
   },
   "sourceControl": {
@@ -3190,7 +3204,6 @@
       "pipelineJobs_one": "작업 {{count}}개",
       "pipelineJobs_other": "작업 {{count}}개",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
     },
@@ -3421,7 +3434,6 @@
       "requestReview": "리뷰 요청",
       "requestReviewers": "리뷰어 요청",
       "rerunAll": "모두 재실행",
-      "rerunFailed": "실패한 체크 재실행",
       "reviewers": "리뷰어",
       "viewFile": "보기"
     },

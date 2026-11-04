@@ -11,7 +11,8 @@ import {
   type connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
-import type { HostProfile, PairingOffer, RpcResponse } from './types'
+import type { HostProfile, RpcResponse } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))

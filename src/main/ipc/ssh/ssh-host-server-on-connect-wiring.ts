@@ -3,7 +3,7 @@ import {
   getManagedOrcadFenceEnvironmentId,
   managedOrcadServerName
 } from '../../../shared/managed-orcad-ssh-owner'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../ssh/orcad-migration-cutover-journal'
 import { abandonOrcadConversion } from '../../ssh/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../ssh/orcad-migration-source-retention'

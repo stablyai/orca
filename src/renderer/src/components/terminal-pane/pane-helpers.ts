@@ -64,4 +64,4 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   )
 }
 
-export { shellEscapePath } from '../../../../shared/shell-path-quoting'
+import '../../../../shared/shell/launch/shell-path-quoting'

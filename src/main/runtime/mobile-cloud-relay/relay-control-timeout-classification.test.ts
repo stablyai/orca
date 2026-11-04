@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mobileRelayMintFailureFromUnknown } from '../../../shared/mobile-relay-mint-failure'
+import { mobileRelayMintFailureFromUnknown } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { RelayControlRequests } from './relay-control-requests'
 
 // Anchored relay_* classification rejects diagnostic suffixes; keep timeout codes precise end to end (STA-7672).

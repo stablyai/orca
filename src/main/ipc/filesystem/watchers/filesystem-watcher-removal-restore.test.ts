@@ -18,7 +18,7 @@ vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
 import { closeAllWatchers } from './filesystem-watcher-shutdown'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
 import { desktopWorktreeWatcherRemoval } from './filesystem-watcher'
-import { setWorktreeWatcherRemoval } from '../../worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../../../workspaces/removal/worktree-watcher-removal'
 import { createRuntimeFileWatcherRemoval } from '../../../runtime/runtime-file-watcher-removal'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { getLocalWatcherRoot } from './filesystem-watcher-paths'

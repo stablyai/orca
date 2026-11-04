@@ -112,13 +112,8 @@
       "tryAgain": "Réessayer"
     },
     "terminalSettings": {
-      "autocomplete": "Complétion et correction automatiques",
-      "autocompleteOff": "Désactivé",
-      "autocompleteOn": "Activé",
       "defaultText": "Par défaut (100 %)",
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "keyboardInputDescription": "La complétion, la correction automatique et les suggestions orthographiques s'appliquent uniquement à la saisie de commandes en mémoire tampon. Utilisez le bouton à double chevron au-dessus du clavier pour quitter la saisie en direct, puis modifiez votre commande avant d'appuyer sur Envoyer. Ces fonctions sont désactivées par défaut pour éviter de modifier les commandes, les options ou les chemins.",
-      "keyboardInputHeading": "SAISIE AU CLAVIER",
       "largeText": "Grand (125 %)",
       "largerText": "Plus grand (150 %)",
       "largestText": "Le plus grand (200 %)",
@@ -287,7 +282,8 @@
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
-      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
+      "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
+      "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}."
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -334,7 +330,10 @@
       "emptyAnswer": "Réponse vide",
       "resolved": "Résolu",
       "resolver": "Répondu sur {{device}}",
-      "unavailable": "Réponse sélectionnée indisponible"
+      "unavailable": "Réponse sélectionnée indisponible",
+      "thisPhone": "ce téléphone",
+      "computer": "l’ordinateur",
+      "otherDevice": "un autre appareil"
     },
     "sessionOptionCopy": {
       "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
@@ -564,6 +563,24 @@
     "agentMessage": {
       "handedOffToAgent": "Confié à un agent",
       "startedAgent": "Agent démarré"
+    },
+    "textAttachmentPreview": {
+      "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
+      "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
+      "notText": "Ce fichier ne peut pas être prévisualisé en texte. Enregistrez-le pour l’ouvrir dans une autre application.",
+      "openFailed": "Impossible d’ouvrir la pièce jointe. Réessayez.",
+      "hostUpdate": "Cet hôte ne peut pas encore ouvrir les pièces jointes texte. Mettez Orca à jour sur cet hôte, puis réessayez.",
+      "copyTooLarge": "Ce fichier est trop volumineux pour être copié. Enregistrez-le plutôt.",
+      "connectionChanged": "La connexion a changé. Réessayez d’ouvrir la pièce jointe.",
+      "hostChanged": "L’hôte de la pièce jointe a changé. Fermez-la et rouvrez-la.",
+      "readFailed": "Impossible de lire cette pièce jointe. Reconnectez-vous et réessayez. Le fichier a peut-être été supprimé ou modifié.",
+      "copyFrame": "La copie intégrale de cette pièce jointe nécessite la prochaine mise à jour du téléphone.",
+      "copyFailed": "Impossible de copier la pièce jointe. Réessayez.",
+      "pastedText": "Texte collé",
+      "textAttachment": "Pièce jointe texte",
+      "byteSize": "{{size}} octets",
+      "saveUpdate": "L’enregistrement sera disponible dans une mise à jour du téléphone.",
+      "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     }
   },
   "common": {
@@ -840,7 +857,8 @@
     },
     "prSidebar": {
       "loading": "Chargement de la pull request…",
-      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté."
+      "notPermitted": "Accès refusé — votre compte GitHub n'est pas connecté.",
+      "retryLoading": "Réessayer de charger la pull request"
     },
     "protocolBlockScreen": {
       "backToHosts": "Retour aux hôtes",
@@ -1692,7 +1710,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Branche actuelle indisponible.",
-      "providerUnavailable": "Panneau de revue hébergée indisponible pour ce fournisseur."
+      "githubRemoteRequired": "Cet onglet nécessite un dépôt distant GitHub pour afficher les détails des pull requests. Pour les autres plateformes prises en charge, créez une revue depuis Modifications et ouvrez-la dans votre navigateur."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Échec du chargement des personnes",
@@ -1715,15 +1733,18 @@
     "accessoryKeys": {
       "dismissKeyboard": "Masquer le clavier",
       "sendKey": "Envoyer {{label}}",
-      "modifierHint": "S’applique à la touche suivante. Touchez deux fois pour la maintenir active.",
       "typeCharacter": "Saisir {{character}}",
       "interrupt": "Interrompre le terminal",
       "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
-      "keysMode": "Touches",
-      "messageMode": "Message",
       "moreKeys": "Plus de touches et d’actions",
-      "showKeyboard": "Afficher le clavier"
+      "showKeyboard": "Afficher le clavier",
+      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
+      "switchToDesktopMode": "Passer en mode bureau",
+      "switchToPhoneMode": "Basculer en mode téléphone",
+      "pasteFromClipboard": "Coller depuis le presse-papiers",
+      "paste": "Coller",
+      "addCustomShortcut": "Ajouter un raccourci personnalisé"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -1850,11 +1871,7 @@
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
-      "liveInputLabel": "Saisie en direct dans le terminal",
-      "sendCommand": "Envoyer la commande",
-      "messageAgentPlaceholder": "Message à {{agent}}",
-      "writeCommandPlaceholder": "Écrivez une commande, puis envoyez-la",
-      "theAgent": "l'agent"
+      "liveInputLabel": "Saisie en direct dans le terminal"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
@@ -1903,6 +1920,7 @@
       "attachmentAtMost": "{{agent}} accepte au maximum {{limit}} images par message, ce message n'a donc pas été envoyé.",
       "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",
       "attachmentInvalid": "Une pièce jointe de ce message ne peut pas être envoyée à l'agent.",
+      "attachmentsExpired": "Expiré : {{names}}.",
       "attachmentLargerThan": "Une image de ce message dépasse {{size}} Mo, le message n'a donc pas été envoyé.",
       "attachmentNoSource": "Une image de ce message n'a aucun fichier à envoyer, le message n'a donc pas été envoyé.",
       "attachmentNotAFile": "Une image de ce message n'est pas un fichier, le message n'a donc pas été envoyé.",
@@ -2108,7 +2126,7 @@
     },
     "prActionsEngine": {
       "mergeFailed": "Impossible de merger la pull request.",
-      "refreshFailed": "Impossible d'actualiser la pull request."
+      "refreshFailed": "Impossible d’actualiser la pull request."
     },
     "prAiTriageLaunch": {
       "agentStarted": "Agent démarré",
@@ -2490,6 +2508,7 @@
       "queueTooLarge": "Trop de texte est en attente dans la file.",
       "quitTerminalAgent": "Quittez cet agent pour continuer le chat ici.",
       "reattachFile": "Retirez-la et joignez-la à nouveau.",
+      "reattachFiles": "Retirez-les et joignez-les à nouveau.",
       "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
       "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
       "reopenChat": "Rouvrez le chat pour vérifier à nouveau.",
@@ -2536,14 +2555,6 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
       "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
-    },
-    "terminalArrowPad": {
-      "label": "Touches fléchées",
-      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
-      "up": "Haut",
-      "down": "Bas",
-      "left": "Gauche",
-      "right": "Droite"
     },
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
@@ -2720,6 +2731,9 @@
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
+    },
+    "agents": {
+      "permissionOwnAll": "Paramètres propres aux agents"
     }
   },
   "sourceControl": {
@@ -3283,7 +3297,6 @@
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer les vérifications échouées",
       "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
     },
@@ -3517,7 +3530,6 @@
       "requestReview": "Demander une revue",
       "requestReviewers": "Demander des reviewers",
       "rerunAll": "Tout relancer",
-      "rerunFailed": "Relancer celles en échec",
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },

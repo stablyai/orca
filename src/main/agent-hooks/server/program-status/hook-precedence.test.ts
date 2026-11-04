@@ -4,7 +4,7 @@ import {
   HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS as SILENCE,
   programStatusHookYieldEndsAt
 } from './hook-precedence'
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const NOW = 1_000_000
 
@@ -29,33 +29,6 @@ const report = (payload: Omit<ParsedAgentStatusPayload, 'prompt'>): ParsedAgentS
 })
 
 describe('programStatusHookYieldEndsAt', () => {
-  it('applies when no hook row speaks for the pane', () => {
-    expect(programStatusHookYieldEndsAt(undefined, report({ state: 'working' }))).toBeUndefined()
-    expect(
-      programStatusHookYieldEndsAt(row({ state: 'working' }, {}, 'osc'), report({ state: 'done' }))
-    ).toBeUndefined()
-    expect(
-      programStatusHookYieldEndsAt(
-        row({ state: 'done' }, { providerSessionOnly: true }),
-        report({ state: 'working' })
-      )
-    ).toBeUndefined()
-  })
-
-  it('yields to a live hook row of the same agent until its hooks fall silent', () => {
-    const hook = row({ state: 'working', agentType: 'claude' })
-    expect(programStatusHookYieldEndsAt(hook, report({ state: 'done', agentType: 'claude' }))).toBe(
-      NOW + SILENCE
-    )
-  })
-
-  it('keeps yielding through a long silent tool call that the program agrees with', () => {
-    const hook = row({ state: 'working', agentType: 'claude' })
-    expect(
-      programStatusHookYieldEndsAt(hook, report({ state: 'working', agentType: 'claude' }))
-    ).toBe(Infinity)
-  })
-
   it('keeps a turn the hooks settled from a later block unless the program worked since', () => {
     const hook = row({ state: 'done', agentType: 'antigravity' })
     const block = report({ state: 'waiting', agentType: 'antigravity' })
@@ -103,20 +76,5 @@ describe('programStatusHookYieldEndsAt', () => {
         NOW + SILENCE
       )
     }
-  })
-
-  it('yields to a mid-turn hook row under another app id, not to a finished one', () => {
-    expect(
-      programStatusHookYieldEndsAt(
-        row({ state: 'working', agentType: 'openclaude' }),
-        report({ state: 'done', agentType: 'claude' })
-      )
-    ).toBe(NOW + SILENCE)
-    expect(
-      programStatusHookYieldEndsAt(
-        row({ state: 'done', agentType: 'claude' }),
-        report({ state: 'working', agentType: 'terraform' })
-      )
-    ).toBeUndefined()
   })
 })

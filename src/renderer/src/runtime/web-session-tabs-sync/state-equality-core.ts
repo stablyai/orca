@@ -1,10 +1,10 @@
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  agentStatusEvidenceObservedAt,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+  agentStatusEvidenceObservedAt
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
+import { mainAgentStatusEqual } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
   WebSessionTabsBatchContext,

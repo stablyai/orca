@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
@@ -33,10 +33,14 @@ vi.mock('@/store', () => createAppStoreModuleMock())
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
-vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
-vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
-vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
-vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
+vi.mock('./workspace-card/surface/WorktreeCard', () => createWorktreeCardModuleMock())
+vi.mock('./workspace-card/activity/WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+vi.mock('./workspace-card/identity/WorktreeTitleInlineRename', () =>
+  createWorktreeTitleInlineRenameModuleMock()
+)
+vi.mock('./workspace-actions/context-menu/WorktreeContextMenu', () =>
+  createWorktreeContextMenuModuleMock()
+)
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 

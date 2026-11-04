@@ -11,7 +11,10 @@ import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
+import { orchestrationMailFixture } from '../../../../../src/shared/agent-session/orchestration-mail.test-fixture'
+import { mobileNativeChatDisplayCopyText } from './mobile-native-chat-display-copy'
 
+import { NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT } from '../../../../../src/shared/native-chat/transcript/native-chat-message-time'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
@@ -39,6 +42,35 @@ function toolMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
 
 describe('MobileNativeChatMessage', () => {
   let renderer: ReactTestRenderer | null = null
+
+  it('shows and copies clean orchestration content on the translated phone card', async () => {
+    await activateMobileUiLocale('es')
+    const message = orchestrationMailFixture({ body: 'The **result** is ready.' })
+    try {
+      const tree = render(message)
+      expect(findAllByHostType(tree.root, 'MobileMarkdown')).toHaveLength(0)
+      const toggle = findAllByHostType(tree.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded === false
+      )!
+      act(() => toggle.props.onPress())
+      expect(timesIn(tree.root, message.timestamp)).toHaveLength(1)
+      const markdown = findAllByHostType(tree.root, 'MobileMarkdown')
+      expect(markdown.map((node) => node.props.content)).toContain(
+        'Review complete\n\nThe **result** is ready.'
+      )
+      expect(textIn(tree.root)).toContain('Review worker')
+      expect(
+        [...textIn(tree.root), ...markdown.map((node) => node.props.content)].join('\n')
+      ).not.toMatch(/Subject:|──── From:|orchestration reply/)
+      expect(mobileNativeChatDisplayCopyText(message)).toBe(
+        'Review complete\n\nThe **result** is ready.'
+      )
+      act(() => toggle.props.onPress())
+      expect(findAllByHostType(tree.root, 'MobileMarkdown')).toHaveLength(0)
+    } finally {
+      await activateMobileUiLocale('en')
+    }
+  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -81,68 +113,97 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
+  const timesIn = (
+    node: ReactTestInstance,
+    timestamp: NativeChatMessage['timestamp']
+  ): ReactTestInstance[] =>
+    findAllByHostType(node, 'Text').filter(
+      (text) =>
+        text.props.accessibilityLabel ===
+        new Intl.DateTimeFormat(undefined, NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT).format(
+          new Date(timestamp ?? Number.NaN)
+        )
+    )
+
   const words = (node: ReactTestInstance): string[] =>
     node.children.flatMap((child) => (typeof child === 'string' ? [child] : words(child)))
 
-  it('keeps answered receipts beside Started worker through the production structured hook', async () => {
-    const items = [
-      {
-        itemId: 'start',
-        revision: 1,
-        sequence: 42,
-        observedAt: 1,
-        body: {
-          kind: 'agent-start' as const,
-          dispatchId: 'dispatch',
-          task: 'Worker assignment',
-          worker: {
-            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
-            name: 'Worker'
+  it.each([
+    [undefined, 'the computer'],
+    [{ kind: 'current' }, 'this phone'],
+    [{ kind: 'named', name: 'Work Mac' }, 'Work Mac']
+  ] satisfies [NativeChatResolvedPrompt['resolution']['resolvedByDevice'], string][])(
+    'keeps answered receipts with device %j through the production structured hook',
+    async (resolvedByDevice, device) => {
+      const items = [
+        {
+          itemId: 'start',
+          revision: 1,
+          sequence: 42,
+          observedAt: 1,
+          body: {
+            kind: 'agent-start' as const,
+            dispatchId: 'dispatch',
+            task: 'Worker assignment',
+            worker: {
+              party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+              name: 'Worker'
+            }
           }
-        }
-      },
-      ...ANSWERED_PROMPT_ITEMS
-    ]
-    const client = stubRpcClient({
-      sendRequest: async () => ok({}),
-      subscribe: (method, _params, onData) => {
-        if (method === 'agentSession.subscribe') {
-          onData(snapshotEvent({ items }))
-        }
-        return () => {}
-      }
-    })
-    const onSendError = vi.fn()
-    function Transcript() {
-      const structured = useMobileStructuredAgentSession({
-        client,
-        pairedHostClient: client,
-        sessionId: 'session-1',
-        agent: 'claude',
-        enabled: true,
-        connected: true,
-        hostSupport: null,
-        onSendError
-      })
-      return structured.session.messages.map((message) =>
-        createElement(MobileNativeChatMessage, {
-          key: message.id,
-          message,
-          receipt: structured.receipts.get(message.id)
+        },
+        ...ANSWERED_PROMPT_ITEMS.map((item) => {
+          const { body } = item
+          return body.kind === 'approval' || body.kind === 'question'
+            ? { ...item, body: { ...body, resolution: { ...body.resolution, resolvedByDevice } } }
+            : item
         })
+      ]
+      const client = stubRpcClient({
+        sendRequest: async () => ok({}),
+        subscribe: (method, _params, onData) => {
+          if (method === 'agentSession.subscribe') {
+            onData(snapshotEvent({ items }))
+          }
+          return () => {}
+        }
+      })
+      const onSendError = vi.fn()
+      function Transcript() {
+        const structured = useMobileStructuredAgentSession({
+          client,
+          pairedHostClient: client,
+          sessionId: 'session-1',
+          agent: 'claude',
+          enabled: true,
+          connected: true,
+          hostSupport: null,
+          onSendError
+        })
+        return structured.session.messages.map((message) =>
+          createElement(MobileNativeChatMessage, {
+            key: message.id,
+            message,
+            receipt: structured.receipts.get(message.id)
+          })
+        )
+      }
+      await act(async () => {
+        renderer = create(createElement(Transcript))
+      })
+      const drawn = words(renderer!.root).join('')
+      expect(drawn).toContain('Started worker')
+      expect(drawn).toContain(
+        `Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on ${device}`
       )
+      expect(drawn).toContain(`AllowResolved · Answered on ${device}`)
+      expect(markdownIn(renderer!.root)).not.toContain('Worker assignment')
+      const toggle = findAllByHostType(renderer!.root, 'Pressable').find(
+        (node) => node.props.accessibilityLabel === 'Started worker'
+      )!
+      act(() => toggle.props.onPress())
+      expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
     }
-    await act(async () => {
-      renderer = create(createElement(Transcript))
-    })
-    const drawn = words(renderer!.root).join('')
-    expect(drawn).toContain('Started worker')
-    expect(drawn).toContain(
-      'Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on desktop-renderer'
-    )
-    expect(drawn).toContain('AllowResolved · Answered on desktop-renderer')
-    expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
-  })
+  )
 
   it.each([
     ['en', 'agent-start', 'Worker assignment', 'Started worker'],
@@ -168,7 +229,13 @@ describe('MobileNativeChatMessage', () => {
       })!
       await activateMobileUiLocale(locale)
       try {
-        expect(textIn(render(message).root)).toContain(title)
+        const tree = render(message)
+        expect(textIn(tree.root)).toContain(title)
+        const toggle = findAllByHostType(tree.root, 'Pressable').find(
+          (node) => node.props.accessibilityLabel === title
+        )
+        expect(toggle !== undefined).toBe(task !== '')
+        expect(timesIn(tree.root, message.timestamp)).toHaveLength(task === '' ? 1 : 0)
       } finally {
         await activateMobileUiLocale('en')
       }

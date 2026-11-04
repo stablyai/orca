@@ -12,13 +12,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { clearWorktreeAgentExpansionStateForTests } from './worktree-card-agents-expansion-state'
+import { clearWorktreeAgentExpansionStateForTests } from './workspace-card/activity/worktree-card-agents-expansion-state'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -121,13 +121,13 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('./CacheTimer', () => ({
+vi.mock('./workspace-card/activity/CacheTimer', () => ({
   default: () => null,
   usePromptCacheCountdownStartedAt: () => null,
   usePromptCacheCountdownForPane: () => null
 }))
 
-vi.mock('./WorktreeContextMenu', () => ({
+vi.mock('./workspace-actions/context-menu/WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'

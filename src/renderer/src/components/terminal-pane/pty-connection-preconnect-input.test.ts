@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectPanePty } from './pty-connection'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   createManager,
@@ -10,7 +10,11 @@ import {
   leafIdForPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -18,6 +22,7 @@ import {
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
 const {
   notifyCodexPaneBoundForStaleSweep,
@@ -92,6 +97,8 @@ function connectPlainPane(
     createManager(1),
     buildPaneConnectionDeps(() => mockStoreState, overrides)
   ]
+  bindPaneAgentTitleMocks(connectArgs[2], agentTitleMocks)
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
   return connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
 }
@@ -176,6 +183,10 @@ describe('connectPanePty pre-connect input', () => {
     mockStoreState.terminalLayoutsByTabId = {}
     const pane = createPane(1)
     const connectArgs = [pane, createManager(1), buildPaneConnectionDeps(() => mockStoreState)]
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+    bindPaneAgentTitleMocks(connectArgs[2], agentTitleMocks2)
+
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shared pane fixtures implement the members connectPanePty touches.
     const binding = connectPanePty(...(connectArgs as unknown as Parameters<typeof connectPanePty>))
     const keep = createdTransportOptions[0]?.keepTypeAheadForNewTerminal

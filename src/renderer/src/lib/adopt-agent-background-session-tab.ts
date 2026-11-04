@@ -1,7 +1,11 @@
 import { useAppStore } from '@/store'
-import { makePaneKey, parsePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import {
+  makePaneKey,
+  parsePaneKey,
+  type PaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { retireProvider, retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'

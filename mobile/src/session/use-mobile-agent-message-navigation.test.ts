@@ -135,7 +135,6 @@ function mount(
         activeSessionTabTypeRef: { current: null },
         activeHandleRef: { current: null },
         terminalUnsubsRef: { current: new Map() },
-        defaultTerminalHandlesToLiveInput: vi.fn(),
         subscribeToTerminal: vi.fn(),
         unsubscribeTerminal: vi.fn(),
         showToast: toast
@@ -183,7 +182,7 @@ it.each(['claude', 'codex'] as const)(
     const row = { ...chat, agent, id: 'agent-chat-tab-v1-actual' }
     const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
       reply(
-        method === 'orchestration.partyLocation'
+        method === 'orchestration.partyOpen'
           ? { location: { kind: 'chat', sessionId: chat.sessionId, worktreeId: 'stale' } }
           : method === 'agentSession.reveal'
             ? ((rows = [row]),
@@ -217,12 +216,12 @@ it.each(['claude', 'codex'] as const)(
       h.open(source)
     })
     expect(send.mock.calls[0]).toEqual([
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       { address: 'term_worker', messageIds: ['mine'] },
       expect.any(Object)
     ])
     expect(send.mock.calls.map(([method]) => method)).toEqual([
-      'orchestration.partyLocation',
+      'orchestration.partyOpen',
       'session.tabs.list',
       'agentSession.reveal',
       'session.tabs.list',
@@ -252,7 +251,7 @@ it.each(['claude', 'codex'] as const)(
 it('routes a resolved terminal through caller focus and its actual grouped leaf', async () => {
   const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
     reply(
-      method === 'orchestration.partyLocation'
+      method === 'orchestration.partyOpen'
         ? { location: { kind: 'terminal', handle: 'term_worker' } }
         : method === 'terminal.focus'
           ? { focus: { worktreeId: 'destination' } }
@@ -274,7 +273,7 @@ it.each(['method_not_found', 'forbidden'])(
   'uses shared old-host %s policy for direct terminals and exact native roots',
   async (code) => {
     const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
-      method === 'orchestration.partyLocation'
+      method.startsWith('orchestration.party')
         ? refused(code)
         : reply(
             method === 'terminal.focus'
@@ -302,7 +301,9 @@ it.each(['method_not_found', 'forbidden'])(
       ]
     }
     await act(async () => h.open(root))
+    // An older host refuses the opening call, then answers the plain lookup.
     expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'orchestration.partyOpen',
       'orchestration.partyLocation',
       'session.tabs.list',
       'session.tabs.activate'
@@ -319,7 +320,7 @@ it('never falls back after ambiguous lookup and carries its remaining budget int
   vi.useFakeTimers()
   vi.setSystemTime(1000)
   const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) => {
-    if (method === 'orchestration.partyLocation') {
+    if (method === 'orchestration.partyOpen') {
       vi.setSystemTime(15000)
       return reply({ location: { kind: 'terminal', handle: 'term_worker' } })
     }
@@ -334,7 +335,7 @@ it('never falls back after ambiguous lookup and carries its remaining budget int
     expect.objectContaining({ timeoutMs: 1000 })
   ])
   expect(send.mock.calls.map(([method]) => method)).toEqual([
-    'orchestration.partyLocation',
+    'orchestration.partyOpen',
     'terminal.focus'
   ])
   expect(h.navigate).not.toHaveBeenCalled()
@@ -342,7 +343,7 @@ it('never falls back after ambiguous lookup and carries its remaining budget int
   send.mockClear()
   send.mockImplementation(async () => refused('timeout'))
   await act(async () => h.open())
-  expect(send.mock.calls.map(([method]) => method)).toEqual(['orchestration.partyLocation'])
+  expect(send.mock.calls.map(([method]) => method)).toEqual(['orchestration.partyOpen'])
 })
 
 it('retains the displayed source, respects pending selection, and fences stale source/visit/generation/newer intent', async () => {
@@ -413,7 +414,7 @@ it.each([
   })
   await activateMobileUiLocale('fr')
   const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
-    method === 'orchestration.partyLocation'
+    method === 'orchestration.partyOpen'
       ? reply(
           code === 'locate'
             ? { location: null, lost: 'terminal' }
@@ -431,8 +432,6 @@ it.each([
     3000
   )
   expect(send.mock.calls.map(([method]) => method)).toEqual(
-    code === 'locate'
-      ? ['orchestration.partyLocation']
-      : ['orchestration.partyLocation', 'terminal.focus']
+    code === 'locate' ? ['orchestration.partyOpen'] : ['orchestration.partyOpen', 'terminal.focus']
   )
 })

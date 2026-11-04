@@ -11,7 +11,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { splitGitRemoteKey } from '../../shared/git-remote-identity'
+import { splitGitRemoteKey } from '../../shared/git/remotes/git-remote-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'

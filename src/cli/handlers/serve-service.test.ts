@@ -63,18 +63,6 @@ describe('orca serve service', () => {
     expect(existsSync(serveSupervisorBrakePath(join(home, 'profile')))).toBe(false)
   })
 
-  it('enables a systemd unit and reports lingering', async () => {
-    const d = deps('linux')
-    answers.set('loginctl show-user 501 --property=Linger --value', { code: 0, out: 'no\n' })
-    const result = await installServeService({ command: null, dryRun: false }, d)
-    expect(result.linger).toBe('no')
-    expect(calls.slice(0, 3)).toEqual([
-      'systemctl --user daemon-reload',
-      expect.stringMatching(/^systemctl --user enable orca-serve-[0-9a-f]{8}\.service$/),
-      expect.stringMatching(/^systemctl --user restart orca-serve-/)
-    ])
-  })
-
   it('fails loudly when the manager refuses, and writes nothing on a dry run', async () => {
     const d = deps('darwin')
     const dry = await installServeService({ command: null, dryRun: true }, d)

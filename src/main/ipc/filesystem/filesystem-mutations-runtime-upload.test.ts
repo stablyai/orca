@@ -18,7 +18,7 @@ vi.mock('../runtime-upload-file-stream', () => ({
 vi.mock('../runtime-upload-temp-sweep', () => ({
   sweepAbandonedRuntimeUploadTempPath: sweepMock
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: (_userDataPath: string, selector: string) => ({
     id: selector === 'env-alias' ? 'env-1' : selector
   })

@@ -1,6 +1,6 @@
 /** Exercise runtime publication per client; window-unit coverage alone cannot prove callers apply the hold. */
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WT = 'repo-1::/tmp/worktree-a'

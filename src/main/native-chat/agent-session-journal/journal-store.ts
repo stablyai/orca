@@ -22,10 +22,8 @@ import type {
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
-import {
-  newestStructuredAgentSessionTurnBySequence,
-  runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'
@@ -70,7 +68,7 @@ export class AgentSessionJournal {
   private readonly readPublic = createJournalPublicReader()
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
-  private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
+  private onCommitted: Parameters<AgentSessionJournal['observeCommits']>[0] | null = null
   private readonly queue: JournalWriteQueue
   private readonly rowWriter: JournalCollaborators['rowWriter']
   private readonly epochController: JournalCollaborators['epochController']
@@ -117,8 +115,8 @@ export class AgentSessionJournal {
         this.queuedMessages.inputState()
         return this.projection.prepare(db, rows, savedAt)
       },
-      commit: (rows) => {
-        this.onCommitted?.(rows)
+      commit: (rows, _savedAt, inputChanged) => {
+        this.onCommitted?.(rows, inputChanged)
         this.projection.verify()
       },
       notifyCommitted: () => this.onCommitted?.([]),
@@ -175,7 +173,9 @@ export class AgentSessionJournal {
   }
 
   /** One nonthrowing listener; undefined rows mean adopted history, an empty array means metadata. */
-  observeCommits(listener: (rows?: readonly JournalRow[]) => void): () => void {
+  observeCommits(
+    listener: (rows?: readonly JournalRow[], inputChanged?: boolean) => void
+  ): () => void {
     const registered: typeof listener = (...args) => listener(...args)
     this.onCommitted = registered
     return () => {
@@ -228,7 +228,7 @@ export class AgentSessionJournal {
     runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 
   newestTurn = (): AgentJournalTurnLifecycle | null =>
-    newestStructuredAgentSessionTurnBySequence(this.state.items.values())
+    readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
   threadGoalSource = (): JournalThreadGoalSource =>
     journalThreadGoalSource(this.state.items.values())

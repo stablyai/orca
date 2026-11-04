@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { findTerminalTabIdForLeaf } from '../persistence/terminal-topology/terminal-topology-membership'
 
 function layout(...leafIds: string[]): TerminalLayoutSnapshot {

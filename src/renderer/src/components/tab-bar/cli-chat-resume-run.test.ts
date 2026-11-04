@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
+import type * as CloseTerminalModule from './cli-chat-resume-close-terminal'
 
 const mocks = vi.hoisted(() => {
   const state: { source: CliChatResumeSource | null } = { source: null }
@@ -19,13 +20,16 @@ const mocks = vi.hoisted(() => {
     frameDrawn: false
   }
 })
-vi.mock('./cli-chat-resume-close-terminal', () => ({
+vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
+  ...(await importOriginal<typeof CloseTerminalModule>()),
   closeCliChatResumeTerminal: mocks.closeTerminal
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: mocks.closeCapability,
+  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+    (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
@@ -99,7 +103,7 @@ import { useAppStore } from '@/store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,

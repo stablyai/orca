@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { buildStoreState, type StoreLike } from '../ipc-events-agent-status-store-test-fixtures'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 

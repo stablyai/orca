@@ -29,7 +29,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionCreateMessage: async () => true,
   supportsStructuredAgentSessionCreateOptionsMode: async () => true,
-  structuredAgentSessionHostSupports: async () => true
+  structuredAgentSessionHostSupports: async () => true,
+  structuredAgentSessionHostCapabilityState: async () => 'supported'
 }))
 
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({

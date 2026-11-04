@@ -1,3 +1,8 @@
+import {
+  preloadRuntimeImports,
+  verifyPreloadSource,
+  verifyPreloadOutput
+} from './preload-output-contract.mjs'
 import * as nodeFs from 'node:fs'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import * as nodePath from 'node:path'
@@ -6,12 +11,17 @@ import { tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import { PreloadConfigFactory } from 'electron-vite'
+import { build, resolveConfig } from 'vite'
+import { electronViteConfig } from '../../electron.vite.config'
 import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
+import { createSandboxedScriptBundlesPlugin } from '../build-plugins/sandboxed-script-bundles'
+import { MAIN_BUILD_ENTRY_POINTS } from '../build-plugins/main-build-entry-points'
 
 type BootstrapProcessMock = EventEmitter & {
   env: Record<string, string>
@@ -64,6 +74,105 @@ function failBootstrapWithBanner(options: {
 }
 
 describe('Electron Vite output contract', () => {
+  it('builds browser and document guest preloads without sandbox-inaccessible chunks', async () => {
+    const fixtureId = '\0sandbox-bundle-fixture'
+    const result = await build({
+      configFile: false,
+      logLevel: 'silent',
+      plugins: [
+        createSandboxedScriptBundlesPlugin(),
+        {
+          name: 'sandbox-bundle-fixture',
+          resolveId: (id) => (id === fixtureId ? fixtureId : null),
+          load: (id) => (id === fixtureId ? 'export default 0' : null)
+        }
+      ],
+      build: { write: false, rollupOptions: { input: fixtureId } }
+    })
+    const emitted = new Map<string, string>()
+    for (const bundle of Array.isArray(result) ? result : [result]) {
+      if ('output' in bundle) {
+        for (const asset of bundle.output) {
+          if (asset.type === 'asset' && typeof asset.source === 'string') {
+            emitted.set(asset.fileName, asset.source)
+          }
+        }
+      }
+    }
+    for (const name of ['browser-window-close-preload', 'doc-preview-link-preload']) {
+      expect(MAIN_BUILD_ENTRY_POINTS).not.toHaveProperty(name)
+      const source = emitted.get(`${name}.js`)
+      if (!source) {
+        throw new Error(`Missing guest preload ${name}`)
+      }
+      expect(await preloadRuntimeImports(source)).toEqual(['electron'])
+    }
+  })
+
+  it('bundles ordinary preload dependencies while retaining sandbox builtins', async () => {
+    expect(electronViteConfig.preload?.build?.externalizeDeps).toBe(false)
+    const preload = await new PreloadConfigFactory(electronViteConfig.preload ?? {}, {}, {}).build()
+    const resolved = await resolveConfig({ ...preload, configFile: false }, 'build')
+    const patterns = resolved.build.rolldownOptions.external
+    if (!Array.isArray(patterns)) {
+      throw new Error('Expected preload externals')
+    }
+    const external = (source: string) =>
+      patterns.some((pattern) =>
+        typeof pattern === 'string' ? pattern === source : pattern.test(source)
+      )
+    expect(external('electron')).toBe(true)
+    expect(external('node:fs')).toBe(true)
+    for (const name of ['smol-toml', 'smol-toml/package.json', 'zod']) {
+      expect(external(name)).toBe(false)
+    }
+  })
+
+  it('rejects unsupported lazy, dynamic, indirect and chunked sandbox output', async () => {
+    for (const source of [
+      'require("smol-toml")',
+      'require("./chunks/native-chat-visual-guest-theme.js")',
+      'function later(){ return require("node:fs") }',
+      'require(name)',
+      'const load = require; load("smol-toml")',
+      'import("smol-toml")',
+      'module.require("smol-toml")',
+      'const load = process.getBuiltinModule; load("fs")'
+    ]) {
+      await expect(verifyPreloadSource(source)).rejects.toThrow()
+    }
+    await expect(verifyPreloadSource('require("electron")')).rejects.toThrow('executable')
+    const root = mkdtempSync(join(tmpdir(), 'orca-preload-contract-'))
+    try {
+      nodeFs.mkdirSync(join(root, 'out', 'preload'), { recursive: true })
+      nodeFs.writeFileSync(join(root, 'out', 'preload', 'index.js'), '')
+      nodeFs.writeFileSync(join(root, 'out', 'preload', 'lazy.js'), '')
+      await expect(verifyPreloadOutput(root)).rejects.toThrow('one complete artifact')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('executes multibyte encoding and the restricted bridge with checked IPC results', async () => {
+    const source = `const {contextBridge, ipcRenderer} = require('electron');
+      const text = 'A🌊é中';
+      const encoded = new TextEncoder().encode(text);
+      if (Array.from(encoded).join(',') !== '65,240,159,140,138,195,169,228,184,173') {
+        throw new Error('Incorrect multibyte UTF-8 encoding');
+      }
+      if (new TextDecoder('utf-8', {fatal: true}).decode(encoded) !== text) {
+        throw new Error('Incorrect multibyte UTF-8 decoding');
+      }
+      contextBridge.exposeInMainWorld('api', {
+        app: {getIdentity: () => ipcRenderer.invoke('app:getIdentity')},
+        orcaProfiles: {list: () => ipcRenderer.invoke('orcaProfiles:list')}
+      });`
+    await expect(verifyPreloadSource(source)).resolves.toEqual({ imports: ['electron'] })
+    await expect(verifyPreloadSource(source.replace('app:getIdentity', 'wrong'))).rejects.toThrow(
+      'bridge result'
+    )
+  })
+
   it('exits when a static import fails before source error guards load', () => {
     const processMock = new EventEmitter() as EventEmitter & {
       exit: (code: number) => void

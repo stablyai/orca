@@ -1,4 +1,4 @@
-import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey, type PaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '../store'
 
 type TerminalLayoutsByTabId = ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']

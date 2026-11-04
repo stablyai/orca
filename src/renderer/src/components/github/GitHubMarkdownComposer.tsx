@@ -7,18 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { RichMarkdownToolbar } from '@/components/editor/RichMarkdownToolbar'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { RichMarkdownToolbar } from '@/components/editor/rich-markdown/commands/RichMarkdownToolbar'
 import {
   getLinkBubblePosition,
   RichMarkdownLinkBubble,
   type LinkBubbleState
-} from '@/components/editor/RichMarkdownLinkBubble'
-import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
-import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown-source-transport'
-import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markdown-selected-link-actions'
-import { copyRichMarkdownLink } from '@/components/editor/rich-markdown-link-clipboard'
-import { normalizeSoftBreaks } from '@/components/editor/rich-markdown-normalize'
+} from '@/components/editor/rich-markdown/links/RichMarkdownLinkBubble'
+import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/rich-markdown/raw-source/raw-markdown-html'
+import { createRichMarkdownEditorCodec } from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
+import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markdown/links/rich-markdown-selected-link-actions'
+import { copyRichMarkdownLink } from '@/components/editor/rich-markdown/links/rich-markdown-link-clipboard'
+import { normalizeSoftBreaks } from '@/components/editor/rich-markdown/schema/rich-markdown-normalize'
 import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
 import { GitHubMarkdownComposerEditorPane } from '@/components/github/GitHubMarkdownComposerEditorPane'
 import {
@@ -33,7 +33,7 @@ import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
-} from '@/components/editor/rich-markdown-spellcheck'
+} from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type GitHubMarkdownComposerProps = {

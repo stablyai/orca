@@ -1,4 +1,4 @@
-import { isAgentStatusFresh } from '../../shared/agent-status-freshness'
+import { isAgentStatusFresh } from '../../shared/agent-status/contracts/agent-status-freshness'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import {
   applyAgentPaneActivityFlags,

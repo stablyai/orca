@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { derivePipelineStatus, mapGitLabIssueInfo, mapMRInfo, mapMRState } from './mappers'
 import {
-  derivePipelineStatus,
-  mapGitLabIssueInfo,
-  mapMRInfo,
-  mapMRState,
-  mapPipelineJobStatusToCheckStatus,
-  mapPipelineJobStatusToConclusion
-} from './mappers'
+  mapGitLabPipelineJobStatusToCheckStatus as mapPipelineJobStatusToCheckStatus,
+  mapGitLabPipelineJobStatusToConclusion as mapPipelineJobStatusToConclusion
+} from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 
 describe('mapPipelineJobStatusToCheckStatus', () => {
   it('classifies queued lifecycle states', () => {

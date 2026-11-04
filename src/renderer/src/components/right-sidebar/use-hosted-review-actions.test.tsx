@@ -123,33 +123,111 @@ describe('useHostedReviewActions', () => {
     document.body.replaceChildren()
   })
 
-  it('refreshes stale eligibility after auto-merge fails while retaining the provider error', async () => {
-    const pr: PRInfo = {
-      number: review.number,
-      title: 'PR',
-      state: 'open',
-      url: 'https://github.com/stablyai/orca/pull/1015',
-      updatedAt: '2026-10-21T16:31:00Z',
-      mergeable: 'MERGEABLE',
-      mergeStateStatus: 'BLOCKED',
-      checksStatus: 'pending',
-      autoMergeAllowed: true,
-      prRepo
+  it.each(['merge', 'close', 'reopen'] as const)(
+    're-reads the PR after %s reports failure, keeping the write error',
+    async (action) => {
+      const error = 'Connection lost after GitHub accepted the request'
+      const write = action === 'merge' ? window.api.gh.mergePR : window.api.gh.updatePRState
+      vi.mocked(write).mockResolvedValue({ ok: false, error })
+      const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+      await renderHook(makeRepo(), onRefreshReview)
+
+      await act(async () => {
+        if (action === 'merge') {
+          await latest?.handleMerge()
+        } else if (action === 'close') {
+          await latest?.handleCloseReview()
+        } else {
+          await latest?.handleReopenReview()
+        }
+      })
+
+      expect(latest?.actionError).toBe(error)
+      expect(onRefreshReview).toHaveBeenCalledOnce()
+      expect(latest?.merging).toBe(false)
+      expect(latest?.stateUpdating).toBeNull()
     }
-    const error =
-      'Failed to enable auto-merge for pull request: gh: Pull request is in unstable status'
-    vi.mocked(window.api.gh.setPRAutoMerge).mockResolvedValue({ ok: false, error })
+  )
+
+  it.each(['response', 'transport'] as const)(
+    'refreshes stale eligibility after an auto-merge %s failure while retaining the provider error',
+    async (failure) => {
+      const pr: PRInfo = {
+        number: review.number,
+        title: 'PR',
+        state: 'open',
+        url: 'https://github.com/stablyai/orca/pull/1015',
+        updatedAt: '2026-10-21T16:31:00Z',
+        mergeable: 'MERGEABLE',
+        mergeStateStatus: 'BLOCKED',
+        checksStatus: 'pending',
+        autoMergeAllowed: true,
+        prRepo
+      }
+      const error =
+        'Failed to enable auto-merge for pull request: gh: Pull request is in unstable status'
+      if (failure === 'response') {
+        vi.mocked(window.api.gh.setPRAutoMerge).mockResolvedValue({ ok: false, error })
+      } else {
+        vi.mocked(window.api.gh.setPRAutoMerge).mockRejectedValue(new Error(error))
+      }
+      const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+      await renderHook(makeRepo(), onRefreshReview, pr)
+
+      await act(async () => {
+        await latest?.handleAutoMerge()
+      })
+
+      expect(latest?.actionError).toBe(error)
+      expect(latest?.merging).toBe(false)
+      expect(onRefreshReview).toHaveBeenCalledOnce()
+      expect(window.api.gh.mergePR).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['handleMerge', 'handleCloseReview'] as const)(
+    're-reads after %s loses its transport response',
+    async (action) => {
+      const error = 'Connection lost after GitHub accepted the request'
+      vi.mocked(window.api.gh.mergePR).mockRejectedValue(new Error(error))
+      vi.mocked(window.api.gh.updatePRState).mockRejectedValue(new Error(error))
+      const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+      await renderHook(makeRepo(), onRefreshReview)
+
+      await act(async () => {
+        await latest?.[action]()
+      })
+
+      expect(onRefreshReview).toHaveBeenCalledOnce()
+      expect(latest?.actionError).toBe(error)
+      expect(latest?.merging).toBe(false)
+      expect(latest?.stateUpdating).toBeNull()
+    }
+  )
+
+  it('does not report a failed merge when only its follow-up read fails', async () => {
     const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
-    await renderHook(makeRepo(), onRefreshReview, pr)
+    await renderHook(makeRepo(), onRefreshReview)
 
     await act(async () => {
-      await latest?.handleAutoMerge()
+      await latest?.handleMerge()
     })
 
-    expect(latest?.actionError).toBe(error)
-    expect(latest?.merging).toBe(false)
     expect(onRefreshReview).toHaveBeenCalledOnce()
-    expect(window.api.gh.mergePR).not.toHaveBeenCalled()
+    expect(latest?.actionError).toBeNull()
+    expect(latest?.merging).toBe(false)
+  })
+
+  it('does not write or re-read after a cancelled confirmation', async () => {
+    confirmationMocks.confirm.mockResolvedValue(false)
+    const { onRefreshReview } = await renderHook(makeRepo())
+
+    await act(async () => {
+      await latest?.handleCloseReview()
+    })
+
+    expect(window.api.gh.updatePRState).not.toHaveBeenCalled()
+    expect(onRefreshReview).not.toHaveBeenCalled()
   })
 
   it('routes runtime-owned GitHub PR merges through the runtime host', async () => {
@@ -249,30 +327,38 @@ describe('useHostedReviewActions', () => {
     expect(gitLabRefresh).toHaveBeenCalledTimes(1)
   })
 
-  it('retains a GitLab ready failure without reporting success or refreshing', async () => {
-    const error =
-      'Failed to update issue: GitLab could not mark the merge request ready. Try again.'
-    vi.mocked(window.api.gl.updateMR).mockResolvedValue({ ok: false, error })
-    const successToast = vi.spyOn(toast, 'success').mockReturnValue('ready-success')
-    const errorToast = vi.spyOn(toast, 'error').mockReturnValue('ready-error')
-    const { onRefreshReview } = await renderHook(makeRepo(), undefined, undefined, true)
+  it.each(['response', 'transport'] as const)(
+    're-reads after a GitLab ready %s failure without replacing the write error or reporting success',
+    async (failure) => {
+      const error =
+        'Failed to update issue: GitLab could not mark the merge request ready. Try again.'
+      if (failure === 'response') {
+        vi.mocked(window.api.gl.updateMR).mockResolvedValue({ ok: false, error })
+      } else {
+        vi.mocked(window.api.gl.updateMR).mockRejectedValue(new Error(error))
+      }
+      const successToast = vi.spyOn(toast, 'success').mockReturnValue('ready-success')
+      const errorToast = vi.spyOn(toast, 'error').mockReturnValue('ready-error')
+      const onRefreshReview = vi.fn().mockRejectedValue(new Error('refresh unavailable'))
+      await renderHook(makeRepo(), onRefreshReview, undefined, true)
 
-    await act(async () => {
-      await latest?.handleMarkReadyForReview()
-    })
+      await act(async () => {
+        await latest?.handleMarkReadyForReview()
+      })
 
-    expect(window.api.gl.updateMR).toHaveBeenCalledExactlyOnceWith({
-      repoPath: '/repo',
-      repoId: 'repo-1',
-      iid: 1015,
-      updates: { readyForReview: true }
-    })
-    expect(latest?.actionError).toBe(error)
-    expect(latest?.readying).toBe(false)
-    expect(errorToast).toHaveBeenCalledExactlyOnceWith(error)
-    expect(successToast).not.toHaveBeenCalled()
-    expect(onRefreshReview).not.toHaveBeenCalled()
-  })
+      expect(window.api.gl.updateMR).toHaveBeenCalledExactlyOnceWith({
+        repoPath: '/repo',
+        repoId: 'repo-1',
+        iid: 1015,
+        updates: { readyForReview: true }
+      })
+      expect(latest?.actionError).toBe(error)
+      expect(latest?.readying).toBe(false)
+      expect(errorToast).toHaveBeenCalledExactlyOnceWith(error)
+      expect(successToast).not.toHaveBeenCalled()
+      expect(onRefreshReview).toHaveBeenCalledOnce()
+    }
+  )
 
   it('gates runtime-owned GitLab ready mutations on the host capability', async () => {
     const gitLabRefresh = vi.fn().mockResolvedValue(undefined)

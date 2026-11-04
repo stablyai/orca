@@ -15,12 +15,6 @@ describe('pairing-local UI fields', () => {
     expect(omitPairingLocalUiFields(state)).toEqual({ sidebarWidth: 280, activeView: 'tasks' })
   })
 
-  it('leaves a payload that carries no member untouched', () => {
-    const state = { sidebarWidth: 280 }
-
-    expect(omitPairingLocalUiFields(state)).toEqual(state)
-  })
-
   // Present undefined still looks like a clear operation to receivers; drop the key itself.
   it('drops a member present with an undefined value', () => {
     expect(

@@ -9,15 +9,15 @@ import EditorViewToggle, {
   CUSTOM_EDITOR_SOURCE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA,
   SVG_VIEW_MODE_METADATA
-} from './EditorViewToggle'
-import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
+} from './view-mode/EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './view-mode/EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
-import { DiffNotesSendMenu } from './DiffNotesSendMenu'
+import { DiffNotesSendMenu } from './diff/review/DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
-import { useDiffNavigation } from './diff-navigation-context'
+import { useDiffNavigation } from './diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
@@ -98,7 +98,10 @@ export function EditorPanelHeader({
   onExportMarkdownToPdf,
   createArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
-  const { comments: diffComments } = useVisibleWorktreeDiffComments(activeFile.worktreeId)
+  const { owner: commentOwner, comments: diffComments } = useVisibleWorktreeDiffComments(
+    activeFile.worktreeId,
+    activeFile
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
@@ -184,6 +187,7 @@ export function EditorPanelHeader({
       )}
       {isSingleDiff && fileDiffComments.length > 0 && (
         <DiffNotesSendMenu
+          owner={commentOwner}
           worktreeId={activeFile.worktreeId}
           groupId={activeGroupId ?? activeFile.worktreeId}
           comments={diffComments}
