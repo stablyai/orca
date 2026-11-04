@@ -8,6 +8,7 @@ import pageAsyncStorage, {
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { hostOs } from '../platform/host-os'
 import { TERMINAL_ACCESSORY_KEYS } from '../terminal/terminal-accessory-keys'
 import { saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'
@@ -39,6 +40,7 @@ vi.mock('react-native', () => ({
   },
   Platform: { OS: 'ios' }
 }))
+vi.mock('../platform/host-os', () => ({ hostOs: vi.fn(() => 'ios') }))
 vi.mock('expo-router', async () => {
   const react = await import('react')
   return {
@@ -88,6 +90,7 @@ function sessionScope() {
     setTerminalTextScale: vi.fn(),
     terminalTextScaleRevisionRef: { current: 0 },
     setAutocompleteEnabled: vi.fn(),
+    setTerminalKeyboardResizeEnabled: vi.fn(),
     setTerminalLinkOpenMode: vi.fn(),
     setCustomKeys: vi.fn(),
     setVisibleBuiltInIds: vi.fn(),
@@ -105,6 +108,7 @@ function sessionScope() {
 
 let renderer: ReactTestRenderer | null = null
 beforeEach(() => {
+  vi.mocked(hostOs).mockReturnValue('ios')
   pageBridge.client = null
   shellGeometry.sideRail = false
   focusEffects.callbacks.clear()
@@ -119,52 +123,68 @@ afterEach(() => {
 })
 
 describe('saved session settings before the first render', () => {
-  it('waits for all terminal reads and keeps readiness while Settings changes apply in place', async () => {
-    const scale = deferred<string | null>()
-    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
-      if (key === 'orca:terminalTextScale') {
-        return scale.promise
+  it.each(['ios', 'android'] as const)(
+    'waits for terminal preferences and applies Settings changes in place on %s',
+    async (os) => {
+      vi.mocked(hostOs).mockReturnValue(os)
+      const keyboardResize = deferred<string | null>()
+      const scale = deferred<string | null>()
+      vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => {
+        if (key === 'orca:terminalTextScale') {
+          return scale.promise
+        }
+        if (key === 'orca:terminalKeyboardResizeEnabled') {
+          return keyboardResize.promise
+        }
+        if (key === 'orca:terminalAutocompleteEnabled') {
+          return 'true'
+        }
+        if (key === 'orca:terminalLinkOpenMode') {
+          return 'phone-browser'
+        }
+        return null
+      })
+      const scope = sessionScope()
+      let ready = false
+      function Harness() {
+        ready = useMobileSessionPreferenceFocus(scope).terminalPreferencesReady
+        return null
       }
-      if (key === 'orca:terminalAutocompleteEnabled') {
-        return 'true'
+      await act(async () => {
+        renderer = create(createElement(Harness))
+      })
+      expect(ready).toBe(false)
+      expect(scope.setAutocompleteEnabled).not.toHaveBeenCalled()
+      await act(async () => scale.resolve('1.25'))
+      if (os === 'android') {
+        expect(ready).toBe(false)
+        expect(scope.setTerminalTextScale).not.toHaveBeenCalled()
+        await act(async () => keyboardResize.resolve('true'))
+      } else {
+        expect(AsyncStorage.getItem).not.toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled')
       }
-      if (key === 'orca:terminalLinkOpenMode') {
-        return 'phone-browser'
-      }
-      return null
-    })
-    const scope = sessionScope()
-    let ready = false
-    function Harness() {
-      ready = useMobileSessionPreferenceFocus(scope).terminalPreferencesReady
-      return null
-    }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    expect(ready).toBe(false)
-    expect(scope.setAutocompleteEnabled).not.toHaveBeenCalled()
-    await act(async () => scale.resolve('1.25'))
-    expect(ready).toBe(true)
-    expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.25)
-    expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(true)
-    expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('phone-browser')
+      expect(scope.setTerminalKeyboardResizeEnabled).toHaveBeenLastCalledWith(os === 'android')
+      expect(ready).toBe(true)
+      expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.25)
+      expect(scope.setAutocompleteEnabled).toHaveBeenLastCalledWith(true)
+      expect(scope.setTerminalLinkOpenMode).toHaveBeenLastCalledWith('phone-browser')
 
-    const nextScale = deferred<string | null>()
-    vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
-      key === 'orca:terminalTextScale' ? nextScale.promise : Promise.resolve(null)
-    )
-    act(() => {
-      for (const [effect, cleanup] of focusEffects.callbacks) {
-        cleanup?.()
-        focusEffects.callbacks.set(effect, effect())
-      }
-    })
-    expect(ready).toBe(true)
-    await act(async () => nextScale.resolve('1.5'))
-    expect(ready).toBe(true)
-    expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.5)
-  })
+      const nextScale = deferred<string | null>()
+      vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
+        key === 'orca:terminalTextScale' ? nextScale.promise : Promise.resolve(null)
+      )
+      act(() => {
+        for (const [effect, cleanup] of focusEffects.callbacks) {
+          cleanup?.()
+          focusEffects.callbacks.set(effect, effect())
+        }
+      })
+      expect(ready).toBe(true)
+      await act(async () => nextScale.resolve('1.5'))
+      expect(ready).toBe(true)
+      expect(scope.setTerminalTextScale).toHaveBeenLastCalledWith(1.5)
+    }
+  )
 
   it('waits for custom keys and built-in layout before publishing accessory readiness', async () => {
     const keys = deferred<string | null>()

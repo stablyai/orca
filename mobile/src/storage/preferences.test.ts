@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readMirroredStorage, retainMirroredStorage } from './mirrored-storage-keys'
+import { pageStorageKeysForRoute } from '../mobile-web-shell/page-storage-keys'
 import {
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
@@ -8,6 +10,7 @@ import {
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
   loadPushNotificationsEnabled,
+  loadTerminalKeyboardResizeEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   readPushNotificationsPreference,
@@ -15,6 +18,7 @@ import {
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
   savePushNotificationsEnabled,
+  saveTerminalKeyboardResizeEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
@@ -391,6 +395,52 @@ describe('terminal autocomplete preference', () => {
 
     await expect(loadTerminalAutocompleteEnabled()).resolves.toBe(false)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAutocompleteEnabled', 'false')
+  })
+})
+
+describe('terminal keyboard resize preference', () => {
+  let releaseMirror: () => void
+  beforeEach(() => {
+    releaseMirror = retainMirroredStorage(
+      pageStorageKeysForRoute('host-1', '/h/host-1/session/wt-1')
+    )
+    stored.clear()
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+  afterEach(() => releaseMirror())
+
+  it('defaults to disabled when unset or unreadable', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled')
+
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+  })
+
+  it('loads and persists the selected boolean value', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('true')
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(true)
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(loadTerminalKeyboardResizeEnabled()).resolves.toBe(false)
+
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => stored.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      stored.set(key, value)
+    })
+    await saveTerminalKeyboardResizeEnabled(true)
+    expect(
+      readMirroredStorage(pageStorageKeysForRoute('host-1', '/h/host-1/session/wt-1'))
+    ).toMatchObject({ 'orca:terminalKeyboardResizeEnabled': 'true' })
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled', 'true')
+
+    await saveTerminalKeyboardResizeEnabled(false)
+    expect(
+      readMirroredStorage(pageStorageKeysForRoute('host-1', '/h/host-1/session/wt-1'))
+    ).toMatchObject({ 'orca:terminalKeyboardResizeEnabled': 'false' })
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalKeyboardResizeEnabled', 'false')
   })
 })
 

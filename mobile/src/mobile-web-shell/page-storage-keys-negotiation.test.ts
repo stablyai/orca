@@ -41,7 +41,11 @@ const LegacyInitStorageSchema = z.object({
 const LegacyReadySchema = z.object({ v: versionSchema, type: z.literal('ready') })
 
 const SPLIT_KEY = 'orca:terminalSplitLayout'
-const STORAGE = { [SPLIT_KEY]: 'stacked', 'orca:pins:host-a': '["wt-1"]' }
+const STORAGE = {
+  [SPLIT_KEY]: 'stacked',
+  'orca:terminalKeyboardResizeEnabled': 'true',
+  'orca:pins:host-a': '["wt-1"]'
+}
 
 function lastInit(posted: readonly string[]): Record<string, unknown> {
   const init = posted

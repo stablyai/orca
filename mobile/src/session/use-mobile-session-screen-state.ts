@@ -43,6 +43,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const terminalTextScaleRevisionRef = useRef(0)
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  // Why: Android-only opt-in to shrink the terminal and refit PTY rows while the IME is open; reloaded on focus like autocomplete.
+  const [terminalKeyboardResizeEnabled, setTerminalKeyboardResizeEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
     useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
@@ -113,7 +115,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
-  // Expo edge-to-edge keeps window size on IME open; lift input from keyboard height without resizing the desktop PTY.
+  // Edge-to-edge windows keep their height on IME open; position the input using the measured keyboard height.
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
@@ -149,6 +151,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminalTextScaleRevisionRef,
     autocompleteEnabled,
     setAutocompleteEnabled,
+    terminalKeyboardResizeEnabled,
+    setTerminalKeyboardResizeEnabled,
     terminalLinkOpenMode,
     setTerminalLinkOpenMode,
     liveInputCapture,

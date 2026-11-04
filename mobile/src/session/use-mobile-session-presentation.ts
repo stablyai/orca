@@ -7,7 +7,10 @@ import {
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
-import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
+import {
+  isTerminalPhoneDisplayMode,
+  MOBILE_SESSION_STATUS_LABELS
+} from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
@@ -34,7 +37,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creatingBrowser,
     creatingMarkdown,
     keyboardHeight,
+    terminalKeyboardResizeEnabled,
     terminalKeyboardMetrics,
+    terminalModes,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
@@ -42,6 +47,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     getTerminalPaneViewport,
     handleCreateTerminal,
     visibleTabs,
+    showNativeChat,
     forceReconnectHost
   } = scope
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
@@ -107,16 +113,24 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? Math.max(0, keyboardHeight - dockBottomInset)
         : keyboardHeight
       : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight:
-      (activeHandle
-        ? getTerminalPaneViewport?.(activeHandle).terminalFrameRef.current?.height
-        : null) ??
-      terminalFrameRef.current?.height ??
-      0
-  })
+  // The shared frame can shrink only when every visible pane uses phone dimensions.
+  const terminalKeyboardResizeActive =
+    terminalKeyboardResizeEnabled &&
+    (scope.terminalSplitActive ? scope.visibleTerminalHandles : [activeHandle]).every((handle) =>
+      isTerminalPhoneDisplayMode(handle, terminalModes)
+    )
+  const activeTerminalKeyboardLift = terminalKeyboardResizeActive
+    ? 0
+    : computeActiveTerminalKeyboardLift({
+        keyboardLift,
+        metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
+        terminalFrameHeight:
+          (activeHandle
+            ? getTerminalPaneViewport?.(activeHandle).terminalFrameRef.current?.height
+            : null) ??
+          terminalFrameRef.current?.height ??
+          0
+      })
   const reducedMotion = useReducedMotionEnabled()
   const toastRise = useMemo(
     () =>
@@ -132,6 +146,12 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }, { translateY: toastRise }]
   }
+  // Why: with keyboard resize the dock's padding already lifts the terminal frame's bottom above the IME; native chat hides that dock.
+  const terminalToastLift = terminalKeyboardResizeActive && !showNativeChat ? 0 : keyboardLift
+  const terminalToastAnimatedStyle = {
+    opacity: toastOpacityRef.current,
+    transform: [{ translateY: -terminalToastLift }, { translateY: toastRise }]
+  }
   return {
     presentedConnState,
     showLoadingState,
@@ -143,7 +163,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     terminalSummary,
     keyboardLift,
     activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    terminalKeyboardResizeActive,
+    toastAnimatedStyle,
+    terminalToastAnimatedStyle
   }
 }
 

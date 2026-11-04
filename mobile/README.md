@@ -2,6 +2,8 @@
 
 React Native companion app for Orca. Monitor worktrees, view terminal output, and send commands from your phone.
 
+Terminal preferences, including Android keyboard resizing, are documented in the [mobile guide](../docs/site/content/docs/mobile.mdx).
+
 Local development uses two processes:
 
 - Orca desktop/Electron from the repo root. This hosts the mobile WebSocket RPC server on port `6768`.
