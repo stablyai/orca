@@ -12,7 +12,10 @@ import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { resolveAuthorizedPath } from '../../../ipc/filesystem/access/filesystem-auth'
+import {
+  PATH_ACCESS_DENIED_MESSAGE,
+  resolveAuthorizedPath
+} from '../../../ipc/filesystem/access/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
 import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
 import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
@@ -98,9 +101,25 @@ export class RuntimeFileWatches {
     }
     // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
     if (!connectionId && process.platform !== 'win32') {
+      const resolvedRootPath = await this.resolveRemovalTeardownPath(rootPath)
+      if (resolvedRootPath !== null) {
+        await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
+      }
+    }
+  }
+
+  /** A denied path cannot hold a watcher — installs authorize first, and removal may
+   *  already have unregistered this worktree in Git (#37902). Failing here would fail
+   *  the whole removal after Git succeeded, and outside roots read as "not authorized". */
+  private async resolveRemovalTeardownPath(rootPath: string): Promise<string | null> {
+    try {
       // Failed setup may still own a child without having published a lease-release callback.
-      const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
-      await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
+      return await resolveAuthorizedPath(rootPath, this.host.requireStore())
+    } catch (error) {
+      if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
+        return null
+      }
+      throw error
     }
   }
 
