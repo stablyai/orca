@@ -1,7 +1,9 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 export const NODE_TEST_PROJECT = 'mobile/tsconfig.test.node.json'
@@ -40,35 +42,20 @@ export function rootTypeAwareLintArgs(root = repoRoot) {
   ]
 }
 
-// Inputs of the bodies' declaration-owned lint besides phone and desktop sources: its program and rules.
-const CONTRACT_LINT_TOOL_FILES = new Set([
-  'tsconfig.json',
-  'package.json',
-  'pnpm-lock.yaml',
-  'config/tsconfig.test.mobile-host-declarations.json',
-  'config/tsconfig.test.pane-launch.json',
-  CONTRACT_LINT_CONFIG,
-  'config/scripts/oxc-cli-invocation.mjs',
-  'config/scripts/oxlint-cli-invocation.mjs',
-  'config/scripts/phone-host-contract-bodies.mjs',
-  'config/scripts/run-typecheck-projects-in-parallel.mjs'
-])
-
-export function needsMobileDependencies(changedFiles, root = repoRoot) {
-  // Changed-mobile type-aware lint needs mobile/node_modules: root-only install resolves mobile types as error and produces phantom findings.
-  // The contract bodies' lint needs both declaration producers, so its desktop inputs need the phone install too.
-  if (changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))) {
-    return true
-  }
-  const bodies = new Set(readNodeTestBodies(root))
-  return changedFiles.some(
-    (file) =>
-      (file.startsWith('src/') && !/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(file)) ||
-      bodies.has(file) ||
-      CONTRACT_LINT_TOOL_FILES.has(file)
-  )
-}
-
+// `--run <paths and flags>` runs the root type-aware pass itself, for CI and the local audit alike.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  console.log(rootTypeAwareLintArgs().join('\n'))
+  const args = rootTypeAwareLintArgs()
+  if (!args.some((arg) => arg.startsWith('--ignore-pattern='))) {
+    throw new Error(`No contract bodies derived from ${NODE_TEST_PROJECT}`)
+  }
+  if (process.argv[2] !== '--run') {
+    console.log(args.join('\n'))
+  } else {
+    const { command, prefixArgs } = resolveOxlintInvocation(repoRoot)
+    const result = spawnSync(command, [...prefixArgs, ...args, ...process.argv.slice(3)], {
+      cwd: repoRoot,
+      stdio: 'inherit'
+    })
+    process.exit(result.status ?? 1)
+  }
 }

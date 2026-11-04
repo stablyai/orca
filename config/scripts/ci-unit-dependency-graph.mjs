@@ -160,7 +160,8 @@ export function buildUnitDependencyGraph(
   }
 }
 
-export function collectUnitDependencyGraph(root = process.cwd()) {
+// Without ownership the graph is only import edges, for callers that need reachability alone.
+export function collectUnitDependencyGraph(root = process.cwd(), { ownership: owned = true } = {}) {
   const files = globSync(
     ['src', 'config', 'tests'].map(
       (directory) => `${directory}/**/*.{${SOURCE_EXTENSIONS.join(',')}}`
@@ -171,7 +172,7 @@ export function collectUnitDependencyGraph(root = process.cwd()) {
     files.map((file) => [file.replaceAll('\\', '/'), readFileSync(join(root, file), 'utf8')])
   )
   const workspace = createWorkspaceSourceResolver(root)
-  let ownership = readUnitInputOwnership(root)
+  let ownership = owned ? readUnitInputOwnership(root) : []
   const dependencyInputs = new Map()
   try {
     for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {

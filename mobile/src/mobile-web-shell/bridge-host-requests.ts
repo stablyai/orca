@@ -62,7 +62,7 @@ export class BridgeHostRequests {
     return true
   }
 
-  // Replay the exact argument arity for the golden recorder. Fence native requests here; native subscriptions are fenced separately in handleSubscribe.
+  // Forward the page's method, params and options; ordinary requests add only the local pre-send fence. Fence native requests here; native subscriptions are fenced separately in handleSubscribe.
   private forward(message: RequestMessage, record: PendingRequest): Promise<RpcResponse> {
     const { client } = this.deps
     if (isBridgeNativeMethod(message.method)) {
