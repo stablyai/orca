@@ -14,7 +14,6 @@ import {
   createPathExistenceBatch,
   requirePathExistenceResults
 } from '../../../../src/shared/path-existence-batch'
-import type { Repo } from '../../../../src/shared/repo-types'
 import { resolveTerminalFileLink } from '../../../../src/shared/terminal/links/terminal-links'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import {
@@ -22,6 +21,7 @@ import {
   type MobileMarkdownLinks
 } from '../../components/mobile-markdown-links-context'
 import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
 import type { ConnectionState } from '../../transport/types'
@@ -40,7 +40,7 @@ const chatPathsExistRead = bindDeferredRpcOperation(
 
 /** Paths in a chat's text, checked in batches against the chat's workspace on its host. */
 export function createMobileNativeChatFileLinkExistence(
-  client: RpcClient,
+  client: RpcOperationSender,
   worktreeId: string,
   worktreePath: string
 ): NativeChatFileLinkExistence {
@@ -77,7 +77,14 @@ export function createMobileNativeChatFileLinkExistence(
   })
 }
 
-type RepoLinkFields = Pick<Repo, 'id' | 'upstream' | 'issueSourcePreference'>
+// Only the fields the `#123` rule reads; a malformed remote leaves refs as text.
+const repoLinkFieldsSchema = z.looseObject({
+  id: z.string(),
+  upstream: z
+    .looseObject({ owner: z.string(), repo: z.string(), host: z.string().optional() })
+    .nullish(),
+  issueSourcePreference: z.enum(['upstream', 'origin', 'auto']).optional()
+})
 
 async function loadGitHubReferenceRepo(
   client: RpcClient,
@@ -91,8 +98,8 @@ async function loadGitHubReferenceRepo(
     return null
   }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const repo = (repos.value as RepoLinkFields[]).find((candidate) => candidate.id === repoId)
-  return repo ? githubReferenceRepo(repo, githubRepoIdentityKey(slug.result)) : null
+  const repo = repoLinkFieldsSchema.safeParse(repos.value.find((row) => row.id === repoId))
+  return repo.success ? githubReferenceRepo(repo.data, githubRepoIdentityKey(slug.result)) : null
 }
 
 /** One per chat: file-path existence and the repo bare `#123` refs point to. */

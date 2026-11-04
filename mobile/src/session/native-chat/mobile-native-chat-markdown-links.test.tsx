@@ -1,12 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { MobileMarkdown } from '../../components/MobileMarkdown'
 import {
   MobileMarkdownLinksContext,
   type MobileMarkdownLinks
 } from '../../components/mobile-markdown-links-context'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcResponse } from '../../transport/types'
 import { createMobileNativeChatFileLinkExistence } from './use-mobile-native-chat-markdown-links'
 
 const openURL = vi.fn((_url: string) => Promise.resolve())
@@ -62,13 +64,16 @@ async function renderChat(content: string, links: MobileMarkdownLinks, onOpenFil
 }
 
 it('links only workspace paths the host confirms, asking once for the whole reply', async () => {
-  const sendRequest = vi.fn(async (_method: string, params: { relativePaths: string[] }) => ({
-    id: '1',
-    ok: true,
-    result: params.relativePaths.map((path) => ({ exists: path === 'src/app.ts' })),
-    _meta: { runtimeId: 'runtime-1' }
-  }))
-  const client = { sendRequest } as unknown as RpcClient
+  const sendRequest = vi.fn(async (_method: string, params?: unknown): Promise<RpcResponse> => {
+    const { relativePaths } = z.object({ relativePaths: z.array(z.string()) }).parse(params)
+    return {
+      id: '1',
+      ok: true,
+      result: relativePaths.map((path) => ({ exists: path === 'src/app.ts' })),
+      _meta: { runtimeId: 'runtime-1' }
+    }
+  })
+  const client: RpcOperationSender = { sendRequest }
   const fileLinks = createMobileNativeChatFileLinkExistence(client, 'repo-1::/work', '/work')
   const onOpenFile = vi.fn()
 
