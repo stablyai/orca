@@ -1913,7 +1913,7 @@
       "providerRetrying": "{{agent}} ist auf ein vorübergehendes Problem gestoßen und versucht es erneut.",
       "providerRetryingQuoted": "{{agent}} versucht es erneut: {{detail}}.",
       "providerStartFailed": "{{agent}} wurde beendet, bevor der Start abgeschlossen war.",
-      "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden. Mit „An einen anderen Agenten übergeben“ auf dem Desktop eine neue Sitzung starten.",
+      "savedConversationMissing": "{{agent}} konnte den gespeicherten Verlauf dieses Chats nicht finden. Du kannst diese Agentensitzung an eine neue Sitzung übergeben.",
       "queueFull": "Zu viele Nachrichten warteten auf den Agenten, daher wurde diese Nachricht nicht gesendet.",
       "quitTerminalAgent": "Diesen Agenten beenden, um den Chat hier fortzusetzen.",
       "runCommandAgain": "/{{command}} erneut ausführen.",

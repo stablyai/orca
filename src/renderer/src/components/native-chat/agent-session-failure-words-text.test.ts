@@ -34,7 +34,7 @@ describe('desktop words for a failure fact', () => {
         sayAgentSessionFailureTranslated
       )
     ).toBe(
-      "Claude couldn't find this chat's saved conversation. Use Hand Off to Another Agent on desktop to start a new session."
+      "Claude couldn't find this chat's saved conversation. You can hand this agent session off to a new session."
     )
   })
 

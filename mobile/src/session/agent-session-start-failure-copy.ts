@@ -8,7 +8,7 @@ export const START_FAILURE_COPY = {
   savedConversationMissing: (values) =>
     translate(
       'session.failure.savedConversationMissing',
-      "{{agent}} couldn't find this chat's saved conversation. Use Hand Off to Another Agent on desktop to start a new session.",
+      "{{agent}} couldn't find this chat's saved conversation. You can hand this agent session off to a new session.",
       values
     ),
   theAgent: (values) => translate('session.failure.theAgent', 'The agent', values),

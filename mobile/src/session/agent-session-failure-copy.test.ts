@@ -14,6 +14,6 @@ it('points to the desktop hand-off while keeping a missing conversation diagnost
       sayMobileAgentSessionFailure
     )
   ).toBe(
-    "Claude couldn't find this chat's saved conversation. Use Hand Off to Another Agent on desktop to start a new session."
+    "Claude couldn't find this chat's saved conversation. You can hand this agent session off to a new session."
   )
 })
