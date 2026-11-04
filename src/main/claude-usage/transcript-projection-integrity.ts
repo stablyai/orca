@@ -51,6 +51,12 @@ export function* iterateClaudeUsageProjectionIntegrity(
     file.ownedDedupeKeys.length,
     state.ownedTokenMaxima.length
   ])
+  if (file.hasCrossFileCorrections) {
+    append(['cross-file-corrections', true])
+  }
+  if (file.ownedTokenDigest !== undefined) {
+    append(['owned-token-digest', file.ownedTokenDigest])
+  }
   for (let index = 0; index < file.ownedDedupeKeys.length; index++) {
     append([file.ownedDedupeKeys[index], state.ownedTokenMaxima[index]])
     if ((index + 1) % CLAUDE_USAGE_VALIDATION_BATCH_ROWS === 0) {
