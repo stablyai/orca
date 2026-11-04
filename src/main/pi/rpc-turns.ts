@@ -249,7 +249,7 @@ export class PiRpcTurns {
     this.revision++
     this.idleCheck.dispose()
     this.delivery.end()
-    this.compaction.end()
+    this.compaction.release()
   }
 
   private awaitingRunTrigger = false

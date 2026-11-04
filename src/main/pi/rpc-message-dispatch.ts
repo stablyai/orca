@@ -52,7 +52,7 @@ export async function dispatchPiRpcMessage(
       )
     }
   }
-  await session.turns.compaction.ended(input.signal)
+  await session.turns.compaction.waitForEnd(input.signal)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()

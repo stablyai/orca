@@ -29,17 +29,22 @@ export class PiRpcCompaction {
   }
 
   end(result?: unknown): ProviderTimelineEvent[] {
-    this.current?.resolve()
-    this.current = undefined
+    this.release()
     this.context.compacted(result)
     return [{ type: 'activity', text: null }]
   }
 
   /** Pi refuses prompts during a requested compaction; like Pi's own TUI, sends wait for any. */
-  async ended(signal?: AbortSignal): Promise<void> {
+  async waitForEnd(signal?: AbortSignal): Promise<void> {
     while (this.current) {
       await waitForPromiseWithSignal(this.current.promise, signal)
     }
+  }
+
+  /** Lets waiting sends go when the session ends mid-compaction. */
+  release(): void {
+    this.current?.resolve()
+    this.current = undefined
   }
 }
 
