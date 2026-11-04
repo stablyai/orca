@@ -9,7 +9,7 @@ import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/s
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/unhandled-provider-frame'
 import { relightsProviderTimelineBackgroundTask } from './provider-timeline-background-tasks'
-import { providerTimelineEntryBytes, providerTimelinePlacement } from './provider-timeline-context'
+import { providerTimelinePlacement } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
   ProviderTimelineDecision,
@@ -85,14 +85,7 @@ export function decideItem(
     return { dropped: 'item-settled' }
   }
   const obligation = change !== 'close' && requiresTerminalSettlement(event.body)
-  const bytes = providerTimelineEntryBytes({
-    key: event.item,
-    join: event.join,
-    body: event.body,
-    producer: event.producer
-  })
   return {
-    ...(obligation ? { hold: { key, bytes } } : {}),
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, event.body),
@@ -109,7 +102,7 @@ export function decideItem(
       if (change === 'close') {
         next.close(key, placed)
       } else if (obligation) {
-        next.items.set(key, { kind: 'item', row, turnItemId: placed, bytes, closed: false })
+        next.items.set(key, { kind: 'item', row, turnItemId: placed, closed: false })
       } else if (change === 'open' || next.items.get(key)?.closed !== true) {
         next.items.delete(key)
       }
@@ -130,21 +123,13 @@ export function decideRequest(
   }
   const scope = providerTimelinePlacement(context, state, event.join)
   const turn = turnOf(scope)
-  const bytes = providerTimelineEntryBytes({
-    key: event.request,
-    join: event.join,
-    body: event.body,
-    producer: event.producer
-  })
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
     row: null,
     turnItemId: turn,
-    bytes,
     closed: false
   }
   return {
-    hold: { key, bytes },
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(

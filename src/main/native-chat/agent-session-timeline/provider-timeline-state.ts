@@ -35,8 +35,7 @@ export type ProviderTimelineOpenItem = {
   /** Request rows are chosen later by their queued write. */
   row: ProviderTimelineRowId | null
   turnItemId: string | null
-  bytes: number
-  /** Closed items hold no budget; reopen permits new work. */
+  /** Reopening permits new work; closed keys suppress duplicate terminal events. */
   closed: boolean
 }
 
@@ -102,7 +101,7 @@ export class ProviderTimelineState {
 
   close(key: string, turnItemId: string | null): void {
     this.items.delete(key)
-    this.items.set(key, { kind: 'item', row: null, turnItemId, bytes: 0, closed: true })
+    this.items.set(key, { kind: 'item', row: null, turnItemId, closed: true })
     const closed = [...this.items].filter(([, entry]) => entry.closed)
     for (const [oldest] of closed.slice(0, Math.max(0, closed.length - MAX_CLOSED_ITEMS))) {
       this.items.delete(oldest)
