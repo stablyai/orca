@@ -5,6 +5,8 @@ import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-lin
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
+import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
+import type { CommentMarkdownLinkClickHandler } from '../sidebar/CommentMarkdown'
 import {
   nativeChatTurnDiffEditFile,
   NATIVE_CHAT_TURN_DIFF_FILE_LIMIT,
@@ -12,7 +14,13 @@ import {
   type NativeChatTurnDiffFile
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
-function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
+function TurnDiffFilePatches({
+  file,
+  onLinkClick
+}: {
+  file: NativeChatTurnDiffFile
+  onLinkClick?: CommentMarkdownLinkClickHandler
+}): React.JSX.Element {
   return (
     <div className="pl-2">
       {file.edits.map((edit) => {
@@ -21,6 +29,7 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
           <NativeChatDiffCard
             key={`${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
             file={patch}
+            onLinkClick={onLinkClick}
             initialOpen
             disclosureKey={`turn-diff-card:${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
           />
@@ -30,7 +39,14 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
   )
 }
 
-function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
+function TurnDiffFileRow({
+  file,
+  onLinkClick
+}: {
+  file: NativeChatTurnDiffFile
+  onLinkClick?: CommentMarkdownLinkClickHandler
+}): React.JSX.Element {
+  const name = nativeChatEditFileBaseName(file.path)
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
   return (
@@ -40,25 +56,30 @@ function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.
         size="xs"
         className="w-full min-w-0 justify-start"
         aria-expanded={open}
+        aria-label={`${file.path} +${file.added} -${file.removed}`}
+        title={file.path}
         onClick={() => setOpen(!open)}
       >
         <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
-        <span className="min-w-0 truncate font-mono" title={file.path}>
-          {file.path}
+        <span className="max-w-2/3 shrink-0 truncate font-mono text-chat-foreground">{name}</span>
+        <span aria-hidden className="min-w-0 flex-1 truncate text-right font-mono">
+          {file.path.slice(0, -name.length)}
         </span>
         <DiffLineCounts added={file.added} removed={file.removed} />
       </Button>
       <NativeChatExpandable open={open}>
-        <TurnDiffFilePatches file={file} />
+        <TurnDiffFilePatches file={file} onLinkClick={onLinkClick} />
       </NativeChatExpandable>
     </div>
   )
 }
 
 export function NativeChatTurnDiffRollup({
-  diff
+  diff,
+  onLinkClick
 }: {
   diff: NativeChatTurnDiff
+  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
     `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
@@ -82,15 +103,13 @@ export function NativeChatTurnDiffRollup({
       </div>
       <div className="space-y-1">
         {files.map((file) => (
-          <TurnDiffFileRow key={file.path} file={file} />
+          <TurnDiffFileRow key={file.path} file={file} onLinkClick={onLinkClick} />
         ))}
         {remaining > 0 ? (
           <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>
-            {translate(
-              'components.native-chat.turnDiff.showMoreFiles',
-              'Show {{count}} more files',
-              { count: remaining }
-            )}
+            {translate('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+              count: remaining
+            })}
           </Button>
         ) : null}
       </div>

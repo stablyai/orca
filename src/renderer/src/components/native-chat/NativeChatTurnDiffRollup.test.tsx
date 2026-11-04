@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { session } from './native-chat-windowing-test-harness'
+import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
 
 const messages: NativeChatMessage[] = [
   {
@@ -52,14 +52,26 @@ const messages: NativeChatMessage[] = [
     blocks: [{ type: 'text', text: 'Updated the greeting.' }]
   }
 ]
-afterEach(cleanup)
+let restoreLayout = (): void => {}
+let restoreResizeObserver = (): void => {}
+beforeEach(() => {
+  restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
+  restoreResizeObserver = stubResizeObserver()
+})
+afterEach(() => {
+  cleanup()
+  restoreResizeObserver()
+  restoreLayout()
+})
 
 it('keeps landed files visible after work folds, opens a patch in one click and survives history remount', () => {
+  const onLinkClick = vi.fn()
   const view = (working: boolean) => (
     <NativeChatMessageList
       session={session(messages)}
       isWorking={working}
       expandSignal={false}
+      onLinkClick={onLinkClick}
       settledTurns={working ? undefined : new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
     />
   )
@@ -71,6 +83,9 @@ it('keeps landed files visible after work folds, opens a patch in one click and 
   expect(screen.queryByText('helloNew()')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /\/repo\/greeting.ts/ }))
   expect(screen.getByText('helloOld()')).toBeVisible()
+  expect(screen.getByText('helloNew()')).toBeVisible()
+  fireEvent.click(screen.getByRole('link', { name: '/repo/greeting.ts' }))
+  expect(onLinkClick).toHaveBeenCalledTimes(1)
   expect(screen.getByText('helloNew()')).toBeVisible()
   expect(screen.queryByText('statusNew()')).toBeNull()
   unmount()
@@ -101,6 +116,6 @@ it('mounts a bounded file prefix and no patch bodies until a file is selected', 
   expect(screen.getByText('new-0')).toBeVisible()
   expect(screen.queryByText('new-1')).toBeNull()
   expect(container.querySelectorAll('[data-native-chat-code-content]')).toHaveLength(1)
-  fireEvent.click(screen.getByRole('button', { name: /Show 180 more files/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Show 180 more/ }))
   expect(screen.getByRole('button', { name: /file-199.ts/ })).toBeVisible()
 })

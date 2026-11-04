@@ -19729,10 +19729,9 @@
       },
       "turnDiff": {
         "partial": "Partial diff",
-        "showDiff": "Show diff",
-        "hideDiff": "Hide diff",
         "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "changedFiles_other": "{{count}} changed files",
+        "showMoreFiles": "Show {{count}} more"
       },
       "receipt": {
         "unavailable": "Selected answer unavailable",

@@ -13,6 +13,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { colors, pressedStyle, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { toolType } from './mobile-native-chat-tool-styles'
+import { nativeChatEditFileBaseName } from '../../../../../src/shared/native-chat/tools/native-chat-edit-model'
 
 function FileRow({
   file,
@@ -28,11 +29,13 @@ function FileRow({
     false
   )
   const type = toolType(fontScale)
+  const name = nativeChatEditFileBaseName(file.path)
   return (
     <View>
       <Pressable
         style={({ pressed }) => [styles.file, pressed && pressedStyle]}
         accessibilityRole="button"
+        accessibilityLabel={file.path}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(!open)}
       >
@@ -42,7 +45,10 @@ function FileRow({
           style={open ? styles.open : undefined}
         />
         <Text style={[styles.path, type.meta]} numberOfLines={1}>
-          {file.path}
+          {name}
+        </Text>
+        <Text style={[styles.directory, type.meta]} numberOfLines={1}>
+          {file.path.slice(0, -name.length)}
         </Text>
         <Text style={[styles.added, type.meta]}>+{file.added}</Text>
         <Text style={[styles.removed, type.meta]}>-{file.removed}</Text>
@@ -113,7 +119,7 @@ export function MobileNativeChatTurnDiffRollup({
           onPress={() => setShowAll(true)}
         >
           <Text style={[styles.label, type.meta]}>
-            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more files', {
+            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
               count: remaining
             })}
           </Text>
@@ -140,7 +146,8 @@ const styles = themedStyleSheet(() => ({
     gap: spacing.sm,
     paddingVertical: spacing.sm
   },
-  path: { flexShrink: 1, color: colors.textPrimary },
+  path: { maxWidth: '65%', flexShrink: 1, color: colors.textPrimary },
+  directory: { flex: 1, color: colors.textMuted },
   label: { color: colors.textMuted },
   added: { color: colors.gitDecorationAdded },
   removed: { color: colors.gitDecorationDeleted },

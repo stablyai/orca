@@ -1,5 +1,4 @@
 import './mobile-agent-message-renderer.test-fixture'
-import { proseRenderCount } from './mobile-agent-message-renderer.test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -7,6 +6,12 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat/na
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatRowContent } from './MobileNativeChatRowItemSource'
 import { findAllByHostType } from '../../../test-support/react-test-renderer-host-nodes'
+import { MobileNativeChatTurnDiffRollup } from './MobileNativeChatTurnDiffRollup'
+
+vi.mock('./MobileNativeChatTurnDiffRollup', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./MobileNativeChatTurnDiffRollup')>()
+  return { ...actual, MobileNativeChatTurnDiffRollup: vi.fn(actual.MobileNativeChatTurnDiffRollup) }
+})
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
@@ -100,15 +105,15 @@ it('shows finished-turn files outside folded work and opens a patch with one tap
   act(() => {
     renderer = create(createElement(Transcript, { working: true }))
   })
-  expect(textIn(renderer!.root)).toContain('/repo/greeting.ts')
+  expect(textIn(renderer!.root)).toContain('greeting.ts')
   act(() => {
     renderer!.update(createElement(Transcript))
   })
-  expect(textIn(renderer!.root)).toContain('/repo/greeting.ts')
+  expect(textIn(renderer!.root)).toContain('greeting.ts')
   expect(textIn(renderer!.root)).not.toContain('diagnostic-output')
   expect(textIn(renderer!.root)).not.toContain('helloNew()')
-  const file = findAllByHostType(renderer!.root, 'Pressable').find((node) =>
-    textIn(node).includes('/repo/greeting.ts')
+  const file = findAllByHostType(renderer!.root, 'Pressable').find(
+    (node) => node.props.accessibilityLabel === '/repo/greeting.ts'
   )!
   act(() => file.props.onPress())
   expect(textIn(renderer!.root)).toContain('helloNew()')
@@ -132,7 +137,8 @@ it.each([10, 100])(
     act(() => {
       renderer = create(createElement(Transcript, { rows }))
     })
-    const before = proseRenderCount()
+    const outcome = vi.mocked(MobileNativeChatTurnDiffRollup)
+    const before = outcome.mock.calls.length
     const last = rows.at(-1)!
     const updated = [
       ...rows.slice(0, -1),
@@ -141,6 +147,31 @@ it.each([10, 100])(
     act(() => {
       renderer!.update(createElement(Transcript, { rows: updated }))
     })
-    expect(proseRenderCount() - before).toBe(1)
+    expect(outcome.mock.calls.length - before).toBe(0)
+    const changed = updated.map((message) =>
+      message.id === `${count - 1}:edit`
+        ? {
+            ...message,
+            blocks: message.blocks.map((block) =>
+              block.type === 'tool-call' && block.name === 'Edit'
+                ? {
+                    ...block,
+                    input: {
+                      file_path: '/repo/greeting.ts',
+                      old_string: 'helloOld()',
+                      new_string: 'helloNewest()'
+                    }
+                  }
+                : block
+            )
+          }
+        : message
+    )
+    act(() => {
+      renderer!.update(createElement(Transcript, { rows: changed }))
+    })
+    expect(outcome.mock.calls.length - before).toBe(1)
+    const latest = outcome.mock.calls.at(-1)![0].diff
+    expect(latest.files.map((file) => file.path)).toContain('/repo/greeting.ts')
   }
 )

@@ -131,6 +131,8 @@ export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
       'path' in input &&
       typeof input.path === 'string' &&
       Object.keys(input).every((key) => key === 'path')
+        ? { output: result.output, path: input.path }
+        : undefined
     if (!journalDiff) {
       const files = normalizedToolEditFiles(call, result)
       if (files?.length) {
@@ -141,7 +143,7 @@ export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
     const cached = diffSummaries.get(call)
     let files = cached?.result === result ? cached.files : undefined
     if (files === undefined) {
-      files = editFilesFromPatchText(result.output, input.path, true)
+      files = editFilesFromPatchText(journalDiff.output, journalDiff.path, true)
       diffSummaries.set(call, { result, files })
     }
     if (files?.length) {

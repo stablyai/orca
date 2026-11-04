@@ -19338,8 +19338,6 @@
       },
       "turnDiff": {
         "partial": "Teilweiser Diff",
-        "showDiff": "Diff anzeigen",
-        "hideDiff": "Diff ausblenden",
         "changedFiles_one": "{{count}} geänderte Datei",
         "changedFiles_other": "{{count}} geänderte Dateien"
       },

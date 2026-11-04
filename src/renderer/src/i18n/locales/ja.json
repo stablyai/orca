@@ -18952,8 +18952,6 @@
       },
       "turnDiff": {
         "partial": "部分的な差分",
-        "showDiff": "差分を表示",
-        "hideDiff": "差分を非表示",
         "changedFiles_other": "変更されたファイル {{count}} 個"
       },
       "receipt": {

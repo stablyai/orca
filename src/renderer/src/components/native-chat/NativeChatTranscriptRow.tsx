@@ -141,7 +141,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
         />
       )}
       {slot.statusAbove ? null : statusRow}
-      {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
+      {turnDiff ? (
+        <NativeChatTurnDiffRollup diff={turnDiff} onLinkClick={context.onLinkClick} />
+      ) : null}
     </div>
   )
 })

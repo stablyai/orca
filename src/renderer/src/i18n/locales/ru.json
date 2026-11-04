@@ -19915,8 +19915,6 @@
       },
       "turnDiff": {
         "partial": "Показана часть изменений",
-        "showDiff": "Показать изменения",
-        "hideDiff": "Скрыть изменения",
         "changedFiles_one": "Изменён {{count}} файл",
         "changedFiles_few": "Изменено {{count}} файла",
         "changedFiles_many": "Изменено {{count}} файлов",

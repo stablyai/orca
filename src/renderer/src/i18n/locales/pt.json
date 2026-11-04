@@ -20055,8 +20055,6 @@
       },
       "turnDiff": {
         "partial": "Diff parcial",
-        "showDiff": "Mostrar diferenças",
-        "hideDiff": "Ocultar diferenças",
         "changedFiles_one": "{{count}} arquivo alterado",
         "changedFiles_other": "{{count}} arquivos alterados",
         "changedFiles_many": "{{count}} arquivos alterados"

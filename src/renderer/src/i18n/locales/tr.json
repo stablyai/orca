@@ -19325,8 +19325,6 @@
       },
       "turnDiff": {
         "partial": "Kısmi diff",
-        "showDiff": "Diff'i göster",
-        "hideDiff": "Diff'i gizle",
         "changedFiles_other": "Değiştirilen {{count}} dosya",
         "changedFiles_one": "Değiştirilen {{count}} dosya"
       },
