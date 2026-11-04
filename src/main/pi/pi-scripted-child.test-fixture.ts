@@ -4,7 +4,10 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
-import type { JsonlRpcAgentConnectionOptions } from '../jsonl-rpc/agent-connection'
+import {
+  JsonlRpcAgentExitError,
+  type JsonlRpcAgentConnectionOptions
+} from '../jsonl-rpc/agent-connection'
 import { JsonlRpcResponseError, type JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
@@ -31,7 +34,8 @@ class ScriptedPiConnection implements PiRpcConnection {
   readonly pid: number
   readonly file: string
   private readonly handshake = Promise.withResolvers<unknown>()
-  private readonly exitListeners = new Set<() => void>()
+  private readonly exitListeners = new Set<Parameters<PiRpcConnection['onExit']>[0]>()
+  private exitError = new Error('Scripted Pi closed')
   private firstStateRead = true
   private streaming = false
   private model: NonNullable<PiScriptOptions['model']> = {
@@ -156,6 +160,16 @@ class ScriptedPiConnection implements PiRpcConnection {
     this.exit(error)
   }
 
+  exitHandshake(message: string): void {
+    // As the real connection: an exit fails the pending calls with its own exit error.
+    const error = withProviderDiagnostic(
+      new JsonlRpcAgentExitError(message),
+      providerDiagnostic(message, 'log')
+    )
+    this.handshake.reject(error)
+    this.exit(error)
+  }
+
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
     if (!this.closed) {
       this.onClosed()
@@ -166,9 +180,9 @@ class ScriptedPiConnection implements PiRpcConnection {
     return { root: 'exited', tree: 'exited' }
   }
 
-  onExit(listener: () => void): void {
+  onExit(listener: Parameters<PiRpcConnection['onExit']>[0]): void {
     if (this.rootVerdict === 'exited') {
-      listener()
+      listener(false, this.exitError)
     } else {
       this.exitListeners.add(listener)
     }
@@ -183,8 +197,9 @@ class ScriptedPiConnection implements PiRpcConnection {
     }
     this.closed = true
     this.rootVerdict = 'exited'
+    this.exitError = error
     this.lastCloseResult = { root: 'exited', tree: 'exited' }
-    this.exitListeners.forEach((listener) => listener())
+    this.exitListeners.forEach((listener) => listener(false, error))
     this.exitListeners.clear()
     this.handlers.onExit?.(error, {
       expected: false,
@@ -288,6 +303,7 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
     },
     releaseHandshake: () => children.at(-1)?.releaseHandshake(),
     failHandshake: (message) => children.at(-1)?.failHandshake(message),
+    exitHandshake: (message) => children.at(-1)?.exitHandshake(message),
     prompts: () => received,
     spawns: () => children.length,
     resumes: () => resumed,

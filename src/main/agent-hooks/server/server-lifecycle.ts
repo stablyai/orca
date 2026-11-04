@@ -132,7 +132,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-        trackEmptyPaneKeyHook(hookBody)
+        trackEmptyPaneKeyHook(hookBody, this.attributionDiagnostics)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         if (await this.ingestTmuxHook(source, aliasedBody)) {
           res.writeHead(204)
@@ -299,6 +299,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.paneKeyAliasPersistenceListener = null
     this.ownerStateInitialized = false
     // Leave the endpoint: stale files fail open, and unlinking can race another Orca instance.
+    this.providerRowsByTab = null
     clearAllListenerCaches(this.state)
     if (!options?.keepStatus) {
       this.resetCanonicalStatus()

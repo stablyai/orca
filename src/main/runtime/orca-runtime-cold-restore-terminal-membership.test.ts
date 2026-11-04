@@ -151,11 +151,15 @@ const RENDERER_TABS = [
   }
 ]
 
-function publishRendererFrame(
+async function publishRendererFrame(
   runtime: OrcaRuntimeService,
   frame: RuntimeMobileSessionTabsSnapshot
-): ReturnType<OrcaRuntimeService['syncWindowGraph']> {
-  return runtime.syncWindowGraph(1, { tabs: RENDERER_TABS, leaves: [], mobileSessionTabs: [frame] })
+): Promise<Awaited<ReturnType<OrcaRuntimeService['syncWindowGraph']>>> {
+  return await runtime.syncWindowGraph(1, {
+    tabs: RENDERER_TABS,
+    leaves: [],
+    mobileSessionTabs: [frame]
+  })
 }
 
 function coldRestoredRuntime(host: RestoreHost = LOCAL_HOST): {
@@ -258,17 +262,17 @@ describe('a restored terminal published before its PTY registers', () => {
   ])('%s: is listed pending, then pushed ready when its PTY registers', async (_label, host) => {
     vi.useFakeTimers()
     const { runtime } = coldRestoredRuntime(host)
-    publishRendererFrame(runtime, makeRendererFrame(host))
+    await publishRendererFrame(runtime, makeRendererFrame(host))
     expect(await listedSurfaces(runtime)).toEqual([
       `tab::${LEFT}:pending-handle`,
       `tab::${RIGHT}:pending-handle`
     ])
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
     const published: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((event) => published.push(event))
 
     registerLeaf(runtime, host, 'left')
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
 
     // No later renderer/graph event can rescue a missing registration push.
     expect(surfaces(published.at(-1))).toEqual([
@@ -277,15 +281,17 @@ describe('a restored terminal published before its PTY registers', () => {
     ])
     const pushes = published.length
     expect(
-      runtime.syncWindowGraph(1, {
-        tabs: RENDERER_TABS,
-        leaves: [],
-        mobileSessionTabs: [],
-        unchangedMobileSessionWorktrees: [WORKTREE_ID]
-      }).mobileSessionResyncWorktrees
+      (
+        await runtime.syncWindowGraph(1, {
+          tabs: RENDERER_TABS,
+          leaves: [],
+          mobileSessionTabs: [],
+          unchangedMobileSessionWorktrees: [WORKTREE_ID]
+        })
+      ).mobileSessionResyncWorktrees
     ).toBeUndefined()
-    publishRendererFrame(runtime, makeRendererFrame(host))
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await publishRendererFrame(runtime, makeRendererFrame(host))
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
     expect(published).toHaveLength(pushes)
     expect(await listedSurfaces(runtime)).toEqual([
       `tab::${LEFT}:ready`,
@@ -293,23 +299,23 @@ describe('a restored terminal published before its PTY registers', () => {
     ])
 
     registerLeaf(runtime, host, 'right')
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
 
     expect(surfaces(published.at(-1))).toEqual([`tab::${LEFT}:ready`, `tab::${RIGHT}:ready`])
     unsubscribe()
   })
 
-  it('pushes a restore of several panes once, not once per registering pane', () => {
+  it('pushes a restore of several panes once, not once per registering pane', async () => {
     vi.useFakeTimers()
     const { runtime } = coldRestoredRuntime()
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
     const published: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((event) => published.push(event))
 
     registerLeaf(runtime, LOCAL_HOST, 'left')
     registerLeaf(runtime, LOCAL_HOST, 'right')
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
+    await vi.advanceTimersByTimeAsync(COALESCED_PUSH_MS)
 
     expect(published.map(surfaces)).toEqual([[`tab::${LEFT}:ready`, `tab::${RIGHT}:ready`]])
     unsubscribe()
@@ -317,7 +323,7 @@ describe('a restored terminal published before its PTY registers', () => {
 
   it('keeps listing a restored pane whose PTY never returns as pending', async () => {
     const { runtime } = coldRestoredRuntime()
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
 
     registerLeaf(runtime, LOCAL_HOST, 'left')
     registerBound(runtime, LOCAL_EXECUTION_HOST_ID, 'pty-other', null, {
@@ -343,7 +349,7 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
   it('after its process exits and the retirement is saved', async () => {
     const { runtime, sessions } = coldRestoredRuntime()
     registerLeaf(runtime, LOCAL_HOST, 'left')
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
     expect(await listedSurfaces(runtime)).toContain(`tab::${LEFT}:ready`)
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-left')
@@ -352,7 +358,7 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
       type: 'leaf',
       leafId: RIGHT
     })
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 2 }))
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 2 }))
     expect(await listedSurfaces(runtime)).not.toContain(`tab::${LEFT}:ready`)
     expect(await listedSurfaces(runtime)).not.toContain(`tab::${LEFT}:pending-handle`)
   })
@@ -363,14 +369,14 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
     sessions.set(LOCAL_EXECUTION_HOST_ID, makeColdRestoredSession(RUNTIME_HOST))
     registerLeaf(runtime, RUNTIME_HOST, 'left')
     registerLeaf(runtime, RUNTIME_HOST, 'right')
-    publishRendererFrame(runtime, makeRendererFrame(RUNTIME_HOST))
+    await publishRendererFrame(runtime, makeRendererFrame(RUNTIME_HOST))
 
     await runtime.onPtyExit('pty-left', 0, 'incarnation-left')
     await runtime.onPtyExit('pty-right', 0, 'incarnation-right')
     // Emptying the owner partition exposes the older copy.
     expect(sessions.get(RUNTIME_HOST.hostId)?.tabsByWorktree[WORKTREE_ID]).toEqual([])
 
-    publishRendererFrame(runtime, makeRendererFrame(RUNTIME_HOST, { version: 2 }))
+    await publishRendererFrame(runtime, makeRendererFrame(RUNTIME_HOST, { version: 2 }))
     expect(await listedSurfaces(runtime)).toEqual([])
   })
 
@@ -378,17 +384,20 @@ describe('a retired restored terminal stays out of a later renderer frame', () =
     const { runtime, sessions } = coldRestoredRuntime()
     registerLeaf(runtime, LOCAL_HOST, 'left')
     registerLeaf(runtime, LOCAL_HOST, 'right')
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
     expect(await listedSurfaces(runtime)).toEqual([`tab::${LEFT}:ready`, `tab::${RIGHT}:ready`])
 
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 2, leaves: [LEFT] }))
+    await publishRendererFrame(
+      runtime,
+      makeRendererFrame(LOCAL_HOST, { version: 2, leaves: [LEFT] })
+    )
     await runtime.onPtyExit('pty-right', 0, 'incarnation-right')
     expect(sessions.get(LOCAL_EXECUTION_HOST_ID)?.terminalLayoutsByTabId.tab?.root).toEqual({
       type: 'leaf',
       leafId: LEFT
     })
 
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 3 }))
+    await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST, { version: 3 }))
     expect(await listedSurfaces(runtime)).toEqual([`tab::${LEFT}:ready`])
   })
 })
@@ -432,12 +441,12 @@ function makeSshSession(tabIds: readonly ('tab-x' | 'tab-y')[]): WorkspaceSessio
   }
 }
 
-function publishSshRendererFrame(runtime: OrcaRuntimeService): void {
+async function publishSshRendererFrame(runtime: OrcaRuntimeService): Promise<void> {
   const tabs = [
     { tabId: 'tab-x', leafId: LEFT, ptyId: SSH_PTY_X },
     { tabId: 'tab-y', leafId: RIGHT, ptyId: SSH_PTY_Y }
   ]
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: tabs.map(({ tabId, leafId }) => ({
       tabId,
       worktreeId: WORKTREE_ID,
@@ -492,7 +501,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
       ),
       getForegroundProcess: async () => null
     })
-    publishSshRendererFrame(runtime)
+    await publishSshRendererFrame(runtime)
     registerBound(runtime, SSH_HOST.hostId, SSH_PTY_Y, 'ssh-1', {
       tabId: 'tab-y',
       leafId: RIGHT,
@@ -515,7 +524,7 @@ describe('a surface the host retired stays retired when a restored sibling regis
     const { runtime } = coldRestoredRuntime()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the chat close path uses only this relay.
     runtime.setNotifier({ closeSessionTab: vi.fn(async () => {}) } as never)
-    publishRendererFrame(
+    await publishRendererFrame(
       runtime,
       makeRendererFrame(LOCAL_HOST, {
         extraTabs: [
@@ -583,7 +592,7 @@ async function runtimeWithUnpublishedPhoneCreate(): Promise<OrcaRuntimeService> 
       folderWorkspace: null
     }))
   })
-  publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
+  await publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
   await runtime.createMobileSessionTerminal(`id:${WORKTREE_ID}`, {
     activate: false,
     clientNavigationId: 'phone'

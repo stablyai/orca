@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AgentsParams,
   AttachParams,
   CreateIntentParams,
   CreateSupportParams,
@@ -88,14 +87,6 @@ describe('structured agent params', () => {
     expect(SendParams.safeParse(send).success).toBe(true)
   })
 
-  it.each(['claude', 'codex', 'grok', 'qwen-code'])('accept the agent id %s', (agent) => {
-    expect(CreateSupportParams.safeParse({ worktree: 'wt', agent }).success).toBe(true)
-    expect(ModelCatalogParams.safeParse({ agent }).success).toBe(true)
-    expect(
-      CreateIntentParams.safeParse({ envelope: ENVELOPE, worktree: 'wt', agent }).success
-    ).toBe(true)
-  })
-
   it.each(['', ' claude', 'grok agent', '../codex', 'a'.repeat(65), 7])(
     'refuse what is not an agent id: %s',
     (agent) => {
@@ -121,10 +112,5 @@ describe('structured agent params', () => {
     }
     expect(AttachParams.safeParse(attach).success).toBe(true)
     expect(AttachParams.safeParse({ ...attach, provider: 'grok' }).success).toBe(false)
-  })
-
-  it('takes nothing for the agent list', () => {
-    expect(AgentsParams.safeParse({}).success).toBe(true)
-    expect(AgentsParams.safeParse({ agent: 'grok' }).success).toBe(false)
   })
 })

@@ -175,7 +175,7 @@ vi.mock('../dashboard-popout', () => ({
   registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
 }))
 
-vi.mock('../workspace-space-window', () => ({
+vi.mock('../workspace-space/workspace-space-window', () => ({
   registerWorkspaceSpaceWindowHandlers: registerWorkspaceSpaceWindowHandlersMock
 }))
 
@@ -203,7 +203,7 @@ vi.mock('../usage-provider-handlers', () => ({
   registerUsageProviderHandlers: registerUsageProviderHandlersMock
 }))
 
-vi.mock('../github', () => ({
+vi.mock('../source-control/github', () => ({
   registerGitHubHandlers: registerGitHubHandlersMock
 }))
 
@@ -251,7 +251,7 @@ vi.mock('../skill-delete/handlers', () => ({
   registerSkillDeleteIpcHandlers: registerSkillDeleteIpcHandlersMock
 }))
 
-vi.mock('../workspace-space', () => ({
+vi.mock('../workspace-space/workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 
@@ -281,7 +281,7 @@ vi.mock('../shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
 
-vi.mock('../pet', () => ({
+vi.mock('../pets/pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
@@ -331,19 +331,19 @@ vi.mock('../runtime-environments/runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
 
-vi.mock('../wsl-host-handlers', () => ({
+vi.mock('../wsl/wsl-host-handlers', () => ({
   registerWslHostHandlers: vi.fn()
 }))
 
-vi.mock('../wsl-move-handlers', () => ({
+vi.mock('../wsl/wsl-move-handlers', () => ({
   registerWslMoveHandlers: vi.fn()
 }))
 
-vi.mock('../wsl-move-orchestrator-wiring', () => ({
+vi.mock('../wsl/wsl-move-orchestrator-wiring', () => ({
   registerWslMoveOrchestrator: vi.fn()
 }))
 
-vi.mock('../wsl-drive-project-handlers', () => ({
+vi.mock('../wsl/wsl-drive-project-handlers', () => ({
   registerWslDriveProjectHandlers: vi.fn()
 }))
 
@@ -351,15 +351,15 @@ vi.mock('../ephemeral-vm', () => ({
   registerEphemeralVmHandlers: registerEphemeralVmHandlersMock
 }))
 
-vi.mock('../ai-vault', () => ({
+vi.mock('../ai-vault/ai-vault', () => ({
   registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
-vi.mock('../ai-vault-search', () => ({
+vi.mock('../ai-vault/ai-vault-search', () => ({
   registerAiVaultSearchHandlers: registerAiVaultSearchHandlersMock
 }))
 
-vi.mock('../orca-profiles', () => ({
+vi.mock('../profiles/orca-profiles', () => ({
   registerOrcaProfileHandlers: registerOrcaProfileHandlersMock
 }))
 
@@ -404,12 +404,12 @@ vi.mock('../../window/clipboard-ipc-handlers', () => ({
   setTrustedClipboardRendererWebContentsId: setTrustedClipboardRendererWebContentsIdMock
 }))
 
-vi.mock('../browser', () => ({
+vi.mock('../browser/browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
 }))
 
-vi.mock('../browser-renderer-trust', () => ({
+vi.mock('../browser/browser-renderer-trust', () => ({
   setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock
 }))
 
@@ -433,15 +433,15 @@ vi.mock('../jira/issue-summary-generation', () => ({
   registerJiraIssueSummaryGenerationHandlers: registerJiraIssueSummaryGenerationHandlersMock
 }))
 
-vi.mock('../bitbucket', () => ({
+vi.mock('../source-control/bitbucket', () => ({
   registerBitbucketHandlers: registerBitbucketHandlersMock
 }))
 
-vi.mock('../gitlab', () => ({
+vi.mock('../source-control/gitlab', () => ({
   registerGitLabHandlers: registerGitLabHandlersMock
 }))
 
-vi.mock('../hosted-review', () => ({
+vi.mock('../source-control/hosted-review', () => ({
   registerHostedReviewHandlers: registerHostedReviewHandlersMock
 }))
 

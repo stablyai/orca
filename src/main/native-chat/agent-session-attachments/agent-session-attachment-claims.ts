@@ -7,7 +7,12 @@ import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absen
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
+  AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX,
+  type AgentSessionExpiredAttachment
+} from '../../../shared/agent-session/failures/agent-session-expired-attachments'
+import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
+  agentSessionAttachmentReferenceNames,
   agentSessionAttachmentReferences,
   agentSessionAttachmentStoreRoot
 } from './agent-session-attachment-references'
@@ -31,9 +36,12 @@ CREATE TABLE IF NOT EXISTS agent_session_attachment_sweeps (
 }
 
 export class AgentSessionAttachmentExpiredError extends Error {
-  constructor() {
+  readonly expired: readonly AgentSessionExpiredAttachment[]
+
+  constructor(expired: readonly AgentSessionExpiredAttachment[]) {
     super('A referenced chat attachment is no longer stored on this host.')
     this.name = 'AgentSessionAttachmentExpiredError'
+    this.expired = expired
   }
 }
 
@@ -94,7 +102,7 @@ export type PreparedAgentSessionAttachmentClaim = {
   sessionId: string
   now: number
   uploadIds: Set<string>
-  required: string[]
+  required: (AgentSessionExpiredAttachment & { stored: boolean })[]
 }
 
 function attachmentClaimParts(claim: AgentSessionAttachmentClaim): {
@@ -112,7 +120,11 @@ function attachmentClaimParts(claim: AgentSessionAttachmentClaim): {
       sessionId: claim.sessionId,
       now: claim.now,
       uploadIds,
-      required: claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+      required: agentSessionAttachmentReferenceNames(
+        root,
+        claim.body,
+        claim.required ? [...uploadIds].filter((id) => !kept.has(id)) : []
+      ).map((reference) => ({ ...reference, stored: true }))
     }
   }
 }
@@ -122,18 +134,16 @@ export async function prepareAgentSessionAttachmentClaim(
   claim: AgentSessionAttachmentClaim
 ): Promise<PreparedAgentSessionAttachmentClaim> {
   const { root, prepared } = attachmentClaimParts(claim)
-  for (const id of prepared.required) {
+  for (const reference of prepared.required) {
     let stored = false
     try {
-      stored = (await readdir(join(root, id))).some(
+      stored = (await readdir(join(root, reference.uploadId))).some(
         (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
       )
     } catch {
       stored = false
     }
-    if (!stored) {
-      throw new AgentSessionAttachmentExpiredError()
-    }
+    reference.stored = stored
   }
   return prepared
 }
@@ -144,8 +154,8 @@ export function claimAgentSessionAttachmentsInTransaction(
   claim: AgentSessionAttachmentClaim
 ): { referenced: Set<string>; inserted: string[] } {
   const { root, prepared } = attachmentClaimParts(claim)
-  if (prepared.required.some((id) => !uploadIsStored(root, id))) {
-    throw new AgentSessionAttachmentExpiredError()
+  for (const reference of prepared.required) {
+    reference.stored = uploadIsStored(root, reference.uploadId)
   }
   return claimPreparedAgentSessionAttachments(db, prepared)
 }
@@ -159,11 +169,17 @@ export function claimPreparedAgentSessionAttachments(
   if (uploadIds.size === 0) {
     return { referenced: uploadIds, inserted: [] }
   }
-  if (required.some((uploadId) => isBeingSwept(db, uploadId))) {
-    throw new AgentSessionAttachmentExpiredError()
+  const expired = required.filter(({ uploadId, stored }) => !stored || isBeingSwept(db, uploadId))
+  if (expired.length > 0) {
+    throw new AgentSessionAttachmentExpiredError(
+      expired
+        .slice(0, AGENT_SESSION_EXPIRED_ATTACHMENTS_MAX)
+        .map(({ uploadId, name }) => ({ uploadId, name }))
+    )
   }
-  const inserted = insertClaims(db, required, claim.sessionId, claim.now)
-  const bestEffort = [...uploadIds].filter((id) => !required.includes(id))
+  const requiredIds = new Set(required.map(({ uploadId }) => uploadId))
+  const inserted = insertClaims(db, requiredIds, claim.sessionId, claim.now)
+  const bestEffort = [...uploadIds].filter((id) => !requiredIds.has(id))
   if (bestEffort.length === 0) {
     return { referenced: uploadIds, inserted }
   }

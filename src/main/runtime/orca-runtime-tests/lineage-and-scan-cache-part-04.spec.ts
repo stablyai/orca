@@ -230,7 +230,7 @@ describe('OrcaRuntimeService', () => {
     )
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-worker',
@@ -314,7 +314,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('returns active orchestration context for renderer-synced terminal leaves', () => {
+  it('returns active orchestration context for renderer-synced terminal leaves', async () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '11111111-1111-4111-8111-111111111111'
     const coordinatorLeafId = '22222222-2222-4222-8222-222222222222'
@@ -372,7 +372,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
 
-    const result = runtime.syncWindowGraph(1, {
+    const result = await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-worker',
@@ -425,7 +425,7 @@ describe('OrcaRuntimeService', () => {
   it.each([
     ['fails closed when a modern dispatch owning Run is missing', 'run-missing', 'run-missing'],
     ['fails closed when Task and Dispatch Runs disagree', 'run-dispatch', 'run-task']
-  ])('%s', (_name, dispatchRunId, taskRunId) => {
+  ])('%s', async (_name, dispatchRunId, taskRunId) => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const coordinatorLeafId = '88888888-8888-4888-8888-888888888888'
@@ -466,7 +466,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
 
-    const result = runtime.syncWindowGraph(1, {
+    const result = await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-worker',

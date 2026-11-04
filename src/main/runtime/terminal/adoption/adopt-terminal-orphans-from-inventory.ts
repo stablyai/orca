@@ -15,7 +15,7 @@ import type {
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
 import { resolveTerminalSessionWorktreeId } from '../../runtime-worktree-path-identity'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { adoptRuntimeTerminalOrphansFromInventory } from '../../runtime-terminal-orphan-adoption'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
@@ -125,7 +125,9 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
   }
 
   // Omitted --terminal follows the current worktree's active terminal, like browser active-tab resolution.
@@ -138,8 +140,12 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
         ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
         : null
       const snapshots = targetWorktreeId
-        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
-        : await this.listAllMobileSessionTabs()
+        ? [
+            this.getMobileSessionTabsWithoutSenders(targetWorktreeId, undefined, {
+              includeAgentSenders: false
+            })
+          ]
+        : await this.listAllMobileSessionTabs(undefined, { includeAgentSenders: false })
       // Active-tab focus cannot establish the caller's identity.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
         const activeTerminal = snapshot.tabs.find(

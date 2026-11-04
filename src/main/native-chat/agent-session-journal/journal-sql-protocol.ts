@@ -2,6 +2,7 @@ import type { JournalUnitPacket, JournalResultPacket } from './journal-unit-tran
 import type { JournalMaintenanceUnit } from './journal-maintenance-unit'
 import {
   AgentSessionRefusalError,
+  refuse,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { SQLInputValue } from 'node:sqlite'
@@ -84,11 +85,28 @@ export function journalSqlFailure(error: unknown): JournalSqlFailure {
       error instanceof Error && 'errcode' in error && typeof error.errcode === 'number'
         ? error.errcode
         : undefined,
-    refusal: error instanceof AgentSessionRefusalError ? error.refusal : undefined,
+    refusal:
+      error instanceof AgentSessionAttachmentExpiredError
+        ? refuse(
+            'agent_session_operation_invalid',
+            { reason: 'attachmentExpired', expiredAttachments: error.expired },
+            error.message
+          )
+        : error instanceof AgentSessionRefusalError
+          ? error.refusal
+          : undefined,
     receipt: error instanceof CommandReceiptExistsError ? error.result : undefined
   }
 }
 export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
+  if (error.name === 'AgentSessionAttachmentExpiredError') {
+    const refusal = error.refusal
+    return new AgentSessionAttachmentExpiredError(
+      refusal?.code === 'agent_session_operation_invalid'
+        ? (refusal.details?.expiredAttachments ?? [])
+        : []
+    )
+  }
   if (error.refusal) {
     return new AgentSessionRefusalError(error.refusal)
   }
@@ -102,8 +120,6 @@ export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
       return new JournalDamageError(error.message)
     case 'JournalOutcomeDecodeError':
       return new JournalOutcomeDecodeError(error.message)
-    case 'AgentSessionAttachmentExpiredError':
-      return new AgentSessionAttachmentExpiredError()
     case 'AgentSessionJournalError': {
       const code = error.code
       if (

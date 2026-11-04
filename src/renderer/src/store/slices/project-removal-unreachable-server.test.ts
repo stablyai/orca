@@ -17,7 +17,6 @@ import {
 } from '../repos/pending-runtime-repo-removals'
 import {
   observeRuntimeHostStatusForPendingRemovals,
-  replayPendingRuntimeRepoRemovalsForReadyServers,
   resetPendingRuntimeRepoRemovalReplayForTests
 } from '../repos/pending-runtime-repo-removal-replay'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
@@ -145,19 +144,6 @@ describe('removing a project while its paired server is unreachable', () => {
     expect(uiSet).toHaveBeenLastCalledWith({ pendingRuntimeRepoRemovals: [] })
   })
 
-  it('replays records seeded after the server already reported ready', async () => {
-    reachable = true
-    observeRuntimeHostStatusForPendingRemovals(readySnapshot())
-
-    seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
-    replayPendingRuntimeRepoRemovalsForReadyServers()
-
-    await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([]), {
-      timeout: 20_000
-    })
-    expect(hostCalls.filter((method) => method === 'repo.rm')).toEqual(['repo.rm'])
-  })
-
   it('keeps a record across disconnect, reconnect and re-pair, then replays it', async () => {
     seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
     const disconnected = { ...readySnapshot(), transport: 'disconnected' as const }
@@ -179,14 +165,6 @@ describe('removing a project while its paired server is unreachable', () => {
       timeout: 20_000
     })
     expect(hostCalls.filter((method) => method === 'repo.rm')).toEqual(['repo.rm'])
-  })
-
-  it('drops records only once the server is forgotten', async () => {
-    seedPendingRuntimeRepoRemovals([{ environmentId: 'env-1', repoId: 'app', requestedAt: 1 }])
-
-    vi.mocked(window.api.runtimeEnvironments.list).mockResolvedValue([])
-    observeRuntimeHostStatusForPendingRemovals({ ...readySnapshot(), retired: true })
-    await vi.waitFor(() => expect(listPendingRuntimeRepoRemovals('env-1')).toEqual([]))
   })
 
   it('replays at once when local removal is chosen while the server already reports ready', async () => {

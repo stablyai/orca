@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import './runtime-file-mutation-client'
-import { readRuntimeFileContent } from './runtime-file-read-client'
+import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
 import {
   fsReadFile,
   runtimeEnvironmentCall,
@@ -10,6 +11,30 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
+  it.each([
+    '/session/images/chart.png',
+    '/remote/repo/chart.png',
+    '/srv/orca/agent-session-attachments/abc/u1/shot.png'
+  ])('pins a resolved image read to its original pairing: %s', async (path) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 8 }])
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('pairing changed'))
+    await expect(
+      readRuntimeFilePreview(
+        {
+          target: { kind: 'environment', environmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo',
+          expectedEnvironmentPairingRevision: 7
+        },
+        path,
+        { kind: 'chat-image' }
+      )
+    ).rejects.toThrow('pairing changed')
+    expect(runtimeEnvironmentCall).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 7 })
+    )
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
   it('shows an unlisted binary an older host sent as text as binary, fetching nothing more', async () => {
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
       Promise.resolve(

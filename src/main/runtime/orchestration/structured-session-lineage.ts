@@ -1,5 +1,6 @@
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
+import { finishJournalSteps } from '../../native-chat/agent-session-journal/journal-reconstruction-steps'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
@@ -14,6 +15,17 @@ export type AgentSessionRecordReader = {
   isSessionUnreadable?: (sessionId: string) => boolean
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** Chats with an open tab, from the tab table or, before one is recorded, the saved workspace tabs. */
+  listVisibleSessionIds?: () => Iterable<string>
+  /** Moves when a commit changes which chats exist, where, their /clear successor or open tabs. */
+  senderIdentityRevision?: () => number
+  /** Candidates from the existing native successor index, checked against committed conversations. */
+  listClearedFrom?: (sessionId: string) => readonly string[] | Promise<readonly string[]>
+  senderSnapshot?: () => Promise<{
+    records: AgentSessionRecordReader
+    revision: number
+    close: () => Promise<void>
+  }>
   /** One session's tab is gone from an index that exists; false while no index exists. */
   isSessionTabRetired?: (sessionId: string) => boolean
   /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
@@ -32,6 +44,10 @@ export function conversationRecordReader(store: {
   listConversations: AgentSessionRecordReader['listRecords']
   isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  senderIdentityRevision?: () => number
+  listVisibleSessionIds?: () => Iterable<string>
+  listClearedFrom?: AgentSessionRecordReader['listClearedFrom']
+  senderSnapshot?: AgentSessionRecordReader['senderSnapshot']
   isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
   lineageRevision?: AgentSessionRecordReader['lineageRevision']
 }): AgentSessionRecordReader {
@@ -40,6 +56,12 @@ export function conversationRecordReader(store: {
     isSessionUnreadable: store.isSessionUnreadable,
     listRecords: store.listConversations,
     getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    ...(store.listVisibleSessionIds ? { listVisibleSessionIds: store.listVisibleSessionIds } : {}),
+    ...(store.senderIdentityRevision
+      ? { senderIdentityRevision: store.senderIdentityRevision }
+      : {}),
+    ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {}),
+    ...(store.senderSnapshot ? { senderSnapshot: store.senderSnapshot } : {}),
     isSessionTabRetired: store.isSessionTabRetired,
     lineageRevision: store.lineageRevision
   }
@@ -129,12 +151,31 @@ export function lineageLiveSession(
 export function createCanonicalSessionPaneResolver(
   store: AgentSessionRecordReader | null
 ): (sessionId: string) => string {
-  const resolved = new Map<string, string | null>()
+  const resolve = createCanonicalSessionResolver(store)
   return (sessionId) => {
+    const id = resolve(sessionId)
+    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+  }
+}
+
+/** The session running a lineage now; the session itself when its chain can't be proved. */
+export function createCanonicalSessionResolver(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => string {
+  const resolve = createCanonicalSessionResolverSteps(store)
+  return (sessionId) => finishJournalSteps(resolve(sessionId))
+}
+
+export function createCanonicalSessionResolverSteps(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => Generator<void, string> {
+  const resolved = new Map<string, string | null>()
+  return function* (sessionId) {
     let current = sessionId
     const path = new Set<string>()
     let destination: string | null = null
     for (;;) {
+      yield
       if (resolved.has(current)) {
         destination = resolved.get(current) ?? null
         break
@@ -161,9 +202,9 @@ export function createCanonicalSessionPaneResolver(
     }
     for (const member of path) {
       resolved.set(member, destination)
+      yield
     }
-    const id = destination ?? sessionId
-    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+    return destination ?? sessionId
   }
 }
 

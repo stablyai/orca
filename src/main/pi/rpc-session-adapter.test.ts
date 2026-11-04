@@ -1,3 +1,4 @@
+import { structuredAgentSessionCommandTurn } from '../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -199,7 +200,9 @@ describe('Pi RPC session ownership and delivery', () => {
         ).toEqual({ accepted: true })
         return gate.promise
       })
-      vi.useFakeTimers()
+      vi.useFakeTimers({
+        toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+      })
       h.connection.receive({ type: 'agent_start' })
       h.connection.receive({ type: 'message_end', message: { role: 'assistant', content } })
       h.connection.receive({
@@ -550,6 +553,22 @@ describe('Pi RPC session ownership and delivery', () => {
     await expect(h.adapter.closeSession(sessionId)).rejects.toBeInstanceOf(
       AgentSessionAcquisitionRootExitObservedError
     )
+  })
+
+  it('passes /compact instructions as Pi custom instructions', async () => {
+    const h = await setup()
+    const command = {
+      clientMessageId: 'compact-1',
+      ...structuredAgentSessionCommandTurn('compact-1'),
+      running: { kind: 'turn' as const, turnId: 'compact:compact-1', state: 'running' as const }
+    }
+    await h.adapter.compact({ sessionId, fence: 7, command })
+    await h.adapter.compact({
+      sessionId,
+      fence: 7,
+      command: { ...command, instructions: 'keep the plan' }
+    })
+    expect(h.connection.compactParams).toEqual([{}, { customInstructions: 'keep the plan' }])
   })
 
   it('ends the host command row under its original identity after a no-op compaction', async () => {

@@ -483,6 +483,9 @@ importers:
       github-slugger:
         specifier: 2.0.0
         version: 2.0.0
+      graphql:
+        specifier: 16.14.2
+        version: 16.14.2
       happy-dom:
         specifier: ^21.0.4
         version: 21.0.4

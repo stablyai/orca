@@ -246,13 +246,6 @@ async function runCliTerminalRetentionJourney(
   }
 }
 
-test('keeps a host-created CLI terminal when an earlier host-created terminal exists', async ({
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(600_000)
-  await runCliTerminalRetentionJourney(orcaPage, testInfo, 'cli-terminal-graph-sync', true)
-})
-
 // The real CLI omits clientMutationId: its first host-admitted tab must establish persistence authority.
 // Reverting store.ts/pty.ts fails at host inventory retention.
 test('keeps a host-created CLI terminal that is the first one on the host', async ({

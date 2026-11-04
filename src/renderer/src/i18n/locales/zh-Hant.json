@@ -7502,7 +7502,7 @@
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "開啟電腦使用",
-          "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝電腦使用技能； macOS 還需要隱私權限。",
+          "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
           "333984cf90": "使用現有的瀏覽器工作階段"
         },
         "BrowserUseEnableSwitch": {
@@ -7622,7 +7622,7 @@
         },
         "ComputerUsePane": {
           "1735461723": "使代理程式能夠檢查和操作本機桌面應用程式。",
-          "93255aaf18": "電腦使用技能",
+          "93255aaf18": "Orca Computer Use 技能",
           "45f8e22c2e": "開啟",
           "d95d1cfab8": "重新整理",
           "0c29da5805": "就緒",
@@ -8507,8 +8507,6 @@
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "命令範本",
-          "2b2f38652b": "自訂命令",
-          "0ffb081b3a": "使用預設代理程式",
           "f4310cf63f": "代理程式",
           "1cd88d470a": "自訂",
           "403876bb48": "使用全域",
@@ -18867,6 +18865,7 @@
         "attachmentNotAFile": "此訊息中的一張圖片不是檔案，因此訊息未傳送。",
         "attachmentNoSource": "此訊息中的一張圖片沒有可傳送的檔案，因此訊息未傳送。",
         "attachmentInvalid": "此訊息中的附件無法傳送給代理程式。",
+        "attachmentsExpired": "{{names}} 已過期。",
         "attachmentUnreadable": "無法讀取此訊息中的附件，因此訊息未傳送。",
         "emptyMessage": "此訊息為空，因此未傳送。",
         "commandUnavailable": "此命令無法在 {{agent}} 聊天中使用，因此未傳送。",
@@ -18956,6 +18955,7 @@
         "recordFailed": "Orca 無法將此內容儲存到聊天歷史記錄中。",
         "attachmentExpired": "此附件已過期。",
         "reattachFile": "請將其移除後重新附加。",
+        "reattachFiles": "請將它們移除後重新附加。",
         "conversationCleared": "此對話已被清除。",
         "openCurrentConversation": "請開啟目前對話以繼續。",
         "clearUnfinished": "上一次 /clear 未完成。",
@@ -19707,7 +19707,8 @@
         "effortPickerFailed": "無法開啟推理強度選擇器。",
         "modelApplyFailed": "無法套用模型 {{value}}。",
         "effortApplyFailed": "無法套用推理強度 {{value}}。"
-      }
+      },
+      "settings": "聊天設定"
     },
     "tab": {
       "bar": {
@@ -22761,6 +22762,12 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "agentPicker": {
+    "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
+    "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
+    "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
+    "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
+    "catalogUnresolved": "尚未載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
+    "catalogEmpty": "{{agent}} 沒有可用模型。",
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
@@ -22775,6 +22782,8 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
+    "use": "使用",
+    "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案"
   }

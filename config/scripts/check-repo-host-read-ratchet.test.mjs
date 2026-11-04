@@ -48,8 +48,8 @@ describe('countRawRepoHostReads', () => {
 
 describe('isScannedFile', () => {
   it('scans source, not tests, declarations or the resolvers', () => {
-    expect(isScannedFile('src/main/worktree-trash.ts')).toBe(true)
-    expect(isScannedFile('src/main/worktree-trash.test.ts')).toBe(false)
+    expect(isScannedFile('src/main/workspaces/removal/worktree-trash.ts')).toBe(true)
+    expect(isScannedFile('src/main/workspaces/removal/worktree-trash.test.ts')).toBe(false)
     expect(isScannedFile('src/shared/types.d.ts')).toBe(false)
     for (const rel of RESOLVER_FILES.keys()) {
       expect(isScannedFile(rel)).toBe(false)

@@ -264,6 +264,19 @@ export class RpcDispatcher {
       callerFingerprint,
       context.orchestrationCaller?.orcaSessionId
     )
+    if (request.method.startsWith('orchestration.')) {
+      queueMicrotask(() => {
+        try {
+          void Promise.resolve(runtime.refreshAgentSenderAssociations?.()).catch(
+            (error: unknown) => {
+              console.warn('[runtime] Sender identity publication failed', error)
+            }
+          )
+        } catch (error) {
+          console.warn('[runtime] Sender identity publication failed', error)
+        }
+      })
+    }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
     return result
   }

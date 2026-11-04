@@ -9,13 +9,13 @@ import {
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
-} from './wsl-linked-worktree-git-routing'
+} from './command-runner/wsl-linked-worktree-git-routing'
 
 const { readRepoCommonDirFromGitMock } = vi.hoisted(() => ({
   readRepoCommonDirFromGitMock: vi.fn()
 }))
 
-vi.mock('./worktree-list-reader', () => ({
+vi.mock('./worktrees/catalog/worktree-list-reader', () => ({
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
 }))
 vi.mock('../../shared/git-object-quarantine', async (importOriginal) => ({

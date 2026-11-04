@@ -322,6 +322,7 @@
     "es-module-lexer": "1.7.0",
     "esbuild": "^0.28.2",
     "github-slugger": "2.0.0",
+    "graphql": "16.14.2",
     "happy-dom": "^21.0.4",
     "hast-util-from-html-isomorphic": "2.0.0",
     "hast-util-to-jsx-runtime": "2.3.6",

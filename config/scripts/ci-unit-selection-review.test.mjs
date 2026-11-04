@@ -1,5 +1,8 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { reviewUnitSelection } from './ci-unit-selection-review.mjs'
+import { readUnitSelectionRecords, reviewUnitSelection } from './ci-unit-selection-review.mjs'
 
 const plan = {
   sourceSha: 'sha',
@@ -31,6 +34,35 @@ const record = (index, file, state) => ({
     shard: { index, count: 2 },
     timings: { [file]: 100 },
     results: { [file]: state }
+  }
+})
+
+it('reviews deferred shadow plans without masking shard plans or accepting another source', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-deferred-selection-'))
+  try {
+    const fallback = join(root, 'deferred-plan.json')
+    writeFileSync(fallback, JSON.stringify(plan))
+    for (const [index, file] of ['a', 'b'].entries()) {
+      const directory = join(root, String(index))
+      mkdirSync(directory)
+      writeFileSync(
+        join(directory, 'unit-timings.json'),
+        JSON.stringify(record(index + 1, file, 'passed').timing)
+      )
+    }
+    const review = () => reviewUnitSelection(readUnitSelectionRecords(root, fallback))[0]
+    expect(review()).toMatchObject({ completeFullRun: true, selectionEvaluated: true })
+    writeFileSync(fallback, JSON.stringify({ ...plan, sourceSha: 'another-source' }))
+    expect(review().completeFullRun).toBe(false)
+    for (const index of [0, 1]) {
+      writeFileSync(join(root, String(index), 'unit-selection.json'), JSON.stringify(plan))
+    }
+    expect(review().completeFullRun).toBe(true)
+    expect(() => readUnitSelectionRecords(root, join(root, 'missing'))).not.toThrow()
+    rmSync(join(root, '0', 'unit-selection.json'))
+    expect(() => readUnitSelectionRecords(root, join(root, 'missing'))).toThrow()
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })
 

@@ -19,6 +19,10 @@ import {
 } from '../../mobile-session-layout-projection'
 
 export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
+  protected abstract createMobileSessionTabsDelivery(): ReturnType<
+    MobileSessionPublication['createMobileSessionTabsDelivery']
+  >
+
   protected abstract emitMobileSessionTabsSnapshotToClient(
     ...args: Parameters<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
   ): ReturnType<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
@@ -34,6 +38,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
     callerFollows = false
   ): RuntimeMobileSessionTabsResult {
+    const deliver = this.createMobileSessionTabsDelivery()
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
       // Follow is live intent; reconnecting devices must not inherit stale navigation.
@@ -51,7 +56,7 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
           id,
           activeTabId
         )
-        this.emitMobileSessionTabsSnapshotToClient(projected, id, true)
+        this.emitMobileSessionTabsSnapshotToClient(projected, id, true, deliver)
         if (id === clientNavigationId) {
           callerSnapshot = projected
         }
@@ -63,7 +68,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         clientNavigationId,
         activeTabId
       )
-      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId, callerFollows)
+      this.emitMobileSessionTabsSnapshotToClient(
+        callerSnapshot,
+        clientNavigationId,
+        callerFollows,
+        deliver
+      )
     }
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)
@@ -85,7 +95,9 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
   ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const snapshot = this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
     const tab = snapshot.tabs.find((candidate) =>
       'sessionId' in surface
         ? candidate.type === 'agent-session' && candidate.sessionId === surface.sessionId
@@ -105,7 +117,9 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     sessionId: string,
     clientNavigationId: string
   ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const snapshot = this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
     const tab = snapshot.tabs.find(
       (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
     )

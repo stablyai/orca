@@ -1,5 +1,5 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 
 export {
   SESSION_SEARCH_LIMIT_DEFAULT,

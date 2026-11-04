@@ -64,14 +64,22 @@ function windowRows(publicationEpoch: string): RuntimeMobileSessionTabsSnapshot 
 }
 
 describe('a window reload with the same rows (switch on)', () => {
-  it('stores the new stamp, so the next unchanged sync asks for no republish', () => {
+  it('stores the new stamp, so the next unchanged sync asks for no republish', async () => {
     const { runtime } = threeTabSurfaceRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [windowRows('R1')] })
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [windowRows('R1')]
+    })
 
     // The reload: the same rows under a new stamp.
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [windowRows('R2')] })
-    const next = runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [windowRows('R2')]
+    })
+    const next = await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID]

@@ -10,6 +10,7 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   capabilities: {
     rewind: true,
     compact: true,
+    compactInstructions: true,
     threadGoal: false,
     contextUsage: true,
     imagePrompts: true,

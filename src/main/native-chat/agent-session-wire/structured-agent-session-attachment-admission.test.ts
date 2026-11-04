@@ -1,5 +1,6 @@
 // Direct/queued admission rejects missing attachments atomically; stored claims survive clear migration.
 
+import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -74,6 +75,33 @@ describe('attachments at send admission', () => {
     expect(result).toMatchObject(EXPIRED)
     expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
     expect(rig.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('names only the expired upload when a fresh one is sent beside it', async () => {
+    const fresh = await storeUpload('fresh.png')
+    const expiredUpload = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
+    const expired = join(agentSessionAttachmentStoreRoot(rig.root), expiredUpload, 'old photo.png')
+    const result = await clientSend({
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: fresh },
+        { type: 'image-ref', path: expired }
+      ]
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: {
+          reason: 'attachmentExpired',
+          expiredAttachments: [{ uploadId: expiredUpload, name: 'old photo.png' }]
+        }
+      }
+    })
+    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
+    expect(await claimedSessions()).toEqual([])
+    expect(existsSync(fresh)).toBe(true)
   })
 
   it('refuses a queued send naming an expired file, and queues nothing', async () => {

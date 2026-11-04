@@ -36,6 +36,10 @@ import { encodeJournalState } from './journal-state-codec'
 import { renderJournalState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import type * as Steps from './journal-reconstruction-steps'
+import type * as TurnTree from './journal-newest-turn-tree'
+import { JournalNewestTurn } from './journal-newest-turn'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import { journalInputOrder } from './journal-input-order'
 import { JournalPersistencePlan } from './journal-persistence-plan'
@@ -54,6 +58,25 @@ vi.mock('./journal-reconstruction-steps', async (original) => {
         work.reconstructionWork.visit()
         return compare(a, b)
       })
+    }
+  }
+})
+
+vi.mock('./journal-newest-turn-tree', async (original) => {
+  const actual = await original<typeof TurnTree>()
+  const work = await import('./journal-reconstruction-work-test-support')
+  return {
+    ...actual,
+    putTurnSourceSteps: function* (...args: Parameters<typeof actual.putTurnSourceSteps>) {
+      const steps = actual.putTurnSourceSteps(...args)
+      for (;;) {
+        const next = steps.next()
+        work.reconstructionWork.visit()
+        if (next.done) {
+          return next.value
+        }
+        yield next.value
+      }
     }
   }
 })
@@ -78,13 +101,25 @@ const body = (id: string): AgentJournalMessageItem => ({
 function population(size: number): JournalRow[] {
   const rows: JournalRow[] = [projectionEpochRow]
   for (let index = 0; index < size; index++) {
+    const turnItemId = agentJournalItemKey({
+      provider: 'orca',
+      clientMessageId: `status-${index - (index % 2)}`
+    })
     rows.push({
       ...projectionBase(rows.length + 1),
       kind: 'item',
       itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: `status-${index}` }),
       revision: 1,
-      body: { kind: 'status', text: `Status ${index}` },
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      body:
+        index % 2 === 0
+          ? { kind: 'turn', turnId: `turn-${index}`, state: 'completed', outcome: 'failure' }
+          : {
+              kind: 'status',
+              ...agentSessionFailureWords(agentSessionFailureFact('usageLimitReached'), {
+                surface: 'row'
+              })
+            },
+      turnScope: index % 2 === 0 ? AGENT_JOURNAL_THREAD_SCOPE : { kind: 'turn', turnItemId }
     })
   }
   for (let index = 0; index < size; index++) {
@@ -133,20 +168,33 @@ const fixtures: {
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-reconstruction-scaling-'))
   for (const size of [256, 2_560]) {
+    const started = performance.now()
+    const phase = (name: string): void => {
+      process.stdout.write(
+        `setup population=${size} phase=${name} elapsedMs=${Math.round(performance.now() - started)}\n`
+      )
+    }
+    phase('native-open')
     const database = await openTestJournalHostDatabase(join(root, `native-${size}`))
+    phase('outcome-seed')
     const rows = population(size)
     const previous = seedOutcomeRows(database, rows)
     const expected = encodeJournalState(previous)
+    phase('input-open')
     const inputOnly = await openTestJournalHostDatabase(join(root, `input-${size}`))
+    phase('input-seed')
     inputOnly.fixtureTransaction((db) => {
       publishTestJournalEpoch(db, projectionSessionId, projectionEpoch)
       for (const row of rows) {
         insertTestJournalRow(db, projectionSessionId, row)
       }
     })
+    phase('linked-seed')
     const linkedDatabase = await seedLinkedLegacyReconstruction(root, size)
+    phase('linked-restore')
     const linkedExpected = restoreJournal(linkedDatabase.db, projectionSessionId)
     fixtures.push({ size, database, inputOnly, previous, expected, linkedDatabase, linkedExpected })
+    phase('complete')
   }
 })
 
@@ -197,6 +245,15 @@ it('bounds private restore and epoch reconstruction work through finalization', 
     expect(restored.result?.damage).toBeNull()
     expect(restored.result?.newer).toBeNull()
     expect(restored.result && encodeJournalState(restored.result.state)).toEqual(expected)
+    const newest = new JournalNewestTurn(previous)
+    expect(newest.read()).not.toBeNull()
+    expect(newest.failure()).toBe(previous.lastSequence)
+    expect(restored.result && journalInputOrder(restored.result.state).newestTurn.read()).toEqual(
+      newest.read()
+    )
+    expect(restored.result && journalInputOrder(restored.result.state).newestTurn.failure()).toBe(
+      newest.failure()
+    )
     process.stdout.write(`phase population=${size} start=legacy\n`)
     const legacy = await countReconstructionWork(
       () => inputOnly.read((read) => restoreJournalAsync(read, projectionSessionId)),

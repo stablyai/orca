@@ -12,7 +12,7 @@ import {
   emptyClaudeAccountsState
 } from '@/runtime/runtime-provider-accounts-client'
 import { toast } from 'sonner'
-import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
+import { getClaudeAccountErrorDescription } from '../settings/accounts/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'
 import {
   getWindowsTerminalCapabilityOwnerKey,

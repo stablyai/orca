@@ -3,23 +3,22 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalSubmissionRow } from './journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
+import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from './queued-message-table'
-import type { JournalInputPlace } from './journal-input-order'
+import type { JournalInputPlace } from './journal-input-order-state'
 import {
   queuePauseHolding,
   journalQueueStopHolds,
+  failedQueueTurnSequence,
   type DerivedQueuePause
 } from './queued-message-pause'
-import {
-  JournalInputPlaceIndex,
-  mergeInputPlaces,
-  type InputPlaceQuery
-} from './journal-input-place-index'
+import { JournalInputPlaceIndex, type InputPlaceQuery } from './journal-input-place-index'
 import {
   type JournalInputLineageOwner,
   type JournalInputCard,
-  queryInputContext,
-  journalInputCardPrecedes
+  queryCurrentInputPlace,
+  journalInputCardPrecedes,
+  journalInputAdmission
 } from './journal-input-lineage'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 import { JournalInputCandidates } from './journal-input-candidates'
@@ -88,12 +87,18 @@ export class JournalInputCardIndex {
   private floor: { epoch: string; sequence: number } | null = null
   private pauses: readonly DerivedQueuePause[] = []
   private cleared = new Set<string>()
+  // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
+  private failed = false
   constructor(private readonly lineage: JournalInputLineageOwner) {}
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
+  /** Whether a failed turn holds waiting input, as of the last ensure. */
+  failureHolds(): boolean {
+    return this.failed
+  }
   command(): QueuedMessageRow | undefined {
-    return this.currentCoordinates?.allPlaces().command
+    return this.failed ? undefined : this.currentCoordinates?.allPlaces().command
   }
   releaseHistory(): void {
     this.domains = undefined
@@ -105,7 +110,9 @@ export class JournalInputCardIndex {
     return (
       card.state === 'waiting' &&
       card.holdReason === null &&
-      (this.cleared.has(card.messageId) || Boolean(queuePauseHolding(this.pauses, card)))
+      (this.failed ||
+        this.cleared.has(card.messageId) ||
+        Boolean(queuePauseHolding(this.pauses, card)))
     )
   }
   admission(
@@ -114,43 +121,19 @@ export class JournalInputCardIndex {
     originalAcceptance?: (id: string) => AgentJournalCursor | undefined
   ): JournalInputPlace {
     this.ensure(state)
-    const coordinate = { epoch: row.epoch, sequence: row.seq }
-    const context = row.inputOrderContext ?? {
-      source: coordinate,
-      basis: 'legacy' as const,
-      cut: this.lineage.at(row.seq)
-    }
-    const original =
-      context.basis === 'legacy' ? originalAcceptance?.(row.clientMessageId) : undefined
-    const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
-    const exposed = row.inputOrderContext?.basis === 'legacy' ? this.command() : undefined
-    const selected =
-      row.inputOrderContext?.basis === 'legacy'
-        ? exposed && this.relation(exposed, place)
-          ? exposed
-          : undefined
-        : !row.inputOrderContext
-          ? this.queryCurrent(place).command
-          : this.query(place).command
-    return { ...place, ...(selected ? { witnessCardId: selected.messageId } : {}) }
+    return journalInputAdmission(this, this.lineage, row, originalAcceptance)
   }
 
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
-    return queryInputContext(
-      place.context,
-      place.original,
-      (coordinate) => this.currentCoordinates!.query(coordinate.epoch, coordinate.sequence),
-      () => this.currentCoordinates!.allPlaces(),
-      mergeInputPlaces
-    )
+    return this.gate(queryCurrentInputPlace(this.currentCoordinates!, place))
   }
 
   query(place: JournalInputPlace): InputPlaceQuery {
     if (place.context.basis === 'observed') {
-      return this.index!.query('introduction', place.context.cut)
+      return this.gate(this.index!.query('introduction', place.context.cut))
     }
     finishJournalSteps(this.prepareDomainsSteps())
-    return this.domains!.query(place.context, place.original)
+    return this.gate(this.domains!.query(place.context, place.original))
   }
 
   *prepareDomainsSteps(): Generator<void> {
@@ -166,6 +149,14 @@ export class JournalInputCardIndex {
     }
   }
 
+  private gate(result: InputPlaceQuery): InputPlaceQuery {
+    if (!this.failed) {
+      return result
+    }
+    const { head, handoff, position } = result
+    return { ...(head ? { head } : {}), ...(handoff ? { handoff } : {}), position }
+  }
+
   ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
     finishJournalSteps(this.ensureSteps(state, floor))
   }
@@ -178,6 +169,11 @@ export class JournalInputCardIndex {
     }
     floor = this.floor
     const marks = state.queuePauseMarks
+    this.failed =
+      failedQueueTurnSequence(
+        journalInputOrder(state).newestTurn.failure(),
+        marks.resumedSequence
+      ) > 0
     const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)
     const reopened = Math.max(
       marks.reopenedSequence,

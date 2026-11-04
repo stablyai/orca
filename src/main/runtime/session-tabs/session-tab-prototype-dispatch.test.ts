@@ -358,7 +358,7 @@ describe('session runtime reentry', () => {
     await expect(runtime.listAllMobileSessionTabs('client')).resolves.toEqual([])
     await runtime.publishStructuredAgentSessionTab(input)
 
-    expect(list).toHaveBeenCalledExactlyOnceWith('client')
+    expect(list).toHaveBeenCalledExactlyOnceWith('client', undefined)
     expect(project).toHaveBeenCalledExactlyOnceWith({
       ...input,
       tabId: 'structured-agent-session-session',

@@ -17,7 +17,7 @@ import {
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { structuredAgentSessionShownSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-view'
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
@@ -178,14 +178,18 @@ function host(agent: string, record: AgentSessionRecord) {
   const store = new AgentModelCatalogStore()
   const fingerprint = agentModelCatalogFingerprintForRecord(record)
   const account = ACCOUNTS[agent]!
-  // Not inline: this base's listing still requires the tier map that main has since dropped.
   const listing = {
     models: account.models,
     fastModeTierByModel: new Map(),
+    ...(account.configured
+      ? { configured: { model: account.configured.modelId, effort: account.configured.effort } }
+      : {}),
     origin: 'probe' as const
   }
   store.recordSuccess(fingerprint, agent, listing, 'discovery')
   if (account.configured) {
+    // A fresh live listing can declare config; a remembered account default alone cannot.
+    store.recordSuccess(fingerprint, agent, { ...listing, origin: 'live-session' }, 'live')
     store.recordConfiguredDefault(fingerprint, account.configured)
   }
   const modelCatalog = createAgentModelCatalogService({
@@ -247,7 +251,7 @@ function host(agent: string, record: AgentSessionRecord) {
 }
 
 function pills(state: StructuredAgentSessionOptionState) {
-  const snapshot = structuredAgentSessionOptionSnapshot(state)
+  const snapshot = structuredAgentSessionShownSnapshot(state)
   const pill = (id: string) => {
     const kind = snapshot.find((descriptor) => descriptor.id === id)?.kind
     return kind?.type === 'select'
@@ -310,11 +314,11 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(settled).toEqual(first)
       expect(atRest.current).toStrictEqual({
         model,
-        effort,
+        effort: undefined,
         defaulted: [],
         ...modeOf(agent),
         ...AT_REST_METADATA,
-        acceptedInputSources: { model: 'policy', effort: 'policy' }
+        acceptedInputSources: { model: 'policy' }
       })
     }
   )
@@ -347,11 +351,11 @@ describe("a new chat's effort pill before its agent starts", () => {
 
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
-      effort: 'high',
+      effort: undefined,
       defaulted: [],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy', effort: 'policy' }
+      acceptedInputSources: { model: 'policy' }
     })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
@@ -361,11 +365,11 @@ describe("a new chat's effort pill before its agent starts", () => {
 
     expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
-      effort: 'medium',
+      effort: undefined,
       defaulted: [],
       permissionMode: 'ask',
       ...AT_REST_METADATA,
-      acceptedInputSources: { model: 'policy', effort: 'policy' }
+      acceptedInputSources: { model: 'policy' }
     })
   })
 

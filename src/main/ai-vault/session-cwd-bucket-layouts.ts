@@ -1,5 +1,8 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
-import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
+import {
+  encodeClaudeProjectPaths,
+  isClaudeProjectDirInScope
+} from './scanners/claude/claude-project-dir-encoding'
 
 export type CwdBucketLayout = {
   agent: Extract<AiVaultAgent, 'claude' | 'pi' | 'codebuddy'>

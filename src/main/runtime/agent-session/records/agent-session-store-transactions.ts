@@ -25,6 +25,7 @@ import {
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
 } from './agent-session-store-draft'
+import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 
 // Commit validated draft rows atomically before publication; failures discard the draft.
 // The promise queue preserves FIFO and defers BEGIN beyond the caller's open journal transaction.
@@ -85,6 +86,8 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   private published: AgentSessionStoreState
+  /** Moves only when a commit changes what chat sender identity reads. */
+  senderIdentityRevision = 0
   /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
    *  lookups derived from every record's lineage stay valid across admission and lease writes. */
   private lineage: object = {}
@@ -254,6 +257,9 @@ export class AgentSessionStoreTransactions {
       adopt: () => {
         if (writes) {
           freezeRows(draft, writes)
+          if (changesAgentSenderIdentity(published, draft, writes)) {
+            this.senderIdentityRevision++
+          }
           this.published = draft
           const lineageChanged =
             writes.records.remove.length > 0 ||

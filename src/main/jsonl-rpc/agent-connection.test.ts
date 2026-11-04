@@ -8,6 +8,7 @@ import type { terminateProviderProcessTree } from '../provider-process/provider-
 import { JsonlRpcAgentConnection, type JsonlRpcAgentConnectionOptions } from './agent-connection'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 
 const teardown = vi.hoisted(() =>
   vi.fn<typeof terminateProviderProcessTree>(async () => 'unverifiable')
@@ -107,9 +108,20 @@ describe('JSON-lines RPC process ownership', () => {
     vi.useFakeTimers()
     const onExit = vi.fn()
     const { connection, child } = fixture({ onExit })
+    const onRootExit = vi.fn()
+    connection.onExit(onRootExit)
     const pending = expect(connection.request('prompt')).rejects.toThrow('code 7')
     child.stderr.write('sensitive stderr text')
     child.emit('exit', 7, null)
+    expect(onRootExit).toHaveBeenCalledExactlyOnceWith(false, expect.any(Error))
+    const rootError = onRootExit.mock.calls[0][1]
+    expect(rootError.message).toContain('code 7')
+    expect(rootError.message).not.toContain('sensitive')
+    expect(providerDiagnosticOf(rootError)).toEqual({
+      text: 'sensitive stderr text',
+      audience: 'person'
+    })
+    expect(onExit).not.toHaveBeenCalled()
     child.emit('close', 7, null)
     await vi.advanceTimersByTimeAsync(1_000)
     await pending
@@ -146,6 +158,8 @@ describe('JSON-lines RPC process ownership', () => {
     const { connection, child } = fixture({ onExit, onClose }, { exitOnEnd: false })
     const pending = expect(connection.request('prompt')).rejects.toThrow('stream closed')
     child.stdout.emit('end')
+    // Output ending first waits the drain bound for the exit that says how the agent ended.
+    await vi.advanceTimersByTimeAsync(1_000)
     await pending
     expect(connection.closed).toBe(true)
     expect(connection.rootVerdict).toBe('live')

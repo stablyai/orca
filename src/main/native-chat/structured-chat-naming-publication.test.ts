@@ -7,7 +7,7 @@ import { agentSessionConversationView } from '../../shared/agent-session/lifecyc
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { listResult } from '../ai-vault/structured-session-ownership.test-support'
-import * as scanner from '../ai-vault/session-scanner-background'
+import * as scanner from '../ai-vault/scan-service/session-scanner-background'
 import { resetAiVaultSessionListCacheForTests } from '../ai-vault/cached-session-list'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'

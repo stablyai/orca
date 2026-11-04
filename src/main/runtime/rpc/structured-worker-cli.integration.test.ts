@@ -8,7 +8,7 @@ import { activeProviderContext } from '../../../shared/agent-session/agent-sessi
 import { isOrcaSessionId } from '../../../shared/orca-session-address'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import * as versionProbe from '../../agent-cli-version-probe'
+import * as versionProbe from '../../agent-launch/preflight/agent-cli-version-probe'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'

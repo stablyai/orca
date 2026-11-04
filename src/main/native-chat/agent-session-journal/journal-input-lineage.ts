@@ -1,3 +1,6 @@
+import { mergeInputPlaces, type JournalInputPlaceIndex } from './journal-input-place-index'
+import type { JournalInputCardIndex } from './journal-input-card-index'
+import type { JournalSubmissionRow } from './journal-row-schema'
 import type { JournalInputPlace } from './journal-input-order-state'
 import { finishJournalSteps } from './journal-reconstruction-steps'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -157,5 +160,42 @@ export function journalInputCardPrecedes(
     (boundary) => coordinate?.epoch === boundary.epoch && coordinate.sequence < boundary.sequence,
     () => true,
     (a, b) => a || b
+  )
+}
+
+export function journalInputAdmission(
+  index: Pick<JournalInputCardIndex, 'command' | 'relation' | 'queryCurrent' | 'query'>,
+  lineage: JournalInputLineageOwner,
+  row: JournalSubmissionRow,
+  originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+): JournalInputPlace {
+  const coordinate = { epoch: row.epoch, sequence: row.seq }
+  const context = row.inputOrderContext ?? {
+    source: coordinate,
+    basis: 'legacy' as const,
+    cut: lineage.at(row.seq)
+  }
+  const original =
+    context.basis === 'legacy' ? originalAcceptance?.(row.clientMessageId) : undefined
+  const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
+  const exposed = row.inputOrderContext?.basis === 'legacy' ? index.command() : undefined
+  const selected =
+    row.inputOrderContext?.basis === 'legacy'
+      ? exposed && index.relation(exposed, place)
+        ? exposed
+        : undefined
+      : !row.inputOrderContext
+        ? index.queryCurrent(place).command
+        : index.query(place).command
+  return { ...place, ...(selected ? { witnessCardId: selected.messageId } : {}) }
+}
+
+export function queryCurrentInputPlace(index: JournalInputPlaceIndex, place: JournalInputPlace) {
+  return queryInputContext(
+    place.context,
+    place.original,
+    (coordinate) => index.query(coordinate.epoch, coordinate.sequence),
+    () => index.allPlaces(),
+    mergeInputPlaces
   )
 }

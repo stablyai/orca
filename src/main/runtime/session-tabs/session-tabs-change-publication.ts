@@ -1,4 +1,4 @@
-import { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab } from './mobile-session-publication-preservation'
+import { OrcaRuntimeWithSessionTabSenders } from './session-tabs-sender-publication'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionClientTab,
@@ -12,7 +12,7 @@ import { getMobileSessionTabOrderIds } from '../mobile-session-tab-merge'
 import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 
-export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab {
+export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntimeWithSessionTabSenders {
   protected scheduleMobileSessionTabsChanged(worktreeId: string): void {
     this.pendingMobileSessionTabsChangeSequenceByWorktree.set(
       worktreeId,
@@ -44,59 +44,74 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       return
     }
     // Browser events are workspace-scoped; navigation/churn must not broadcast every workspace.
-    const result = this.toMobileSessionTabsResult(snapshot)
-    for (const subscription of this.mobileSessionTabListeners) {
-      subscription.listener(
-        this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-        changeSequence
-      )
-    }
+    this.createMobileSessionTabsDelivery()(this.toMobileSessionTabsResult(snapshot), changeSequence)
   }
 
   protected notifyMobileSessionTabSnapshots(): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+    const deliver = this.createMobileSessionTabsDelivery()
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
-      const result = this.toMobileSessionTabsResult(snapshot)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
+      deliver(this.toMobileSessionTabsResult(snapshot), ++this.mobileSessionTabsChangeSequence)
     }
   }
 
-  protected getMobileSessionTabsForWorktree(
+  protected async getMobileSessionTabsForWorktree(
     worktreeId: string,
     clientNavigationId?: string,
-    options?: { includeInitialSurfaceLaunch?: true }
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    return (
+      await this.getMobileSessionTabsForWorktreeWithChangeSequence(
+        worktreeId,
+        clientNavigationId,
+        options
+      )
+    ).snapshot
+  }
+
+  protected getMobileSessionTabsWithoutSenders(
+    worktreeId: string,
+    clientNavigationId?: string,
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: false }
   ): RuntimeMobileSessionTabsResult {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
+    let result: RuntimeMobileSessionTabsResult
+    if (snapshot) {
+      result = this.toMobileSessionTabsResult(snapshot)
+    } else {
       const publishedEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
       if (publishedEpoch === null) {
         this.notifyEmptyWorktreeOnPublication(worktreeId)
       }
-      const result = this.projectMobileSessionTabsForClient(
-        this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch),
-        clientNavigationId
-      )
-      const launch = options?.includeInitialSurfaceLaunch
-        ? readCreatedWorkspaceLaunch(this, worktreeId)
-        : undefined
-      return launch ? { ...result, initialSurfaceLaunch: launch } : result
+      result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
     }
-    const result = this.projectMobileSessionTabsForClient(
-      this.toMobileSessionTabsResult(snapshot),
-      clientNavigationId
-    )
+    const projected = this.projectMobileSessionTabsForClient(result, clientNavigationId)
     const launch = options?.includeInitialSurfaceLaunch
       ? readCreatedWorkspaceLaunch(this, worktreeId)
       : undefined
-    return launch ? { ...result, initialSurfaceLaunch: launch } : result
+    return launch ? { ...projected, initialSurfaceLaunch: launch } : projected
+  }
+
+  protected async getMobileSessionTabsForWorktreeWithChangeSequence(
+    worktreeId: string,
+    clientNavigationId?: string,
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
+  ): Promise<{ snapshot: RuntimeMobileSessionTabsResult; changeSequence: number }> {
+    const changeSequence = this.mobileSessionTabsChangeSequence
+    const result = this.getMobileSessionTabsWithoutSenders(
+      worktreeId,
+      clientNavigationId,
+      options?.includeInitialSurfaceLaunch ? { includeInitialSurfaceLaunch: true } : {}
+    )
+    return {
+      snapshot:
+        options?.includeAgentSenders === false
+          ? result
+          : await this.withMobileSessionTabSenders(result),
+      changeSequence
+    }
   }
 
   // Only unpublished graphs mean ask later; published graphs without an entry are empty, allowing the first terminal create.
@@ -104,7 +119,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     worktreeId: string,
     publishedEpoch: number | null
   ): RuntimeMobileSessionTabsResult {
-    return {
+    const result: RuntimeMobileSessionTabsResult = {
       worktree: worktreeId,
       publicationEpoch:
         publishedEpoch === null
@@ -116,6 +131,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       activeTabType: null,
       tabs: []
     }
+    return result
   }
 
   // Empty workspaces get no normal publication notice; explicitly settle clients previously told ask later.
@@ -135,13 +151,7 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         return
       }
       const result = this.emptyMobileSessionTabsResult(worktreeId, publishedEpoch)
-      const changeSequence = ++this.mobileSessionTabsChangeSequence
-      for (const subscription of this.mobileSessionTabListeners) {
-        subscription.listener(
-          this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
-          changeSequence
-        )
-      }
+      this.createMobileSessionTabsDelivery()(result, ++this.mobileSessionTabsChangeSequence)
     }
     this.sessionTabsInventoryWaiters.add(onPublished)
   }
@@ -149,17 +159,14 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
   protected emitMobileSessionTabsSnapshotToClient(
     projected: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
-    follow = false
+    follow = false,
+    deliver = this.createMobileSessionTabsDelivery()
   ): void {
-    const changeSequence = ++this.mobileSessionTabsChangeSequence
-    for (const subscription of this.mobileSessionTabListeners) {
-      if (subscription.clientNavigationId === clientNavigationId) {
-        subscription.listener(
-          follow ? { ...projected, navigationIntent: 'follow' } : projected,
-          changeSequence
-        )
-      }
-    }
+    deliver(
+      follow ? { ...projected, navigationIntent: 'follow' } : projected,
+      ++this.mobileSessionTabsChangeSequence,
+      clientNavigationId
+    )
   }
 
   protected async resolveMobileMarkdownWorktreeId(

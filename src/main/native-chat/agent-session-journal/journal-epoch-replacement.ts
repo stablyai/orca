@@ -99,6 +99,21 @@ export function replaceJournalEpoch(
         }
         const rows: JournalRow[] = [epochRow]
         applyJournalRow(state, epochRow)
+        const { lifted, liveStop, reopened, failureHeld } = input.queuePause
+        const place = () => ({
+          state,
+          seq: state.lastSequence + 1,
+          fence: input.fence,
+          ts: input.now()
+        })
+        const resume = () => {
+          const row = buildJournalQueueResumeRow(place())
+          journalInputOrder(state).withAcceptance(acceptance, () => applyJournalRow(state, row))
+          rows.push(row)
+        }
+        if (lifted && failureHeld) {
+          resume()
+        }
         for (const item of input.items) {
           await finishJournalStepsAsync(journalInputOrder(state).cards.ensureSteps(state))
           const row = buildJournalItemRow({
@@ -194,17 +209,8 @@ export function replaceJournalEpoch(
               : change
           )
         }
-        const { lifted, liveStop, reopened } = input.queuePause
-        const place = () => ({
-          state,
-          seq: state.lastSequence + 1,
-          fence: input.fence,
-          ts: input.now()
-        })
-        if (lifted) {
-          const row = buildJournalQueueResumeRow(place())
-          journalInputOrder(state).withAcceptance(acceptance, () => applyJournalRow(state, row))
-          rows.push(row)
+        if (lifted && !failureHeld) {
+          resume()
         }
         if (liveStop) {
           const row = buildJournalStopEventRow({ ...place(), event: liveStop })

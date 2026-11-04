@@ -355,7 +355,8 @@ describe('host rewind', () => {
     expect(
       await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
     ).toMatchObject({ ok: true })
-    expect(startedChild()).toBeNull()
+    // The start's owner stops the child once its required rewind read failed.
+    await vi.waitFor(() => expect(startedChild()).toBeNull())
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('prepared')
     expect(
       await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)

@@ -1643,7 +1643,7 @@
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
-      "providerUnavailable": "Bu sağlayıcı için barındırılan inceleme paneli kullanılamıyor."
+      "githubRemoteRequired": "Bu sekmede çekme isteği ayrıntılarını görmek için bir GitHub uzak deposu gerekir. Desteklenen diğer platformlarda Değişiklikler bölümünden bir inceleme oluşturup tarayıcınızda açın."
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",
@@ -1838,6 +1838,7 @@
       "attachmentAtMost": "{{agent}} tek mesajda en fazla {{limit}} görsel kabul ettiği için bu mesaj gönderilmedi.",
       "attachmentEmpty": "Bu mesajdaki bir görsel boş olduğu için mesaj gönderilmedi.",
       "attachmentInvalid": "Bu mesajdaki bir ek ajana gönderilemiyor.",
+      "attachmentsExpired": "Süresi doldu: {{names}}.",
       "attachmentLargerThan": "Bu mesajdaki bir görsel {{size}} MB sınırını aştığı için mesaj gönderilmedi.",
       "attachmentNoSource": "Bu mesajdaki bir görselin gönderilecek dosyası bulunmadığı için mesaj gönderilmedi.",
       "attachmentNotAFile": "Bu mesajdaki görsellerden biri dosya olmadığı için mesaj gönderilmedi.",
@@ -2422,6 +2423,7 @@
       "queueTooLarge": "Kuyrukta çok fazla metin bekliyor.",
       "quitTerminalAgent": "Sohbete burada devam etmek için o ajandan çıkın.",
       "reattachFile": "Kaldırıp yeniden ekleyin.",
+      "reattachFiles": "Kaldırıp yeniden ekleyin.",
       "recordFailed": "Orca bunu sohbet geçmişine kaydedemedi.",
       "recordUnreadable": "Orca'da bu sohbetin kayıtlı durumu okunamadı.",
       "reopenChat": "Yeniden kontrol etmek için sohbeti tekrar açın.",
@@ -2648,6 +2650,9 @@
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi"
+    },
+    "agents": {
+      "permissionOwnAll": "Ajanların kendi ayarları"
     }
   },
   "sourceControl": {

@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import type { JournalReducerState } from './journal-reducer'
 import type { LegacyQueuedCards } from './journal-queue-import'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
@@ -19,6 +20,7 @@ export async function journalQueuePausesAsync(
       epoch: state.epoch,
       marks: state.queuePauseMarks,
       latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      failedAt: journalInputOrder(state).newestTurn.failure(),
       cards: await journalQueueCardsAsync(state, legacy),
       reopenFloor
     })

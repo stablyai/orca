@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
-import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
+import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
 import type {
@@ -48,12 +48,12 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   ): ReturnType<BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserClose']>
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract getMobileTerminalLeafPtyIds(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalLeafPtyIds']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalLeafPtyIds']>
+    ...args: Parameters<PruneLayout['getMobileTerminalLeafPtyIds']>
+  ): ReturnType<PruneLayout['getMobileTerminalLeafPtyIds']>
 
   protected abstract getMobileTerminalPaneKey(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
+    ...args: Parameters<PruneLayout['getMobileTerminalPaneKey']>
+  ): ReturnType<PruneLayout['getMobileTerminalPaneKey']>
 
   abstract applyLayoutCommand(
     command: WindowLayoutCommand,
@@ -70,10 +70,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     surface: StructuredSessionSurface | null
   ): Promise<boolean> {
     const host = getStructuredAgentSessionHost()
-    if (!host) {
-      return false
-    }
-    return closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this)
+    return host ? closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this) : false
   }
 
   // Refused echo closes need a newer snapshot so clients restore the still-live mirror they already pruned.
@@ -231,7 +228,9 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (options.caller) {
       // Keep shared selection; only the originating client selects its newly created tab. Local creates lack a caller.
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
+        this.getMobileSessionTabsWithoutSenders(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         tab.id,
         options.caller.navigation,
         options.caller.clientNavigationId,

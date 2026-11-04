@@ -1,7 +1,7 @@
+import { assertUniqueRuntimeGraphTabIds } from './session-graph-tab-ids'
 import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
 import type {
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
@@ -11,17 +11,6 @@ import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 type Graph = RuntimeSyncWindowGraph
-
-/** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
-function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
-  const seen = new Set<string>()
-  for (const tab of tabs) {
-    if (seen.has(tab.tabId)) {
-      throw new Error('duplicate_runtime_tab_id')
-    }
-    seen.add(tab.tabId)
-  }
-}
 
 export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
@@ -47,8 +36,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
 
   syncWindowGraph(
     windowId: number,
-    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph
-  ): RuntimeSyncWindowGraphResult {
+    graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
+    options?: { includeAgentSenders?: boolean }
+  ): RuntimeSyncWindowGraphResult | Promise<RuntimeSyncWindowGraphResult> {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
     if (
@@ -321,7 +311,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       this.getNativeChatLaunchDraftResolutionClientEventSnapshot().map(
         ({ tabId, text, createdAt }) => ({ tabId, text, createdAt })
       )
-    return {
+    const result: RuntimeSyncWindowGraphResult = {
       ...this.getStatus(),
       ...(agentOrchestrationByPaneKey ? { agentOrchestrationByPaneKey } : {}),
       ...(nativeChatLaunchDraftResolutions.length > 0 ? { nativeChatLaunchDraftResolutions } : {}),
@@ -329,5 +319,17 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
         ? { mobileSessionResyncWorktrees: [...mobileSessionResyncWorktrees] }
         : {})
     }
+    const publicationEpoch = this.rendererGraphEpoch
+    return options?.includeAgentSenders === false || windowId === HEADLESS_RUNTIME_WINDOW_ID
+      ? result
+      : this.agentSenderGraphReply(graph.agentSenderBase).then((senders) => {
+          if (
+            this.authoritativeWindowId !== windowId ||
+            this.rendererGraphEpoch !== publicationEpoch
+          ) {
+            throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+          }
+          return { ...result, ...senders }
+        })
   }
 }

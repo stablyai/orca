@@ -40,6 +40,12 @@ export type CommitMessageModel = {
   contextWindowTokens?: number
 }
 
+export type TextGenerationFlag = {
+  aliases: readonly string[]
+  configKey?: string
+  modelVariant?: boolean
+}
+
 export type CommitMessageAgentSpec = {
   id: TuiAgent
   label: string
@@ -57,6 +63,8 @@ export type CommitMessageAgentSpec = {
   }) => string[]
   /** User recipe args replace generated singleton alias groups; repeats make yargs parse arrays and crash. Default: model flag only. */
   singletonOptions?: readonly (readonly string[])[]
+  modelFlag: readonly TextGenerationFlag[]
+  effortFlag: readonly TextGenerationFlag[]
   modelSource: 'static' | 'dynamic'
   /** Discover models on main for dynamic sources. */
   modelDiscovery?: {
@@ -111,6 +119,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       prompt
     ],
     singletonOptions: [['--model'], ['--thinking']],
+    modelFlag: [{ aliases: ['--model'] }],
+    effortFlag: [{ aliases: ['--thinking'] }],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'omp', args: OMP_MODEL_LIST_ARGS, parse: parseOmpModelList },
     models: [{ id: 'default', label: 'Config default' }],

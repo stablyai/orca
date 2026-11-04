@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TimerPromises from 'node:timers/promises'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
+import { codexStartFailure } from '../../codex/app-server/codex-startup-outcome'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -8,6 +9,8 @@ import { agentSessionFailureFact } from '../../../shared/agent-session/failures/
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import * as startFlight from './structured-agent-session-start-flight'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'
+import { agentSessionStartFailure } from './structured-agent-session-start-failure'
+import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import {
   CALLER,
   attach,
@@ -20,7 +23,7 @@ import {
   hostTestMessage
 } from './structured-agent-session-host-test-data'
 
-const retryClock = vi.hoisted(() => ({ fake: false }))
+const retryClock = vi.hoisted(() => ({ fake: false, scheduled: [] as number[] }))
 vi.mock('node:timers/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof TimerPromises>()
   return {
@@ -29,6 +32,7 @@ vi.mock('node:timers/promises', async (importOriginal) => {
       if (!retryClock.fake) {
         return actual.setTimeout(...args)
       }
+      retryClock.scheduled.push(args[0] ?? 1)
       // ast-grep-ignore: test-no-real-time-wait -- routes the retry backoff onto the faked global timer
       return new Promise((resolve) => setTimeout(() => resolve(args[1]), args[0]))
     }
@@ -38,12 +42,14 @@ vi.mock('node:timers/promises', async (importOriginal) => {
 let host: ReturnType<typeof hostTestState>['host']
 let acquire: ReturnType<typeof hostTestState>['acquire']
 let dispatch: ReturnType<typeof hostTestState>['dispatch']
+const openFailures = new Map<string, (error: Error) => void>()
 const openGates = new Map<string, () => void>()
 const eventually = (assertion: () => void | Promise<void>) =>
   vi.waitFor(assertion, { timeout: 10_000, interval: 0 })
 
 beforeEach(async () => {
   retryClock.fake = false
+  retryClock.scheduled = []
   vi.useFakeTimers({
     toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
   })
@@ -52,8 +58,10 @@ beforeEach(async () => {
   await host.close(SESSION, 'evict')
   acquire.mockClear()
   openGates.clear()
+  openFailures.clear()
   host.deps.adapter.open = ({ acquisitionGeneration }) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
+      openFailures.set(acquisitionGeneration!, reject)
       openGates.set(acquisitionGeneration!, () => resolve({ reportedOptions: {} }))
     })
 })
@@ -81,6 +89,9 @@ async function heldBehindStart(text: string): Promise<string> {
 }
 
 async function proveOpen(): Promise<void> {
+  await eventually(() =>
+    expect(host.collaboratorsForTests().sessions.get(SESSION)?.child).toBeTruthy()
+  )
   const generation = host.collaboratorsForTests().sessions.get(SESSION)?.child?.generation
   if (!generation) {
     throw new Error('expected a published child')
@@ -108,6 +119,7 @@ async function endAttempt() {
   if (!child.generation) {
     throw new Error('expected a published child')
   }
+  await eventually(() => expect(openFailures.has(child.generation!)).toBe(true))
   await host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,
@@ -116,6 +128,13 @@ async function endAttempt() {
     reason: 'exited while starting',
     cause: 'unexpected-exit'
   })
+  // As the adapter: its open answers with this acquisition's own unanswered exit.
+  openFailures.get(child.generation)!(
+    agentSessionStartFailure(
+      withObservedProviderExit(new Error('provider exited before open answered'))
+    )
+  )
+  openFailures.delete(child.generation)
   await eventually(() => expect(session.child).toBeNull())
 }
 
@@ -126,7 +145,7 @@ describe('final logical startup settlement', () => {
       host.deps.adapter.changeThreadGoal = vi.fn(async () => ({ ok: true as const }))
       const operation = messageOwned ? undefined : goal()
       const id = messageOwned ? await heldBehindStart('withdraw before settlement') : undefined
-      const { sessions, runtimeState, lifetime } = host.collaboratorsForTests()
+      const { sessions, runtimeState } = host.collaboratorsForTests()
       await eventually(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
       const flight = runtimeState.startFlights.get(SESSION)!
       let stopped: ReturnType<typeof stop> | undefined
@@ -162,15 +181,20 @@ describe('final logical startup settlement', () => {
         await endAttempt()
         await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
         await eventually(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
-        await lifetime.failStartingChild(
-          SESSION,
-          sessions.get(SESSION)!.child!,
-          withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
-            method: 'initialize',
-            timeoutMs: 60_000
-          }),
-          60_000
+        const failed = sessions.get(SESSION)!.child!
+        await eventually(() => expect(openFailures.has(failed.generation!)).toBe(true))
+        openFailures.get(failed.generation!)!(
+          codexStartFailure(
+            withProviderRequestTimeout(
+              new CodexAppServerRequestError('initialize', -1, 'deadline'),
+              {
+                method: 'initialize',
+                timeoutMs: 60_000
+              }
+            )
+          )
         )
+        openFailures.delete(failed.generation!)
         await expect(flight.outcome).resolves.toMatchObject({ ok: false, aborted: true })
         expect(stopped).toBeDefined()
         expect(await stopped).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -183,6 +207,9 @@ describe('final logical startup settlement', () => {
             reason: DISPATCH_REJECTED_CANCELLED
           })
         }
+        await host.collaboratorsForTests().serialize(SESSION, async () => {})
+        await sessions.get(SESSION)!.journal.readInOrder(() => undefined)
+        await host.flushStreamedEvents(SESSION)
         const snapshot = await host.journalSnapshot(SESSION)
         expect(
           snapshot.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
@@ -246,7 +273,7 @@ describe('final logical startup settlement', () => {
   it('recovers a message-owned failed final write on the next accept without transferring its failure', async () => {
     const first = await heldBehindStart('original requester')
     const later = await accept('later queued message')
-    const { sessions, lifetime, conversationDelivery } = host.collaboratorsForTests()
+    const { sessions, conversationDelivery } = host.collaboratorsForTests()
     const journal = sessions.get(SESSION)!.journal
     const append = journal.appendLifecycleBatch.bind(journal)
     const write = vi.spyOn(journal, 'appendLifecycleBatch').mockImplementation((input) => {
@@ -255,15 +282,17 @@ describe('final logical startup settlement', () => {
       }
       return append(input)
     })
-    await lifetime.failStartingChild(
-      SESSION,
-      sessions.get(SESSION)!.child!,
-      withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
-        method: 'initialize',
-        timeoutMs: 60_000
-      }),
-      60_000
+    const failedChild = sessions.get(SESSION)!.child!
+    await eventually(() => expect(openFailures.has(failedChild.generation!)).toBe(true))
+    openFailures.get(failedChild.generation!)!(
+      codexStartFailure(
+        withProviderRequestTimeout(new CodexAppServerRequestError('initialize', -1, 'deadline'), {
+          method: 'initialize',
+          timeoutMs: 60_000
+        })
+      )
     )
+    openFailures.delete(failedChild.generation!)
     await eventually(() => expect(conversationDelivery.loop.isRunning(SESSION)).toBe(false))
     expect(await submission(first)).toMatchObject({ dispatchState: 'pending' })
     expect(await submission(later)).toMatchObject({ dispatchState: 'pending' })
@@ -291,6 +320,7 @@ describe('final logical startup settlement', () => {
       })
     ])
     await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    await eventually(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
     await proveOpen()
     await eventually(() =>
       expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([later, wake])
@@ -369,6 +399,7 @@ describe('final logical startup settlement', () => {
       expect(runtimeState.currentEventSink(SESSION)).toBeUndefined()
       acquire.mockClear()
       openGates.clear()
+      openFailures.clear()
       const other = 'unrelated-chat'
       const unrelated = hostTestAttachParams(null, {
         providerHandle: undefined,
@@ -432,8 +463,11 @@ describe('final logical startup settlement', () => {
           for (let attempt = 0; attempt < 5; attempt++) {
             await eventually(() => expect(acquire).toHaveBeenCalledTimes(n * 5 + attempt + 1))
             await eventually(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
+            const scheduled = retryClock.scheduled.length
             await endAttempt()
             if (attempt < 4) {
+              await eventually(() => expect(retryClock.scheduled).toHaveLength(scheduled + 1))
+              expect(retryClock.scheduled.at(-1)).toBe(100 * 2 ** attempt)
               await vi.advanceTimersByTimeAsync(100 * 2 ** attempt)
             }
           }
@@ -471,7 +505,10 @@ describe('final logical startup settlement', () => {
         }
         for (let attempt = 0; attempt < 4; attempt++) {
           await eventually(() => expect(sessions.get(SESSION)?.child).toBeTruthy())
+          const scheduled = retryClock.scheduled.length
           await endAttempt()
+          await eventually(() => expect(retryClock.scheduled).toHaveLength(scheduled + 1))
+          expect(retryClock.scheduled.at(-1)).toBe(100 * 2 ** attempt)
           await vi.advanceTimersByTimeAsync(100 * 2 ** attempt)
         }
         await eventually(() => expect(acquire).toHaveBeenCalledTimes(5 * count + 6))

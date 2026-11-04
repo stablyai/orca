@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { publishFileDurableSync } from '../../durable-file-write'
+import { publishFileDurableSync } from '../../filesystem/durable-file-write'
 import { profileStatePublicationFailureText } from './profile-state-startup-failure'
 
 class ProfileStateDatabasePublicationError extends Error {

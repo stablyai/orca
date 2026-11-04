@@ -28,7 +28,7 @@ import {
 } from '../../../shared/ripgrep-process-availability'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
-import { resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './access/filesystem-auth'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { QuickOpenSubprocessPathAccumulator } from '../../../shared/quick-open-subprocess-path-accumulator'
 import { bundledRipgrepUnavailableError } from '../../ripgrep/bundled-ripgrep-path'

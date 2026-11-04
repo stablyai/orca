@@ -1,3 +1,4 @@
+import { withHeldSenderDiscovery } from '../runtime-agent-sender-snapshot.test-fixture'
 import type { AdoptStablePaneArgs } from '../../ipc/pty/ipc/spawn-types'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
@@ -76,39 +77,46 @@ describe('OrcaRuntimeService', () => {
     const { runtime, runtimeStore, getSession, spawn, adoptStablePane, activate, terminalLeafIds } =
       await startSplitHost()
 
-    const disk = makeDeferred()
-    Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
-    const published = vi.fn()
-    runtime.onMobileSessionTabsChanged(published)
-    // Model immediate paired-client reactivation on stream end.
-    let reactivation: Promise<unknown> | undefined
-    let observedAtStreamEnd: { binding?: string; publications: number } | undefined
-    runtime.subscribeToPtyExit('pty-b', () => {
-      observedAtStreamEnd = {
-        binding:
-          getSession().terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId?.[
-            HEADLESS_SECOND_LEAF_ID
-          ],
-        publications: published.mock.calls.length
-      }
-      reactivation = activate(HEADLESS_SECOND_LEAF_ID, 'automatic').catch((error) => error)
+    await withHeldSenderDiscovery(runtime, async (release) => {
+      const disk = makeDeferred()
+      Object.assign(runtimeStore, { flushPendingOrThrowAsync: () => disk.promise })
+      const published = vi.fn()
+      const phone = vi.fn()
+      runtime.onMobileSessionTabsChanged(published)
+      runtime.onMobileSessionTabsChanged(phone, undefined, 'mobile')
+      // Model immediate paired-client reactivation on stream end.
+      let reactivation: Promise<unknown> | undefined
+      let observedAtStreamEnd: { binding?: string; publications: number; phone: number } | undefined
+      runtime.subscribeToPtyExit('pty-b', () => {
+        observedAtStreamEnd = {
+          binding:
+            getSession().terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId?.[
+              HEADLESS_SECOND_LEAF_ID
+            ],
+          publications: published.mock.calls.length,
+          phone: phone.mock.calls.length
+        }
+        reactivation = activate(HEADLESS_SECOND_LEAF_ID, 'automatic').catch((error) => error)
+      })
+      const exiting = runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
+
+      expect(observedAtStreamEnd).toEqual({ binding: undefined, publications: 1, phone: 1 })
+      expect(reactivation).toBeDefined()
+      // Lookup must reject before stable-pane adoption can revive the retired leaf.
+      expect(await reactivation).toEqual(new Error('tab_not_found'))
+      expect(adoptStablePane).toHaveBeenCalledTimes(2)
+      expect(spawn).toHaveBeenCalledTimes(2)
+      expect(phone.mock.calls[0]?.[0].agentSenderAssociations).toBeUndefined()
+      await release()
+      expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
+      expect(
+        getSession().terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId?.[HEADLESS_SECOND_LEAF_ID]
+      ).toBeUndefined()
+
+      disk.resolve()
+      await exiting
+      expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
     })
-    const exiting = runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
-
-    expect(observedAtStreamEnd).toEqual({ binding: undefined, publications: 1 })
-    expect(reactivation).toBeDefined()
-    // Lookup must reject before stable-pane adoption can revive the retired leaf.
-    expect(await reactivation).toEqual(new Error('tab_not_found'))
-    expect(adoptStablePane).toHaveBeenCalledTimes(2)
-    expect(spawn).toHaveBeenCalledTimes(2)
-    expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
-    expect(
-      getSession().terminalLayoutsByTabId['host-tab']?.ptyIdsByLeafId?.[HEADLESS_SECOND_LEAF_ID]
-    ).toBeUndefined()
-
-    disk.resolve()
-    await exiting
-    expect(await terminalLeafIds()).toEqual([HEADLESS_LEAF_ID])
   })
 
   // PTY exit remains real even when quit/maintenance refuses persistence.

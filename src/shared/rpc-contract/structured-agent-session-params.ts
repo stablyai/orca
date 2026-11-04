@@ -2,6 +2,7 @@ import { AgentSessionSelectionSchema } from '../agent-session/options/agent-sess
 import {
   SendBody,
   MAX_OPTION_LABEL,
+  CompactInstructions,
   AgentSessionOptions
 } from './structured-agent-session-message-params'
 import { TerminalClose } from './terminal-unary-params'
@@ -277,11 +278,16 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
+    /** Only where the session's options report compactInstructions: older strict hosts refuse it. */
+    instructions: CompactInstructions.optional(),
     /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
      * /clear never queues: delivery is outside its fingerprint, so including it conflicts. */
     delivery: z.literal('queue-if-active').optional()
   })
   .strict()
+  .refine((params) => params.instructions === undefined || params.command === 'compact', {
+    message: 'Only /compact takes instructions'
+  })
 
 export const ThreadGoalParams = z
   .object({

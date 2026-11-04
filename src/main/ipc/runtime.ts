@@ -37,7 +37,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    async (event, graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
@@ -54,7 +54,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (graph.projectSectionCatalog) {
         publishMobileProjectSections(graph.projectSectionCatalog)
       }
-      return result
+      const reply = await result
+      if (window.isDestroyed() || event.senderFrame !== event.sender.mainFrame) {
+        throw new Error('Runtime graph publisher was replaced before its reply')
+      }
+      return reply
     }
   )
 

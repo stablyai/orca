@@ -6,7 +6,7 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import {
   restoreJournalSqlFailure,
   type JournalSqlCommand,

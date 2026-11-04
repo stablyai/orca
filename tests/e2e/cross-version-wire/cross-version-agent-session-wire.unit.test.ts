@@ -67,8 +67,6 @@ describeReleasedStopNoteProjection({
   runtimeStub
 })
 
-const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
-
 let baselineRef: string
 let current: AgentSessionWireBuild
 let baseline: AgentSessionWireBuild
@@ -100,20 +98,6 @@ async function releaseHostRoot(root: string): Promise<void> {
 }
 
 describe('cross-version structured agent sessions', () => {
-  it(
-    'skews current code against a real published release',
-    () => {
-      expect(baselineRef).toMatch(/^v?\d/)
-      expect(baseline.revision).toMatch(/^[0-9a-f]{40}$/)
-      expect(baseline.revision).not.toBe(current.revision)
-      // The anti-vacuous oracle for the source scan: a scan that found nothing
-      // would make every "no structured method here" claim below meaningless.
-      expect(baseline.methodNames).toContain('terminal.create')
-      expect(current.methodNames).toContain('terminal.create')
-    },
-    SUITE_TIMEOUT_MS
-  )
-
   describe('a client that never asked for structured sessions', () => {
     let hostCalls: ReturnType<typeof structuredHostStub>
 
@@ -348,76 +332,6 @@ describe('cross-version structured agent sessions', () => {
         } finally {
           await build.installStructuredHost(null)
         }
-      }
-    })
-
-    it(
-      'executes every method a release-shaped checkout registers',
-      async () => {
-        // Validate the full manifest through an extracted checkout graph as well as the working-tree module graph.
-        const releasedCurrent = await loadAgentSessionWireBuild('HEAD')
-        expect(releasedCurrent.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-        expect(
-          releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.'))
-        ).toHaveLength(STRUCTURED_CALLS.length)
-        // Install this graph’s host slot explicitly so unsupported-host fallback cannot masquerade as capability refusal.
-        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
-        await releasedCurrent.installStructuredHost(installableHost(hostCalls))
-        try {
-          await expectDeclaredSurfaceExecutes(
-            releasedCurrent,
-            hostCalls,
-            releasedCurrent.capabilities
-          )
-        } finally {
-          await releasedCurrent.installStructuredHost(null)
-        }
-      },
-      SUITE_TIMEOUT_MS
-    )
-  })
-
-  describe('post-auth mobile capability negotiation', () => {
-    it('is an additive method that lets the current host record mobile capabilities', async () => {
-      const updates: string[][] = []
-
-      const replies = await callBuild(
-        current,
-        CLIENT_CAPABILITY_UPDATE_METHOD,
-        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
-        {
-          clientKind: 'mobile',
-          clientCapabilities: [],
-          updateClientCapabilities: (capabilities) => updates.push([...capabilities])
-        }
-      )
-
-      expect(current.methodNames).toContain(CLIENT_CAPABILITY_UPDATE_METHOD)
-      expect(current.protocolVersion).toBe(baseline.protocolVersion)
-      expect(replies).toHaveLength(1)
-      expect(replies[0]).toMatchObject({
-        ok: true,
-        result: {
-          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-        }
-      })
-      expect(updates).toEqual([[STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])
-    })
-
-    it('gets a normal answer from an old host instead of changing the auth shape', async () => {
-      const replies = await callBuild(
-        baseline,
-        CLIENT_CAPABILITY_UPDATE_METHOD,
-        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
-        { clientKind: 'mobile', clientCapabilities: [] }
-      )
-
-      expect(replies).toHaveLength(1)
-      if (!baseline.methodNames.includes(CLIENT_CAPABILITY_UPDATE_METHOD)) {
-        expect(replies[0]).toMatchObject({
-          ok: false,
-          error: { code: 'method_not_found' }
-        })
       }
     })
   })

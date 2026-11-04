@@ -27,6 +27,10 @@ export class AgentSessionTabTable {
     return this.sessionByTab.get(tabId)
   }
 
+  *sessionIdsInOrder(): Generator<string> {
+    yield* this.sessionByTab.values()
+  }
+
   /** Visible sessions in tab issuance order. */
   sessionIds(): string[] {
     return [...this.sessionByTab.values()]

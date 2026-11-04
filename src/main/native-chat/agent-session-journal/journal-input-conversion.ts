@@ -3,7 +3,11 @@ import type { JournalReadConnection } from './journal-sql-owner'
 import { readJournalLegacyCards, readJournalLegacyCardsAsync } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
-import { initializeJournalInputOrder, journalInputOrder } from './journal-input-order'
+import {
+  initializeJournalInputOrder,
+  initializeJournalInputOrderSteps,
+  journalInputOrder
+} from './journal-input-order'
 import type { JournalOutcomeFold } from './journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../sqlite/sync-database'
@@ -124,7 +128,7 @@ export async function restoreJournalNativeStateAsync(
   prefix: JournalNativePrefix
 ): Promise<void> {
   await finishJournalStepsAsync(liftJournalNativePrefix(state, format, fold, prefix))
-  const owner = initializeJournalInputOrder(state)
+  const owner = await finishJournalStepsAsync(initializeJournalInputOrderSteps(state))
   const ids = await finishJournalStepsAsync(owner.acceptanceIdsSteps())
   const acceptance = await prepareJournalAcceptance(read, state.sessionId, ids)
   const cards = await readJournalLegacyCardsAsync(read, state)

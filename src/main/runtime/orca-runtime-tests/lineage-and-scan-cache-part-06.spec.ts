@@ -32,7 +32,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it.each(['failed', 'circuit_broken'] as const)(
     'returns recent %s orchestration context without an active coordinator',
-    (dispatchStatus) => {
+    async (dispatchStatus) => {
       const runtime = new OrcaRuntimeService(store)
       const workerLeafId = '66666666-6666-4666-8666-666666666666'
       const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
@@ -61,7 +61,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setOrchestrationDb(orchestrationDb)
       runtime.attachWindow(1)
 
-      const result = runtime.syncWindowGraph(1, {
+      const result = await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-worker',
@@ -92,7 +92,7 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
-  it('does not return stale completed orchestration context for renderer-synced terminal leaves', () => {
+  it('does not return stale completed orchestration context for renderer-synced terminal leaves', async () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
@@ -116,7 +116,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
 
-    const result = runtime.syncWindowGraph(1, {
+    const result = await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-worker',
@@ -329,7 +329,7 @@ describe('OrcaRuntimeService', () => {
     )
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-worker',
@@ -430,7 +430,7 @@ describe('OrcaRuntimeService', () => {
     )
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-parent',

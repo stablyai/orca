@@ -8,7 +8,7 @@ import {
 import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('batches attention queries across unchanged graph publishes', () => {
+  it('batches attention queries across unchanged graph publishes', async () => {
     const runtime = new OrcaRuntimeService(store)
     const terminals = Array.from({ length: 12 }, (_, index) => ({
       tabId: `tab-attention-batch-${index}`,
@@ -58,10 +58,10 @@ describe('OrcaRuntimeService', () => {
         }))
       }
 
-      runtime.syncWindowGraph(1, graph)
+      await runtime.syncWindowGraph(1, graph)
       prepare.mockClear()
       getWorkerAttentionFacts.mockClear()
-      const unchanged = runtime.syncWindowGraph(1, graph)
+      const unchanged = await runtime.syncWindowGraph(1, graph)
 
       const attentionSql = prepare.mock.calls
         .map(([sql]) => sql)

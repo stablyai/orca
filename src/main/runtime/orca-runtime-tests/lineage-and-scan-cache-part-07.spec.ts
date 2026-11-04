@@ -60,7 +60,7 @@ function lineageOf<T extends { attention?: unknown }>(
 }
 
 describe('OrcaRuntimeService orchestration lineage across restart', () => {
-  it('projects the coordinator pane key as the worker parent after the handles are reminted', () => {
+  it('projects the coordinator pane key as the worker parent after the handles are reminted', async () => {
     const terminals = makeTerminals()
     const paneKey = (name: string): string => {
       const terminal = terminals.find((entry) => entry.name === name) as RestartTerminal
@@ -74,7 +74,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       )
       before.setOrchestrationDb(db)
       before.attachWindow(1)
-      before.syncWindowGraph(1, makeGraph(terminals))
+      await before.syncWindowGraph(1, makeGraph(terminals))
       const coordinatorAuthority = before.getOrchestrationDispatchAuthority(
         beforeHandles.coordinator
       )
@@ -116,7 +116,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         paneKey('nested-worker')
       )
       expect(
-        before.syncWindowGraph(1, makeGraph(terminals)).agentOrchestrationByPaneKey
+        (await before.syncWindowGraph(1, makeGraph(terminals))).agentOrchestrationByPaneKey
       ).toMatchObject({
         [paneKey('worker')]: {
           parentTerminalHandle: beforeHandles.coordinator,
@@ -136,7 +136,8 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       expect(freshCoordinatorHandle).not.toBe(beforeHandles.coordinator)
       after.setOrchestrationDb(db)
       after.attachWindow(1)
-      const contexts = after.syncWindowGraph(1, makeGraph(terminals)).agentOrchestrationByPaneKey
+      const contexts = (await after.syncWindowGraph(1, makeGraph(terminals)))
+        .agentOrchestrationByPaneKey
 
       expect(db.getRun(run.id)?.coordinator_handle).toBe(beforeHandles.coordinator)
       expect(lineageOf(contexts?.[paneKey('worker')])).toEqual({
@@ -167,7 +168,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
     }
   })
 
-  it('omits a stale coordinator handle when no live pane owns the coordinator pane key', () => {
+  it('omits a stale coordinator handle when no live pane owns the coordinator pane key', async () => {
     const terminals = makeTerminals().filter((terminal) => terminal.name === 'worker')
     const workerPaneKey = makePaneKey('tab-worker', terminals[0]!.leafId)
     const coordinatorPaneKey = makePaneKey(
@@ -188,7 +189,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       const task = db.createTask({ spec: 'orphaned worker', runId: run.id })
       const dispatch = createRootDispatch(db, task.id, workerHandle, workerPaneKey)
 
-      const context = runtime.syncWindowGraph(1, makeGraph(terminals))
+      const context = (await runtime.syncWindowGraph(1, makeGraph(terminals)))
         .agentOrchestrationByPaneKey?.[workerPaneKey]
 
       // Never publish handles lacking live rows; keep durable pane keys so restored panes recover nesting.

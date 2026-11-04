@@ -61,10 +61,11 @@ export abstract class OrcaRuntimeWithWorkspaceActivityFacts extends OrcaRuntimeW
   }
 
   protected override notifyMobileSessionTabSnapshots(): void {
-    super.notifyMobileSessionTabSnapshots()
+    const result = super.notifyMobileSessionTabSnapshots()
     for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
       this.workspaceActivityFacts.refreshWorkspace(worktreeId)
     }
+    return result
   }
 
   protected override notifyMobileSessionTabsRemoved(worktreeId: string): void {
