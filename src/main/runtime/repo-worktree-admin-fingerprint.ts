@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { resolveGitCommonDirectory } from '../../shared/git-common-directory'
+import { resolveGitCommonDirectory } from '../../shared/git/metadata/git-common-directory'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // NUL can appear in neither a path nor a Git ref, so field boundaries stay unambiguous.

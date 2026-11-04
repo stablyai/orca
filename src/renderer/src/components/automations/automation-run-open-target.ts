@@ -18,17 +18,14 @@ import {
 } from '../../../../shared/execution-host'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AppState } from '@/store/types'
-import {
-  getFolderWorkspaceWorktree,
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getAutomationRunViewState } from './automation-run-view-state'
 import { resolveOwner } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
 
 export type AutomationRunPaneTarget = {

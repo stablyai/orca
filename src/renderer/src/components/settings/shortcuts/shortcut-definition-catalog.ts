@@ -11,7 +11,7 @@ import {
   findMacSystemHotkeyConflicts,
   type MacCapturedDigitChord
 } from '../../../../../shared/macos-symbolic-hotkeys'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { translate } from '@/i18n/i18n'

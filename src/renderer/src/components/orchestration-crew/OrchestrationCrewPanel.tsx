@@ -269,7 +269,7 @@ export function CrewPanelContent({
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
       // z-15: above terminal text and the chat rail, below the pane title strip (z-20) so its buttons stay usable.
-      className="pointer-events-none absolute inset-0 z-[15] text-foreground"
+      className="pointer-events-none absolute inset-0 z-[15] text-foreground [--crew-border:color-mix(in_srgb,var(--foreground)_20%,var(--border))] [--crew-surface:color-mix(in_srgb,var(--foreground)_7%,var(--card))]"
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -282,7 +282,7 @@ export function CrewPanelContent({
           // (their frame stops there); terminals keep the bottom quarter, where the CLI's prompt sits.
           // The header (and its collapse button) always shows: in a pane too short for both, it wins.
           className={cn(
-            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground shadow-floating',
+            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating',
             surface === 'terminal'
               ? 'max-h-[calc(75%-var(--orca-pane-title-height)-var(--spacing)*2)]'
               : 'max-h-[calc(100%-var(--orca-pane-title-height)-var(--spacing)*4)]'
@@ -345,7 +345,7 @@ export function CrewPanelContent({
           <TooltipTrigger asChild>
             <Button
               ref={tab}
-              variant="outline"
+              variant="orchestration-tab"
               size="xs"
               className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-[min(20rem,100%)]"
               aria-label={translate(

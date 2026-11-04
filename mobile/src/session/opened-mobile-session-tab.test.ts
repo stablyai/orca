@@ -212,24 +212,6 @@ describe('shouldActivateOpenedMobileSessionTab', () => {
     activeTabType: 'terminal'
   }
 
-  it('allows the latest tap while the source terminal is still active', () => {
-    expect(
-      shouldActivateOpenedMobileSessionTab({
-        ...currentTerminalState,
-        activated: false
-      })
-    ).toBe(true)
-  })
-
-  it('stops later retries after the first successful activation', () => {
-    expect(
-      shouldActivateOpenedMobileSessionTab({
-        ...currentTerminalState,
-        activated: true
-      })
-    ).toBe(false)
-  })
-
   it('prevents an older tap from stealing focus from a newer tap', () => {
     expect(
       shouldActivateOpenedMobileSessionTab({

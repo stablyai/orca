@@ -1,3 +1,4 @@
+import type { FileOpenFailure } from './terminal-file-open-failure'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { buildHttpLinkActions } from '@/lib/http-link-destinations'
@@ -6,8 +7,7 @@ import {
   mapTerminalFilePath,
   openDetectedFilePath,
   shouldOpenTerminalFileWithSystemDefault,
-  terminalLinkWslDistro,
-  type FileOpenFailure
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import { isTerminalLinkDirectActivation } from './terminal-link-activation'

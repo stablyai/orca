@@ -14,7 +14,7 @@ afterEach(() => {
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamText
-} from '../../../../shared/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   createRemoteRuntimeTransportMocks,

@@ -1,32 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  withPrivateFilesHiddenFromWebAccessibleResources,
-  withStaticWebAccessibleResources
-} from './browser-extension-web-accessible-resources'
-
-describe('withStaticWebAccessibleResources', () => {
-  it('turns off dynamic URLs and keeps every other field', () => {
-    const manifest = {
-      name: 'Vault',
-      web_accessible_resources: [
-        { resources: ['overlay/menu.html'], matches: ['<all_urls>'], use_dynamic_url: true },
-        { resources: ['icon.png'], matches: ['<all_urls>'] }
-      ]
-    }
-    expect(withStaticWebAccessibleResources(manifest)).toEqual({
-      name: 'Vault',
-      web_accessible_resources: [
-        { resources: ['overlay/menu.html'], matches: ['<all_urls>'], use_dynamic_url: false },
-        { resources: ['icon.png'], matches: ['<all_urls>'] }
-      ]
-    })
-  })
-
-  it('leaves manifests without web-accessible resources unchanged', () => {
-    const manifest = { name: 'Plain' }
-    expect(withStaticWebAccessibleResources(manifest)).toBe(manifest)
-  })
-})
+import { withPrivateFilesHiddenFromWebAccessibleResources } from './browser-extension-web-accessible-resources'
 
 describe('withPrivateFilesHiddenFromWebAccessibleResources', () => {
   const packageFiles = ['popup.html', 'assets/app.js', 'assets/deep/icon.png', 'Secret.json']

@@ -1,9 +1,10 @@
 import { translate } from '@/i18n/i18n'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusReason
-} from '../../../shared/folder-workspace-path-status'
-import { blocksFolderWorkspaceActivation } from '../../../shared/folder-workspace-path-status'
+
+import {
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusReason,
+  blocksFolderWorkspaceActivation
+} from '../../../shared/folder-workspaces/folder-workspace-path-status'
 import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 
 // Guard unknown RPC reasons at runtime; union-keyed records make newly known reasons fail typecheck here and in both switches.

@@ -21,7 +21,7 @@ import { Terminal } from '@xterm/xterm'
 import { toast } from 'sonner'
 import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
 import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 import {

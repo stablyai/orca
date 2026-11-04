@@ -1,6 +1,6 @@
-import { CLAUDE_IDLE, containsAgentSpinnerGlyph } from './agent-title-glyphs'
+import { CLAUDE_IDLE, containsAgentSpinnerGlyph } from './agent-status/title/agent-title-glyphs'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import type { AgentStatus } from './agent-title-core'
+import type { AgentStatus } from './agent-status/title/agent-title-core'
 
 export type ClaudeTerminalEvidence =
   | { kind: 'input'; data: string }

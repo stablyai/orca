@@ -17,7 +17,11 @@ import {
   createManager,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -72,6 +76,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -130,7 +136,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks))
+        )
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -194,6 +202,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks2 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -259,7 +269,13 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
           .mockResolvedValueOnce(1)
           .mockResolvedValueOnce(2)
 
-        connectPanePty(...mockPanePtyArgs(createPane(2), createManager(2), deps))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            createPane(2),
+            createManager(2),
+            bindPaneAgentTitleMocks(deps, agentTitleMocks2)
+          )
+        )
         await flushAsyncTicks(20)
         for (const fn of pendingTimeouts) {
           fn()
@@ -300,6 +316,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       state: 'working' | 'done'
     ): Promise<void> {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -337,7 +355,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks3))
+      )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)
@@ -354,6 +374,8 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
     it('keeps a contentless reattach when a live status supersedes passive sleep evidence', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -402,7 +424,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+      )
       await flushAsyncTicks(20)
 
       expect(transport.connect).toHaveBeenCalledTimes(1)

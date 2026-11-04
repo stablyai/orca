@@ -11,11 +11,17 @@ import {
 import { Button } from '@/components/ui/button'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import {
+  summarizeProviderChecks,
+  getProviderChecksOutcome
+} from '../../../../../shared/source-control/checks/provider-check-summary'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { CHECK_COLOR } from './check-presentation'
-import { getBrokenChecks, isBrokenCheck } from '../../../../../shared/pr-checks-fix-prompt'
+import {
+  getBrokenChecks,
+  isBrokenCheck
+} from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 
 export function PRTriageStrip({
   review,
@@ -50,7 +56,8 @@ export function PRTriageStrip({
   const resolvedReview = review ?? pr
   // Share the pill's classifier so completed checks without conclusions remain unresolved rather than spinning.
   const summary = summarizeProviderChecks(checks)
-  const failingCount = summary.failed
+  const failingCount = summary.failed - (summary.cancelled ?? 0)
+  const outcome = getProviderChecksOutcome(summary)
   const brokenCheckCount = getBrokenChecks(checks).length
   const pendingCount = summary.pending
   const pipelineFailed = pipelineCheck ? isBrokenCheck(pipelineCheck) : false
@@ -72,7 +79,16 @@ export function PRTriageStrip({
         {conflictStrip}
         <div className="border-b border-border px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <CircleX className="size-3.5 shrink-0 text-rose-500" />
+            <CircleX
+              className={cn(
+                'size-3.5 shrink-0',
+                pipelineFailed || outcome === 'failure'
+                  ? CHECK_COLOR.failure
+                  : outcome === 'pending'
+                    ? CHECK_COLOR.pending
+                    : CHECK_COLOR.cancelled
+              )}
+            />
             <div className="min-w-0 flex-1">
               <div className="truncate text-[11px] font-medium text-foreground">
                 {pipelineCheck && pipelineFailed
@@ -81,11 +97,22 @@ export function PRTriageStrip({
                       '{{name}} failed',
                       { name: pipelineCheck.name }
                     )
-                  : translate(
-                      'auto.components.right.sidebar.checks.panel.content.failingChecks',
-                      '{{count}} failing checks',
-                      { count: failingCount, defaultValue_one: '{{count}} failing check' }
-                    )}
+                  : outcome === 'cancelled'
+                    ? translate(
+                        'auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0',
+                        'Cancelled'
+                      )
+                    : outcome === 'pending'
+                      ? translate(
+                          'auto.components.right.sidebar.checks.panel.content.pendingChecks',
+                          '{{count}} checks pending',
+                          { count: pendingCount, defaultValue_one: '{{count}} check pending' }
+                        )
+                      : translate(
+                          'auto.components.right.sidebar.checks.panel.content.failingChecks',
+                          '{{count}} failing checks',
+                          { count: failingCount, defaultValue_one: '{{count}} failing check' }
+                        )}
               </div>
               <div className="truncate text-[10px] text-muted-foreground">
                 {translate(

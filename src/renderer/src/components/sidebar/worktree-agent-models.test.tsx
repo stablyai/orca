@@ -20,7 +20,7 @@ import {
   clearWorktreeAgentExpansionStateForTests,
   seedWorktreeAgentExpansionStateForTests
 } from './worktree-card-agents-expansion-state'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'

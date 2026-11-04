@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-import { AgentHookServer, CLOSED_AGENT_STATUS_TAB_IDS_MAX, _internals } from './server'
+import { AgentHookServer, _internals } from './server'
+import { CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './server/server-constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   buildBody,

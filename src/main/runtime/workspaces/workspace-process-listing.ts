@@ -46,8 +46,8 @@ import {
   structuredWorkerOpenTaskTitle,
   structuredWorkerOwesWork
 } from '../structured-worker-custody'
-import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { preModeChatGetsFullAccess } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,

@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { editorFileHoldKey, pathMutationHoldKeys } from '@/components/editor/editor-autosave-holds'
 import {
   notifyEditorExternalFileChange,

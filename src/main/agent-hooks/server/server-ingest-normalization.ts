@@ -1,10 +1,19 @@
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
-import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-attribution-diagnostics'
-import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
-import { checkHookOwnerPresence, restateHookRoot } from '../../../shared/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../../../shared/hook-process-root-evidence'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import { AgentHookAttributionDiagnostics } from '../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
+import {
+  buildSpoolHookBody,
+  type SpoolRecord
+} from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
+import {
+  checkHookOwnerPresence,
+  restateHookRoot
+} from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost

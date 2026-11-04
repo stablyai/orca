@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { deriveTaskPagePRCheckSummary } from './task-page/task-page-pr-check-summary'
 import { getCheckCountChips, getCheckCounts } from './pr-check-counts'
 import { derivePipelineStatus } from '../../../main/gitlab/mappers'
-import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-checks'
-import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from '../../../shared/pr-check-status'
+import { gitLabPipelineJobsToPRChecks } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
+import {
+  derivePRCheckStatus,
+  derivePRCheckStatusFromRollup
+} from '../../../shared/source-control/checks/pr-check-status'
 import {
   getProviderChecksLabel,
   summarizeProviderChecks
-} from '../../../shared/provider-check-summary'
+} from '../../../shared/source-control/checks/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
@@ -158,17 +161,21 @@ const PARITY_CASES: ParityCase[] = [
 
 describe('provider check classification parity', () => {
   it.each(PARITY_CASES)(
-    '$name resolves identically on every desktop surface',
+    '$name preserves shared counts across complete and detail sources',
     ({ checks, expected, gitLabJobStatuses, gitLabPipelineStatus }) => {
-      const summary = { ...expected, total: checks.length }
+      const summary = {
+        ...expected,
+        total: checks.length,
+        cancelled: checks.filter((check) => check.conclusion === 'cancelled').length
+      }
       expect(summarizeProviderChecks(checks)).toEqual(summary)
-      expect(deriveTaskPagePRCheckSummary(checks)).toEqual(summary)
+      expect(deriveTaskPagePRCheckSummary(checks)).toEqual({ ...summary, cancelled: undefined })
       // Keep pane counts aligned with sidebar rollups, including the neutral unresolved bucket.
       const paneCounts = getCheckCounts(checks)
       expect({
         passed: paneCounts.passing,
         // Both panes split action_required into its own amber chip; it is still the failed bucket.
-        failed: paneCounts.failing + paneCounts.needsAction,
+        failed: paneCounts.failing + paneCounts.needsAction + paneCounts.cancelled,
         pending: paneCounts.pending,
         neutral: paneCounts.neutral
       }).toEqual({

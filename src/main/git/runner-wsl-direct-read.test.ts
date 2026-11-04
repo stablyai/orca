@@ -20,11 +20,9 @@ vi.mock('../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSpawn
 import { getBranchConflictKind } from './repo-branch-conflict'
 import { pendingWslDirectGitReadEnvironment } from './command-runner/git-command-resolution'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitSpawn, gitStreamStdout } from './runner'
-import {
-  GitAdmissionScheduler,
-  _resetGitAdmissionForTests,
-  type GitAdmissionEvent
-} from './command-runner/git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../shared/git/admission/git-admission-scheduler'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
+import type { GitAdmissionEvent } from '../../shared/git/admission/git-admission-state'
 import {
   getWslGitReadEnvironment,
   resetWslGitReadEnvironmentForTests,

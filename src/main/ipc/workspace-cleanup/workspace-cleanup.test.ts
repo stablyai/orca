@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { DiffComment } from '../../../shared/diff-comment-types'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type { WorkspaceCleanupScanProgress } from '../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 const {
   lstatMock,

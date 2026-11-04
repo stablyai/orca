@@ -11,7 +11,11 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
@@ -60,6 +64,8 @@ export function registerPtyConnectionUnansweredCommandFinishTests(): void {
       async (_verb, _label, verifiable) => {
         vi.useFakeTimers()
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
         const hasVerifiableAgentProcess = vi.fn(async () => verifiable)
         Object.assign(window.api.agentStatus, { hasVerifiableAgentProcess })
@@ -94,7 +100,10 @@ export function registerPtyConnectionUnansweredCommandFinishTests(): void {
         connectPanePty(
           createPane(1) as never,
           createManager(1) as never,
-          createDeps({ tabId, isVisibleRef: { current: false } }) as never
+          bindPaneAgentTitleMocks(
+            createDeps({ tabId, isVisibleRef: { current: false } }) as never,
+            agentTitleMocks
+          )
         )
         await vi.advanceTimersByTimeAsync(20)
         await flushAsyncTicks()

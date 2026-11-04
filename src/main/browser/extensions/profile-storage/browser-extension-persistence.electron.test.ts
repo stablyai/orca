@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { build as buildVite } from 'vite'
 import { bundleBrowserExtensionWorkerShim } from '../../../../../config/build-plugins/browser-extension-worker-shim'
-import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../../shared/browser-extension-worker-api'
+import { BROWSER_EXTENSION_WORKER_SHIM_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import { resolveElectronProbeLaunch } from '../../electron-fixtures/electron-probe-display-launch'
 
 vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })

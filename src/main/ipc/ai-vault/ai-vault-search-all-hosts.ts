@@ -1,10 +1,10 @@
-import { resolveSessionSearchLimit } from '../../../shared/ai-vault-search-limit'
+import { resolveSessionSearchLimit } from '../../../shared/ai-vault/search/ai-vault-search-limit'
 import type {
   AiVaultSearchHit,
   AiVaultSearchHostOutcome,
   AiVaultSearchRequest,
   AiVaultSearchResponse
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   decodeMergedSearchCursor,

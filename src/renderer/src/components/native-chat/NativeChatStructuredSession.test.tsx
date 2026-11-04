@@ -1,4 +1,4 @@
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalThemeSelection from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHistoryItem, GitHistoryResult } from '../../../src/shared/git-history-types'
+import type {
+  GitHistoryItem,
+  GitHistoryResult
+} from '../../../src/shared/git/history/git-history-types'
 import {
   appendMobileGitHistoryPage,
   buildMobileCommitsListItems,

@@ -5,7 +5,7 @@ import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { WorkspaceCleanupFreshness } from './workspace-cleanup-freshness'
 
 export function WorkspaceCleanupDialogHeader({

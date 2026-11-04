@@ -5,8 +5,8 @@ import {
   trackBrowserExtensionDocument,
   type FrameContext
 } from './browser-extension-frame-lifetime'
-import type { BrowserExtensionEventPayload } from '../../../../shared/browser-extension-channels'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import type { BrowserExtensionEventPayload } from '../../../../shared/browser/extensions/browser-extension-channels'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   dispatchBrowserExtensionEvent as dispatchEvent,
   eventKey,

@@ -1,6 +1,6 @@
-import type { AiVaultSessionTitle } from './ai-vault-session-title'
-import type { TuiAgent } from './tui-agent'
-import type { AgentLaunchPaneOutcome } from './agent-launch-pane-verdict'
+import type { AiVaultSessionTitle } from './ai-vault/contracts/ai-vault-session-title'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
+import type { AgentLaunchPaneOutcome } from './agent-launch/contracts/agent-launch-pane-verdict'
 
 /** The tab row owns the recovery ledger, including the last reason it acted on. */
 export type TerminalPaneRecoveryReason =

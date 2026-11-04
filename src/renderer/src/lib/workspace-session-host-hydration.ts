@@ -6,16 +6,17 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
+} from '../../../shared/workspace-scope'
 import {
   adoptStrandedHostPartitionSession,
   partitionRowsTheWriteWontReturn,
   workspaceIdsNamedByPartition
 } from '../../../shared/workspace-session-stranded-partition-adoption'
-import {
-  mergeWorkspaceSessionsWithHostShadow,
-  normalizeWorkspaceSessionKeyToWorktreeId
-} from './workspace-session-host-contention'
+import { mergeWorkspaceSessionsWithHostShadow } from './workspace-session-host-contention'
+
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
 import {
   sshPartitionCatalogAttribution,

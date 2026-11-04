@@ -38,8 +38,8 @@ import {
   useSourceControlBranchCompare
 } from './source-control/sync/use-branch-compare'
 import { deferred, flush, mountProbe, unmountProbes } from './source-control-hook-test-harness'
-import type { GitBranchCompareResult } from '../../../../shared/git-diff-compare-types'
-import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GitBranchCompareResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 
 type Api = ReturnType<typeof useSourceControlBranchCompare>
 

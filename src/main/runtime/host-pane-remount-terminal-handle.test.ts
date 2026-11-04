@@ -9,7 +9,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 const TAB_ID = 'tab-hidden-on-host'

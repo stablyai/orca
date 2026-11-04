@@ -2,7 +2,7 @@ import * as gitExecFile from '../../git/command-runner/git-exec-file'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   TEST_REPO_ID,
   TEST_REPO_PATH,

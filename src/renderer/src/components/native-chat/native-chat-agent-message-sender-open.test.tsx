@@ -52,7 +52,7 @@ import {
 } from './native-chat-agent-message-sender-target'
 import { unnamedSenderLabel } from './native-chat-agent-message-sender-label'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { sameAgentIdentity } from '../../../../shared/agent-title-owner'
+import { sameAgentIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
 import { initialStore, resetSenderStore, status } from './native-chat-agent-sender.test-fixture'
 import type { AgentSenderPublication } from '../../../../shared/agent-sender-associations'
 import type {

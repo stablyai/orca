@@ -7,12 +7,12 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
+
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
@@ -31,7 +31,10 @@ import {
   type AutomationListSortField,
   type AutomationListViewItem
 } from './automation-list-view'
-import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
+import {
+  type AutomationHostFilter,
+  automationHostFilterStableKey
+} from '../../../../shared/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'

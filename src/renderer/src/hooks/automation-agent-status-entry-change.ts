@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 
 export const UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY = Symbol('unchanged-agent-status-entry')
 

@@ -4,7 +4,7 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   encodeTerminalStreamFrame
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { publishPtyEndpointLoss } from '../terminal/pty-endpoint-loss-signal'
 import {
   WRITE_UNAVAILABLE_OPCODE,

@@ -18,6 +18,7 @@ export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> & {
+  getConversation: Mock<AgentSessionRecordStore['getConversation']>
   getSessionTabId: Mock<StructuredAgentSessionHost['getSessionTabId']>
   setSessionTabVisibility: Mock<StructuredAgentSessionHost['setSessionTabVisibility']>
   notifySessionTabHidden: Mock<StructuredAgentSessionHost['notifySessionTabHidden']>
@@ -68,7 +69,7 @@ export function structuredHostStub(
   >
   return {
     ...tabs,
-    getConversation: vi.fn(() => {
+    getConversation: vi.fn<AgentSessionRecordStore['getConversation']>(() => {
       const record = agentSessionRecordFixture()
       return agentSessionConversationView({
         ...record,
@@ -189,6 +190,9 @@ export function installableHost(
   const host = {
     ...hostCalls,
     readModelCatalog: hostCalls.modelCatalog,
+    attentionReads: {
+      sessionLocation: (id: string) => hostCalls.getConversation(id)?.location ?? null
+    },
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
       logger,

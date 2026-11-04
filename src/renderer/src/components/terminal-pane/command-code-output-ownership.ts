@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 
 export function canCommandCodeOutputOwnPane(args: {

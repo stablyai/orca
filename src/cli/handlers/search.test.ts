@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SEARCH_HANDLERS } from './search'
-import { AiVaultSearchResponseSchema } from '../../shared/ai-vault-search-contract'
-import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import { AiVaultSearchResponseSchema } from '../../shared/ai-vault/search/ai-vault-search-contract'
+import type {
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import { RuntimeClientError } from '../runtime/types'
 import { RuntimeClient } from '../runtime-client'
 import { okFixture } from '../test-fixtures'

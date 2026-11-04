@@ -10,14 +10,14 @@ import type { AppState } from '@/store/types'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspace-worktree'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { useSidebarRevealHighlight } from './use-reveal-highlight'
 import { useSidebarRevealRequests } from './use-reveal-requests'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
-import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { buildRenderableRows } from '../listing/renderable-rows'
+
+import { type WorktreeItemRow, buildRenderableRows } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from '../rows/option-dom'
 import { usePendingSidebarReveal } from './use-pending-reveal'
 import { useWorktreeListKeyboardNavigation } from './use-keyboard'
