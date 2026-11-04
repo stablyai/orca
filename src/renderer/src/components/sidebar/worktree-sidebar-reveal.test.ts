@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import {
+  isElementVisibleInScrollContainer,
+  revealElementInScrollContainer
+} from './worktree-sidebar-reveal'
 
 function makeContainer(scrollTop: number, clientHeight: number) {
   const container = document.createElement('div')
@@ -99,4 +102,37 @@ it('preserves sticky upward clearance and reduced-motion scroll notification', (
   expect(revealElementInScrollContainer(container, target, 'smooth', issued)).toBe(true)
   expect(scrollTo).toHaveBeenCalledWith({ top: 376, behavior: 'auto' })
   expect(issued).toHaveBeenCalledWith(376)
+})
+
+describe('isElementVisibleInScrollContainer', () => {
+  it('agrees with revealElementInScrollContainer that an in-view element needs no scroll', () => {
+    const { container } = makeContainer(0, 673)
+    expect(isElementVisibleInScrollContainer(container, makeElement(200, 260))).toBe(true)
+  })
+
+  it('reports an element below the fold as not visible', () => {
+    const { container } = makeContainer(0, 673)
+    expect(isElementVisibleInScrollContainer(container, makeElement(1005, 1060))).toBe(false)
+  })
+
+  it('reports an element outside the container as not visible', () => {
+    const { container } = makeContainer(0, 673)
+    const stray = makeElement(200, 260)
+    document.body.append(stray)
+    expect(isElementVisibleInScrollContainer(container, stray)).toBe(false)
+  })
+
+  it('agrees with the parent-card-only reveal judgment when expanded children overflow', () => {
+    const { container } = makeContainer(0, 673)
+    const parent = makeElement(200, 12_000, makeElement(320, 12_000))
+    expect(isElementVisibleInScrollContainer(container, parent)).toBe(true)
+  })
+
+  it('reports an incomplete card as not visible, matching the reveal failure path', () => {
+    const { container } = makeContainer(0, 673)
+    const incomplete = makeElement(200, 260)
+    incomplete.removeAttribute('data-worktree-card-surface')
+    incomplete.setAttribute('data-worktree-id', 'known-card')
+    expect(isElementVisibleInScrollContainer(container, incomplete)).toBe(false)
+  })
 })
