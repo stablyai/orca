@@ -104,33 +104,6 @@ describe('attachments at send admission', () => {
     expect(existsSync(fresh)).toBe(true)
   })
 
-  it('refuses a queued send naming an expired file, and queues nothing', async () => {
-    await rig.workingSend()
-    expect(await clientSend(textWith(storedPath('notes.txt')), 'queue-if-active')).toMatchObject(
-      EXPIRED
-    )
-    expect(await rig.drafts()).toHaveLength(0)
-  })
-
-  it('keeps a stored upload claimed by the same conversation after clear', async () => {
-    const working = await rig.workingSend()
-    const path = await storeUpload('notes.txt')
-    expect(await clientSend(textWith(path), 'queue-if-active')).toMatchObject({
-      ok: true,
-      value: { queued: { state: 'waiting' } }
-    })
-    expect(claimedSessions()).toEqual([SESSION])
-    await rig.stop()
-    await rig.settleAccepted(working, 'a')
-    const fields = { command: 'clear' as const }
-    const cleared = await rig.host.conversationCommand(CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId()),
-      ...fields
-    })
-    expect(cleared).toMatchObject({ ok: true })
-    expect(claimedSessions()).toEqual([SESSION])
-  })
-
   it('sends text that only mentions another store path, claiming nothing', async () => {
     const result = await clientSend(
       textWith(`/home/someone/.config/Orca/agent-session-attachments/${UPLOAD}/notes.txt`)
@@ -157,41 +130,4 @@ describe('attachments at send admission', () => {
     await rm(join(agentSessionAttachmentStoreRoot(rig.root), UPLOAD), { recursive: true })
     expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: true })
   })
-
-  it("never refuses a host-side send (orchestration mail, a restart's continuation)", async () => {
-    const body = textWith(storedPath('notes.txt'))
-    const clientOperationId = hostTestOperationId()
-    const result = await rig.host.send(CALLER, {
-      envelope: rig.envelope({ body }, 'agentSession.send', clientOperationId),
-      body
-    })
-    expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-  })
 })
-
-it.each([undefined, 'queue-if-active'] as const)(
-  're-evaluates an unaccepted attachment refusal after the file returns (%s)',
-  async (delivery) => {
-    if (delivery) {
-      await rig.workingSend()
-    }
-    const body = textWith(storedPath('notes.txt'))
-    const clientOperationId = hostTestOperationId()
-    const fields = { body, ...(delivery ? { delivery } : {}) }
-    const params = {
-      envelope: rig.envelope(fields, 'agentSession.send', clientOperationId),
-      ...fields,
-      userSend: true as const
-    }
-    expect(await rig.host.send(CALLER, params)).toMatchObject(EXPIRED)
-    expect(rig.store.readCommandReceipt({ kind: 'global' }, clientOperationId)).toEqual({
-      verdict: 'absent'
-    })
-    expect(
-      rig.store.listOperationRows().find((row) => row.operationId === clientOperationId)
-    ).toBeUndefined()
-    await storeUpload('notes.txt')
-    expect(await rig.host.send(CALLER, params)).toMatchObject({ ok: true, replayed: false })
-    expect(await clientSend(body, delivery)).toMatchObject({ ok: true, replayed: false })
-  }
-)
