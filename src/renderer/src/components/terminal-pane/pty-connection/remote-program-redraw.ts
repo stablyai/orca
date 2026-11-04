@@ -60,6 +60,9 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
       if (session.transport.getPtyId() !== ptyId || session.shouldSuppressDesktopPtyResize()) {
         return
       }
+      if (session.deps.isVisibleRef.current) {
+        session.resizeRepaintHold?.hold()
+      }
       session.transport.resize(session.pane.terminal.cols, session.pane.terminal.rows, {
         claim: true
       })
@@ -84,7 +87,11 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     const ackTimer = setTimeout(scheduleRestore, REMOTE_PROGRAM_REDRAW_ACK_TIMEOUT_MS)
     session.remoteProgramRedrawRestore = restore
     session.remoteProgramRedrawPtyId = ptyId
+    if (session.deps.isVisibleRef.current) {
+      session.resizeRepaintHold?.hold()
+    }
     if (!session.transport.resize(cols, nudgeRows, { claim: true })) {
+      session.resizeRepaintHold?.releaseNow(false)
       finish()
       return
     }

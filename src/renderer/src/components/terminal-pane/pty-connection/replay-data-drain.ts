@@ -65,7 +65,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
   session.replayPayloadGeneration = 0
   let replayDrainQueued = false
   // Fit destination geometry after the whole source-grid replay transaction parses.
-  let replayedAtSourceGrid = false
+  let replayedSourceGrid: { cols: number; rows: number } | null = null
   const drainReplayDataQueue = async (
     expectedPtyId: string | null,
     expectedStreamGeneration: number
@@ -146,7 +146,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         } finally {
           session.suppressStructuralReplayPtyResize = false
         }
-        replayedAtSourceGrid = true
+        replayedSourceGrid = sourceGrid
       }
       if (clearBeforeReplay || data.length > 0) {
         // Authoritative empty clearing frames must also retire prior agent-screen evidence.
@@ -187,10 +187,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
     scheduledPtyId: string | null,
     scheduledStreamGeneration: number
   ): Promise<void> => {
-    if (!replayedAtSourceGrid) {
+    const baselineGrid = replayedSourceGrid
+    if (!baselineGrid) {
       return
     }
-    replayedAtSourceGrid = false
+    replayedSourceGrid = null
     if (
       session.disposed ||
       !scheduledPtyId ||
@@ -204,7 +205,11 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       safeFit(session.pane)
       return
     }
-    const gridPush = session.createReattachGridPush(scheduledStreamGeneration, scheduledPtyId)
+    const gridPush = session.createReattachGridPush(
+      scheduledStreamGeneration,
+      scheduledPtyId,
+      baselineGrid
+    )
     const fit = safeFitAndThen(session.pane, 'replay-source-grid-fit', gridPush.continuation, {
       shouldContinue: gridPush.shouldContinue,
       retryIfUnmeasurable: true,
@@ -228,7 +233,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
     const scheduledPtyId = session.pendingReplayData?.ptyId ?? null
     replayDrainQueued = true
     // Skipped transactions never run afterRestore; clear their pending fit flag before a later unrelated drain.
-    replayedAtSourceGrid = false
+    replayedSourceGrid = null
     // Hold newer live bytes until clear/replay/reset parse so replay cannot erase them.
     const scheduledStreamGeneration =
       session.pendingReplayData?.streamGeneration ?? session.transportStreamGeneration

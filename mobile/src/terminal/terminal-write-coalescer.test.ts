@@ -4,7 +4,10 @@ import {
   TERMINAL_WRITE_FLUSH_WINDOW_MS,
   TERMINAL_WRITE_MAX_PENDING_UNITS,
   TERMINAL_INTERACTIVE_WRITE_WINDOW_MS,
-  TERMINAL_INTERACTIVE_WRITE_DURATION_MS
+  TERMINAL_INTERACTIVE_WRITE_DURATION_MS,
+  TERMINAL_RESIZE_BURST_WINDOW_MS,
+  TERMINAL_RESIZE_SETTLE_MS,
+  TERMINAL_SYNC_FRAME_HOLD_MS
 } from './terminal-write-coalescer'
 
 function createDeliverySink() {
@@ -270,5 +273,75 @@ describe('terminal write coalescer', () => {
     expect(sink.delivered).toEqual(['first'])
     vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
     expect(sink.delivered).toEqual(['first', 'second'])
+  })
+
+  it('coalesces multi-chunk post-resize repaint streams into a single settled delivery', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    coalescer.beginResizeBurst()
+    coalescer.write('chunk-1\r\n')
+    expect(sink.delivered).toEqual([])
+
+    vi.advanceTimersByTime(30)
+    coalescer.write('chunk-2\r\n')
+    expect(sink.delivered).toEqual([])
+
+    vi.advanceTimersByTime(30)
+    coalescer.write('chunk-3\r\n')
+    expect(sink.delivered).toEqual([])
+
+    vi.advanceTimersByTime(TERMINAL_RESIZE_SETTLE_MS)
+    expect(sink.delivered).toEqual(['chunk-1\r\nchunk-2\r\nchunk-3\r\n'])
+  })
+
+  it('caps sustained resize-burst holding at TERMINAL_RESIZE_BURST_WINDOW_MS and yields immediately on markInteractive()', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    coalescer.beginResizeBurst()
+    for (let elapsed = 0; elapsed < TERMINAL_RESIZE_BURST_WINDOW_MS; elapsed += 20) {
+      coalescer.write(`line-${elapsed};`)
+      vi.advanceTimersByTime(20)
+    }
+    expect(sink.delivered).toHaveLength(1)
+
+    // A fresh resize burst cancelled by user interaction flushes on the short interactive window.
+    sink.delivered.length = 0
+    coalescer.beginResizeBurst()
+    coalescer.write('typing-echo')
+    expect(sink.delivered).toEqual([])
+    coalescer.markInteractive()
+    vi.advanceTimersByTime(TERMINAL_INTERACTIVE_WRITE_WINDOW_MS)
+    expect(sink.delivered).toEqual(['typing-echo'])
+  })
+
+  it('holds DECSET 2026 synchronized output frames until the closing marker or safety timeout', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    coalescer.write('\u001b[?2026hframe-top\r\n')
+    expect(sink.delivered).toEqual([])
+
+    vi.advanceTimersByTime(60)
+    coalescer.write('frame-mid\r\n')
+    expect(sink.delivered).toEqual([])
+
+    coalescer.write('frame-end\u001b[?2026l')
+    expect(sink.delivered).toEqual(['\u001b[?2026hframe-top\r\nframe-mid\r\nframe-end\u001b[?2026l'])
+
+    // Unclosed ?2026h flushes at TERMINAL_SYNC_FRAME_HOLD_MS and resets open state for later output.
+    sink.delivered.length = 0
+    coalescer.write('\u001b[?2026horphan-frame')
+    expect(sink.delivered).toEqual([])
+    vi.advanceTimersByTime(TERMINAL_SYNC_FRAME_HOLD_MS)
+    expect(sink.delivered).toEqual(['\u001b[?2026horphan-frame'])
+
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS)
+    coalescer.write('prompt$ ')
+    expect(sink.delivered).toEqual(['\u001b[?2026horphan-frame', 'prompt$ '])
   })
 })

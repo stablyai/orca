@@ -1,9 +1,6 @@
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
 import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
-import {
-  FOREGROUND_GRID_DRIFT_CHECK_MIN_MS,
-  FOREGROUND_GRID_DRIFT_SETTLED_RECHECK_MS
-} from './foreground-output-budgets'
+import { FOREGROUND_GRID_DRIFT_CHECK_MIN_MS } from './foreground-output-budgets'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 // Repairs xterm grids that drifted from the fit without a pane resize, throttled on foreground output.
@@ -26,14 +23,13 @@ export function installForegroundGridDriftProbe(session: ConnectPanePtySession):
       !session.deps.isVisibleRef.current ||
       session.shouldSuppressDesktopPtyResize() ||
       session.pendingForegroundGridDriftCheckRaf !== null ||
-      (!force && session.terminalSelectionFitGuard?.isActive())
+      (!force &&
+        (session.foregroundGridDriftProbeSettled || session.terminalSelectionFitGuard?.isActive()))
     ) {
       return
     }
     const now = performance.now()
-    const minIntervalMs = session.foregroundGridDriftProbeSettled
-      ? FOREGROUND_GRID_DRIFT_SETTLED_RECHECK_MS
-      : FOREGROUND_GRID_DRIFT_CHECK_MIN_MS
+    const minIntervalMs = FOREGROUND_GRID_DRIFT_CHECK_MIN_MS
     const elapsedMs = now - session.lastForegroundGridDriftCheckAt
     if (!force && elapsedMs < minIntervalMs) {
       // Why: the last write in a burst may land inside the interval; one trailing probe keeps drift from sticking once output stops.

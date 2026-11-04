@@ -96,12 +96,22 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     session.synchronizedForegroundMarkerTail = synchronizedForegroundScan?.markerTail ?? ''
     const startupWrite =
       opts?.liveStartupBatch && data.length > 0 ? session.startupTiming?.firstWrite() : undefined
-    const onParsed = presentInteractiveSynchronizedFrame
-      ? () => {
-          startupWrite?.onParsed()
-          forceFullViewportPresent(session.pane.terminal)
-        }
-      : startupWrite?.onParsed
+    if (foregroundOutput && data.length > 0) {
+      session.resizeRepaintHold?.noteOutputQueued()
+    }
+    const trackResizeRepaintParsed = foregroundOutput && data.length > 0
+    const onParsed =
+      presentInteractiveSynchronizedFrame || startupWrite?.onParsed || trackResizeRepaintParsed
+        ? () => {
+            startupWrite?.onParsed()
+            if (presentInteractiveSynchronizedFrame) {
+              forceFullViewportPresent(session.pane.terminal)
+            }
+            if (trackResizeRepaintParsed) {
+              session.resizeRepaintHold?.noteOutputParsed()
+            }
+          }
+        : undefined
     writeTerminalOutput(session.pane.terminal, data, {
       foreground: foregroundOutput,
       beforeWrite: startupWrite

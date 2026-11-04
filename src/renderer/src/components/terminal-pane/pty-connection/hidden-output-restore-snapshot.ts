@@ -246,6 +246,7 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                   return
                 }
                 if (replayChangedDimensions && session.isRendererPtyResizeAuthoritative()) {
+                  session.resizeRepaintHold?.hold()
                   session.transport.resize(session.pane.terminal.cols, session.pane.terminal.rows)
                   if (!isRemoteRuntimePtyId(currentPtyId)) {
                     // Why: redundant SIGWINCH makes alt-screen TUIs rebuild their scroll viewport to the top on tab return.

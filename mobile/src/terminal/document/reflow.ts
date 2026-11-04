@@ -1,5 +1,6 @@
 import { applyFitScale } from './fit-scale'
 import { isAlternateBufferActive } from './mouse-input-encoding'
+import { holdResizeRepaintSurface } from './resize-repaint-hold'
 import { updateScrollIndicator } from './viewport-transform'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import type { TerminalDocumentScope } from './document-scope'
@@ -14,6 +15,7 @@ export function reflow(scope: TerminalDocumentScope, cols: number, rows: number)
   if (nextCols === scope.term.cols && nextRows === scope.term.rows) {
     return
   }
+  holdResizeRepaintSurface(scope)
   const buffer = scope.term.buffer.active
   // Preserve distance from bottom across rewrap, including bottom-pinned readers.
   const wasAtBottom = buffer.viewportY >= buffer.baseY

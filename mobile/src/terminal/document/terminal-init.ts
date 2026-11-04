@@ -25,6 +25,11 @@ import {
 } from './query-reply'
 import { cancelSelect } from './selection-mode'
 import { resetEvictionCounter } from './selection-state-and-eviction'
+import {
+  holdResizeRepaintSurface,
+  noteResizeRepaintWrite,
+  releaseResizeRepaintSurface
+} from './resize-repaint-hold'
 import { beginTerminalSurfaceSwap, commitTerminalSurfaceSwap } from './surface-swap'
 import { attachTermObservers } from './term-observers'
 import { applyTerminalTheme } from './terminal-theme'
@@ -97,6 +102,7 @@ export function init(
   kittyKeyboardFlags: unknown
 ) {
   // Replay replaces the scroll target; retire momentum and pending drags belonging to the old one.
+  releaseResizeRepaintSurface(scope, false)
   stopSurfaceTouchGestures(scope)
   resetSmoothScrollOffset(scope)
   clearLongPress(scope)
@@ -218,6 +224,7 @@ export function write(scope: TerminalDocumentScope, data: string) {
   updateMouseModeFromData(scope, data, true)
   scope.keyboardModes.scan(data)
   enqueueWrite(scope, data)
+  noteResizeRepaintWrite(scope)
   pumpWrites(scope, scope.terminalGeneration)
   // Refit once after first live output reveals a wider line; later chunks preserve manual zoom.
   if (scope.firstDataPending) {
@@ -236,8 +243,14 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
   if (!scope.term) {
     return
   }
+  const nextCols = cols || scope.term.cols
+  const nextRows = rows || scope.term.rows
+  const changed = nextCols !== scope.term.cols || nextRows !== scope.term.rows
+  if (changed) {
+    holdResizeRepaintSurface(scope)
+  }
   scope.initRows = rows || scope.initRows
-  scope.term.resize(cols || scope.term.cols, rows || scope.term.rows)
+  scope.term.resize(nextCols, nextRows)
   emitKeyboardAvoidanceMetrics(scope)
   applyFitScale(scope, 'resize-msg')
   notify(scope, { type: 'ready', cols: cols, rows: rows })
@@ -245,6 +258,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
 
 // Invalidate queued init frames by generation and dispose both committed and pending-swap engines, deduping identical instances.
 export function stopTerminalInit(scope: TerminalDocumentScope) {
+  releaseResizeRepaintSurface(scope, false)
   scope.terminalGeneration++
   for (const terminal of new Set([scope.term, scope.committedTerm])) {
     try {

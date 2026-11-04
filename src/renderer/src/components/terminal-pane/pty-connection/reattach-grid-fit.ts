@@ -1,6 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { resolvePositiveTerminalDimensions } from '../snapshots/terminal-snapshot-replay-paint'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
@@ -35,7 +36,23 @@ export async function fitReattachedPaneToGrid(
     }
     return
   }
-  const gridPush = session.createReattachGridPush(ctx.attemptGeneration, reattachPtyId)
+  const modelSnapshot = ctx.revealFollowsTerminalPark ? ctx.prefetchedParkModelSnapshot : null
+  const baselineGrid =
+    ctx.skippedAltFrameCaptureCols !== null
+      ? null
+      : ctx.connectResult?.snapshot
+        ? resolvePositiveTerminalDimensions(
+            ctx.connectResult.snapshotCols,
+            ctx.connectResult.snapshotRows
+          )
+        : modelSnapshot
+          ? resolvePositiveTerminalDimensions(modelSnapshot.cols, modelSnapshot.rows)
+          : null
+  const gridPush = session.createReattachGridPush(
+    ctx.attemptGeneration,
+    reattachPtyId,
+    baselineGrid
+  )
   const continuation = (): void => {
     gridPush.continuation()
     // Why: a fit that lands back on the capture grid sends only a same-size SIGWINCH, which apps like OpenTUI ignore; the model still holds the omitted frame.

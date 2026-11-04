@@ -66,6 +66,8 @@ export function RetainedPaneHost({
     if (!fitTerminal || !isVisible || !anchorName) {
       return
     }
+    let lastDispatchedWidth = -1
+    let lastDispatchedHeight = -1
     const dispatchFitIfMeasurable = (): void => {
       const rect = overlayRef.current?.getBoundingClientRect()
       if (
@@ -75,6 +77,13 @@ export function RetainedPaneHost({
       ) {
         return
       }
+      const width = Math.round(rect.width)
+      const height = Math.round(rect.height)
+      if (width === lastDispatchedWidth && height === lastDispatchedHeight) {
+        return
+      }
+      lastDispatchedWidth = width
+      lastDispatchedHeight = height
       window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
     }
 

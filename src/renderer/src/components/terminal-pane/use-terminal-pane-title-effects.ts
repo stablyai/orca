@@ -38,7 +38,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     renamingPaneId,
     renameInputRef,
     renameUserRequestedBlurCommitRef,
-    sessionRestoredBannerPaneIds,
     setPaneTitleOverlayRects,
     setSessionRestoredBannerPaneIds,
     setTabLayout,
@@ -67,8 +66,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     const needsFit = syncSessionRestoredBannerTitleSpace({
       panes: manager.getPanes(),
       paneTitles,
-      renamingPaneId,
-      sessionRestoredBannerPaneIds
+      renamingPaneId
     })
     if (needsFit && (isVisible || shouldMeasureHiddenStartup)) {
       fitPanes(manager)
@@ -78,7 +76,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneLayoutRevision,
     paneTitles,
     renamingPaneId,
-    sessionRestoredBannerPaneIds,
     isVisible,
     shouldMeasureHiddenStartup,
     managerRef
@@ -150,7 +147,6 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     paneLayoutRevision,
     paneTitles,
     renamingPaneId,
-    sessionRestoredBannerPaneIds,
     shouldMeasureHiddenStartup,
     syncPaneTitleOverlayRects,
     containerRef,

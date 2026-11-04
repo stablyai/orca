@@ -307,24 +307,31 @@
 
 .session-restored-banner {
   position: absolute;
-  top: 0;
-  left: 8px;
-  z-index: 5;
-  height: var(--orca-pane-title-height);
-  /* Why: block + line-height (not flex) so the single line can ellipsize like
-     .pane-title-text — an overflowing banner would wrap onto the terminal grid. */
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  /* Why: float as a non-layout pill over row one so showing or dismissing on first
+     keystroke never toggles data-has-title or triggers SIGWINCH full-history redraws. */
   display: block;
-  line-height: var(--orca-pane-title-height);
-  max-width: calc(100% - 16px);
+  line-height: 18px;
+  max-width: calc(100% - 24px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--orca-pane-title-fg);
-  background: transparent;
+  background: color-mix(in srgb, var(--orca-pane-title-bg, var(--background)) 82%, transparent);
+  backdrop-filter: blur(4px);
   user-select: none;
   pointer-events: none;
+}
+
+.pane[data-has-title] .session-restored-banner {
+  top: calc(var(--orca-pane-title-height) + 4px);
 }
 
 .pane-title-text {

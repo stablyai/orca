@@ -94,14 +94,12 @@ export function syncSessionRestoredBannerTitleSpace(args: {
   panes: readonly SessionRestoredBannerPane[]
   paneTitles: Readonly<Record<number, string>>
   renamingPaneId: number | null
-  sessionRestoredBannerPaneIds: SessionRestoredBannerPaneReasons
+  sessionRestoredBannerPaneIds?: SessionRestoredBannerPaneReasons
 }): boolean {
   let needsFit = false
   for (const pane of args.panes) {
-    const shouldShow =
-      !!args.paneTitles[pane.id] ||
-      args.renamingPaneId === pane.id ||
-      args.sessionRestoredBannerPaneIds.has(pane.id)
+    // Float restored-session banners over row one so showing/dismissing never triggers SIGWINCH.
+    const shouldShow = !!args.paneTitles[pane.id] || args.renamingPaneId === pane.id
     const hadTitle = pane.container.hasAttribute('data-has-title')
     if (shouldShow && !hadTitle) {
       pane.container.setAttribute('data-has-title', '')
