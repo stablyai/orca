@@ -26,6 +26,22 @@ export function isPausedActionTour(
   )
 }
 
+function isInformationalTour(tourId: ContextualTourId): boolean {
+  return !hasContextualTourActionStep(getContextualTour(tourId))
+}
+
+export function isContextualTourSessionConsumed(
+  state: Pick<UISlice, 'contextualToursSeenIds' | 'contextualToursStartedThisSession'>,
+  tourId: ContextualTourId
+): boolean {
+  return (
+    !isPausedActionTour(state, tourId) &&
+    state.contextualToursStartedThisSession.some(
+      (started) => started !== tourId && isInformationalTour(started)
+    )
+  )
+}
+
 export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     contextualToursSeenIds: [],
@@ -37,7 +53,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
     activeContextualTourWasFeaturePreviouslyInteracted: false,
     contextualTourNavigationInteractionSnapshot: {},
     activeContextualTourSuppressed: false,
-    contextualTourSessionTourId: null,
+    contextualToursStartedThisSession: [],
     contextualToursOnboardingVisible: false,
     contextualToursBlockingSurfaceVisible: false,
     lastCompletedContextualTourId: null,
@@ -72,11 +88,7 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           autoEligible: options?.force === true || s.contextualToursAutoEligible === true,
           onboardingVisible: s.contextualToursOnboardingVisible,
           seenIds: options?.force === true ? [] : s.contextualToursSeenIds,
-          sessionConsumed:
-            options?.force !== true &&
-            s.contextualTourSessionTourId !== null &&
-            s.contextualTourSessionTourId !== id &&
-            !isPausedActionTour(s, id),
+          sessionConsumed: options?.force !== true && isContextualTourSessionConsumed(s, id),
           activeTourId: s.activeContextualTourId,
           activeModal: s.activeModal,
           blockingSurfaceVisible: s.contextualToursBlockingSurfaceVisible,
@@ -107,9 +119,9 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
             hasFeatureInteraction(s.featureInteractions, id),
           contextualTourNavigationInteractionSnapshot: remainingNavigationSnapshot,
           activeContextualTourSuppressed: false,
-          contextualTourSessionTourId: hasContextualTourActionStep(tour)
-            ? s.contextualTourSessionTourId
-            : id,
+          contextualToursStartedThisSession: s.contextualToursStartedThisSession.includes(id)
+            ? s.contextualToursStartedThisSession
+            : [...s.contextualToursStartedThisSession, id],
           lastCompletedContextualTourId: null
         }
       }),
@@ -226,8 +238,9 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
         if (!tourId || (id && activeTourId !== id)) {
           return s
         }
-        // An unshown attempt frees the session for a retry.
-        const alreadyShown = s.contextualToursSeenIds.includes(tourId)
+        // An unshown informational attempt frees the session for a retry; an action tour stays paused.
+        const freesSession =
+          !s.contextualToursSeenIds.includes(tourId) && isInformationalTour(tourId)
         return {
           activeContextualTourId: null,
           activeContextualTourStepIndex: 0,
@@ -236,10 +249,9 @@ export function createUiTourActions(set: UISliceSet, get: UISliceGet): Partial<U
           activeContextualTourWasFeaturePreviouslyInteracted: false,
           activeContextualTourSuppressed: false,
           lastCompletedContextualTourId: null,
-          contextualTourSessionTourId:
-            s.contextualTourSessionTourId === tourId && !alreadyShown
-              ? null
-              : s.contextualTourSessionTourId
+          contextualToursStartedThisSession: freesSession
+            ? s.contextualToursStartedThisSession.filter((started) => started !== tourId)
+            : s.contextualToursStartedThisSession
         }
       }),
     markContextualToursSeen: (ids) =>

@@ -5,7 +5,7 @@ import {
   type FeatureInteractionState
 } from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
-import { isPausedActionTour } from '@/store/slices/ui/ui-slice-tour-actions'
+import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
 
 const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
@@ -75,7 +75,7 @@ export function useContextualTour(
   )
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
-  const contextualTourSessionTourId = useAppStore((s) => s.contextualTourSessionTourId)
+  const sessionConsumed = useAppStore((s) => isContextualTourSessionConsumed(s, id))
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
@@ -168,9 +168,7 @@ export function useContextualTour(
       contextualToursOnboardingVisible ||
       contextualToursBlockingSurfaceVisible ||
       activeContextualTourId !== null ||
-      (contextualTourSessionTourId !== null &&
-        contextualTourSessionTourId !== id &&
-        !isPausedActionTour({ contextualToursSeenIds }, id)) ||
+      sessionConsumed ||
       contextualToursSeenIds.includes(id)
     ) {
       return
@@ -251,7 +249,7 @@ export function useContextualTour(
     contextualToursBlockingSurfaceVisible,
     activeModal,
     contextualToursAutoEligible,
-    contextualTourSessionTourId,
+    sessionConsumed,
     contextualToursOnboardingVisible,
     contextualToursSeenIds,
     enabled,

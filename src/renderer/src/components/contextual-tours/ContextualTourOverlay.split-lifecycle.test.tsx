@@ -94,7 +94,7 @@ beforeEach(() => {
     persistedUIReady: true,
     contextualToursAutoEligible: true,
     contextualToursSeenIds: [],
-    contextualTourSessionTourId: null,
+    contextualToursStartedThisSession: [],
     featureInteractions: {},
     activeModal: 'none',
     sidebarOpen: true,
@@ -241,6 +241,16 @@ describe('Split a terminal pane tip lifecycle', () => {
     addTourTarget('workspace-create-control', 40)
     await closeDialog()
     expect(shownTip()).toBe('Start another task in parallel')
+  })
+
+  it('leaves the sidebar closed for a split before the tip ever started', async () => {
+    act(() => {
+      useAppStore.setState({ sidebarOpen: false })
+    })
+    act(() => {
+      void useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+    })
+    expect(useAppStore.getState().sidebarOpen).toBe(false)
   })
 
   it('keeps its place and focus when a forced tour shows while it is paused', async () => {

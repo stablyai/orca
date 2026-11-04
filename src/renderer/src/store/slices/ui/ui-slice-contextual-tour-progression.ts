@@ -1,8 +1,5 @@
 import type { AppState } from '../../types'
-import {
-  hasFeatureInteraction,
-  type FeatureInteractionId
-} from '../../../../../shared/feature-interactions'
+import type { FeatureInteractionId } from '../../../../../shared/feature-interactions'
 import { getContextualTour } from '../../../../../shared/contextual-tours'
 import { isPausedActionTour } from './ui-slice-tour-actions'
 import {
@@ -24,12 +21,11 @@ export function getContextualTourProgressionForFeatureInteraction(
     state.activeContextualTourId !== 'workspace-agent-sessions' &&
     id === 'terminal-pane-split' &&
     !state.sidebarOpen &&
-    state.contextualToursAutoEligible === true &&
-    isPausedActionTour(state, 'workspace-agent-sessions') &&
-    !hasFeatureInteraction(state.featureInteractions, id)
+    state.contextualToursStartedThisSession.includes('workspace-agent-sessions') &&
+    isPausedActionTour(state, 'workspace-agent-sessions')
   ) {
-    // A first split that finishes while its tip is paused (no tour, or another one, showing) still
-    // opens the sidebar the next tip points at.
+    // A split that finishes while its tip is paused (no tour, or another one, showing) still opens
+    // the sidebar the next tip points at.
     return 'reveal-sidebar'
   }
   if (!state.activeContextualTourId) {
