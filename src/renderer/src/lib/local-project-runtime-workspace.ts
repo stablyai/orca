@@ -4,8 +4,8 @@ import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/ex
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspaceResult
-} from '../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+} from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'

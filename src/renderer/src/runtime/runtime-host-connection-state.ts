@@ -1,94 +1,12 @@
-import { runtimeHostContactFromSnapshot } from '../../../shared/runtime-host-contact'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
+import { runtimeHostContactFromSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import '../../../shared/runtime-workspace-window-availability'
 
-export type HostStatus = 'connected' | 'disconnected' | 'connecting'
-export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
-
-// Closed workspace windows leave reachable but graph-less hosts; count connected while preserving degraded status.
-export type RuntimeHostConnectionState =
-  | 'connected'
-  // Live SSH/control transport with unanswered runtime probe is distinct from disconnected.
-  | 'runtime-unavailable'
-  | 'workspace-window-closed'
-  | 'checking'
-  | 'reconnecting'
-  | 'disconnected'
-
-// Share derivation across status bar/Settings so degraded hosts get consistent labels.
-export function runtimeHostConnectionState({
-  hasStatusEntry,
-  status,
-  transportStatus = 'disconnected',
-  remoteControl = null
-}: {
-  hasStatusEntry: boolean
-  status: RuntimeStatus | null | undefined
-  /** Transport evidence is independent from the runtime status RPC result. */
-  transportStatus?: RuntimeHostTransportState
-  remoteControl?: RuntimeStatus['remoteControl'] | null
-}): RuntimeHostConnectionState {
-  if (!hasStatusEntry) {
-    return 'checking'
-  }
-  const transportState =
-    remoteControl?.state === 'ready'
-      ? 'connected'
-      : remoteControl?.state === 'awaiting_ready' ||
-          remoteControl?.state === 'awaiting_authenticated' ||
-          remoteControl?.state === 'reconnecting'
-        ? 'checking'
-        : remoteControl?.state === 'closed'
-          ? 'disconnected'
-          : transportStatus
-  const statusRemoteControl = status?.remoteControl ?? remoteControl
-  if (statusRemoteControl?.state === 'reconnecting') {
-    return 'reconnecting'
-  }
-  if (!status) {
-    if (transportState === 'connected') {
-      return 'runtime-unavailable'
-    }
-    // Negotiating/reconnecting transport cannot yet prove runtime outcome.
-    return transportState === 'checking' ? 'checking' : 'disconnected'
-  }
-  // Clean closes leave no lastError; requiring one falsely paints dead hosts green.
-  if (statusRemoteControl?.state === 'closed') {
-    return 'disconnected'
-  }
-  // Why: the socket is up but ready/auth has not completed, so nothing can run there yet.
-  if (statusRemoteControl && statusRemoteControl.state !== 'ready') {
-    return 'checking'
-  }
-  // Reachable but graph-less is degraded: transport works, but Connected hides that no work runs.
-  if (isRuntimeWorkspaceWindowClosed(status)) {
-    return 'workspace-window-closed'
-  }
-  // Connected means reachable regardless of active/default selection; every surface must use that definition.
-  return 'connected'
-}
-
-export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
-  switch (state) {
-    // Closed workspace windows degrade runtime service, not contact; retain connected-host count.
-    case 'connected':
-    case 'runtime-unavailable':
-    case 'workspace-window-closed':
-      return 'connected'
-    case 'checking':
-    case 'reconnecting':
-      return 'connecting'
-    case 'disconnected':
-      return 'disconnected'
-  }
-}
-
-export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
-  return (
-    state === 'connected' || state === 'runtime-unavailable' || state === 'workspace-window-closed'
-  )
-}
+import {
+  type RuntimeHostConnectionState,
+  runtimeHostConnectionState
+} from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 /**
  * Only this verdict earns the destructive glyph. 'checking' and 'reconnecting' are

@@ -13,12 +13,11 @@ import {
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
 import type { HookListenerState } from '../listener-state'
-import { claudeRowHasUnlistedLiveWork } from './claude-pane-hold-evidence'
+import { claudeRowHasUnlistedLiveWork, resolveClaudePaneStatus } from './claude-pane-hold-evidence'
 import { readString } from '../tool-input-preview'
 import {
   clearClaudePendingWaitForAgent,
-  getOrCreateClaudeSubagentRoster,
-  resolveClaudePaneStatus
+  getOrCreateClaudeSubagentRoster
 } from './claude-roster-state'
 import { buildClaudeStatusPayload } from './claude-status-build'
 

@@ -10,7 +10,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import * as commands from '../../../shared/agent-session/structured-agent-session-command-entry'
 import * as usageLimitCut from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
+import { createCodexJournalTranslator } from '../../codex/structured/journal/codex-structured-journal-translation'
 import * as reducer from '../agent-session-journal/journal-reducer'
 import * as publicRead from '../agent-session-journal/journal-public-read'
 import * as stoppedCut from '../agent-session-journal/journal-stopped-usage-limit-cut'

@@ -239,7 +239,8 @@ it('retains ordinary input through restart/reconciliation and exact replay recei
   lease.claimStatus = 'released'
   expect(journal.queuedMessages.get(cardId('restart'))).toBeNull()
   expect(journal.submissionBody('restart')).toEqual(body('restart'))
-  const { catchUpCodexThread } = await import('../../codex/codex-structured-thread-catch-up')
+  const { catchUpCodexThread } =
+    await import('../../codex/structured/threads/codex-structured-thread-catch-up')
   const { createDeferredStructuredAgentSessionEventSink } =
     await import('../agent-session-wire/structured-agent-session-event-sink')
   const { testEventSinkLogging } =
@@ -348,9 +349,10 @@ it('keeps an image as a returned card on both failed-start routes in the rejecti
 
 it('confirms id-less live receipts and releases unopened error/interrupt holds without deciding delivery', async () => {
   await open()
-  const { createCodexDispatchEchoes } = await import('../../codex/codex-structured-dispatch-echo')
+  const { createCodexDispatchEchoes } =
+    await import('../../codex/structured/turns/codex-structured-dispatch-echo')
   const { settleCodexSendsInEndedTurn } =
-    await import('../../codex/codex-structured-turn-end-settlement')
+    await import('../../codex/structured/turns/codex-structured-turn-end-settlement')
   const remembered: string[] = []
   const echoes = createCodexDispatchEchoes(undefined, (id) => {
     remembered.push(id)

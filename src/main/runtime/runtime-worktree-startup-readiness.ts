@@ -8,7 +8,7 @@ import {
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup

@@ -1,6 +1,6 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +10,8 @@ import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
-import { encodePairingOffer, parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,

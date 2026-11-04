@@ -1,5 +1,6 @@
 import type { RestoreSpawnIntent } from '../../../shared/host-spawn-admission'
-import { TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import '../../../shared/protocol-version'
+import { TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 
 /** The restore intent param for a remote create; empty for hosts whose strict params would reject it. */

@@ -6,15 +6,15 @@ import {
   getRuntimeEnvironmentStatusSnapshots,
   resetRuntimeEnvironmentStatusOwners
 } from '../runtime-environments/runtime-environment-request-connections'
-import { encodePairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   addWslHostEnvironment,
   findWslHostDeployment
-} from '../../../shared/runtime-environment-wsl-host-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
 
 const mocks = vi.hoisted(() => ({

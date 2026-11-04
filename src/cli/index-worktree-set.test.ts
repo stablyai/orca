@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -418,6 +421,37 @@ describe('orca cli worktree awareness', () => {
         'worktree.set',
         expect.objectContaining({ worktree: 'id:repo::/tmp/repo/child', comment: '' })
       )
+    }
+  )
+
+  it.each([
+    { flags: ['--read'], isUnread: false, acknowledges: true },
+    { flags: ['--unread'], isUnread: true, acknowledges: false },
+    { flags: [], isUnread: undefined, acknowledges: false }
+  ])(
+    'sends acknowledgement intent only for explicit --read: $flags',
+    async ({ flags, isUnread, acknowledges }) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_read', { worktree: buildWorktree('/tmp/repo/child', 'feature/child') })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenCalledExactlyOnceWith(
+        'worktree.set',
+        expect.objectContaining(isUnread === undefined ? {} : { isUnread })
+      )
+      const params = callMock.mock.calls[0][1]
+      if (acknowledges) {
+        expect(params).toHaveProperty('acknowledgeAttention', true)
+      } else {
+        expect(params).not.toHaveProperty('acknowledgeAttention')
+      }
     }
   )
 

@@ -9,8 +9,8 @@ import {
   adapterFor,
   fakeCodex,
   identityFor
-} from '../../codex/codex-structured-session-adapter-fixture'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import {
   HOST_TEST_SESSION as SESSION,

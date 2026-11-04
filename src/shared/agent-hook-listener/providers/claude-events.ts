@@ -23,12 +23,12 @@ import {
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
-  resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import {
+  resolveClaudePaneStatus,
   claudePaneHasRunningChildWork,
   claudeRowHasUnlistedLiveWork
 } from './claude-pane-hold-evidence'

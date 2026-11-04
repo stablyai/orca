@@ -1,6 +1,6 @@
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
 import { getAppEnvironment } from '../../../shared/app-environment'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'

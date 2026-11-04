@@ -21,7 +21,7 @@ import { structuredAgentSessionShownSnapshot } from '../../shared/agent-session/
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'

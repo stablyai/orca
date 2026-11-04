@@ -1,7 +1,7 @@
 import { readStructuredAgentLaunchRecords } from './agent-session/launch/structured-agent-session-launch-persistence'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+
+import { type ExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'

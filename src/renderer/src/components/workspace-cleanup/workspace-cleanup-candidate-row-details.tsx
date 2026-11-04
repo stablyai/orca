@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatGitStatus } from './workspace-cleanup-candidate-row-data'
 
 type CandidateRowDetailsProps = {

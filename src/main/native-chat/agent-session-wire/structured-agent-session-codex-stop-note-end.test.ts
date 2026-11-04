@@ -10,9 +10,9 @@ import {
   acquireReadyCodexForTest,
   identityFor,
   fakeCodex
-} from '../../codex/codex-structured-session-adapter-fixture'
+} from '../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapter } from '../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BrowserClientDownloadRelay,
   type BrowserClientDownloadRoute

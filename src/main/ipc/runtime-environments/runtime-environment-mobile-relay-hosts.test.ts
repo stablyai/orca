@@ -18,15 +18,18 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments
 }))
-vi.mock('../../../shared/runtime-environments', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getPreferredPairingOffer: (environment: { endpoint: string }) => ({
-    endpoint: environment.endpoint
+vi.mock(
+  '../../../shared/remote-runtime/host-catalog/runtime-environments',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    getPreferredPairingOffer: (environment: { endpoint: string }) => ({
+      endpoint: environment.endpoint
+    })
   })
-}))
+)
 vi.mock('./runtime-environment-managed-tunnel', () => ({
   resolveManagedRuntimeEnvironment: mocks.resolveManaged
 }))

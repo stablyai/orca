@@ -17,7 +17,7 @@ import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-disp
 import { formatHostedReviewLabel } from '../status-bar/hosted-review-label'
 import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
   referenceAttachment,
   referenceReview,

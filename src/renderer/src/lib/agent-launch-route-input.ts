@@ -31,7 +31,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 

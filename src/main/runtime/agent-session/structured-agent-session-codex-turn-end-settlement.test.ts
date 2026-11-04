@@ -3,9 +3,9 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'
-import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
-import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
+import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/structured/turns/codex-structured-turn-open-wait'
+import { settledWithin } from '../../codex/structured/turns/codex-structured-dispatch-test-support'
+import { codexTurnLifecycleFake } from '../../codex/structured/journal/codex-turn-lifecycle-fake'
 import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -39,7 +39,7 @@ import { scriptedCodexTransport } from '../scripted-codex-transport.test-fixture
 // Driven through the shipped host, journal and Codex adapter; only the Codex child is fake,
 // keeping Codex 0.157's turn bookkeeping.
 
-import type * as CodexTurnOpenWait from '../../codex/codex-structured-turn-open-wait'
+import type * as CodexTurnOpenWait from '../../codex/structured/turns/codex-structured-turn-open-wait'
 
 // The turns a send or Stop is waiting on to open, so a test knows the wait began.
 const openWaits = vi.hoisted(() => {
@@ -51,7 +51,7 @@ const openWaits = vi.hoisted(() => {
   } = { turnIds: [], ended: [], began: null, releaseAll: null }
   return state
 })
-vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) => {
+vi.mock('../../codex/structured/turns/codex-structured-turn-open-wait', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexTurnOpenWait>()
   return {
     ...actual,

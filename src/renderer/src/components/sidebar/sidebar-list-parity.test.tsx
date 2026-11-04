@@ -9,13 +9,16 @@ import type { AppState } from '@/store/types'
 import { SidebarInputsFeed } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed'
 import { TestPhone } from '../../../../main/runtime/sidebar-inputs/sidebar-inputs-feed.test-fixture'
 import { isActiveSidebarWorkspace } from '../../../../shared/sidebar-list/active-workspace'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
-import type { readSidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+
 import type { buildSidebarFeedRows } from '../../../../shared/sidebar-list/sidebar-feed-rows'
 import { GOLDEN_NOW } from './sidebar-list-golden-factories.test-fixture'
 import type { DesktopSidebarFeed } from '@/lib/desktop-sidebar-feed'
-import { readSidebarFeedDomains as readFeedDomainsSwitchedOn } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import {
+  type readSidebarFeedDomains,
+  readSidebarFeedDomains as readFeedDomainsSwitchedOn
+} from '../../../../shared/sidebar-list/sidebar-feed-domains'
 import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
 import {
   GOLDEN_WORKTREE_IDS,

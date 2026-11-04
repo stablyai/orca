@@ -1,4 +1,4 @@
-import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser-extension-webstore'
+import { CHROME_WEB_STORE_ORIGIN } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
   installBrowserSessionHeadersReceived,
   installBrowserSessionRequestLifecycle,

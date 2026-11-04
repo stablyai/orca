@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create, type StateCreator } from 'zustand'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
   createRemoteServerUpdatesSlice,

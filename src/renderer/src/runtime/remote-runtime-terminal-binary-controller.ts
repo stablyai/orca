@@ -5,7 +5,7 @@ import {
   decodeTerminalStreamText,
   decodeTerminalInputAck,
   type TerminalStreamFrame
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import {
   shouldDropE2eRemoteTerminalOutput,
