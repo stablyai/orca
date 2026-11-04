@@ -9280,6 +9280,10 @@
               "native": "原生",
               "cleaned": "清洁过的",
               "restart": "重新启动"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "复用",
+              "split": "拆分"
             }
           },
           "use": {
@@ -12767,6 +12771,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "没有匹配项。"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "在当前浏览器标签页中打开链接",
+          "description": "终端、聊天和 Markdown 中的链接会在你上次使用的浏览器标签页中加载，而不是新建标签页或分屏。"
         }
       },
       "right": {

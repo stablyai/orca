@@ -9796,6 +9796,10 @@
               "native": "原生",
               "cleaned": "已清理",
               "restart": "重新啟動"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "重複使用",
+              "split": "分割"
             }
           },
           "use": {
@@ -13215,6 +13219,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "沒有符合的項目。"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "在目前的瀏覽器分頁中開啟連結",
+          "description": "終端機、聊天和 Markdown 中的連結會在你上次使用的瀏覽器分頁中載入，而不是開啟新分頁或分割。"
         }
       },
       "right": {

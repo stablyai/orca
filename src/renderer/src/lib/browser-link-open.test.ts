@@ -243,6 +243,134 @@ describe('browser link placement and exact page activation', () => {
   })
 })
 
+describe('opt-in reuse of an existing browser tab', () => {
+  function singleGroupWithHiddenBrowser() {
+    store.setState((state) => ({
+      layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } },
+      groupsByWorktree: {
+        [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.filter((group) => group.id === 'a')
+      },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.groupId === 'a')
+      },
+      activeGroupIdByWorktree: { [WORKSPACE]: 'a' }
+    }))
+    const existing = browser('a', 'https://other.example/')
+    store.getState().activateTab('source')
+    return existing
+  }
+
+  function enableReuse() {
+    store.setState((state) => ({
+      settings: { ...state.settings!, openLinksInExistingBrowserTab: true }
+    }))
+  }
+
+  it('splits beside a lone group when the setting is off', async () => {
+    const existing = singleGroupWithHiddenBrowser()
+    const opened = await open()
+    expect(opened.status).toBe('opened')
+    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(2)
+    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(
+      'https://other.example/'
+    )
+  })
+
+  it('navigates the hidden browser tab in place instead of splitting', async () => {
+    const existing = singleGroupWithHiddenBrowser()
+    enableReuse()
+    const create = vi.spyOn(store.getState(), 'createBrowserTab')
+    expect(await open()).toMatchObject({
+      status: 'opened',
+      result: {
+        browserWorkspaceId: existing.id,
+        browserPageId: existing.activePageId,
+        groupId: 'a'
+      }
+    })
+    expect(create).not.toHaveBeenCalled()
+    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(1)
+    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(
+      'https://example.com/a#one'
+    )
+  })
+
+  it('picks the most recently focused browser tab across groups', async () => {
+    enableReuse()
+    const older = browser('b', 'https://older.example/')
+    const newer = browser('c', 'https://newer.example/')
+    store.setState((state) => ({
+      groupsByWorktree: {
+        [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.map((group) =>
+          group.id === 'a' ? group : { ...group, activeTabId: `terminal-${group.id}` }
+        )
+      },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
+          tab.entityId === older.id
+            ? { ...tab, lastFocusedAt: 2 }
+            : tab.entityId === newer.id
+              ? { ...tab, lastFocusedAt: 1 }
+              : tab
+        )
+      }
+    }))
+    expect(await open()).toMatchObject({
+      status: 'opened',
+      result: { browserWorkspaceId: older.id, groupId: 'b' }
+    })
+  })
+
+  it('prefers a more recently focused hidden tab over a visible tab in an unfocused group', async () => {
+    enableReuse()
+    const visible = browser('b', 'https://visible.example/')
+    const hidden = browser('c', 'https://hidden.example/')
+    store.setState((state) => {
+      const tabs = state.unifiedTabsByWorktree[WORKSPACE]!
+      const visibleTabId = tabs.find((tab) => tab.entityId === visible.id)!.id
+      return {
+        activeGroupIdByWorktree: { [WORKSPACE]: 'a' },
+        groupsByWorktree: {
+          [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.map((group) =>
+            group.id === 'b'
+              ? { ...group, activeTabId: visibleTabId }
+              : group.id === 'c'
+                ? { ...group, activeTabId: 'terminal-c' }
+                : group
+          )
+        },
+        unifiedTabsByWorktree: {
+          [WORKSPACE]: tabs.map((tab) =>
+            tab.entityId === visible.id
+              ? { ...tab, lastFocusedAt: 1 }
+              : tab.entityId === hidden.id
+                ? { ...tab, lastFocusedAt: 2 }
+                : tab
+          )
+        }
+      }
+    })
+    expect(await open()).toMatchObject({
+      status: 'opened',
+      result: { browserWorkspaceId: hidden.id, groupId: 'c' }
+    })
+  })
+
+  it('keeps an explicit open-in-this-group request on its own new tab', async () => {
+    const existing = singleGroupWithHiddenBrowser()
+    enableReuse()
+    const opened = await open(context(true))
+    expect(opened.status).toBe('opened')
+    if (opened.status !== 'opened') {
+      throw new Error('Expected open')
+    }
+    expect(opened.result.browserWorkspaceId).not.toBe(existing.id)
+    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(
+      'https://other.example/'
+    )
+  })
+})
+
 describe('existing open routes with link intent', () => {
   it('refuses a source owner that changed while HTTP routing was pending', async () => {
     const captured = context()

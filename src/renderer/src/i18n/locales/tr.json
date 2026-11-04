@@ -9959,6 +9959,10 @@
               "native": "yerel",
               "cleaned": "temizlenmiş",
               "restart": "yeniden başlat"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "yeniden kullan",
+              "split": "bölme"
             }
           },
           "use": {
@@ -13378,6 +13382,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Eşleşme yok."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Bağlantıları geçerli tarayıcı sekmesinde aç",
+          "description": "Terminal, sohbet ve markdown bağlantıları yeni bir sekme veya bölme yerine en son kullandığınız tarayıcı sekmesinde yüklenir."
         }
       },
       "right": {

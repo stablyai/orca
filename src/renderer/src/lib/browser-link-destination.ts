@@ -61,9 +61,11 @@ export function browserLinkUrlIdentity(url: string): string | null {
   return parsed.username || parsed.password ? null : normalized
 }
 
+/** anyWebsite keeps owner and session checks but accepts any non-document page URL. */
 export function createBrowserLinkPageMatcher(
   state: AppState,
-  destination: BrowserLinkDestination
+  destination: BrowserLinkDestination,
+  options: { anyWebsite?: boolean } = {}
 ): (workspace: BrowserWorkspace, page: BrowserPage) => boolean {
   const matchesSession = createBrowserLinkSessionMatcher(
     state,
@@ -98,6 +100,9 @@ export function createBrowserLinkPageMatcher(
         : !matchesSession(workspace)
     ) {
       return false
+    }
+    if (options.anyWebsite) {
+      return !page.docLocation
     }
     if (resource.kind === 'document') {
       return browserPageDocLocationsEqual(page.docLocation ?? null, resource.docLocation)

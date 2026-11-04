@@ -10331,6 +10331,10 @@
               "native": "встроенная",
               "cleaned": "очищенная",
               "restart": "перезапуск"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "повторно",
+              "split": "разделение"
             }
           },
           "use": {
@@ -13758,6 +13762,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Совпадений нет."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Открывать ссылки в текущей вкладке браузера",
+          "description": "Ссылки из терминала, чата и Markdown загружаются в последней использованной вкладке браузера, а не в новой вкладке или разделе."
         }
       },
       "right": {

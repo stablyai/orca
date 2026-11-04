@@ -9973,6 +9973,10 @@
               "native": "nativ",
               "cleaned": "bereinigt",
               "restart": "Neustart"
+            },
+            "linkRoutingExistingTab": {
+              "reuse": "wiederverwenden",
+              "split": "teilen"
             }
           },
           "use": {
@@ -13392,6 +13396,10 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Keine Treffer."
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Links im aktuellen Browser-Tab öffnen",
+          "description": "Links aus dem Terminal, Chat und Markdown werden im zuletzt verwendeten Browser-Tab geladen statt in einem neuen Tab oder einer neuen Teilung."
         }
       },
       "right": {
