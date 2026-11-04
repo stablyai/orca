@@ -33,7 +33,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
-    withImages: boolean,
+    requiresSession: boolean,
     send: () => boolean | 'queued'
   ) => boolean | 'queued'
   starting: boolean
@@ -42,12 +42,13 @@ export function useNativeChatStructuredComposerTransport(args: {
   optionPickerRequest: NativeChatOptionPickerRequest | null
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
   onError: NativeChatStructuredComposerTransport['onError']
-  onSubmitted: () => void
+  reveal: { revealLatest: () => void; captureRevealLatest: () => () => void }
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
-  const { setOptionPickerRequest, onError, onSubmitted } = args
+  const { setOptionPickerRequest, onError } = args
+  const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
   const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
   const acceptsImages = useStructuredAgentAcceptsImages(
@@ -67,16 +68,21 @@ export function useNativeChatStructuredComposerTransport(args: {
       capturePresentation: controller.capturePresentation,
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
-        sendThroughLaunch(text, attachments.length > 0, () =>
-          controller.send(
-            text,
-            attachments.map(({ path, connectionId }) => ({
-              path,
-              previewUri: path,
-              ...(connectionId ? { connectionId } : {})
-            })),
-            ...request
-          )
+        sendThroughLaunch(
+          text,
+          attachments.length > 0 ||
+            request[0]?.prepareAttachments !== undefined ||
+            Boolean(request[0]?.skills?.length),
+          () =>
+            controller.send(
+              text,
+              attachments.map(({ path, connectionId }) => ({
+                path,
+                previewUri: path,
+                ...(connectionId ? { connectionId } : {})
+              })),
+              ...request
+            )
         ),
       dispatchCommand: (text: string) =>
         dispatchStructuredAgentSessionComposerCommand(text, {
@@ -110,6 +116,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       worktreeId,
       onError,
       onSubmitted,
+      captureAdmittedReveal,
       runtime: props.target.kind === 'local' ? 'local' : 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
@@ -127,6 +134,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     worktreeId,
     onError,
     onSubmitted,
+    captureAdmittedReveal,
     optionPickerRequest,
     props.agent,
     props.sessionId,

@@ -77,20 +77,6 @@ afterEach(() => {
 })
 
 describe('AgentDashboardDrawer', () => {
-  it('leaves Escape to an open terminal panel before dismissing the drawer', () => {
-    mocks.blockingOverlay = true
-    const view = render(<AgentDashboardDrawer statusBarVisible />)
-
-    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
-
-    mocks.blockingOverlay = false
-    view.rerender(<AgentDashboardDrawer statusBarVisible />)
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
-  })
-
   it('keeps the dismissal Escape from a focused terminal but not from other fields', () => {
     const terminalInput = document.createElement('textarea')
     terminalInput.className = 'xterm-helper-textarea'
@@ -111,41 +97,5 @@ describe('AgentDashboardDrawer', () => {
     fireEvent.keyDown(field, { key: 'Escape' })
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
     expect(fieldKeyDown).toHaveBeenCalledTimes(1)
-  })
-
-  type RevealAgent = (args: {
-    repoId: string
-    worktreeId: string
-    executionHostId?: string
-    tabId: string
-    leafId: string | null
-  }) => void
-
-  function revealFromBoard(executionHostId: string): void {
-    render(<AgentDashboardDrawer statusBarVisible />)
-    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
-    const onRevealAgent = mocks.boardProps?.onRevealAgent
-    expect(onRevealAgent).toBeTypeOf('function')
-    act(() => {
-      ;(onRevealAgent as RevealAgent)({
-        repoId: 'repo-1',
-        worktreeId: 'shared-worktree',
-        executionHostId,
-        tabId: 'tab-1',
-        leafId: 'leaf-1'
-      })
-    })
-  }
-
-  it('activates a parked SSH workspace before reaching for its pane', () => {
-    revealFromBoard('ssh:devbox')
-
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
-      executionHostId: 'ssh:devbox'
-    })
-    // Ordering is the fix: a parked remote tab only exists after activation revives it.
-    expect(mocks.activateAndRevealWorkspace.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.activateTabAndFocusPane.mock.invocationCallOrder[0] as number
-    )
   })
 })

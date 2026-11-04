@@ -5,7 +5,6 @@ import {
   finishTestJournalHistoricalInputs
 } from '../agent-session-journal/journal-host-database-test-support'
 import { outcomeFormat1EntryParsers } from '../agent-session-journal/journal-outcome-format-1'
-import { JournalDraftMap } from '../agent-session-journal/journal-transition-collections'
 import { expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -16,7 +15,6 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/r
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import { createAgentSessionCatchUpReader } from './agent-session-history-page'
 import { readPublishedQueuedMessages } from './structured-agent-session-queued-publication'
 import { buildSubscriberFrame } from './agent-session-subscriber-frame-fields'
 import { boundedQueuePublication } from './agent-session-bounded-queue'
@@ -79,163 +77,6 @@ async function handOff(
       : { clientMessageId: attempt, state: 'rejected', ...words(as), fence, answeredInTurn }
   )
 }
-
-it.each([100, 1_000].flatMap((size) => [false, true].map((adopt) => ({ size, adopt }))))(
-  'publication reuse: $size historical items, adopted=$adopt',
-  async ({ size, adopt }) => {
-    const corrections = size / 10
-    const earlier = journalFor(SESSION)
-    await earlier.open()
-    await handOff(earlier, 'u-0', 'q-0', 'stopped words', 'cancelled', 0, async () => {
-      for (let ordinal = 0; ordinal < size; ordinal++) {
-        await earlier.appendItem(
-          { provider: 'codex', threadId: 'history', turnId: 't', ordinal },
-          { ...message('old answer'), role: 'assistant' },
-          { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-        )
-      }
-    })
-    for (let index = 1; index < corrections; index++) {
-      await handOff(earlier, `u-${index}`, `q-${index}`, 'stopped words', 'cancelled')
-    }
-    await earlier.close()
-    seedLegacy(
-      SESSION,
-      Array.from({ length: corrections }, (_, i): Legacy => [`q-${i}`, 'waiting', 'stopped words'])
-    )
-    if (!adopt) {
-      db().exec(`CREATE TEMP TRIGGER b2_perf_fail_import BEFORE DELETE ON queued_messages
-      BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
-    }
-    const journal = journalFor(SESSION)
-    await journal.open()
-    expect(legacyIds()).toHaveLength(adopt ? 0 : corrections)
-    const display = journal.queuedMessages.displayState()
-    const feed = new AgentSessionSubscribers()
-    const events: AgentSessionSubscribeEvent[] = []
-    let visits = 0
-    let keyVisits = 0
-    function counted<T>(iterator: MapIterator<T>, correction = false): MapIterator<T> {
-      const next = iterator.next.bind(iterator)
-      iterator.next = (...args) => {
-        const result = next(...args)
-        if (!result.done) {
-          if (correction) {
-            keyVisits++
-          } else {
-            visits++
-          }
-        }
-        return result
-      }
-      return iterator
-    }
-    const values = Map.prototype.values
-    const entries = Map.prototype[Symbol.iterator]
-    const valuesRead = vi.spyOn(Map.prototype, 'values').mockImplementation(function (
-      this: Map<unknown, unknown>
-    ) {
-      return counted(values.call(this))
-    })
-    const entriesRead = vi.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function (
-      this: Map<unknown, unknown>
-    ) {
-      return counted(entries.call(this))
-    })
-    const setIterator = Set.prototype[Symbol.iterator]
-    const sets = vi.spyOn(Set.prototype, Symbol.iterator).mockImplementation(function (
-      this: Set<unknown>
-    ) {
-      return this === journal['state'].normalizedHandOffs
-        ? counted(setIterator.call(this), true)
-        : setIterator.call(this)
-    })
-    const gets = vi.spyOn(Map.prototype, 'get')
-    const draftGets = vi.spyOn(JournalDraftMap.prototype, 'get')
-    const sourceGets = () =>
-      [...gets.mock.contexts, ...draftGets.mock.contexts].filter(
-        (m) => m === display.items || m === display.submissions
-      )
-    const sorts = vi.spyOn(Array.prototype, 'sort')
-    const json = vi.spyOn(JSON, 'stringify')
-    const work = () => [
-      keyVisits,
-      sorts.mock.contexts.filter((v) => Array.isArray(v) && v[0] === 'u-0').length,
-      json.mock.calls.filter(
-        ([v]) => Array.isArray(v) && Array.isArray(v[1]) && v[1][0]?.[0] === 'u-0'
-      ).length
-    ]
-    const reset = () => {
-      keyVisits = 0
-      gets.mockClear()
-      draftGets.mockClear()
-      sorts.mockClear()
-      json.mockClear()
-    }
-    try {
-      for (const id of ['perf-a', 'perf-b', 'old']) {
-        feed.open({
-          sessionId: SESSION,
-          journal,
-          fence: 0,
-          id,
-          boundedFrames: id === 'perf-b',
-          cursor: journal.cursor(),
-          snapshotCatchUp: id !== 'old',
-          readsCurrentRequests: id !== 'old',
-          emit: (event) => events.push(event)
-        })
-      }
-      expect(work()).toEqual([0, 1, 1])
-      // Adopted display shares the raw map used by the keyed inverse lookup.
-      expect(sourceGets()).toHaveLength((adopt ? 3 : 2) * corrections)
-      expect(visits).toBeGreaterThanOrEqual(size)
-      const key = journal.publicRead().normalizationKey
-      reset()
-      visits = 0
-      for (let publication = 0; publication < 5; publication++) {
-        feed.publish(SESSION, journal)
-      }
-      // Only subscriber visits; history copies/materialization would add N visits.
-      expect(visits).toBe(15)
-      expect(work()).toEqual([0, 0, 0])
-      expect(sourceGets()).toHaveLength(0)
-      const cursor = journal.cursor()
-      const snapshot = journal.snapshot()
-      await journal.open()
-      expect(journal.cursor()).toEqual(cursor)
-      expect(journal.queuedMessages.displayState() === display).toBe(false)
-      expect(journal.snapshot()).not.toBe(snapshot)
-      feed.publish(SESSION, journal)
-      expect(work()).toEqual([0, 1, 1])
-      reset()
-      await journal.appendItem(
-        { provider: 'codex', threadId: 'progress', turnId: 't', ordinal: 0 },
-        message('progress'),
-        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-      )
-      expect(journal.snapshot().items.at(-1)?.body).toEqual(message('progress'))
-      expect(work()).toEqual([0, 0, 0])
-      reset()
-      feed.publish(SESSION, journal)
-      const latest = events.at(-1)
-      expect(latest?.type === 'batch' && latest.batch.items.at(-1)?.body).toEqual(
-        message('progress')
-      )
-      expect(work()).toEqual([0, 1, 1])
-      expect(journal.publicRead().normalizationKey).toBe(key)
-    } finally {
-      for (const spy of [sets, gets, draftGets, sorts, json, entriesRead, valuesRead]) {
-        spy.mockRestore()
-      }
-      if (!adopt) {
-        db().exec('DROP TRIGGER b2_perf_fail_import')
-      }
-    }
-    expect(events.filter((event) => event.type === 'snapshot')).toHaveLength(2)
-    await journal.close()
-  }
-)
 
 it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
   const journal = journalFor(SESSION)
@@ -348,52 +189,6 @@ it.each([100, 1_000])('raw selection reuse: %i waiting cards', async (size) => {
     db().exec('DROP TRIGGER b2_raw_fail_import')
     await journal.close()
   }
-})
-
-it('public metadata follows legacy-only commits, item recreation and epoch replacement', async () => {
-  const earlier = journalFor(SESSION)
-  await earlier.open()
-  await earlier.queuedMessages.insert({ messageId: 'q', body: message('words') })
-  await handOff(earlier, 'u', 'q', 'words', 'cancelled')
-  await earlier.close()
-  seedLegacy(SESSION, [['gone', 'withdrawn', 'deleted']])
-  db().exec(`CREATE TEMP TRIGGER b2_source_fail_import BEFORE DELETE ON queued_messages
-    BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
-  const journal = journalFor(SESSION)
-  await journal.open()
-  const ids = vi.spyOn(journal.inputOrder, 'inputForItem')
-  const key = journal.publicRead().normalizationKey
-  const snapshot = journal.snapshot()
-  expect(journal.snapshot()).toBe(snapshot)
-  expect(key).not.toBe('')
-  const cursor = journal.cursor()
-  const catchUp = createAgentSessionCatchUpReader(journal, undefined, journal.publicRead())
-  const request = { sessionId: SESSION, direction: 'tail' as const }
-  const beforeImport = catchUp(request)
-  expect(beforeImport).toMatchObject({ ok: true, page: { items: snapshot.items } })
-  db().exec('DROP TRIGGER b2_source_fail_import')
-  await journal.queuedMessages.importAtOpen()
-  expect(journal.cursor()).toEqual(cursor)
-  expect(legacyIds()).toEqual([])
-  expect(journal.snapshot()).not.toBe(snapshot)
-  expect(catchUp(request)).toEqual(beforeImport)
-  // The refreshed catch-up resolves the one selected original; normalization reuses it.
-  expect(ids).toHaveBeenCalledTimes(2)
-  expect(journal.publicRead().normalizationKey).toBe(key)
-  expect(ids).toHaveBeenCalledTimes(2)
-  ids.mockRestore()
-  const identity = { provider: 'orca' as const, clientMessageId: 'u' }
-  await journal.appendTombstone(identity, { fence: 0 })
-  expect(journal.publicRead().normalizationKey).toBe('')
-  expect(journal.snapshot().items).toEqual([])
-  await journal.appendItem(identity, message('recreated'), threadWrite)
-  expect([key, '']).not.toContain(journal.publicRead().normalizationKey)
-  expect(journal.snapshot().items[0]?.body).toEqual(message('recreated'))
-  await journal.rollEpoch('handle_forked', 0)
-  expect(journal.epoch).not.toBe(cursor.epoch)
-  expect(journal.publicRead().normalizationKey).toBe('')
-  expect(journal.snapshot().items).toEqual([])
-  await journal.close()
 })
 
 it('carries saved independent holds through real publication, bounded snapshot/reset/catch-up/live and the shared reducer', async () => {

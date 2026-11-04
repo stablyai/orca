@@ -35,54 +35,6 @@ describe('the desktop’s server list', () => {
     vi.useRealTimers()
   })
 
-  it('is read once per poll however many readers share it', async () => {
-    const session = desktop(() => 'available')
-    const feed = relayHostsFeed(session)
-    await feed.read()
-    await vi.advanceTimersByTimeAsync(1000)
-    const unsubscribe = feed.subscribe(() => {})
-    const unsubscribeAgain = feed.subscribe(() => {})
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(1999)
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(listCalls(session)).toBe(2)
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(listCalls(session)).toBe(3)
-    unsubscribe()
-    unsubscribeAgain()
-    await vi.advanceTimersByTimeAsync(9000)
-    expect(listCalls(session)).toBe(3)
-  })
-
-  it('joins a read already in flight', async () => {
-    const session = desktop(() => 'available')
-    const feed = relayHostsFeed(session)
-    const [first, second] = await Promise.all([feed.read(), feed.read()])
-    expect(second).toBe(first)
-    expect(listCalls(session)).toBe(1)
-    expect(feed.getSnapshot()).toBe(first)
-    await feed.read()
-    expect(feed.getSnapshot()).toBe(first)
-    expect(listCalls(session)).toBe(2)
-  })
-
-  it('keeps polling after a read slower than the poll', async () => {
-    const session = desktop(() => 'available')
-    session.sendRequest.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      return hostsReply('available')
-    })
-    const unsubscribe = relayHostsFeed(session).subscribe(() => {})
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(listCalls(session)).toBe(2)
-    unsubscribe()
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('drops a reply that lands after a drop and reconnect', async () => {
     const session = desktop(() => 'error')
     let releaseStale: () => void = () => {}

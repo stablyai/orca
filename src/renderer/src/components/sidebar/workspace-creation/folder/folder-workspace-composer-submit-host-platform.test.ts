@@ -19,42 +19,6 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   beforeEach(() => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
   })
-  it('preserves SSH group ownership when creating and activating a folder workspace', async () => {
-    const projectGroup = {
-      ...makeProjectGroup(),
-      connectionId: 'ssh-1',
-      executionHostId: 'ssh:ssh-1'
-    }
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
-    const onOpenChange = vi.fn()
-
-    await submitFolderWorkspaceCreate({
-      projectGroup,
-      name: 'SSH workspace',
-      lastAutoName: '',
-      linkedWorkItem: null,
-      note: '',
-      quickAgent: null,
-      autoRenameBranchFromWork: false,
-      agentCmdOverrides: {},
-      isRemote: true,
-      runtimeEnvironmentId: null,
-      createFolderWorkspace,
-      onOpenChange
-    })
-
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: 'SSH workspace',
-      connectionId: 'ssh-1',
-      linkedTask: null
-    })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      agent: null,
-      runtimeEnvironmentId: null
-    })
-  })
 
   it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())

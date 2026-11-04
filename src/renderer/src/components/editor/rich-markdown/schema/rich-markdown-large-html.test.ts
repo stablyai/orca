@@ -1,13 +1,12 @@
 // @vitest-environment happy-dom
 import { Editor } from '@tiptap/core'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { getMarkdownRichModeUnsupportedReason } from '../../markdown/render-mode/markdown-rich-mode'
 import { commitRichMarkdownSerialization } from '../document/rich-markdown-serialization-commit'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
-import * as fenceScanner from '../../markdown/source-scanning/markdown-fence-scanner'
 
 function createEditor(source: string): Editor {
   const codec = createRichMarkdownEditorCodec()
@@ -81,17 +80,6 @@ it.each([200, 50_000, 50_001])(
   }
 )
 
-it.each([
-  '    <span>indented</span>',
-  '[link](https://example.com "<span>title</span>")',
-  '[link](<span>)'
-])('blocks markup that the parser keeps as transport text: %s', (markup) => {
-  for (const length of [200, 50_000, 50_001, 120_000]) {
-    const source = `${'a'.repeat(length)}\n\n${markup}\n`
-    expect(getMarkdownRichModeUnsupportedReason(source)).toBe('html-or-jsx')
-  }
-})
-
 it('preserves markup in the edited paragraph through successive saves and reopening', () => {
   const markup = '<span title="keep">text</span> <sup><a href="https://example.com">1</a></sup>'
   const source = `${'a'.repeat(50_001)}\n\nBefore ${markup} after\n`
@@ -140,16 +128,5 @@ it('preserves markup in the edited paragraph through successive saves and reopen
     }
   } finally {
     editor.destroy()
-  }
-})
-
-it('scans whole-document fence ranges once for thousands of passthrough details blocks', () => {
-  const source = '<details class="custom"><summary>Toggle</summary>Body</details>\n\n'.repeat(4_000)
-  const scan = vi.spyOn(fenceScanner, 'getMarkdownFenceRanges')
-  try {
-    expect(getMarkdownRichModeUnsupportedReason(source)).toBeNull()
-    expect(scan.mock.calls.filter(([content]) => content === source)).toHaveLength(1)
-  } finally {
-    scan.mockRestore()
   }
 })

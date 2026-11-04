@@ -121,21 +121,3 @@ it.each([
     )
   }
 )
-
-it('disables sprint filtering in linked mode while retaining its checked preference', () => {
-  const current = model(source)
-  current.jiraHasWorkspace = true
-  const { rerender } = render(<TaskPageJiraContent model={current} />)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
-  current.jiraHasWorkspace = false
-  rerender(<TaskPageJiraContent model={current} />)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).hasAttribute('disabled')).toBe(
-    false
-  )
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
-})

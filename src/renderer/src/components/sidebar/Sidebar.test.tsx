@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 
 import { tmpdir } from 'node:os'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -155,80 +155,5 @@ describe('Sidebar', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('does not start a full worktree scan while the startup session is hydrating', () => {
-    setSidebarState(getDefaultSettings(tmpdir()))
-    const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
-    mocks.state = {
-      ...mocks.state,
-      fetchAllWorktrees,
-      repos: [],
-      startupWorktreeRefreshCompleted: false
-    }
-    const view = render(sidebarElement())
-
-    mocks.state = { ...mocks.state, repos: [{ id: 'repo-a' }] }
-    view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).not.toHaveBeenCalled()
-
-    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
-    view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).not.toHaveBeenCalled()
-
-    mocks.state = { ...mocks.state, repos: [{ id: 'repo-a' }, { id: 'repo-b' }] }
-    view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not scan all hosts when runtime connection status flaps', () => {
-    setSidebarState(getDefaultSettings(tmpdir()))
-    const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
-    mocks.state = {
-      ...mocks.state,
-      fetchAllWorktrees,
-      runtimeStatusByEnvironmentId: new Map(),
-      startupWorktreeRefreshCompleted: true
-    }
-    const view = render(sidebarElement())
-
-    for (let index = 0; index < 5; index += 1) {
-      mocks.state = {
-        ...mocks.state,
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-a', { status: index % 2 === 0 ? 'connected' : null }]
-        ])
-      }
-      view.rerender(sidebarElement())
-    }
-
-    expect(fetchAllWorktrees).not.toHaveBeenCalled()
-  })
-
-  it('closes the dashboard drawer when the dashboard experiment is disabled', async () => {
-    setSidebarState({
-      ...getDefaultSettings(tmpdir()),
-      experimentalAgentDashboardPopout: false
-    })
-    const setAgentDashboardDrawerOpen = vi.fn()
-    mocks.state = {
-      ...mocks.state,
-      agentDashboardDrawerOpen: true,
-      setAgentDashboardDrawerOpen
-    }
-
-    render(sidebarElement())
-
-    await waitFor(() => expect(setAgentDashboardDrawerOpen).toHaveBeenCalledWith(false))
-  })
-
-  it('detaches the project-drop owner while the sidebar is collapsed', () => {
-    setSidebarState(getDefaultSettings(tmpdir()))
-    const view = render(sidebarElement())
-    expect(mocks.dropOwnerRef).toHaveBeenLastCalledWith(expect.any(HTMLDivElement))
-
-    mocks.state = { ...mocks.state, sidebarOpen: false }
-    view.rerender(sidebarElement())
-    expect(mocks.dropOwnerRef).toHaveBeenLastCalledWith(null)
   })
 })

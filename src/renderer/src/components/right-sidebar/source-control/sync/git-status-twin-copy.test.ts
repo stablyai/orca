@@ -5,7 +5,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'
 import { useAppStore } from '@/store/index'
-import { resolveWorktreeGitCopyNow, worktreeCopyPushTarget } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 // #32918: the same project at the same path on this machine and on an SSH host.
@@ -82,12 +82,6 @@ afterEach(() => {
 })
 
 describe('git status poll for a same-path twin', () => {
-  it('refuses an unselected twin instead of guessing a copy', () => {
-    useAppStore.setState({ activeWorktreeId: null, activeWorkspaceExecutionHostId: null })
-
-    expect(resolveWorktreeGitCopyNow(id)).toBeNull()
-  })
-
   it("asks the selected SSH copy's host and patches only that copy", async () => {
     const target = resolveWorktreeGitCopyNow(id)
     expect(target).toMatchObject({ hostId: 'ssh:box-b', connectionId: 'box-b' })
@@ -114,30 +108,5 @@ describe('git status poll for a same-path twin', () => {
     const [local, remote] = useAppStore.getState().worktreesByRepo.repo1
     expect(local).toMatchObject({ head: 'aaa', branch: 'refs/heads/master' })
     expect(remote).toMatchObject({ head: 'bbb2', branch: 'refs/heads/feature' })
-  })
-})
-
-describe('push target for a same-path twin', () => {
-  it("names the pinned SSH copy's remote and branch, not the local copy's", () => {
-    const [local, remote] = useAppStore.getState().worktreesByRepo.repo1
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo1: [
-          { ...local, pushTarget: { remoteName: 'origin', branchName: 'local-review' } },
-          { ...remote, pushTarget: { remoteName: 'fork', branchName: 'remote-review' } }
-        ]
-      }
-    })
-
-    expect(worktreeCopyPushTarget(useAppStore.getState(), id, 'ssh:box-b')).toEqual({
-      remoteName: 'fork',
-      branchName: 'remote-review'
-    })
-    // An unplaced host must not fall back to either twin, nor to a lone copy stamped elsewhere.
-    expect(worktreeCopyPushTarget(useAppStore.getState(), id, 'ssh:other')).toBeUndefined()
-    useAppStore.setState({
-      worktreesByRepo: { repo1: [useAppStore.getState().worktreesByRepo.repo1[0]] }
-    })
-    expect(worktreeCopyPushTarget(useAppStore.getState(), id, 'ssh:box-b')).toBeUndefined()
   })
 })

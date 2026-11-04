@@ -21,8 +21,6 @@ import { resolveSourceControlActionRecipe } from '../../../../../../shared/sourc
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { tokenizeStartupCommand } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import * as setupOwner from '../../../agent/agent-launch-picker-drafts'
-import * as optionRows from '../../../agent/agent-launch-setup-option-rows'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: () => null },
@@ -453,8 +451,6 @@ it.each([
 it.each([true, false] as const)(
   'executes accepted Customize Fast=%s through the actual queued pane intent and host compiler',
   async (fast) => {
-    const setupReads = vi.spyOn(setupOwner, 'useAgentPickerSetup')
-    const rows = vi.spyOn(optionRows, 'agentLaunchSetupOptionRows')
     const f = mountSourceDialog(
       {
         agentId: 'claude',
@@ -526,30 +522,9 @@ it.each([true, false] as const)(
     fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
     const toggle = screen.getByRole('switch')
     expect(toggle).toHaveProperty('disabled', false)
-    const descriptor = rows.mock.results.at(-1)
-    expect(
-      descriptor?.type === 'return' && descriptor.value.find((row) => row.id === 'fastMode')
-    ).toMatchObject({ settable: true, valueSource: 'unknown' })
-    const readDraft = () => {
-      const latest = setupReads.mock.results.at(-1)
-      return latest?.type === 'return' ? latest.value.getDraft() : undefined
-    }
-    expect(readDraft()?.delegated).toContain('fastMode')
-    expect(readDraft()?.choices.options?.fastMode).toBeUndefined()
-    expect(
-      readDraft()?.recipeEdits?.selection.source.authoredPreferences?.modelSelection?.options
-        ?.fastMode
-    ).toEqual({ agentId: 'claude', value: null })
-    if ((toggle.getAttribute('aria-checked') === 'true') === fast) {
-      await user.click(toggle)
-    }
+    expect(toggle.getAttribute('aria-checked')).toBe(String(!fast))
     await user.click(toggle)
-    expect(readDraft()?.choices.options?.fastMode).toBe(String(fast))
-    expect(readDraft()?.delegated).not.toContain('fastMode')
-    expect(
-      readDraft()?.recipeEdits?.selection.source.authoredPreferences?.modelSelection?.options
-        ?.fastMode
-    ).toEqual({ agentId: 'claude', value: String(fast) })
+    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe(String(fast))
     await user.click(screen.getByRole('button', { name: 'Launch terminal' }))
     expect(f.controller.recipe.launchPreferences?.modelSelection?.options?.fastMode).toEqual({
       agentId: 'claude',

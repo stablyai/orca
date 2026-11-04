@@ -142,6 +142,7 @@ export function BrowserPageToolbar({
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
       pinnedStage={pinnedStage}
       controls={{

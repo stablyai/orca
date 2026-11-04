@@ -361,7 +361,14 @@ describe('registerSkillsHandlers', () => {
       handlerFor('skills:bundledExecute')(null, { planDigest, request: { force } })
     ).resolves.toEqual({ executed: true })
 
-    expect(runtime.planLocalBundledSkills.mock.calls).toEqual([[{}], [{ force }]])
+    const chatRequest = { names: ['orca-cli'], agent: 'claude' }
+    await handlerFor('skills:bundledPlan')(null, chatRequest)
+    await handlerFor('skills:bundledExecute')(null, { planDigest, request: chatRequest })
+    expect(runtime.planLocalBundledSkills.mock.calls).toEqual([[{}], [{ force }], [chatRequest]])
+    expect(runtime.executeLocalBundledSkills).toHaveBeenCalledWith({
+      planDigest,
+      request: chatRequest
+    })
     expect(runtime.executeLocalBundledSkills).toHaveBeenCalledWith({
       planDigest,
       request: { force }
@@ -383,6 +390,7 @@ describe('registerSkillsHandlers', () => {
         request: { wsl: { distro: 'Ubuntu' } }
       })
     ).rejects.toThrow()
+    await expect(handlerFor('skills:bundledPlan')(null, { agent: '../claude' })).rejects.toThrow()
     await expect(handlerFor('skills:bundledPlan')(null, { force: 'all' })).rejects.toThrow()
     await expect(handlerFor('skills:bundledPlan')(null, { names: ['../x'] })).rejects.toThrow()
     await expect(handlerFor('skills:bundledExecute')(null, {})).rejects.toThrow()

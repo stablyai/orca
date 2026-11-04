@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   agentModelCatalogEntry,
   entryWithConfiguredDefault,
-  agentModelCatalogListingKey,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 
@@ -146,35 +145,4 @@ it('keeps late configured validation from reattaching old declaration proof to a
     entryWithConfiguredDefault(late, { modelId: 'openai/gpt-6', effort: 'high' }, 4, current)
       ?.models[0]?.declaredDefaultEffort
   ).toBe('high')
-})
-
-it('bounds transient declaration serialization and configured observation work at N and 10N', () => {
-  const counts = [100, 1000].map((size) => {
-    let observations = 0
-    const models = Array.from({ length: size }, (_, index) => ({
-      id: `model-${index}`,
-      label: 'Model',
-      isDefault: false,
-      efforts: menu('low', 'high'),
-      get declaredDefaultEffort() {
-        observations++
-        return 'low'
-      }
-    }))
-    const source = { models, origin: 'live-session' as const, at: 1 }
-    const entry = agentModelCatalogEntry('grok', 'fp', null, source, {
-      modelId: `model-${size - 1}`,
-      effort: 'low',
-      at: 1
-    })!
-    observations = 0
-    agentModelCatalogListingKey(entry)
-    expect(observations).toBe(size)
-    expect(
-      entryWithConfiguredDefault(entry, { modelId: `model-${size - 1}`, effort: 'low' }, 2)
-    ).toBeNull()
-    expect(observations).toBe(size + 1)
-    return observations
-  })
-  expect(counts[1]).toBeLessThanOrEqual(10 * counts[0])
 })

@@ -36,6 +36,7 @@ vi.mock('react-native', () => ({
   Keyboard: { dismiss: vi.fn() },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Switch: 'Switch',
   Text: 'Text',
