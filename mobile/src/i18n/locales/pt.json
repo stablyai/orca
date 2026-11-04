@@ -787,8 +787,8 @@
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "repairHint": "Toque para parear novamente com seu desktop",
+      "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
-      "updateDesktopHint": "Atualize o Orca no desktop e entre na sua conta para se conectar de qualquer lugar",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
     },
     "hostDiagnosticsLink": {

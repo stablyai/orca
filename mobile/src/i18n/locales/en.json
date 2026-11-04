@@ -1087,7 +1087,7 @@
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
       "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
-      "updateDesktopHint": "Update desktop Orca and sign in to connect from anywhere",
+      "sameNetworkOnlyHint": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",
       "repairHint": "Tap to re-pair with your desktop",
       "unlockHint": "Unlock your phone, then tap to retry",
       "openHost": "Open {{title}}",

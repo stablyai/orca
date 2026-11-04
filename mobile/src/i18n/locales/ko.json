@@ -745,8 +745,8 @@
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
       "repairHint": "탭하여 데스크톱과 다시 페어링하세요.",
+      "sameNetworkOnlyHint": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
-      "updateDesktopHint": "어디서나 연결하려면 데스크톱 Orca를 업데이트하고 로그인하세요.",
       "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개"
     },
     "hostDiagnosticsLink": {

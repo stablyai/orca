@@ -74,11 +74,12 @@ export function MobileHomeDesktopRow(props: {
   const statusColor = PROBLEM_VERDICTS.has(statusVerdict.kind) ? dotColor : colors.textMuted
   const worktreeSummary = worktreeSummaries(props.worktreeInfo, t)
   const display = useHostDisplay(props.host)
-  const discoveryHint =
+  // No Relay is no evidence of an old desktop: current desktops make LAN-only pairings that never gain it.
+  const sameNetworkHint =
     props.verdict.kind === 'unreachable' && !props.host.relay
       ? t(
-          'components.hostCard.updateDesktopHint',
-          'Update desktop Orca and sign in to connect from anywhere'
+          'components.hostCard.sameNetworkOnlyHint',
+          'Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again'
         )
       : null
   const credentialHint = credentialMissing
@@ -89,7 +90,7 @@ export function MobileHomeDesktopRow(props: {
   // The verdict's own second line (what to check on the desktop); credential copy wins.
   const verdictDetail =
     credentialHint === null && 'detail' in props.verdict ? (props.verdict.detail ?? null) : null
-  const details = [discoveryHint, credentialHint, verdictDetail].filter((line): line is string =>
+  const details = [sameNetworkHint, credentialHint, verdictDetail].filter((line): line is string =>
     Boolean(line)
   )
   const statusLine = connected && worktreeSummary.visual ? worktreeSummary.visual : statusLabel

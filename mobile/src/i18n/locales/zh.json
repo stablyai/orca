@@ -745,8 +745,8 @@
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
       "repairHint": "轻点以重新与桌面配对",
+      "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
-      "updateDesktopHint": "更新桌面端 Orca 并登录，即可随时随地连接",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
     },
     "hostDiagnosticsLink": {
