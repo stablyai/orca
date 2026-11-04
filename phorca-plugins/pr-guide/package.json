@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "build": "esbuild guide-ui.jsx --bundle --minify --format=esm --platform=browser --jsx=automatic --outfile=guide-ui.js && esbuild ../../src/packages/process-host/src/run-process.ts --bundle --platform=node --format=cjs --target=node18 --outfile=process-host.cjs",
+    "build": "esbuild guide-ui.jsx --bundle --minify --format=esm --platform=browser --jsx=automatic --outfile=guide-ui.js && esbuild ../../src/packages/process-host/src/run-process.ts --bundle --minify --platform=node --format=cjs --target=node18 --outfile=process-host.cjs",
     "test": "npm run build && node --test *.test.mjs"
   },
   "devDependencies": {
