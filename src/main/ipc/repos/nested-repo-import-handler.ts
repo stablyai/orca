@@ -105,8 +105,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
                 // The resolved spelling names this machine's folder, so only local rows may match it.
                 (resolvedImportRepoPath !== null &&
-                  !repo.connectionId &&
-                  !getRepoExecutionHostId(repo).startsWith('ssh:') &&
+                  getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
                   normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
           )
           const group = groupResolver.getGroupForRepo(repoPath)
