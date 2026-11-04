@@ -112,27 +112,59 @@ describe('runKillAllTerminalSurfaces', () => {
     })
   })
 
+  it('leaves tabs mirrored from a paired host open while closing local ones', async () => {
+    const current = state({
+      tabsByWorktree: {
+        'wt-local': [terminal('local-tab', 'wt-local')],
+        'wt-paired': [terminal('mirrored-tab', 'wt-paired')]
+      },
+      unifiedTabsByWorktree: {
+        'wt-paired': [unified('mirrored-visible', 'mirrored-unified', 'wt-paired')]
+      },
+      ptyIdsByTabId: {
+        'local-tab': ['pty-local'],
+        'mirrored-tab': ['remote:env-paired@@terminal-1'],
+        'mirrored-unified': ['remote:env-paired@@terminal-2']
+      }
+    })
+    current.worktreesByRepo = {
+      'fixture-repo': [
+        { id: 'wt-local', repoId: 'fixture-repo', hostId: 'local' },
+        { id: 'wt-paired', repoId: 'fixture-repo', runtimeOwnerEnvironmentId: 'env-paired' }
+      ]
+    } as never
+    const closeSurface = vi.fn((targetId: string) => removeSurface(current, targetId))
+    const killPty = vi.fn().mockResolvedValue(undefined)
+
+    await runKillAllTerminalSurfaces(snapshotKillAllTerminalSurfaceIds(current), {
+      getState: () => current,
+      killDaemonSessions: vi.fn().mockResolvedValue({ killedCount: 0, remainingCount: 0 }),
+      closeSurface,
+      killPty,
+      yieldToRenderer: vi.fn(async () => {}),
+      reportSummary: vi.fn()
+    })
+
+    expect(closeSurface.mock.calls.map(([targetId]) => targetId)).toEqual(['local-tab'])
+    expect(killPty.mock.calls).toEqual([['pty-local']])
+  })
+
   it('revalidates remaining ownership after a yield before killing an exact PTY', async () => {
     let current = state({
       activeWorktreeId: 'wt',
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
       tabsByWorktree: {
         wt: [terminal('first', 'wt'), terminal('second', 'wt'), terminal('third', 'wt')]
       },
       ptyIdsByTabId: {
-        first: ['pty-first', 'remote:terminal-1'],
+        first: ['pty-first'],
         second: ['pty-second'],
-        third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1']
+        third: ['pty-shared-after-yield']
       }
     })
     const closeSurface = vi.fn(
       (
         targetId: string,
         options: {
-          precomputedRetirementPlan: {
-            runtimeTerminals: unknown[]
-            cleanupOnlyPtyIds: string[]
-          }
           precomputedCloseState: {
             terminalCountBeforeClose: number
             nextTerminalTabId: string | null
@@ -150,12 +182,11 @@ describe('runKillAllTerminalSurfaces', () => {
     const yieldToRenderer = vi.fn(async () => {
       current = state({
         activeWorktreeId: 'wt',
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
         tabsByWorktree: {
           wt: [terminal('third', 'wt'), terminal('survivor', 'wt')]
         },
         ptyIdsByTabId: {
-          third: ['pty-shared-after-yield', 'remote:env-1@@terminal-1'],
+          third: ['pty-shared-after-yield'],
           survivor: ['pty-shared-after-yield']
         }
       })
@@ -180,18 +211,14 @@ describe('runKillAllTerminalSurfaces', () => {
       terminalCountBeforeClose: 2,
       nextTerminalTabId: 'survivor'
     })
-    expect(closeSurface.mock.calls[2]?.[1].precomputedRetirementPlan).toMatchObject({
-      runtimeTerminals: [],
-      cleanupOnlyPtyIds: ['remote:env-1@@terminal-1']
-    })
-    expect(killPty).not.toHaveBeenCalledWith('pty-first')
-    expect(killPty).not.toHaveBeenCalledWith('pty-second')
+    expect(killPty).toHaveBeenCalledWith('pty-first')
+    expect(killPty).toHaveBeenCalledWith('pty-second')
     expect(killPty).not.toHaveBeenCalledWith('pty-shared-after-yield')
     expect(snapshotKillAllTerminalSurfaceIds(current)).toEqual(['survivor'])
     expect(summary).toMatchObject({
       closeAttemptCount: 3,
       absentTargetCount: 3,
-      exactKillAcceptedCount: 0,
+      exactKillAcceptedCount: 2,
       closeYieldCount: 1
     })
   })
