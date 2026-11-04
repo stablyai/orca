@@ -24,6 +24,7 @@ import {
 } from '@/lib/agent-launch-routing'
 import {
   launchPinsClaudeAccount,
+  resolvePlannedRoute,
   type ClaudeAccountRouteArgs
 } from '@/lib/agent-session-launch-claude-account'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
@@ -54,7 +55,10 @@ export type AgentSessionLaunchRequest = ClaudeAccountRouteArgs & {
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
-export type AgentSessionLaunchVerdict = {
+export type AgentSessionLaunchVerdict = Pick<
+  StructuredAgentLaunchOptions,
+  'promptAttachments' | 'promptSkills' | 'preparePrompt'
+> & {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
   requestId: AgentLaunchRequestId
@@ -101,6 +105,9 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
   return {
     requestId: verdict.requestId,
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
+    ...(verdict.promptAttachments?.length ? { promptAttachments: verdict.promptAttachments } : {}),
+    ...(verdict.promptSkills?.length ? { promptSkills: verdict.promptSkills } : {}),
+    ...(verdict.preparePrompt ? { preparePrompt: verdict.preparePrompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
@@ -179,22 +186,6 @@ export function structuredAgentSessionLaunchFeasible(
   const { settings, ...args } = request
   // Carry narrow settings on the built input so callers can name exact dependencies without a whole store object.
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
-}
-
-function resolvePlannedRoute(
-  store: AgentLaunchRouteStore,
-  request: ClaudeAccountRouteArgs & Pick<AgentSessionLaunchRequest, 'requestedSurface'>,
-  input: ReturnType<typeof buildAgentLaunchRouteInput>
-): AgentLaunchRoute {
-  const route = request.requestedSurface
-    ? request.requestedSurface === 'chat'
-      ? 'structured-native-chat'
-      : 'terminal-tui'
-    : resolveAgentLaunchRoute(input)
-  // Why even over a requested chat: a chat cannot run on the pinned account, and must not run on another.
-  return route === 'structured-native-chat' && launchPinsClaudeAccount(store, request)
-    ? 'terminal-tui'
-    : route
 }
 
 export function resolveAgentSessionLaunchRoute(
