@@ -122,12 +122,15 @@ afterEach(() => {
 
 describe('Split a terminal pane tip lifecycle', () => {
   it('returns by itself after a dialog and after visiting another page', async () => {
+    const terminalInput = document.createElement('textarea')
+    document.body.appendChild(terminalInput)
+    terminalInput.focus()
     renderSurfaces({ terminal: true, tasks: false })
     await settle()
     expect(shownTip()).toBe('Split a terminal pane')
+    // The tip shows over the terminal the user types into; it never takes focus, first time included.
+    expect(document.activeElement).toBe(terminalInput)
 
-    const terminalInput = document.createElement('textarea')
-    document.body.appendChild(terminalInput)
     await interruptWithDialog()
     terminalInput.focus()
     await closeDialog()
@@ -164,6 +167,22 @@ describe('Split a terminal pane tip lifecycle', () => {
     expect(shownTip()).toBe('Start another task in parallel')
     expect(document.activeElement).toBe(terminalInput)
     expect(useAppStore.getState().contextualToursSeenIds).toContain('workspace-agent-sessions')
+    terminalInput.remove()
+  })
+
+  it('moves to the next tip after a keyboard split without taking the terminal focus', async () => {
+    const terminalInput = document.createElement('textarea')
+    document.body.appendChild(terminalInput)
+    terminalInput.focus()
+    renderSurfaces({ terminal: true, tasks: false })
+    await settle()
+
+    act(() => {
+      void useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+    })
+    await settle()
+    expect(shownTip()).toBe('Start another task in parallel')
+    expect(document.activeElement).toBe(terminalInput)
     terminalInput.remove()
   })
 

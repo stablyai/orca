@@ -1,6 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { useAppStore } from '@/store'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
+import {
+  getContextualTour,
+  hasContextualTourActionStep,
+  type ContextualTourId
+} from '../../../../shared/contextual-tours'
 import { getContextualTourFocusableElements } from './ContextualTourOverlaySurface'
 
 // Moves focus into a newly shown tour step and gives it back when the tour ends.
@@ -17,7 +20,6 @@ export function useContextualTourFocus({
 }): void {
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const focusedStepRef = useRef<string | null>(null)
-  const resumed = useAppStore((s) => s.activeContextualTourResumed)
 
   useEffect(() => {
     if (!activeTourId || !rendered) {
@@ -27,11 +29,10 @@ export function useContextualTourFocus({
     if (focusedStepRef.current === focusKey) {
       return
     }
-    const firstStepOfActivation = focusedStepRef.current === null
     focusedStepRef.current = focusKey
-    // A paused tour that comes back, at any step, must not take focus again: a keystroke meant for
-    // the terminal would land on its dismiss button.
-    if (firstStepOfActivation && resumed) {
+    // A tour that waits for the user to act (split a pane) shows while they type in the terminal and
+    // keeps coming back until they do; taking focus would send those keystrokes to its dismiss button.
+    if (hasContextualTourActionStep(getContextualTour(activeTourId))) {
       return
     }
 
@@ -50,7 +51,7 @@ export function useContextualTourFocus({
       ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
     }, 0)
     return () => window.clearTimeout(timeout)
-  }, [activeStepIndex, activeTourId, panelRef, rendered, resumed])
+  }, [activeStepIndex, activeTourId, panelRef, rendered])
 
   useEffect(() => {
     if (activeTourId) {
