@@ -9,8 +9,9 @@ export type TerminalQuickCommandArgument = {
   required: boolean
 }
 
-// Why: `{{name}}` avoids colliding with shell `${VAR}` syntax; leading `.` (Go templates) never matches.
-const ARGUMENT_TOKEN_RE = /\{\{\s*([A-Za-z_][\w-]{0,39})\s*(\?)?\s*(?:([:=])([^{}]*))?\}\}/g
+// Why: `{{name}}` avoids colliding with shell `${VAR}` syntax; Go template actions (`{{.X}}`, bare `{{end}}`) never match.
+const ARGUMENT_TOKEN_RE =
+  /\{\{\s*(?!(?:end|else|break|continue)\s*\}\})([A-Za-z_][\w-]{0,39})\s*(\?)?\s*(?:([:=])([^{}]*))?\}\}/g
 
 function parseArgumentToken(
   name: string,

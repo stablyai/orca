@@ -25,7 +25,7 @@ describe('terminal quick command arguments', () => {
   })
 
   it('leaves shell variables and Go templates alone', () => {
-    const text = `echo \${HOME} && docker inspect -f '{{.State.Status}}' {{json .}}`
+    const text = `echo \${HOME} && docker inspect -f '{{.State.Status}}' {{json .}} --format '{{range .Networks}}{{.IPAddress}}{{else}}none{{ end }}'`
     expect(parseTerminalQuickCommandArguments(text)).toEqual([])
     expect(applyTerminalQuickCommandArguments(text, {})).toBe(text)
   })
