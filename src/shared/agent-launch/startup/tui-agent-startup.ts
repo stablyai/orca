@@ -35,6 +35,19 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
+/**
+ * Build the launch plan for one agent: the command a pane runs, the process to expect, and
+ * whether the prompt rides argv or is typed after start.
+ *
+ * The prompt's route is the agent's `promptInjectionMode`. An `argv` agent that declares an
+ * `argvPromptSeparator` gets it inserted before the prompt, so prompt words are never read back
+ * as flags — unless the resolved command already ends option parsing, which
+ * `launchCommandEndsOptions` detects so a second `--` is not appended.
+ *
+ * @param args.prompt Empty is only a launch when `allowEmptyPromptLaunch` is set.
+ * @param args.cmdOverrides A user's custom launch command, which may carry its own arguments.
+ * @returns The plan, or `null` when the agent has no buildable launch.
+ */
 export function buildAgentStartupPlan(args: {
   agent: TuiAgent
   prompt: string
