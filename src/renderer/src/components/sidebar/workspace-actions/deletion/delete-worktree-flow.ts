@@ -5,7 +5,7 @@ import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,
   showWorkspaceListChangedToast
-} from '../../stale-workspace-list-toast'
+} from '../../worktree-list/listing/stale-workspace-list-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'

@@ -2,14 +2,14 @@ import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { hasWorkspaceKanbanSidebarDropBoard } from '../../workspace-kanban-sidebar-drop'
+import { hasWorkspaceKanbanSidebarDropBoard } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
 import {
   createSidebarDragPreview,
   isSidebarPointerDragBlocked,
   setSidebarPointerDragDocumentStyles
-} from '../../worktree-sidebar-pointer-drag-dom'
-import { getWorktreeSidebarDragRectsForGroup } from '../../worktree-sidebar-drag-autoscroll'
-import { getWorktreeSidebarDragGrab } from '../../worktree-sidebar-drag-geometry'
+} from './worktree-sidebar-pointer-drag-dom'
+import { getWorktreeSidebarDragRectsForGroup } from './worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragGrab } from './worktree-sidebar-drag-geometry'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './drop-commit-context'
 import type {
   ShouldShowWorkspaceBoardDropIndicator,

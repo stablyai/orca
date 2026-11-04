@@ -10,7 +10,7 @@ import {
 import type { SshConnectionState } from '../../../../../../shared/ssh-types'
 import { isEphemeralVmRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
-import { useSidebarHostScopeOptions } from '../../use-sidebar-host-scope-options'
+import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
 import { canSelectAddRepoHost } from './add-repo-host-availability'
 import {
   indexExecutionHostsById,

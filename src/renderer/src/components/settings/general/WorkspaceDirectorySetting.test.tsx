@@ -8,7 +8,7 @@ import { getDefaultSettings } from '../../../../../shared/constants'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 
-vi.mock('../../sidebar/use-sidebar-host-scope-options', () => ({
+vi.mock('../../sidebar/worktree-list/controls/use-sidebar-host-scope-options', () => ({
   useSidebarHostScopeOptions: () => ({ hostOptions: [] })
 }))
 

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import { getWorktreeIdsWithStructuredChat } from '../../visible-worktree-activity-inputs'
+import { getWorktreeIdsWithStructuredChat } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import {

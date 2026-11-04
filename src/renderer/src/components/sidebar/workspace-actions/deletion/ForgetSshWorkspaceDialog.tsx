@@ -23,7 +23,7 @@ import {
   readWorktreeDeleteIdentities,
   resolveWorktreeBatchDeleteTargets
 } from './worktree-delete-request'
-import { showWorkspaceListChangedToast } from '../../stale-workspace-list-toast'
+import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string

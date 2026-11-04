@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
-import { buildSidebarHostOptions } from '../../sidebar-host-options'
+import { buildSidebarHostOptions } from '../../worktree-list/controls/sidebar-host-options'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
