@@ -58,7 +58,7 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
 }))
 
 // Assert the Add Host mode here; the dialog covers its own SSH/runtime behavior.
-vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
+vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: ({ mode }: { mode: 'ssh' | 'server' | null }) =>
     mode ? <div data-testid="add-remote-host-dialog" data-mode={mode} /> : null
 }))

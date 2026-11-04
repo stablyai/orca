@@ -8,7 +8,7 @@ import {
   makeTerminalTab,
   makeWorktree
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
-import { makeProjectGroup } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 const leaf = '11111111-1111-4111-8111-111111111111'
