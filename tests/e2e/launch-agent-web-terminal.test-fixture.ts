@@ -8,7 +8,7 @@ import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-o
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
-import type { FolderWorkspace } from '../../src/shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 
 const mocks = vi.hoisted(() => ({

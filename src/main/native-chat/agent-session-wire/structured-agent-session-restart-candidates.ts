@@ -39,7 +39,7 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       latestPrompt: (sessionId) => {
         const session = deps.sessions.get(sessionId)
         return session
-          ? latestStructuredAgentSessionPrompt(session.journal.snapshot().items)
+          ? latestStructuredAgentSessionPrompt(session.journal.itemsRead().items)
           : (deps.getRecord(sessionId)?.lastTurn?.prompt ?? '')
       },
       leaseState

@@ -2,11 +2,11 @@ import { ipcMain, type WebContents } from 'electron'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewSnapshot
-} from '../../shared/terminal-preview'
+} from '../../shared/terminal/replay/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isDetachedTerminalRendererForPty } from '../window/detached-terminal-window'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { isTrustedUIRenderer } from './ui'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {

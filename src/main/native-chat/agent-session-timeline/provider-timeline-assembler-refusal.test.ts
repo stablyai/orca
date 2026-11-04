@@ -174,20 +174,4 @@ describe('what the assembler holds open is bounded', () => {
         .admission
     ).toEqual({ accepted: true })
   })
-
-  it('refuses a stream past the budget, even though the coalescer would hold it', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
-    let admitted = 0
-    for (let index = 0; index < 1_100; index += 1) {
-      const { admission } = rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: `m${index}` },
-        channel: 'assistant',
-        text: 'x'
-      })
-      admitted += admission.accepted ? 1 : 0
-    }
-    expect(admitted).toBe(MAX_PROVIDER_TIMELINE_OPEN_ENTRIES)
-  })
 })

@@ -1,11 +1,14 @@
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
-import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
+
+import {
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
+  isClientOnlyUnverifiableInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {

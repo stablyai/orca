@@ -1,6 +1,9 @@
 import { MAX_DETACHED_TERMINAL_TITLE_LENGTH } from '../../../../shared/detached-terminal-limits'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/remote-execution-host-pty-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import type { AppState } from '../types'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'

@@ -1,30 +1,30 @@
 import {
   sourceControlActionSelectedPreferences,
   sourceControlActionAgentArgs
-} from '../../../../../shared/source-control-action-launch-preferences'
+} from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 // @vitest-environment happy-dom
 import { useState } from 'react'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai-operation-policy'
+import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import * as lifts from '../../../../../shared/source-control-action-permission-lift'
+import * as lifts from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import * as shell from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { expect, it, vi } from 'vitest'
 import '../__fixtures__/settings-persistence-test-fixture'
 import {
   getDefaultSourceControlAiSettings,
   normalizeSourceControlAiSettings
-} from '../../../../../shared/source-control-ai'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
-} from '../../../../../shared/source-control-ai-types'
-import { liftActionPermissionArgs } from '../../../../../shared/source-control-action-permission-lift'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { liftActionPermissionArgs } from '../../../../../shared/source-control/ai/recipes/source-control-action-permission-lift'
 import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { agentPermissionArgsForLaunch } from '../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { SourceControlActionArguments } from './SourceControlActionArguments'
 import { useRepositorySourceControlAiGlobalUx } from '../repository/source-control/repository-source-control-ai-global-ux'

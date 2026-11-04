@@ -1,9 +1,9 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
 

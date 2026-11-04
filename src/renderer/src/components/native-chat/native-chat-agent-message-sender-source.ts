@@ -6,8 +6,9 @@ import {
   startWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached
 } from '@/components/dashboard/worktree-agent-rows-cache'
-import { createWorktreeAgentFreshnessSelector } from '@/components/sidebar/worktree-agent-freshness-selector'
-import { selectRuntimeAgentOrchestrationForWorktree } from '@/components/sidebar/worktree-agent-row-selectors'
+import { createWorktreeAgentFreshnessSelector } from '@/components/sidebar/workspace-card/activity/worktree-agent-freshness-selector'
+import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import {

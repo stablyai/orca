@@ -10,7 +10,10 @@ vi.mock('@/components/dashboard/dashboard-client-host', () => ({
   readDashboardClientHost: () => ({ platform: 'win32', userAgent: 'Windows', osRelease: '10.0' })
 }))
 
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   resolveDetachedTerminalInput,
   type DetachedTerminalInputState

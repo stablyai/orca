@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import StatusIndicator from '@/components/sidebar/StatusIndicator'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { cn } from '@/lib/utils'
@@ -10,9 +10,9 @@ import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
 } from '../native-chat/native-chat-agent-message-sender-view'
-import { isAgentStatusState } from '../../../../shared/agent-status-types'
+import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'

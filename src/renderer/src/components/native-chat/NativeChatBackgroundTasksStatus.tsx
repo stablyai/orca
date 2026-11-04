@@ -4,8 +4,8 @@ import type { AgentSessionBackgroundTask } from '../../../../shared/agent-sessio
 import type {
   AgentChildRowContext,
   AgentChildRowModel
-} from '../../../../shared/agent-child-row-model'
-import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
+} from '../../../../shared/agent-status/presentation/agent-child-row-model'
+import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'

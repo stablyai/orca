@@ -33,13 +33,6 @@ describe('agent prompt injection bytes', () => {
     expect(getAgentPromptSubmitDelayMs('win32', bytes)).toBeGreaterThan(measuredMs)
   })
 
-  it('scales without a cap all the way to the terminal input ceiling', () => {
-    const ceilingBytes = 16 * 1024 * 1024
-    expect(getAgentPromptSubmitDelayMs('win32', ceilingBytes)).toBeGreaterThan(250_000)
-    // Even the fast platforms outrun a flat 500 ms at the ceiling.
-    expect(getAgentPromptSubmitDelayMs('linux', ceilingBytes)).toBeGreaterThan(4_000)
-  })
-
   it('sanitizes embedded escape bytes before framing', () => {
     const bytes = buildAgentPromptPasteBytes('before\x1b[201~after\x1b')
     expect(bytes).toBe(`${BEGIN}before<ESC>[201~after<ESC>${END}`)

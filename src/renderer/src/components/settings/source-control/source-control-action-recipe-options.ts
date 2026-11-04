@@ -3,14 +3,14 @@ import {
   AI_TEXT_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type AiActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
   type CustomAgentId,
   getCommitMessageAgentCapability,
   isCustomAgentId,
   listCommitMessageAgentCapabilities
-} from '../../../../../shared/commit-message-agent-spec'
+} from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'

@@ -5,7 +5,7 @@ import type {
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type {
   ClientAutomationWorkspaceProvenance,

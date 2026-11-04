@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { claudeAgentViewChord } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_SHORTCUTS,

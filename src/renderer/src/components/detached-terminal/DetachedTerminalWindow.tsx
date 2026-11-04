@@ -4,7 +4,7 @@ import { AgentTerminalPreview } from '../dashboard-popout/AgentTerminalPreview'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 
 export type DetachedTerminalWindowParams = {

@@ -9,7 +9,12 @@ import {
   type MockPane,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps, type PaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -223,7 +228,13 @@ async function connectPane(visible: boolean): Promise<PaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: visible }
   })
-  const binding = await connectMockPanePty(pane, createManager(1), deps)
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+  const binding = await connectMockPanePty(
+    pane,
+    createManager(1),
+    bindPaneAgentTitleMocks(deps, agentTitleMocks)
+  )
   await flushAsyncTicks(6)
   expect(captured.current).not.toBeNull()
   return {

@@ -1,4 +1,4 @@
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'

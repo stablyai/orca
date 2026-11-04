@@ -8,10 +8,10 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '../../../../shared/source-control-tree'
+} from '../../../../shared/source-control/listing/source-control-tree'
 import { VirtualizedList } from '@/components/virtualized-list'
 import type { ConflictReviewEntry } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { translate } from '@/i18n/i18n'
 
 type ConflictReviewTreeEntry = ConflictReviewEntry & {

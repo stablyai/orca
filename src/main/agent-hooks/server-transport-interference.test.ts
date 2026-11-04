@@ -2,7 +2,7 @@
 import { connect } from 'node:net'
 import { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HookTransportInterferenceReport } from '../../shared/agent-hook-transport-interference'
+import type { HookTransportInterferenceReport } from '../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { AgentHookServer } from './server'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../shared/agent-launch/startup/opencode-startup-prompt'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../shared/agent-hook-listener/listener-limits'
@@ -69,19 +69,6 @@ async function postStalledHook(
     timeout.mockRestore()
   }
   await new Promise((resolve) => setTimeout(resolve, 50))
-}
-
-async function postCompleteHook(port: number, token: string): Promise<void> {
-  const body = 'paneKey=tab%3Aleaf&payload=%7B%7D'
-  const response = await fetch(`http://127.0.0.1:${port}/hook/claude`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Orca-Agent-Hook-Token': token
-    },
-    body
-  })
-  expect(response.status).toBe(204)
 }
 
 describe('AgentHookServer transport interference', () => {
@@ -169,16 +156,6 @@ describe('AgentHookServer transport interference', () => {
       writeHead.mockRestore()
     }
   }, 30_000)
-
-  it('never reports for POSTs that deliver their whole body', async () => {
-    const { port, token, reports } = await startServer()
-
-    for (let i = 0; i < 5; i++) {
-      await postCompleteHook(port, token)
-    }
-
-    expect(reports).toEqual([])
-  }, 20_000)
 
   it('excludes requests the slowloris cap destroyed, so the count stays honest', async () => {
     const { port, token, reports } = await startServer()

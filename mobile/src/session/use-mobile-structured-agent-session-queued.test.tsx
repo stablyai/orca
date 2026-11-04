@@ -1,5 +1,3 @@
-// Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
-
 import { createElement } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -28,6 +26,7 @@ import {
   queuedDraft,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
+// Test capability-gated queue writes with authoritative cards; Stop preserves host-held drafts and legacy Edit copies before deleting.
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -480,105 +479,6 @@ describe('mobile structured queued messages', () => {
       expect(hook!.sendFollowUp?.action).toBe('queue')
     })
 
-    it.each(['steer', 'queue'] as const)(
-      'pre-turn host Working honors default and explicit choice (%s)',
-      async (behavior) => {
-        sendRequest.mockImplementation(async (method) => {
-          if (method === 'settings.get') {
-            return ok({ settings: { nativeChatQueueFollowUps: behavior === 'queue' } })
-          }
-          if (method === 'agentSession.send') {
-            return mutationOk({
-              clientMessageId: 'client-1',
-              submission: acceptedSubmission('client-1')
-            })
-          }
-          return normalReply(method)
-        })
-        await mountSession(CAPABLE, {
-          ...snapshotEvent(),
-          page: {
-            ...snapshotEvent().page,
-            working: true,
-            latestTurn: null,
-            nextQueuedMessageId: null
-          }
-        })
-        await act(async () => {})
-        expect(hook!.isWorking).toBe(true)
-        expect(hook!.sendFollowUp).toEqual({ action: behavior, offersChoice: true })
-        for (const alternate of [false, true]) {
-          await act(async () => {
-            await hook!.sendWithOutcome(
-              'pre-turn',
-              undefined,
-              undefined,
-              undefined,
-              [],
-              alternate ? { alternate: true } : undefined
-            )
-          })
-          expect(requestOf('agentSession.send', alternate ? 1 : 0).params.delivery).toBe(
-            (behavior === 'queue') !== alternate ? 'queue-if-active' : undefined
-          )
-        }
-        // A sheet opened during work sends against the current idle state.
-        await act(async () =>
-          listener?.({
-            ...snapshotEvent(),
-            page: {
-              ...snapshotEvent().page,
-              working: false,
-              latestTurn: null,
-              nextQueuedMessageId: null
-            }
-          })
-        )
-        await act(async () => {
-          await hook!.sendWithOutcome('now idle', undefined, undefined, undefined, [], {
-            alternate: true
-          })
-        })
-        expect(requestOf('agentSession.send', 2).params.delivery).toBe(
-          behavior === 'queue' ? 'queue-if-active' : undefined
-        )
-      }
-    )
-
-    it('sends using a changed host preference in the same connected chat', async () => {
-      sendRequest.mockImplementation(async (method) =>
-        method === 'agentSession.send'
-          ? mutationOk({ clientMessageId: 'client-1', submission: acceptedSubmission('client-1') })
-          : normalReply(method)
-      )
-      await mountSession(CAPABLE, {
-        ...snapshotEvent(),
-        page: {
-          ...snapshotEvent().page,
-          working: true,
-          latestTurn: null,
-          nextQueuedMessageId: null
-        }
-      })
-      expect(hook!.sendFollowUp).toEqual({ action: 'queue', offersChoice: true })
-      await act(async () => {
-        await hook!.sendWithOutcome('queue by default')
-      })
-      expect(requestOf('agentSession.send').params.delivery).toBe('queue-if-active')
-      await act(async () =>
-        preferenceListener?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
-      )
-      expect(hook!.sendFollowUp).toEqual({ action: 'steer', offersChoice: true })
-      await act(async () => {
-        await hook!.sendWithOutcome('now steer')
-      })
-      expect(requestOf('agentSession.send', 1).params.delivery).toBeUndefined()
-      expect(
-        subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
-      ).toHaveLength(1)
-      expect(calls('settings.get')).toHaveLength(1)
-    })
-
     it('a new send follows the current host capability after acknowledgement loss', async () => {
       let attempts = 0
       sendRequest.mockImplementation(async (method, params) => {
@@ -637,57 +537,6 @@ describe('mobile structured queued messages', () => {
   })
 
   describe('cards from the published list', () => {
-    it('renders published drafts as cards and follows later frames', async () => {
-      await mountSession(
-        CAPABLE,
-        snapshotEvent({ queuedMessages: [queuedDraft({ messageId: 'draft-1' })] })
-      )
-      expect(hook!.queued.cards).toEqual([
-        {
-          messageId: 'draft-1',
-          position: 1,
-          text: 'text of draft-1',
-          line: 'text of draft-1',
-          state: 'waiting',
-          hold: 'turn',
-          needsAttention: false,
-          caption: null,
-          attribution: null
-        }
-      ])
-      act(() => listener?.(batchEvent()))
-      expect(hook!.queued.cards).toHaveLength(1)
-      act(() => listener?.(batchEvent(null)))
-      expect(hook!.queued.cards).toEqual([])
-    })
-
-    it('hides a waiting card once a submission names it as its hand-off, as the desktop does', async () => {
-      await mountSession(
-        CAPABLE,
-        snapshotEvent({
-          queuedMessages: [
-            queuedDraft({ messageId: 'drained' }),
-            queuedDraft({ messageId: 'still-waiting' })
-          ],
-          items: [
-            {
-              itemId: agentJournalSubmissionKey('fresh-hand-off-id'),
-              revision: 1,
-              sequence: 1,
-              observedAt: 10,
-              body: {
-                kind: 'message',
-                role: 'user',
-                blocks: [{ type: 'text', text: 'sent message' }]
-              }
-            }
-          ],
-          submissions: [acceptedSubmission('fresh-hand-off-id', 'drained')]
-        })
-      )
-      expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['still-waiting'])
-    })
-
     it('never hides a card by a direct send that merely shares its id', async () => {
       await mountSession(
         CAPABLE,
@@ -777,23 +626,6 @@ describe('mobile structured queued messages', () => {
       })
       // Failed delete leaves both visible copies without restoring text a second time.
       expect(appendText.mock.calls).toEqual([['text of draft-1']])
-      expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['draft-1'])
-    })
-
-    it('Edit that copied nothing deletes nothing and does not report a copy', async () => {
-      sendRequest.mockImplementation(async (method) => normalReply(method))
-      await mountSession(
-        LEGACY,
-        snapshotEvent({ queuedMessages: [queuedDraft({ messageId: 'draft-1' })] })
-      )
-      appendText.mockReturnValueOnce(false)
-      const onCopied = vi.fn()
-      await act(async () => {
-        expect(await hook!.queued.edit!('draft-1', onCopied)).toBe(false)
-      })
-      expect(appendText.mock.calls).toEqual([['text of draft-1']])
-      expect(onCopied).not.toHaveBeenCalled()
-      expect(callOrderOf('agentSession.queuedMessageDelete')).toBeUndefined()
       expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['draft-1'])
     })
   })

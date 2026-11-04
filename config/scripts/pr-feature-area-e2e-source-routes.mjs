@@ -61,8 +61,17 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     [
       'src/main/ai-vault/',
       'src/main/ai-vault-search/',
-      `${COMPONENTS}right-sidebar/ai-vault-`,
-      `${COMPONENTS}right-sidebar/AiVault`
+      `${COMPONENTS}right-sidebar/ai-vault/accounts/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/accounts/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/panel/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/scanning/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/scanning/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/scope/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/search/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/search/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-actions/ai-vault-`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-list/AiVault`,
+      `${COMPONENTS}right-sidebar/ai-vault/session-list/ai-vault-`
     ]
   ),
   featureRoute(

@@ -2,7 +2,7 @@ import {
   CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS,
   MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
   type ClientHostedBrowserCloseIntent
-} from '../../../shared/client-hosted-browser-close-intent'
+} from '../../../shared/workspace-session/client-hosted-browser-close-intent'
 import type { AppState } from '@/store/types'
 import {
   appendEnvironmentCloseIntents,

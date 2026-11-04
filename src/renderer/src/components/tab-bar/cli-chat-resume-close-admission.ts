@@ -15,7 +15,7 @@ import {
   chatAgentsShareConversations,
   namesCliConversation
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { recognizeAgentProcess } from '../../../../shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'

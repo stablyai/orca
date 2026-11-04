@@ -1,4 +1,4 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 
 export function lastInputBlocksHibernation(entry: AgentStatusEntry, inputAt: number): boolean {
   // Working-segment input and the open done tail may contain drafts; waiting/blocked or completed done-segment input was consumed. Check history too, and resolve boundary ties toward keeping the PTY alive.

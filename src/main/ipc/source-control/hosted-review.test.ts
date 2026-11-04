@@ -69,7 +69,7 @@ vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
 
 import { registerHostedReviewHandlers } from './hosted-review'
 import { readHostedReviewForBranch } from '../../source-control/hosted-review'
-import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { WslDistroStoppedError } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../../shared/worktree/worktree-catalog-availability'
 

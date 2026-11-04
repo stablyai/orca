@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { isTerminalLeafId } from '../../shared/stable-pane-id'
+import { isTerminalLeafId } from '../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
-import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { buildHeadlessTerminalSplitLayout } from './headless-terminal-split-layout'
 
 export function collectPersistedTerminalLeafIds(

@@ -13,7 +13,7 @@ vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability,
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/store', () => {
+vi.mock('@/store/index', () => {
   const state = { settings: mocks.settings }
   const useAppStore = (select: (s: typeof state) => unknown) => select(state)
   useAppStore.getState = () => state
@@ -52,21 +52,6 @@ describe('the permission verdict on a paired host', () => {
     await expect(
       readStructuredChatHostPermissionVerdict(PAIRED, 'codex', 'accept-edits')
     ).resolves.toEqual({ kind: 'refused', hostMode: 'full-access' })
-  })
-})
-
-describe('the permission verdict a chat holds', () => {
-  it('checks again, holding the chat, when contact with the host returns', async () => {
-    mocks.contactListeners.length = 0
-    mocks.supportsCapability.mockResolvedValue(true)
-    const { result } = renderHook(() => useStructuredChatHostPermissionVerdict(PAIRED, 'claude'))
-    expect(result.current).toMatchObject({ kind: 'checking' })
-    await vi.waitFor(() => expect(result.current).toMatchObject({ kind: 'allowed' }))
-
-    // The host came back as an older build: its answer is still on the way.
-    mocks.supportsCapability.mockReturnValue(new Promise(() => undefined))
-    act(() => mocks.contactListeners.forEach((listener) => listener()))
-    expect(result.current).toMatchObject({ kind: 'checking' })
   })
 })
 

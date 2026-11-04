@@ -6,20 +6,21 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
-} from '../../../../../shared/source-control-ai-types'
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
+import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
-  normalizeSourceControlAiSettings,
   readSourceControlAiModelChoiceForHost,
-  selectSourceControlAiModelChoiceForHost
-} from '../../../../../shared/source-control-ai'
-import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../../shared/source-control-ai-actions'
-import { withDiscoveredModels } from '../../../../../shared/source-control-ai-model-selection'
+  selectSourceControlAiModelChoiceForHost,
+  withDiscoveredModels
+} from '../../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
+import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
   type CommitMessageModelCapability
-} from '../../../../../shared/commit-message-agent-spec'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/commit-message-host-key'
+} from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { getRuntimeGitScope } from '../../../runtime/runtime-git-client-context'
 import { useAppStore } from '../../../store/index'
 import { CustomAgentCommandField } from './CustomAgentCommandField'

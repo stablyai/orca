@@ -1,7 +1,7 @@
 /** CLI terminals can look unowned before mount; layout-owner main places/names them, and every finder must show that one tab without asking another adoption. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { applyLayoutCommand } from '../../../shared/workspace-layout/workspace-layout-commands'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'

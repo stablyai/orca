@@ -135,6 +135,25 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.general.search.markdownDefaultView',
+      'Default Markdown View'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.markdownDefaultViewDesc',
+      'The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2b463f0bf9', 'view'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.markdownSourceKw',
+        'source'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.markdownRichKw', 'rich')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.d2d2d929c0',
       'Rich Markdown Spellcheck'
     ),

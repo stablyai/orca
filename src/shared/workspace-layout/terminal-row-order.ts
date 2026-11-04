@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 /** Group tab orders are authoritative; unlisted rows retain order afterwards. Return the same session when already ordered. */
 export function orderTerminalRowsByTabGroups(

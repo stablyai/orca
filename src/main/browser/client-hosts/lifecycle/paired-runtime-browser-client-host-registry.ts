@@ -1,4 +1,4 @@
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 
 export type PairedRuntimeBrowserClientHostStart = {
   environmentId: string

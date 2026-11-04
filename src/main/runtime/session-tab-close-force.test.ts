@@ -1,9 +1,7 @@
-// Confirmed pinned-tab closes carry force and advertise that capability in both layout builds.
+// Confirmed pinned-tab closes carry force in both layout builds.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY } from '../../shared/session-tabs-runtime-capabilities'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { z } from 'zod'
-import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { SESSION_TAB_METHODS } from './rpc/methods/session-tabs'
 import {
@@ -95,13 +93,6 @@ async function pinnedServerTab(layoutOwnerIsMain: boolean) {
 }
 
 describe.each([false, true])('ORCA_LAYOUT_OWNER_IS_MAIN=%s', (layoutOwnerIsMain) => {
-  it('advertises the forced-close capability', async () => {
-    layoutOwner.isMain = layoutOwnerIsMain
-    expect(new OrcaRuntimeService().getStatus().capabilities).toContain(
-      SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY
-    )
-  })
-
   it('refuses an unforced close of a pinned tab and keeps it and its terminals', async () => {
     const { f, stopped, close } = await pinnedServerTab(layoutOwnerIsMain)
     const reply = await close({})

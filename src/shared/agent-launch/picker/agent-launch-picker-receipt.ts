@@ -5,18 +5,18 @@ import {
   editSourceControlActionArguments,
   selectSourceControlActionRecipe,
   type CurrentActionSelection
-} from '../../source-control-action-selection'
+} from '../../source-control/ai/recipes/source-control-action-selection'
 import {
   selectedSourceControlActionPreferences,
   sourceControlActionExecutionArgs,
   demoteDisplacedActionArgumentChoices
-} from '../../source-control-action-launch-preferences'
+} from '../../source-control/ai/recipes/source-control-action-launch-preferences'
 import {
   editActionArgumentChoices,
   reconcileActionArgumentDocumentTransaction
-} from '../../source-control-action-argument-choices'
-import { editActionArgumentChoicePreferences } from '../../source-control-action-choice-preferences'
-import { trimActionArgumentDocument } from '../../source-control-action-argument-document'
+} from '../../source-control/ai/recipes/source-control-action-argument-choices'
+import { editActionArgumentChoicePreferences } from '../../source-control/ai/recipes/source-control-action-choice-preferences'
+import { trimActionArgumentDocument } from '../../source-control/ai/recipes/source-control-action-argument-document'
 
 type AcceptedChoices = ReturnType<typeof reconcileAgentChoiceArgsDetailed>
 
@@ -188,8 +188,45 @@ export function publishAccepted(
     }
     argumentsEffect = sourceControlActionExecutionArgs(recipe, entry.agent)
   }
+  const edits = draft.acceptedEdits
+  const ownChoices: AgentChoicePatch = {
+    ...edits?.choices,
+    options: { ...edits?.choices.options }
+  }
+  if (argumentsAuthored) {
+    for (const occurrence of result.recognized) {
+      if (occurrence.key === 'model') {
+        delete ownChoices.model
+      } else if (occurrence.key === 'permissionMode') {
+        delete ownChoices.permissionMode
+      } else {
+        delete ownChoices.options![occurrence.key]
+      }
+    }
+    for (const [key, value] of Object.entries(patch.options ?? {})) {
+      if (value === null) {
+        ownChoices.options![key] = null
+      }
+    }
+  } else {
+    if (patch.model !== undefined) {
+      ownChoices.model = patch.model
+    }
+    if (patch.permissionMode !== undefined) {
+      ownChoices.permissionMode = patch.permissionMode
+    }
+    Object.assign(ownChoices.options!, patch.options)
+  }
   return {
     ...accepted,
+    acceptedEdits: {
+      choices: ownChoices,
+      ...(argumentsAuthored
+        ? { arguments: rawSource || null }
+        : edits?.arguments !== undefined
+          ? { arguments: argumentsEffect === undefined ? edits.arguments : argumentsEffect }
+          : {})
+    },
     choices: {
       ...(choices.model ? { model: choices.model } : {}),
       ...(choices.permissionMode ? { permissionMode: choices.permissionMode } : {}),

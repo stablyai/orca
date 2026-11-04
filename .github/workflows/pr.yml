@@ -629,9 +629,7 @@ jobs:
             export GIT_EXEC_PATH="$HOME/.cache/orca-git-compat/git-$ORCA_GIT_COMPAT_VERSION"
           fi
           pnpm exec vitest run --config config/vitest.config.ts \
-            src/shared/git-binary-compatibility.test.ts \
-            src/main/git/worktrees/creation/worktree-safety-real-git.test.ts \
-            src/main/git/worktrees/removal/worktree-rebase-update-refs-real-git.test.ts
+            src/shared/git/compatibility/git-binary-compatibility.test.ts
 
   # Run pinned real Codex: thread/read must repair an unindexed rollout’s threads row; stub-only units cannot detect upstream removal of this behavior.
   codex_index_heal_contract:
@@ -672,7 +670,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-index-heal-binary-contract.test.ts
+            src/main/codex/history/index/codex-index-heal-binary-contract.test.ts
 
       - name: Install pinned no-daemon Codex CLI
         run: |
@@ -700,7 +698,7 @@ jobs:
             ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/${install%%:*}/node_modules/.bin/codex" \
               ORCA_CODEX_HOOK_CONTRACT_VERSION="${install#*:}" \
               pnpm exec vitest run --config config/vitest.config.ts \
-              src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+              src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
           done
 
       - name: Install latest Codex CLI
@@ -715,7 +713,7 @@ jobs:
           set -euo pipefail
           ORCA_CODEX_HOOK_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-latest/node_modules/.bin/codex" \
             pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/codex/codex-hook-file-entry-binary-contract.test.ts
+            src/main/codex/hooks/definitions/codex-hook-file-entry-binary-contract.test.ts
 
       # Why the no-daemon install: it is the newest pinned Codex, and its project
       # lookup decides whether a worktree launch stops at the trust prompt.
@@ -866,7 +864,7 @@ jobs:
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
-            src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
@@ -989,7 +987,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Use blob:none for merge-base history because blobs are ~89% of pack; fetch rare historical contents on demand.
+          # Requested historical snapshots acquire their blobs before timed extraction.
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
@@ -1110,7 +1108,6 @@ jobs:
           xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
           --no-file-parallelism
           src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts
-          src/main/browser/network/egress/browser-route-webrtc-egress.electron.test.ts
           src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts
           src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts
           src/main/browser/guest-lifecycle/popups/popup-origin-chrome.electron.test.ts

@@ -1,5 +1,5 @@
 import { useTabAgent } from '@/lib/use-tab-agent'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import SortableTab, { type SortableTabProps } from './SortableTab'
 import { useAppStore } from '../../store'
 import { resolveTabDetachTarget } from '../../store/terminals/terminal-detachment'

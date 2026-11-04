@@ -2,7 +2,7 @@ import {
   createNativeChatFileHref,
   routeNativeChatHref
 } from '../../../../shared/native-chat/native-chat-href-routing'
-import { formatFileLinkLocation } from '../../../../shared/file-link-location'
+import { formatFileLinkLocation } from '../../../../shared/file-links/file-link-location'
 
 type MarkdownNode = {
   type: string

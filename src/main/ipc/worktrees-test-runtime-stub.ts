@@ -27,7 +27,7 @@ export type WorktreeRuntimeStub = {
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
 
-/** Minimal create-flow runtime; fetch-remote-cache.test.ts covers actual fetch caching. */
+/** Minimal create-flow runtime. */
 export function createWorktreeRuntimeStub(mainWindow?: {
   webContents: { send: (channel: string, ...args: unknown[]) => unknown }
 }): WorktreeRuntimeStub {

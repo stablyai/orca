@@ -37,7 +37,9 @@ function compareBefore(a, b) {
 }
 
 const { outputFiles } = await build({
-  entryPoints: [fileURLToPath(new URL('../../src/shared/git-status-sort.ts', import.meta.url))],
+  entryPoints: [
+    fileURLToPath(new URL('../../src/shared/git/status/git-status-sort.ts', import.meta.url))
+  ],
   bundle: true,
   platform: 'node',
   format: 'esm',

@@ -3,7 +3,7 @@ import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure,
   terminalExitError
-} from '../../shared/terminal-start-failure'
+} from '../../shared/terminal/pty/lifecycle/terminal-start-failure'
 /** Fresh-launch signals require shell handoff plus dialog/provisional-header vetoes; shells also enable bracketed paste.
  * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */

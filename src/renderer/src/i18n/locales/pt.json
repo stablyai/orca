@@ -1443,7 +1443,18 @@
         "antigravityAccount": "Conta",
         "antigravitySignInNeeded": "Os chats exigem login no Antigravity, separado da sua conta agy do terminal."
       },
-      "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes."
+      "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
+      "launch": {
+        "on": "A interface de chat está ativada",
+        "off": "A interface de chat está desativada",
+        "agents": "Modo de inicialização padrão por agente",
+        "agentsDescription": "Escolha se cada agente abre na interface de chat ou em sua CLI.",
+        "chatDescription": "Novos agentes serão iniciados no modo de chat por padrão.",
+        "cliDescription": "Novos agentes serão iniciados na CLI por padrão.",
+        "turnOn": "Ativar",
+        "turnOff": "Desativar",
+        "toggle": "Usar a interface de chat por padrão"
+      }
     },
     "terminal": {
       "optionLayoutAlt": "ABC ou U.S. — Option envia sequências Alt/Esc",
@@ -1714,6 +1725,28 @@
         "notPng": "Os ícones do repositório devem ser arquivos PNG.",
         "tooLarge": "A imagem do ícone do repositório deve ter no máximo 256 KB."
       }
+    },
+    "editorFormatOnSave": {
+      "title": "Formatar ao salvar",
+      "description": "Formata o texto antes de salvamentos manuais e automáticos. Configure um comando de formatação em Configurações > Projetos. Desativado por padrão.",
+      "keywords": "formatador formatar ao salvar prettier biome gofmt"
+    },
+    "editorInsertFinalNewline": {
+      "title": "Inserir nova linha final",
+      "description": "Adiciona uma quebra de linha ao salvar um arquivo de código não vazio que não termina com uma. Desativado por padrão.",
+      "keywordNewline": "nova linha",
+      "keywordEndOfFile": "fim do arquivo"
+    },
+    "repositoryFormatter": {
+      "title": "Comando do formatador",
+      "description": "Usa o formatador deste projeto para formatar ao salvar.",
+      "saveFailed": "Não foi possível salvar as configurações do formatador.",
+      "command": "Comando",
+      "commandHelp": "Executa no host do arquivo, na raiz do espaço de trabalho. Lê o buffer de stdin e deve imprimir somente o texto formatado em stdout. Use ${file} ou ${relativeFile} para o caminho. Os argumentos são passados diretamente, sem shell. Não use --write. Deixe vazio para desativar neste projeto.",
+      "include": "Globs de inclusão (um por linha)",
+      "includeHelp": "Corresponde aos caminhos relativos à raiz do espaço de trabalho. Sem um glob correspondente, não há formatação. * e ** ignoram nomes que começam com ponto; liste-os explicitamente, por exemplo .github/**/*.yml. Ative Formatar ao salvar em Geral > Editor para usar este comando.",
+      "saving": "Salvando…",
+      "save": "Salvar formatador"
     }
   },
   "auto": {
@@ -2846,9 +2879,7 @@
           "ae3b00ca82": "Configurar tarefas do GitHub",
           "ff92d15436": "O Orca vai avisá-lo quando os agentes terminarem ou precisarem de ajuda.",
           "b054332836": "Configurar notificações",
-          "04ae28d8ca": "Escolha a aparência que você vai encarar por horas.",
           "f396db9f20": "Deixe com a sua cara",
-          "322fc50a18": "O Orca funciona com todo agente de CLI. Escolha o que você vai usar mais. Troque quando quiser.",
           "198b148b3c": "Escolha seu agente padrão",
           "windowsTerminalTitle": "Definir padrões do terminal do Windows",
           "windowsTerminalSubtitle": "Escolha o Shell PADRÃO para novos painéis e como o clique com o botão direito se comporta no terminal.",
@@ -3072,7 +3103,6 @@
             "5c938d39ac": "sem",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "c98ea88392": "Nenhuma outra conta",
             "d450654fa2": "Conta do Claude",
             "11e2354daf": "Runtime de uso do Claude",
             "3dd7ddfae1": "Abrir detalhes do Claude e alternador de conta",
@@ -7977,7 +8007,8 @@
                   "supportedAgents": "Agentes suportados para esta receita: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} não pode executar esta receita de geração de texto. Escolha um dos agentes suportados abaixo.",
                   "resolveComments": "Inicia um agente a partir de comentários não resolvidos selecionados de PR ou MR.",
-                  "fixPushFailure": "Inicia um agente quando um hook de pre-push ou git push falha."
+                  "fixPushFailure": "Inicia um agente quando um hook de pre-push ou git push falha.",
+                  "commitMessageSharedModel": "Os detalhes da pull request, o nome da branch e o nome do chat também podem usar este modelo quando não escolhem outro; a opção “Igual ao padrão” mostra qual modelo usam."
                 }
               }
             }
@@ -9382,7 +9413,8 @@
           "pluginIconTheme": {
             "title": "Tema de ícones",
             "description": "Ícones de arquivos e pastas de um plugin ativado.",
-            "builtIn": "Integrado"
+            "builtIn": "Integrado",
+            "search": "Buscar temas de ícones…"
           }
         },
         "PluginInUseAction": {
@@ -9625,7 +9657,12 @@
         },
         "AppearanceThemeControl": {
           "matchTerminal": "Combinar com o Terminal",
-          "dynamic": "dinâmico"
+          "dynamic": "dinâmico",
+          "searchThemes": "Buscar temas…",
+          "noThemes": "Nenhum tema corresponde à sua busca."
+        },
+        "SettingsSearchableSelect": {
+          "noMatches": "Nenhum resultado."
         }
       },
       "right": {
@@ -14671,6 +14708,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "O host de execução salvo não corresponde mais a esta configuração do projeto."
+        },
+        "launchSettings": {
+          "needsFreshSession": "As configurações de inicialização do agente exigem uma nova sessão a cada execução."
         }
       },
       "TaskPage": {
@@ -16073,7 +16113,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Carregando detalhes da verificação…",
         "71c11aff84": "Executar todas as verificações novamente",
-        "e31651a224": "Executar verificações com falha novamente",
         "1b56e28faa": "Executar novamente",
         "f4b1292569": "Iniciar o agente de IA padrão nestas verificações",
         "9a1004fc76": "Atualizar verificações",
@@ -16835,7 +16874,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Carregando detalhes da verificação…",
         "54cddd1858": "Executar todas as verificações novamente",
-        "68605516dd": "Executar verificações com falha novamente",
         "522d9353e1": "Executar novamente",
         "0fa8b8faec": "Iniciar o agente de IA padrão nestas verificações",
         "5d0f42766d": "Atualizar verificações",
@@ -19954,7 +19992,32 @@
           "system": "Seguir o sistema",
           "dark": "Suave para os olhos",
           "light": "Claro e nítido"
-        }
+        },
+        "looks": {
+          "activeNow": "agora",
+          "browsePlugins": "Explorar plugins",
+          "browseThemePlugins": "Explorar plugins de temas",
+          "colorMode": "Modo de cor",
+          "colorModeCaption": "Claro, escuro ou igual ao sistema.",
+          "darkLook": "Visual escuro",
+          "darkLooks": "Visuais escuros",
+          "lightLook": "Visual claro",
+          "lightLooks": "Visuais claros",
+          "moreThemes": "Mais temas",
+          "next": "Mais visuais",
+          "orcaDark": "Orca escuro",
+          "orcaLight": "Orca claro",
+          "pluginsHint": "Há mais temas disponíveis como plugins.",
+          "previous": "Visuais anteriores",
+          "showsWhenDark": "Aparece quando o sistema está no modo escuro",
+          "showsWhenLight": "Aparece quando o sistema está no modo claro",
+          "slotLabel": "Visual a editar",
+          "sourceBuiltIn": "Integrado",
+          "sourceCommunity": "Paleta do terminal",
+          "themes": "Tema",
+          "themesCaption": "Opcional. Vá além com temas do app e paletas do terminal."
+        },
+        "subtitle": "Escolha claro ou escuro e, se quiser, um tema. Altere ambos quando quiser em Configurações."
       },
       "integrations": {
         "capabilities": {
@@ -20002,9 +20065,12 @@
         "unavailable": "Resposta selecionada indisponível",
         "cancelled": "Cancelado",
         "resolved": "Resolvido",
-        "resolver": "Respondido em {{device}}",
-        "cancelledBy": "Cancelado em {{device}}",
-        "emptyAnswer": "Resposta vazia"
+        "resolver": "Respondido em: {{device}}",
+        "cancelledBy": "Cancelado em: {{device}}",
+        "emptyAnswer": "Resposta vazia",
+        "thisComputer": "este computador",
+        "computer": "o computador",
+        "otherDevice": "outro dispositivo"
       },
       "notices": {
         "compaction": "Contexto compactado",
@@ -20649,8 +20715,6 @@
         "pendingWork": "Aguarde a conclusão do trabalho e das mensagens pendentes antes de usar este comando.",
         "notDoneGoalChangeIncomplete": "Não foi possível concluir a alteração do objetivo. Verifique o chat."
       },
-      "newRowsAnnouncement": "Novas mensagens chegaram enquanto você estava ausente",
-      "newRowsMarker": "Novas",
       "find": {
         "label": "Localizar no chat",
         "noResults": "Nenhum resultado",
@@ -20706,7 +20770,11 @@
         "handedOffToAgent": "Entregue a um agente",
         "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
-        "updateFromWorker": "Atualização do worker"
+        "updateFromWorker": "Atualização do worker",
+        "senderReplaced": "{{name}} não está mais em execução em seu terminal; outro agente está em execução nele agora. Abra esse terminal pela barra lateral se precisar dele.",
+        "senderAmbiguous": "O Orca não consegue identificar em qual terminal {{name}} está em execução. Abra-o pela barra lateral.",
+        "senderNotRunning": "{{name}} não está mais em execução. Inicie um novo agente pela barra lateral para continuar o trabalho.",
+        "unnamedSenderSubject": "Um agente"
       },
       "goal": {
         "placeholder": "Descreva seu objetivo e defina resultados mensuráveis para obter os melhores resultados",
@@ -20744,7 +20812,6 @@
       "dismissDeliveryNotice": "Dispensar",
       "addSelectionToChat": "Adicionar ao chat",
       "messageNotSent": "Mensagem não enviada",
-      "deliveryUnconfirmed": "Entrega não confirmada — confira o chat antes de tentar novamente",
       "messageSending": "Enviando…",
       "userMessage": {
         "showFull": "Mostrar mensagem completa",
@@ -20814,8 +20881,7 @@
       "interruptedContinue": {
         "continue": "Continuar",
         "failed": "Não foi possível continuar este chat. Tente novamente ou envie uma mensagem.",
-        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
-        "unconfirmed": "Não foi possível confirmar se o {{agent}} recebeu Continuar. Confira o chat antes de tentar novamente."
+        "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída."
       },
       "antigravitySignIn": {
         "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."
@@ -20970,7 +21036,24 @@
         "modelApplyFailed": "Não foi possível aplicar o modelo {{value}}.",
         "effortApplyFailed": "Não foi possível aplicar o esforço {{value}}."
       },
-      "settings": "Configurações do chat"
+      "settings": "Configurações do chat",
+      "textAttachmentPreview": {
+        "copiedContents": "Conteúdo copiado",
+        "textAttachment": "Anexo de texto",
+        "byteSize": "{{size}} bytes",
+        "copyContents": "Copiar conteúdo",
+        "saveFile": "Salvar arquivo",
+        "copyTooLarge": "Este arquivo é grande demais para copiar. Salve-o em vez disso.",
+        "exportError": "Não foi possível exportar o anexo. Tente novamente.",
+        "unreadableReply": "Resposta do anexo ilegível. Tente novamente.",
+        "incompleteReply": "O anexo mudou ou sua resposta estava incompleta. Feche-o e tente novamente.",
+        "notText": "Não é possível visualizar este arquivo como texto. Salve-o para abri-lo em outro aplicativo.",
+        "openFailed": "Não foi possível abrir o anexo. Tente novamente.",
+        "hostUpdate": "Este host ainda não consegue abrir anexos de texto. Atualize o Orca nesse host e tente novamente.",
+        "hostUnavailable": "O host do anexo está indisponível. Reconecte-se e tente novamente.",
+        "connectionChanged": "A conexão mudou. Feche este anexo e abra-o novamente.",
+        "readFailed": "Não foi possível ler este anexo no host. Reconecte-se e tente novamente. O arquivo pode ter sido removido ou alterado."
+      }
     },
     "tab": {
       "bar": {
@@ -21374,6 +21457,9 @@
       },
       "nativeChat": {
         "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
+        "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
+        "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
+        "scrollToLatestOnSendSearchPosition": "posição",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21385,7 +21471,13 @@
         "queueSearchSteer": "orientar",
         "shellEnvSearchVariables": "variáveis de ambiente",
         "shellEnvSearchPath": "PATH",
-        "shellEnvSearchProxy": "proxy"
+        "shellEnvSearchProxy": "proxy",
+        "idleStopTitle": "Parar agentes inativos após",
+        "idleStopCopy": "Encerra o agente de um chat quando o chat fica inativo por esse tempo, para liberar memória. O chat continua e sua próxima mensagem inicia o agente de novo. Escolha Nunca para agentes que continuam trabalhando em segundo plano entre os turnos.",
+        "idleStopSearchIdle": "idle",
+        "idleStopSearchTimeout": "tempo limite",
+        "idleStopSearchKeepAlive": "manter ativo",
+        "idleStopNever": "Nunca"
       }
     },
     "jiraIssueAssigneeField": {
@@ -21532,6 +21624,11 @@
     },
     "wslHostMark": {
       "runsOn": "Executa no WSL: {{distro}} (Linux)"
+    },
+    "editor": {
+      "formatOnSave": {
+        "failed": "Não foi possível formatar {{file}}. Salvando sem formatação: {{reason}}"
+      }
     }
   },
   "csv": {
@@ -21876,7 +21973,10 @@
         "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
         "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
         "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar."
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
+        "reasonSharedSession": "Também aberta em outro painel",
+        "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
       }
     },
     "managedData": {
@@ -23002,7 +23102,11 @@
     "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
-    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos"
+    "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos",
+    "workspaceStartupFailed": "Não foi possível iniciar {{agent}}. Verifique os argumentos desta configuração e tente novamente.",
+    "sameAsTextDefault": "Igual ao padrão · {{value0}}",
+    "chatChoicesNote": "As escolhas de modelo ou esforço de {{agent}} sem uma flag de CLI se aplicam aos chats.",
+    "composedChoicesNote": "As escolhas de esforço e velocidade de {{agent}} estão incluídas no argumento do modelo."
   },
   "wslMove": {
     "entry": {

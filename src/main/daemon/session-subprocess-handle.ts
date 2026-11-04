@@ -1,6 +1,6 @@
-import type { TerminalForegroundSample } from '../../shared/terminal-foreground-observation'
-import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspection'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalForegroundSample } from '../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
+import type { PtyChildProcessVerdict } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 

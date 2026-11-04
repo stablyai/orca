@@ -183,7 +183,7 @@ export function mutateWithChatStop<TValue>(
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
     // Capture once on the lane; the acceptance receipt owns the exact-cut withdrawal.
     if (turnId === undefined) {
-      withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.snapshot())
+      withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.statusRead())
     }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)

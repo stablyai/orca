@@ -1,4 +1,4 @@
-import { quotePosixShellUnlessPlain } from '../../shared/shell-argument-quoting'
+import { quotePosixShellUnlessPlain } from '../../shared/shell/launch/shell-argument-quoting'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'

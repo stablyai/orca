@@ -18,7 +18,7 @@ import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft
 } from '../../lib/source-control-agent-launch-picker'
-import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
+import { canonicalSourceControlActionSelection } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { AgentLaunchSetupButton, useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
@@ -407,7 +407,7 @@ it.each([3, 30])(
       fireEvent.change(document.querySelector('textarea')!, {
         target: { value: '--model private/unlisted --opaque' }
       })
-      fireEvent.blur(document.querySelector('textarea')!)
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
       close()
       showGeneration(generations + 1)
       query('Codex')
@@ -493,7 +493,7 @@ it.each(['ordinary', 'search'] as const)(
       fireEvent.change(document.querySelector('textarea')!, {
         target: { value: '--model private/w1 --accepted-w1' }
       })
-      fireEvent.blur(document.querySelector('textarea')!)
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
       fireEvent.change(document.querySelector('textarea')!, { target: { value: '--pending-w1' } })
       close()
       await visit(second.id)
@@ -625,7 +625,7 @@ it.each([3, 30])(
       fireEvent.change(document.querySelector('textarea')!, {
         target: { value: '--model private/opaque --accepted' }
       })
-      fireEvent.blur(document.querySelector('textarea')!)
+      fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
       fireEvent.change(document.querySelector('textarea')!, { target: { value: '--latest-live' } })
       // Filtering does not own the active envelope.
       fireEvent.change(document.querySelector('input[placeholder="Search agents and setups…"]')!, {

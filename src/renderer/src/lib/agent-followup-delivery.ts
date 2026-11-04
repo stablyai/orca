@@ -4,8 +4,8 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { isShellProcess } from '../../../shared/shell-process-detection'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string

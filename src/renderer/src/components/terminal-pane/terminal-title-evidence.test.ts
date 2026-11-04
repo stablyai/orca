@@ -3,15 +3,15 @@ import {
   createTerminalTitleTracker,
   STALE_WORKING_TITLE_TIMEOUT_MS,
   type TerminalTitleFactMeta
-} from '../../../../shared/terminal-output-side-effects'
+} from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
 import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
 
-import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
-import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-title-status'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
+import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-status/title/agent-title-status'
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
       settings: { terminalGpuAcceleration: 'auto' },
