@@ -5,7 +5,7 @@ import { clientFrame } from './bridge-host-test-fakes'
 import { createPageReadyFrame } from './bridge/bridge-client-init-handshake'
 
 const SPLIT_KEY = 'orca:terminalSplitLayout'
-const STORAGE = { [SPLIT_KEY]: 'stacked', 'orca:pins:host-a': '[\"wt-1\"]' }
+const STORAGE = { [SPLIT_KEY]: 'stacked', 'orca:pins:host-a': '["wt-1"]' }
 
 function lastInit(posted: readonly string[]): Record<string, unknown> {
   const init = posted
@@ -26,7 +26,7 @@ describe('negotiated page storage keys across page and shell versions', () => {
     const bridge = harness({ storage: { ...STORAGE, [key]: '{}' } })
     bridge.host.receive(clientFrame({ type: 'ready' }))
 
-    expect(lastInit(bridge.posted).storage).toEqual({ 'orca:pins:host-a': '[\"wt-1\"]' })
+    expect(lastInit(bridge.posted).storage).toEqual({ 'orca:pins:host-a': '["wt-1"]' })
   })
 
   it('hands a dismissed-subagent record to a page whose ready names the prefix', () => {
@@ -43,6 +43,6 @@ describe('negotiated page storage keys across page and shell versions', () => {
     bridge.host.receive(clientFrame({ type: 'ready', storageKeys: [SPLIT_KEY, 7] }))
 
     expect(bridge.pageReadyCount()).toBe(1)
-    expect(lastInit(bridge.posted).storage).toEqual({ 'orca:pins:host-a': '[\"wt-1\"]' })
+    expect(lastInit(bridge.posted).storage).toEqual({ 'orca:pins:host-a': '["wt-1"]' })
   })
 })
