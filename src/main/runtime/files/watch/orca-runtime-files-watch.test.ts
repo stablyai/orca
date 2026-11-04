@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../../../ipc/filesystem/access/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE } from '../../../ipc/filesystem/access/filesystem-auth'
 
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 
@@ -168,6 +169,32 @@ describe('RuntimeFileWatches', () => {
     await Promise.all(releases.slice(1).map((release) => release()))
     expect(watcher.close).toHaveBeenCalledOnce()
     expect(_getRuntimeFileWatcherReleaseCountForTests()).toBe(0)
+  })
+
+  it('closes non-Windows removal watchers after Git already unregistered the path (#37902)', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    const rootPath = '/home/u/projects/worktrees/fix-guard/bragibooks'
+    // Removal unregistering the worktree in Git turns the teardown's re-authorization
+    // into exactly this denial; it must not fail the removal after Git succeeded.
+    resolveAuthorizedPathMock.mockRejectedValue(new Error(PATH_ACCESS_DENIED_MESSAGE))
+
+    const { commands } = createRuntimeFileWatches(rootPath)
+    await expect(commands.closeFileExplorerWatchersForPath(rootPath)).resolves.toBeUndefined()
+
+    expect(closeWatcherInWatcherProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('still closes a non-Windows removal watcher for an authorized path', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    resolveAuthorizedPathMock.mockResolvedValue('/home/u/orca/workspaces/wt')
+    closeWatcherInWatcherProcessMock.mockResolvedValue(undefined)
+
+    const { commands } = createRuntimeFileWatches('/home/u/orca/workspaces/wt')
+    await expect(
+      commands.closeFileExplorerWatchersForPath('/home/u/orca/workspaces/wt')
+    ).resolves.toBeUndefined()
+
+    expect(closeWatcherInWatcherProcessMock).toHaveBeenCalledWith('/home/u/orca/workspaces/wt')
   })
 
   it('retains Windows close ownership until late physical exit without retry leaks', async () => {
