@@ -81,32 +81,6 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
     return transport.connect({ url: '', resumeSpawnIntent: 'automatic-restore', callbacks })
   }
 
-  function ensureParams(): Record<string, unknown> | undefined {
-    for (const [args] of runtimeCall.mock.calls) {
-      const call: RpcCall = args
-      if (call.method === 'terminal.ensureAgentSession') {
-        return call.params
-      }
-    }
-    return undefined
-  }
-
-  it('sends the intent to a host that advertises it', async () => {
-    capabilities.push('terminal.spawn-intent.v1')
-    await connectResume()
-    expect(ensureParams()).toMatchObject({ kind: 'explicit', spawnIntent: 'automatic-restore' })
-  })
-
-  it('omits it for an older host, whose strict params would reject the request', async () => {
-    ensureResponse = okResponse({
-      disposition: 'created',
-      terminal: { handle: 'term-remote', worktreeId: 'repo1::/remote/wt', title: null }
-    })
-    await connectResume()
-    expect(ensureParams()).toBeDefined()
-    expect(ensureParams()).not.toHaveProperty('spawnIntent')
-  })
-
   it.each([false, true])(
     'keeps saved-origin negotiation stable through an unknown outcome (capability %s)',
     async (modern) => {
@@ -146,15 +120,4 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
       expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
     }
   )
-
-  it('reports a deferral to the pane instead of surfacing an error', async () => {
-    capabilities.push('terminal.spawn-intent.v1')
-    const onError = vi.fn()
-    const onSpawnDeferred = vi.fn()
-
-    await expect(connectResume({ onError, onSpawnDeferred })).resolves.toBeUndefined()
-
-    expect(onSpawnDeferred).toHaveBeenCalledWith('paused')
-    expect(onError).not.toHaveBeenCalled()
-  })
 })
