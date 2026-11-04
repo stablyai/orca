@@ -5,10 +5,6 @@ import { ptySizes } from '../delivery/visibility-state'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 
-function sameGrid(left: PtyGrid | undefined, right: PtyGrid | undefined): boolean {
-  return left?.cols === right?.cols && left?.rows === right?.rows
-}
-
 /** Commit the attached grid, then seed the screen a restarted runtime has never seen. */
 export function seedAttachedRuntimeTerminal(
   runtime: OrcaRuntimeService | undefined,
@@ -16,8 +12,8 @@ export function seedAttachedRuntimeTerminal(
   sizeBeforeAttach: PtyGrid | undefined
 ): void {
   const sizeNow = ptySizes.get(result.id)
-  // A resize during attach already published the live grid. Snapshot geometry is older.
-  const resizeLanded = sizeNow !== undefined && !sameGrid(sizeBeforeAttach, sizeNow)
+  // Identity, not dimensions: A→B→A publishes a new entry that still measures A.
+  const resizeLanded = sizeNow !== undefined && sizeNow !== sizeBeforeAttach
   if (!resizeLanded) {
     commitRuntimeAttachedPtySize(result, runtime?.reflowHeadlessTerminalToPtyGrid.bind(runtime))
   }

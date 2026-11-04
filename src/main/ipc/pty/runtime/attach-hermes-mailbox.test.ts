@@ -139,4 +139,29 @@ describe('mail to a Hermes terminal attached without a renderer', () => {
     expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
     expect(ptySizes.get(PTY_ID)).toEqual({ cols: 140, rows: 48 })
   })
+
+  it('keeps a resize that returns to the pre-attach dimensions', async () => {
+    const before = { cols: 80, rows: 24 }
+    ptySizes.set(PTY_ID, before)
+    const restored = { cols: 80, rows: 24 }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach reads only this provider's attach method.
+    const provider = {
+      attach: async () => {
+        ptySizes.set(PTY_ID, { cols: 140, rows: 48 })
+        ptySizes.set(PTY_ID, restored)
+        return {
+          id: PTY_ID,
+          isReattach: true,
+          snapshot: '─ ready │ grok 4.7 │ 150k tokens\r\n❯',
+          snapshotCols: 140,
+          snapshotRows: 48
+        }
+      }
+    } as unknown as IPtyProvider
+    setLocalPtyProvider(provider)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attach needs only the optional delivery callbacks.
+    const deps = {} as unknown as PtyRuntimeControllerDeps
+    expect(await attachPtyFromRuntimeController(deps, PTY_ID)).toBe(true)
+    expect(ptySizes.get(PTY_ID)).toBe(restored)
+  })
 })
