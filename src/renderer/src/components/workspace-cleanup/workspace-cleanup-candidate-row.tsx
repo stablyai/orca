@@ -86,6 +86,7 @@ type CandidateRowProps = {
   showSizeColumn: boolean
   selected: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
+  onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
   onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
   onDeleteAnyway?: (candidate: WorkspaceCleanupCandidate) => void
@@ -113,6 +114,7 @@ export const CandidateRow = React.memo(function CandidateRow({
   showSizeColumn,
   selected,
   onIgnore,
+  onRestore,
   onRemove,
   onForgetLocally,
   onDeleteAnyway,
@@ -354,6 +356,7 @@ export const CandidateRow = React.memo(function CandidateRow({
           ignored={ignored}
           selectable={selectable}
           onIgnore={onIgnore}
+          onRestore={onRestore}
           onRemove={onRemove}
           onForgetLocally={onForgetLocally}
           onToggleExpanded={onToggleExpanded}

@@ -119,6 +119,7 @@ function Rows({
             gitEvidencePending={scenario.gitPending}
             selected={scenario.selected ?? false}
             onIgnore={noop}
+            onRestore={noop}
             onRemove={noop}
             onForgetLocally={noop}
             onDeleteAnyway={noop}
@@ -354,4 +355,13 @@ export const expandedDetails = defineFixture({
       ]}
     />
   )
+})
+
+/** An ignored row offers Stop ignoring in the slot Ignore used. */
+export const ignoredFocused = defineFixture({
+  width: 880,
+  render: () => <Rows scenarios={SINGLE_HOST.slice(0, 1)} />,
+  interact: (frame) => {
+    frame.querySelector<HTMLElement>('[aria-label^="Stop ignoring"]')?.focus()
+  }
 })

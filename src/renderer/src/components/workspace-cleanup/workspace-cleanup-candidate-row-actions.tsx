@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, EyeOff, ExternalLink, Trash2, type LucideIcon } from 'lucide-react'
+import { ChevronDown, Eye, EyeOff, ExternalLink, Trash2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ type CandidateRowActionsProps = {
   ignored: boolean
   selectable: boolean
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
+  onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
   onForgetLocally?: (candidate: WorkspaceCleanupCandidate) => void
   onToggleExpanded: (identity: string) => void
@@ -36,6 +37,7 @@ export function CandidateRowActions({
   ignored,
   selectable,
   onIgnore,
+  onRestore,
   onRemove,
   onForgetLocally,
   onToggleExpanded,
@@ -67,8 +69,8 @@ export function CandidateRowActions({
           <RowIconAction
             icon={EyeOff}
             tooltip={translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4d0b72481c',
-              'Ignore'
+              'components.workspace.cleanup.browse.ignoreTooltip',
+              'Ignore: skip in bulk delete'
             )}
             ariaLabel={translate(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
@@ -78,7 +80,16 @@ export function CandidateRowActions({
             onClick={() => onIgnore(candidate)}
           />
         ) : (
-          <ActionSlotPlaceholder />
+          <RowIconAction
+            icon={Eye}
+            tooltip={translate('components.workspace.cleanup.browse.stopIgnoring', 'Stop ignoring')}
+            ariaLabel={translate(
+              'components.workspace.cleanup.browse.stopIgnoringNamed',
+              'Stop ignoring {{value0}}',
+              { value0: accessibleName }
+            )}
+            onClick={() => onRestore(candidate)}
+          />
         )}
         {selectable ? (
           <RowIconAction

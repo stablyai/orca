@@ -33,6 +33,7 @@ export type WorkspaceCleanupRowListState = {
   onToggleSelected: (identity: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
+  onRestore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
   onForgetLocally: (candidate: WorkspaceCleanupCandidate) => void
   onDeleteAnyway: (candidate: WorkspaceCleanupCandidate) => void
@@ -109,6 +110,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             onToggleSelected={props.onToggleSelected}
             onView={props.onView}
             onIgnore={props.onIgnore}
+            onRestore={props.onRestore}
             onRemove={props.onRemove}
             onForgetLocally={props.onForgetLocally}
             onDeleteAnyway={props.onDeleteAnyway}

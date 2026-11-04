@@ -44,6 +44,7 @@ function renderRows(
             workspaceStatusLabel={row.workspaceStatusLabel}
             selected={false}
             onIgnore={vi.fn()}
+            onRestore={vi.fn()}
             onRemove={vi.fn()}
             onForgetLocally={onForgetLocally}
             onToggleExpanded={vi.fn()}

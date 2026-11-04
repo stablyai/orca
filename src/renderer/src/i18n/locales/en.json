@@ -3880,7 +3880,6 @@
             "b2c1331844": "Delete Inactive Workspaces",
             "7f451a3e2c": "Could not ignore cleanup suggestion",
             "662b8ec3f8": "Workspace cleanup scan failed",
-            "4d0b72481c": "Ignore",
             "9cc26c019d": "Remove",
             "0e2d235c63": "Workspace scan ready",
             "4a35c08764": "Review",
@@ -20744,7 +20743,11 @@
           "copyPath": "Copy path",
           "gitNotChecked": "Not checked",
           "workspaceCount_one": "{{count}} workspace",
-          "workspaceCount_other": "{{count}} workspaces"
+          "workspaceCount_other": "{{count}} workspaces",
+          "restoreFailed": "Could not stop ignoring {{value0}}",
+          "ignoreTooltip": "Ignore: skip in bulk delete",
+          "stopIgnoring": "Stop ignoring",
+          "stopIgnoringNamed": "Stop ignoring {{value0}}"
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",

@@ -52,6 +52,10 @@ export type WorkspaceCleanupSlice = {
   dismissWorkspaceCleanupCandidates: (
     candidates: readonly WorkspaceCleanupCandidate[]
   ) => Promise<void>
+  /** Undo "Ignore" for these rows only; other hosts' copies of the same worktree stay ignored. */
+  restoreWorkspaceCleanupCandidates: (
+    candidates: readonly WorkspaceCleanupCandidate[]
+  ) => Promise<void>
   resetWorkspaceCleanupDismissals: () => Promise<void>
   beginUnverifiedRemovalConsent: (identity: string) => string | null
   removeWorkspaceCleanupCandidates: (
@@ -127,6 +131,43 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }
     })
     await window.api.workspaceCleanup.dismiss({ dismissals })
+  },
+  restoreWorkspaceCleanupCandidates: async (candidates) => {
+    // Legacy dismissals are keyed by bare worktree id; drop that key too or the row stays ignored.
+    const keys = [
+      ...new Set(
+        candidates.flatMap((candidate) => [
+          getWorkspaceCleanupCandidateIdentity(candidate),
+          candidate.worktreeId
+        ])
+      )
+    ]
+    const restored = new Set(
+      candidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))
+    )
+    set((state) => {
+      const nextDismissals = { ...state.workspaceCleanupDismissals }
+      for (const key of keys) {
+        delete nextDismissals[key]
+      }
+      return {
+        workspaceCleanupDismissals: nextDismissals,
+        workspaceCleanupScan: state.workspaceCleanupScan
+          ? {
+              ...state.workspaceCleanupScan,
+              candidates: state.workspaceCleanupScan.candidates.map((candidate) =>
+                restored.has(getWorkspaceCleanupCandidateIdentity(candidate))
+                  ? applyWorkspaceCleanupPolicy({
+                      ...candidate,
+                      blockers: candidate.blockers.filter((blocker) => blocker !== 'dismissed')
+                    })
+                  : candidate
+              )
+            }
+          : state.workspaceCleanupScan
+      }
+    })
+    await window.api.workspaceCleanup.dismiss({ dismissals: [], restoredDismissalKeys: keys })
   },
   resetWorkspaceCleanupDismissals: async () => {
     set((state) => ({
