@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { syncUnreadWorktreeForTabStatus } from '../session/session-tab-catalog-agent-status'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 import type { useForgetHostClient } from '../transport/host-client-hooks'
@@ -229,6 +230,9 @@ export function useHostWorktreeActions(args: {
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
       const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}${executionHost}${pane}`
       navigateFromHostList(target, Boolean(paneKey), () => {
+        if (item.unread) {
+          syncUnreadWorktreeForTabStatus(item)
+        }
         // Record this phone’s visit before navigation; a session opened in another page cannot publish its stored write back here.
         if (!ORCA_SIDEBAR_INPUTS_IS_MAIN) {
           setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))

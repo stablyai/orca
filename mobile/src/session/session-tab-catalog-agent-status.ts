@@ -1,11 +1,12 @@
-import {
-  isAgentStatusState,
-  normalizeMainAgentStatusField,
-  type AgentStatusEntry
-} from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/runtime-types'
+import {
+  syncUnreadWorktreeForTabStatus,
+  toReconciledStatus,
+  type ReconciledTerminalAgentStatus
+} from './catalog-worktree-unread-status'
 
 export { buildTabCompletionKeys, resolveTrackedTabCompletionState } from './tab-completion-state'
+export { syncUnreadWorktreeForTabStatus, type ReconciledTerminalAgentStatus }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -37,20 +38,6 @@ export function recentCardWorktrees(rows: readonly unknown[] | undefined): Recen
 export function isUnpublishedSnapshot(snapshot: unknown): boolean {
   return isRecord(snapshot) && snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
 }
-
-export type ReconciledTerminalAgentStatus = Pick<
-  AgentStatusEntry,
-  | 'state'
-  | 'updatedAt'
-  | 'stateStartedAt'
-  | 'evidenceObservedAt'
-  | 'mirroredEvidenceReceivedAt'
-  | 'structuredHostOwned'
-  | 'workingMode'
-  | 'interrupted'
-  | 'mainAgent'
-  | 'restoredUnconfirmed'
->
 
 let catalogWorktrees: readonly unknown[] | undefined
 let catalogReceivedAt = 0
@@ -85,6 +72,11 @@ export function setCatalogWorktreesForTabStatus(
   receivedAt = Date.now()
 ): void {
   const next = worktrees ?? undefined
+  if (next) {
+    for (const worktree of next) {
+      syncUnreadWorktreeForTabStatus(worktree, receivedAt)
+    }
+  }
   const nextSig = computeCatalogAgentSignature(next)
   catalogWorktrees = next
   catalogReceivedAt = receivedAt
@@ -138,33 +130,6 @@ function findCatalogAgentRow(
     }
   }
   return null
-}
-
-function toReconciledStatus(
-  source: Record<string, unknown>,
-  fallbackReceivedAt?: number
-): ReconciledTerminalAgentStatus | null {
-  if (!isAgentStatusState(source.state) || typeof source.updatedAt !== 'number') {
-    return null
-  }
-  const receivedAt =
-    typeof source.mirroredEvidenceReceivedAt === 'number'
-      ? source.mirroredEvidenceReceivedAt
-      : fallbackReceivedAt
-  return {
-    state: source.state,
-    updatedAt: source.updatedAt,
-    stateStartedAt:
-      typeof source.stateStartedAt === 'number' ? source.stateStartedAt : source.updatedAt,
-    evidenceObservedAt:
-      typeof source.evidenceObservedAt === 'number' ? source.evidenceObservedAt : undefined,
-    mirroredEvidenceReceivedAt: receivedAt,
-    structuredHostOwned: source.structuredHostOwned === true ? true : undefined,
-    workingMode: source.workingMode === 'monitoring' ? 'monitoring' : undefined,
-    interrupted: typeof source.interrupted === 'boolean' ? source.interrupted : undefined,
-    mainAgent: normalizeMainAgentStatusField(source.mainAgent),
-    restoredUnconfirmed: source.restoredUnconfirmed === true ? true : undefined
-  }
 }
 
 export function reconcileTerminalAgentStatusWithCatalog(

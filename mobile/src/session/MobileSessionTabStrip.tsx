@@ -9,8 +9,11 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
+  hasPendingWorktreeUnreadForTabCompletion,
+  isMobileSessionTabUnreadBeforeView,
   resolveMobileSessionTabDotState,
   resolveMobileTerminalTabAgentId,
+  seedUnreadWorktreeSessionTabs,
   subscribeCatalogWorktreesForTabStatus
 } from './mobile-terminal-tab-agent'
 import { spacing } from '../theme/mobile-theme'
@@ -80,25 +83,71 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
     [tabBarKeepsKeyboard]
   )
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
+  const visitUnreadRef = useRef<{
+    worktreeId: string | null | undefined
+    userSwitchedTab: boolean
+    initialActiveChecked: boolean
+    latchedUnreadTabId: string | null
+  }>({
+    worktreeId: undefined,
+    userSwitchedTab: false,
+    initialActiveChecked: false,
+    latchedUnreadTabId: null
+  })
+  if (visitUnreadRef.current.worktreeId !== controller.worktreeId) {
+    visitUnreadRef.current = {
+      worktreeId: controller.worktreeId,
+      userSwitchedTab: false,
+      initialActiveChecked: false,
+      latchedUnreadTabId: null
+    }
+  }
   const now = useNow(60_000)
   const [catalogRevision, setCatalogRevision] = useState(0)
+  const [visitEpoch, setVisitEpoch] = useState(0)
   useEffect(
     () => subscribeCatalogWorktreesForTabStatus(() => setCatalogRevision((rev) => rev + 1)),
     []
   )
   const tabStates = useMemo(() => {
     void catalogRevision
+    void visitEpoch
     const states = new Map<string, AgentDotState>()
+    if (visibleTabs.length > 0 && hasPendingWorktreeUnreadForTabCompletion(controller.worktreeId)) {
+      seedUnreadWorktreeSessionTabs(controller.worktreeId, visibleTabs, now)
+    }
     for (const tab of visibleTabs) {
-      const state = resolveMobileSessionTabDotState(tab, now, {
-        isActiveOnScreen: tab.id === activeSessionTabId
-      })
-      if (state) {
-        states.set(tab.id, state)
+      const tabId = tab.id
+      const isActive = tabId === activeSessionTabId
+      const visit = visitUnreadRef.current
+      let state: AgentDotState | undefined
+      if (isActive && !visit.userSwitchedTab && !visit.initialActiveChecked) {
+        const unreadBeforeView = isMobileSessionTabUnreadBeforeView(tab, now, tabId)
+        state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: true, tabId })
+        if (unreadBeforeView) {
+          visit.latchedUnreadTabId = tabId
+          visit.initialActiveChecked = true
+        } else if (state !== undefined) {
+          visit.initialActiveChecked = true
+        }
+      } else {
+        state = resolveMobileSessionTabDotState(tab, now, { isActiveOnScreen: isActive, tabId })
+      }
+      if (!visit.userSwitchedTab && visit.latchedUnreadTabId === tabId) {
+        if (state === 'done') {
+          states.set(tabId, 'unread')
+        } else {
+          visit.latchedUnreadTabId = null
+          if (state) {
+            states.set(tabId, state)
+          }
+        }
+      } else if (state) {
+        states.set(tabId, state)
       }
     }
     return states
-  }, [visibleTabs, now, activeSessionTabId, catalogRevision])
+  }, [visibleTabs, now, activeSessionTabId, catalogRevision, controller.worktreeId, visitEpoch])
   const tabLabels = useMemo(
     () =>
       visibleTabs.map((tab) => {
@@ -134,6 +183,9 @@ export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   const rightHint = resolveTabStripEdgeHint(hiddenTabs.right, tabStates)
   const pressTab = useCallback(
     (t: (typeof visibleTabs)[number], source: Parameters<typeof toggleSource>[0]) => {
+      visitUnreadRef.current.userSwitchedTab = true
+      visitUnreadRef.current.latchedUnreadTabId = null
+      setVisitEpoch((epoch) => epoch + 1)
       const at = Date.now()
       const lastTap = lastTabTapRef.current
       lastTabTapRef.current = { id: t.id, at }

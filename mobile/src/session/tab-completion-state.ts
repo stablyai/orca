@@ -7,13 +7,92 @@ type TabCompletionTrackerEntry = {
 }
 
 const tabCompletionTracker = new Map<string, TabCompletionTrackerEntry>()
+const unreadWorktreeIds = new Set<string>()
 
 export function clearTabCompletionEntriesForTests(): void {
   tabCompletionTracker.clear()
+  unreadWorktreeIds.clear()
 }
 
-function isInTurnDotState(state: AgentDotState | null | undefined): boolean {
+export function isInTurnDotState(state: AgentDotState | null | undefined): boolean {
   return state === 'working' || state === 'monitoring' || state === 'waiting' || state === 'blocked'
+}
+
+export function markWorktreeUnreadForTabCompletion(worktreeId: string | null | undefined): void {
+  if (!worktreeId) {
+    return
+  }
+  unreadWorktreeIds.add(worktreeId)
+}
+
+export function hasPendingWorktreeUnreadForTabCompletion(
+  worktreeId: string | null | undefined
+): boolean {
+  return typeof worktreeId === 'string' && unreadWorktreeIds.has(worktreeId)
+}
+
+export function consumeWorktreeUnreadForTabCompletion(
+  worktreeId: string | null | undefined
+): boolean {
+  if (!worktreeId) {
+    return false
+  }
+  return unreadWorktreeIds.delete(worktreeId)
+}
+
+export function hasUnacknowledgedTabCompletion(
+  keys: readonly string[],
+  rawState: AgentDotState | undefined
+): boolean {
+  if (rawState !== 'done') {
+    return false
+  }
+  for (const key of keys) {
+    const entry = tabCompletionTracker.get(key)
+    if (entry?.unread || entry?.sawInTurn) {
+      return true
+    }
+  }
+  return false
+}
+
+export function recordCatalogAgentTabState(args: {
+  keys: readonly string[]
+  rawState: AgentDotState | undefined
+  doneStamp?: number
+  forceUnreadIfUnacknowledged?: boolean
+}): void {
+  const entry = getOrCreateTrackerEntry(args.keys)
+  if (!entry) {
+    return
+  }
+  const { rawState, doneStamp, forceUnreadIfUnacknowledged } = args
+  if (isInTurnDotState(rawState)) {
+    entry.sawInTurn = true
+    entry.unread = false
+    return
+  }
+  if (rawState === 'done') {
+    if (entry.sawInTurn) {
+      entry.sawInTurn = false
+      entry.unread = true
+      return
+    }
+    // A passive catalog scan must not acknowledge, so a later unread signal can still mark this completion.
+    if (
+      forceUnreadIfUnacknowledged &&
+      (entry.acknowledgedDoneAt === undefined ||
+        (doneStamp !== undefined && doneStamp > entry.acknowledgedDoneAt))
+    ) {
+      entry.sawInTurn = false
+      entry.unread = true
+    }
+    return
+  }
+  if (rawState === 'interrupted' || rawState === 'failed') {
+    entry.sawInTurn = false
+    entry.unread = false
+  }
 }
 
 function getOrCreateTrackerEntry(keys: readonly string[]): TabCompletionTrackerEntry | null {

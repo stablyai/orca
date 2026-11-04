@@ -7,19 +7,32 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status/contract
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isBlankBrowserUrl } from '../browser/browser-url'
 import { translate } from '../i18n/mobile-i18n'
-import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-row-display'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
-  buildTabCompletionKeys,
   clearCatalogWorktreesForTabStatusForTests,
-  reconcileTerminalAgentStatusWithCatalog,
-  resolveTrackedTabCompletionState,
   setCatalogWorktreesForTabStatus,
   subscribeCatalogWorktreesForTabStatus
 } from './session-tab-catalog-agent-status'
-import { clearTabCompletionEntriesForTests } from './tab-completion-state'
+import {
+  clearTabCompletionEntriesForTests,
+  hasPendingWorktreeUnreadForTabCompletion
+} from './tab-completion-state'
 
-export { buildTabCompletionKeys, resolveTrackedTabCompletionState }
+export { hasPendingWorktreeUnreadForTabCompletion }
+
+export {
+  buildTabCompletionKeys,
+  resolveTrackedTabCompletionState
+} from './session-tab-catalog-agent-status'
+
+export {
+  isMobileSessionTabUnreadBeforeView,
+  resolveMobileSessionTabDotState,
+  resolveRawSessionTabDotState,
+  resolveTabDoneStamp,
+  seedUnreadWorktreeSessionTabs
+} from './mobile-session-tab-unread'
 
 export { setCatalogWorktreesForTabStatus, subscribeCatalogWorktreesForTabStatus }
 
@@ -165,83 +178,4 @@ export function parseAgentDotState(raw: unknown): AgentDotState | undefined {
 export function clearTabCompletionTrackerForTests(): void {
   clearTabCompletionEntriesForTests()
   clearCatalogWorktreesForTabStatusForTests()
-}
-
-export function resolveRawSessionTabDotState(
-  tab: {
-    id?: string
-    parentTabId?: string | null
-    leafId?: string | null
-    type?: MobileSessionTab['type']
-    agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
-    chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
-  },
-  now = Date.now()
-): AgentDotState | undefined {
-  if (tab.type === 'terminal') {
-    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
-      tabId: tab.id,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId,
-      now
-    })
-    // Why: a status restored across a host restart is unconfirmed, so like desktop it shows no live state.
-    if (status && !status.restoredUnconfirmed) {
-      return agentDotState(status, now)
-    }
-    return undefined
-  }
-  if (tab.type === 'agent-session' && tab.chatStatus) {
-    return agentDotState(tab.chatStatus, now)
-  }
-  return undefined
-}
-
-export function resolveTabDoneStamp(tab: {
-  id?: string
-  parentTabId?: string | null
-  leafId?: string | null
-  type?: MobileSessionTab['type']
-  agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
-  chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
-}): number | undefined {
-  if (tab.type === 'terminal') {
-    const status = reconcileTerminalAgentStatusWithCatalog(tab.agentStatus, {
-      tabId: tab.id,
-      parentTabId: tab.parentTabId,
-      leafId: tab.leafId
-    })
-    return status ? (status.stateStartedAt ?? status.updatedAt) : undefined
-  }
-  if (tab.type === 'agent-session' && tab.chatStatus) {
-    return tab.chatStatus.updatedAt
-  }
-  return undefined
-}
-
-export function resolveMobileSessionTabDotState(
-  tab: {
-    id?: string
-    parentTabId?: string | null
-    leafId?: string | null
-    terminal?: string | null
-    isActive?: boolean
-    type?: MobileSessionTab['type']
-    agentStatus?: (AgentStatusEntry & { restoredUnconfirmed?: boolean }) | null
-    chatStatus?: Extract<MobileSessionTab, { type: 'agent-session' }>['chatStatus'] | null
-  },
-  now = Date.now(),
-  options?: { isActiveOnScreen?: boolean }
-): AgentDotState | undefined {
-  const rawState = resolveRawSessionTabDotState(tab, now)
-  return resolveTrackedTabCompletionState({
-    keys: buildTabCompletionKeys({
-      id: tab.id,
-      terminal: tab.terminal,
-      paneKey: tab.agentStatus?.paneKey
-    }),
-    rawState,
-    doneStamp: resolveTabDoneStamp(tab),
-    isActiveOnScreen: options?.isActiveOnScreen ?? tab.isActive
-  })
 }
