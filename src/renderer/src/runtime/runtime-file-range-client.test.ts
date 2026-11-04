@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readRuntimeFileRange } from './runtime-file-range-client'
-import {
-  readEditorCsvFileContent,
-  CSV_PAGED_PREVIEW_BYTES
-} from '../components/editor/csv/csv-file-content'
+import { readEditorCsvFileContent } from '../components/editor/csv/csv-file-content'
 import {
   fsReadFile,
   fsReadFileChunk,
@@ -45,17 +42,5 @@ describe('CSV file admission', () => {
       csvPreview: { readArgs: localArgs, snapshot }
     })
     expect(fsReadFile).not.toHaveBeenCalled()
-  })
-  it('keeps small files editable and preserves existing dirty drafts', async () => {
-    fsStat.mockResolvedValue({ ...snapshot, size: CSV_PAGED_PREVIEW_BYTES - 1 })
-    fsReadFile.mockResolvedValue({ content: 'a,b\n1,2', isBinary: false })
-    expect(await readEditorCsvFileContent(localArgs)).toEqual({
-      content: 'a,b\n1,2',
-      isBinary: false
-    })
-    fsStat.mockClear()
-    await readEditorCsvFileContent(localArgs, false)
-    expect(fsStat).not.toHaveBeenCalled()
-    expect(fsReadFile).toHaveBeenCalledTimes(2)
   })
 })

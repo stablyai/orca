@@ -32,7 +32,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import {
   createInitialStoreState,
   buildReattachPaneTitleState,
@@ -91,6 +95,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('retries a fresh-spawn native follow reset when renderer dimensions return', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { getTerminalScrollIntentKind } =
         await import('@/lib/pane-manager/terminal-scroll-intent')
       const transport = createMockTransport('fresh-pty')
@@ -116,7 +122,13 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           pane.terminal.buffer.active.viewportY = pane.terminal.buffer.active.baseY
         })
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+        )
+      )
       await flushAsyncTicks()
       expect(pane.terminal.buffer.active.viewportY).toBe(40)
       expect(renderListener.current).not.toBeNull()
@@ -131,6 +143,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('writes the daemon pendingEscapeTailAnsi after the reset on local reattach (#7329)', async () => {
       // Why: re-arm the mid-escape tail LAST, after the reattach reset whose ESC would abort it, so a live continuation completes it.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -157,7 +171,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
       })
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks2))
+      )
       await flushAsyncTicks(20)
 
       const tailWriteCall = pane.terminal.write.mock.invocationCallOrder.find(
@@ -173,6 +189,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('answers cursor queries while an account notice blocks user input', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
       mockStoreState.codexRestartNoticeByPtyId = {
@@ -180,6 +198,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       }
       const pane = createPane(1)
       const args = mockPanePtyArgs(pane, createManager(1), createDeps())
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks3)
+
       const binding = connectPanePty(...args)
       transport.getPtyId.mockReturnValue('pty-live')
       mockStoreState.codexRestartNoticeByPtyId = {
@@ -195,6 +215,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('routes native onData query replies through sendInputImmediate, typed input through sendInput (#7329)', async () => {
       // Why this test: the mock aliases sendInputImmediate to sendInput, so other tests can't tell them apart; this pins the routing decision.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const transport = createMockTransport('remote:web-env-1@@pty-7329')
@@ -202,7 +224,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks4))
+      )
       await flushAsyncTicks()
 
       // xterm answers CSI 6n natively with a CPR via onData; it must take the immediate path (skips the remote 8ms debounce that corrupted it).
@@ -237,6 +261,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
     it('writes the onReplayData pendingEscapeTailAnsi meta last, after the replayed bytes (#7329)', async () => {
       // Why this test: the onReplayData meta pass-through had no failing test — severing it kept the suite green.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       enableActiveRuntimeEnvironment()
       const pane = createPane(1)
       const writes: string[] = []
@@ -263,7 +289,9 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       const manager = createManager(1, 1)
       const deps = createDeps()
 
-      connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+      connectPanePty(
+        ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks5))
+      )
       await flushAsyncTicks(20)
       expect(replayCallback.current).toBeTypeOf('function')
 
@@ -303,8 +331,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks6 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks6))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
@@ -322,6 +354,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -343,10 +377,13 @@ export function registerPtyConnectionReattachModeResetTests(): void {
         ...mockPanePtyArgs(
           pane,
           manager,
-          createDeps({
-            restoredLeafId: LEAF_1,
-            restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-          })
+          bindPaneAgentTitleMocks(
+            createDeps({
+              restoredLeafId: LEAF_1,
+              restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+            }),
+            agentTitleMocks7
+          )
         )
       )
       await flushAsyncTicks(20)
@@ -388,8 +425,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks8))
+        )
         await flushAsyncTicks(20)
 
         const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -449,8 +490,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
             bind: bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_1)
           })
         }
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks9))
+        )
         await flushAsyncTicks(30)
 
         expect(transport.connect).toHaveBeenCalledTimes(2)
@@ -503,8 +548,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks10))
+        )
         await flushAsyncTicks(20)
 
         expect(pane.terminal.write).toHaveBeenCalledWith(
@@ -536,8 +585,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks11))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -572,8 +625,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks12))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -607,7 +664,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        const agentTitleMocks13 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks13))
+        )
         await flushAsyncTicks(20)
         return (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls
           .map((call) => String(call[0]))
@@ -656,8 +718,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks14 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks14))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -694,8 +760,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks15 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks15))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -735,8 +805,12 @@ export function registerPtyConnectionReattachModeResetTests(): void {
           restoredLeafId: LEAF_1,
           restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
         })
+        const agentTitleMocks16 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
 
-        connectPanePty(...mockPanePtyArgs(pane, manager, deps))
+        connectPanePty(
+          ...mockPanePtyArgs(pane, manager, bindPaneAgentTitleMocks(deps, agentTitleMocks16))
+        )
         await flushAsyncTicks(20)
 
         expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\x1b[I')
@@ -753,6 +827,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
 
     it('resets an already-idle agent cursor again after reattach SIGWINCH repaint', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks17 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -792,6 +868,8 @@ export function registerPtyConnectionReattachModeResetTests(): void {
       })
 
       const args = mockPanePtyArgs(pane, manager, deps)
+      bindPaneAgentTitleMocks(args[2], agentTitleMocks17)
+
       const binding = connectPanePty(...args)
       await flushAsyncTicks(20)
 

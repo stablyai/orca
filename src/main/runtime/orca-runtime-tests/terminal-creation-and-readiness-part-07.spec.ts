@@ -3,7 +3,7 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
   buildAgentPromptPasteBytes
-} from '../../../shared/agent-prompt-injection'
+} from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks.spec'

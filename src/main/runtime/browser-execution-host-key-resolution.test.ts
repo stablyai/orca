@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { parseBrowserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
+import { parseBrowserNetworkExecutionHostKey } from '../browser/network/execution-routes/browser-network-execution-route'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Use the real resolver: adoption retires missing workspaces but preserves pages awaiting an offline host.

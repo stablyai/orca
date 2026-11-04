@@ -15,12 +15,12 @@ import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type {
   AgentLaunchPaneAddress,
   AgentLaunchPaneVerdict
-} from '../../shared/agent-launch-pane-verdict'
-import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+} from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'

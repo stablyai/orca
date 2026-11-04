@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'

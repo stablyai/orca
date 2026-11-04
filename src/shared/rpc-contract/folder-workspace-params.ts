@@ -3,7 +3,7 @@ import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { DiffCommentSchema } from '../diff-comment-schema'
 

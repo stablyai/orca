@@ -1,4 +1,4 @@
-import { recognizeAgentLaunchCommand } from './agent-command-line-intent'
+import { recognizeAgentLaunchCommand } from './agent-launch/startup/agent-command-line-intent'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 
 const GIT_CONFIG_PROTOCOL_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/

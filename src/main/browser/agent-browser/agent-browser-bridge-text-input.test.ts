@@ -49,7 +49,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
-vi.mock('../cdp-ws-proxy', () => ({
+vi.mock('../cdp/transport/cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
 vi.mock('../browser-error', () => ({
@@ -62,7 +62,7 @@ vi.mock('../browser-error', () => ({
   }
 }))
 
-vi.mock('../cdp-bridge', async () => {
+vi.mock('../cdp/commands/cdp-bridge', async () => {
   const { BrowserError } = await vi.importMock<typeof BrowserErrorTypes>('../browser-error')
   return { BrowserError }
 })
@@ -89,7 +89,7 @@ import {
   FILE_INPUT_FRAME_URL_FUNCTION,
   FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION
-} from '../browser-element-functions'
+} from '../cdp/input/browser-element-functions'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
 

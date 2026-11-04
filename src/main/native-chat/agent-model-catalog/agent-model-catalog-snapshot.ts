@@ -8,29 +8,22 @@ import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fin
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogReadParams,
-  AgentModelCatalogServiceDeps
+  AgentModelCatalogServiceDeps,
+  AgentModelCatalogBinding
 } from './agent-model-catalog-service-contract'
 
 export { agentModelCatalogReleasedOwner }
 
-export type AgentModelCatalogBinding = {
-  identity: string
-  params: AgentModelCatalogReadParams
-  workspaceId?: string
-  current: () => boolean
-  cancel: () => void
-  fingerprint: string
-  base: string
-  exact: boolean
-  folder?: string
-  cwd?: string
-  workspacePath?: string | null
-  keepDefault: boolean
-  projecting?: Promise<void>
-}
+export type {
+  AgentModelCatalogBinding,
+  AgentModelCatalogClaim
+} from './agent-model-catalog-service-contract'
 
 /** Canonical authority survives folder churn and preliminary same-account refreshes until replacement. */
 export function bindAgentModelCatalogScope(
@@ -237,7 +230,7 @@ export function projectAgentModelCatalogSnapshot(
     !params.verifiedOnly &&
     (deps.store.isListing(bound.fingerprint) ||
       (resolving && deps.store.probeDue(bound.fingerprint))) &&
-    (independent || !listed)
+    (independent || !listed || usesModelSpecificAcpEfforts(params.agent))
       ? { listingInProgress: true as const }
       : {}),
     ...(deps.store.failure(bound.fingerprint)?.unavailable
@@ -302,13 +295,4 @@ export function agentModelCatalogSessionPeek(
     const entry = bound ? deps.store.observation(bound.fingerprint) : null
     return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }
-}
-
-export type AgentModelCatalogClaim = Pick<
-  AgentModelCatalogBinding,
-  'identity' | 'params' | 'current'
-> & {
-  controller: AbortController
-  promise: Promise<void>
-  ready: Promise<void>
 }

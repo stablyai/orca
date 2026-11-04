@@ -2,7 +2,8 @@ import {
   configuredDeclarationModels,
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import * as modelCatalogOwnership from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,
@@ -15,6 +16,8 @@ export type AgentModelCatalogSource = 'discovery' | 'live'
 
 export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
+  /** Transient probe progress; unvisited demands remain eligible for the next batch. */
+  attemptedModels?: readonly string[]
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   complete?: boolean
@@ -58,27 +61,7 @@ export type AgentModelCatalogConfiguredDefault = {
   at: number
 }
 
-/** Report defaults only for config-resolved launches; undefined is unknown, null is unlisted. */
-export function unpickedSessionConfiguredChoice(session: {
-  resolvesConfig: boolean
-  picked?: ReadonlySet<string>
-  models: readonly { id: string }[]
-  current: { model?: string; effort?: string }
-}): AgentModelCatalogConfiguredChoice | null | undefined {
-  const { models, current, resolvesConfig, picked } = session
-  // Empty/signed-out listings cannot establish catalog membership.
-  if (!resolvesConfig || picked?.has('model') || !current.model || models.length === 0) {
-    return undefined
-  }
-  if (!models.some((model) => model.id === current.model)) {
-    return null
-  }
-  return {
-    modelId: current.model,
-    // Session effort picks do not establish configured defaults.
-    ...(session.picked?.has('effort') ? {} : { effort: current.effort ?? null })
-  }
-}
+export { unpickedSessionConfiguredChoice } from './agent-model-catalog-models'
 
 export function withLiveCatalogListing<
   T extends Pick<AgentModelCatalogLiveListing, 'models' | 'fastModeSupport'>
@@ -153,8 +136,13 @@ export function agentModelCatalogEntry(
     discovered,
     live,
     configured,
-    models: mergedAgentModelCatalogModels(discovered, live, configured).map((model) =>
-      independentAgentModelCatalog(agent) && discovered?.complete !== true
+    models: mergedAgentModelCatalogModels(
+      discovered,
+      live,
+      configured,
+      modelCatalogOwnership.usesModelSpecificAcpEfforts(agent)
+    ).map((model) =>
+      modelCatalogOwnership.independentAgentModelCatalog(agent) && discovered?.complete !== true
         ? { ...model, isDefault: false }
         : model
     ),
@@ -178,7 +166,7 @@ export function agentModelCatalogEntryWithSuccess(
   source: AgentModelCatalogSource,
   at: number
 ): AgentModelCatalogEntry | null {
-  if (independentAgentModelCatalog(identity.agent)) {
+  if (modelCatalogOwnership.independentAgentModelCatalog(identity.agent)) {
     if (source !== 'discovery' || success.models.length === 0) {
       return null
     }
@@ -216,7 +204,10 @@ export function agentModelCatalogEntryWithSuccess(
         : null
     )
   }
-  const models = retainedAgentModelCatalogModels(previous, success)
+  const incoming = retainedAgentModelCatalogModels(previous, success)
+  const models = modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent)
+    ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
+    : incoming
   if (models.length === 0) {
     return null
   }
@@ -273,7 +264,7 @@ export function entryWithConfiguredDefault(
   at: number,
   source: AgentModelCatalogListing | null = entry.live
 ): AgentModelCatalogEntry | null {
-  if (independentAgentModelCatalog(entry.agent)) {
+  if (modelCatalogOwnership.independentAgentModelCatalog(entry.agent)) {
     return null
   }
   const next = configuredDefaultFacts(choice, entry.configured)

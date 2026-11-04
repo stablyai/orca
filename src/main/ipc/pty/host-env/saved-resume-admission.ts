@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
   agentProviderSessionsEqual,
@@ -9,7 +9,7 @@ import {
 import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeasePossiblyWriting,

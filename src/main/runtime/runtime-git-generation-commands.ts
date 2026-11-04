@@ -6,7 +6,7 @@ import type { CommitMessageDraftContext } from '../../shared/commit-message-gene
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { getStagedCommitContext } from '../git/source-control/staged-commit-context'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'

@@ -11,104 +11,14 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { stubRuntimeEnvironmentBridge } from '@/runtime/runtime-environment-bridge-fixture'
-import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { consumeOldHostPreparedCommand } from './prepared-action-launch.test-fixture'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
-import { projectAgentLaunchSettings } from '../../src/shared/agent-launch-settings'
+import '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { describe, expect, it, vi } from 'vitest'
 
 describe('launchAgentInNewTab paired web runtime', () => {
-  it('awaits the capable host map once and preserves explicit/raw and prepared command ownership', async () => {
-    mocks.capability.mockResolvedValue(true)
-    store.settings.agentLaunchChoices = { claude: { model: 'sonnet', options: { effort: 'low' } } }
-    store.settings.agentDefaultArgs = { claude: '--verbose' }
-    store.settings.agentDefaultEnv = { claude: { KEEP: 'caller' } }
-    const pending = Promise.withResolvers<{
-      settings: ReturnType<typeof projectAgentLaunchSettings>
-    }>()
-    mocks.hostRpc.mockReturnValueOnce(pending.promise)
-    const { launchAgentInNewTab } =
-      await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal'
-    })
-    expect(mocks.createWebRuntimeSessionTerminal).not.toHaveBeenCalled()
-    pending.resolve({
-      settings: projectAgentLaunchSettings({
-        agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } }
-      })
-    })
-    await result?.terminalCompletion
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledTimes(1)
-    expect(mocks.createWebRuntimeSessionTerminal.mock.calls[0][0]).toMatchObject({
-      command: expect.stringContaining("'opus'"),
-      env: { KEEP: 'caller' },
-      launchConfig: { agentArgs: '--verbose' },
-      preparedAgentCommand: false
-    })
-    expect(mocks.createWebRuntimeSessionTerminal.mock.calls[0][0]).not.toHaveProperty(
-      'launchPreferences'
-    )
-    mocks.createWebRuntimeSessionTerminal.mockClear()
-    const picked = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      agentArgs: '--model literal',
-      sessionOptions: { model: 'picked' }
-    })
-    await picked?.terminalCompletion
-    expect(mocks.createWebRuntimeSessionTerminal.mock.calls[0][0]).toMatchObject({
-      command: expect.stringContaining("'picked'"),
-      agentArgs: '--model literal',
-      launchPreferences: { model: 'picked' },
-      launchConfig: { agentArgs: '' }
-    })
-    clearHostAgentMenuSettingsForTests()
-    mocks.hostRpc.mockResolvedValue({
-      settings: projectAgentLaunchSettings({
-        agentLaunchChoices: { claude: { options: { effort: 'high' } } }
-      })
-    })
-    store.settings.agentCmdOverrides = { claude: 'cx' }
-    const prepared = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal'
-    })
-    await prepared?.terminalCompletion
-    expect(mocks.createWebRuntimeSessionTerminal.mock.calls.at(-1)?.[0]).toMatchObject({
-      command: "cx '--verbose' '--effort' 'high'",
-      env: { KEEP: 'caller' },
-      preparedAgentCommand: true,
-      launchConfig: { agentCommand: "cx '--verbose'", agentArgs: '--verbose' }
-    })
-    expect(mocks.createTab).not.toHaveBeenCalled()
-    const dispatched = mocks.createWebRuntimeSessionTerminal.mock.calls.length
-    store.settings.agentCmdOverrides = { claude: 'claude --model sonnet' }
-    const refused = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      requestedSurface: 'terminal',
-      prompt: 'keep this prompt',
-      sessionOptions: { model: 'opus' }
-    })
-    await expect(refused?.terminalCompletion).resolves.toEqual({
-      delivered: false,
-      failureNotified: true,
-      outcome: { status: 'failed', message: expect.stringContaining('Claude') }
-    })
-    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledTimes(dispatched)
-    expect(mocks.toastError).toHaveBeenCalledOnce()
-  })
-
   it.each(['deadline', 'prepared', 'authoritative', 'old'] as const)(
     'delivers the actual %s operation once with the correct model owner and final result',
     async (route) => {

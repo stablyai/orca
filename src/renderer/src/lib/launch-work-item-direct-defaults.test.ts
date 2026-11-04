@@ -7,14 +7,14 @@ import { resolveProjectExecutionRuntime } from '../../../shared/project-executio
 import * as inventory from './agent-detection-target-inventory'
 import * as localCapabilities from '@/runtime/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
+import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAppStore } from '@/store'
 
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
+import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { runSourceControlAgentActionStart } from '../components/right-sidebar/runSourceControlAgentActionStart'
 import { startFixChecksFromDialog } from '../components/pull-request-page/checks/fix-launch'
 import { sourceControlActionRecipeEntry } from '../../../shared/source-control-action-selection'

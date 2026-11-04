@@ -14,8 +14,8 @@ import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/stru
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
-import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
-import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
+import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../browser/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
@@ -196,9 +196,10 @@ function installWillQuitHandler(): void {
       await state.runtime?.getAgentBrowserBridge()?.destroyAllSessions()
     })()
     // Local SSH browser routes own loopback listeners and ssh -N -D children that must not outlive the app (P2-4).
-    const localSshRouteShutdown = import('../browser/local-ssh-browser-route')
-      .then((routes) => routes.closeAllLocalSshBrowserRoutes())
-      .catch(() => {})
+    const localSshRouteShutdown =
+      import('../browser/routing/local-host-partitions/local-ssh-browser-route')
+        .then((routes) => routes.closeAllLocalSshBrowserRoutes())
+        .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
     browserManager.setOffscreenTabOpener(null)
     const emulatorShutdown =

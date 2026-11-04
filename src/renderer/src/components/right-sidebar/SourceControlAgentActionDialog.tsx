@@ -12,7 +12,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RunSourceControlAgentActionStartArgs } from './runSourceControlAgentActionStart'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'

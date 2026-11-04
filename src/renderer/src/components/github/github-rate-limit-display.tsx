@@ -9,8 +9,8 @@ import type {
   GetRateLimitResult,
   GitHubRateLimitSnapshot
 } from '../../../../shared/github/rate-limit-types'
-import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
-import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
+import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
+import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 const REFRESH_INTERVAL_MS = 60_000

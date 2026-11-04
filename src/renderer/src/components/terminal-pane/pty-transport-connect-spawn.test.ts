@@ -1,3 +1,7 @@
+import {
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import type { ConnectCallbacks } from './pty-connection-test-pane-fixtures'
@@ -463,6 +467,8 @@ describe('createIpcPtyTransport', () => {
     await installTerminalTestGlobals()
     try {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       for (const proof of ['interleaved', 'covered', 'no-flags'] as const) {
         state = createInitialStoreState(() => state)
         const result = provenSpawnResponse(
@@ -538,7 +544,11 @@ describe('createIpcPtyTransport', () => {
             }
           }
         }
-        const binding = connectPanePty(pane, manager, deps)
+        const binding = connectPanePty(
+          pane,
+          manager,
+          bindPaneAgentTitleMocks(deps, agentTitleMocks)
+        )
         try {
           await flushAsyncTicks(20)
           for (let step = 0; step < 40; step += 1) {

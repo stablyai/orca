@@ -14,18 +14,18 @@ import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { expectSettingsWorkScale } from '../../../../shared/global-settings-test-fixture'
-import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   makeFolderWorkspace,
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
-import { mutateHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
+import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
   readAgentLaunchPreferencesForWorktree,
   readAgentLaunchPreferencesForWorkspace
-} from '../settings/use-host-agent-launch-preferences'
+} from '../../runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
   useAgentLaunchPickerInventory,
   useAgentLaunchPickerInventorySource,
@@ -669,7 +669,7 @@ it('reprojects a supplied local authored map once without host acquisition', asy
       }
     }
     const profiles = vi.spyOn(
-      await import('../../../../shared/agent-launch-profile'),
+      await import('../../../../shared/agent-launch/choices/agent-launch-profile'),
       'projectAgentLaunchProfile'
     )
     try {

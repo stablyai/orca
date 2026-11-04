@@ -46,7 +46,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
-} from '../../../../../src/shared/agent-chat-permission-mode'
+} from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
 

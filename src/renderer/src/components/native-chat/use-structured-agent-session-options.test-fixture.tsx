@@ -13,7 +13,7 @@ type OptionsFixtureMocks = {
   enqueue: Mock
   pick: Mock
   target: RuntimeClientTarget
-  agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+  agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   hold: Mock<
     (
       sessionId: string,
@@ -24,6 +24,7 @@ type OptionsFixtureMocks = {
   >
   toastError: Mock<(message: string) => void>
   supportsRemote: Mock
+  effortDiscovery: boolean
   coherentCatalog: boolean
   sendSelection: boolean
 }
@@ -31,7 +32,7 @@ type OptionsFixtureMocks = {
 const mocks: OptionsFixtureMocks = vi.hoisted(() => {
   const selection: {
     target: RuntimeClientTarget
-    agent: 'codex' | 'claude' | 'pi' | 'antigravity'
+    agent: 'codex' | 'claude' | 'pi' | 'antigravity' | 'opencode2'
   } = {
     target: { kind: 'local' },
     agent: 'codex'
@@ -51,6 +52,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
     >(),
     toastError: vi.fn<(message: string) => void>(),
     supportsRemote: vi.fn(),
+    effortDiscovery: false,
     coherentCatalog: false,
     sendSelection: false
   }
@@ -68,6 +70,15 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
   )
   return {
     ...actual,
+    useStructuredAgentSessionHostCapabilityState: (
+      target: RuntimeClientTarget | null,
+      capability: string
+    ) => {
+      const state = actual.useStructuredAgentSessionHostCapabilityState(target, capability)
+      return mocks.effortDiscovery && capability === 'agent-session.model-catalog.model-efforts.v1'
+        ? 'supported'
+        : state
+    },
     useStructuredAgentSessionHostCapability: (
       target: RuntimeClientTarget,
       capability: Parameters<typeof actual.useStructuredAgentSessionHostCapability>[1]
@@ -178,7 +189,7 @@ type RenderProps = {
   hidden?: boolean
   launchSeedOptions?: Record<string, string>
   worktree?: string
-  agent?: 'claude' | 'codex' | 'pi' | 'antigravity'
+  agent?: 'claude' | 'codex' | 'pi' | 'antigravity' | 'opencode2'
   providerStarting?: boolean
   paired?: boolean
   /** Pass the production presentation scope, which is closed while transport is disabled. */

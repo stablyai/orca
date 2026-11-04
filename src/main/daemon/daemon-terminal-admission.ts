@@ -13,7 +13,7 @@ import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
 import type { CreateOrAttachOptions, CreateOrAttachResult, TerminalHost } from './terminal-host'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { isSpawnIntent } from '../../shared/host-spawn-admission'
 import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import {

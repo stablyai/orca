@@ -18,7 +18,7 @@ import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-s
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import type { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { nativeChatSessionOptionsWrite } from './mobile-session-launch-operations'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 
 export const MOBILE_MODEL_DEFAULT_PICK = ''
 

@@ -1,5 +1,5 @@
 import { cloneStructuredAgentSessionOptionRecord } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {

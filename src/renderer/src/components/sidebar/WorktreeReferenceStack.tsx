@@ -3,6 +3,7 @@ import { CircleDot } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { ReviewIcon } from './worktree-review-helpers'
 import { workspaceAttachmentLabel } from './worktree-attachment-editing'
@@ -11,6 +12,7 @@ import {
   type WorkspaceReferenceDetailsMap
 } from './workspace-reference-details'
 import { translate } from '@/i18n/i18n'
+import { checksLabel } from './WorktreeCardHelpers'
 const EMPTY_DETAILS: WorkspaceReferenceDetailsMap = {}
 
 function singleReferenceLabel(item: WorkspaceAttachment): string {
@@ -64,19 +66,22 @@ function priority(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsM
   const detail = details[key]
   if (item.type !== 'issue') {
     const review = detail?.review
+    const status = review && getProviderChecksOutcome(review.checksSummary, review.status)
     return review?.state === 'open'
-      ? review.status === 'failure'
+      ? status === 'failure'
         ? 0
-        : review.status === 'pending'
+        : status === 'pending'
           ? 1
-          : 2
+          : status === 'cancelled'
+            ? 2
+            : 3
       : review?.state === 'draft'
-        ? 3
+        ? 4
         : review?.state === 'merged'
-          ? 4
+          ? 5
           : review?.state === 'closed'
-            ? 5
-            : 6
+            ? 6
+            : 7
   }
   const state = detail?.stateName?.toLowerCase() ?? ''
   if (detail?.stateType) {
@@ -116,10 +121,12 @@ export function WorktreeReferenceStack({
   const summary = ordered
     .map((item) => {
       const detail = details[getWorkspaceAttachmentKey(item)]
+      const review = detail?.review
+      const status = review && getProviderChecksOutcome(review.checksSummary, review.status)
       return [
         workspaceAttachmentLabel(item),
-        detail?.review?.state ?? detail?.stateName,
-        detail?.review?.status
+        review?.state ?? detail?.stateName,
+        status === 'cancelled' ? checksLabel(status) : status
       ]
         .filter(Boolean)
         .join(' · ')

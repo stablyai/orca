@@ -4,7 +4,7 @@ import type {
   TerminalQuickCommandScope
 } from '../../../../shared/terminal-quick-command-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,

@@ -47,6 +47,8 @@ export type AgentSessionOptionsResult = {
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
     modelDefault?: boolean
+    /** Current child reports this model for display; it is never a next-turn selection. */
+    reportedModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string

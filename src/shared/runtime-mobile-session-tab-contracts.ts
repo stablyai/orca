@@ -1,9 +1,9 @@
-import type { AgentStatusEntry } from './agent-status-types'
+import type { AgentStatusEntry } from './agent-status/contracts/agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
-import type { TuiAgent } from './tui-agent'
+import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { StructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle'
 
 export type RuntimeMobileSessionTerminalTab = {

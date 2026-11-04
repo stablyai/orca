@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 import { launchDraftSource } from '../native-chat/native-chat-launch-draft-source'
-import { acceptAgentPickerArguments } from '../../../../shared/agent-launch-picker-edits'
+import { acceptAgentPickerArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { act, createElement, useState } from 'react'
 import { fireEvent, getByRole, render, renderHook, waitFor } from '@testing-library/react'
@@ -17,7 +17,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft
-} from '../settings/source-control-agent-launch-picker'
+} from '../../lib/source-control-agent-launch-picker'
 import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
 import { AgentLaunchSetupButton, useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
@@ -35,7 +35,7 @@ import type {
   AgentPickerDraft,
   AgentPickerDraftOwner,
   AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })

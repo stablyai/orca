@@ -2,8 +2,8 @@ export { setOptionPlan } from './structured-agent-session-option-mutation-plan'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_MESSAGE_SOURCE,

@@ -8,10 +8,10 @@ import {
  * Captured-marker agents wait for their marker; others may fall back to tui-idle within the remaining budget.
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
 
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { draftPasteReadySignalHasMarker } from '../../shared/draft-paste-ready-scanner'
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from './orca-runtime'

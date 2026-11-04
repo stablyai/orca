@@ -158,17 +158,21 @@ const PARITY_CASES: ParityCase[] = [
 
 describe('provider check classification parity', () => {
   it.each(PARITY_CASES)(
-    '$name resolves identically on every desktop surface',
+    '$name preserves shared counts across complete and detail sources',
     ({ checks, expected, gitLabJobStatuses, gitLabPipelineStatus }) => {
-      const summary = { ...expected, total: checks.length }
+      const summary = {
+        ...expected,
+        total: checks.length,
+        cancelled: checks.filter((check) => check.conclusion === 'cancelled').length
+      }
       expect(summarizeProviderChecks(checks)).toEqual(summary)
-      expect(deriveTaskPagePRCheckSummary(checks)).toEqual(summary)
+      expect(deriveTaskPagePRCheckSummary(checks)).toEqual({ ...summary, cancelled: undefined })
       // Keep pane counts aligned with sidebar rollups, including the neutral unresolved bucket.
       const paneCounts = getCheckCounts(checks)
       expect({
         passed: paneCounts.passing,
         // Both panes split action_required into its own amber chip; it is still the failed bucket.
-        failed: paneCounts.failing + paneCounts.needsAction,
+        failed: paneCounts.failing + paneCounts.needsAction + paneCounts.cancelled,
         pending: paneCounts.pending,
         neutral: paneCounts.neutral
       }).toEqual({

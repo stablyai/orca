@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
 import { Button } from './ui/button'
-import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './settings/native-chat-resume-setting-target'
+import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './settings/chat/native-chat-resume-setting-target'
 
 /** Explain automatic resume only for runs started by this launch’s saved preference, with its settings link. */
 export function NativeChatResumeAutoNote({

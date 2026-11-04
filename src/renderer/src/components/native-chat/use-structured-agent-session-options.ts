@@ -1,4 +1,4 @@
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { structuredAgentSessionDefaultModelChoice } from '../../../../shared/structured-agent-session-default-model-choice'
 import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../../../../shared/agent-session-default-model'
 import { useStructuredAgentSessionHostCapability } from '@/runtime/structured-agent-session-host-capability'
@@ -73,25 +73,6 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
 
   const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
 
-  const hostCatalog = useHostModelCatalogUpgrade({
-    agent,
-    sessionId,
-    target,
-    optionCatalog,
-    enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default.
-    newLaunch,
-    ...(launch?.worktree ? { worktree: launch.worktree } : {}),
-    fence,
-    turnId,
-    reportedUnpickedModel:
-      newLaunch && launchSeedOptions?.model === undefined && optionState.catalogSource === 'live',
-    ...(args.providerRunning ? { providerRunning: true } : {}),
-    activeOptionRecordRef,
-    updateOptionState,
-    receiveCatalog
-  })
-
   const takesModelDefault = useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_DEFAULT_MODEL_CAPABILITY
@@ -136,6 +117,27 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       optionView(optionState, launchSeedOptions, launch?.explicitOptions)
     )
   )
+  const modelOption = optionSnapshot.find((row) => row.id === 'model')
+  const hostCatalog = useHostModelCatalogUpgrade({
+    agent,
+    selectedModel: modelOption?.kind.type === 'select' ? modelOption.kind.currentValue : undefined,
+    sessionId,
+    target,
+    optionCatalog,
+    enabled: args.isVisible,
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    newLaunch,
+    ...(launch?.worktree ? { worktree: launch.worktree } : {}),
+    fence,
+    turnId,
+    reportedUnpickedModel:
+      newLaunch && launchSeedOptions?.model === undefined && optionState.catalogSource === 'live',
+    ...(args.providerRunning ? { providerRunning: true } : {}),
+    activeOptionRecordRef,
+    updateOptionState,
+    receiveCatalog
+  })
+
   const readWriteContext = () => {
     const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
     return {

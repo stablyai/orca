@@ -9,22 +9,22 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
   AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch-tab-closed'
-import { classifyAgentLaunchReplayRefusal } from '../../../../shared/agent-launch-replay-refusal'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { classifyAgentLaunchReplayRefusal } from '../../../../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { mapRuntimeError } from '../errors'
-import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabPublishRequest
-} from '../../../../shared/agent-launch-tab-publication'
+} from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests,
   resolveAgentLaunchPaneVerdict
 } from '../../../agent-launch/agent-launch-pane-attachment'
-import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
+import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'

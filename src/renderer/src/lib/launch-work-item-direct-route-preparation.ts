@@ -1,5 +1,5 @@
-import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'

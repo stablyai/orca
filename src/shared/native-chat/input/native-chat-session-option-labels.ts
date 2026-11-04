@@ -1,3 +1,4 @@
+import { labelFromModelId } from '../../model-id-label'
 import {
   isDefaultServiceTier,
   type SessionOptionDescriptor,
@@ -159,12 +160,25 @@ export function nativeChatModelPillLabel(
   descriptor: SessionOptionDescriptor,
   say: NativeChatSessionOptionSay
 ): string {
-  if (descriptor.defaultChoice?.selected) {
+  if (descriptor.defaultChoice?.selected && !descriptor.reportedModel) {
     return say('defaultModel')
   }
   // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   const choice = descriptor.valueSource === 'unknown' ? null : selectedNativeChatChoice(descriptor)
-  return choice ? nativeChatSessionChoiceLabel(choice, say) : say('model')
+  const selected = choice ? nativeChatSessionChoiceLabel(choice, say) : say('model')
+  const reported = descriptor.reportedModel
+  if (!reported || (choice && reported === choice.value.replace(/\[[^\]]*\]$/u, ''))) {
+    return selected
+  }
+  const reportedChoice =
+    descriptor.kind.type === 'select'
+      ? descriptor.kind.choices.find((entry) => entry.value === reported)
+      : undefined
+  const label = reportedChoice
+    ? nativeChatSessionChoiceLabel(reportedChoice, say)
+    : labelFromModelId(reported)
+  const actual = selected.startsWith('Claude ') ? label : label.replace(/^Claude /, '')
+  return actual
 }
 
 export function nativeChatOptionsPillTitle(

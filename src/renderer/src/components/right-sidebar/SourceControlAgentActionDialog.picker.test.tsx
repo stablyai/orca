@@ -8,11 +8,9 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
-import {
-  agentPickerChoiceSeeds,
-  type AgentPickerEntry
-} from '../../../../shared/agent-launch-picker'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { agentPickerChoiceSeeds } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import {
   mountSourceDialog,
@@ -20,9 +18,9 @@ import {
 } from './source-control-action-dialog.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { tokenizeStartupCommand } from '../../../../shared/tui-agent-startup-shell'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import * as setupOwner from '../agent/agent-launch-picker-drafts'
 import * as optionRows from '../agent/agent-launch-setup-option-rows'
 

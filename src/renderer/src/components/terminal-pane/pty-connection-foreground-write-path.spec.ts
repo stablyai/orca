@@ -12,7 +12,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -57,6 +61,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('queues visible bulk output off the synchronous xterm write path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -68,7 +74,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks)
+        )
+      )
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -82,6 +94,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('keeps ANSI redraws after terminal input on the immediate xterm write path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks2 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -93,7 +107,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks2)
+        )
+      )
       await flushAsyncTicks()
       const onDataMock = pane.terminal.onData as unknown as {
         mock: { calls: [[(data: string) => void] | []] }
@@ -110,6 +130,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('keeps large ANSI redraws after terminal input on the immediate xterm write path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks3 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -121,7 +143,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks3)
+        )
+      )
       await flushAsyncTicks()
       const onDataMock = pane.terminal.onData as unknown as {
         mock: { calls: [[(data: string) => void] | []] }
@@ -141,12 +169,20 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
     it('routes terminal input through deferPtyInput so the host can withhold it', async () => {
       // Regression: inlining forwardPtyInput into onData dropped this hop, silently disabling link-click mouse suppression.
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks4 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
       const deferPtyInput = vi.fn()
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps({ deferPtyInput })))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps({ deferPtyInput }), agentTitleMocks4)
+        )
+      )
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
@@ -160,11 +196,19 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks5 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks5)
+        )
+      )
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
@@ -173,6 +217,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks6 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -184,7 +230,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      const binding = connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      const binding = connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks6)
+        )
+      )
       await flushAsyncTicks()
       binding.markShortcutTerminalInputSent()
 
@@ -197,6 +249,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
     it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks7 =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -208,7 +262,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       transportFactoryQueue.push(transport)
 
-      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      connectPanePty(
+        ...mockPanePtyArgs(
+          pane,
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps(), agentTitleMocks7)
+        )
+      )
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
@@ -242,6 +302,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks8 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -253,7 +315,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks8)
+          )
+        )
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -286,6 +354,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks9 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -297,7 +367,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks9)
+          )
+        )
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -328,6 +404,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks10 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -339,7 +417,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks10)
+          )
+        )
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -370,6 +454,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks11 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -381,7 +467,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks11)
+          )
+        )
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()
@@ -421,6 +513,8 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       )
       try {
         const { connectPanePty } = await import('./pty-connection')
+        const agentTitleMocks12 =
+          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -432,7 +526,13 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
         transportFactoryQueue.push(transport)
 
         const pane = createPane(1)
-        connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+        connectPanePty(
+          ...mockPanePtyArgs(
+            pane,
+            createManager(1),
+            bindPaneAgentTitleMocks(createDeps(), agentTitleMocks12)
+          )
+        )
         await flushAsyncTicks(6)
 
         vi.useFakeTimers()

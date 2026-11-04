@@ -1,7 +1,7 @@
 import { ptyIncarnationById, ptyOwnership } from '../../../../main/ipc/pty/provider/ownership-state'
 import { createLaunchRaceRuntime } from '../../../../main/ipc/pty/pty-launch-race-test-fixture'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentPaneLaunchRequest } from '../../../../shared/agent-pane-launch-request'
+import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import { setupPtyIpcSuite } from '../../../../main/ipc/pty/pty-ipc-test-harness'
 import { classifyErrorMock, statSyncMock } from '../../../../main/ipc/pty/pty-ipc-mock-registry'
 import { registerPtyHandlers } from '../../../../main/ipc/pty/register-handlers'
@@ -10,13 +10,13 @@ import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests
 } from '../../../../main/agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
   paneSpawnReservationsByOwnerKey
 } from '../../../../main/ipc/pty/pane/spawn-reservation'
-import { acquireWatcherRemovalGate } from '../../../../main/ipc/watcher-removal-gate'
+import { acquireWatcherRemovalGate } from '../../../../main/workspaces/removal/watcher-removal-gate'
 
 const renderer = vi.hoisted(() => {
   const ptyIdsByTabId: Record<string, string[]> = {}

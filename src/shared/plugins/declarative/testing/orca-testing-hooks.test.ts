@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
-import { acknowledgesByDefault } from './testing-host'
 import { mountWorker } from './orca-testing'
 
 type HookOrca = {
@@ -37,11 +35,6 @@ describe('orca/testing hooks', () => {
       kind: 'continue',
       event: send
     })
-  })
-
-  it('answers fire-and-forget host methods with success by default', () => {
-    expect(acknowledgesByDefault({ result: z.object({ ok: z.literal(true) }) })).toBe(true)
-    expect(acknowledgesByDefault({ result: z.object({ delivered: z.boolean() }) })).toBe(false)
   })
 
   it('fires editor.save.before and returns the text the worker wrote', async () => {

@@ -209,7 +209,7 @@ export class DeviceRegistry {
   // Clients erase keys on unknown; reserve that verdict for readable absence.
   lookupDeviceKey(deviceId: string): DeviceKeyLookup {
     this.adoptExternalEdits()
-    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId))
+    const lookup = lookupDeviceKeyRow(this.getDevice(deviceId), this.devices)
     return lookup.kind === 'unknown' && (this.registryUnreadable || this.registryDoubtful)
       ? { kind: 'unavailable' }
       : lookup

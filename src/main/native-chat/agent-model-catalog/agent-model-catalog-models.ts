@@ -9,7 +9,8 @@ import type {
 export function mergedAgentModelCatalogModels(
   discovered: AgentModelCatalogListing | null,
   live: AgentModelCatalogListing | null,
-  configured: AgentModelCatalogConfiguredDefault | null
+  configured: AgentModelCatalogConfiguredDefault | null,
+  modelSpecificEfforts = false
 ): AgentSessionModelOption[] {
   const liveIsNewer = live !== null && (discovered === null || live.at >= discovered.at)
   const newer = liveIsNewer ? live : discovered
@@ -27,8 +28,11 @@ export function mergedAgentModelCatalogModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const { efforts, effortsKnown } =
-      olderModel && model.effortsKnown !== olderModel.effortsKnown
+    const { efforts, effortsKnown } = modelSpecificEfforts
+      ? model.effortsKnown === false && olderModel
+        ? olderModel
+        : model
+      : olderModel && model.effortsKnown !== olderModel.effortsKnown
         ? model.effortsKnown === false
           ? olderModel
           : model
@@ -99,4 +103,26 @@ export function configuredDeclarationModels(
     return { ...row, declaredDefaultEffort }
   })
   return changed ? observed : models
+}
+
+/** Report defaults only for config-resolved launches; undefined is unknown, null is unlisted. */
+export function unpickedSessionConfiguredChoice(session: {
+  resolvesConfig: boolean
+  picked?: ReadonlySet<string>
+  models: readonly { id: string }[]
+  current: { model?: string; effort?: string }
+}): AgentModelCatalogConfiguredChoice | null | undefined {
+  const { models, current, resolvesConfig, picked } = session
+  // Empty/signed-out listings cannot establish catalog membership.
+  if (!resolvesConfig || picked?.has('model') || !current.model || models.length === 0) {
+    return undefined
+  }
+  if (!models.some((model) => model.id === current.model)) {
+    return null
+  }
+  return {
+    modelId: current.model,
+    // Session effort picks do not establish configured defaults.
+    ...(session.picked?.has('effort') ? {} : { effort: current.effort ?? null })
+  }
 }

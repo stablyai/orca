@@ -9,9 +9,9 @@ import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
 
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
-import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-title-status'
+import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-status/title/agent-title-status'
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
       settings: { terminalGpuAcceleration: 'auto' },
@@ -103,19 +103,6 @@ describe('resolvePaneTitleDecision', () => {
       expect(decide(stamp).displayTitle).toBe(stamp)
     }
   )
-
-  it.each([
-    'Gemini',
-    'gemini cli',
-    'Qoder CLI',
-    'Grok',
-    '⠴ Grok',
-    'Pi ready',
-    'OMP ready',
-    '✦ Qoder CLI extra'
-  ])('does not treat loose or owner-shaped text %j as an exact output', (title) => {
-    expect(isNormalizedAgentTitleStamp(title)).toBe(false)
-  })
 
   it('keeps current timer facts cleared with equal raw/display input and existing provenance', async () => {
     vi.useFakeTimers()

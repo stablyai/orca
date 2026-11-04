@@ -1,3 +1,4 @@
+import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { GitHubPRMergeStateInput } from '../../../shared/github/pull-request-merge-state'
 import { presentGitHubPRMergeState } from './github-pr-merge-state'
@@ -271,5 +272,17 @@ describe('presentGitHubPRMergeState', () => {
     expect(
       presentGitHubPRMergeState(pr({ state: 'draft', mergeQueueRequired: true })).autoMergeAction
     ).toBeNull()
+  })
+  it('names cancelled checks accurately without changing the provider merge permission', () => {
+    const checksSummary = summarizeProviderChecks([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'completed', conclusion: 'cancelled' }
+    ])
+    expect(presentGitHubPRMergeState(pr({ checksStatus: 'failure', checksSummary }))).toMatchObject(
+      {
+        label: 'Cancelled',
+        directMergeAvailable: true
+      }
+    )
   })
 })

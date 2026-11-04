@@ -1,8 +1,14 @@
-import { structuredAgentSessionRuntimePermission } from './structured-agent-session-ran-options'
+import {
+  structuredAgentSessionRuntimeModel,
+  structuredAgentSessionRuntimePermission
+} from './structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
+import {
+  normalizeOptionalField,
+  AGENT_MODEL_MAX_LENGTH
+} from '../../../shared/agent-status/contracts/agent-status-field-normalization'
+
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
@@ -11,7 +17,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import { isAgentChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import { isAgentChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   StructuredAgentSessionStatusFeedDeps,
   StatusPublication
@@ -85,6 +91,9 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(model ? { model } : {}),
     ...(record?.defaultModelOptions !== undefined ? { modelDefault: true } : {}),
+    ...(session.params.provider === 'claude' && session.child
+      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
+      : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
@@ -151,6 +160,7 @@ export function releasedStructuredStatusSummary(
     hostExecutionPhase: _hostExecutionPhase,
     stopping: _stopping,
     restartResume: _restartResume,
+    reportedModel: _reportedModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }
