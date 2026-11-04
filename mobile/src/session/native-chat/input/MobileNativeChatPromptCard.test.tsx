@@ -92,6 +92,34 @@ describe('MobileNativeChatPromptCard collapse', () => {
     expect(textInput(tree!.root).props.value).toBe('turbo')
     act(() => tree!.unmount())
   })
+  it('keeps the same permission expanded while folded and closes a replacement request', async () => {
+    let tree: ReactTestRenderer | null = null
+    const render = (revision: number, collapsed: boolean) =>
+      createElement(MobileNativeChatPromptCard, {
+        permission: {
+          title: 'Apply file changes?',
+          detail: 'one\ntwo\nthree\nfour\nfive',
+          prompt: { itemId: 'approval-1', expectedRevision: revision },
+          options: []
+        },
+        collapsedPrompt: collapsed ? { title: 'Approval', expand: () => {} } : null
+      })
+    await act(async () => {
+      tree = create(render(1, false))
+    })
+    const disclosure = () =>
+      tree!.root
+        .findAllByType(Pressable)
+        .find((node) => typeof node.props.accessibilityState?.expanded === 'boolean')!
+    expect(disclosure().props.accessibilityState.expanded).toBe(false)
+    act(() => disclosure().props.onPress())
+    await act(async () => tree!.update(render(1, true)))
+    expect(disclosure().props.accessibilityState.expanded).toBe(true)
+    await act(async () => tree!.update(render(2, false)))
+    expect(disclosure().props.accessibilityState.expanded).toBe(false)
+    act(() => tree!.unmount())
+  })
+
   it('resets stale pending choices/text on definition revision', async () => {
     let tree: ReactTestRenderer | null = null
     const render = (question: string) => {

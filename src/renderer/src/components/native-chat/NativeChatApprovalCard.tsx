@@ -1,6 +1,8 @@
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useRef } from 'react'
-import { ShieldQuestion, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { approvalDetailPreview } from '../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -148,13 +150,7 @@ export function NativeChatApprovalCard({
                     ) : null}
                   </div>
                 ) : approval.detail ? (
-                  <div
-                    data-native-chat-approval-detail="true"
-                    data-native-chat-code-content
-                    className="whitespace-pre-wrap break-words font-mono text-chat-code"
-                  >
-                    {approval.detail}
-                  </div>
+                  <NativeChatApprovalDetail detail={approval.detail} />
                 ) : null}
                 {newerSubject ? (
                   <p data-native-chat-approval-needs-newer-orca="true" className="break-words">
@@ -188,5 +184,40 @@ export function NativeChatApprovalCard({
         </div>
       </div>
     </SecuritySurface>
+  )
+}
+
+function NativeChatApprovalDetail({ detail }: { detail: string }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const preview = approvalDetailPreview(detail)
+  const hasMore = preview !== detail
+  const textClassName = 'whitespace-pre-wrap break-words font-mono text-chat-code'
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded} className="space-y-2">
+      {hasMore ? (
+        <CollapsibleTrigger className="group flex items-center gap-1 rounded-sm text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ChevronDown className="size-4 group-data-[state=open]:rotate-180" />
+          {translate('components.native-chat.notices.details', 'Details')}
+        </CollapsibleTrigger>
+      ) : null}
+      {!expanded ? (
+        <div
+          data-native-chat-approval-detail="true"
+          data-native-chat-code-content
+          className={textClassName}
+        >
+          {preview}
+        </div>
+      ) : null}
+      <CollapsibleContent>
+        <div
+          data-native-chat-approval-detail="true"
+          data-native-chat-code-content
+          className={textClassName}
+        >
+          {detail}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
