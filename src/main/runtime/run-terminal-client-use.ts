@@ -10,7 +10,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 export function readRunTerminalClientUse(
   host: {
     hasRawTerminalViewSubscriber: (ptyId: string) => boolean
-    terminalRunFacts: Pick<TerminalRunFactsRegister, 'read'>
+    terminalRunFacts: Pick<TerminalRunFactsRegister, 'read' | 'wasOpenedByUser'>
   },
   ptyId: string
 ): 'used' | 'unused' | 'unknown' {
@@ -18,7 +18,7 @@ export function readRunTerminalClientUse(
     return 'used'
   }
   const facts = host.terminalRunFacts.read(ptyId, undefined)
-  if (facts.firstUserInputAt !== null) {
+  if (facts.firstUserInputAt !== null || host.terminalRunFacts.wasOpenedByUser(ptyId)) {
     return 'used'
   }
   return facts.freshSpawn ? 'unused' : 'unknown'

@@ -33,6 +33,7 @@ import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledTickRefusal,
   missedBeyondGrace,
+  recordFailedLaunch,
   recordMissedRun,
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
@@ -153,7 +154,17 @@ export class AutomationService {
     const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
     const target = this.resolveTarget(automation)
     const run = await this.runs.createRun(automation, Date.now(), 'manual')
-    return await this.requestDispatch(automation, run, target, generation)
+    // The saved pending row is the acknowledgement; the lane owns execution behind earlier launches.
+    void this.requestDispatch(automation, run, target, generation).catch((error: unknown) =>
+      recordFailedLaunch({
+        store: this.store,
+        run,
+        error,
+        isActive: () => !this.stopped && generation === this.dispatchGeneration,
+        markDispatchResult: (result) => this.markDispatchResult(result)
+      })
+    )
+    return run
   }
 
   async recordRefusedRun(automationId: string): Promise<void> {

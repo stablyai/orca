@@ -14,6 +14,7 @@ import {
   writePersistedStateJson
 } from '../persistence/persistence-test-harness'
 import { AutomationService } from './service'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -171,7 +172,7 @@ describe('repeated skipped_unavailable coalescing', () => {
     const service = attachedService(store)
 
     await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    const manual = await service.runNow(automation.id)
+    const manual = await runNowSettled(service, store, automation.id)
 
     expect(manual.status).toBe('skipped_unavailable')
     expect(manual.occurrenceCount).toBeUndefined()

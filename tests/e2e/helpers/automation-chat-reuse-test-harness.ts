@@ -13,6 +13,7 @@ import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { createRuntimeAutomationService } from '../../../src/main/automations/runtime-automation-service'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
+import { runNowSettled } from '../../../src/main/automations/automation-run-now-settled.test-fixture'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
 import { automationRunOperationId } from '../../../src/main/automations/automation-run-operation'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
@@ -123,7 +124,7 @@ export async function exerciseBusyChatReuse(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime facade is scripted; the real host/store and service/send/receipt/queue/observer/writer execute.
     const runtime = runtimeFacade as unknown as OrcaRuntimeService
     service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
-    const dispatched = await service.runNow(saved.id)
+    const dispatched = await runNowSettled(service, disk, saved.id)
     expect(dispatched).toMatchObject({
       status: 'dispatched',
       sessionKind: 'chat',

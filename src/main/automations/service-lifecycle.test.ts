@@ -6,6 +6,7 @@ import { createStore, closeTestStores, testState } from '../persistence/persiste
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
 import { AutomationRunLaunchError } from './headless-dispatch'
 import { AutomationService } from './service'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -57,7 +58,7 @@ it.each(['chat', 'terminal'] as const)(
       const service = new AutomationService(store, { chatDispatcher: dispatch })
       service.setWebContents({ isDestroyed: () => false, send: vi.fn() })
       service.setRendererReady()
-      const failed = await service.runNow(automation.id)
+      const failed = await runNowSettled(service, store, automation.id)
       expect(failed).toMatchObject({ ...published, status: 'dispatch_failed' })
       expect(store.listAutomationRuns()[0]).toMatchObject({
         ...published,

@@ -17,6 +17,7 @@ import { resolveAutomationRunTarget } from '../../automations/run-target-resolut
 import { AutomationService } from '../../automations/service'
 import * as prechecks from '../../automations/precheck-runner'
 import * as repoTargets from '../../../shared/automation-repo-target'
+import { runNowSettled } from '../../automations/automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -204,7 +205,7 @@ describe('legacy automation on a repo id two hosts share', () => {
     service.setWebContents({ isDestroyed: () => false, send } as never)
     service.setRendererReady()
 
-    const run = await service.runNow('legacy-1')
+    const run = await runNowSettled(service, store, 'legacy-1')
 
     expect(run.status).toBe('dispatching')
     expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
@@ -241,7 +242,7 @@ describe('legacy automation on a repo id two hosts share', () => {
     service.setWebContents({ isDestroyed: () => false, send: vi.fn() } as never)
     service.setRendererReady()
 
-    await service.runNow('legacy-1')
+    await runNowSettled(service, store, 'legacy-1')
 
     expect(storedAutomation(store).runContext ?? null).toBeNull()
     expect(resolveAutomationRunTarget(store, storedAutomation(store))).toMatchObject({
@@ -335,7 +336,7 @@ describe('legacy automation on a repo id two hosts share', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only send/isDestroyed from this fake window.
       service.setWebContents({ isDestroyed: () => false, send } as never)
       service.setRendererReady()
-      const run = await service.runNow(saved.id)
+      const run = await runNowSettled(service, store, saved.id)
       expect(run.status).toBe('dispatching')
       expect(send).toHaveBeenCalledWith(
         'automations:dispatchRequested',
@@ -520,7 +521,7 @@ describe('legacy automation on a repo id two hosts share', () => {
           enabled: true
         })
         expect(storedAutomation(store).executionTargetGeneration).toBeUndefined()
-        const manual = await service.runNow('legacy-1')
+        const manual = await runNowSettled(service, store, 'legacy-1')
         expect(manual).toMatchObject({
           status: 'skipped_unavailable',
           error: expect.stringContaining('reselect')
@@ -571,7 +572,7 @@ describe('legacy automation on a repo id two hosts share', () => {
         dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
         service = new AutomationService(store, { tickMs: 60000 })
         runtime.setAutomationService(service)
-        expect(await service.runNow('legacy-1')).toMatchObject({
+        expect(await runNowSettled(service, store, 'legacy-1')).toMatchObject({
           status: 'skipped_unavailable',
           error: expect.stringContaining('reselect')
         })
@@ -645,7 +646,7 @@ describe('legacy automation on a repo id two hosts share', () => {
               )
             )
           }
-          const manual = await reloadedService.runNow('legacy-1')
+          const manual = await runNowSettled(reloadedService, store, 'legacy-1')
           expect(manual.status).toBe('dispatching')
           expect(dispatch).toHaveBeenCalledWith(
             'automations:dispatchRequested',

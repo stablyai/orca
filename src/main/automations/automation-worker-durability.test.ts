@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AutomationService } from './service'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,
@@ -60,7 +61,10 @@ describe('automation background writer durability', () => {
     const dispatcher = vi.fn(async () => launch)
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
     try {
-      const runs = await Promise.all([service.runNow(automation.id), service.runNow(automation.id)])
+      const runs = await Promise.all([
+        runNowSettled(service, store, automation.id),
+        runNowSettled(service, store, automation.id)
+      ])
       expect(new Set(runs.map((run) => run.id)).size).toBe(1)
       expect(dispatcher).toHaveBeenCalledOnce()
     } finally {
@@ -84,7 +88,7 @@ describe('automation background writer durability', () => {
     })
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
     try {
-      const run = service.runNow(automation.id)
+      const run = runNowSettled(service, store, automation.id)
       await Promise.resolve()
       expect(dispatcher).not.toHaveBeenCalled()
       gate.resolve()
@@ -150,12 +154,14 @@ describe('automation background writer durability', () => {
     const acknowledgement = blockAcknowledgement(store, index)
     const dispatcher = vi.fn(async () => launch)
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
-    const pending = service.runNow(automation.id)
-    const rejected = expect(pending).rejects.toThrow('stopped before')
+    const pending = runNowSettled(service, store, automation.id)
     await acknowledgement.blocked
     service.stop()
     acknowledgement.release()
-    await rejected
+    // The reconciler strands the row on the next start.
+    await expect(pending).resolves.toMatchObject({
+      status: index === 1 ? 'pending' : 'dispatching'
+    })
     expect(dispatcher).not.toHaveBeenCalled()
   })
 
@@ -165,12 +171,11 @@ describe('automation background writer durability', () => {
     const dispatcher = vi.fn(async () => launch)
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
     try {
-      const pending = service.runNow(automation.id)
-      const rejected = expect(pending).rejects.toThrow('removed before')
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.deleteAutomation(automation.id)
       acknowledgement.release()
-      await rejected
+      await pending
       expect(dispatcher).not.toHaveBeenCalled()
       expect(
         readState().automationRuns.some(
@@ -188,7 +193,7 @@ describe('automation background writer durability', () => {
     const dispatcher = vi.fn(async () => launch)
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
     try {
-      const pending = service.runNow(automation.id)
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.updateAutomation(automation.id, { prompt: 'Different instructions' })
       acknowledgement.release()
@@ -208,7 +213,7 @@ describe('automation background writer durability', () => {
     const dispatcher = vi.fn(async () => launch)
     const service = new AutomationService(store, { headlessDispatcher: dispatcher })
     try {
-      const pending = service.runNow(automation.id)
+      const pending = runNowSettled(service, store, automation.id)
       await acknowledgement.blocked
       store.updateRepo({ id: 'repo-local' }, { executionHostId: 'runtime:other-host' })
       acknowledgement.release()
@@ -230,7 +235,7 @@ describe('automation background writer durability', () => {
       service.setWebContents(renderer)
       service.setRendererReady()
       try {
-        const pending = service.runNow(automation.id)
+        const pending = runNowSettled(service, store, automation.id)
         await acknowledgement.blocked
         service.setWebContents(change === 'disconnect' ? null : replacement)
         acknowledgement.release()

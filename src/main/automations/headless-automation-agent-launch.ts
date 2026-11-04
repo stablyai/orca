@@ -139,7 +139,8 @@ export async function launchHeadlessAutomationAgent(
             suppressStartupUpdatePrompt: true,
             ...automationTerminalLaunchInputs(automation),
             // Run now is the user's act and may start a stopped WSL distro; a scheduled run never does.
-            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const })
+            ...(run.trigger === 'scheduled' ? {} : { wslUserAct: true as const }),
+            surfaceOwner: false
           },
           {
             worktree: resolved,

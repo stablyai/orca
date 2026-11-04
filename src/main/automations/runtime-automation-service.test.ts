@@ -343,7 +343,8 @@ describe('headless automation dispatch', () => {
         agent: 'goose',
         prompt: '',
         title: 'Nightly',
-        suppressStartupUpdatePrompt: true
+        suppressStartupUpdatePrompt: true,
+        surfaceOwner: false
       },
       { worktree: managedWorktree, repo, folderWorkspace: undefined }
     )

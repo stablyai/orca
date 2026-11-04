@@ -173,6 +173,10 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
       )
       // Serve-created/restored tabs may lack renderer adoption; materialize locally even when phone-only navigation suppresses desktop focus.
       const automatic = isAutomaticTabActivation(opts.intent)
+      if (!automatic && tab.ptyId) {
+        // Finished-run cleanup keeps a terminal someone opened after it started.
+        this.terminalRunFacts.recordUserOpen(tab.ptyId)
+      }
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&

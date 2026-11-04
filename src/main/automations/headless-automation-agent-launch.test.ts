@@ -258,7 +258,8 @@ describe('headless automation agent launch', () => {
         agent: 'hermes',
         prompt: 'fix the flaky test',
         title: 'Nightly',
-        suppressStartupUpdatePrompt: true
+        suppressStartupUpdatePrompt: true,
+        surfaceOwner: false
       },
       { worktree: { displayName: 'repo' }, repo: TARGET.repo }
     )
@@ -278,7 +279,8 @@ describe('headless automation agent launch', () => {
         prompt: 'fix the flaky test',
         title: 'Nightly',
         suppressStartupUpdatePrompt: true,
-        extraAgentArgs: '--model opus'
+        extraAgentArgs: '--model opus',
+        surfaceOwner: false
       },
       { worktree: { displayName: 'repo' }, repo: TARGET.repo }
     )

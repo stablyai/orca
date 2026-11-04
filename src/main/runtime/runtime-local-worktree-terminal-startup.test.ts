@@ -54,7 +54,10 @@ function createPorts() {
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
-async function startupTerminalOptions(startupPaneKey?: string) {
+async function startupTerminalOptions(
+  startupPaneKey?: string,
+  request: Partial<StartupArgs['request']> = {}
+) {
   const { createTerminal, ports } = createPorts()
   const observe = vi.fn()
   const followup = { agent: 'codex' as const, prompt: 'task' }
@@ -72,7 +75,8 @@ async function startupTerminalOptions(startupPaneKey?: string) {
       onStartupTerminalCreated: observe,
       repoSelector: `id:${repo.id}`,
       name: worktree.displayName,
-      ...(startupPaneKey ? { startupPaneKey } : {})
+      ...(startupPaneKey ? { startupPaneKey } : {}),
+      ...request
     },
     repo,
     worktree,
@@ -93,6 +97,12 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
     expect(await startupTerminalOptions(`${TAB_ID}:${LEAF_ID}`)).toMatchObject({
       tabId: TAB_ID,
       leafId: LEAF_ID
+    })
+  })
+
+  it('titles the startup tab with the title the caller named', async () => {
+    expect(await startupTerminalOptions(undefined, { startupTitle: 'Nightly' })).toMatchObject({
+      title: 'Nightly'
     })
   })
 

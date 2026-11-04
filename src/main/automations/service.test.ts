@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -116,7 +117,7 @@ describe('AutomationService', () => {
     } as never)
     service.setRendererReady()
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
 
     expect(run.status).toBe('dispatching')
     expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
@@ -161,7 +162,7 @@ describe('AutomationService', () => {
     } as never)
     service.setRendererReady()
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, reloaded, automation.id)
 
     expect(run.status).toBe('skipped_unavailable')
     expect(run.error).toBe('Project is not set up on the selected automation host anymore.')
@@ -202,7 +203,7 @@ describe('AutomationService', () => {
     } as never)
     service.setRendererReady()
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, reloaded, automation.id)
 
     expect(run.status).toBe('skipped_unavailable')
     expect(run.error).toBe('Project path for the selected automation host has changed.')
@@ -245,7 +246,7 @@ describe('AutomationService', () => {
     } as never)
     service.setRendererReady()
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
 
     expect(run.status).toBe('skipped_unavailable')
     expect(run.error).toContain('Remote-server automation scheduling is not available')
@@ -291,7 +292,7 @@ describe('AutomationService', () => {
     } as never)
     service.setRendererReady()
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
 
     expect(run.status).toBe('dispatching')
     expect(send).toHaveBeenCalledWith(
@@ -353,18 +354,13 @@ describe('AutomationService', () => {
       })
     })
 
-    const run = await service.runNow(automation.id)
+    await runNowSettled(service, store, automation.id)
 
-    expect(run.status).toBe('dispatched')
-    expect(run.workspaceId).toBe('remote-wt-1')
-    expect(run.workspaceDisplayName).toBe('Remote automation')
-    expect(run.terminalSessionId).toBe('remote-tab-1')
-    expect(run.terminalPaneKey).toBe('remote-tab-1:11111111-1111-4111-8111-111111111111')
-    expect(run.terminalPtyId).toBe('remote-pty-1')
     await vi.waitFor(() =>
       expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
         status: 'completed',
         workspaceId: 'remote-wt-1',
+        workspaceDisplayName: 'Remote automation',
         terminalSessionId: 'remote-tab-1',
         terminalPaneKey: 'remote-tab-1:11111111-1111-4111-8111-111111111111',
         terminalPtyId: 'remote-pty-1',
