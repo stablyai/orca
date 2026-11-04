@@ -6,12 +6,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import '@/components/editor/document-images/useLocalImageSrc'
 import {
-  invalidateLocalImageSrcCacheForTests,
-  resetLocalImageSrcStateForTests
-} from '@/components/editor/useLocalImageSrc'
+  invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
+  resetLocalImageCacheState as resetLocalImageSrcStateForTests
+} from '@/components/editor/document-images/local-image-src-cache'
 import { useAppStore } from '@/store'
-import * as imageCache from '@/components/editor/local-image-src-cache'
+import * as imageCache from '@/components/editor/document-images/local-image-src-cache'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import {
   NativeChatMarkdownImageOwnerContext,
@@ -27,6 +28,8 @@ import {
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
 import type * as HttpLinkRouting from '@/lib/http-link-routing'
 import { getDefaultSettings } from '../../../../shared/constants'
+import * as imageCachePinning from '@/components/editor/document-images/local-image-cache-pinning'
+import { ImageVisibilityObserver } from './native-chat-image-visibility-observer.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFilePreview: vi.fn(),
@@ -45,40 +48,6 @@ vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRouting>()),
   openHttpLink: mocks.openHttpLink
 }))
-
-class ImageVisibilityObserver implements IntersectionObserver {
-  static current: ImageVisibilityObserver
-  readonly root = null
-  readonly rootMargin = '128px'
-  readonly scrollMargin = '0px'
-  readonly thresholds = [0]
-  readonly observe = vi.fn()
-  readonly unobserve = vi.fn()
-  readonly disconnect = vi.fn()
-  readonly takeRecords = (): IntersectionObserverEntry[] => []
-
-  constructor(private readonly callback: IntersectionObserverCallback) {
-    ImageVisibilityObserver.current = this
-  }
-
-  emit(target: Element, isIntersecting: boolean): void {
-    const bounds = target.getBoundingClientRect()
-    this.callback(
-      [
-        {
-          target,
-          isIntersecting,
-          boundingClientRect: bounds,
-          intersectionRect: bounds,
-          rootBounds: null,
-          intersectionRatio: isIntersecting ? 1 : 0,
-          time: 0
-        }
-      ],
-      this
-    )
-  }
-}
 
 const localOwner = {
   fileLinkContext: {
@@ -320,7 +289,7 @@ describe('native chat Markdown image preview', () => {
 
   it('retries a cache-byte-budget rejection on open after another image releases its lease', async () => {
     vi.stubGlobal('IntersectionObserver', ImageVisibilityObserver)
-    imageCache.pinLocalImageCache('reserved')
+    imageCachePinning.pinLocalImageCacheKey('reserved')
     expect(imageCache.cacheLocalImageBlob('reserved', 'blob:reserved', 2 ** 27 - 2)).toBe(true)
     const content = [0, 1, 2].map((i) => `![Chart ${i}](chart-${i}.png)`).join('\n\n')
     const { container } = render(<Transcript content={content} />)

@@ -6,12 +6,12 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
-vi.mock('./ExternalFileChangeBanner', () => ({
+vi.mock('./external-changes/ExternalFileChangeBanner', () => ({
   ExternalFileChangeBanner: () => <div>banner</div>
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
 
-import { CustomEditorExternalChangeBanner } from './CustomEditorExternalChangeBanner'
+import { CustomEditorExternalChangeBanner } from './external-changes/CustomEditorExternalChangeBanner'
 import {
   countCustomEditorMergingView,
   mergeOutsideChangeIntoEditor,

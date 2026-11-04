@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
@@ -10,7 +10,10 @@ import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedu
 import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
-const entry = join(root, 'src/renderer/src/components/editor/raw-markdown-html.ts')
+const entry = join(
+  root,
+  'src/renderer/src/components/editor/rich-markdown/raw-source/raw-markdown-html.ts'
+)
 const source = await readFile(entry, 'utf8')
 const cachedProbe =
   /if \(index > fenceProbe\) \{[\s\S]*?fenceMatch = fencePrefix.exec\(normalizedContent\)\n      \}/
@@ -23,7 +26,7 @@ try {
     const outfile = join(temp, `${arm}.cjs`)
     await build({
       stdin: {
-        contents: `export { encodeRawMarkdownHtmlForRichEditor as encode } from './src/renderer/src/components/editor/raw-markdown-html'; export { createRichMarkdownEditorCodec as codec } from './src/renderer/src/components/editor/rich-markdown-source-transport';`,
+        contents: `export { encodeRawMarkdownHtmlForRichEditor as encode } from './src/renderer/src/components/editor/rich-markdown/raw-source/raw-markdown-html'; export { createRichMarkdownEditorCodec as codec } from './src/renderer/src/components/editor/rich-markdown/document/rich-markdown-source-transport';`,
         resolveDir: root
       },
       bundle: true,
@@ -39,7 +42,7 @@ try {
                   plugin.onLoad({ filter: /raw-markdown-html\.ts$/ }, () => ({
                     contents: source.replace(cachedProbe, oldProbe),
                     loader: 'ts',
-                    resolveDir: join(root, 'src/renderer/src/components/editor')
+                    resolveDir: dirname(entry)
                   }))
                 }
               }

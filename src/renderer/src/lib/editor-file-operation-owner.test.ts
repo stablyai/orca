@@ -16,7 +16,7 @@ import { buildEditorSessionData } from './workspace-session'
 import { restorableEditorFile } from '@/store/slices/editor/tabs/editor-tab-layout-owner'
 import { isSameOwnedDocument } from '@/store/slices/editor/file-ids/same-owned-editor-document'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from './open-editor-move-owner'
-import { getEditorModelOwnerKey } from '@/components/editor/editor-model-owner'
+import { getEditorModelOwnerKey } from '@/components/editor/model-lifetime/identity/editor-model-owner'
 import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import {
@@ -27,8 +27,8 @@ import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
-import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/editor-autosave'
-import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
+import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
+import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
 import type * as RuntimeFileMutationClient from '@/runtime/runtime-file-mutation-client'
 import type { OpenFile } from '@/store/slices/editor'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
