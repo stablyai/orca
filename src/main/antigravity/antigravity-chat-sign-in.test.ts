@@ -4,7 +4,8 @@ import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
 
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import * as fs from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -32,7 +33,9 @@ import {
   readAntigravityChatSignInStatus,
   startAntigravityChatSignIn
 } from './antigravity-chat-sign-in'
+import { answerAntigravityChatAuth } from './antigravity-chat-account'
 
+vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }))
 vi.mock('../provider-process/provider-process-teardown', () => ({
   terminateProviderProcessTree: vi.fn<typeof terminateProviderProcessTree>(
     async () => 'unverifiable'
@@ -64,6 +67,11 @@ const DESKTOP = 'trusted-local:desktop'
 const PHONE: RpcCallerIdentity = { kind: 'paired-device', deviceId: 'phone' }
 const folders: string[] = []
 afterEach(async () => {
+  const flow = readAntigravityChatSignInStatus(DESKTOP).flow
+  if (flow?.flowId && ['starting', 'waiting', 'verifying'].includes(flow.phase)) {
+    await cancelAntigravityChatSignIn(DESKTOP, flow.flowId)
+  }
+  await vi.waitFor(() => ANTIGRAVITY_LAUNCH_SPEC.launchGate.enter(undefined).leave())
   vi.restoreAllMocks()
   await Promise.all(folders.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
@@ -97,6 +105,8 @@ async function signInAgainst(
     metaCwd?: string
     sessionResult?: Record<string, unknown>
     realLaunchSources?: boolean
+    cachedToken?: string
+    sessionError?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
@@ -104,20 +114,45 @@ async function signInAgainst(
   const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
+  await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
+  if (options.cachedToken) {
+    await writeFile(join(folder, 'antigravity-acp', 'acp_token.json'), options.cachedToken)
+  }
+  let serverHome = folder
   const agent = new AcpScriptedAgent()
   const stderr = new PassThrough()
   const [browserDone, sessionOpen] = [deferred<void>(), deferred<void>()]
   agent.on('authenticate', (frame) => {
-    void output().then((text) => (options.stream === 'stdout' ? agent.stdout : stderr).write(text))
-    void browserDone.promise.then(() => agent.reply(frame, {}))
+    void (async () => {
+      const token = join(serverHome, 'antigravity-acp', 'acp_token.json')
+      if (await readFile(token).catch(() => null)) {
+        agent.reply(frame, {})
+        sessionOpen.resolve()
+        return
+      }
+      const text = await output()
+      ;(options.stream === 'stdout' ? agent.stdout : stderr).write(text)
+      await browserDone.promise
+      if (!child.stdin.writableEnded) {
+        await writeFile(token, 'replacement-token')
+        agent.reply(frame, {})
+      }
+    })()
   })
   agent.on('session/new', (frame) => {
     void sessionOpen.promise.then(async () => {
       const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
-      await mkdir(join(folder, 'antigravity-acp', 'brain', SESSION), { recursive: true })
-      await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
-      await writeFile(sessionFile(folder, '.db'), '')
-      await writeFile(sessionFile(folder, '.meta'), JSON.stringify({ cwd: options.metaCwd ?? cwd }))
+      if (options.sessionError) {
+        agent.fail(frame, -32603, 'fixture session failure')
+        return
+      }
+      await mkdir(join(serverHome, 'antigravity-acp', 'brain', SESSION), { recursive: true })
+      await mkdir(join(serverHome, 'antigravity-acp', 'conversations'), { recursive: true })
+      await writeFile(sessionFile(serverHome, '.db'), '')
+      await writeFile(
+        sessionFile(serverHome, '.meta'),
+        JSON.stringify({ cwd: options.metaCwd ?? cwd })
+      )
       agent.reply(frame, { ...options.sessionResult, sessionId: SESSION })
     })
   })
@@ -158,6 +193,7 @@ async function signInAgainst(
         }),
     stopLiveChats: async () => {},
     connect: vi.fn<ConnectAcpAgent<AcpAgentConnection>>((launch, connectionOptions) => {
+      serverHome = launch.env?.GEMINI_HOME ?? folder
       const connection = createAcpAgentConnection(launch, connectionOptions, () => child)
       options.configure?.(connection)
       return connection
@@ -235,14 +271,17 @@ it("shows the helper's link, reads signed in only once a session starts, then re
   openSession()
   expect(await stateAfter(flowId, 'verifying')).toEqual({ flowId, phase: 'signedIn' })
   expect(readAntigravityChatSignInStatus(DESKTOP).auth).toBe('signedIn')
-  await expect(stat(sessionFile(folder, '.meta'))).rejects.toMatchObject({ code: 'ENOENT' })
-  await expect(stat(sessionFile(folder, '.db'))).rejects.toMatchObject({ code: 'ENOENT' })
-  await expect(stat(join(folder, 'antigravity-acp', 'brain', SESSION))).rejects.toThrow()
+  await vi.waitFor(async () => {
+    await expect(stat(sessionFile(folder, '.meta'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(sessionFile(folder, '.db'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(folder, 'antigravity-acp', 'brain', SESSION))).rejects.toThrow()
+  })
   await vi.waitFor(() => expect(frames.at(-1)?.flow).toEqual({ flowId, phase: 'signedIn' }))
   const revisions = frames.map(({ revision }) => revision)
   expect(revisions).toEqual([...new Set(revisions)].sort((a, b) => a - b))
   watcher.close()
   const seen = frames.length
+  await vi.waitFor(() => ANTIGRAVITY_LAUNCH_SPEC.launchGate.enter(undefined).leave())
   const next = startAntigravityChatSignIn(
     {
       launchSources: () => Promise.reject(new Error('raw host detail')),
@@ -396,20 +435,24 @@ it("sets the host's status from what a chat's server answers, and nothing else",
   await vi.waitFor(() => expect([auth(), chat.closed]).toEqual(['signedOut', true]))
 })
 
-it("keeps a checking session whose saved folder is not the sign-in's own", async () => {
+it('keeps existing conversations while discarding the private checking home', async () => {
   const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
     printed(GOOGLE_LINK),
     { metaCwd: tmpdir() }
   )
   expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+  await mkdir(join(folder, 'antigravity-acp', 'conversations'), { recursive: true })
+  await writeFile(sessionFile(folder, '.meta'), 'existing conversation')
   finishBrowser()
   openSession()
   await vi.waitFor(() =>
     expect(readAntigravityChatSignInStatus(DESKTOP).flow).toMatchObject({ phase: 'signedIn' })
   )
   const { cwd = '' } = host.connect.mock.calls[0][0]
-  await expect(stat(cwd)).rejects.toMatchObject({ code: 'ENOENT' })
-  expect((await stat(sessionFile(folder, '.meta'))).isFile()).toBe(true)
+  await vi.waitFor(async () => {
+    await expect(stat(cwd)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+  expect(await readFile(sessionFile(folder, '.meta'), 'utf8')).toBe('existing conversation')
 })
 
 it('signs in from the address a browser on another computer ended on', async () => {
@@ -459,6 +502,7 @@ it('never shows a link that is not a Google sign-in back to this host', async ()
 it('retains an unclosed sign-in child for both launch entry points until its exit is proven', async () => {
   const close = vi.fn(async () => false)
   const old = await signInAgainst(printed(GOOGLE_LINK), {
+    cachedToken: 'previous-token',
     configure: (connection) => void vi.spyOn(connection, 'close').mockImplementation(close)
   })
   await stateAfter(old.flowId, 'starting')
@@ -474,7 +518,10 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   }
   expect((await stat(env.TMPDIR)).isDirectory()).toBe(true)
   expect((await stat(cwd)).isDirectory()).toBe(true)
-  expect((await stat(sessionFile(old.folder, '.meta'))).isFile()).toBe(true)
+  expect(await readFile(join(old.folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+    'previous-token'
+  )
+  expect((await stat(sessionFile(env.GEMINI_HOME, '.meta'))).isFile()).toBe(true)
   const next = startAntigravityChatSignIn(old.host, DESKTOP)
   expect((await stateAfter(next.flowId, 'starting'))?.phase).toBe('failed')
   expect(old.host.connect).toHaveBeenCalledTimes(1)
@@ -485,7 +532,7 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
         resolveLaunch: async () => ({
           ...launch,
           prefixArgs: [],
-          env,
+          env: { ...env, GEMINI_HOME: old.folder },
           cwd,
           envToDelete: [...envToDelete],
           spec: ANTIGRAVITY_LAUNCH_SPEC,
@@ -522,7 +569,9 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   await vi.waitFor(async () => {
     await expect(stat(env.TMPDIR)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(stat(cwd)).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(stat(sessionFile(old.folder, '.meta'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(sessionFile(env.GEMINI_HOME, '.meta'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
   })
 })
 
@@ -654,4 +703,101 @@ it('retires a cold checking producer on effective Refresh while valid sign-in st
       await cancelAntigravityChatSignIn(DESKTOP, run.flowId)
     }
   }
+})
+
+it('opens a fresh sign-in with cached credentials and replaces them only after the session works', async () => {
+  answerAntigravityChatAuth(true)
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  const token = join(run.folder, 'antigravity-acp', 'acp_token.json')
+  expect(await stateAfter(run.flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+  expect(await readFile(token, 'utf8')).toBe('previous-token')
+  run.finishBrowser()
+  expect(await stateAfter(run.flowId, 'waiting')).toMatchObject({ phase: 'verifying' })
+  expect(await readFile(token, 'utf8')).toBe('previous-token')
+  run.openSession()
+  expect(await stateAfter(run.flowId, 'verifying')).toMatchObject({ phase: 'signedIn' })
+  expect(await readFile(token, 'utf8')).toBe('replacement-token')
+  expect(readAntigravityChatSignInStatus(DESKTOP).auth).toBe('signedIn')
+  const stage = run.host.connect.mock.calls[0][0].env?.GEMINI_HOME ?? ''
+  expect(stage).not.toBe(run.folder)
+  await vi.waitFor(async () => {
+    await expect(stat(stage)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+it('keeps the working account when replacement is cancelled after authentication', async () => {
+  answerAntigravityChatAuth(true)
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  await stateAfter(run.flowId, 'starting')
+  run.finishBrowser()
+  await stateAfter(run.flowId, 'waiting')
+  const cancelling = cancelAntigravityChatSignIn(DESKTOP, run.flowId)
+  run.openSession()
+  expect((await cancelling)?.phase).toBe('cancelled')
+  expect(await readFile(join(run.folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+    'previous-token'
+  )
+  expect(readAntigravityChatSignInStatus(DESKTOP).auth).toBe('signedIn')
+})
+
+it('keeps the working account when the authenticated replacement cannot start a session', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  answerAntigravityChatAuth(true)
+  const run = await signInAgainst(printed(GOOGLE_LINK), {
+    cachedToken: 'previous-token',
+    sessionError: true
+  })
+  await stateAfter(run.flowId, 'starting')
+  run.finishBrowser()
+  await stateAfter(run.flowId, 'waiting')
+  run.openSession()
+  expect(await stateAfter(run.flowId, 'verifying')).toMatchObject({ phase: 'failed' })
+  expect(await readFile(join(run.folder, 'antigravity-acp', 'acp_token.json'), 'utf8')).toBe(
+    'previous-token'
+  )
+  expect(readAntigravityChatSignInStatus(DESKTOP).auth).toBe('signedIn')
+})
+
+it('reports a failed replacement without changing the account when credential promotion fails', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  await stateAfter(run.flowId, 'starting')
+  const token = join(run.folder, 'antigravity-acp', 'acp_token.json')
+  const rename = fs.renameSync
+  vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    if (to === token) {
+      throw new Error('fixture promotion failure')
+    }
+    rename(from, to)
+  })
+  run.finishBrowser()
+  await stateAfter(run.flowId, 'waiting')
+  run.openSession()
+  expect(await stateAfter(run.flowId, 'verifying')).toMatchObject({ phase: 'failed' })
+  expect(await readFile(token, 'utf8')).toBe('previous-token')
+})
+
+it('reports the committed account when cancellation arrives at the promotion boundary', async () => {
+  const run = await signInAgainst(printed(GOOGLE_LINK), { cachedToken: 'previous-token' })
+  await stateAfter(run.flowId, 'starting')
+  const token = join(run.folder, 'antigravity-acp', 'acp_token.json')
+  const cancelled = deferred<string>()
+  const rename = fs.renameSync
+  vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    rename(from, to)
+    if (to === token) {
+      queueMicrotask(() => {
+        void cancelAntigravityChatSignIn(DESKTOP, run.flowId).then(
+          () => cancelled.resolve('cancelled'),
+          (error: unknown) => cancelled.resolve(error instanceof Error ? error.message : '')
+        )
+      })
+    }
+  })
+  run.finishBrowser()
+  await stateAfter(run.flowId, 'waiting')
+  run.openSession()
+  expect(await stateAfter(run.flowId, 'verifying')).toMatchObject({ phase: 'signedIn' })
+  expect(await cancelled.promise).toContain('no longer active')
+  expect(await readFile(token, 'utf8')).toBe('replacement-token')
 })
