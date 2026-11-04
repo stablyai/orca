@@ -22163,6 +22163,22 @@
         "sonnet": "Efficient for routine tasks",
         "haiku": "Fastest for quick answers"
       },
+      "modelDetails": {
+        "provider": "Provider",
+        "inputs": "Inputs",
+        "inputText": "Text",
+        "inputImage": "Image",
+        "inputAudio": "Audio",
+        "inputVideo": "Video",
+        "inputPdf": "PDF",
+        "reasoning": "Reasoning",
+        "supported": "Supported",
+        "notSupported": "Not supported",
+        "contextWindow": "Context window",
+        "maxOutput": "Max output",
+        "tokens": "{{tokens}} tokens",
+        "free": "Free"
+      },
       "transcript": {
         "imageFallback": "Image"
       },

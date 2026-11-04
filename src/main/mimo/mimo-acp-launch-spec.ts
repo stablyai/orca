@@ -12,7 +12,7 @@ import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launc
 
 // Its ACP takes a variant as a model of its own (`<provider>/<model>/<variant>`), never as an effort.
 function parseMimoModelListing(stdout: string): AgentSessionModelOption[] {
-  return parseOpenCodeModelListing(stdout).map((model) => ({
+  return parseOpenCodeModelListing(stdout).map(({ details: _details, ...model }) => ({
     ...model,
     efforts: [],
     defaultEffort: undefined,

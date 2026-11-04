@@ -19,6 +19,7 @@ import {
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
 import { nativeChatOptionsWithoutModel } from './native-chat-session-option-values-without-model'
+import { catalogModelChoiceDetails } from '../native-chat-model-details'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -234,13 +235,19 @@ export function nativeChatSessionOptionDescriptors(args: {
   // Callers reconcile tracked models into choices first; the trigger must never show an unlisted selection.
   // Legacy rows fold away like the launch picker's; a picker opens the section when the chat is on one.
   const { legacy, hidden } = classifyAgentModels(agent, args.legacyInventory ?? models)
-  const modelChoices = models.map(({ id, label, description }) => ({
-    value: id,
-    label,
-    ...(description ? { description } : {}),
-    ...(legacy.has(id) ? { legacy: true as const } : {}),
-    ...(hidden.has(id) && id !== model.currentId ? { hidden: true as const } : {})
-  }))
+  const modelChoices = models.map((catalogModel) => {
+    const details = catalogModelChoiceDetails(catalogModel)
+    return {
+      value: catalogModel.id,
+      label: catalogModel.label,
+      ...(catalogModel.description ? { description: catalogModel.description } : {}),
+      ...(details ? { details } : {}),
+      ...(legacy.has(catalogModel.id) ? { legacy: true as const } : {}),
+      ...(hidden.has(catalogModel.id) && catalogModel.id !== model.currentId
+        ? { hidden: true as const }
+        : {})
+    }
+  })
   const modelAction = actionForApply(catalog.modelApply, model.tracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
     {
