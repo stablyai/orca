@@ -40,7 +40,7 @@ export function assertAutomationExtraAgentArgs(
   if (automation.reuseSession && consumed) {
     throw new Error('Agent launch settings require a fresh session for every run.')
   }
-  if (automation.surface === 'chat' || !hasExtraAgentArgs(setup.extraAgentArgs)) {
+  if (setup.surface === 'chat' || !hasExtraAgentArgs(setup.extraAgentArgs)) {
     return
   }
   if (automation.reuseSession) {
