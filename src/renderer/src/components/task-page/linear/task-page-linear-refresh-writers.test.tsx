@@ -11,9 +11,9 @@ import {
 } from './task-page-linear-refresh-test-fixtures'
 import { LinearIssueProjectSelector } from '../../linear-issue-project-selector'
 import { syncWorkspaceBoardTaskStatuses } from '../../sidebar/workspace-board-task-status-sync'
-import { readWorkspaceReferenceDetails } from '../../sidebar/workspace-reference-detail-read'
-import { getWorkspaceReferenceRequest } from '../../sidebar/workspace-reference-details'
-import { referenceWorkspace } from '../../sidebar/workspace-reference-fixtures.test-support'
+import { readWorkspaceReferenceDetails } from '../../sidebar/workspace-card/review/workspace-reference-detail-read'
+import { getWorkspaceReferenceRequest } from '../../sidebar/workspace-card/review/workspace-reference-details'
+import { referenceWorkspace } from '../../sidebar/workspace-card/review/workspace-reference-fixtures.test-support'
 import { LinearIssueSubIssues } from '../../linear-issue-sub-issues'
 import { createWorktreeJumpPaletteWorktreeHandler } from '../../worktree-jump/worktree-jump-palette-create-worktree'
 import {

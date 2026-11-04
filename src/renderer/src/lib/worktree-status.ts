@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import {

@@ -68,10 +68,13 @@ vi.mock(import('@/lib/reveal-in-file-manager'), async (importOriginal) => ({
   revealInFileManager
 }))
 
-vi.mock(import('@/components/sidebar/WorktreeOpenInMenu'), async (importOriginal) => ({
-  ...(await importOriginal()),
-  openWorktreePath
-}))
+vi.mock(
+  import('@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'),
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    openWorktreePath
+  })
+)
 
 vi.mock('@/lib/open-in-app-catalog', () => ({ OpenInApplicationIcon: () => null }))
 

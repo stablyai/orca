@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTitleDerivedAgentRows } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
