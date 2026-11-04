@@ -210,7 +210,7 @@ function NativeChatApprovalDetail({
       onOpenChange={(open) => {
         const scroller = scrollContainerRef.current
         const trigger = triggerRef.current
-        if (scroller && trigger) {
+        if (!open && scroller && trigger) {
           const rowBottom =
             trigger.getBoundingClientRect().bottom -
             scroller.getBoundingClientRect().top -

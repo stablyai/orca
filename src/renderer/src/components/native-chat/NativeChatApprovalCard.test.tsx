@@ -75,11 +75,12 @@ describe('NativeChatApprovalCard', () => {
   })
 
   it.each([
-    ['ordinary context', 200, 0],
-    ['oversized context', 488, 200]
+    ['ordinary context', 200, 0, 0],
+    ['oversized context', 488, 200, 200],
+    ['visible row after tabbing through oversized context', 4392, 4184, 4104]
   ] as const)(
-    'keeps the operated disclosure visible with %s after scrolling',
-    (_case, rowBottom, offset) => {
+    'preserves the opening viewport and restores the closing row with %s',
+    (_case, rowBottom, openingOffset, closingOffset) => {
       render(
         <NativeChatApprovalCard
           approval={{ title: 'Allow command?', detail: 'one\ntwo\nthree\nfour\nfive', options: [] }}
@@ -91,14 +92,16 @@ describe('NativeChatApprovalCard', () => {
       Object.defineProperty(content, 'clientHeight', { value: 288 })
       vi.spyOn(content, 'getBoundingClientRect').mockReturnValue(new DOMRect())
       vi.spyOn(toggle, 'getBoundingClientRect').mockImplementation(
-        () => new DOMRect(0, rowBottom - content.scrollTop, 0, 0)
+        () => new DOMRect(0, rowBottom - content.scrollTop - 36, 0, 36)
       )
+      content.scrollTop = openingOffset
       toggle.focus()
       fireEvent.click(toggle)
-      expect(content.scrollTop).toBe(offset)
+      expect(content.scrollTop).toBe(openingOffset)
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
       content.scrollTop = 780
       fireEvent.click(toggle)
-      expect(content.scrollTop).toBe(offset)
+      expect(content.scrollTop).toBe(closingOffset)
       expect(toggle.getAttribute('aria-expanded')).toBe('false')
       expect(document.activeElement).toBe(toggle)
     }
