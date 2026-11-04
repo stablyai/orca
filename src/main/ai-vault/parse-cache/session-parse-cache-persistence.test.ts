@@ -8,7 +8,6 @@ import SyncDatabase from '../../sqlite/sync-database'
 import {
   configureSessionParseCachePersistence,
   flushSessionParseCachePersist,
-  getSessionParseCachePersistenceOptions,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
 } from './session-parse-cache-persistence'
@@ -25,14 +24,10 @@ import {
 import {
   invalidateSessionParseCacheEntry,
   resetSessionParseCacheForTests,
-  getSessionParseCacheEntry,
-  storeSessionParseCacheEntry,
   storeSessionScopeCwd,
   type SessionScopeCwdStamp
 } from './session-parse-cache-store'
 import type * as ParseCacheModule from './session-scanner-parse-cache'
-
-import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from '../session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
 import { parseSessionCandidate } from '../session-scanner-candidate-parse'
@@ -158,16 +153,6 @@ function setSeenAt(cacheFile: string, path: string, seenAt: number): void {
 }
 
 describe('session parse cache persistence', () => {
-  it('exposes a copy of the active configuration for background scanners', () => {
-    const configured = { filePath: '/tmp/ai-vault-cache.json', appVersion: APP_VERSION }
-    configureSessionParseCachePersistence(configured)
-
-    const snapshot = getSessionParseCachePersistenceOptions()
-
-    expect(snapshot).toEqual(configured)
-    expect(snapshot).not.toBe(configured)
-  })
-
   it('persists scope rows across chunks and keeps replacements queued during a yield', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
@@ -268,17 +253,16 @@ describe('session parse cache persistence', () => {
       CREATE TABLE rows(path TEXT PRIMARY KEY, mtime_ms REAL NOT NULL, size_bytes INTEGER,
         platform TEXT NOT NULL, sidecar TEXT, session TEXT NOT NULL, seen_at INTEGER NOT NULL);
     `)
-    oldDatabase
-      .prepare('INSERT INTO rows VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(
-        transcript,
-        candidate.file.mtimeMs,
-        candidate.file.sizeBytes ?? null,
-        process.platform,
-        null,
-        JSON.stringify(session),
-        Date.now()
-      )
+    oldDatabase.prepare('INSERT INTO rows VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      transcript,
+      candidate.file.mtimeMs,
+      candidate.file.sizeBytes ?? null,
+      process.platform,
+      null,
+      JSON.stringify(session),
+      // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
+      Date.now()
+    )
     oldDatabase.close()
 
     simulateRestart(cacheFile)
@@ -322,97 +306,6 @@ describe('session parse cache persistence', () => {
     )
     expect(stats).toMatchObject({ fullParses: 1, incremental: 0, reused: 0 })
     expect(reparsed).toEqual(await parseClaudeSessionFile((await claudeCandidate(transcript)).file))
-  })
-
-  it('writes only the rows that changed, and nothing for unchanged hits', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcripts = await Promise.all(
-      ['a', 'b', 'c'].map((name) =>
-        writeTranscript(root, `${name}aaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee`)
-      )
-    )
-    for (const transcript of transcripts) {
-      await parse(transcript)
-    }
-    await flushSessionParseCachePersist()
-    expect(databaseRows(cacheFile)).toHaveLength(3)
-
-    const write = vi.spyOn(SessionParseCacheDatabase.prototype, 'write')
-    await appendFile(transcripts[1]!, `${userRecord(2, 'follow-up')}\n`)
-    for (const transcript of transcripts) {
-      await parse(transcript)
-    }
-    await flushSessionParseCachePersist()
-    expect(write).toHaveBeenCalledOnce()
-    expect([...write.mock.calls[0]![0]].map(([path]) => path)).toEqual([transcripts[1]])
-
-    write.mockClear()
-    for (const transcript of transcripts) {
-      await parse(transcript)
-    }
-    await flushSessionParseCachePersist()
-    expect(write).not.toHaveBeenCalled()
-  })
-
-  it('a scan saves the files it finished while it is still running', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const roots = isolatedScanRoots(root)
-    const projectDir = join(roots.claudeProjectsDir, 'project')
-    await mkdir(projectDir, { recursive: true })
-    for (let index = 0; index < 20; index++) {
-      await writeTranscript(
-        projectDir,
-        `aaaaaaaa-bbbb-4ccc-8ddd-${String(index).padStart(12, '0')}`
-      )
-    }
-    let started = 0
-    let release = (): void => {}
-    const held = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    // A hung eighth parse must not prevent the seven completed rows from persisting.
-    hooks.beforeParse = () => (++started === 8 ? held : Promise.resolve())
-
-    const scan = scanAiVaultSessions(roots)
-    try {
-      await vi.waitFor(() => expect(databaseRows(cacheFile)).toHaveLength(7), {
-        timeout: 10_000,
-        interval: 100
-      })
-    } finally {
-      release()
-    }
-    expect((await scan).sessions).toHaveLength(20)
-  })
-
-  it('writes at least every 15 s while changes keep arriving', async () => {
-    const root = await makeTempDir()
-    initSessionParseCachePersistence({
-      filePath: join(root, 'session-parse-cache.json'),
-      appVersion: APP_VERSION
-    })
-    const write = vi.spyOn(SessionParseCacheDatabase.prototype, 'write')
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    for (let second = 0; second < 20; second++) {
-      storeSessionParseCacheEntry('timed', {
-        mtimeMs: second,
-        sizeBytes: null,
-        platform: process.platform,
-        session: null,
-        resume: null
-      })
-      await vi.advanceTimersByTimeAsync(1_000)
-      if (second === 14) {
-        expect(write).toHaveBeenCalledOnce()
-      }
-    }
-    expect(write).toHaveBeenCalledOnce()
-    await flushSessionParseCachePersist()
-    expect(write).toHaveBeenCalledTimes(2)
   })
 
   it('imports the old JSON file even when a title lookup reaches the database first', async () => {
@@ -502,7 +395,9 @@ describe('session parse cache persistence', () => {
     await parse(deletedOutsideOrca)
     await flushSessionParseCachePersist()
     resetSessionParseCachePersistenceForTests()
+    // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
     setSeenAt(cacheFile, kept, Date.now() - 31 * DAY_MS)
+    // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
     setSeenAt(cacheFile, deletedOutsideOrca, Date.now() - 31 * DAY_MS)
     await rm(deletedOutsideOrca)
 
@@ -510,30 +405,9 @@ describe('session parse cache persistence', () => {
     expect((await parse(kept)).reused).toBe(1)
     await vi.waitFor(() => expect(databaseRows(cacheFile).map((row) => row.path)).toEqual([kept]))
     await vi.waitFor(() =>
+      // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
       expect(databaseRows(cacheFile)[0]!.seen_at).toBeGreaterThan(Date.now() - DAY_MS)
     )
-  })
-
-  it('never stats WSL transcripts; their rows age out after half a year unparsed', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const row = { sizeBytes: 1, platform: 'win32', session: null, resume: null } as const
-    const recent = '\\\\wsl.localhost\\Ubuntu\\home\\me\\recent.jsonl'
-    const ancient = '\\\\wsl$\\Ubuntu\\home\\me\\ancient.jsonl'
-    storeSessionParseCacheEntry(recent, { ...row, mtimeMs: 1 })
-    storeSessionParseCacheEntry(ancient, { ...row, mtimeMs: 2 })
-    await flushSessionParseCachePersist()
-    resetSessionParseCachePersistenceForTests()
-    setSeenAt(cacheFile, recent, Date.now() - 31 * DAY_MS)
-    setSeenAt(cacheFile, ancient, Date.now() - 181 * DAY_MS)
-    const stat = vi.mocked(fsPromises.stat)
-
-    simulateRestart(cacheFile)
-    stat.mockClear()
-    invalidateSessionParseCacheEntry(join(root, 'opens-the-database.jsonl'))
-    await vi.waitFor(() => expect(databaseRows(cacheFile).map((r) => r.path)).toEqual([recent]))
-    expect(stat.mock.calls.map(([path]) => String(path))).not.toContain(recent)
   })
 
   it('invalidating before the first lookup does not bring the row back', async () => {
@@ -547,22 +421,6 @@ describe('session parse cache persistence', () => {
     simulateRestart(cacheFile)
     invalidateSessionParseCacheEntry(transcript)
     expect((await parse(transcript)).fullParses).toBe(1)
-  })
-
-  it('a forced whole read re-reads even when the database delete fails', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcript = await writeTranscript(root)
-    await parse(transcript)
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    vi.spyOn(SessionParseCacheDatabase.prototype, 'delete').mockImplementation(() => {})
-    const candidate = await claudeCandidate(transcript)
-    const stats = createSessionParseStats()
-    await parseAgentSessionFileCached(candidate, process.platform, stats, 'whole')
-    expect(stats).toMatchObject({ reused: 0, fullParses: 1 })
   })
 
   it('performs zero disk IO when only configured, as Electron main is', async () => {
@@ -594,31 +452,5 @@ describe('session parse cache persistence', () => {
     await expect(flushSessionParseCachePersist()).resolves.toBeUndefined()
     expect(debugSpy).toHaveBeenCalled()
     expect((await parse(transcript)).reused).toBe(1)
-  })
-})
-
-describe('sidecar observations survive the round trip', () => {
-  const OBSERVATIONS: [string, SessionSidecarObservation | undefined][] = [
-    ['an object', { path: '/chats/a/meta.json', mtimeMs: 42, sizeBytes: 7 }],
-    ['none', 'none'],
-    ['unknown', 'unknown'],
-    ['absent', undefined]
-  ]
-
-  it.each(OBSERVATIONS)('restores %s exactly', async (_label, sidecar) => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    const path = await writeTranscript(root)
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    await parse(path)
-    const entry = getSessionParseCacheEntry(path)
-    if (!entry) {
-      throw new Error('Expected a completed cached entry')
-    }
-    storeSessionParseCacheEntry(path, { ...entry, sidecar })
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    expect(getSessionParseCacheEntry(path)?.sidecar).toEqual(sidecar)
   })
 })

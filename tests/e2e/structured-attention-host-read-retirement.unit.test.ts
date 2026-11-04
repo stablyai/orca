@@ -6,6 +6,7 @@ import type { AgentJournalRenderItem } from '../../src/shared/agent-session/jour
 import { agentSessionPromptAttentionKey } from '../../src/shared/agent-session/agent-session-attention'
 import { projectStructuredAgentSessionStatusState } from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-attention-capabilities'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -140,6 +141,11 @@ let directory: string
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-bounded-read-'))
   installStructuredHostStub()
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured host not installed')
+  }
+  vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(SCOPE)
   vi.clearAllMocks()
 })
 afterEach(async () => {
@@ -160,7 +166,7 @@ it('a delayed production renderer read retires A while leaving unseen B live', a
   )
   transport.call.mockImplementation(async (_target, method: string, params: unknown) => {
     const reply = await call(method, params, STRUCTURED_CLIENT, {
-      retireStructuredAttention: h.controller.retireStructuredAttention.bind(h.controller)
+      acknowledgeNotificationAttention: h.controller.acknowledgeAttention.bind(h.controller)
     })
     if (!reply.ok) {
       throw new Error(reply.error.message)
@@ -209,12 +215,15 @@ it('keeps missing-origin and other-journal deliveries outside a bounded read', (
     body: '',
     notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'old')
   })
-  h.controller.retireStructuredAttention({
-    sessionId: SESSION,
-    observedCursor: { ...read, epoch: 'later-journal' }
+  h.controller.acknowledgeAttention({
+    reads: [
+      { scope: SCOPE, sessionId: SESSION, observedCursor: { ...read, epoch: 'later-journal' } }
+    ]
   })
   expect(h.events.filter((event) => event.type === 'dismiss')).toEqual([])
-  h.controller.retireStructuredAttention({ sessionId: SESSION, observedCursor: read })
+  h.controller.acknowledgeAttention({
+    reads: [{ scope: SCOPE, sessionId: SESSION, observedCursor: read }]
+  })
   expect(h.events.filter((event) => event.type === 'dismiss')).toHaveLength(1)
 })
 
@@ -235,7 +244,9 @@ it('a restart sends the original delivery fence in the existing native gateway f
     retirement.push(event)
     gateway.dispatcher.enqueue(event)
   })
-  restarted.retireStructuredAttention({ sessionId: SESSION, observedCursor: cursor })
+  restarted.acknowledgeAttention({
+    reads: [{ scope: SCOPE, sessionId: SESSION, observedCursor: cursor }]
+  })
   await flush()
   expect(retirement).toEqual([
     expect.objectContaining({

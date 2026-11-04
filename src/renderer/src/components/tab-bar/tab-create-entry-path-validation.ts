@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
+import { normalizeAbsolutePath } from '../../../../shared/file-links/file-link-path-normalization'
 import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
 
 export type TabEntryLocalPlatform = 'posix' | 'windows'

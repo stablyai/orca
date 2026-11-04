@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { ScannedSessionCollection, dedupeScannedSessions } from '../../session-root-dedup'
 import { createAccumulator, finalizeSession } from '../../session-scanner-accumulator'
 

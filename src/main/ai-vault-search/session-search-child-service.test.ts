@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
-import type { AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-types'
 import { createChildSessionSearchService } from './session-search-child-service'
 
 const indexingStatus: AiVaultSearchStatus = {

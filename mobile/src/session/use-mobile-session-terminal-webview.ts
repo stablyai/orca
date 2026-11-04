@@ -3,7 +3,7 @@ import {
   MobileTerminalInputSender,
   type TerminalInputEnqueueOptions
 } from '../terminal/mobile-terminal-input-sender'
-import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal-ordered-input'
+import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal/input/terminal-ordered-input'
 import { useRouteCapability } from '../transport/use-workspace-client'
 import { pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'

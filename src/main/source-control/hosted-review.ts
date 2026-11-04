@@ -4,7 +4,7 @@ import {
   cachedHostedReviewOutcome,
   type HostedReviewForBranchOutcome,
   type HostedReviewInfo
-} from '../../shared/hosted-review'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { assertRemoteUrlReadable } from '../git/remotes/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'

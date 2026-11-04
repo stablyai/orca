@@ -24,7 +24,7 @@ vi.mock('../../source-control/git-read-cache-invalidation', () => ({
 
 import { getBranchConflictKind, getBranchConflictKindViaExec } from '../../repo-branch-conflict'
 import { clearGitCapabilityStateForTests } from '../../command-runner/git-capability-state'
-import { GitBinaryTestFixture } from '../../../../shared/git-binary.test-fixture'
+import { GitBinaryTestFixture } from '../../../../shared/git/compatibility/git-binary.test-fixture'
 
 const expectedVersion = process.env.ORCA_GIT_COMPAT_VERSION
 let fixture: GitBinaryTestFixture

@@ -2,8 +2,8 @@ import { link, mkdtemp, mkdir, rm, stat, utimes, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   MAX_UNLISTED_ENTRIES,

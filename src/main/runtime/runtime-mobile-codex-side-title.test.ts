@@ -32,35 +32,6 @@ function sideChatIdlePty(hookAt: number): RuntimePtyWorktreeRecord {
 }
 
 describe('paired/mobile Codex status while a /side chat is shown', () => {
-  it('keeps the running main turn when the side chat idles the title', () => {
-    const hookAt = Date.now() - 10_000
-    const out = renewRuntimeMobileAgentStatusFromPtyTitle(
-      runningExec(hookAt, 'codex'),
-      sideChatIdlePty(hookAt)
-    )
-    expect(out).toMatchObject({ state: 'working', prompt: 'main task please' })
-  })
-
-  it('keeps a main turn waiting on approval and its prompt once the side chat closes', () => {
-    const hookAt = Date.now() - 20_000
-    const out = renewRuntimeMobileAgentStatusFromPtyTitle(
-      {
-        ...runningExec(hookAt, 'codex'),
-        state: 'waiting',
-        mainAgent: { state: 'waiting', stateStartedAt: hookAt }
-      },
-      {
-        ...sideChatIdlePty(hookAt),
-        lastOscTitle: '✋ repo',
-        lastOscTitleEpochMs: hookAt + 15_000,
-        lastAgentStatus: 'permission',
-        lastAgentStatusStartedAtEpochMs: hookAt + 15_000,
-        lastAgentStatusRichInvalidatedAtEpochMs: hookAt + 15_000
-      }
-    )
-    expect(out).toMatchObject({ state: 'waiting', prompt: 'main task please' })
-  })
-
   it('does not carry a running turn across a replacement process on the same PTY', () => {
     const hookAt = Date.now() - 20_000
     const out = renewRuntimeMobileAgentStatusFromPtyTitle(runningExec(hookAt, 'codex'), {

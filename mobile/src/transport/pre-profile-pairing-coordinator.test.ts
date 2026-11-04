@@ -4,7 +4,8 @@ import type { connectMobileRelayForPairing } from './mobile-relay-physical-clien
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { racePairingCandidates } from './pairing-candidate-race'
 import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, HostProfile, PairingOffer, RpcResponse } from './types'
+import type { ConnectionLogEntry, HostProfile, RpcResponse } from './types'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { connect, RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))

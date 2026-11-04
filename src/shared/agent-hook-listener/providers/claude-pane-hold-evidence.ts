@@ -8,8 +8,8 @@ import {
   claudeTasksAwaitAgents
 } from './claude-owed-task-notifications'
 import { claudeRosterHasWorkingSubagent } from '../../claude-subagent-roster'
-import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
-import { mainAgentIdleSince } from '../main-agent-turn-state'
+import type { HookListenerState } from '../listener-state'
+import { mainAgentIdleSince, type ClaudeLeadTurnState } from '../main-agent-turn-state'
 
 /** Everything that can hold a pane whose main agent's own turn is over. */
 type ClaudePaneHoldEvidence = {

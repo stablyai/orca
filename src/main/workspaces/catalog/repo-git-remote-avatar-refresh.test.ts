@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { deriveGitRemoteIdentity } from '../../../shared/git-remote-identity'
+import { deriveGitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { githubAvatarIcon, type RepoIcon } from '../../../shared/repo-icon'
 import type { Repo } from '../../../shared/repo-types'

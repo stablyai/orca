@@ -12,18 +12,29 @@ import {
 import { structuredAgentSessionTurnCompletionSubscriptionId } from './structured-agent-session-subscription-id'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
 import { clientReadsStructuredSessionAgent } from './structured-agent-session-policy'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
-  // Retire only prompt deliveries covered by the accepted read's session/epoch, without installing the host.
+  // Retire delivered attention covered by the journal boundary without installing the host.
   defineMethod({
     name: 'agentSession.acknowledgeAttention',
     permission: 'workspace',
     params: AcknowledgeAttentionParams,
-    handler: (params, ctx) => {
+    handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
-      ctx.runtime.retireStructuredAttention({
-        sessionId: params.sessionId,
-        observedCursor: params.observedCursor
+      const host = getStructuredAgentSessionHost()
+      const scope = host
+        ? host.attentionReads.sessionLocation(params.sessionId)
+        : (await ctx.runtime.openAgentSessionRecordStore()).getConversation(params.sessionId)
+            ?.location
+      ctx.runtime.acknowledgeNotificationAttention({
+        reads: [
+          {
+            sessionId: params.sessionId,
+            observedCursor: params.observedCursor,
+            ...(scope ? { scope } : {})
+          }
+        ]
       })
       return { acknowledged: true }
     }

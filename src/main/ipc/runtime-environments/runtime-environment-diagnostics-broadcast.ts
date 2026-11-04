@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
-import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../../shared/runtime-environment-diagnostics'
+import { RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL } from '../../../shared/remote-runtime/host-catalog/runtime-environment-diagnostics'
 
 export type RuntimeEnvironmentDiagnosticsEvent = {
   environmentId: string

@@ -1,7 +1,7 @@
 import type { AppState } from '../types'
 import type { GitHubPRRefreshAlias } from '../../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
-import { deriveCheckStatusFromChecks } from '../slices/github-checks'
+import { derivePRCheckStatus as deriveCheckStatusFromChecks } from '../../../../shared/source-control/checks/pr-check-status'
 import {
   getPRChecksCacheTtl,
   prChecksCacheSuffix,

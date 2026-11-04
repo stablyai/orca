@@ -1,5 +1,5 @@
 /** Label the first delivery after a renderer-stream gap with the escape it resumes inside, so an abandoned restore can skip that tail (#33766). */
-import { advanceTerminalEscapeBoundary } from '../../../../shared/terminal-partial-escape-tail'
+import { advanceTerminalEscapeBoundary } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 // Escape-parser state at the end of each PTY's accepted output, delivered or dropped.
 const escapeBoundaryByPty = new Map<string, string>()

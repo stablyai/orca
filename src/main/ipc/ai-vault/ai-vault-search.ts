@@ -8,24 +8,24 @@ import {
   createSessionSearchClient,
   isUnknownSessionSearchMethod,
   unavailableSessionSearchStatus
-} from '../../../shared/ai-vault-search-client'
+} from '../../../shared/ai-vault/search/ai-vault-search-client'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusSchema,
   AiVaultSetSearchEnabledParamsSchema
-} from '../../../shared/ai-vault-search-contract'
+} from '../../../shared/ai-vault/search/ai-vault-search-contract'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   type ParsedExecutionHost
 } from '../../../shared/execution-host'
-import { redactStatusForTransport } from '../../../shared/ai-vault-search-transport'
+import { redactStatusForTransport } from '../../../shared/ai-vault/search/ai-vault-search-transport'
 import { clearSessionSearchInService } from '../../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'

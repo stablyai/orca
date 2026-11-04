@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 describe('RuntimeBinaryMessageRouter', () => {

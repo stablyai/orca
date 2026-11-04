@@ -1,11 +1,11 @@
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   getAgentModelProbeSpec,
   type AgentModelProbeSpec
 } from '../../shared/agent-model-probe-spec'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   runClaudeBackgroundAttempts,
   type ClaudeBackgroundFailedExit

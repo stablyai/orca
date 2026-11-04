@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { MemorySnapshotStore } from './collector'
 import { resolveWorktreeMemoryNames } from './memory-snapshot-buckets'
 

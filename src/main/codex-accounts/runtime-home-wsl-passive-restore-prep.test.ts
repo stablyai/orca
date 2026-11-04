@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import type * as CodexConfigMirror from '../codex/codex-config-mirror'
-import type * as CodexHomePaths from '../codex/codex-home-paths'
+import type * as CodexConfigMirror from '../codex/configuration/settings/codex-config-mirror'
+import type * as CodexHomePaths from '../codex/configuration/homes/codex-home-paths'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -47,14 +47,14 @@ function wslMocks() {
   vi.doMock('./legacy-wsl-runtime-auth-drain', () => ({
     startLegacyWslRuntimeAuthDrain: mocks.drain
   }))
-  vi.doMock('../codex/wsl-codex-session-bridge', () => ({
+  vi.doMock('../codex/history/bridges/wsl-codex-session-bridge', () => ({
     startWslCodexSessionBridgeInBackground: mocks.bridge
   }))
-  vi.doMock('../codex/codex-home-paths', async (importOriginal) => ({
+  vi.doMock('../codex/configuration/homes/codex-home-paths', async (importOriginal) => ({
     ...(await importOriginal<typeof CodexHomePaths>()),
     syncCodexGlobalInstructionsIntoManagedHome: mocks.syncInstructions
   }))
-  vi.doMock('../codex/codex-config-mirror', async (importOriginal) => ({
+  vi.doMock('../codex/configuration/settings/codex-config-mirror', async (importOriginal) => ({
     ...(await importOriginal<typeof CodexConfigMirror>()),
     syncSystemConfigIntoManagedCodexHome: mocks.syncConfig
   }))

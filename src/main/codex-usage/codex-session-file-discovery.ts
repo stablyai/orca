@@ -1,9 +1,12 @@
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { realpath, readdir, stat } from 'node:fs/promises'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { getCodexAccountHomeSessionDirectories } from '../codex/codex-account-home-discovery'
-import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath
+} from '../codex/configuration/homes/codex-home-paths'
+import { getCodexAccountHomeSessionDirectories } from '../codex/history/rollouts/codex-account-home-discovery'
+import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/history/bridges/codex-session-bridge'
 import { normalizeFsPath } from '../usage/usage-path-comparison'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 

@@ -1,5 +1,5 @@
-import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
-import type { SourceControlActionRecipe } from '../../../../shared/source-control-ai-actions'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { SourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,10 +32,10 @@ vi.mock('sonner', () => ({
 
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { saveSourceControlActionRecipe } from '../../../../shared/source-control-ai-recipe-save'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control-ai-operation-policy'
+import { saveSourceControlActionRecipe } from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { saveSourceControlAiActionRecipeForTarget } from './source-control/ai/recipe-persistence'
-import { sourceControlActionLaunchOptions } from '../../../../shared/source-control-action-launch-preferences'
+import { sourceControlActionLaunchOptions } from '../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import {
   resolveAgentLaunchCommand,
   terminalSessionOptionInputs

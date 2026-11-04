@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'

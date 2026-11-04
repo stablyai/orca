@@ -2,7 +2,7 @@ import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provide
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
 import { ptyOwnership } from './ownership-state'
-import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import { colorQueryReplyColorsEqual } from '../../../../shared/pty-owner-color-query-colors'
 import {
   getSshTargetIdForExecutionHost,

@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { decodeGitCQuotedPath } from '../../src/shared/git-cquoted-path.ts'
+import { decodeGitCQuotedPath } from '../../src/shared/git/paths/git-cquoted-path.ts'
 
 async function git(repoRoot, args) {
   const result = await runProcess({

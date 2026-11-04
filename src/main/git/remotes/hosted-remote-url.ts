@@ -1,4 +1,4 @@
-import { normalizeForgeWebHost } from '../../../shared/git-remote-host-alias'
+import { normalizeForgeWebHost } from '../../../shared/git/remotes/git-remote-host-alias'
 
 // Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
 // Keep only the provider parsing and file/commit URL construction needed by source links.

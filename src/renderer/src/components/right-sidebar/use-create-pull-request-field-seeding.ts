@@ -1,12 +1,12 @@
 import { useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { cancelRuntimeGeneratePullRequestFields } from '@/runtime/runtime-git-generation-client'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
-import { resolveCreateReviewSeedText } from '../../../../shared/hosted-review-create-seed'
+import { resolveCreateReviewSeedText } from '../../../../shared/source-control/hosted-review/hosted-review-create-seed'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import {
   createInitialPullRequestFieldRevisions,

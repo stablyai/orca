@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { isCollapsibleContentHash } from './session-search-content-hash'
 import type { SessionSearchSort } from './session-search-engine-types'
 

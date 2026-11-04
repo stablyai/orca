@@ -2,7 +2,6 @@ import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-
 import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status-child-work'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
-export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 import {
   AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,

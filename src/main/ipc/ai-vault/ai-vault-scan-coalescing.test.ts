@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult } from '../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
 const mocks = vi.hoisted(() => ({
   scanAiVaultSessionsInService: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (impo
 vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: (_path: string, id: string) => ({
     id,
     runtimeId: id,

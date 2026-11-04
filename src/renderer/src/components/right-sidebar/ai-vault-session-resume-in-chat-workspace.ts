@@ -5,7 +5,7 @@ import {
 } from '@/lib/agent-session-launch-plan'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { useAppStore } from '@/store'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import {
   adoptsCliConversations,

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type * as RepoWorktrees from '../../workspaces/catalog/repo-worktrees'
 

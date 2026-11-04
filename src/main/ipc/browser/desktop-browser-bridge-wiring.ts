@@ -9,11 +9,11 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getPreferredPairedRuntimeConnection
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 import { browserManager } from '../../browser/browser-manager'

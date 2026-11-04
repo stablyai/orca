@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_GRAPHIC_RENDITION,
   RESET_TERMINAL_CURSOR_STYLE
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { replayEpilogue } from './pty-connection-test-replay-epilogue'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../shared/startup-cwd-fallback'
 import { flushAsyncTicks } from './pty-connection-test-async'

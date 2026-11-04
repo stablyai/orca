@@ -9,12 +9,15 @@ import { ChecksPanelUpdatedAtMetadata } from '../checks-panel-updated-at-metadat
 import { getChecksPanelRefreshErrorBannerLine } from '../github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
 import { clearPendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
-import { getBrokenChecks, isBrokenCheck } from '../../../../../shared/pr-checks-fix-prompt'
+import {
+  getBrokenChecks,
+  isBrokenCheck
+} from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'
 import { PRCommentsList } from './comments-list'
-import { openAnnotationLocation } from '@/components/editor/check-annotation-open'
+import { openAnnotationLocation } from '@/components/editor/check-details/actions/check-annotation-open'
 import { translate } from '@/i18n/i18n'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'

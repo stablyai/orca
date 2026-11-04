@@ -1,7 +1,11 @@
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { sanitizeTerminalPasteText } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { BRACKETED_PASTE_BEGIN, BRACKETED_PASTE_END } from './agent-paste-draft'
+import './agent-paste-draft'
+import {
+  BRACKETED_PASTE_START as BRACKETED_PASTE_BEGIN,
+  BRACKETED_PASTE_END
+} from '../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS as POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
 import {
