@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import {
   AI_VAULT_CACHE_TTL_MS,

@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import { translate } from '@/i18n/i18n'

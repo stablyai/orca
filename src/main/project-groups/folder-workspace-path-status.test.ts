@@ -9,7 +9,7 @@ import {
   inferFolderWorkspacePathConnection
 } from './folder-workspace-path-status'
 import type { ProjectGroup } from '../../shared/project-group-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 
 function makeGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {

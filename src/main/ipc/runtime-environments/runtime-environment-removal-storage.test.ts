@@ -11,7 +11,7 @@ const { handleMock, clearStorageMock, removeEnvironmentMock, resolveEnvironmentM
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
 
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   addEnvironmentFromPairingCode: vi.fn(),
   listEnvironments: vi.fn(() => []),
   removeEnvironment: removeEnvironmentMock,

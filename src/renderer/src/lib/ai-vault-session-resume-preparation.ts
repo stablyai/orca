@@ -1,15 +1,17 @@
-import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault-chat-fork-contract'
-import type { AiVaultAgent, AiVaultSession } from '../../../shared/ai-vault-types'
+import { AiVaultChatForkSourceSchema } from '../../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
 import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareChatForkArgs,
-  AiVaultPrepareSessionResumeRequest,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault-resume-preparation'
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
+
 import {
+  type AiVaultPrepareSessionResumeArgs,
+  type AiVaultPrepareChatForkArgs,
+  type AiVaultPrepareSessionResumeRequest,
+  type AiVaultPrepareSessionResumeResult,
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
-} from '../../../shared/ai-vault-resume-preparation'
+} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -21,7 +23,7 @@ import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-rev
 import type { FilesystemPathFlavor } from '../../../shared/filesystem-entry-types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { readIpcErrorMessage } from './ipc-error'
-import type { AiVaultResumeCommandSession } from './ai-vault-resume-command'
+import type { AiVaultResumeCommandSession } from '../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { agentForksThroughChat } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { translate } from '@/i18n/i18n'
 

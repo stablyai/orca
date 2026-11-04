@@ -9,7 +9,7 @@ import { getDefaultSettings, getDefaultWorkspaceSession } from '../../src/shared
 import {
   MIXED_FOLDER,
   MIXED_GROUP
-} from '../../src/shared/folder-workspace-host-routing.test-fixture'
+} from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { setupPtyIpcSuite } from '../../src/main/ipc/pty/pty-ipc-test-harness'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'

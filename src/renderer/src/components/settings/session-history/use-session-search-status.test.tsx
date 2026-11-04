@@ -2,8 +2,8 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { unavailableSessionSearchStatus } from '../../../../../shared/ai-vault-search-client'
-import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault-search-types'
+import { unavailableSessionSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-client'
+import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import {
   sessionSearchStatusDetails,

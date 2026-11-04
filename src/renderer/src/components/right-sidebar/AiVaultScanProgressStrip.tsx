@@ -10,8 +10,9 @@ import { cn } from '@/lib/utils'
 import type {
   AiVaultScanAgentProgress,
   AiVaultScanProgress
-} from '../../../../shared/ai-vault-scan-progress'
-import { agentLabel } from './ai-vault-session-filters'
+} from '../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import './ai-vault-session-filters'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { formatTimeAgo } from './ai-vault-session-time'
 
 // Why: interpolated so locales place the emphasized count; U+0000 never appears in copy.

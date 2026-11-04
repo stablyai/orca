@@ -46,7 +46,7 @@ import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/cata
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
-import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
 export function mergeWebUIState(
   base: PersistedUIState,

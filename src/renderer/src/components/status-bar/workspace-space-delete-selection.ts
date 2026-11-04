@@ -1,4 +1,4 @@
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /** Host-partitioned scan rows can share workspace IDs; destructive selection must preserve the row’s host. */

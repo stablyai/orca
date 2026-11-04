@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { translate } from '@/i18n/i18n'
 import { conversationRoleLabel } from './ai-vault-session-row-display'
 

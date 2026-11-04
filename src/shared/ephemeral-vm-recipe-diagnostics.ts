@@ -1,4 +1,4 @@
-import { parsePairingCode } from './pairing'
+import { parsePairingCode } from './remote-runtime/pairing/pairing'
 import { stripCredentialsFromMessage } from './git/remotes/git-remote-error'
 import {
   getEphemeralVmRecipeResultConnection,

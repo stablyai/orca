@@ -3,11 +3,11 @@ import type { CheckStatus } from '../../../src/shared/github/pull-request-types'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope
-} from '../../../src/shared/workspace-attachment-normalization'
+} from '../../../src/shared/workspace-attachments/workspace-attachment-normalization'
 import {
   getWorkspaceAttachments,
   workspaceAttachmentReferenceLabel
-} from '../../../src/shared/workspace-attachments'
+} from '../../../src/shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../src/shared/worktree/types'
 import type { Worktree } from './workspace-list-types'
 

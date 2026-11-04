@@ -1,5 +1,8 @@
 import type { Hash } from 'node:crypto'
-import type { AiVaultAgent, AiVaultSession } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultAgent,
+  AiVaultSession
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ResumableSessionParseState } from '../session-scanner-types'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { TranscriptMessageChannel } from '../transcripts/session-transcript-channel'

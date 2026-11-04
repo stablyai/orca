@@ -13,7 +13,7 @@ import {
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
-import { readWslHostDeployments } from '../../shared/wsl-host-deployment-store'
+import { readWslHostDeployments } from '../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 
 // Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2

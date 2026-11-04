@@ -1,4 +1,4 @@
-import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
+import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-handshake'
 import WebSocket from 'ws'
 import { abortSignalReason } from '../../abort-signal-reason'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'

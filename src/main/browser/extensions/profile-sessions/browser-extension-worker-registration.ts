@@ -1,4 +1,4 @@
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
 import type { PreparedBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 

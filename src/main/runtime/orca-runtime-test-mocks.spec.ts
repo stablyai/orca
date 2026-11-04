@@ -235,8 +235,6 @@ export type OrcaRuntimeService = InstanceType<typeof importedValues.exportedOrca
 export type EventEmitter = InstanceType<typeof importedValues.exportedEventEmitter>
 export type OrchestrationDb = InstanceType<typeof importedValues.exportedOrchestrationDb>
 
-export type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
-export type { FolderWorkspace } from '../../shared/folder-workspace-types'
 export type { GitUsernameModule }
 export type { IPtyProvider } from '../providers/pty-provider-contract'
 export type { MessagePriority, MessageRow, MessageType } from './orchestration/types'

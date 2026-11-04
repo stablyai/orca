@@ -1,5 +1,5 @@
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 

@@ -5,8 +5,10 @@ const mocks = vi.hoisted(() => {
   const record: { active: string | null } = { active: '1.0.0+a' }
   return { stop: vi.fn(), write: vi.fn(), release: vi.fn(), record }
 })
-vi.mock('../../shared/runtime-environment-store', () => ({ listEnvironments: () => [] }))
-vi.mock('../../shared/runtime-environment-managed-orcad-store', () => ({
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: () => []
+}))
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store', () => ({
   removeManagedOrcadEnvironment: vi.fn()
 }))
 vi.mock('./orcad-migration-cutover-journal', () => ({
