@@ -1,4 +1,4 @@
-import type { RateLimitWindow } from './rate-limit-types'
+import type { ProviderRateLimits, RateLimitWindow } from './rate-limit-types'
 
 // Structural so mobile's decoded snapshot, whose provider id is any string, fits too.
 type ProviderUsageWindows = {
@@ -17,38 +17,25 @@ export type UsageWindowSection =
       window: RateLimitWindow | null
     }
 
+// `satisfies` makes a provider added to ProviderRateLimits fail the typecheck until it has a name.
+const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  gemini: 'Gemini',
+  'opencode-go': 'OpenCode Go',
+  kimi: 'Kimi',
+  antigravity: 'Antigravity',
+  minimax: 'MiniMax',
+  grok: 'Grok',
+  zcode: 'ZCode',
+  cursor: 'Cursor'
+} satisfies Record<ProviderRateLimits['provider'], string>
+
+// A provider id from a newer host falls back to the id itself.
 export function getProviderDisplayName(provider: string): string {
-  if (provider === 'claude') {
-    return 'Claude'
-  }
-  if (provider === 'codex') {
-    return 'Codex'
-  }
-  if (provider === 'gemini') {
-    return 'Gemini'
-  }
-  if (provider === 'opencode-go') {
-    return 'OpenCode Go'
-  }
-  if (provider === 'kimi') {
-    return 'Kimi'
-  }
-  if (provider === 'antigravity') {
-    return 'Antigravity'
-  }
-  if (provider === 'minimax') {
-    return 'MiniMax'
-  }
-  if (provider === 'grok') {
-    return 'Grok'
-  }
-  if (provider === 'zcode') {
-    return 'ZCode'
-  }
-  if (provider === 'cursor') {
-    return 'Cursor'
-  }
-  return provider
+  return Object.hasOwn(PROVIDER_DISPLAY_NAMES, provider)
+    ? PROVIDER_DISPLAY_NAMES[provider]
+    : provider
 }
 
 export function hasUsageData(provider: ProviderUsageWindows): boolean {

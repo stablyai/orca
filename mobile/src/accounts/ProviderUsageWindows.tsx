@@ -22,7 +22,7 @@ const EMPTY_SECTIONS: UsageWindowSection[] = [
   { kind: 'weekly', window: null }
 ]
 
-// Same labels as the desktop usage roster; the two common lengths keep mobile's translated copy.
+// The desktop roster's labels, except 5h and 7d use mobile's translated copy (desktop shows 7d as "wk").
 function getWindowLabel(section: UsageWindowSection, t: Translate): string {
   if (section.kind === 'bucket') {
     return section.name

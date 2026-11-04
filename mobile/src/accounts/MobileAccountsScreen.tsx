@@ -202,7 +202,7 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot, t]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
+  const renderProviderSection = (provider: ProviderKey) => {
     if (!snapshot) {
       return null
     }
@@ -218,7 +218,11 @@ export function MobileAccountsScreen() {
     const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
     return (
       <View>
-        <SectionHeader title={title} icon={<Icon size={14} />} first={provider === 'claude'} />
+        <SectionHeader
+          title={getProviderDisplayName(provider)}
+          icon={<Icon size={14} />}
+          first={provider === 'claude'}
+        />
         <ListGroup style={styles.group}>
           {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
           <ListRow
@@ -360,8 +364,8 @@ export function MobileAccountsScreen() {
           />
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
+            {renderProviderSection('claude')}
+            {renderProviderSection('codex')}
             {renderOtherProviders()}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />

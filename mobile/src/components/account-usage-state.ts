@@ -53,18 +53,7 @@ export function getInactiveProviderUsage(
 
 // System-default logins still fetch quota without managed accounts. Show successful provider or any window data; empty unavailable/error means no credentials.
 export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boolean {
-  if (!limits) {
-    return false
-  }
-  if (
-    limits.session != null ||
-    limits.weekly != null ||
-    limits.monthly != null ||
-    (limits.buckets && limits.buckets.length > 0)
-  ) {
-    return true
-  }
-  return limits.status === 'ok'
+  return limits !== null && (hasUsageData(limits) || limits.status === 'ok')
 }
 
 // Determine availability per window because transient provider errors retain successful window data.
