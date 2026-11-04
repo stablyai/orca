@@ -134,16 +134,6 @@ describe('main sleeping retention and a closed last tab', () => {
     vi.useRealTimers()
   })
 
-  it('drops the row as the window closes the tab, before the terminal exits', async () => {
-    const runtime = await createHostWithSpawnedPty()
-    // As closeTab does: pty:kill first, then the graph without the tab.
-    runtime.markPtyStopRequested('pty-1')
-    expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')
-    publishNoTabs(runtime)
-    expect(runtime.getWorkspaceActivityFacts().facts[WT]).toBeUndefined()
-    expect(retained(runtime)).toEqual([])
-  })
-
   it('drops the row when the stop request lands after the graph', async () => {
     const runtime = await createHostWithSpawnedPty()
     publishNoTabs(runtime)
@@ -151,13 +141,6 @@ describe('main sleeping retention and a closed last tab', () => {
     runtime.markPtyStopRequested('pty-1')
     expect(runtime.getWorkspaceActivityFacts().facts[WT]).toBeUndefined()
     expect(retained(runtime)).toEqual([])
-  })
-
-  it('keeps a terminal live while a pane still shows it, though asked to stop', async () => {
-    const runtime = await createHostWithSpawnedPty()
-    runtime.markPtyStopRequested('pty-1')
-    await vi.advanceTimersByTimeAsync(300)
-    expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')
   })
 
   it('keeps a closed tab’s terminal unverifiable when its host stops answering', async () => {

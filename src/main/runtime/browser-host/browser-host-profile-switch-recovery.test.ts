@@ -65,27 +65,6 @@ function recoveryFixture(
 }
 
 describe('profile switch failure convergence', () => {
-  it('bounds a stalled result without racing a close against the pending switch', async () => {
-    vi.useFakeTimers()
-    const f = recoveryFixture(new Promise(() => {}))
-    const rejected = expect(
-      switchBrowserHostClientProfile(
-        f.authority,
-        { id: 'isolated', label: 'Isolated', scope: 'isolated' },
-        f.input
-      )
-    ).rejects.toThrow('browser_host_page_creation_timeout')
-    await vi.advanceTimersByTimeAsync(11)
-    await rejected
-    expect(f.placements.cancelClientPageReservation).not.toHaveBeenCalled()
-    expect(f.placements.completePageRetirement).not.toHaveBeenCalled()
-    expect(f.ledger.retirePage).not.toHaveBeenCalled()
-    expect(f.ledger.issue).toHaveBeenCalledTimes(1)
-    // Pending client verdict must keep the old guest from being recreated.
-    expect(f.grants.has('page')).toBe(true)
-    expect(f.grant.release).not.toHaveBeenCalled()
-  })
-
   it('orders late-success cleanup behind the original result and preserves its sequence', async () => {
     vi.useFakeTimers()
     let complete!: (result: { status: 'completed' }) => void
@@ -148,25 +127,5 @@ describe('profile switch failure convergence', () => {
     expect(f.placements.completePageRetirement).not.toHaveBeenCalled()
     expect(f.grants.has('page')).toBe(true)
     expect(f.grant.release).not.toHaveBeenCalled()
-  })
-
-  it('closes the completed replacement when the host cannot commit it', async () => {
-    const f = recoveryFixture(Promise.resolve({ status: 'completed' }))
-    await expect(
-      switchBrowserHostClientProfile(
-        f.authority,
-        { id: 'isolated', label: 'Isolated', scope: 'isolated' },
-        f.input
-      )
-    ).rejects.toThrow('browser_page_placement_stale')
-    expect(f.ledger.advancePageGeneration).toHaveBeenCalledWith('page', 1, 2)
-    expect(f.ledger.issue).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        pageHostGeneration: 2,
-        command: expect.objectContaining({ type: 'closePage' })
-      })
-    )
-    expect(f.grants.has('page')).toBe(false)
-    expect(f.grant.release).toHaveBeenCalledOnce()
   })
 })

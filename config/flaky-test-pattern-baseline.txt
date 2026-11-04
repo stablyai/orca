@@ -641,7 +641,6 @@
 1 test-timeout-needs-reason:src/main/daemon/slow-daemon-session-verification.test.ts
 1 test-timeout-needs-reason:src/main/daemon/terminal-history-large-checkpoint-cold-restore.test.ts
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
-1 test-timeout-needs-reason:src/main/git/worktrees/creation/worktree-preparation-cancel-latency.bench.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-real-git.test.ts
 1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
