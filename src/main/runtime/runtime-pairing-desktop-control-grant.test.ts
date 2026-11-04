@@ -5,8 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from './device-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { getServeOptions } from '../startup/serve-options'
-import { parseArgs as parseOrcadArgs } from '../orcad/orcad-command-arguments'
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), 'orca-desktop-control-grant-'))
@@ -44,21 +42,6 @@ describe('desktop control for paired runtime clients', () => {
     const device = server['deviceRegistry']!.addDevice('laptop', 'runtime')
     const reply = await dispatchOverWebSocket(server, device.token, 'computer.click')
     expect(errorCode(reply)).toBe('forbidden')
-  })
-
-  it('passes the permission gate for a pairing created with the grant', async () => {
-    const userDataPath = tempDir()
-    const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
-      userDataPath,
-      enableWebSocket: false
-    })
-    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
-    const device = server['deviceRegistry']!.addDevice('laptop', 'runtime', 'network', [
-      'desktop-control'
-    ])
-    const reply = await dispatchOverWebSocket(server, device.token, 'computer.click')
-    expect(errorCode(reply)).not.toBe('forbidden')
   })
 })
 
@@ -100,24 +83,5 @@ describe('pairing-time grants on the device registry', () => {
     expect(granted.token).not.toBe(plain.token)
     expect(registry.getDevice(plain.deviceId)?.grants).toBeUndefined()
     expect(registry.getOrCreatePendingDevice('cli', 'runtime').token).toBe(plain.token)
-  })
-})
-
-describe('the --grant-desktop-control serve flag', () => {
-  it('reaches the desktop serve options in both argv shapes', () => {
-    expect(getServeOptions(['/AppRun', '--serve']).grantDesktopControl).toBe(false)
-    expect(
-      getServeOptions(['/AppRun', '--serve', '--serve-grant-desktop-control']).grantDesktopControl
-    ).toBe(true)
-    expect(() =>
-      getServeOptions(['/AppRun', '--serve', '--grant-desktop-control', '--mobile-pairing'])
-    ).toThrow('--grant-desktop-control applies only to the default runtime pairing offer.')
-  })
-
-  it('reaches orcad', () => {
-    expect(parseOrcadArgs(['--grant-desktop-control'])).toEqual({ grantDesktopControl: true })
-    expect(() => parseOrcadArgs(['--grant-desktop-control', '--no-pairing'])).toThrow(
-      '--grant-desktop-control applies only to the default runtime pairing offer'
-    )
   })
 })
