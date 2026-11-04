@@ -215,14 +215,24 @@ export function buildAgentStartupPlan(args: {
   }
 }
 
-/** Whether an override or agent args already end option parsing; a required option's `--` value does not. */
+/**
+ * Whether the command already ends option parsing for the agent, so the prompt needs no `--`.
+ *
+ * Only a TRAILING terminator counts. A `--` with tokens after it belongs to a wrapper rather
+ * than the agent — `env -- traecli` ends `env`'s options and then names the command, so TRAE
+ * still parses the prompt as its own argument and still needs its own `--`. A required
+ * option's `--` value (`--system-prompt '--'`) is not a terminator at all; that is
+ * `agentArgTerminatorIndex`'s job.
+ *
+ * Unsure means append, which is what this builder did for every agent before the guard existed.
+ */
 function launchCommandEndsOptions(
   agent: TuiAgent,
   command: string,
   shell: AgentStartupShell
 ): boolean {
   const parsed = tokenizeStartupCommand(command, shell)
-  return parsed.ok && agentArgTerminatorIndex(agent, parsed.tokens) < parsed.tokens.length
+  return parsed.ok && agentArgTerminatorIndex(agent, parsed.tokens) === parsed.tokens.length - 1
 }
 
 /** Predict the builder’s null-followupPrompt verdict before choosing a launch surface; derive from the same injection table.

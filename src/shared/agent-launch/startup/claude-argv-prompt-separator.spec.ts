@@ -36,4 +36,13 @@ describe("Claude's argv prompt separator", () => {
       "claude --system-prompt '--' -- 'Fix the bug'"
     )
   })
+
+  // Why: a `--` with tokens after it ended the WRAPPER's options and then named the command,
+  // so the agent itself has not had its options ended and the prompt still needs its own.
+  it("does not mistake a wrapper's terminator for the agent's", () => {
+    expect(launchCommandFor('Fix the bug', 'env -- claude')).toBe("env -- claude -- 'Fix the bug'")
+    expect(launchCommandFor('Fix the bug', 'env -- claude --verbose')).toBe(
+      "env -- claude --verbose -- 'Fix the bug'"
+    )
+  })
 })
