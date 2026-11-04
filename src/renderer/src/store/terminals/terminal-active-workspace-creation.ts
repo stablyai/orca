@@ -57,7 +57,7 @@ export async function openNewTerminalTabInWorkspace(
     try {
       const { createWebRuntimeSessionTerminal } =
         await import('@/runtime/web-runtime-terminal-creation')
-      const outcome = await createWebRuntimeSessionTerminal(
+      await createWebRuntimeSessionTerminal(
         {
           worktreeId,
           environmentId: runtimeEnvironmentId,
@@ -66,12 +66,9 @@ export async function openNewTerminalTabInWorkspace(
         },
         { userAct: true }
       )
-      if (outcome.status !== 'created') {
-        closeEmptySplit()
-      }
-    } catch (error) {
+    } finally {
+      // Host acceptance can settle before its tab is mirrored; keep only a populated split.
       closeEmptySplit()
-      throw error
     }
     return
   }

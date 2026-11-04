@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import type * as importCreation from '@/runtime/web-runtime-terminal-creation'
 import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
 import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
 
 let store: ReturnType<typeof createTestStore>
 const { createRemote, runtimeOwners, requestSplit } = vi.hoisted(() => ({
@@ -141,14 +143,34 @@ it.each(['failed', 'rejected', 'populated'] as const)(
   }
 )
 
-it('keeps a successful paired split for its mirrored terminal', async () => {
-  const worktreeId = folderWorkspaceKey('paired-folder')
-  const { target } = sourceChat(worktreeId)
-  runtimeOwners.set(worktreeId, 'paired-host')
-  runNativeChatSplitTarget(target, 'down')
-  await vi.waitFor(() => expect(createRemote).toHaveBeenCalledOnce())
-  expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(2)
-  expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
+it('removes an empty split when accepted host creation cannot be mirrored', async () => {
+  const actual = await vi.importActual<typeof importCreation>(
+    '@/runtime/web-runtime-terminal-creation'
+  )
+  await loadWebRuntimeSessionTabsApplyModulesForTests()
+  createRemote.mockImplementation(actual.createWebRuntimeSessionTerminal)
+  vi.useFakeTimers()
+  try {
+    const worktreeId = folderWorkspaceKey('paired-folder')
+    const { target } = sourceChat(worktreeId)
+    runtimeOwners.set(worktreeId, 'paired-host')
+    const call = vi.fn().mockImplementation(async ({ method }: { method: string }) => {
+      if (method === 'session.tabs.createTerminal') {
+        return { id: 'create', ok: true, result: { tab: { id: 'host-tab' } } }
+      }
+      throw new Error('snapshot unavailable')
+    })
+    Object.assign(window.api, { runtimeEnvironments: { call } })
+    runNativeChatSplitTarget(target, 'down')
+    await vi.advanceTimersByTimeAsync(10_500)
+    expect(call.mock.calls.some(([args]) => args.method === 'session.tabs.createTerminal')).toBe(
+      true
+    )
+    expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(1)
+    expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 it('keeps floating chat splits local while a remote workspace is selected', async () => {

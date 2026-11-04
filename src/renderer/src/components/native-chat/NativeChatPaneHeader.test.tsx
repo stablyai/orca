@@ -4,6 +4,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
 import * as historyRequest from '../right-sidebar/ai-vault-panel-session-list-request'
@@ -138,4 +139,14 @@ it('omits the shortcut from the Split Terminal Right tooltip when split-right is
   useAppStore.setState({ keybindings: { 'terminal.splitRight': [] } })
   renderHeader()
   expect(await splitTooltipText()).toBe('Split Terminal Right')
+})
+
+it('renders the translated terminal split label', async () => {
+  try {
+    await i18n.changeLanguage(await loadRendererUiLanguage('de'))
+    renderHeader()
+    expect(screen.getByRole('button', { name: 'Terminal nach rechts teilen' })).toBeTruthy()
+  } finally {
+    await i18n.changeLanguage('en')
+  }
 })

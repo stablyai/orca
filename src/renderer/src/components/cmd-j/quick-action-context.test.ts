@@ -426,6 +426,9 @@ describe('Cmd+J quick action context', () => {
       }
     } satisfies CmdJQuickActionContext
 
+    expect(action?.title).toBe('Split Terminal Right')
+    expect(action?.description).toBe('Split Terminal Right')
+    expect(action?.verbKeywords).toEqual(['Split Terminal Right'])
     expect(action?.isAvailable(context)).toEqual({ available: true })
     await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
     expect(calls).toEqual(['right'])
