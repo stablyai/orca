@@ -1,6 +1,6 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -83,6 +83,7 @@ it.skipIf(process.platform === 'win32')(
         'config/dark-build-switches.cjs',
         'config/scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
       ]) {
+        mkdirSync(dirname(join(directory, file)), { recursive: true })
         copyFileSync(file, join(directory, file))
       }
       const bundleDir = join(directory, 'out', 'mobile-web')
