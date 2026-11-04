@@ -20,6 +20,10 @@ import {
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
+export function claudeEffortLevel(value: string) {
+  return value === 'ultracode' ? 'xhigh' : EFFORT_LEVELS.find((level) => level === value)
+}
+
 const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
 
 /** A fallback approval mode is dropped only by reopening for a newly picked model (only an approved plan
@@ -116,7 +120,13 @@ export async function setClaudeStructuredOption(
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
       : null
-  const effort = EFFORT_LEVELS.find((value) => value === input.value)
+  const effort = claudeEffortLevel(input.value)
+  const ultracode = input.value === 'ultracode'
+  const leavesUltracode =
+    session.options.get('effort') === 'ultracode' ||
+    session.appliedInputOptions.get('effort') === 'ultracode' ||
+    session.reportedOptions.effort === 'ultracode' ||
+    session.appliedOptions?.ultracode === true
   if (input.key === 'effort' && effort === undefined) {
     throw new ClaudeEffortValidationError()
   }
@@ -132,7 +142,11 @@ export async function setClaudeStructuredOption(
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
       : input.key === 'effort' && effort !== undefined
-        ? () => session.connection.applyFlagSettings({ effortLevel: effort }, { timeoutMs })
+        ? () =>
+            session.connection.applyFlagSettings(
+              { effortLevel: effort, ...(ultracode || leavesUltracode ? { ultracode } : {}) },
+              { timeoutMs }
+            )
         : input.key === 'fastMode' && typeof fastMode === 'boolean'
           ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
           : null

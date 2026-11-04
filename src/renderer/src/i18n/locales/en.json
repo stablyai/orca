@@ -19754,6 +19754,7 @@
         "availableAfterSessionStarts": "Available after the session starts.",
         "optionUpdateFailed": "Could not update option",
         "optionValue": {
+          "ultracode": "Ultracode",
           "fast": "Fast",
           "minimal": "Minimal",
           "low": "Low",

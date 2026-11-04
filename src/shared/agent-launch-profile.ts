@@ -1,6 +1,10 @@
 import type { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import { agentPermissionArgsForLaunch } from './agent-permission-args'
-import type { AgentLaunchInputViews, AgentDedicatedChoices } from './agent-launch-choices'
+import {
+  terminalAgentChoices,
+  type AgentLaunchInputViews,
+  type AgentDedicatedChoices
+} from './agent-launch-choices'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import {
   removeOverriddenAgentSessionArgs,
@@ -125,7 +129,8 @@ export function projectAgentLaunchInputViews(
     permissionContext?: AgentPermissionChoice
   }
 ): AgentLaunchInputViews {
-  const terminal = { ...choices, options: { ...choices.options } }
+  const terminalChoices = terminalAgentChoices(agent, choices)
+  const terminal = { ...terminalChoices, options: { ...terminalChoices.options } }
   const chat = { ...choices, options: { ...choices.options } }
   for (const entry of input.agentArgs !== undefined ? result.recognized : []) {
     if (input.sourceKeys === undefined || input.sourceKeys.includes(entry.key)) {
@@ -178,7 +183,8 @@ export function projectAgentLaunchInputViews(
         }
       : {}),
     ...(Object.keys(sessionOptions).length ? { sessionOptions } : {}),
-    ...((input.agentArgs !== undefined && result.recognized.length) ||
+    ...(terminalChoices !== choices ||
+    (input.agentArgs !== undefined && result.recognized.length) ||
     (terminal.model === undefined && profile.launch.appliedValues.model !== undefined)
       ? { chatSessionOptions: values(chat) }
       : {})

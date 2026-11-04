@@ -14,9 +14,19 @@ import {
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
+export function claudeObservedEffort(
+  effort: string | null | undefined,
+  ultracode: unknown
+): string | null {
+  return ultracode === true ? (effort === 'xhigh' ? 'ultracode' : null) : (effort ?? null)
+}
+
 /** Effort comes from settings; system/init omits it. */
 export function readClaudeSettingsEffort(settings: unknown): string | null {
-  return text(record(record(settings)?.effective)?.effortLevel)
+  return claudeObservedEffort(
+    text(record(record(settings)?.effective)?.effortLevel),
+    record(record(settings)?.applied)?.ultracode
+  )
 }
 
 /** CLI resolution of env, settings and defaults; null effort sends none, and older CLIs omit the block. */
@@ -29,7 +39,11 @@ export function readClaudeSettingsApplied(
   }
   const model = text(applied.model)
   const effort = text(applied.effort)
-  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+  return {
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+    ...(typeof applied.ultracode === 'boolean' ? { ultracode: applied.ultracode } : {})
+  }
 }
 
 export function observeClaudeSettingsApplied(session: ClaudeSession, settings: unknown): void {
@@ -177,7 +191,7 @@ export function claudeStructuredSessionOptionsFrom(
   const effort =
     session.options.get('effort') ??
     session.reportedOptions.effort ??
-    session.appliedOptions?.effort
+    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode)
   const desiredFastMode = decodedFastMode(session)
   // Frames can report Fast before settings do; cooldown throttles routing but preserves the preference.
   const fastMode =

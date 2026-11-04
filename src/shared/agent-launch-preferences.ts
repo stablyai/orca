@@ -21,7 +21,9 @@ export function toAgentLaunchPreferences(
   }
   const model = composeAgentLaunchModel(agent, sessionOptions)
   const effort =
-    typeof sessionOptions.effort === 'string' && sessionOptions.effort.trim()
+    typeof sessionOptions.effort === 'string' &&
+    sessionOptions.effort.trim() &&
+    !(agent === 'claude' && sessionOptions.effort.trim() === 'ultracode')
       ? sessionOptions.effort.trim()
       : undefined
   const mode = readLaunchPermissionChoice(sessionOptions)

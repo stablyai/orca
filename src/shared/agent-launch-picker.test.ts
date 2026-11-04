@@ -1,9 +1,12 @@
+import { toAgentLaunchPreferences } from './agent-launch-preferences'
+import { resolveAgentSessionOptionLaunch } from './agent-session/options/agent-session-option-launch'
 import { buildNewTabAgentMenuRows } from './agent-launch-picker-rows'
 import 'node:fs'
 import 'zod'
 import { describe, expect, it } from 'vitest'
 import {
   agentPickerLaunchInputs,
+  agentPickerEntryOptions,
   agentPickerEntriesFromRows,
   agentPickerChoiceSeeds,
   agentPickerDraft,
@@ -403,4 +406,51 @@ it('keeps offered host Chat independent of preference through the actual row bui
       chatProgram: () => 'available'
     })
   ).toEqual([])
+})
+
+it('keeps Ultracode in chat intent while every terminal launch projection stays numeric', () => {
+  const own: AgentPickerEntry = {
+    ...entry,
+    agent: 'claude',
+    terminal: { model: 'opus', options: { effort: 'high' } },
+    structured: { model: 'opus' },
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [
+        {
+          id: 'opus',
+          label: 'Opus',
+          isDefault: true,
+          efforts: [{ value: 'xhigh', label: 'Extra high' }],
+          chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }]
+        }
+      ]
+    }
+  }
+  const picked = editAgentPickerDraft(agentPickerDraft(own), {
+    model: 'opus',
+    options: { effort: 'ultracode' }
+  })
+  const choices = (surface: 'chat' | 'terminal') =>
+    agentPickerEntryOptions(own, 'opus', surface).find(({ id }) => id === 'effort')?.kind
+  expect(choices('chat')).toMatchObject({ choices: [{ value: 'xhigh' }, { value: 'ultracode' }] })
+  expect(choices('terminal')).toMatchObject({ choices: [{ value: 'xhigh' }] })
+  expect(agentPickerEffectiveChoices(own, { ...picked, surface: 'terminal' }).options?.effort).toBe(
+    'high'
+  )
+  const launch = agentPickerLaunchInputs({ ...picked, surface: 'terminal' }, own)
+  expect(launch.sessionOptions?.effort).toBeUndefined()
+  expect(launch.chatSessionOptions?.effort).toBe('ultracode')
+  expect(agentPickerEffectiveChoices(own, { ...picked, surface: 'chat' }).options?.effort).toBe(
+    'ultracode'
+  )
+})
+
+it('never emits a chat-only effort into terminal argv or legacy host preferences', () => {
+  const values = { model: 'opus', effort: 'ultracode' }
+  const launch = resolveAgentSessionOptionLaunch('claude', values)
+  expect(launch.args).not.toContain('ultracode')
+  expect(launch.appliedValues).not.toHaveProperty('effort')
+  expect(toAgentLaunchPreferences(values, 'claude')).toEqual({ model: 'opus' })
 })

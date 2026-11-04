@@ -1,3 +1,4 @@
+import { claudeObservedEffort } from './launch/claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 
 /** Fast routing reports precede this input and cannot vouch for its execution. */
@@ -6,7 +7,10 @@ export function claudeExecutionObservations(session: ClaudeSession): Record<stri
     session.reportedModelMutation === session.optionMutationSequence
       ? (session.reportedOptions.model ?? session.appliedOptions?.model)
       : session.appliedOptions?.model
-  const effort = session.appliedOptions?.effort
+  const effort = claudeObservedEffort(
+    session.appliedOptions?.effort,
+    session.appliedOptions?.ultracode
+  )
   return {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {})

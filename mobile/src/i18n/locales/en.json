@@ -2835,6 +2835,7 @@
       "showAll": "Full task list"
     },
     "sessionOptionCopy": {
+      "ultracode": "Ultracode",
       "on": "On",
       "off": "Off",
       "permissions": "Permissions",

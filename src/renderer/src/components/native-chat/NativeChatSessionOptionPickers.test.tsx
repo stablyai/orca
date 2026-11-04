@@ -822,3 +822,26 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(effortLevels().every((level) => level.hasAttribute('disabled'))).toBe(true)
   })
 })
+
+it('renders and selects Ultracode in the existing effort control', async () => {
+  const ultracode: SessionOptionDescriptor = {
+    ...effort,
+    kind: {
+      type: 'select',
+      currentValue: 'high',
+      choices: [...EFFORT_CHOICES, { value: 'ultracode', label: 'Ultracode' }]
+    },
+    transport: 'agent-session'
+  }
+  render(
+    <NativeChatSessionOptionPickers
+      surface={surface}
+      snapshot={[model(), ultracode]}
+      isWorking={false}
+    />
+  )
+  expect(pill('Model Opus 4.8, Effort High')).toBeTruthy()
+  const choice = screen.getByRole('radio', { name: 'Ultracode' })
+  fireEvent.click(choice)
+  await waitFor(() => expect(surface.setOption).toHaveBeenCalledWith('effort', 'ultracode'))
+})

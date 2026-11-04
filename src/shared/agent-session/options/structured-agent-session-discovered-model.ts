@@ -3,6 +3,12 @@ import type { AgentSessionOptionChoice } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import type { AgentType } from '../../agent-status-types'
 
+export function structuredModelEfforts(
+  model: AgentSessionOptionsResult['models'][number]
+): AgentSessionOptionChoice[] {
+  return [...model.efforts, ...(model.chatEfforts ?? [])]
+}
+
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
   agent: AgentType
@@ -17,7 +23,7 @@ function effortOption(
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: model.efforts,
+      choices: structuredModelEfforts(model),
       defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
       ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
     },

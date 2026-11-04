@@ -13,6 +13,7 @@ import {
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
   settleStructuredAgentSessionBuiltinCatalog,
+  structuredAgentSessionOptionCatalog,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
@@ -375,5 +376,26 @@ it('rederives unanswered catalog policy while preserving stronger input and quer
     model: 'opus',
     effort: 'low',
     fastMode: 'false'
+  })
+})
+
+it('uses the host chat-only effort declaration on both structured-chat clients and keeps old hosts ordinary', () => {
+  const model = {
+    id: 'opus',
+    label: 'Opus',
+    isDefault: true,
+    efforts: [{ value: 'xhigh', label: 'Extra high' }]
+  }
+  const catalog = (chatEfforts?: { value: string; label: string }[]) =>
+    structuredAgentSessionOptionCatalog(
+      CLAUDE_SESSION_OPTION_CATALOG,
+      { models: [{ ...model, ...(chatEfforts ? { chatEfforts } : {}) }], current: {} },
+      'claude'
+    )
+  const effort = (chatEfforts?: { value: string; label: string }[]) =>
+    catalog(chatEfforts).models[0]?.options.find(({ id }) => id === 'effort')?.kind
+  expect(effort()).toMatchObject({ choices: [{ value: 'xhigh' }] })
+  expect(effort([{ value: 'ultracode', label: 'Ultracode' }])).toMatchObject({
+    choices: [{ value: 'xhigh' }, { value: 'ultracode' }]
   })
 })

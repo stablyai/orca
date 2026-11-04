@@ -17,6 +17,7 @@ import { ClaudeChildWorkDecoder } from '../../claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../../claude-slash-command-catalog'
 import { createClaudeInitProof } from '../claude-structured-init-proof'
 import { createClaudeStartupOutcome } from '../claude-structured-startup-outcome'
+import { claudeExecutionObservations } from '../claude-structured-execution-observations'
 import { claudeProviderHandleLink } from '../claude-structured-owner-identity'
 import {
   claudeStructuredSessionOptionsFrom,
@@ -506,5 +507,71 @@ describe('Claude applied inputs across native writer effects', () => {
     const count = setModel.mock.calls.length + flags.mock.calls.length
     await applyClaudeMessageOptions(session, {}, undefined)
     expect(setModel.mock.calls.length + flags.mock.calls.length).toBe(count)
+  })
+})
+
+describe('Claude Ultracode effort', () => {
+  it('enters the workflow and explicitly leaves it at the same numeric effort', async () => {
+    const session = sessionFor(vi.fn(async () => undefined))
+    let workflow = false
+    const applyFlagSettings = vi.fn(async (settings: { ultracode?: boolean }) => {
+      workflow = settings.ultracode ?? workflow
+    })
+    session.connection.applyFlagSettings = applyFlagSettings
+    session.connection.getSettings = async () => ({
+      effective: { effortLevel: 'xhigh' },
+      applied: { effort: 'xhigh', ultracode: workflow }
+    })
+    await setClaudeStructuredOption(session, { key: 'effort', value: 'ultracode' }, undefined)
+    await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
+    expect(claudeExecutionObservations(session)).toEqual({ effort: 'ultracode' })
+    await setClaudeStructuredOption(session, { key: 'effort', value: 'xhigh' }, undefined)
+    expect(applyFlagSettings.mock.calls.map(([settings]) => settings)).toEqual([
+      { effortLevel: 'xhigh', ultracode: true },
+      { effortLevel: 'xhigh', ultracode: false }
+    ])
+    await vi.waitFor(() => expect(session.confirmedOptions.has('effort')).toBe(true))
+    expect(claudeExecutionObservations(session)).toEqual({ effort: 'xhigh' })
+  })
+
+  it.each([false, undefined])(
+    'holds intent without refusing when applied workflow is %s',
+    async (ultracode) => {
+      const session = sessionFor(vi.fn(async () => undefined))
+      session.connection.applyFlagSettings = vi.fn(async () => {})
+      session.connection.getSettings = async () => ({
+        effective: { effortLevel: 'xhigh' },
+        applied: { effort: 'xhigh', ultracode }
+      })
+      await expect(
+        setClaudeStructuredOption(session, { key: 'effort', value: 'ultracode' }, undefined)
+      ).resolves.toEqual({ effort: 'ultracode' })
+      expect(session.confirmedOptions.has('effort')).toBe(false)
+      expect(claudeExecutionObservations(session)).toEqual({ effort: 'xhigh' })
+      await refreshClaudeStructuredSessionOptions(
+        session,
+        undefined,
+        () => true,
+        () => {}
+      )
+      expect(claudeStructuredSessionOptionsFrom(session, null).current.effort).toBe('ultracode')
+    }
+  )
+
+  it('turns off a workflow observed from configured settings before confirming ordinary effort', async () => {
+    const session = sessionFor(vi.fn(async () => undefined))
+    session.appliedOptions = { effort: 'xhigh', ultracode: true }
+    session.connection.getSettings = async () => ({
+      effective: { effortLevel: 'xhigh' },
+      applied: { effort: 'xhigh', ultracode: true }
+    })
+    const apply = vi.fn(async () => {})
+    session.connection.applyFlagSettings = apply
+    await setClaudeStructuredOption(session, { key: 'effort', value: 'xhigh' }, undefined)
+    expect(apply).toHaveBeenCalledWith(
+      { effortLevel: 'xhigh', ultracode: false },
+      { timeoutMs: undefined }
+    )
+    expect(session.confirmedOptions.has('effort')).toBe(false)
   })
 })
