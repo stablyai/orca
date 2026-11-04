@@ -138,6 +138,52 @@ describe('BrowserSiteDisplayController zoom', () => {
 })
 
 describe('BrowserSiteDisplayController color scheme', () => {
+  it('uses chat media for document guests without changing zoom, and upgrades browser registration', () => {
+    const controller = new BrowserSiteDisplayController()
+    const preview = fakeGuest('orca-preview://grant/theme.html')
+    preview.level = 1
+    controller.setGuestColorSchemeFallback(preview, 'dark')
+    controller.onMainFrameNavigationCommitted(preview.id)
+    expect(preview.mediaSent).toEqual(['dark', 'dark'])
+    expect(preview.level).toBe(1)
+    expect(preview.listenerCount('dom-ready')).toBe(0)
+
+    const local = fakeGuest('file:///chat-scratch/theme.html')
+    controller.setGuestColorSchemeFallback(local, 'dark')
+    controller.onGuestRegistered(local, 'work')
+    controller.setColorScheme(local.id, 'light')
+    controller.setGuestColorSchemeFallback(local, 'light')
+    controller.setGuestColorSchemeFallback(local, 'dark')
+    expect(local.mediaSent.at(-1)).toBe('light')
+    expect(controller.getPageDisplay(local.id)?.colorScheme).toBe('light')
+    controller.setColorScheme(local.id, null)
+    expect(local.mediaSent.at(-1)).toBe('dark')
+    controller.setGuestColorSchemeFallback(local, undefined)
+    commit(controller, local, 'https://ordinary.example/')
+    expect(local.mediaSent.slice(-2)).toEqual(['dark', ''])
+    controller.onGuestRetired(preview.id)
+    expect(preview.debugger.isAttached()).toBe(false)
+  })
+
+  it.each([10, 100])('sends one media update per eligible guest at population %s', (population) => {
+    const controller = new BrowserSiteDisplayController()
+    const ordinary = fakeGuest('https://ordinary.example/')
+    controller.onGuestRegistered(ordinary, null)
+    const guests = Array.from({ length: population }, () =>
+      fakeGuest('orca-preview://grant/a.html')
+    )
+    for (const guest of guests) {
+      controller.setGuestColorSchemeFallback(guest, 'dark')
+      guest.mediaSent.length = 0
+    }
+    for (const guest of guests) {
+      controller.setGuestColorSchemeFallback(guest, 'light')
+    }
+    expect(guests.reduce((total, guest) => total + guest.mediaSent.length, 0)).toBe(population)
+    expect(ordinary.mediaSent).toEqual([])
+    expect(ordinary.debugger.isAttached()).toBe(false)
+  })
+
   it('sets the site scheme as each page commits and clears it once on leaving', () => {
     const controller = new BrowserSiteDisplayController()
     const guest = fakeGuest('https://github.com/')

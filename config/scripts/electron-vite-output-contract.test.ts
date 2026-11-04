@@ -105,7 +105,7 @@ describe('Electron Vite output contract', () => {
       if (!source) {
         throw new Error(`Missing guest preload ${name}`)
       }
-      expect(preloadRuntimeImports(source)).toEqual(['electron'])
+      expect(await preloadRuntimeImports(source)).toEqual(['electron'])
     }
   })
 

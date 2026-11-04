@@ -7,9 +7,14 @@ import {
   NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE as UPDATE
 } from '../../shared/native-chat/native-chat-visual-shell'
 
-const { ipc, classify } = vi.hoisted(() => ({
+const { ipc, classify, display } = vi.hoisted(() => ({
   ipc: { on: vi.fn(), removeListener: vi.fn() },
-  classify: vi.fn(() => true)
+  classify: vi.fn(() => true),
+  display: {
+    setGuestColorSchemeFallback: vi.fn(),
+    onGuestRetired: vi.fn(),
+    onMainFrameNavigationCommitted: vi.fn()
+  }
 }))
 vi.mock('electron', () => ({ ipcMain: ipc }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
@@ -20,6 +25,9 @@ vi.mock('../native-chat/native-chat-scratch-folder', () => ({
 }))
 vi.mock('../native-chat/native-chat-visual-guest-location', () => ({
   isNativeChatVisualGuestLocation: classify
+}))
+vi.mock('../browser/site-settings/browser-site-display-controller', () => ({
+  browserSiteDisplayController: display
 }))
 import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
 
@@ -135,7 +143,9 @@ describe('visual guest theme handoff', () => {
         expect(guest.listenerCount('did-navigate')).toBe(1)
         expect(guest.listenerCount('destroyed')).toBe(1)
       }
+      display.setGuestColorSchemeFallback.mockClear()
       publish(event(host), { ...dark, colorScheme: 'light' })
+      expect(display.setGuestColorSchemeFallback).toHaveBeenCalledTimes(population)
       expect(guests.reduce((sum, guest) => sum + guest.send.mock.calls.length, 0)).toBe(population)
       for (const guest of guests) {
         guest.emit('destroyed')

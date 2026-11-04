@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { build, type Plugin } from 'vite'
-import { verifySandboxPreloadImports } from '../scripts/preload-output-contract.mjs'
+import { verifySandboxPreloadImports } from '../scripts/sandbox-preload-imports.mjs'
 import {
   BROWSER_EXTENSION_CONTENT_SCRIPT_FILE,
   BROWSER_EXTENSION_WORKER_SHIM_FILE
@@ -55,7 +55,7 @@ async function bundleScript(
     for (const chunk of output.output) {
       if (chunk.type === 'chunk' && chunk.isEntry) {
         if (format === 'cjs') {
-          verifySandboxPreloadImports(chunk.code)
+          await verifySandboxPreloadImports(chunk.code)
         }
         return { code: chunk.code, moduleIds: chunk.moduleIds }
       }

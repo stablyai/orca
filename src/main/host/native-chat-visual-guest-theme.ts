@@ -9,6 +9,7 @@ import {
 } from '../../shared/native-chat/native-chat-visual-shell'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { nativeChatScratchRootFor } from '../native-chat/native-chat-scratch-folder'
+import { browserSiteDisplayController } from '../browser/site-settings/browser-site-display-controller'
 import { isNativeChatVisualGuestLocation } from '../native-chat/native-chat-visual-guest-location'
 
 /** Install before the host loads: an unanswered synchronous preload request blocks its guest. */
@@ -39,6 +40,7 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
     theme = next
     for (const guest of guests.values()) {
       if (!guest.isDestroyed()) {
+        browserSiteDisplayController.setGuestColorSchemeFallback(guest, theme.colorScheme)
         guest.send(NATIVE_CHAT_VISUAL_GUEST_THEME_UPDATE, theme)
       }
     }
@@ -61,6 +63,7 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
       event.returnValue = null
       return
     }
+    browserSiteDisplayController.setGuestColorSchemeFallback(guest, theme.colorScheme)
     guests.set(guest.id, guest)
     if (!watched.has(guest)) {
       watched.add(guest)
@@ -68,10 +71,16 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
         if (
           !isNativeChatVisualGuestLocation(url, nativeChatScratchRootFor(getProfileUserDataPath()))
         ) {
+          browserSiteDisplayController.setGuestColorSchemeFallback(guest, undefined)
           guests.delete(guest.id)
+        } else {
+          browserSiteDisplayController.onMainFrameNavigationCommitted(guest.id)
         }
       })
-      guest.once('destroyed', () => guests.delete(guest.id))
+      guest.once('destroyed', () => {
+        browserSiteDisplayController.onGuestRetired(guest.id)
+        guests.delete(guest.id)
+      })
     }
     event.returnValue = theme
   }
@@ -80,6 +89,9 @@ export function installNativeChatVisualGuestTheme(window: BrowserWindow): void {
   window.webContents.on('destroyed', () => {
     ipcMain.removeListener(NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH, publish)
     ipcMain.removeListener(NATIVE_CHAT_VISUAL_GUEST_THEME_READ, read)
+    for (const guest of guests.values()) {
+      browserSiteDisplayController.setGuestColorSchemeFallback(guest, undefined)
+    }
     guests.clear()
   })
 }

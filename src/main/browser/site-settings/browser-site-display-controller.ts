@@ -19,7 +19,8 @@ import { errorMessage } from '../../../shared/error-message'
 
 type TrackedGuest = {
   guest: Electron.WebContents
-  profileId: string
+  profileId: string | null
+  fallbackColorScheme?: BrowserSiteColorScheme
   stopWatchingDomReady: () => void
   colorScheme: {
     lease: ElectronDebuggerLease
@@ -65,10 +66,36 @@ export class BrowserSiteDisplayController {
       guest,
       profileId: profileId ?? 'default',
       stopWatchingDomReady: () => guest.off('dom-ready', onDomReady),
-      colorScheme: previous?.colorScheme ?? null
+      colorScheme: previous?.colorScheme ?? null,
+      fallbackColorScheme: previous?.fallbackColorScheme
     })
     this.applyColorScheme(guest.id)
     this.applyZoom(guest.id)
+  }
+
+  /** Document previews use media emulation without becoming browser pages or inheriting zoom. */
+  setGuestColorSchemeFallback(
+    guest: Electron.WebContents,
+    colorScheme: BrowserSiteColorScheme | undefined
+  ): void {
+    let tracked = this.guests.get(guest.id)
+    if (!tracked) {
+      if (!colorScheme || guest.isDestroyed()) {
+        return
+      }
+      tracked = {
+        guest,
+        profileId: null,
+        stopWatchingDomReady: () => {},
+        colorScheme: null
+      }
+      this.guests.set(guest.id, tracked)
+    }
+    if (tracked.fallbackColorScheme === colorScheme) {
+      return
+    }
+    tracked.fallbackColorScheme = colorScheme
+    this.applyColorScheme(guest.id)
   }
 
   onGuestRetired(guestId: number): void {
@@ -98,7 +125,7 @@ export class BrowserSiteDisplayController {
       return null
     }
     const site = browserSiteDisplayKey(tracked.guest.getURL())
-    const saved = site ? getBrowserSiteDisplay(tracked.profileId, site) : {}
+    const saved = site && tracked.profileId ? getBrowserSiteDisplay(tracked.profileId, site) : {}
     return {
       site,
       zoomLevel: saved.zoomLevel ?? this.defaultZoomLevel,
@@ -156,7 +183,7 @@ export class BrowserSiteDisplayController {
 
   private applyZoom(guestId: number): void {
     const tracked = this.guests.get(guestId)
-    if (!tracked || tracked.guest.isDestroyed()) {
+    if (!tracked?.profileId || tracked.guest.isDestroyed()) {
       return
     }
     const level = this.getPageDisplay(guestId)?.zoomLevel ?? this.defaultZoomLevel
@@ -171,7 +198,7 @@ export class BrowserSiteDisplayController {
     if (!tracked || tracked.guest.isDestroyed()) {
       return
     }
-    const colorScheme = this.getPageDisplay(guestId)?.colorScheme ?? undefined
+    const colorScheme = this.getPageDisplay(guestId)?.colorScheme ?? tracked.fallbackColorScheme
     if (!colorScheme && !tracked.colorScheme?.standing) {
       return
     }
