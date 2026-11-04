@@ -51,52 +51,80 @@ test('chat right-click offers Copy for selected text and Paste in the composer o
     worktreeId: descriptor.worktreeId,
     paneKey: descriptor.paneKey
   })
-  const nativeMenu = await electronApp.evaluateHandle(({ Menu }) => {
-    const originalBuild = Menu.buildFromTemplate
-    const originalPopup = Menu.prototype.popup
-    const menus: InstanceType<typeof Menu>[] = []
-    let opened: InstanceType<typeof Menu> | null = null
-    // Keep the real menu builder and callbacks; intercept only its OS popup.
-    Menu.buildFromTemplate = (...args) => {
-      const menu = originalBuild(...args)
-      menus.push(menu)
-      menu.popup = () => {
-        opened = menu
+  const nativeWindow = await electronApp.browserWindow(orcaPage)
+  const contentsId = await nativeWindow.evaluate((window) => window.webContents.id)
+  const nativeMenu = await electronApp.evaluateHandle(
+    ({ Menu, webContents }, { contentsId, text }) => {
+      const contents = webContents.fromId(contentsId)
+      if (!contents) {
+        throw new Error('Test window unavailable')
       }
-      return menu
-    }
-    return {
-      items: () =>
-        opened?.items.map((item) => ({ label: item.label, enabled: item.enabled })) ?? [],
-      paste: () => {
-        const item = opened?.items.find((candidate) => candidate.label === 'Paste')
-        if (!item?.enabled) {
-          throw new Error('The actual native composer menu has no enabled Paste command')
+      const originalBuild = Menu.buildFromTemplate
+      const originalPopup = Menu.prototype.popup
+      const menus: InstanceType<typeof Menu>[] = []
+      let opened: InstanceType<typeof Menu> | null = null
+      // Keep the real menu builder and callbacks while suppressing its OS popup.
+      Menu.buildFromTemplate = (...args) => {
+        const menu = originalBuild(...args)
+        menus.push(menu)
+        menu.popup = () => {
+          opened = menu
         }
-        item.click()
-      },
-      restore: () => {
-        Menu.buildFromTemplate = originalBuild
-        for (const menu of menus) {
-          menu.popup = originalPopup
+        return menu
+      }
+      return {
+        items: () =>
+          opened?.items.map((item) => ({ label: item.label, enabled: item.enabled })) ?? [],
+        paste: async () => {
+          const item = opened?.items.find((candidate) => candidate.label === 'Paste')
+          if (!item?.enabled) {
+            throw new Error('The actual native composer menu has no enabled Paste command')
+          }
+          const originalPaste = contents.paste
+          let delivery: Promise<unknown> | undefined
+          // Simulate native clipboard delivery without reading or changing the system clipboard.
+          contents.paste = () => {
+            delivery = contents.executeJavaScript(`(() => {
+              const target = document.activeElement
+              if (!(target instanceof HTMLElement)) throw new Error('Paste target unavailable')
+              const data = new DataTransfer()
+              data.setData('text/plain', ${JSON.stringify(text)})
+              target.dispatchEvent(new ClipboardEvent('paste', {
+                bubbles: true, cancelable: true, clipboardData: data
+              }))
+            })()`)
+          }
+          try {
+            item.click()
+            if (!delivery) {
+              throw new Error('The native menu did not invoke webContents.paste()')
+            }
+            await delivery
+          } finally {
+            contents.paste = originalPaste
+          }
+        },
+        restore: () => {
+          Menu.buildFromTemplate = originalBuild
+          for (const menu of menus) {
+            menu.popup = originalPopup
+          }
         }
       }
-    }
-  })
+    },
+    { contentsId, text: PASTED }
+  )
   try {
-    // Substitute only the clipboard IPC; never touch the user's system clipboard.
-    await electronApp.evaluate(({ ipcMain }, pasteText) => {
+    await electronApp.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('clipboard:writeText')
       ipcMain.handle('clipboard:writeText', (_event, text: string) => {
         process.env.ORCA_E2E_COPIED_TEXT = text
       })
-      ipcMain.removeHandler('clipboard:readText')
-      ipcMain.handle('clipboard:readText', () => pasteText)
       ipcMain.removeHandler('clipboard:readFilePaths')
       ipcMain.handle('clipboard:readFilePaths', () => [])
       ipcMain.removeHandler('clipboard:hasImage')
       ipcMain.handle('clipboard:hasImage', () => false)
-    }, PASTED)
+    })
     const takeCopiedText = (): Promise<string | null> =>
       electronApp.evaluate(() => {
         const text = process.env.ORCA_E2E_COPIED_TEXT ?? null
@@ -179,6 +207,7 @@ test('chat right-click offers Copy for selected text and Paste in the composer o
   } finally {
     await nativeMenu.evaluate((menu) => menu.restore())
     await nativeMenu.dispose()
+    await nativeWindow.dispose()
     await testInfo.attach('transcript-pane-lifetime', {
       body: JSON.stringify(await finishLifetime()),
       contentType: 'application/json'
