@@ -18,7 +18,11 @@ import {
 } from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
-import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  TAB_MOVE_TO_SPLIT_COMMANDS,
+  type KeybindingActionId
+} from '../../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
@@ -235,6 +239,13 @@ export function useGlobalKeybindings(args: {
         return
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
+        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
+          return
+        }
+      }
+
+      // Why: these unbound built-ins are not plugin aliases and must fall through when unavailable.
+      for (const { id: actionId } of TAB_MOVE_TO_SPLIT_COMMANDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
         }

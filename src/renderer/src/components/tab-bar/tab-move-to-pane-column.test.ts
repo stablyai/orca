@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
 import { makeRuntimeOwnedWorktree } from '../../store/slices/store-test-helpers'
-import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import {
+  canMoveTabToNewPaneColumn,
+  moveTabToNewPaneColumn,
+  resolveActiveTabPaneColumnMove
+} from './tab-move-to-pane-column'
 
 const WT = 'wt-1'
 
@@ -84,6 +88,7 @@ describe('tab-move-to-pane-column', () => {
     })
 
     expect(canMoveTabToNewPaneColumn('tab-a', 'group-1')).toBe(false)
+    expect(resolveActiveTabPaneColumnMove(useAppStore.getState())).toBeNull()
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-a', groupId: 'group-1', direction: 'right' })
     ).toBe(false)
@@ -116,6 +121,49 @@ describe('tab-move-to-pane-column', () => {
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
     ).toBe(false)
+    expect(mocks.mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+  })
+
+  it('resolves the active unified tab', () => {
+    useAppStore.setState({ activeGroupIdByWorktree: { [WT]: 'group-1' } })
+
+    expect(resolveActiveTabPaneColumnMove(useAppStore.getState())).toEqual({
+      unifiedTabId: 'tab-a',
+      groupId: 'group-1'
+    })
+  })
+
+  it('resolves nothing when the active group has no active tab', () => {
+    useAppStore.setState({
+      activeGroupIdByWorktree: { [WT]: 'group-1' },
+      groupsByWorktree: {
+        [WT]: [{ id: 'group-1', worktreeId: WT, activeTabId: null, tabOrder: ['tab-a', 'tab-b'] }]
+      }
+    })
+
+    expect(resolveActiveTabPaneColumnMove(useAppStore.getState())).toBeNull()
+  })
+
+  it('rejects a move after its tab changes groups', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({ dropUnifiedTab } as Partial<ReturnType<typeof useAppStore.getState>>)
+    const tabs = useAppStore.getState().unifiedTabsByWorktree[WT] ?? []
+    useAppStore.setState({
+      groupsByWorktree: {
+        [WT]: [
+          { id: 'group-1', worktreeId: WT, activeTabId: 'tab-a', tabOrder: ['tab-a'] },
+          { id: 'group-2', worktreeId: WT, activeTabId: 'tab-b', tabOrder: ['tab-b'] }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [WT]: tabs.map((tab) => (tab.id === 'tab-b' ? { ...tab, groupId: 'group-2' } : tab))
+      }
+    })
+
+    expect(
+      moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
+    ).toBe(false)
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
     expect(mocks.mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
   })
 })
