@@ -18845,8 +18845,6 @@
         "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
-      "newRowsAnnouncement": "자리를 비운 동안 새 메시지가 도착했습니다",
-      "newRowsMarker": "새 메시지",
       "find": {
         "label": "채팅에서 찾기",
         "noResults": "결과 없음",
