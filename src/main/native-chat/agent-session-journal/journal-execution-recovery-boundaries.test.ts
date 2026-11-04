@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-stale-state-settlement'
 import { journalInputOrder } from './journal-input-order'
 import { latestUsageLimitContinueIdentity } from '../../../shared/native-chat/native-chat-usage-limit-cut'
@@ -46,7 +49,6 @@ async function fixture(name: string) {
   }
 }
 import { settleUnheldStructuredAgentSessionTurns } from '../agent-session-wire/structured-agent-session-unheld-turns'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 it('a queued exact old-host callback cannot settle a fresh same-child execution', async () => {
   const f = await fixture('real-unheld-caller')
   const old = agentJournalItemKey(turn)

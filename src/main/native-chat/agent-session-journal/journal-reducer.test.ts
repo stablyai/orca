@@ -20,7 +20,8 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
+import { buildJournalItemRow } from './journal-row-builders'
+import { buildJournalTombstoneRow } from './journal-tombstone-row'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'

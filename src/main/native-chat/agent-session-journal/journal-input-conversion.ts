@@ -1,6 +1,6 @@
 import { copyJournalExecutionRemovals } from './journal-execution-restatement'
 import { normalizeStopCancellations } from './journal-stop-cancellation'
-import { restoreJournalCancellationTargets } from './journal-cancellation-targets'
+import { restoreJournalCancellationTargets } from './journal-cancellation-restore'
 import { readJournalLegacyCards } from './journal-queue-import'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'

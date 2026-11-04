@@ -6,8 +6,7 @@ import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
-import { journalLifecycleItems } from './journal-public-read'
-import { createJournalPublicReader, visitJournalItemsWithLinkage } from './journal-public-read'
+import * as publicJournal from './journal-public-read'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalItemBody,
@@ -39,7 +38,7 @@ import {
   resolveJournalItemId,
   type JournalReducerState
 } from './journal-reducer'
-import { journalTombstoneRowBuilder } from './journal-row-builders'
+import { journalTombstoneRowBuilder } from './journal-tombstone-row'
 import type {
   AgentSessionJournalOptions,
   JournalItemLinkageVisitor,
@@ -67,7 +66,7 @@ export class AgentSessionJournal {
   private readonly database: JournalHostDatabase
 
   private state: JournalReducerState
-  private readonly readPublic = createJournalPublicReader()
+  private readonly readPublic = publicJournal.createJournalPublicReader()
   private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: ((rows?: readonly JournalRow[]) => void) | null = null
@@ -190,7 +189,7 @@ export class AgentSessionJournal {
     sequence: this.state.lastSequence
   })
 
-  lifecycleItems = (): AgentJournalRenderItem[] => journalLifecycleItems(this.state)
+  lifecycleItems = (): AgentJournalRenderItem[] => publicJournal.journalLifecycleItems(this.state)
 
   snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
 
@@ -221,7 +220,7 @@ export class AgentSessionJournal {
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
   visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void =>
-    visitJournalItemsWithLinkage(this.state, visit)
+    publicJournal.visitJournalItemsWithLinkage(this.state, visit)
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
   runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>

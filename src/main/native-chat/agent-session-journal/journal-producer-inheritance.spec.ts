@@ -1,3 +1,4 @@
+import { buildJournalTombstoneRow } from './journal-tombstone-row'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
@@ -10,11 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import {
-  buildJournalItemRow,
-  buildJournalTombstoneRow,
-  journalLifecycleBatchRowBuilder
-} from './journal-row-builders'
+import { buildJournalItemRow, journalLifecycleBatchRowBuilder } from './journal-row-builders'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 

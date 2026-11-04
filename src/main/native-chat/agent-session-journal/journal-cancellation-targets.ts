@@ -284,5 +284,3 @@ export class JournalCancellationTargets {
     return [...this.active.values()].filter((target) => target.ownerFence === ownerFence)
   }
 }
-
-export { restoreJournalCancellationTargets } from './journal-cancellation-restore'

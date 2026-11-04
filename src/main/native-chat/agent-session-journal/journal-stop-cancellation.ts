@@ -3,7 +3,7 @@ import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema
 import type { JournalReducerState } from './journal-reducer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalCancellationTarget } from './journal-cancellation-targets'
-import { restoreJournalCancellationTargets } from './journal-cancellation-targets'
+import { restoreJournalCancellationTargets } from './journal-cancellation-restore'
 import type { JournalStopSettle } from './queued-message-pause'
 import type { AcceptedInterruption, ExecutionInterruption } from './journal-execution-interruption'
 import { carryJournalExecutionAliases, journalExecutionAlias } from './journal-execution-item'

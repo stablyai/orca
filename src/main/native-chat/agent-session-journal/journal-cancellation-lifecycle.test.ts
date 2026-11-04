@@ -1,7 +1,7 @@
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { applyJournalRow } from './journal-reducer'
 import { journalStopEventRowBuilder } from './journal-stop-and-resume-rows'
-import { activeCancellations } from './journal-stop-cancellation'
+import { activeCancellations, normalizeStopCancellations } from './journal-stop-cancellation'
 import { it, expect, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -17,7 +17,6 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { normalizeStopCancellations } from './journal-stop-cancellation'
 import { personStopDecidesTurn } from './journal-stop-turn-end'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 async function fixture(now?: () => number) {

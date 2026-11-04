@@ -1,4 +1,3 @@
-export { buildJournalTombstoneRow, journalTombstoneRowBuilder } from './journal-tombstone-row'
 import type { ExecutionInterruption } from './journal-execution-interruption'
 import { journalWriteTurnScope } from './journal-write-turn-scope'
 import {

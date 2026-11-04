@@ -14,7 +14,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 
 it('accepted Stop withdraws first late known-reset cut even when feedback note could not save', async () => {
   const rig = await createQueuedMessageTestRig({ now: () => NOW, restartable: true })
-  let spy: ReturnType<typeof vi.spyOn> | undefined
+  let restoreAppendItem: (() => void) | undefined
   try {
     const id = await rig.workingSend()
     await rig.settleAccepted(id, '1')
@@ -28,7 +28,7 @@ it('accepted Stop withdraws first late known-reset cut even when feedback note c
       { fence, turnScope: { kind: 'thread' } }
     )
     const append = journal.appendItem.bind(journal)
-    spy = vi.spyOn(journal, 'appendItem').mockImplementation((...args) => {
+    const spy = vi.spyOn(journal, 'appendItem').mockImplementation((...args) => {
       const item = agentJournalItemKey(args[0])
       const parsed = parseAgentJournalItemKey(item)
       if (parsed?.provider === 'orca' && parsed.clientMessageId.startsWith('stop:')) {
@@ -36,6 +36,7 @@ it('accepted Stop withdraws first late known-reset cut even when feedback note c
       }
       return append(...args)
     })
+    restoreAppendItem = () => spy.mockRestore()
     expect(await rig.stop()).toMatchObject({ ok: true })
     // Exact earlier provider failure must keep its meaning; no limit/reset was known at Stop.
     const endFence = rig.store.getRecord(SESSION)!.lease.runtimeFence
@@ -68,7 +69,7 @@ it('accepted Stop withdraws first late known-reset cut even when feedback note c
     expect(cut).toBeDefined()
     expect(rig.store.getRecord(SESSION)?.usageLimitContinueCancel).toEqual(cut)
   } finally {
-    spy?.mockRestore()
+    restoreAppendItem?.()
     await rig.dispose()
   }
 })

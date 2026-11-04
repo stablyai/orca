@@ -2,11 +2,13 @@ import { it, expect } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import {
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
+} from './journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { restoreJournal } from './journal-open'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 
 for (const rebuild of ['retained-opener', 'removed-opener'] as const) {
   it(`keeps pre-ID close and later Stop as separate execution history through epoch replacement with ${rebuild} and restart`, async () => {
