@@ -155,7 +155,7 @@ export function ThemeStep({
       await updateSettings(imported)
       // Why: later look picks start from the imported terminal, not the one it replaced.
       if (mountedRef.current) {
-        onLookBaselineChange({ ...settings, ...imported })
+        onLookBaselineChange({ ...(lookBaseline ?? settings), ...imported })
       }
       // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
