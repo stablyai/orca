@@ -3,6 +3,8 @@ import { fetchClaudeRateLimits } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
+import { prepareOllamaResultPromise } from '../../ollama/ollama-usage-cycle-preparation'
+import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFullCycleApplication {
@@ -178,6 +180,40 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+  }
+
+  /** Dedicated refresh for the Ollama accounts pane; key read rides in the cycle so sibling promises stay warm. */
+  protected async runFetchOllamaOnlyCycle(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) {
+      return
+    }
+    const previousState = this.state
+
+    this.updateState({
+      ...previousState,
+      ollama: this.withFetchingStatus(previousState.ollama, 'ollama')
+    })
+
+    const ollama = await prepareOllamaResultPromise(signal)
+      .then(settleSiblingProviderResult.bind(null, 'ollama'))
+      .catch((err): ProviderRateLimits => ({
+        provider: 'ollama',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: err instanceof Error ? err.message : 'Unknown error',
+        status: 'error'
+      }))
+
+    if (signal.aborted) {
+      return
+    }
+
+    this.trackActiveFailureStreak('ollama', ollama)
+    this.updateState({
+      ...this.state,
+      ollama: this.applyStalePolicy(ollama, previousState.ollama)
     })
   }
 }

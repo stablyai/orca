@@ -7,6 +7,7 @@ import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { MuseUsagePane } from './MuseUsagePane'
+import { OllamaUsagePane } from './OllamaUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
 import {
@@ -53,7 +54,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'muse' | 'grok' | 'ollama'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -91,11 +92,21 @@ const USAGE_ANALYTICS_OPTIONS = [
     get label() {
       return translate('auto.components.stats.StatsPane.grokUsageTab', 'Grok')
     }
+  },
+  {
+    id: 'ollama',
+    get label() {
+      return translate('auto.components.stats.StatsPane.ollamaUsageTab', 'Ollama')
+    }
   }
 ] as const satisfies readonly { id: UsageTab; label: string }[]
 
 function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element {
   if (tab === 'overview') {
+    return <BarChart3 className="size-3.5 text-muted-foreground" />
+  }
+  // 'ollama' is a cloud subscription (no TUI binary), not a TuiAgent; give it the bar icon.
+  if (tab === 'ollama') {
     return <BarChart3 className="size-3.5 text-muted-foreground" />
   }
   return <AgentIcon agent={tab} size={14} />
@@ -215,6 +226,8 @@ export function StatsPane(): React.JSX.Element {
             <OpenCodeUsagePane />
           ) : activeUsageTab === 'muse' ? (
             <MuseUsagePane />
+          ) : activeUsageTab === 'ollama' ? (
+            <OllamaUsagePane />
           ) : (
             <GrokUsagePane />
           )}

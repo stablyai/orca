@@ -82,6 +82,7 @@ export abstract class RateLimitServiceState {
   protected codexOnlyFetchQueued = false
   protected claudeOnlyFetchQueued = false
   protected grokOnlyFetchQueued = false
+  protected ollamaOnlyFetchQueued = false
   protected activeFetchAbortControllers = new Set<AbortController>()
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0

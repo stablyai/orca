@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
@@ -334,9 +334,9 @@ export function OllamaCloudAccountsSection({
                   'auto.components.settings.OllamaCloudAccountsSection.monthTokens',
                   '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out',
                   {
-                    value0: totals.inputTokens.toLocaleString(),
-                    value1: (totals.cachedInputTokens ?? 0).toLocaleString(),
-                    value2: (totals.outputTokens ?? 0).toLocaleString()
+                    value0: totals.inputTokens.toLocaleString(getIntlLocale()),
+                    value1: (totals.cachedInputTokens ?? 0).toLocaleString(getIntlLocale()),
+                    value2: (totals.outputTokens ?? 0).toLocaleString(getIntlLocale())
                   }
                 )}
               </p>

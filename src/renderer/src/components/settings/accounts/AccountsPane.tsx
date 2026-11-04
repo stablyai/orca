@@ -25,9 +25,9 @@ import {
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries,
-  getAccountsZcodePlanSearchEntries,
-  getAccountsOllamaSearchEntries
+  getAccountsZcodePlanSearchEntries
 } from './accounts-search'
+import { getAccountsOllamaSearchEntries } from './ollama-cloud-accounts-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
