@@ -8,6 +8,7 @@ import type { AgentJournalItemBody } from '../../../shared/agent-session/journal
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalOwnedItem } from './journal-execution-interruption'
 import { journalItemExecutionFence } from './journal-item-provenance'
+import { journalItemRevisionIsStale } from './journal-item-revision'
 
 export const executionOriginSchema = z.object({
   providerItemId: z.string(),
@@ -157,9 +158,15 @@ export function resolveJournalExecutionItem(
   writer: ExecutionWriter
 ): { itemId: string; item: JournalOwnedItem } | null {
   if (!readAgentJournalTurn(next.body)) {
-    return { itemId: next.itemId, item: next }
+    return journalItemRevisionIsStale(state, itemId, next.revision) ||
+      journalItemRevisionIsStale(state, next.itemId, next.revision)
+      ? null
+      : { itemId: next.itemId, item: next }
   }
   if (next.executionOrigin) {
+    if (journalItemRevisionIsStale(state, itemId, next.revision)) {
+      return null
+    }
     rememberOrigin(
       state,
       itemId,
@@ -172,7 +179,10 @@ export function resolveJournalExecutionItem(
   }
   const address = journalExecutionAddress(state, { kind: 'provider', itemId }, next.body, writer)
   if (address.itemId !== undefined) {
-    if (!state.items.has(address.itemId) && state.tombstones.has(address.itemId)) {
+    if (
+      (!state.items.has(address.itemId) && state.tombstones.has(address.itemId)) ||
+      journalItemRevisionIsStale(state, address.itemId, next.revision)
+    ) {
       return null
     }
     state.aliases.set(
@@ -196,6 +206,9 @@ export function resolveJournalExecutionItem(
     provider: 'orca',
     clientMessageId: `execution:${state.epoch}:${next.sequence}:${next.sequenceIndex ?? 0}`
   })
+  if (journalItemRevisionIsStale(state, canonical, next.revision)) {
+    return null
+  }
   rememberOrigin(state, canonical, origin, true)
   return { itemId: canonical, item: { ...next, itemId: canonical, executionOrigin: origin } }
 }

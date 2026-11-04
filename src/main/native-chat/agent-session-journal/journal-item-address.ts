@@ -7,7 +7,7 @@ import {
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
 import { isWriteFailureSubmission } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { journalItemDeclaresEcho } from './journal-item-echo'
+import { journalItemDeclaresEcho, type JournalItemEcho } from './journal-item-echo'
 import type { JournalReducerState } from './journal-reducer'
 
 export function resolveJournalItemId(
@@ -15,17 +15,36 @@ export function resolveJournalItemId(
   itemId: string,
   body?: AgentJournalRenderItem['body']
 ): string {
-  const aliased = state.aliases.get(itemId)
-  if (aliased) {
-    return aliased
+  const addressed = journalItemAddress(state, itemId, body)
+  rememberJournalItemAlias(state, itemId, addressed)
+  return addressed
+}
+
+export function journalItemAddress(
+  state: JournalReducerState,
+  itemId: string,
+  body?: AgentJournalRenderItem['body'],
+  incoming: JournalItemEcho = {}
+): string {
+  return (
+    state.aliases.get(itemId) ??
+    (journalItemDeclaresEcho(state.itemEchoes, itemId, incoming)
+      ? null
+      : journalEchoClaimant(state, itemId, body)) ??
+    itemId
+  )
+}
+
+export function rememberJournalItemAlias(
+  state: JournalReducerState,
+  itemId: string,
+  addressed: string
+): void {
+  if (addressed === itemId || state.aliases.has(itemId)) {
+    return
   }
-  const submissionId = journalEchoClaimant(state, itemId, body)
-  if (!submissionId) {
-    return itemId
-  }
-  state.aliases.set(itemId, submissionId)
-  state.derivedTurnScope.cancellations.rememberAlias(itemId, submissionId)
-  return submissionId
+  state.aliases.set(itemId, addressed)
+  state.derivedTurnScope.cancellations.rememberAlias(itemId, addressed)
 }
 
 export function isProviderUserMessageEcho(

@@ -1,5 +1,5 @@
 export { renderJournalState } from './journal-render-state'
-import { resolveJournalItemId } from './journal-item-address'
+import { journalItemAddress, rememberJournalItemAlias } from './journal-item-address'
 export {
   resolveJournalItemId,
   isProviderUserMessageEcho,
@@ -26,7 +26,6 @@ import { journalBatchMutationProducer, journalRenderItem } from './journal-rende
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import { removeJournalItem, statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import { resolveJournalExecutionItem } from './journal-execution-item'
-import { journalItemRevisionIsStale } from './journal-item-revision'
 import { observeJournalProviderActivity } from './journal-provider-activity'
 import { isJournalStopOrResumeRow, type JournalRow } from './journal-row-schema'
 import { acceptSubmissionFromProviderItem, applyJournalSubmission } from './journal-submission-fold'
@@ -151,10 +150,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
-    if (!state.itemEchoes.has(row.itemId) && Object.hasOwn(row, 'echoOf')) {
-      state.itemEchoes.set(row.itemId, row.echoOf)
-    }
-    const addressed = resolveJournalItemId(state, row.itemId, row.body)
+    const addressed = journalItemAddress(state, row.itemId, row.body, row)
     const resolved = resolveJournalExecutionItem(
       state,
       row.itemId,
@@ -167,10 +163,14 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
       ),
       row
     )
-    if (!resolved || journalItemRevisionIsStale(state, resolved.itemId, row.revision)) {
+    if (!resolved) {
       return
     }
     const { itemId, item } = resolved
+    rememberJournalItemAlias(state, row.itemId, addressed)
+    if (!state.itemEchoes.has(row.itemId) && Object.hasOwn(row, 'echoOf')) {
+      state.itemEchoes.set(row.itemId, row.echoOf)
+    }
     if (!state.itemEchoes.has(row.itemId)) {
       acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     }
@@ -247,17 +247,11 @@ export function applyJournalLifecycleMutation(
   savedAt = row.ts
 ): void {
   if (mutation.kind === 'item') {
-    if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
-      state.itemEchoes.set(mutation.itemId, mutation.echoOf)
-    }
     const { revision, body } = mutation
-    let itemId = resolveJournalItemId(state, mutation.itemId, body)
-    if (!state.itemEchoes.has(mutation.itemId)) {
-      acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
-    }
+    const addressed = journalItemAddress(state, mutation.itemId, body, mutation)
     const producer = journalBatchMutationProducer(row, mutation)
     const scope = statedOrDerivedTurnScope(state, mutation)
-    let item = journalRenderItem(itemId, revision, body, row, scope, producer, sequenceIndex)
+    let item = journalRenderItem(addressed, revision, body, row, scope, producer, sequenceIndex)
     if (mutation.executionInterruption) {
       item.executionInterruption = mutation.executionInterruption
     }
@@ -269,10 +263,17 @@ export function applyJournalLifecycleMutation(
       ownerFence: mutation.ownerFence,
       executionOwner: mutation.executionOwner
     })
-    if (!resolved || journalItemRevisionIsStale(state, resolved.itemId, revision)) {
+    if (!resolved) {
       return
     }
-    itemId = resolved.itemId
+    const itemId = resolved.itemId
+    rememberJournalItemAlias(state, mutation.itemId, addressed)
+    if (!state.itemEchoes.has(mutation.itemId) && Object.hasOwn(mutation, 'echoOf')) {
+      state.itemEchoes.set(mutation.itemId, mutation.echoOf)
+    }
+    if (!state.itemEchoes.has(mutation.itemId)) {
+      acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
+    }
     item = { ...resolved.item, itemId }
     item.observedAt = mutation.observedAt ?? row.ts
     upsertJournalItem(state, itemId, revision, item, {
