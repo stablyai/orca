@@ -1,3 +1,4 @@
+import { isContextualTourStepActive } from '../../../../shared/contextual-tours'
 import { useEffect } from 'react'
 import type { KeybindingPlatform } from '../../../../shared/keybindings'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
@@ -118,7 +119,7 @@ export function useTerminalKeyboardShortcuts({
       isWindows,
       shortcutPlatform,
       getKeyboardSplitTelemetrySource: () =>
-        useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
+        isContextualTourStepActive(useAppStore.getState(), 'agent-sessions-split')
           ? 'contextual_tour'
           : 'keyboard'
     })

@@ -38,6 +38,7 @@ export type ContextualTourStep = {
   body: string
   targetSelector: string
   requiredForStart?: boolean
+  continueAfterModal?: string
   fallbackCopy?: string
   preferredPlacement?: ContextualTourStepPlacement
   targetPulse?: boolean
@@ -78,6 +79,14 @@ export const CONTEXTUAL_TOURS = [
   {
     id: 'workspace-agent-sessions',
     steps: [
+      {
+        id: 'agent-sessions-add-project',
+        title: 'Add a project',
+        body: 'Add a folder or Git repository to start working on your project.',
+        targetSelector: '[data-contextual-tour-target="project-add-control"]',
+        preferredPlacement: 'bottom',
+        continueAfterModal: 'add-repo'
+      },
       {
         id: 'agent-sessions-split',
         title: 'Split a terminal pane',
@@ -248,6 +257,17 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
 
 export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
+}
+
+export function isContextualTourStepActive(
+  state: { activeContextualTourId: ContextualTourId | null; activeContextualTourStepIndex: number },
+  stepId: ContextualTourStepId
+): boolean {
+  return (
+    state.activeContextualTourId !== null &&
+    getContextualTour(state.activeContextualTourId).steps[state.activeContextualTourStepIndex]
+      ?.id === stepId
+  )
 }
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {

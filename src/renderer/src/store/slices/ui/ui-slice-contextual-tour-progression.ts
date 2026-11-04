@@ -28,7 +28,7 @@ export function getContextualTourProgressionForFeatureInteraction(
   }
   if (
     state.activeContextualTourId === 'workspace-agent-sessions' &&
-    state.activeContextualTourStepIndex === 0 &&
+    step.id === 'agent-sessions-split' &&
     id === 'terminal-pane-split' &&
     !state.sidebarOpen
   ) {

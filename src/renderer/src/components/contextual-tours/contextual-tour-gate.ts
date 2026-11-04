@@ -80,7 +80,9 @@ export function getContextualTourStartStepIndex(
   if (!step || !targetExists(step.targetSelector)) {
     return null
   }
-  return startIndex
+  return tour.steps.findIndex(
+    (candidate, index) => index <= startIndex && targetExists(candidate.targetSelector)
+  )
 }
 
 export function getVisibleContextualTourStepIndexes(
@@ -135,6 +137,7 @@ export function getContextualTourRequestDecision(args: {
   activeModal: string
   blockingSurfaceVisible: boolean
   targetExists: (selector: string) => boolean
+  startStepIndex?: number
 }): ContextualTourRequestDecision {
   if (!args.persistedUIReady) {
     return { kind: 'blocked', reason: 'persisted-ui-not-ready' }
@@ -161,8 +164,10 @@ export function getContextualTourRequestDecision(args: {
     return { kind: 'blocked', reason: 'blocking-surface' }
   }
 
-  const stepIndex = getContextualTourStartStepIndex(args.tour, args.targetExists)
-  if (stepIndex === null) {
+  const stepIndex =
+    args.startStepIndex ?? getContextualTourStartStepIndex(args.tour, args.targetExists)
+  const step = stepIndex === null ? undefined : args.tour.steps[stepIndex]
+  if (stepIndex === null || !step || !args.targetExists(step.targetSelector)) {
     return { kind: 'blocked', reason: 'missing-start-target' }
   }
   return { kind: 'start', stepIndex }
