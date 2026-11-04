@@ -14,9 +14,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import {
   runKillAllTerminalSurfaces,
-  snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfacesSummary
 } from './kill-all-terminal-surfaces'
+import { snapshotKillAllTerminalSurfaceIds } from './kill-all-terminal-targets'
 
 export type DaemonActionKind = 'restart' | 'killAll'
 

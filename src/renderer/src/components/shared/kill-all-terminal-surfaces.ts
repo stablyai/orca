@@ -15,9 +15,6 @@ import {
   type KillAllTerminalSurfaceState
 } from './kill-all-terminal-targets'
 
-// Callers and their mocks treat this module as Kill All's single entry point.
-export { snapshotKillAllTerminalSurfaceIds, type KillAllTerminalSurfaceState }
-
 const CLOSE_BATCH_SIZE = 2
 
 type DaemonKillAllResult = {

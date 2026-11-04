@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/components/shared/kill-all-terminal-surfaces', () => ({
-  runKillAllTerminalSurfaces: mocks.runKillAll,
+  runKillAllTerminalSurfaces: mocks.runKillAll
+}))
+vi.mock('@/components/shared/kill-all-terminal-targets', () => ({
   snapshotKillAllTerminalSurfaceIds: mocks.snapshotIds
 }))
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({

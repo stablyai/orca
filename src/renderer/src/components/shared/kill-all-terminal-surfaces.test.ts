@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AppState } from '@/store'
+import { runKillAllTerminalSurfaces } from './kill-all-terminal-surfaces'
 
 import {
-  runKillAllTerminalSurfaces,
   snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfaceState
-} from './kill-all-terminal-surfaces'
+} from './kill-all-terminal-targets'
 
 type TerminalRow = AppState['tabsByWorktree'][string][number]
 
