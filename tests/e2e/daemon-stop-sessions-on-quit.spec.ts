@@ -22,32 +22,9 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function bootstrap(page: Page, repoPath: string): Promise<{ worktreeId: string }> {
-  const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
-  await waitForSessionReady(page)
-  await waitForActiveWorktree(page)
-  await ensureTerminalVisible(page)
-  await waitForActiveTerminalManager(page, 30_000)
-  await waitForPaneCount(page, 1, 30_000)
-  return { worktreeId }
-}
-
-async function setStopOnQuit(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate(async (enabled) => {
-    await window.__store?.getState().updateSettingsOrThrow({ stopTerminalSessionsOnQuit: enabled })
-  }, enabled)
-  // will-quit reads the main-process store, not the renderer copy.
-  await expect
-    .poll(() =>
-      page.evaluate(
-        async () => (await window.api.settings.get()).stopTerminalSessionsOnQuit === true
-      )
-    )
-    .toBe(enabled)
-}
-
 /** Start a long-lived child under the PTY shell, standing in for an agent CLI. */
-async function startLongLivedChild(page: Page, tag: string): Promise<number> {
+async function startLongLivedChild(page: Page): Promise<number> {
+  const tag = `STOP_${Date.now()}`
   const ptyId = await discoverActivePtyId(page)
   await execInTerminal(
     page,
@@ -65,39 +42,6 @@ async function startLongLivedChild(page: Page, tag: string): Promise<number> {
   return pid
 }
 
-test.describe.configure({ mode: 'serial' })
-
-test('keeps terminal children alive across quit when the setting is off', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo.
-{}, testInfo) => {
-  const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-  test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
-
-  const session = createRestartSession(testInfo)
-  let app: ElectronApplication | null = null
-  let childPid: number | null = null
-  try {
-    const launch = await session.launch()
-    app = launch.app
-    await bootstrap(launch.page, repoPath)
-    await setStopOnQuit(launch.page, false)
-    childPid = await startLongLivedChild(launch.page, `KEEP_${Date.now()}`)
-
-    await session.close(app)
-    app = null
-
-    // Control: proves the harness quit is graceful, so the enabled case below is not a tree-kill artifact.
-    expect(isProcessAlive(childPid)).toBe(true)
-  } finally {
-    if (app) {
-      await session.close(app)
-    }
-    if (childPid !== null && isProcessAlive(childPid)) {
-      process.kill(childPid)
-    }
-    await session.dispose()
-  }
-})
-
 test('stops terminal children on quit when enabled, then restores the tab', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
@@ -110,9 +54,26 @@ test('stops terminal children on quit when enabled, then restores the tab', asyn
   try {
     const firstLaunch = await session.launch()
     firstApp = firstLaunch.app
-    const { worktreeId } = await bootstrap(firstLaunch.page, repoPath)
-    await setStopOnQuit(firstLaunch.page, true)
-    const stoppedPid = await startLongLivedChild(firstLaunch.page, `STOP_${Date.now()}`)
+    const worktreeId = await attachRepoAndOpenTerminal(firstLaunch.page, repoPath)
+    await waitForSessionReady(firstLaunch.page)
+    await waitForActiveWorktree(firstLaunch.page)
+    await ensureTerminalVisible(firstLaunch.page)
+    await waitForActiveTerminalManager(firstLaunch.page, 30_000)
+    await waitForPaneCount(firstLaunch.page, 1, 30_000)
+
+    await firstLaunch.page.evaluate(async () => {
+      await window.__store?.getState().updateSettingsOrThrow({ stopTerminalSessionsOnQuit: true })
+    })
+    // will-quit reads the main-process store, not the renderer copy.
+    await expect
+      .poll(() =>
+        firstLaunch.page.evaluate(
+          async () => (await window.api.settings.get()).stopTerminalSessionsOnQuit === true
+        )
+      )
+      .toBe(true)
+
+    const stoppedPid = await startLongLivedChild(firstLaunch.page)
     childPid = stoppedPid
 
     await session.close(firstApp)

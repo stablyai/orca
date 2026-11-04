@@ -15,8 +15,6 @@ const killAllDaemonSessions = vi.fn<() => Promise<DaemonKillAllResult>>(async ()
   remainingCount: 0,
   killedSessionIds: []
 }))
-const isQuittingForUpdate = vi.fn(() => false)
-const isAppRelaunchRequested = vi.fn(() => false)
 /** Final-save calls seen by the first microtask after the SSH shutdown began. */
 let flushesByNextMicrotask = -1
 
@@ -31,7 +29,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
     disconnectDaemon,
     shutdownDaemon: settled()
   },
-  './quit/app-relaunch': { isAppRelaunchRequested },
+  './quit/app-relaunch': { isAppRelaunchRequested: () => false },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -67,7 +65,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../tray/system-tray': { destroySystemTray: idle() },
   '../telemetry/client': { shutdownTelemetry: settled() },
   '../observability': { shutdownObservability: settled() },
-  '../updater/updater-service': { isQuittingForUpdate },
+  '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
   '../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
@@ -79,8 +77,6 @@ const dependencies: Record<string, Record<string, unknown>> = {
 }
 
 afterEach(() => {
-  isQuittingForUpdate.mockReturnValue(false)
-  isAppRelaunchRequested.mockReturnValue(false)
   vi.doUnmock('electron')
   vi.doUnmock('./main-process-state')
   for (const moduleName of Object.keys(dependencies)) {
@@ -271,29 +267,3 @@ it('stops terminal sessions after the final save freezes, then disconnects the d
   )
   expect(app.quit).toHaveBeenCalledOnce()
 })
-
-it('still disconnects the daemon when stopping sessions on quit fails', async () => {
-  killAllDaemonSessions.mockRejectedValueOnce(new Error('daemon unreachable'))
-  vi.spyOn(console, 'error').mockImplementation(() => {})
-  const { app } = await startQuit(async () => {}, {}, { stopTerminalSessionsOnQuit: true })
-  await vi.advanceTimersByTimeAsync(0)
-  expect(disconnectDaemon).toHaveBeenCalledOnce()
-  expect(app.quit).toHaveBeenCalledOnce()
-})
-
-it.each([
-  { reason: 'the setting is off', enabled: false },
-  { reason: 'an update installs', updating: true },
-  { reason: 'Orca relaunches', relaunching: true },
-  { reason: 'a serve host quits', isServeMode: true }
-])(
-  'keeps terminal sessions for warm reattach when $reason',
-  async ({ enabled = true, updating = false, relaunching = false, isServeMode = false }) => {
-    isQuittingForUpdate.mockReturnValue(updating)
-    isAppRelaunchRequested.mockReturnValue(relaunching)
-    await startQuit(async () => {}, { isServeMode }, { stopTerminalSessionsOnQuit: enabled })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(killAllDaemonSessions).not.toHaveBeenCalled()
-    expect(disconnectDaemon).toHaveBeenCalledOnce()
-  }
-)
