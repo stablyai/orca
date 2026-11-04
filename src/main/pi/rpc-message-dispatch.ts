@@ -52,18 +52,13 @@ export async function dispatchPiRpcMessage(
       )
     }
   }
-  await session.turns.compaction.waitForEnd(input.signal)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()
   }
   input.onInputPreparation?.()
-  if (!input.executionOptions) {
-    input.signal?.throwIfAborted()
-    return submitPiRpcPrompt(session, input, prompt)
-  }
   for (const key of ['model', 'effort'] as const) {
-    const value = input.executionOptions[key]
+    const value = input.executionOptions?.[key]
     if (value === undefined || session.optionProof.current.get(key) === value) {
       continue
     }
@@ -90,6 +85,8 @@ export async function dispatchPiRpcMessage(
       throw new AgentSessionOptionRejectedError(error)
     }
   }
+  // Pi refuses prompts during a requested compaction; waiting after option RPCs leaves only microtasks before the write.
+  await session.turns.compaction.waitForEnd(input.signal)
   input.signal?.throwIfAborted()
   if (!isCurrent() || session.connection.closed) {
     return exited()

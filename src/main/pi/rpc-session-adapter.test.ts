@@ -527,18 +527,25 @@ describe('Pi RPC session ownership and delivery', () => {
 
   it('writes a send made while Pi compacts only after compaction ends, unless Stop aborts it', async () => {
     const h = await setup()
-    const send = (clientMessageId: string, signal?: AbortSignal) =>
+    const modelSet = Promise.withResolvers<void>()
+    h.connection.requestOverride = (command) =>
+      command === 'set_model' ? modelSet.promise.then(() => ({})) : undefined
+    const send = (clientMessageId: string, extra: { signal?: AbortSignal; model?: string } = {}) =>
       h.adapter.dispatch({
         sessionId,
         fence: 7,
         clientMessageId,
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] },
-        ...(signal ? { signal } : {})
+        ...(extra.signal ? { signal: extra.signal } : {}),
+        ...(extra.model ? { executionOptions: { model: extra.model } } : {})
       })
+    // Compaction starts while this send is still applying its model.
+    const waiting = send('waiting', { model: 'anthropic/model-2' })
+    await vi.waitFor(() => expect(h.connection.requests).toContain('set_model'))
     h.connection.receive({ type: 'compaction_start', reason: 'manual' })
+    modelSet.resolve()
     const stop = new AbortController()
-    const stopped = send('stopped', stop.signal)
-    const waiting = send('waiting')
+    const stopped = send('stopped', { signal: stop.signal })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(h.connection.sent).toEqual([])
     const reason = new Error('Stopped')
