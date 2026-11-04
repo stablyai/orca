@@ -256,7 +256,6 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: nextId
       })
-      bumpProviderRuntimeSessionGeneration()
       // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
       const focusedSettings =
         (nextSettings as GlobalSettings | undefined) ??
@@ -269,6 +268,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         if (!shouldPublish()) {
           return true
         }
+        // Why: bump only with the publish, or provider-connection subscribers keep the old runtime's map.
+        bumpProviderRuntimeSessionGeneration()
         set((state) => ({
           settings: hydrated.settings,
           worktreeVisibilityDefaultsByHost: {
@@ -281,6 +282,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
             hydrated.sourceDefaultsSupportedRuntimeEnvironmentId
         }))
       } else {
+        bumpProviderRuntimeSessionGeneration()
         set({ settings: null })
       }
       // Hydrate only the newly focused host’s catalog; downstream host merges preserve other hosts.
