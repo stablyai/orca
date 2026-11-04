@@ -25,6 +25,7 @@ vi.mock('./restored-host-file-grant', () => ({
 
 const FILE = '/repo-b/docs/readme.md'
 const HOLDER = { worktreeId: 'repo-b', relativePath: 'docs/readme.md' } as const
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the mocked findWorkspaceFileRoute receives it
 const state = {} as AppState
 const serverTab = {
   state,
