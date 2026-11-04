@@ -1,7 +1,7 @@
 import {
   getProviderChecksOutcome,
   type CheckPresentationOutcome
-} from '../../../../../shared/provider-check-summary'
+} from '../../../../../shared/source-control/checks/provider-check-summary'
 import { useState } from 'react'
 import { ChevronRight, CircleDot, GitMerge, GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -9,9 +9,9 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getReviewStateTone } from '@/components/github/review-state-presentation'
-import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments'
+import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { HostedReviewState } from '../../../../../shared/hosted-review'
+import type { HostedReviewState } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { ReviewIcon } from '../../sidebar/worktree-review-helpers'
 import { workspaceAttachmentLabel } from '../../sidebar/worktree-attachment-editing'
 import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-hover-attachments'

@@ -12,7 +12,7 @@ import type {
   WorkspaceCleanupStatusFilter,
   WorkspaceCleanupTicketFilter,
   WorkspaceCleanupTriState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export const WORKSPACE_CLEANUP_DAY_MS = 24 * 60 * 60 * 1000
 

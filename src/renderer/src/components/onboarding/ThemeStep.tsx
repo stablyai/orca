@@ -13,7 +13,7 @@ import { ChromePreview } from './theme-chrome-preview'
 import {
   terminalConfigImportSettingsUpdate,
   type TerminalConfigImportPreview
-} from '../../../../shared/terminal-config-import-preview'
+} from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 type ThemeStepProps = {

@@ -12,7 +12,7 @@ import type {
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
-import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
+import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type {
   GeneratedTabTitleUpdate,
   TerminalTabTitleUpdate

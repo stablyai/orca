@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { useRelayHosts } from '../worktree/relay-hosts-feed'
 import {
   scopeRpcClientToExecutionHost,

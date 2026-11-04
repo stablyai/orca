@@ -1,5 +1,5 @@
 import { flattenRetainedSlice } from '@/lib/flatten-retained-slice'
-import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal-synchronized-output-scan'
+import { resolveSynchronizedOutputSafeSplit } from '../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
 import type {
   QueueEntry,
   QueuedWrite,

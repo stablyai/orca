@@ -5,8 +5,11 @@ import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
 } from '@/lib/pr-comment-audience-labels'
-import { getPRCommentGroupId, type PRCommentGroup } from '../../../../../shared/pr-comment-groups'
-import type { PRCommentAudienceFilter } from '../../../../../shared/pr-comment-audience'
+import {
+  getPRCommentGroupId,
+  type PRCommentGroup
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
+import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'

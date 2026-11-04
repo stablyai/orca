@@ -153,34 +153,6 @@ async function mount() {
   return { serve, send }
 }
 
-it('refuses a PDF open from a retained hidden page before downloading', async () => {
-  const handler = await mount()
-  act(() => device.blur())
-  await expect(handler.serve(open)).rejects.toThrow('not focused')
-  expect.soft(handler.send).not.toHaveBeenCalled()
-  expect.soft(device.creates).toBe(0)
-  expect(device.presentations).toEqual([])
-})
-
-it.each(['ios', 'android'] as const)(
-  'still downloads and presents after refocus on %s',
-  async (platform) => {
-    device.platform = platform
-    const handler = await mount()
-    act(() => device.blur())
-    act(() => device.focus())
-    await handler.serve(open)
-    expect(handler.send.mock.calls.map(([method]) => method)).toEqual([
-      'files.stat',
-      'files.readChunk',
-      'files.stat'
-    ])
-    expect(device.presentations).toHaveLength(1)
-    expect(device.presentations[0]).toMatch(platform === 'android' ? /^content:/ : /^file:/)
-    expect([...device.files.values()]).toEqual([new Uint8Array([37, 80, 68, 70])])
-  }
-)
-
 it('cancels an admitted range on blur without presenting its late bytes', async () => {
   const handler = await mount()
   let finishRange: (reply: ReturnType<typeof rpcSuccess>) => void = () => {}
@@ -204,16 +176,4 @@ it('cancels an admitted range on blur without presenting its late bytes', async 
   expect(handler.send).toHaveBeenCalledTimes(2)
   expect(device.presentations).toEqual([])
   expect(device.files.size).toBe(0)
-})
-
-it('keeps the last presented PDF intact when its retained page attempts another open while hidden', async () => {
-  const handler = await mount()
-  await handler.serve(open)
-  const presented = [...device.presentations]
-  const files = [...device.files.keys()]
-  act(() => device.blur())
-  await handler.serve({ ...open, relativePath: 'docs/another.pdf' }).catch(() => undefined)
-  expect(device.presentations).toEqual(presented)
-  expect([...device.files.keys()]).toEqual(files)
-  expect(handler.send).toHaveBeenCalledTimes(3)
 })

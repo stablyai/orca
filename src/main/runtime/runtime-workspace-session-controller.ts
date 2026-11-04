@@ -5,9 +5,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
-import { getFolderWorkspaceHostId } from '../../shared/folder-workspace-execution-host'
+import '../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../shared/folder-workspaces/folder-workspace-host-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree/id'

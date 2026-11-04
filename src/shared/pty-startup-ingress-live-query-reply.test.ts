@@ -1,11 +1,11 @@
 // Write live replies synchronously in call order; deferral let replies overtake and enter later programs’ stdin (#15559).
 import { describe, expect, it } from 'vitest'
 import { PtyStartupIngress, type PtyIngressEmission } from './pty-startup-ingress'
-import { mode2031SequenceFor } from './terminal-color-scheme-protocol'
+import { mode2031SequenceFor } from './terminal/protocol/queries/terminal-color-scheme-protocol'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
   needsCookedEchoSafeQueryReply
-} from './terminal-query-reply'
+} from './terminal/protocol/queries/terminal-query-reply'
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
 const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'

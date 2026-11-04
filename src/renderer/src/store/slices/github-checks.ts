@@ -7,13 +7,11 @@ import {
   type RuntimeFocusSettings
 } from '../../../../shared/github/github-cache-key'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
-import { derivePRCheckStatus } from '../../../../shared/pr-check-status'
+import { derivePRCheckStatus } from '../../../../shared/source-control/checks/pr-check-status'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
-
-export const deriveCheckStatusFromChecks = derivePRCheckStatus
 
 export function syncPRChecksStatus(
   state: AppState,
@@ -54,7 +52,7 @@ export function syncPRChecksStatus(
     return null
   }
 
-  const nextStatus = deriveCheckStatusFromChecks(checks)
+  const nextStatus = derivePRCheckStatus(checks)
   // Detail pages are partial; retain the complete same-head summary until the next PR lookup.
   if (prEntry.data.checksStatus === nextStatus) {
     return null

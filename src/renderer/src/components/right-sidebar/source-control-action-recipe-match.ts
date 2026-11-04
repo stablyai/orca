@@ -1,20 +1,18 @@
-import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
-import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
-import { trimActionArgumentDocument } from '../../../../shared/source-control-action-argument-choices'
-import {
-  normalizeRepoSourceControlAiOverrides,
-  normalizeSourceControlAiSettings,
-  resolveSourceControlActionRecipe
-} from '../../../../shared/source-control-ai'
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { isCustomAgentId } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { trimActionArgumentDocument } from '../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   type SourceControlActionId,
   type SourceControlActionRecipe
-} from '../../../../shared/source-control-ai-actions'
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
-} from '../../../../shared/source-control-ai-recipe-save'
+} from '../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 

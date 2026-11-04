@@ -9,8 +9,8 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import { CheckJobLogTail } from '../check-job-log-tail'
 import { translate } from '@/i18n/i18n'
-import { checkJobIdentities } from '@/components/editor/check-details-reading-cache'
-import { resolveStepOutcome } from '../../../../../shared/pr-check-step-status'
+import { checkJobIdentities } from '@/components/editor/check-details/reading/check-details-reading-cache'
+import { resolveStepOutcome } from '../../../../../shared/source-control/checks/pr-check-step-status'
 import {
   type CheckDetailsLoadState,
   type CheckDetailsStickySurface,
@@ -20,7 +20,7 @@ import {
 import {
   getCheckConclusion,
   getCheckStatusLabel
-} from '../../../../../shared/pr-check-status-label'
+} from '../../../../../shared/source-control/checks/pr-check-status-label'
 
 function ViewFullCheckDetailsButton({
   onClick,

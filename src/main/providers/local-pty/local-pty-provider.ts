@@ -18,7 +18,7 @@ import {
 } from './local-pty-foreground-inspection'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInspection, PtyProcessInspectionOptions } from '../pty-process-inspection'
-import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   _resetPtyOwnerHostColorsForTest,
   setPtyOwnerHostColors

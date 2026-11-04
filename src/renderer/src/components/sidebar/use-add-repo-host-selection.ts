@@ -8,7 +8,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import { isEphemeralVmRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isEphemeralVmRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { canSelectAddRepoHost } from './add-repo-host-availability'

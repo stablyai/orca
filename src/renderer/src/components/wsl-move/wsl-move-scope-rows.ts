@@ -2,13 +2,13 @@
  * What the move dialog shows about its projects, read from the renderer catalog. Main decides what
  * moves; this only names rows, counts what they hold, and maps blockers back to their project.
  */
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'

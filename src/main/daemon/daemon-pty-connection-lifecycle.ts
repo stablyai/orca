@@ -14,7 +14,7 @@ import { notifyDaemonAuditListeners } from './daemon-listener-registry'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import { supportsColorQueryReplyColors } from './daemon-protocol-version'
-import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 
 export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscriptions {
   private colorQueryReplyColors: TerminalOscColorQueryReplyColors | null = null

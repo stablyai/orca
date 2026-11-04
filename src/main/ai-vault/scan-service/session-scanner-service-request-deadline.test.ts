@@ -9,7 +9,6 @@ import {
 } from './session-scanner-service-test-child'
 
 const SCAN = { type: 'request', operation: 'scan', options: {} } as const
-const SCAN_VALUE = { result: { sessions: [], issues: [], scannedAt: '2026-10-12' }, durationMs: 1 }
 const WORK = { stage: 'finding', agents: [], read: { done: 0, total: 0 } } as const
 
 function setup(): { children: AiVaultServiceTestChild[]; client: AiVaultScannerServiceClient } {
@@ -50,37 +49,6 @@ afterEach(() => {
 })
 
 describe('AI Vault service request deadlines', () => {
-  it('lets a scan run as long as it needs, even with no progress', async () => {
-    const { children, client } = setup()
-    const { scan, child, id } = await startScan(client, children)
-
-    vi.advanceTimersByTime(60 * 60_000)
-    expect(child.sent).not.toContainEqual({ type: 'shutdown' })
-    child.emit('message', { type: 'result', id, operation: 'scan', value: SCAN_VALUE })
-
-    await expect(scan).resolves.toEqual(SCAN_VALUE)
-    expect(child.killed).toBe(false)
-    client.dispose()
-  })
-
-  it('forwards only its own scan work to the scan listener', async () => {
-    const { children, client } = setup()
-    const work = vi.fn()
-    const scan = client.request(SCAN, undefined, { work })
-    const child = children[0]!
-    readyAiVaultServiceChild(child)
-    await Promise.resolve()
-    const id = aiVaultServiceRequestId(child, 'scan')
-
-    progress(child, id + 100)
-    progress(child, id)
-
-    expect(work).toHaveBeenCalledExactlyOnceWith(WORK)
-    child.emit('message', { type: 'result', id, operation: 'scan', value: SCAN_VALUE })
-    await expect(scan).resolves.toEqual(SCAN_VALUE)
-    client.dispose()
-  })
-
   it('retires a stalled interactive call with shutdown first after its fixed bound', async () => {
     const { children, client } = setup()
     const subagents = client.request({

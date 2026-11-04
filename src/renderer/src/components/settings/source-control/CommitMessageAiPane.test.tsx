@@ -1,20 +1,20 @@
 // @vitest-environment happy-dom
 import React from 'react'
 import recordings from '../../../../../shared/fixtures/source-control-launch-recordings.json'
-import { normalizeSourceControlActionLaunchPreferences } from '../../../../../shared/source-control-action-model-selection'
-import { sourceControlActionLaunchOptions } from '../../../../../shared/source-control-action-launch-preferences'
+import { normalizeSourceControlActionLaunchPreferences } from '../../../../../shared/source-control/ai/recipes/source-control-action-model-selection'
+import { sourceControlActionLaunchOptions } from '../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { buildAgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { describeSourceControlActionModel } from '../../right-sidebar/source-control/ai/source-control-action-model-copy'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlAiSettings } from '../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import {
   getCommitMessageModelDiscoveryHostKey,
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope
-} from '../../../../../shared/commit-message-host-key'
+} from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { useAppStore } from '../../../store/index'
 import {
   CommitMessageAiPane,

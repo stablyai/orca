@@ -1,5 +1,8 @@
-import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
-import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
+import {
+  mode2031SequenceFor,
+  type TerminalColorSchemeMode
+} from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
+
 import type { PtyTransport } from './pty-transport-types'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 

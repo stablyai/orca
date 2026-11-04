@@ -3,7 +3,7 @@
  * existing chats stay on this computer (owner decision, option C). Separate from the repo and
  * folder lists so no caller can mistake one for a normal, editable project.
  */
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { WslMovedProject } from '../../../shared/wsl-move/wsl-moved-project'
 import { isLocalWslMoveRow, wslMoveHostDistro } from './wsl-move-scope-guard'

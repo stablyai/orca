@@ -1,4 +1,4 @@
-import { getProviderChecksOutcome } from '../../../../shared/provider-check-summary'
+import { getProviderChecksOutcome } from '../../../../shared/source-control/checks/provider-check-summary'
 import type { AppState } from '../../store/types'
 import { getRepoMapFromState, getWorktreeMapFromState } from '../../store/selectors'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'

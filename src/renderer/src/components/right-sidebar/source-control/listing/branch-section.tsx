@@ -4,9 +4,9 @@ import { translate } from '@/i18n/i18n'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'
 import { SectionHeader } from './section-header'

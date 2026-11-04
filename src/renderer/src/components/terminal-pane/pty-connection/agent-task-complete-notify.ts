@@ -1,4 +1,4 @@
-import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal-output-side-effects'
+import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal/output/terminal-output-side-effects'
 import { idleEdgeSettledAtRest, isClaudeIdleEdge } from '@/lib/agent-idle-edge'
 import { captureNotificationTransportOwner } from '@/attention/notification-subject-owner'
 import { useAppStore } from '@/store'

@@ -11,7 +11,7 @@ import {
 import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY
-} from '../../shared/terminal-quick-command-capabilities'
+} from '../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 
 /** Curate one capability set for unary/streaming desktop calls; remote-only gates can alter local semantics even on the same build. */
 export const DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES: readonly RuntimeCapability[] = [

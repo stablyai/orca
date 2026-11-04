@@ -1,5 +1,5 @@
-import type { HostedReviewInfo } from '../../shared/hosted-review'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/source-control/hosted-review/hosted-review-github'
 import type { PRInfo } from '../../shared/github/pull-request-types'
 import type { MRInfo } from '../../shared/gitlab-types'
 import type { AzureDevOpsPullRequestInfo } from '../azure-devops/pull-request-mappers'

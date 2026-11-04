@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { DROP_STAGING_GITIGNORE_CONTENT, DROP_STAGING_RELATIVE_DIR } from './drop-staging-ignore'
-import { GitBinaryTestFixture } from './git-binary.test-fixture'
+import { GitBinaryTestFixture } from './git/compatibility/git-binary.test-fixture'
 
 let fixture: GitBinaryTestFixture
 let root = ''

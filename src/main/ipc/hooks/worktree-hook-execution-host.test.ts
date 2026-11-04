@@ -36,7 +36,7 @@ vi.mock('node:fs/promises', () => ({
   readFile: mocks.localFileRead,
   stat: mocks.localStat
 }))
-vi.mock('../../../shared/setup-script-imports', () => ({
+vi.mock('../../../shared/workspace-setup/setup-script-imports', () => ({
   inspectSetupScriptImportCandidates: async (
     read: (path: string) => Promise<unknown>,
     options?: { fileExists: (path: string) => Promise<boolean> }

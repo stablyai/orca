@@ -1,4 +1,4 @@
-import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
+import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { GitHubPRMergeStateInput } from '../../../shared/github/pull-request-merge-state'
 import { presentGitHubPRMergeState } from './github-pr-merge-state'

@@ -7,8 +7,9 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { parsePairingCode } from '../../shared/pairing'
-import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+import { E2EE_KEYPAIR_FILENAME } from '../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
 import { STATUS_METHODS } from './rpc/methods/status'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {

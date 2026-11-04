@@ -2,8 +2,8 @@
 import { act, cleanup, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AiVaultScanProgress } from '../../../../shared/ai-vault-scan-progress'
-import { aiVaultLocalScanKey } from '../../../../shared/ai-vault-local-scan-key'
+import type { AiVaultScanProgress } from '../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import { aiVaultLocalScanKey } from '../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { AiVaultScanProgressStrip } from './AiVaultScanProgressStrip'
 import { resetAiVaultSessionResultCacheForTest } from './ai-vault-session-result-cache'
 import {

@@ -10,6 +10,7 @@ import { useAppStore } from '../store'
 import { ActiveWorkspaceSyncGate } from './ActiveWorkspaceSyncGate'
 import { StructuredAgentSessionAttentionBridge } from '../components/native-chat/StructuredAgentSessionAttentionBridge'
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/StructuredAgentSessionStatusBridge'
+import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/NativeChatVisualGuestThemePublisher'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
 
@@ -22,6 +23,7 @@ export function AppBackgroundServices(): React.JSX.Element {
 
   return (
     <>
+      <NativeChatVisualGuestThemePublisher />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
       <ActiveWorkspaceSyncGate />
       {/* Keep permission notices available across app surfaces. */}
