@@ -3,18 +3,20 @@ import {
   sweepAgentSessionAttachments,
   UNCLAIMED_ATTACHMENT_MAX_AGE_MS
 } from '../agent-session-attachments/agent-session-attachment-sweep'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalThreadGoal,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AgentJournalThreadGoal,
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabase,
@@ -32,7 +34,7 @@ import {
   claudeAndCodexDeclared
 } from './structured-agent-session-adapter-router-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 import { readStructuredAgentSessionOptions } from './structured-agent-session-options-read'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
@@ -780,8 +782,7 @@ it('reports the exact goal transition revision for independent options and histo
     deps: {
       adapter: {},
       agents: claudeAndCodexDeclared(),
-      store: hostTestOptionsReadStore(() => record),
-      modelCatalog: { read: async () => ({ origin: 'unknown' }) }
+      store: hostTestOptionsReadStore(() => record)
     },
     serialize: (_id: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => session,

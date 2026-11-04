@@ -5,26 +5,27 @@ import {
   mobileQueuedEditValueKey,
   sameMobileQueuedEditImage
 } from './mobile-queued-message-edit-value'
-import type {
-  MobileNativeChatDraftInputs,
-  MobileNativeChatDraftDestination
+import {
+  type MobileNativeChatDraftInputs,
+  type MobileNativeChatDraftDestination,
+  closeMobileNativeChatEditInputs,
+  readMobileNativeChatDraftInputs,
+  updateMobileNativeChatDraftInputs
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileQueuedEditLease } from './mobile-queued-message-edit-lease'
-import { pickedSkillsInText } from '../../../src/shared/structured-agent-session-send-mutation'
+import { pickedSkillsInText } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   queuedEditKeptImages,
   queuedEditTextForKeptImages
 } from '../../../src/shared/queued-message-edit'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import {
-  closeMobileNativeChatEditInputs,
-  readMobileNativeChatDraftInputs,
-  updateMobileNativeChatDraftInputs
-} from './native-chat/composer/mobile-native-chat-draft-inputs'
-import { setMobileNativeChatDraftText } from './native-chat/composer/mobile-native-chat-draft-store'
+  setMobileNativeChatDraftText,
+  type MobileComposerWriter
+} from './native-chat/composer/mobile-native-chat-draft-store'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 
 export type MobileQueuedMessageInlineEditor = {
@@ -229,7 +230,7 @@ export type MobileStructuredQueuedEditArgs = {
   submissions?: readonly AgentJournalSubmission[]
   cards: readonly MobileQueuedMessageCard[]
   mutate: MobileStructuredAgentMutate
-  appendComposerText: ((text: string) => boolean) | undefined
+  appendComposerText: MobileComposerWriter | undefined
   onQueuedEditNotice?: (text: string) => void
   onSendError: (text: string) => void
   onActionResolved?: () => void

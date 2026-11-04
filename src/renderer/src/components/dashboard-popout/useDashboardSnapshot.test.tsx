@@ -4,11 +4,11 @@ import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusClearIpcPayload,
-  type AgentStatusIpcPayload
-} from '../../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true

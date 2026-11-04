@@ -1,4 +1,4 @@
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import {
   createPtyPreconnectInputBuffer,
   type AcceptedInputOptions,

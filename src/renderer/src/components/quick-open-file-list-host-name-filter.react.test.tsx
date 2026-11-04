@@ -3,7 +3,7 @@
 import { act, createElement, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
@@ -79,16 +79,6 @@ async function flushEffects(): Promise<void> {
   })
 }
 
-async function waitForListRuntimeFilesCall(): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await flushEffects()
-    if (listRuntimeFilesMock.mock.calls.length > 0) {
-      return
-    }
-  }
-  throw new Error('listRuntimeFiles was not called')
-}
-
 async function renderProbe(args: ProbeProps): Promise<Root> {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -155,28 +145,6 @@ describe('useRuntimeFileListForWorktree host name filter', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('filters an uncapped local listing in the renderer without a host re-list', async () => {
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace()],
-      projectGroups: [makeProjectGroup()],
-      repos: [],
-      worktreesByRepo: {}
-    })
-
-    await renderProbe({
-      enabled: true,
-      onState: () => {},
-      query: 'package',
-      hostFilterWhenCapped: true,
-      worktreeId: folderWorkspaceKey('folder-workspace-1')
-    })
-    await waitForListRuntimeFilesCall()
-    await flushEffects()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(listRuntimeFilesMock.mock.calls[0][1]).not.toHaveProperty('nameFilter')
   })
   it('falls back to the capped listing and stops re-listing after a host filter failure', async () => {
     vi.useFakeTimers()

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 import { findWorkspaceReferences, type ReferenceAgentCandidate } from './runtime-reference-find'
 import type { ExecutionHostId } from '../../shared/execution-host'
 

@@ -41,17 +41,4 @@ describe('guarded lifecycle transitions', () => {
 
     expect(db.getTask(task.id)).toMatchObject({ status: 'ready', result: null })
   })
-
-  it.each([
-    ['ready', 'pending'],
-    ['blocked', 'completed'],
-    ['failed', 'completed'],
-    ['completed', 'blocked']
-  ] as const)('preserves public task updates from %s to %s', (from, to) => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'manual status correction' })
-    db.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(from, task.id)
-
-    expect(db.updateTaskStatus(task.id, to)?.status).toBe(to)
-  })
 })

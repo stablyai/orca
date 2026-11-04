@@ -2,8 +2,14 @@ import type { RpcClient } from '../../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
-import { typeAgentTuiCommand } from '../../../../src/shared/agent-tui-command-typing'
-import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal-send-acknowledgment'
+import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
+import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
+import {
+  AGENT_TUI_CLEAR_MAX_LINES,
+  countAgentTuiInputLines,
+  buildAgentTuiClearInputForText
+} from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
+import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
@@ -27,6 +33,12 @@ type MobileNativeChatSendArgs = {
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
+/** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
+export type MobileNativeChatSendIntent = {
+  alternate?: true
+  onCreated?: (clientMessageId: string) => void
+}
+
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
 // Bound reconnect wait so an interactive send cannot keep the composer locked indefinitely.
@@ -36,6 +48,42 @@ export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 // One action gets one budget; multi-write sequences must not multiply the send timeout.
 export function openMobileNativeChatSendBudget(): number {
   return Date.now() + MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS
+}
+
+export async function readMobileNativeChatInputClear(args: {
+  client: MobileNativeChatRpcSender
+  terminal: string
+  deadline: number
+  seededText?: string
+}): Promise<string | null> {
+  let draft: string | undefined
+  const timeoutMs = Math.min(MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS, args.deadline - Date.now())
+  if (timeoutMs > 0) {
+    try {
+      const response = await nativeChatTerminalDraftRead.request(
+        args.client,
+        { terminal: args.terminal, screen: true, limit: 1 },
+        { timeoutMs, budgetSpansConnect: true }
+      )
+      const result = nativeChatTerminalDraftRead.interpret(response)
+      if (result.accepted) {
+        draft = result.value.terminal?.draft
+      }
+    } catch {
+      // Older or unreadable hosts still send using the bounded maximum clear.
+    }
+  }
+  if (
+    [draft, args.seededText].some(
+      (text) => text !== undefined && countAgentTuiInputLines(text) > AGENT_TUI_CLEAR_MAX_LINES
+    )
+  ) {
+    return null
+  }
+  const clearInput = buildAgentTuiClearInputForText(draft)
+  const seededClear =
+    args.seededText === undefined ? undefined : buildAgentTuiClearInputForText(args.seededText)
+  return seededClear && seededClear.length > clearInput.length ? seededClear : clearInput
 }
 
 export async function sendMobileNativeChatMessageWithOutcome(
@@ -121,13 +169,13 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
 export async function clearMobileNativeChatInput(args: {
   client: RpcClient
   terminal: string
-  clearInput: string
+  clearInput: string | null
   mobileClient?: MobileTerminalClient
   deadline?: number
 }): Promise<boolean> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
-  if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
+  if (args.clearInput === null || timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return false
   }
   try {

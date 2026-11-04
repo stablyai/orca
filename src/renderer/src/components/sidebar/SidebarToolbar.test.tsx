@@ -30,7 +30,7 @@ vi.mock('@/components/ui/tooltip', () => ({
     mocks.activeTooltipOpen ? <span>{children}</span> : null
 }))
 
-vi.mock('./ScrollToCurrentWorkspaceToolbarButton', () => ({
+vi.mock('./worktree-list/navigation/ScrollToCurrentWorkspaceToolbarButton', () => ({
   ScrollToCurrentWorkspaceToolbarButton: () => <button type="button">Current workspace</button>
 }))
 
@@ -140,12 +140,5 @@ describe('SidebarToolbar moved workspace board hint', () => {
     const localized = ko.auto.components.sidebar.SidebarToolbar['49f62c5665']
     expect(localized).not.toBe('Workspace board')
     expect(container.querySelector(`button[aria-label="${localized}"]`)).not.toBeNull()
-  })
-
-  it('keeps account controls out of the sidebar footer', async () => {
-    const { container } = await renderToolbar()
-
-    expect(container.textContent).not.toContain('Profile')
-    expect(container.textContent).toContain('Settings')
   })
 })

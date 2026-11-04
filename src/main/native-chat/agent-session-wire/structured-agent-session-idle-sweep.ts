@@ -1,7 +1,7 @@
 // Derive owed work each tick, independent of viewers; retire quiet children and cached folds,
 // preserving durable conversations for the next send.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -137,7 +137,7 @@ export class StructuredAgentSessionIdleSweep {
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
     )
   }
 

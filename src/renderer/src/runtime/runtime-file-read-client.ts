@@ -18,7 +18,8 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import { readRemoteRangePreview } from './runtime-file-range-preview'
-import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../shared/agent-session/agent-session-attachments'
+import { decodeSvgBase64, isSvgFilePath } from '../../../shared/svg-document'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   isHostFileOutsideWorkspaces,
@@ -40,7 +41,26 @@ import {
 
 export { localAccess } from './runtime-file-routing'
 
-export async function readRuntimeFileContent({
+/** SVG opens as editable markup; hosts send it as image bytes, or as a URL if a viewer asks. */
+export async function readRuntimeFileContent(
+  args: RuntimeFileReadArgs
+): Promise<RuntimeReadableFileContent> {
+  if (!isSvgFilePath(args.filePath)) {
+    return readRuntimeFileContentAsStored(args)
+  }
+  const result = await readRuntimeFileContentAsStored({ ...args, pageOversizedBinary: false })
+  const markup = result.isBinary && result.content ? decodeSvgBase64(result.content) : null
+  if (markup === null) {
+    return result
+  }
+  return {
+    content: markup,
+    isBinary: false,
+    ...(result.fileIdentity ? { fileIdentity: result.fileIdentity } : {})
+  }
+}
+
+async function readRuntimeFileContentAsStored({
   target,
   filePath,
   relativePath,
@@ -154,7 +174,10 @@ export async function readRuntimeFilePreview(
       runtimeTarget,
       'agentSessionAttachment.read',
       { path: filePath },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
     )
   }
   if (!remoteArgs) {
@@ -162,7 +185,8 @@ export async function readRuntimeFilePreview(
       return readHostFilePreview({
         target: runtimeTarget,
         worktreeId,
-        absolutePath: filePath
+        absolutePath: filePath,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
       })
     }
     if (hasRemoteRuntimeOwner(context)) {
@@ -178,7 +202,8 @@ export async function readRuntimeFilePreview(
     {
       target: remoteArgs.target,
       worktree: remoteArgs.worktreeSelector,
-      relativePath: remoteArgs.relativePath
+      relativePath: remoteArgs.relativePath,
+      expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
     },
     { pageOversized: true }
   )

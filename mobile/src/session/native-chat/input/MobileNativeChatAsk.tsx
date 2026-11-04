@@ -1,31 +1,38 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
+import {
+  nativeChatAnswerOperationEvidence,
+  type NativeChatAnswerOperation,
+  type NativeChatAnswerSource,
+  type AskAnswerSelection
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../src/shared/native-chat-ask-card-rules'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+} from '../../../../../src/shared/native-chat/input/native-chat-ask-card-rules'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
-import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
+import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
 
 type Props = {
   prompt: AskPrompt
+  answerSendSource?: NativeChatAnswerSource
+  answerPending?: boolean
   // Use option indices so Claude’s selector can navigate without pasting labels.
-  onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
+  onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
@@ -47,6 +54,8 @@ const OTHER = -1
 
 export function MobileNativeChatAsk({
   prompt,
+  answerPending = false,
+  answerSendSource,
   onAnswer,
   onCancel,
   onCollapse,
@@ -61,9 +70,24 @@ export function MobileNativeChatAsk({
   const [otherText, setOtherText] = useState<string[]>(() =>
     prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
-  const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false)
-  const autoAdvance = useMobileNativeChatAskAutoAdvance()
+  const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
+  const operationRef = useRef<NativeChatAnswerOperation | null>(null)
+  const operationId = operation?.clientMessageId
+  const evidence = useMemo(
+    () =>
+      nativeChatAnswerOperationEvidence(
+        operationId,
+        answerSendSource?.messages ?? [],
+        answerSendSource?.submissions
+      ),
+    [operationId, answerSendSource?.messages, answerSendSource?.submissions]
+  )
+  const isLocalPending = (current: NativeChatAnswerOperation | null): boolean =>
+    current !== null &&
+    ((current.clientMessageId === operationId ? evidence : undefined) ?? current.inFlight)
+  const sending = operation?.inFlight === true && isLocalPending(operation)
+  const submitting = isLocalPending(operation) || answerPending
+  const autoAdvance = useMobileNativeChatAskAutoAdvance(submitting)
   // Open each step at its question and end the last step's edit, so no typing lands out of view.
   const showStep = (next: (current: number) => number): void => {
     inputRef.current?.blur()
@@ -80,7 +104,7 @@ export function MobileNativeChatAsk({
   // Delay single-select advance to show the choice; Other still needs text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // Block same-frame taps before disabled state renders.
-    if (submittingRef.current) {
+    if (isLocalPending(operationRef.current) || answerPending) {
       return
     }
     const cur = selections[qi] ?? []
@@ -120,16 +144,27 @@ export function MobileNativeChatAsk({
     prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
-    if (!anyAnswered(sel) || submittingRef.current) {
+    if (!anyAnswered(sel) || isLocalPending(operationRef.current) || answerPending) {
       return
     }
-    submittingRef.current = true
-    setSubmitting(true)
+    const current: NativeChatAnswerOperation = { inFlight: true }
+    operationRef.current = current
+    setOperation(current)
     try {
-      await onAnswer(prompt.questions.map((_, i) => selectionFor(i, sel)))
+      await onAnswer(
+        prompt.questions.map((_, i) => selectionFor(i, sel)),
+        (id) => {
+          current.clientMessageId = id
+          if (operationRef.current === current) {
+            setOperation({ ...current })
+          }
+        }
+      )
     } finally {
-      submittingRef.current = false
-      setSubmitting(false)
+      current.inFlight = false
+      if (operationRef.current === current) {
+        setOperation({ ...current })
+      }
     }
   }
 
@@ -144,14 +179,17 @@ export function MobileNativeChatAsk({
 
   const cancel = async (): Promise<void> => {
     autoAdvance.cancel()
-    if (!submittingRef.current && onCancel) {
-      submittingRef.current = true
-      setSubmitting(true)
+    if (!(operationRef.current?.inFlight && isLocalPending(operationRef.current)) && onCancel) {
+      const current: NativeChatAnswerOperation = { inFlight: true }
+      operationRef.current = current
+      setOperation(current)
       try {
         await onCancel()
       } finally {
-        submittingRef.current = false
-        setSubmitting(false)
+        current.inFlight = false
+        if (operationRef.current === current) {
+          setOperation({ ...current })
+        }
       }
     }
   }
@@ -185,7 +223,11 @@ export function MobileNativeChatAsk({
             <Pressable
               // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Questions are positional: selections are index-addressed and a prompt never reorders them.
               key={i}
-              style={[styles.tab, i === index && styles.tabActive]}
+              style={({ pressed }) => [
+                styles.tab,
+                i === index && styles.tabActive,
+                pressed && pressedStyle
+              ]}
               disabled={submitting}
               onPress={() => {
                 autoAdvance.cancel()
@@ -219,7 +261,7 @@ export function MobileNativeChatAsk({
                 onCollapse()
               })
             }
-            disabled={submitting}
+            disabled={sending}
           />
         </View>
         {q.options.map((opt, optIndex) => (
@@ -261,9 +303,9 @@ export function MobileNativeChatAsk({
 
       <View style={styles.footer}>
         <Pressable
-          style={styles.cancel}
+          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
           onPress={() => void cancel()}
-          disabled={submitting}
+          disabled={sending}
           hitSlop={8}
         >
           <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
@@ -274,7 +316,11 @@ export function MobileNativeChatAsk({
           </Text>
         ) : null}
         <Pressable
-          style={[styles.next, !currentAnswered && styles.nextSkip]}
+          style={({ pressed }) => [
+            styles.next,
+            !currentAnswered && styles.nextSkip,
+            pressed && pressedStyle
+          ]}
           onPress={confirm}
           disabled={submitting}
         >

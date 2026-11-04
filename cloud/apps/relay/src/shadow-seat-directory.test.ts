@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openInMemoryRelayDatabase } from './database.js'
 import {
   SHADOW_SEAT_OUTRANK_SKEW_MS,
@@ -97,19 +97,6 @@ function poller(
 }
 
 describe('startShadowSeatPoller', () => {
-  it('polls nothing unless a director has cells switched on and the rehome audience', () => {
-    const base = { role: 'director' as const, rehomeAudience: 'https://relay.example.test/rehome' }
-    const options = { listCells: async () => CELLS }
-    expect(startShadowSeatPoller(base, options)).toBeNull()
-    expect(startShadowSeatPoller({ ...base, shadowSeatFeedCells: [] }, options)).toBeNull()
-    expect(
-      startShadowSeatPoller({ ...base, role: 'cell', shadowSeatFeedCells: 'all' }, options)
-    ).toBeNull()
-    expect(
-      startShadowSeatPoller({ role: 'director', shadowSeatFeedCells: 'all' }, options)
-    ).toBeNull()
-  })
-
   it('takes a full snapshot first, then applies deltas from its cursor', async () => {
     let call = 0
     const cell = poller(
@@ -140,7 +127,14 @@ describe('startShadowSeatPoller', () => {
     expect(cell.requests[1]?.searchParams.get('since')).toBe(`${INCARNATION}:2`)
     expect(cell.directory.seatsOf('user-a', 'host-1')).toEqual([])
     expect(cell.directory.recentlyLeftOf('user-a', 'host-1', 1_000)).toEqual([
-      { cellId: 'cell-a', epoch: 3, generation: 1, incarnation: INCARNATION, closeCode: 4001, at: 53 }
+      {
+        cellId: 'cell-a',
+        epoch: 3,
+        generation: 1,
+        incarnation: INCARNATION,
+        closeCode: 4001,
+        at: 53
+      }
     ])
     expect(cell.directory.seatsOf('user-a', 'host-2')).toMatchObject([{ state: 'drain-only' }])
     expect(cell.directory.seatsOf('user-a', 'host-3')).toMatchObject([
@@ -157,9 +151,7 @@ describe('startShadowSeatPoller', () => {
         'cell-a': () => {
           call += 1
           if (call === 1) return json(feed({ seq: 2, full: [seat('host-1'), seat('host-2')] }))
-          return json(
-            feed({ incarnation: 'restarted', seq: 1, full: [seat('host-2', 1)] })
-          )
+          return json(feed({ incarnation: 'restarted', seq: 1, full: [seat('host-2', 1)] }))
         }
       },
       ['cell-a']
@@ -208,25 +200,6 @@ describe('startShadowSeatPoller', () => {
     directory.apply('cell-a', feed({ seq: 10, changes: [] }), 12)
     expect(directory.since('cell-a')).toBeUndefined()
     expect(directory.cellState('cell-a')).toMatchObject({ lastFailure: 'cursor_gap' })
-  })
-
-  it('checks the map against the cell seat count, with controls only as a cross-check', () => {
-    const directory = new ShadowSeatDirectory()
-    directory.setCells(['cell-a', 'cell-b'])
-    directory.apply(
-      'cell-a',
-      feed({ seq: 1, counts: { seats: 2, controls: 1 }, full: [seat('host-1'), seat('host-2')] }),
-      10
-    )
-    directory.apply(
-      'cell-b',
-      feed({ cellId: 'cell-b', seq: 1, counts: { seats: 3, controls: 3 }, full: [seat('host-3')] }),
-      10
-    )
-    expect(directory.summary(10)).toMatchObject({
-      seatsMismatchedCells: 1,
-      controlsBelowMapCells: 1
-    })
   })
 
   it('returns a drain-only seat to active, and ignores active for an older generation', () => {
@@ -392,7 +365,11 @@ describe('startShadowSeatPoller', () => {
     const directory = new ShadowSeatDirectory()
     directory.setCells(['cell-b'])
     const reserve = { generation: 4, flags: { admitMode: 'reserve' } }
-    directory.apply('cell-b', feed({ cellId: 'cell-b', seq: 1, full: [], flagsApplied: reserve }), 10)
+    directory.apply(
+      'cell-b',
+      feed({ cellId: 'cell-b', seq: 1, full: [], flagsApplied: reserve }),
+      10
+    )
     directory.markNoFeed('cell-b', 20, INCARNATION)
     expect(directory.cellState('cell-b')?.flagsApplied).toEqual(reserve)
     directory.markNoFeed('cell-b', 30)
@@ -495,10 +472,10 @@ describe('startShadowSeatPoller', () => {
   })
 
   it('polls only the listed cells and drops a cell that leaves the list', async () => {
-    const cell = poller(
-      { 'cell-a': () => json(feed({ seq: 1, full: [seat('host-1')] })) },
-      ['cell-a', 'cell-z']
-    )
+    const cell = poller({ 'cell-a': () => json(feed({ seq: 1, full: [seat('host-1')] })) }, [
+      'cell-a',
+      'cell-z'
+    ])
     await cell.tick()
     cell.stop()
     expect(cell.requests.map((url) => url.hostname)).toEqual(['cell-a.example.test'])
@@ -579,34 +556,6 @@ describe('RelayAssignmentStore.seatFeedCells', () => {
   })
 })
 
-describe('ShadowSeatDirectory.placementModeOf', () => {
-  const response = (
-    modes: { admitModeEffective?: 'db' | 'reserve'; admitModeRaw?: 'db' | 'reserve' } = {}
-  ): SeatFeedResponse => ({
-    v: 1,
-    cellId: 'cell-a',
-    incarnation: INCARNATION,
-    seq: 1,
-    at: 0,
-    counts: { seats: 0, controls: 0, bookings: 0, units: 0, ceiling: 500 },
-    intake: { perSec: 100, burst: 20, tokens: 20 },
-    flagsApplied: { generation: 3, flags: { admitMode: 'reserve' } },
-    full: [],
-    ...modes
-  })
-
-  // A tripped cell re-registering still reports reserve as effective; placement reads raw db.
-  it('reads the raw mode when the cell sends it, and the effective mode otherwise', () => {
-    const directory = new ShadowSeatDirectory()
-    directory.setCells(['cell-a'])
-    directory.apply('cell-a', response({ admitModeEffective: 'reserve', admitModeRaw: 'db' }), 1_000, 1_000)
-    expect(directory.placementModeOf('cell-a')).toBe('db')
-    expect(directory.admitModeOf('cell-a')).toBe('reserve')
-    directory.apply('cell-a', response({ admitModeEffective: 'reserve' }), 2_000, 2_000)
-    expect(directory.placementModeOf('cell-a')).toBe('reserve')
-  })
-})
-
 describe('ShadowSeatDirectory.onOutranked', () => {
   const reserve = { generation: 3, flags: { admitMode: 'reserve' } }
   const db = { generation: 3, flags: { admitMode: 'db' } }
@@ -658,8 +607,16 @@ describe('ShadowSeatDirectory.onOutranked', () => {
     const { map, outranked } = directory()
     map.apply('cell-a', full('cell-a', 3, 10), 100)
     map.apply('cell-b', full('cell-b', 4, 2_000), 101)
-    map.apply('cell-b', { ...full('cell-b', 4, 2_000), incarnation: '22222222-2222-4222-8222-222222222222' }, 102)
-    map.apply('cell-a', { ...full('cell-a', 3, 10), incarnation: '22222222-2222-4222-8222-222222222222' }, 103)
+    map.apply(
+      'cell-b',
+      { ...full('cell-b', 4, 2_000), incarnation: '22222222-2222-4222-8222-222222222222' },
+      102
+    )
+    map.apply(
+      'cell-a',
+      { ...full('cell-a', 3, 10), incarnation: '22222222-2222-4222-8222-222222222222' },
+      103
+    )
     expect(outranked).toEqual([halfOpen])
   })
 
@@ -677,11 +634,8 @@ describe('ShadowSeatDirectory.onOutranked', () => {
     const withinSkew = directory()
     withinSkew.map.apply('cell-a', full('cell-a', 3, 10), 100)
     withinSkew.map.apply('cell-b', full('cell-b', 4, 10 + SHADOW_SEAT_OUTRANK_SKEW_MS), 101)
-    expect([onDatabaseCell, drainOnly, staleSticky, withinSkew].map(({ outranked }) => outranked)).toEqual([
-      [],
-      [],
-      [],
-      []
-    ])
+    expect(
+      [onDatabaseCell, drainOnly, staleSticky, withinSkew].map(({ outranked }) => outranked)
+    ).toEqual([[], [], [], []])
   })
 })

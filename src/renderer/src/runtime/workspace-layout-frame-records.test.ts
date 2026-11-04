@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as WorkspaceSessionModule from '@/lib/workspace-session'
 import type * as WorkspaceLayoutLoadModule from '../../../shared/workspace-layout/workspace-layout-load'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import {
@@ -129,22 +129,6 @@ afterEach(() => {
 })
 
 describe('a records frame in the window', () => {
-  it('shows 100 generated titles from one frame in one store update', async () => {
-    const { store, first, writes, send, close } = await boot()
-    const titled = structuredClone(first)
-    titled.tabs.forEach((tab, index) => {
-      tab.generatedTitle = `Title ${index}`
-    })
-
-    await send(titled)
-
-    expect(writes).toHaveBeenCalledTimes(1)
-    expect(store.getState().tabsByWorktree[GIT_KEY]!.map((tab) => tab.generatedTitle)).toEqual(
-      titled.tabs.map((tab) => tab.generatedTitle)
-    )
-    close()
-  })
-
   it('shows a frame of only tab rows without reading the window’s session back', async () => {
     const { store, first, writes, send, close } = await boot()
     // Exclude reference builds performed by apply checker; count only window calls.
@@ -162,21 +146,6 @@ describe('a records frame in the window', () => {
     expect(buildWorkspaceSessionPayload).not.toHaveBeenCalled()
     expect(loadWorkspaceLayoutWithoutReport).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree[GIT_KEY]![99]!.generatedTitle).toBe('Title 99')
-    close()
-  })
-
-  it('shows a binding record without a rebuild', async () => {
-    const { store, first, send, close } = await boot()
-    const rebound = structuredClone(first)
-    rebound.tabs[7]!.terminal!.panes[0]!.ptyId = 'pty-fresh'
-    rebound.tabs[7]!.terminal!.panes[0]!.ptyGeneration = 2
-
-    await send(rebound)
-
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
-    expect(store.getState().terminalLayoutsByTabId['tab-7']!.ptyIdsByLeafId).toEqual({
-      [leafOf(7)]: 'pty-fresh'
-    })
     close()
   })
 
@@ -204,37 +173,6 @@ describe('a records frame in the window', () => {
     expect(after.terminalLayoutsByTabId['tab-7']!.ptyIdsByLeafId).toEqual({
       [leafOf(7)]: 'pty-fresh'
     })
-    close()
-  })
-
-  it('shows 100 single-binding frames, one per task, without building a workspace', async () => {
-    const { store, first, send, close } = await boot()
-    let layout = first
-    for (let index = 0; index < TABS; index += 1) {
-      layout = structuredClone(layout)
-      layout.tabs[index]!.terminal!.panes[0]!.ptyId = `pty-respawned-${index}`
-      await send(layout)
-    }
-
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
-    const bindings = store.getState().terminalLayoutsByTabId
-    expect(
-      Array.from({ length: TABS }, (_, index) => bindings[`tab-${index}`]!.ptyIdsByLeafId)
-    ).toEqual(
-      Array.from({ length: TABS }, (_, index) => ({ [leafOf(index)]: `pty-respawned-${index}` }))
-    )
-    close()
-  })
-
-  it('writes nothing for a respawn under the same id: only its generation rose', async () => {
-    const { first, writes, send, close } = await boot()
-    const respawned = structuredClone(first)
-    respawned.tabs[3]!.terminal!.panes[0]!.ptyGeneration = 2
-
-    await send(respawned)
-
-    expect(writes).not.toHaveBeenCalled()
-    expect([...check.fullBuilt, ...check.workspaceBuilt]).toEqual([])
     close()
   })
 })

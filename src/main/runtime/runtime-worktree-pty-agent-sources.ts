@@ -1,14 +1,17 @@
 import {
   pickParsedAgentStatusPayload,
-  type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
-} from '../../shared/agent-status-types'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { agentVerdictFields } from '../../shared/agent-main-agent-verdict'
+} from '../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/workspace-layout/stable-pane-id'
+import { agentVerdictFields } from '../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../shared/wsl-hook-relay-contract'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
-import { structuredAgentSessionIdFromTabId } from '../../shared/structured-agent-session-tab-id'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
 export type ConnectedPtyEvidence = {

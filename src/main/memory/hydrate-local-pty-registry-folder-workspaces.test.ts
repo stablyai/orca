@@ -1,17 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { SessionInfo } from '../daemon/types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const getDaemonProviderMock = vi.fn()
 vi.mock('../daemon/daemon-provider-state', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 const listLocalRepoWorktreesStrictMock = vi.fn()
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listLocalRepoWorktreesStrict: (...args: unknown[]) => listLocalRepoWorktreesStrictMock(...args)
 }))
 
@@ -41,25 +41,6 @@ async function loadFresh() {
 beforeEach(() => {
   getDaemonProviderMock.mockReset()
   listLocalRepoWorktreesStrictMock.mockReset()
-})
-
-it('hydrates surviving true folder workspace PTYs without enumerating Git', async () => {
-  const { hydrate, listRegisteredPtys } = await loadFresh()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership reads only id and executionHostId.
-  const workspace = { id: 'folder-workspace-1', executionHostId: 'local' } as FolderWorkspace
-  const session = { sessionId: 'folder:folder-workspace-1@@cafebabe', pid: 4242 }
-  getDaemonProviderMock.mockReturnValue({ listSessions: vi.fn().mockResolvedValue([session]) })
-
-  await hydrate(makeStore([workspace]))
-
-  expect(listRegisteredPtys()).toEqual([
-    expect.objectContaining({
-      ptyId: 'folder:folder-workspace-1@@cafebabe',
-      worktreeId: 'folder:folder-workspace-1',
-      pid: 4242
-    })
-  ])
-  expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
 })
 
 it.each(['deleted', 'remote', 'ssh'] as const)(

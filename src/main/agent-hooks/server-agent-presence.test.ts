@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from './server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { buildBody, LEAF_1, PANE, postHookEvent } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -12,7 +12,9 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }
 const probe = vi.hoisted(() =>
   vi.fn(async (): Promise<'live' | 'unverifiable' | 'exited'> => 'unverifiable')
 )
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: probe }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: probe
+}))
 const servers: AgentHookServer[] = []
 const temporaryPaths: string[] = []
 
@@ -114,6 +116,16 @@ describe('host-owned hook presence', () => {
     await hook(server, 'UserPromptSubmit')
     expect(observed?.current()).toBe(false)
     expect(server.persistedWriterState()).not.toContain('pane-owned')
+  })
+
+  it('reads an agent that reported its own end as exited, whatever its process probe says', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    await hook(server, 'SessionEnd', 'session-a', 'prompt_input_exit')
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+    expect(row).toBeDefined()
+    probe.mockResolvedValue('live')
+    expect(await server.readCliWriterObservation(row!)?.presence()).toBe('exited')
   })
 
   it('clears the status on SessionEnd while the terminal survives, without a renderer', async () => {

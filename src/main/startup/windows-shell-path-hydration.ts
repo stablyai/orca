@@ -1,5 +1,5 @@
 import { win32 as pathWin32 } from 'node:path'
-import { resolveWindowsGitBashShellPath } from '../git-bash'
+import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import {
   resolveEffectiveWindowsPowerShell,
   type WindowsPowerShellImplementation,

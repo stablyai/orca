@@ -1,7 +1,10 @@
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
-import { noteWslDistroWoken, noteWslDistrosRunning } from '../../wsl-background-distro-gate'
+import {
+  noteWslDistroWoken,
+  noteWslDistrosRunning
+} from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   agentSessionOwners,
   assertSpawnReplyWasLive,
@@ -15,7 +18,7 @@ import {
   PaneOwnerContentionError
 } from './pane/pane-spawn-operation'
 import { isRegisteredAgentSessionOwnerLive } from './provider/liveness'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
 import {
   resumeSpawnRefusal,
   SavedResumeFreshRefusal,

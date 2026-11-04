@@ -2,16 +2,14 @@ import { useEffect, useMemo, useRef } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionCommandItemIds } from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionCommandItemIds } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-
-const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
@@ -22,11 +20,10 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
-  // Read journal rows/items only for visible rejected messages so ordinary streaming cannot rebuild notices.
+  // Only rejection wording needs journal items; pending delivery comes from submissions alone.
   const hasRejected = submissions.some(
     (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
   )
-  const journalRows = hasRejected ? submissions : NO_SUBMISSIONS
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
     hasRejected && args.startFailures === undefined
@@ -37,12 +34,12 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
     () =>
       structuredAgentSessionDeliveryNotices({
         pending,
-        submissions: journalRows,
+        submissions,
         agentName,
         startFailures,
         commandItemIds
       }),
-    [pending, journalRows, agentName, startFailures, commandItemIds]
+    [pending, submissions, agentName, startFailures, commandItemIds]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)

@@ -8,7 +8,7 @@ import {
   CHROMIUM_BROWSERS,
   browserRootPath,
   type DetectedBrowser
-} from './browser-cookie-detection-types'
+} from './browser-cookie-source-profiles'
 import type { EncryptionKeyResult } from './browser-cookie-sqlite'
 import type { LinuxCookieKeyFailure } from '../../../../shared/browser-workspace-types'
 

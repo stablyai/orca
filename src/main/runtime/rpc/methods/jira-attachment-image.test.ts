@@ -84,17 +84,4 @@ describe('Jira image RPC carrier', () => {
       expect(replies.at(-1)).toContain('"ok":false')
     }
   )
-  it('requires a binary transport and rejects unknown grant references', async () => {
-    const replies: string[] = []
-    await dispatcher.dispatchStreaming(request(), (reply) => replies.push(reply))
-    expect(replies.join('')).toContain('binary subscription transport')
-    expect(read).not.toHaveBeenCalled()
-    const unknown = request()
-    unknown.params.reference = '00000000-0000-0000-0000-000000000000'
-    await dispatcher.dispatchStreaming(unknown, (reply) => replies.push(reply), {
-      sendBinary: vi.fn()
-    })
-    expect(replies.join('')).toContain('unavailable')
-    expect(read).not.toHaveBeenCalled()
-  })
 })

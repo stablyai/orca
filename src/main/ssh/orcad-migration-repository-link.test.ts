@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   addManagedOrcadEnvironment,
   removeManagedOrcadEnvironment
-} from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
+} from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import * as environments from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
@@ -119,14 +120,14 @@ beforeEach(() => {
   targetStore = new SshConnectionStore(store as never)
   mocks.state.targetStore = targetStore
   destination = serverDestination()
-  mocks.ensureTunnel.mockImplementation(resolveEnvironment)
+  mocks.ensureTunnel.mockImplementation(environments.resolveEnvironment)
   mocks.deploy.mockImplementation(
     async (path: string, args: { name: string; sshTargetId: string }) => {
       const owner = getManagedOrcadFenceEnvironmentId(store.getSshTarget(args.sshTargetId))
       if (!owner) {
         throw new Error('deploy without a fence')
       }
-      if (!listEnvironments(path).some((entry) => entry.id === owner)) {
+      if (!environments.listEnvironments(path).some((entry) => entry.id === owner)) {
         addManagedOrcadEnvironment(path, {
           id: owner,
           name: args.name,
@@ -421,7 +422,7 @@ describe('moving the host again after its server was stopped', () => {
       store,
       claims: targetStore.getOrcadRuntimeClaims(),
       target: store.getSshTarget(TARGET.id)!,
-      environment: listEnvironments(userDataPath)[0]!,
+      environment: environments.listEnvironments(userDataPath)[0]!,
       connectDestination: async () => destination,
       censusHost: async () => ({ verdict: 'exited', count: 0 }),
       runTargetLifecycle

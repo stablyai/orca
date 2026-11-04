@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SessionInfo } from '../daemon/types'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { hydrateLocalPtyRegistryAtBoot as HydrateFn } from './hydrate-local-pty-registry'
 import type {
   listRegisteredPtys as ListFn,
@@ -30,13 +30,13 @@ const { FakeDaemonPtyRouter } = vi.hoisted(() => ({
 vi.mock('../daemon/daemon-pty-router', () => ({ DaemonPtyRouter: FakeDaemonPtyRouter }))
 
 const getLocalProjectWorktreeGitOptionsMock = vi.fn()
-vi.mock('../project-runtime-git-options', () => ({
+vi.mock('../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: (store: unknown, repo: unknown) =>
     getLocalProjectWorktreeGitOptionsMock(store, repo)
 }))
 
 const listLocalRepoWorktreesStrictMock = vi.fn()
-vi.mock('../repo-worktrees', () => ({
+vi.mock('../workspaces/catalog/repo-worktrees', () => ({
   listLocalRepoWorktreesStrict: (
     repo: unknown,
     options?: { signal?: AbortSignal; wslDistro?: string }

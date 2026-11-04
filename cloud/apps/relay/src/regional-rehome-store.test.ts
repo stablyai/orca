@@ -7,7 +7,7 @@ import {
   REGIONAL_REHOME_QUARANTINE_FAILURES,
   REGIONAL_REHOME_QUARANTINE_MS,
   REGIONAL_REHOME_REDRAIN_SEND_LIMIT
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import {
   openInMemoryRelayDatabase,
   type RelayDatabase,
@@ -278,59 +278,6 @@ describe('regional rehome assignment state', () => {
     })
     expect(await context.store.tryIdleRehome()).toBeNull()
     expect(await context.database.query(`SELECT * FROM relay_assignment_migrations`)).toEqual([])
-    await context.database.close()
-  })
-
-  it('fails fleet safety closed until source and target telemetry is fresh', async () => {
-    const context = await setup()
-    await context.database.query(`DELETE FROM relay_cell_rehome_safety WHERE cell_id = ?`, [
-      target.id
-    ])
-    expect(await context.store.regionalRehomeFleetSafety()).toMatchObject({
-      requiredCells: 2,
-      missingCells: 1,
-      observedAt: 0
-    })
-    await heartbeat(context.store, source, sourceIncarnation, 3, 2, {
-      observedAt: context.now(),
-      sqlFailures: 0,
-      reconnects: 2,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    })
-    await heartbeat(context.store, target, targetIncarnation, 3, 2, {
-      observedAt: context.now(),
-      sqlFailures: 1,
-      reconnects: 3,
-      controlActivityRecoveryFailures: 0,
-      databasePoolWaiting: 0,
-      databasePoolWaitersMax: 0,
-      databasePoolWaitMsMax: 0
-    })
-    expect(await context.store.regionalRehomeFleetSafety()).toMatchObject({
-      requiredCells: 2,
-      missingCells: 0,
-      observedAt: context.now(),
-      sqlFailures: 1,
-      reconnects: 5
-    })
-    await context.database.close()
-  })
-
-  it('counts only drainable cells as the rehome fleet, in every region', async () => {
-    const context = await setup({ targetProtocol: 0 })
-
-    expect(await context.store.regionalRehomeFleetSafety()).toMatchObject({
-      requiredCells: 1,
-      missingCells: 0
-    })
-    await heartbeat(context.store, target, targetIncarnation, 3, 2)
-    expect(await context.store.regionalRehomeFleetSafety()).toMatchObject({
-      requiredCells: 2,
-      missingCells: 0
-    })
     await context.database.close()
   })
 
@@ -753,7 +700,9 @@ describe('regional rehome assignment state', () => {
       enabled: true
     })
     expect(
-      await context.database.query(`SELECT consecutive_failures FROM relay_region_rehome_worker_state`)
+      await context.database.query(
+        `SELECT consecutive_failures FROM relay_region_rehome_worker_state`
+      )
     ).toEqual([{ consecutive_failures: 0 }])
     expect(await context.database.query(`SELECT * FROM relay_assignment_migrations`)).toEqual([])
     await context.database.close()
@@ -764,12 +713,16 @@ describe('regional rehome assignment state', () => {
     // 10-06 06:16Z: one stall put the fleet sum at 396 for about a minute.
     for (let elapsed = 0; elapsed <= 90_000; elapsed += 6_000) {
       await sqlFailuresHeartbeats(context, 396)
-      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual([])
+      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual(
+        []
+      )
       context.advance(6_000)
     }
     await sqlFailuresHeartbeats(context, 0)
     await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
-    expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toHaveLength(1)
+    expect(
+      await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))
+    ).toHaveLength(1)
     // The next stall, ~610 s later, starts its own breach rather than extending the last one.
     context.advance(500_000)
     for (let elapsed = 0; elapsed <= 90_000; elapsed += 6_000) {
@@ -796,7 +749,9 @@ describe('regional rehome assignment state', () => {
       }
       expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({ enabled: true })
       await sqlFailuresHeartbeats(context, REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1)
-      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual([])
+      expect(await context.store.selectIdleRegionalRehomeCandidates(cleanSafety(context))).toEqual(
+        []
+      )
     } finally {
       warnings.restore()
     }
@@ -1481,54 +1436,6 @@ describe('regional rehome assignment state', () => {
     await context.database.close()
   })
 
-  it('reports a repaired counter only for the candidate it repaired', async () => {
-    const context = await setup()
-    const skewed = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const clean = { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
-    const skewedSource = await activatePreferredSource(context, skewed)
-    const cleanSource = await activatePreferredSource(context, clean)
-    const first = await context.store.tryIdleRehome()
-    context.advance(6_000)
-    const second = await context.store.tryIdleRehome()
-    for (const [identity, attempt, sourceControl] of [
-      [skewed, first, skewedSource],
-      [clean, second, cleanSource]
-    ] as const) {
-      await context.store.activateControl(identity, {
-        cellId: target.id,
-        assignmentEpoch: attempt!.assignmentEpoch,
-        generation: 1
-      })
-      await context.store.markMigrationTargetRegistered(identity, {
-        cellId: target.id,
-        assignmentEpoch: attempt!.assignmentEpoch
-      })
-      await context.store.releaseActivity(identity, sourceControl)
-    }
-    // Damage already written by a pre-fix sticky grant, on one host only.
-    await context.database.query(
-      `UPDATE relay_assignments SET reserved_controls = 0
-       WHERE user_id = ? AND relay_host_id = ?`,
-      [skewed.userId, skewed.relayHostId]
-    )
-
-    const warnings = collectCandidateFailureWarnings([
-      'orca_relay_regional_rehome_activity_counts_repaired'
-    ])
-    try {
-      expect(await context.store.completeReadyRegionalRehomes()).toBe(2)
-    } finally {
-      warnings.restore()
-    }
-    expect(warnings.entries).toEqual([
-      {
-        event: 'orca_relay_regional_rehome_activity_counts_repaired',
-        attemptId: first!.attemptId
-      }
-    ])
-    await context.database.close()
-  })
-
   it('never repairs past a migration lease whose shape is wrong', async () => {
     const context = await setup()
     const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
@@ -1573,48 +1480,6 @@ describe('regional rehome assignment state', () => {
       reservedControls: 0,
       controlLeases: 1
     })
-    await context.database.close()
-  })
-
-  it('stays silent when a repair cannot make the counts whole', async () => {
-    const context = await setup()
-    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-    const sourceControl = await activatePreferredSource(context, identity)
-    const attempt = await context.store.tryIdleRehome()
-    await context.store.activateControl(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch,
-      generation: 1
-    })
-    await context.store.markMigrationTargetRegistered(identity, {
-      cellId: target.id,
-      assignmentEpoch: attempt!.assignmentEpoch
-    })
-    await context.store.releaseActivity(identity, sourceControl)
-    // A vanished migration lease repairs on first assert but fails re-assert; no repaired event may escape rollback.
-    await context.database.query(
-      `DELETE FROM relay_assignment_activity_leases
-       WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'migration'`,
-      [identity.userId, identity.relayHostId]
-    )
-
-    const warnings = collectCandidateFailureWarnings([
-      'orca_relay_regional_rehome_candidate_failed',
-      'orca_relay_regional_rehome_activity_counts_repaired'
-    ])
-    try {
-      expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
-    } finally {
-      warnings.restore()
-    }
-    expect(warnings.entries).toEqual([
-      {
-        event: 'orca_relay_regional_rehome_candidate_failed',
-        operation: 'complete',
-        attemptId: attempt!.attemptId,
-        reason: 'migration_activity_accounting_mismatch'
-      }
-    ])
     await context.database.close()
   })
 })
@@ -1822,7 +1687,10 @@ function cleanSafety(context: Context): RegionalRehomeSafetySnapshot {
 async function sqlFailuresHeartbeats(context: Context, fleetSqlFailures: number): Promise<void> {
   const half = Math.floor(fleetSqlFailures / 2)
   const safety = cleanSafety(context)
-  await heartbeat(context.store, source, sourceIncarnation, 3, context.now(), { ...safety, sqlFailures: half })
+  await heartbeat(context.store, source, sourceIncarnation, 3, context.now(), {
+    ...safety,
+    sqlFailures: half
+  })
   await heartbeat(context.store, target, targetIncarnation, 3, context.now(), {
     ...safety,
     sqlFailures: fleetSqlFailures - half

@@ -1,24 +1,34 @@
+import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
 import { ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import * as processSpawn from '../codex/codex-app-server-process-tree-kill'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import * as processSpawn from '../codex/app-server/codex-app-server-process-tree-kill'
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
-vi.mock('./structured-agent-model-catalog-wiring', () => ({
-  modelCatalogHostDeps: async () => ({})
-}))
+vi.mock('./structured-agent-model-catalog-wiring', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelCatalogWiring>()
+  return {
+    ...actual,
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => ({
+      ...(await actual.ensureStructuredAgentModelCatalogOwner(...args)),
+      modelCatalog: undefined
+    })
+  }
+})
 
 it('stops naming admission and joins native helper finalization before runtime close', async ({
   onTestFinished

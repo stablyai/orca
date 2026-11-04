@@ -5,12 +5,12 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
   GitDiffResult,
   GitDiffTextResult
-} from '../../../../../../shared/git-diff-compare-types'
-import type { DiffSection } from '../../diff-section-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { createCombinedDiffSectionIndexMap } from '../resolve-changes/combined-diff-section-identity'
 import { useCombinedDiffViewRestore } from '../remember-view/use-combined-diff-view-restore'
@@ -20,7 +20,15 @@ import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 import { useCombinedDiffSectionRevalidation } from './use-combined-diff-section-revalidation'
 
 const sectionFetch = vi.hoisted(() => vi.fn())
-vi.mock('./fetch-combined-diff-section', () => ({ fetchCombinedDiffSection: sectionFetch }))
+vi.mock('./fetch-combined-diff-section', () => ({
+  fetchCombinedDiffSection: async (args: { operation: unknown }) => ({
+    result: await sectionFetch(args),
+    operation: args.operation
+  })
+}))
+vi.mock('./combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: () => ({ assertCurrent: () => undefined })
+}))
 import { useCombinedDiffSectionLoader } from './use-combined-diff-section-loader'
 
 const mocks = { fetch: sectionFetch }

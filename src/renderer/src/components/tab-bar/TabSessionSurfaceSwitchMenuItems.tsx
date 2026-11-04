@@ -1,4 +1,4 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { CliChatResumeMenuItems } from './CliChatResumeMenuItems'
 import { NativeChatCliForkMenuItems } from './NativeChatCliForkMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'

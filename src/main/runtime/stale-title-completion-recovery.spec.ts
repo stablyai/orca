@@ -2,9 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
-import { extractAllOscTitleEntries } from '../../shared/osc-title-extraction'
+import { extractAllOscTitleEntries } from '../../shared/agent-status/title/osc-title-extraction'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { paneKeyPtyId, ptyPaneKey, rememberPaneKeyForPty } from '../ipc/pty/pane/key-state'
 import { mainProcessState } from '../startup/main-process-state'
@@ -225,7 +225,7 @@ describe('hook title evidence and completion recovery', () => {
     }
   }, 15_000)
 
-  it('Pi controlled hooks retract rest and preserve a subsequently recorded native title', async () => {
+  it('Pi controlled hooks preserve titleless and native-title panes', async () => {
     vi.useFakeTimers()
     const { runtime, status, dispose } = producerFixture('pi')
     try {
@@ -246,13 +246,15 @@ describe('hook title evidence and completion recovery', () => {
       )
       await runtime.listTerminals()
       status('done')
-      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('Pi ready')
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBeNull()
       status('working')
-      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('⠋ Pi')
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBeNull()
       await expect(runtime.getTerminalAgentStatus(TERMINAL_HANDLE)).resolves.toMatchObject({
         status: 'working'
       })
       runtime.onPtyData(PTY_ID, nativeFrame, 1)
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')
+      status('done')
       expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')
       status('working')
       expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')

@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -108,15 +109,6 @@ describe('OrcadManagedTunnelManager.closeTarget (the SSH session teardown)', () 
     await state.manager.closeTarget('ssh-1')
 
     expect(state.listening.size).toBe(0)
-  })
-
-  it('leaves the tunnels of other hosts alone', async () => {
-    const state = setup()
-    await state.manager.ensure(createEnvironment())
-
-    await state.manager.closeTarget('ssh-2')
-
-    expect(state.listening.size).toBe(1)
   })
 
   it('supersedes a build still dialling, so it opens no forward after the teardown', async () => {

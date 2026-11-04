@@ -5,7 +5,7 @@ const { stat } = vi.hoisted(() => ({
   stat: vi.fn<() => Promise<{ isDirectory: () => boolean }>>()
 }))
 vi.mock('node:fs/promises', () => ({ stat }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   wslUncDirectoryExistsAsync: () => {
     throw new Error('Unexpected WSL probe')
   }

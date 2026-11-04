@@ -1,26 +1,26 @@
 // Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import {
   acpStructuredLaunchPart,
   type AcpStructuredLaunchPartDeps
 } from '../acp/acp-structured-launch-resolution'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
-import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
+import type { ClaudeEnvDeps } from '../claude/structured/launch/claude-structured-child-env'
 import {
   claudeStructuredLaunchPart,
   type ClaudeStructuredLaunchPartDeps
-} from '../claude/claude-structured-launch-resolution'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+} from '../claude/structured/launch/claude-structured-launch-resolution'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import {
   codexStructuredLaunchPart,
   type CodexStructuredLaunchPartDeps
-} from '../codex/codex-structured-launch-resolution'
+} from '../codex/structured/launch/codex-structured-launch-resolution'
 import type { PrepareNativeChatVisuals } from '../native-chat/native-chat-visuals-delivery'
 import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'

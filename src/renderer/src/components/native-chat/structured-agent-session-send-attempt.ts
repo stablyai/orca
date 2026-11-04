@@ -1,27 +1,23 @@
-// Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
-
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import { structuredAgentSessionMessageSendMutation } from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer,
   type StructuredAgentSessionSendEvidence
-} from '../../../../shared/structured-agent-session-send-evidence'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import { ensureRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -30,9 +26,10 @@ import {
   agentSessionThrownFailure,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+// Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 
 const fences = new Map<string, number>()
 
@@ -152,7 +149,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     // Re-pairing errors are raised before forwarding, proving the request never went out.
     if (error instanceof RuntimeRpcCallError && error.code === RUNTIME_ENVIRONMENT_CHANGED) {
       args.reconcile(false)
-      return args.abandoned() ? null : { kind: 'not-sent', parts: notSentParts(error) }
+      return { kind: 'not-sent', parts: notSentParts(error) }
     }
     answer = {
       kind: 'thrown',
@@ -161,9 +158,7 @@ export async function attemptStructuredAgentSessionSend(args: {
     }
   }
   args.reconcile(structuredAgentSessionSendEvidence(answer).kind === 'uncertain')
-  if (args.abandoned()) {
-    return null
-  }
+  // A recorded reply can still reconcile retained input after its caller's deadline.
   const value = answer.kind === 'result' && answer.result.ok ? answer.result.value : null
   return {
     kind: 'answered',

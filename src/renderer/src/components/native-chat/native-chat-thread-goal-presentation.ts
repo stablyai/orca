@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalThreadGoalStatus } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { nativeChatThreadGoalStatusKey } from '../../../../shared/native-chat-thread-goal-copy'
 
 /** Active goals read as pursued only during a running turn; between turns they remain set. */

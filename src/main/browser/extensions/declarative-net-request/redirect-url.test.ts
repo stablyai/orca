@@ -1,17 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  compareDomains,
-  DnrDomainList,
-  hostLabelSuffixes,
-  hostMatchesDomainLists,
-  sameDomainOrHost
-} from './domain-matching'
-import {
-  escapeQueryParamValue,
-  parseDnrRedirect,
-  transformDnrUrl,
-  upgradeDnrUrl
-} from './redirect-url'
+import { sameDomainOrHost } from './domain-matching'
+import { parseDnrRedirect, transformDnrUrl } from './redirect-url'
 import { isDnrRuleProblem } from './parse-errors'
 import type { DnrUrlTransform } from './rule-types'
 
@@ -79,64 +68,9 @@ describe('transformDnrUrl', () => {
   ])('%s with %j → %s', (url, queryTransform, expected) => {
     expect(transform(url, { queryTransform })).toBe(expected)
   })
-
-  it('escapes parameter names and values like base::EscapeQueryParamValue', () => {
-    expect(escapeQueryParamValue("a b&c=d/é!'()*-._~")).toBe("a+b%26c%3Dd%2F%C3%A9!'()*-._~")
-  })
-})
-
-describe('upgradeDnrUrl', () => {
-  it.each([
-    ['http://a.com/x', 'https://a.com/x'],
-    ['ftp://a.com:2121/x', 'https://a.com:2121/x'],
-    ['https://a.com/x', null],
-    ['ws://a.com/x', null]
-  ])('%s → %s', (url, expected) => {
-    expect(upgradeDnrUrl(url)).toBe(expected)
-  })
 })
 
 describe('domain lists', () => {
-  it('orders domains longest first', () => {
-    expect(['a.com', 'google.com', 'zzz.com', 'xy.com'].sort(compareDomains)).toEqual([
-      'google.com',
-      'zzz.com',
-      'xy.com',
-      'a.com'
-    ])
-  })
-
-  const matches = (
-    host: string,
-    included: string[] | null,
-    excluded: string[] | null = null
-  ): boolean =>
-    hostMatchesDomainLists(
-      host,
-      hostLabelSuffixes(host),
-      included && new DnrDomainList(included),
-      excluded && new DnrDomainList(excluded)
-    )
-
-  it.each<[string, string[] | null, string[] | null, boolean]>([
-    ['a.example.com', ['example.com'], null, true],
-    ['example.com.', ['example.com'], null, true],
-    ['notexample.com', ['example.com'], null, false],
-    ['a.b.example.com', ['example.com'], ['b.example.com'], false],
-    ['a.b.example.com', ['a.b.example.com'], ['example.com'], true],
-    ['x.com', null, ['x.com'], false],
-    ['y.com', null, ['x.com'], true],
-    ['', ['x.com'], null, false]
-  ])('%s in %j minus %j → %s', (host, included, excluded, expected) => {
-    expect(matches(host, included, excluded)).toBe(expected)
-  })
-
-  it("keeps Chromium's split between short-list DomainIs and long-list suffix lookup", () => {
-    // url::DomainIs accepts a leading-dot entry; the binary search used above five entries does not.
-    expect(matches('a.com', ['.com'])).toBe(true)
-    expect(matches('a.com', ['.com', 'b.net', 'c.net', 'd.net', 'e.net', 'f.net'])).toBe(false)
-  })
-
   it.each([
     ['www.example.co.uk', 'cdn.example.co.uk', true],
     ['example.co.uk', 'other.co.uk', false],

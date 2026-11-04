@@ -1,10 +1,15 @@
-import { advanceTerminalEscapeBoundary } from '../../../../shared/terminal-partial-escape-tail'
-import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal-mode-reset-profiles'
+import { advanceTerminalEscapeBoundary } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
+import { RESET_TERMINAL_CURSOR_STYLE } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 
 /** Cosmetic resets must not abort an application's unfinished control sequence. */
 export class TerminalIdleCursorReset {
   private escapeState = ''
   private pending = false
+
+  /** xterm's open escape boundary across every write routed through processOutput. */
+  get parserEscape(): string {
+    return this.escapeState
+  }
 
   request(): string {
     this.pending = true

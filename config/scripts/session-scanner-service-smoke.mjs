@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
 import { ORCAD_SESSION_SCANNER_SERVICE_ENTRY } from '../../src/shared/orcad-artifacts.ts'
-import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from '../../src/main/ai-vault/session-scanner-service-protocol.ts'
+import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from '../../src/main/ai-vault/scan-service/session-scanner-service-protocol.ts'
 
 // Probe forks with shipped runtime’s execPath; judge exit code, never matched output.
 const PROBE = `

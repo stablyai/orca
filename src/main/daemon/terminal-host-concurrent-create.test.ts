@@ -3,7 +3,9 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { TerminalHost } from './terminal-host'
 
-vi.mock('../pty-descendant-termination', () => ({ killWithDescendantSweep: vi.fn() }))
+vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
+  killWithDescendantSweep: vi.fn()
+}))
 
 type MockSubprocess = SubprocessHandle & {
   emitData: (data: string) => void

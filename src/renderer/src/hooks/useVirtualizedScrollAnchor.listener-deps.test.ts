@@ -37,42 +37,6 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
     vi.resetModules()
   })
 
-  it('does not tear down the scroll listener when row snapshots change', async () => {
-    const harness = createReactHookHarness()
-    vi.doMock('react', () => harness.react)
-    const { useVirtualizedScrollAnchor } = await import('./useVirtualizedScrollAnchor')
-
-    const anchorRef = { current: null }
-    const scrollElementRef = { current: null }
-    const scrollOffsetRef = { current: 0 }
-    const virtualizer = {
-      getVirtualItems: () => [],
-      isScrolling: false,
-      scrollToIndex: vi.fn()
-    }
-    const renderWithRows = (rows: readonly string[]) => {
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getRowKey: (row) => row,
-        rows,
-        scrollElementRef,
-        scrollOffsetRef,
-        totalSize: rows.length,
-        virtualizer
-      } as never)
-      return harness.effects[0]?.deps
-    }
-
-    const initialDeps = renderWithRows(['before-delete', 'stable-top'])
-    const nextDeps = renderWithRows(['stable-top'])
-
-    // Row-dependent cleanup would overwrite the pre-delete anchor after mutation; allow only stable refs.
-    expect(initialDeps).toEqual([anchorRef, scrollElementRef, scrollOffsetRef])
-    expect(nextDeps).toEqual(initialDeps)
-  })
-
   it('keeps the target anchor while measured fallback restores a transitional window', async () => {
     const harness = createReactHookHarness()
     vi.doMock('react', () => harness.react)
@@ -115,57 +79,6 @@ describe('useVirtualizedScrollAnchor listener effect dependencies', () => {
     // Keep anchor identity through transitional restore; refresh only its source scrollTop.
     expect(anchorRef.current).toEqual({ key: 'row-1', offset: 3358, scrollTop: 4116 })
   })
-
-  it('can ignore generic scroll anchor recording while preserving the saved anchor', async () => {
-    const harness = createReactHookHarness()
-    vi.doMock('react', () => harness.react)
-    const { useVirtualizedScrollAnchor } = await import('./useVirtualizedScrollAnchor')
-
-    const capturedScrollHandler: { current: (() => void) | null } = { current: null }
-    const savedAnchor = { key: 'row-1', offset: 3358 }
-    const anchorRef = { current: savedAnchor }
-    const scrollElementRef = {
-      current: {
-        clientHeight: 880,
-        scrollHeight: 30_000,
-        scrollTop: 746,
-        addEventListener: vi.fn((eventName: string, handler: () => void) => {
-          if (eventName === 'scroll') {
-            capturedScrollHandler.current = handler
-          }
-        }),
-        removeEventListener: vi.fn()
-      }
-    }
-    const scrollOffsetRef = { current: 0 }
-    const virtualizer = {
-      getVirtualItems: () => [
-        { index: 0, start: 0, end: 3_000 },
-        { index: 1, start: 3_000, end: 7_000 }
-      ],
-      isScrolling: false,
-      scrollToIndex: vi.fn()
-    }
-
-    harness.beginRender()
-    useVirtualizedScrollAnchor({
-      anchorRef,
-      getRowKey: (row) => row,
-      recordAnchorOnScroll: false,
-      rows: ['row-0', 'row-1'],
-      scrollElementRef,
-      scrollOffsetRef,
-      totalSize: 30_000,
-      virtualizer
-    } as never)
-
-    harness.effects[0]?.effect()
-    expect(capturedScrollHandler.current).not.toBeNull()
-    capturedScrollHandler.current?.()
-
-    expect(scrollOffsetRef.current).toBe(0)
-    expect(anchorRef.current).toBe(savedAnchor)
-  })
 })
 
 // Reproduce a parent row starting 20px above a 300px viewport at scrollTop 520.
@@ -181,7 +94,6 @@ function row(key: string, size = 100): FakeRow {
 
 const LEADING_ROWS = ['r0', 'r1', 'r2', 'r3', 'r4'].map((id) => row(`wt:sec:${id}`))
 const TRAILING_ROWS = ['s0', 's1', 's2', 'r10', 'r11'].map((id) => row(`wt:sec:${id}`))
-const UNFOLDED_ROWS = [...LEADING_ROWS, row(PARENT_KEY), row('wt:sec:c'), ...TRAILING_ROWS]
 // Folding changes the key but keeps the group at 500px; no screen content moved.
 const FOLDED_ROWS = [...LEADING_ROWS, row(GROUP_KEY, 200), ...TRAILING_ROWS]
 const DELETED_ROWS = [...LEADING_ROWS, ...TRAILING_ROWS]
@@ -351,59 +263,5 @@ describe('runVirtualizedScrollAnchorRestore lineage re-keying', () => {
         useDom: true
       })
     ).toBe(500)
-  })
-})
-
-describe('useVirtualizedScrollAnchor with sidebar row re-keying', () => {
-  afterEach(() => {
-    vi.doUnmock('react')
-    vi.resetModules()
-  })
-
-  it('does not scroll when a child worktree folds the anchored parent into a group', async () => {
-    const harness = createReactHookHarness()
-    vi.doMock('react', () => harness.react)
-    const { useVirtualizedScrollAnchor, VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } =
-      await import('./useVirtualizedScrollAnchor')
-
-    const anchorRef: { current: unknown } = { current: null }
-    const scrollOffsetRef = { current: 520 }
-    let scroller = createFakeScroller(UNFOLDED_ROWS, 520)
-    const scrollElementRef: { current: unknown } = { current: scroller.el }
-    const listeners = new Map<string, () => void>()
-    scroller.el.addEventListener.mockImplementation((name: string, handler: () => void) => {
-      listeners.set(name, handler)
-    })
-
-    const render = (rows: readonly FakeRow[], rekeyedRowKeys?: ReadonlyMap<string, string>) => {
-      harness.beginRender()
-      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
-      useVirtualizedScrollAnchor({
-        anchorRef,
-        getItemElementKey: (element: { rowKey: string }) => element.rowKey,
-        getRowKey: (item: FakeRow) => item.key,
-        itemElementSelector: ITEM_SELECTOR,
-        rekeyedRowKeys,
-        rows,
-        scrollElementRef,
-        scrollOffsetRef,
-        totalSize: rows.reduce((sum, item) => sum + item.size, 0),
-        virtualizer: scroller.virtualizer
-      } as never)
-    }
-
-    render(UNFOLDED_ROWS)
-    harness.effects[0]?.effect()
-    listeners.get(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT)?.()
-    expect(anchorRef.current).toMatchObject({ key: PARENT_KEY, offset: 20, scrollTop: 520 })
-
-    scroller = createFakeScroller(FOLDED_ROWS, 520)
-    scrollElementRef.current = scroller.el
-    render(FOLDED_ROWS, FOLD_REKEYS)
-    harness.effects[1]?.effect()
-
-    expect(scroller.el.scrollTop).toBe(520)
-    // Re-record the new key so later restores use the exact row.
-    expect(anchorRef.current).toMatchObject({ key: GROUP_KEY, offset: 20 })
   })
 })

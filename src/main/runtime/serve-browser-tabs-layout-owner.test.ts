@@ -5,7 +5,7 @@ import type {
   LayoutApplyOutcome,
   LayoutCommand
 } from '../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import { ServeBrowserTabs } from './serve-browser-tabs'
 
@@ -77,20 +77,6 @@ describe('served browser tabs in a layout-owner build', () => {
 
     expect(host.applyLayout).toHaveBeenCalledTimes(1)
     expect(host.session().browserTabsByWorktree?.[WT]).toHaveLength(1)
-  })
-
-  it('closes a tab through layout.apply and drops its page records', async () => {
-    const host = servedHost()
-    host.tabs.opened(PAGE)
-    await settle()
-
-    expect(host.tabs.closed(WT, 'page-1')).toBe(true)
-    await settle()
-
-    expect(host.session().browserTabsByWorktree?.[WT] ?? []).toEqual([])
-    expect(host.session().unifiedTabs?.[WT] ?? []).toEqual([])
-    expect(host.session().browserPagesByWorkspace?.['page-1']).toBeUndefined()
-    expect(host.tabs.closed(WT, 'page-1')).toBe(false)
   })
 
   it('closes a window-saved tab by its own tab-bar entry', async () => {

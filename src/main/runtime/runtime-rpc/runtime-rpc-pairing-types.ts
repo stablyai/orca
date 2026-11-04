@@ -3,15 +3,15 @@ import type { RpcAnyMethodDeclaration } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketTransportMetadata } from '../rpc/mobile-socket-wiring'
-import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
-import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../shared/mobile-relay-mint-failure'
+import type { PairingRelay } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem

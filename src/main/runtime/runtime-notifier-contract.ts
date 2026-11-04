@@ -2,18 +2,19 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../shared/runtime-file-contracts'
-import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
-import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+import type { ClaudeAccountSelectionChange } from '../../shared/managed-account-types'
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   AgentLaunchTabPublished,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
-} from '../../shared/agent-launch-tab-publication'
+} from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
-import type { TerminalPaneRevealTarget } from '../../shared/terminal-pane-reveal'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalRevealIdentity } from '../../shared/workspace-layout/terminal-reveal-identity'
+import type { TerminalPaneRevealTarget } from '../../shared/workspace-layout/terminal-pane-reveal'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../shared/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
@@ -180,4 +181,5 @@ export type RuntimeNotifier = {
   browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void
+  claudeAccountSelected?(change: ClaudeAccountSelectionChange): void
 }

@@ -1,11 +1,17 @@
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   findPendingLinkedWorkItemCreationId,
+  pendingCreationChatDraftScopeKey,
   type WorktreeCreationPhase,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/worktree-creation-flow-execute'
 import {
   getInitialWorktreeCreationPhase,
@@ -22,19 +28,38 @@ type ContinueBackgroundWorktreeCreationOptions = {
 
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
-  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+  const originView = useAppStore.getState().activeView
+  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    // Inline creation errors need a separate toast only after navigation away.
-    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
-      toast.error(message)
-    }
+    showWorktreeCreationError(store, creationId, originView, message)
   })
+}
+
+// The chat composer shows before the worktree exists, so a linked item's draft starts there.
+function seedPendingChatDraft(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  prior?: WorktreeCreationRequest
+): void {
+  const draft = request.launchDraftPrompt
+  if (
+    !draft ||
+    draft === prior?.launchDraftPrompt ||
+    request.promptDelivery !== 'draft' ||
+    request.agentLaunchRoute !== 'structured-native-chat'
+  ) {
+    return
+  }
+  updateNativeChatComposerDraft(
+    pendingCreationChatDraftScopeKey(creationId),
+    { text: draft, document: promptTextContent(draft) },
+    'immediate'
+  )
 }
 
 function revealPendingCreation(
@@ -44,18 +69,25 @@ function revealPendingCreation(
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
+  const loaderVisible = !(
+    isInstantFolderWorktreeCreation(store, request) &&
+    phase !== 'preparing' &&
+    phase !== 'provisioning-vm'
+  )
   store.beginPendingWorktreeCreation({
     creationId,
     phase,
     status: 'creating',
     startedAt: Date.now(),
     indeterminate,
-    // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
-    loaderVisible: true,
+    loaderVisible,
     request
   })
+  seedPendingChatDraft(creationId, request)
   // Creation UI renders only in terminal view; activate it before publishing the panel.
-  store.setActiveView('terminal')
+  if (loaderVisible) {
+    store.setActiveView('terminal')
+  }
   store.setSidebarOpen(true)
 }
 
@@ -67,6 +99,7 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     request
   )
   if (existingCreationId) {
+    store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
     store.setSidebarOpen(true)
@@ -93,9 +126,11 @@ export function continueBackgroundWorktreeCreation(
   options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
-  if (!store.pendingWorktreeCreations[creationId]) {
+  const staged = store.pendingWorktreeCreations[creationId]
+  if (!staged) {
     return false
   }
+  seedPendingChatDraft(creationId, request, staged.request)
   // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
   store.updatePendingWorktreeCreation(creationId, {
     phase: getInitialWorktreeCreationPhase(request),
@@ -125,6 +160,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
   }
   store.updatePendingWorktreeCreation(creationId, {
     status: 'creating',
+    loaderVisible: true,
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,

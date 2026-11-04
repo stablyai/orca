@@ -85,13 +85,6 @@
         }
       }
     },
-    "32947a33faab": {
-      "name": "clear-live-input",
-      "ordinal": 4,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "3e15def58214": {
       "activeHandle": "terminal-1",
       "sessionTabs": [
@@ -472,7 +465,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {
@@ -484,7 +477,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {
@@ -496,7 +489,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {
@@ -508,7 +501,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {
@@ -520,7 +513,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {
@@ -532,7 +525,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       },
       {

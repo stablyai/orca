@@ -7,8 +7,8 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+} from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../workspace-scope'
 
 export const GIT_KEY = 'repo-1::/Users/dev/orca'

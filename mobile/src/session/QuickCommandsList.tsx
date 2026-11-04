@@ -6,9 +6,10 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { TextField } from '../components/composer-input/TextField'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { supportsTerminalAgentQuickCommand } from '../terminal/quick-commands'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import '../terminal/quick-commands'
+import { supportsTerminalAgentQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 import { QuickCommandRow } from './QuickCommandRow'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -198,7 +199,7 @@ export function QuickCommandAgentPicker({
 }
 
 const styles = themedStyleSheet(() => ({
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },
   listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
@@ -219,14 +220,14 @@ const styles = themedStyleSheet(() => ({
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
   },
-  group: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
+  group: { backgroundColor: colors.sheetGroup, borderRadius: radii.surface, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
   rowIcon: {
     width: 26,
     height: 26,
     borderRadius: radii.tile,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.borderSubtle,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -235,7 +236,7 @@ const styles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.control,
     borderWidth: 1,
     borderStyle: 'dashed',

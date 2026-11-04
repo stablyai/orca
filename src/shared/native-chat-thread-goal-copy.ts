@@ -1,4 +1,4 @@
-import type { AgentJournalThreadGoalStatus } from './agent-session-journal-types'
+import type { AgentJournalThreadGoalStatus } from './agent-session/journal/agent-session-journal-types'
 
 export const NATIVE_CHAT_THREAD_GOAL_COPY = {
   pursuing: 'Pursuing goal',

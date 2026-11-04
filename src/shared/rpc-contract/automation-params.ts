@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -244,5 +244,7 @@ export const AutomationUpdate = z.object({
   id: requiredString('Missing automation id'),
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
-  destination: Destination
+  destination: Destination,
+  // An edit relying on the current new-per-run mode is refused if the stored mode changed first.
+  expectedWorkspaceMode: z.literal('new_per_run').optional()
 })

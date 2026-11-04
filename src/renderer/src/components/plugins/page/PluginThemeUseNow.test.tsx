@@ -11,7 +11,7 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   resolveConfiguredTerminalColors,
   selectTerminalTheme
-} from '../../../../../shared/terminal-theme-selection'
+} from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { useAppStore } from '@/store'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveMobileTerminalTheme } from '@/runtime/sync-runtime-graph/mobile-terminal-theme'
@@ -172,7 +172,8 @@ it.each([6, 60])('prepares only the clicked terminal palette among %i choices', 
       terminalUseSeparateLightTheme: true,
       terminalPluginPalettes: [{ id: candidate.id, colors: candidate.terminal }]
     })
-    expect(update).toHaveProperty('terminalColorOverrides', undefined)
+    // The light slot now has its own theme, so the dark slot's overrides stay for dark mode.
+    expect(update).not.toHaveProperty('terminalColorOverrides')
     expect(update).not.toHaveProperty('theme')
     expect(settings().terminalThemeLight).toBe(before.terminalThemeLight)
     expect(

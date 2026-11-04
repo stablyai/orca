@@ -9,7 +9,7 @@ import {
 import {
   isConfirmedStaleFolderPathStatus,
   type FolderWorkspacePathStatus
-} from '../../../../../../shared/folder-workspace-path-status'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 
 export function FolderPathStatusIndicator({
   status

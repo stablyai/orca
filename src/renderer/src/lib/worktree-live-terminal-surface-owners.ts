@@ -1,4 +1,8 @@
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,

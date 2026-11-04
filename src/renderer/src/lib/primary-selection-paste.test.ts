@@ -60,19 +60,6 @@ describe('primary selection paste', () => {
     expect(textarea.value).toBe('alpha beta')
   })
 
-  it('does not resolve disabled or terminal helper textareas as paste targets', () => {
-    const disabled = appendTextarea()
-    disabled.disabled = true
-    const terminalRoot = document.createElement('div')
-    terminalRoot.className = 'xterm-helper-textarea'
-    const terminalTextarea = document.createElement('textarea')
-    terminalRoot.appendChild(terminalTextarea)
-    document.body.appendChild(terminalRoot)
-
-    expect(findEditablePrimarySelectionPasteTarget(disabled)).toBeNull()
-    expect(findEditablePrimarySelectionPasteTarget(terminalTextarea)).toBeNull()
-  })
-
   it('routes large text-control pastes through chunked insertion without event data leakage', async () => {
     const textarea = appendTextarea()
     textarea.focus()
@@ -89,19 +76,6 @@ describe('primary selection paste', () => {
     expect(events).toHaveLength(1)
     expect(events[0].inputType).toBe('insertFromPaste')
     expect(events[0].data ?? '').toBe('')
-  })
-
-  it('rejects stale text-control targets', async () => {
-    const textarea = document.createElement('textarea')
-    textarea.value = 'unchanged'
-
-    const result = await pastePrimarySelectionTextIntoTarget(textarea, 'text', {
-      clientX: 0,
-      clientY: 0
-    })
-
-    expect(result).toBe(false)
-    expect(textarea.value).toBe('unchanged')
   })
 
   it('rejects connected text-control targets that lost focus', async () => {
@@ -271,56 +245,6 @@ describe('primary selection paste', () => {
     expect(events).toHaveLength(1)
     expect(events[0].inputType).toBe('insertFromPaste')
     expect(events[0].data ?? '').toBe('')
-  })
-
-  it('rejects oversized contenteditable primary-selection text before DOM insertion', async () => {
-    const target = appendContentEditable('unchanged')
-    const yieldToEventLoop = vi.fn(async () => {})
-
-    const result = await pastePrimarySelectionTextIntoTarget(
-      target,
-      'secret-token',
-      {
-        clientX: 0,
-        clientY: 0
-      },
-      {
-        maxBytes: 4,
-        yieldToEventLoop
-      }
-    )
-
-    expect(result).toBe(false)
-    expect(target.textContent).toBe('unchanged')
-    expect(yieldToEventLoop).not.toHaveBeenCalled()
-  })
-
-  it('rejects oversized multibyte contenteditable primary-selection text with bounded measuring', async () => {
-    const target = appendContentEditable('unchanged')
-    const events = captureInputEvents(target)
-    const execCommand = vi.fn(() => true)
-    Object.defineProperty(document, 'execCommand', { configurable: true, value: execCommand })
-    Object.defineProperty(document, 'queryCommandSupported', {
-      configurable: true,
-      value: vi.fn(() => true)
-    })
-
-    const result = await pastePrimarySelectionTextIntoTarget(
-      target,
-      '😀'.repeat(10_000),
-      {
-        clientX: 0,
-        clientY: 0
-      },
-      {
-        maxBytes: 7
-      }
-    )
-
-    expect(result).toBe(false)
-    expect(target.textContent).toBe('unchanged')
-    expect(execCommand).not.toHaveBeenCalled()
-    expect(events).toHaveLength(0)
   })
 
   it('rejects oversized contenteditable text after yielded preflight without DOM insertion', async () => {

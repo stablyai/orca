@@ -290,6 +290,7 @@ describe('isScannedPath', () => {
     expect(isScannedPath('src/renderer/src/a.spec.tsx')).toBe(false)
     expect(isScannedPath('src/renderer/src/a.test-fixture.ts')).toBe(false)
     expect(isScannedPath('src/renderer/src/a.test-support.tsx')).toBe(false)
+    expect(isScannedPath('src/renderer/src/a.fixture.tsx')).toBe(false)
     expect(isScannedPath('src/renderer/src/a-test-harness.ts')).toBe(false)
     expect(isScannedPath('src/renderer/src/a-test-fixture.ts')).toBe(false)
     expect(isScannedPath('src/renderer/src/a-test-fixtures.ts')).toBe(false)

@@ -22,6 +22,11 @@ export type DraftZoneEntry = {
   root: Root
   draft: { lineNumber: number; startLine?: number }
   body: string
+  createComment: (args: {
+    lineNumber: number
+    startLine?: number
+    body: string
+  }) => Promise<boolean>
   // A save is in flight: the body must not be carried to another card, or the note could post twice.
   submitting: boolean
   disposeMouseDownStopper: () => void
@@ -63,3 +68,20 @@ export function resizeDiffCommentZone(
     acc.layoutZone(entry.zoneId)
   })
 }
+
+export type CarriedDiffCommentDraft = Pick<DraftZoneEntry, 'draft' | 'body' | 'createComment'>
+export type OpenDiffCommentDraft = (
+  draft: DraftZoneEntry['draft'],
+  initialBody?: string,
+  createComment?: DraftZoneEntry['createComment']
+) => boolean
+
+export function snapshotDiffCommentDraft(entry: DraftZoneEntry): CarriedDiffCommentDraft {
+  return { draft: entry.draft, body: entry.body, createComment: entry.createComment }
+}
+
+export type RestoreDiffCommentDraft = (
+  draft: DraftZoneEntry['draft'],
+  body: string,
+  createComment: DraftZoneEntry['createComment']
+) => void

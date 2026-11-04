@@ -13,7 +13,7 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
-vi.mock('../../ipc/command-path-resolver', () => ({
+vi.mock('../../ipc/command-path/command-path-resolver', () => ({
   resolveSelectedLocalCommand: resolveSelectedMock
 }))
 

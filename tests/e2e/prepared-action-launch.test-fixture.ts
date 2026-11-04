@@ -1,12 +1,12 @@
 import { eraseRpcMethods, type RpcContext } from '../../src/main/runtime/rpc/core'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'
 import { expect, vi } from 'vitest'
-import { normalizeSourceControlAiActionDefaults } from '../../src/shared/source-control-ai-actions'
-import { sourceControlActionLaunchOptions } from '../../src/shared/source-control-action-launch-preferences'
-import { agentLaunchNeedsPreparedCommand } from '../../src/shared/agent-launch-preferences'
-import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-startup-plan-inputs'
-import { buildAgentStartupPlan } from '../../src/shared/tui-agent-startup'
-import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session-option-launch-legacy.test-fixture'
+import { normalizeSourceControlAiActionDefaults } from '../../src/shared/source-control/ai/recipes/source-control-ai-actions'
+import { sourceControlActionLaunchOptions } from '../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
+import { agentLaunchNeedsPreparedCommand } from '../../src/shared/agent-launch/choices/agent-launch-preferences'
+import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../src/shared/agent-launch/startup/tui-agent-startup'
+import { resolveAgentSessionOptionLaunch } from '../../src/shared/agent-session/options/agent-session-option-launch-legacy.test-fixture'
 import {
   OrcaRuntimeWithResolveMobileSessionTerminalCommand,
   type MobileTerminalCommandOptions

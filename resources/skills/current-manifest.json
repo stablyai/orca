@@ -2,22 +2,6 @@
   "schemaVersion": 3,
   "skills": [
     {
-      "name": "computer-use",
-      "sourcePath": "skills/computer-use",
-      "packageDigest": "425634e3ebf27690cc613eaf17b6337b36769153ec6bca85dc4ebf65d4d6b8b4",
-      "files": [
-        {
-          "path": "SKILL.md",
-          "size": 2211,
-          "executable": false,
-          "classification": "text",
-          "exactSha256": "2839933fd35216845461466403e6061488005f6df57126d0cd0f769ea45753f3",
-          "textNormalizedSha256": "2839933fd35216845461466403e6061488005f6df57126d0cd0f769ea45753f3",
-          "identitySha256": "2839933fd35216845461466403e6061488005f6df57126d0cd0f769ea45753f3"
-        }
-      ]
-    },
-    {
       "name": "jira-tickets",
       "sourcePath": "skills/jira-tickets",
       "packageDigest": "48ca2a93818e17bf1e942452e835800e8f967a935d3082e1e9c03fff9ddb3d19",
@@ -62,6 +46,22 @@
           "exactSha256": "e9759aea664f54561946eeb40a6328031330860cda0817f2c2aa2cf529d5c1b3",
           "textNormalizedSha256": "e9759aea664f54561946eeb40a6328031330860cda0817f2c2aa2cf529d5c1b3",
           "identitySha256": "e9759aea664f54561946eeb40a6328031330860cda0817f2c2aa2cf529d5c1b3"
+        }
+      ]
+    },
+    {
+      "name": "orca-computer-use",
+      "sourcePath": "skills/orca-computer-use",
+      "packageDigest": "aeffe31ab2ee7f23ca0d271402578dd538c5ae7a61bd46b4559aa86e08ed2eaf",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2221,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "69376456185483ea494eb354be09bce5b8bde9d1c792e8cb1ce7687691d1a021",
+          "textNormalizedSha256": "69376456185483ea494eb354be09bce5b8bde9d1c792e8cb1ce7687691d1a021",
+          "identitySha256": "69376456185483ea494eb354be09bce5b8bde9d1c792e8cb1ce7687691d1a021"
         }
       ]
     },
@@ -146,18 +146,34 @@
       ]
     },
     {
-      "name": "orchestration",
-      "sourcePath": "skills/orchestration",
-      "packageDigest": "033316337f9c5d070a5b6d7f071d79deeed0e39985e29b1247c5de80a56a3215",
+      "name": "orca-plugin-authoring",
+      "sourcePath": "skills/orca-plugin-authoring",
+      "packageDigest": "8bc40895e0655c24014699ff0f311752814b0ba6b18a8428768cb42f9b54264e",
       "files": [
         {
           "path": "SKILL.md",
-          "size": 4365,
+          "size": 2320,
           "executable": false,
           "classification": "text",
-          "exactSha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a",
-          "textNormalizedSha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a",
-          "identitySha256": "24c5392fe1734c3dcf63d1a05ab4ac75eaa70e4d880f590a4a33ec83e4a2cc6a"
+          "exactSha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597",
+          "textNormalizedSha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597",
+          "identitySha256": "633d9b8dd17a7406a77541633e10391d95dfe10a0c25fcd0e04d6a248ea2f597"
+        }
+      ]
+    },
+    {
+      "name": "orchestration",
+      "sourcePath": "skills/orchestration",
+      "packageDigest": "306d65c6742f5061179646e467b92a8e5d5c659842f079883ee2ef983f890112",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 4348,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606",
+          "textNormalizedSha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606",
+          "identitySha256": "66d4c60a3ead54eb063a57341278cccaf28e016c2847a6f1808a0d4d2d163606"
         }
       ]
     }

@@ -16,8 +16,8 @@ import {
   SquareTerminal,
   Workflow
 } from 'lucide-react-native'
-import type { AgentChildRowModel } from '../../../../../src/shared/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session-background-task-wire'
+import type { AgentChildRowModel } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
+import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
 import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {

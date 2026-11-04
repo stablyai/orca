@@ -55,39 +55,6 @@ async function settle() {
   }
 }
 
-it.each([false, true])(
-  'opens hostless legacy links relative to their source (explicit: %s)',
-  async (explicit) => {
-    store.setState((state) => ({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-          ...tab,
-          executionHostId: undefined
-        }))
-      }
-    }))
-    expect(
-      canOfferHttpLinkGroupAction(store.getState(), {
-        workspaceId: WORKSPACE,
-        sourceTabId: 'source',
-        sourceOwner: { kind: 'local' },
-        url: URL_TO_OPEN
-      })
-    ).toBe(true)
-    openRoutedHttpLink(URL_TO_OPEN, {
-      worktreeId: WORKSPACE,
-      sourceTabId: 'source',
-      sourceOwner: { kind: 'local' },
-      forceDestination: 'orca',
-      openInSourceGroup: explicit
-    })
-    await settle()
-    expect(outcomes).toMatchObject([
-      { status: 'opened', ...(explicit ? { result: { groupId: 'a' } } : {}) }
-    ])
-  }
-)
-
 it('captures the link owner before an asynchronous preference decision and follows its current group', async () => {
   let resolvePreference: ((value: boolean) => void) | undefined
   const preference = new Promise<boolean>((resolve) => {
@@ -110,10 +77,8 @@ it('captures the link owner before an asynchronous preference decision and follo
   store.setState({ settings: { ...getDefaultSettings('/home/test'), openLinksInApp: true } })
   resolvePreference?.(true)
   await settle()
-  expect(outcomes).toMatchObject([{ status: 'opened' }])
-  expect(store.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-    second: { first: { type: 'split', first: { groupId: 'b' } } }
-  })
+  expect(outcomes).toMatchObject([{ status: 'opened', result: { groupId: 'c' } }])
+  expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(3)
 })
 
 it('a newer activation suppresses an older pending preference decision', async () => {
@@ -146,7 +111,7 @@ it('the native chat context menu pins the owning tab when the action runs, even 
     runtimeEnvironmentId: null,
     sourceTabId: 'source'
   })
-  const row = actions?.secondaryActions?.find((action) => action.label === 'Open in this group')
+  const row = actions?.secondaryActions?.find((action) => action.label === 'Open in new tab')
   expect(row).toBeDefined()
   store.setState((state) => ({
     unifiedTabsByWorktree: {
@@ -167,7 +132,7 @@ it('refuses a stale explicit chat action when its source closed before activatio
     runtimeEnvironmentId: null,
     sourceTabId: 'source'
   })
-  const action = actions?.secondaryActions?.find((row) => row.label === 'Open in this group')
+  const action = actions?.secondaryActions?.find((row) => row.label === 'Open in new tab')
   expect(action).toBeDefined()
   store.setState((state) => ({
     unifiedTabsByWorktree: {
@@ -246,9 +211,8 @@ it.each([false, true])(
       }
     ])
     if (!explicit) {
-      expect(store.getState().layoutByWorktree[floating]).toMatchObject({
-        first: { type: 'split', first: { groupId: 'left' } }
-      })
+      expect(outcomes[0]).toMatchObject({ result: { groupId: 'right' } })
+      expect(store.getState().groupsByWorktree[floating]).toHaveLength(2)
     }
     expect(store.getState().activeWorktreeId).toBe(WORKSPACE)
     expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')

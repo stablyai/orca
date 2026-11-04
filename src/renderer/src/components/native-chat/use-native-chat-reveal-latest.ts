@@ -1,5 +1,5 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
-import { hasAskAnswer } from '../../../../shared/native-chat-ask-answer'
+import { hasAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -78,24 +78,19 @@ export function useNativeChatRevealLatest(): {
 
 function ignoreFindMatch(): void {}
 
-/** Notify onSent for conversation answers; ordinary jumps to latest do not count as sends. */
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
   jumpToLatest: () => void,
   revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  onSent?: () => void,
   slots: readonly NativeChatTranscriptSlot[] = []
 ): void {
   useImperativeHandle(
     ref,
     () => ({
-      revealLatest: () => {
-        onSent?.()
-        jumpToLatest()
-      },
+      revealLatest: jumpToLatest,
       revealFindMatch,
       messageCopyText: (messageId) => nativeChatSlotCopyText(slots, messageId)
     }),
-    [jumpToLatest, revealFindMatch, onSent, slots]
+    [jumpToLatest, revealFindMatch, slots]
   )
 }

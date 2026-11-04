@@ -1,11 +1,12 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
-import type { Store } from '../persistence'
-import type {
-  WarpThemeImportPreview,
-  WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
-import { makeCustomTerminalThemeSelection } from '../../shared/terminal-custom-themes'
+import type { Store } from '../persistence/loading-store/store'
+
+import {
+  type WarpThemeImportPreview,
+  type WarpThemeImportSource,
+  makeCustomTerminalThemeSelection
+} from '../../shared/terminal-themes/terminal-custom-themes'
 import { parseWarpThemeYamlWithTimeout } from './parser-runner'
 import { sanitizeReadError } from './theme-file-scanner'
 import {
@@ -14,7 +15,7 @@ import {
   type PreviewOperationBudget,
   type WarpThemePreviewOptions
 } from './preview-operation-budget'
-import { validateWarpThemeImportSource } from './warp-theme-import-source-validation'
+import { validateImportSource } from '../configuration-import/import-source-validation'
 import { filesFromAutoDirectories } from './auto-discovered-theme-files'
 import { filesFromDirectory, type ThemeSourceSelection } from './theme-source-selection'
 import {
@@ -24,6 +25,7 @@ import {
 } from './manual-warp-theme-files'
 
 const MAX_THEME_FILE_BYTES = 1_000_000
+const WARP_THEME_IMPORT_SOURCE_KINDS = ['auto', 'chooseFile', 'chooseFolder'] as const
 
 type ThemeSourceResolution = {
   selection: ThemeSourceSelection
@@ -63,7 +65,7 @@ export async function previewWarpThemeImport(
   webContents?: WebContents,
   options: WarpThemePreviewOptions = {}
 ): Promise<WarpThemeImportPreview> {
-  const validatedSource = validateWarpThemeImportSource(source)
+  const validatedSource = validateImportSource(source, WARP_THEME_IMPORT_SOURCE_KINDS)
   if (!validatedSource) {
     return {
       found: false,
