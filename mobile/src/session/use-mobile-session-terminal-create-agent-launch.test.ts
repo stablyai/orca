@@ -1,11 +1,11 @@
 import { createElement } from 'react'
-import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentLaunchOutcome,
   AgentLaunchPromptReceipt
-} from '../../../src/shared/agent-launch-intent'
+} from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { parsePaneKey } from '../../../src/shared/stable-pane-id'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'

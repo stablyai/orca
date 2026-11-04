@@ -5,17 +5,17 @@ import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
-} from './session-scanner-background'
-import { getCachedWslDistros, hasCachedWslDistros } from '../wsl'
+} from './scan-service/session-scanner-background'
+import { getCachedWslDistros, hasCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import {
   listLastKnownRunningWslHomeDirs,
   readRunningWslHomeDirsUnlessStopped
-} from '../wsl/wsl-home-unless-stopped'
+} from '../wsl/discovery/wsl-home-unless-stopped'
 import {
   carryOverUnconfirmedWslSessions,
   resetAiVaultWslSessionCarryover
 } from './ai-vault-wsl-session-carryover'
-import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl/filesystem/wsl-running-path-filter'
 import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
@@ -24,7 +24,7 @@ import {
 import { aiVaultLocalScanKey, aiVaultLocalScanScopeKey } from '../../shared/ai-vault-local-scan-key'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../opencode/opencode-managed-account-data-dirs'
-import { prepareOpenCodeWslReaders } from './opencode-wsl-runtime-preparation'
+import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
 import {

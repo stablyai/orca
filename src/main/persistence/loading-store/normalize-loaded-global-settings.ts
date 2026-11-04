@@ -15,7 +15,7 @@ import {
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
-import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
+import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   expandWorkspaceDirHome,
   stripRetiredGlobalSettings

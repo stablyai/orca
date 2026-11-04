@@ -1,7 +1,8 @@
 import type { CatalogModel, CatalogOption } from './agent-session-option-catalog-types'
 import type { AgentSessionOptionChoice } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 
 function effortOption(
   model: AgentSessionOptionsResult['models'][number],
@@ -58,6 +59,9 @@ export function discoveredModel(
   const effort = effortOption(model, agent)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
+    ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
+      ? { effortsKnown: false as const }
+      : {}),
     ...(model.declaredDefaultEffort !== undefined
       ? { declaredDefaultEffort: model.declaredDefaultEffort }
       : {}),

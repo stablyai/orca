@@ -1,6 +1,6 @@
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
-import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
-import { useAppStore } from '@/store'
+import { launchConfigsEqual } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
+import { useAppStore } from '@/store/index'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -9,9 +9,9 @@ import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
@@ -38,12 +38,16 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   }
   session.clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
-    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord },
+    keepPaneKey?: string
   ): void => {
-    state.clearSleepingAgentSession(consumed.paneKey)
+    if (consumed.paneKey !== keepPaneKey) {
+      state.clearSleepingAgentSession(consumed.paneKey)
+    }
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
+        paneKey !== keepPaneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
         agentProviderSessionsEqual(

@@ -20,4 +20,5 @@ export type BrowserClientRetainedRendererPage = {
   onRendererGone: EventListener
   onLoadCommit: (event: Electron.LoadCommitEvent) => void
   releaseDragPassthroughSurface: () => void
+  releasePaintRetention: () => void
 }

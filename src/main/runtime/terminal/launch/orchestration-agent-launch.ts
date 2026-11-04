@@ -1,22 +1,22 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
-import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
+import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import {
   resolveStartupShell,
   type AgentStartupShell
-} from '../../../../shared/tui-agent-startup-shell'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+} from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/configured-worker-agent-selector'
 import { newWorktreeLaunchScope, resolveAgentLaunchRuntime } from '../../agent-launch-scope-runtime'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/opencode-model-startup-plan'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
 
 export abstract class OrcaRuntimeWithOrchestrationAgentLaunch extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {

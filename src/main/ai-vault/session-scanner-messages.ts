@@ -10,8 +10,11 @@ import {
   sliceAtCodeUnitLimit
 } from './session-scanner-text-normalization'
 import type { SessionAccumulator } from './session-scanner-types'
-import { transcriptMessagesFromDecodedMessage } from './session-transcript-message-content'
-import { decodeSessionMessage, type DecodedSessionMessage } from './session-decoded-message'
+import { transcriptMessagesFromDecodedMessage } from './transcripts/session-transcript-message-content'
+import {
+  decodeSessionMessage,
+  type DecodedSessionMessage
+} from './transcripts/session-decoded-message'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 

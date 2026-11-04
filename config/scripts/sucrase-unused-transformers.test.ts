@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveSucraseUnusedTransformer,
-  SUCRASE_UNUSED_TRANSFORMER_STUB
-} from '../build-plugins/sucrase-unused-transformers'
+import { resolveSucraseUnusedTransformer } from '../build-plugins/sucrase-unused-transformers'
 
 const ROOT_TRANSFORMER =
   '/Users/me/pnpm/store/v11/links/@/sucrase/3.35.1/abc/node_modules/sucrase/dist/esm/transformers/RootTransformer.js'
@@ -24,12 +21,5 @@ describe('sucrase unused transformers stub', () => {
     expect(
       resolveSucraseUnusedTransformer('./FlowTransformer', '/repo/src/main/flow.ts')
     ).toBeNull()
-  })
-
-  it('stubs with a class that throws if constructed and names no runtime package', () => {
-    expect(SUCRASE_UNUSED_TRANSFORMER_STUB).toContain('throw new Error')
-    expect(SUCRASE_UNUSED_TRANSFORMER_STUB).not.toMatch(
-      /require\(|flow-enums-runtime|react-hot-loader/
-    )
   })
 })

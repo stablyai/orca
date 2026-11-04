@@ -19,7 +19,7 @@ import {
   PANE_KEY_3,
   makeTab
 } from './ActivityPrototypePage-test-fixtures'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   buildActivityVirtualItems,

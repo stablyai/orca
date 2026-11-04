@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysByTabPrefix,

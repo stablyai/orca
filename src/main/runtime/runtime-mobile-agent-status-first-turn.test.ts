@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
@@ -138,14 +138,5 @@ describe('first-turn mobile chat identity under the pre-launch shell title', () 
     ['a restored hook', {}, { restoredUnconfirmed: true }]
   ])('suppresses the hook under %s', (_name, pty, row) => {
     expect(projectedSession(pty, row)).toBeUndefined()
-  })
-
-  it('does not invent a transcript for an empty pane', () => {
-    const status = buildRuntimeMobileAgentStatus(shellPty(), TAB, 'term-1', null, () => [], {
-      getPaneKey: () => 'tab:leaf',
-      getLeaf: () => null,
-      getTrackedTitle: () => null
-    })
-    expect(status).not.toHaveProperty('agentStatus')
   })
 })

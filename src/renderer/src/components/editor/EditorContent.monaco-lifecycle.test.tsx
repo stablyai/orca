@@ -100,8 +100,11 @@ vi.mock('@/lib/lazy-with-retry', async () => {
           }
           // Use the real mount reconciler to observe key ordering with retained-model behavior intact.
           syncContentOnMount(
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: content sync calls only the editor methods stubbed here.
             {
               getModel: () => model,
+              saveViewState: () => null,
+              restoreViewState: () => {},
               pushUndoStop: () => {
                 retained.undo.push('unexpected undo stop')
                 return true

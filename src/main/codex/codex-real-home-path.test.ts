@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hasCustomCodexHomeOverrideForLaunch } from './codex-real-home-path'
 
-import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
+import { __resetShellStartupEnvCache } from '../pty/shell-startup/shell-startup-env'
 
 const temporaryHomes: string[] = []
 const savedConfigHome = process.env.XDG_CONFIG_HOME

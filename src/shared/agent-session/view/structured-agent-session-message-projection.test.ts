@@ -56,6 +56,25 @@ const lingeringCopy = {
   queuedAt: 1
 }
 
+it('looks up delivery facts linearly as the transcript and submission ledger grow', () => {
+  for (const count of [50, 500]) {
+    let identityReads = 0
+    const items = Array.from({ length: count }, (_, index) =>
+      userItem(`send-${index}`, 'answer', index)
+    )
+    const submissions = items.map((_, index): AgentJournalSubmission => ({
+      ...rejected({ dispatchState: 'pending', reason: null, resolvedAt: null }),
+      get clientMessageId() {
+        identityReads += 1
+        return `send-${index}`
+      }
+    }))
+    const messages = projectStructuredAgentSessionMessages(items, [], submissions)
+    expect(messages.map((message) => message.id)).toEqual(items.map((item) => item.itemId))
+    expect(identityReads).toBeLessThanOrEqual(8 * count)
+  }
+})
+
 describe('a send kept as a card', () => {
   it('shows nothing of the original send, even beside its own local copy', () => {
     const kept = rejected({ keptAsQueuedMessageId: KEPT_ID })

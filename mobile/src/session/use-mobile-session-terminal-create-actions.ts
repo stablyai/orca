@@ -6,7 +6,7 @@ import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import {
   hostSupportsMobileChatFork,
   mobileChatForkCreateReplyMessage,
@@ -109,7 +109,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       setCreateError(reason)
       // Only empty sessions show inline errors; existing tabs need toast feedback.
       triggerError()
-      showToast(options?.errorToast ?? reason, 1800)
+      showToast(reason, 1800)
     }
 
     try {

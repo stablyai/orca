@@ -12,6 +12,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
@@ -23,7 +24,7 @@ import {
 } from '../native-chat/native-chat-composer-draft-store'
 import * as sources from '../native-chat/native-chat-launch-draft-source'
 import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -296,5 +297,16 @@ describe('setup records exist only for authored setups', () => {
     expect(prompt().textContent).toBe('review the diff')
     close()
     expect(sourceCount()).toBe(1)
+    const scope = agentLaunchPromptScopeKey(entry)
+    writeLaunchSetupOptions(scope, {
+      agent: 'claude',
+      surface: 'terminal',
+      choices: {},
+      pendingArguments: '--ordinary'
+    })
+    retireAgentPickerDrafts([{ ...entry, catalog: { origin: 'probe', fetchedAt: 2, models: [] } }])
+    expect(sources.readLaunchSetupOptions(scope, JSON.stringify(preset.choices))).toBeUndefined()
+    expect(sources.readLaunchSetupOptions(scope)?.pendingArguments).toBe('--ordinary')
+    expect(readNativeChatComposerDraft(scope).text).toBe('review the diff')
   })
 })

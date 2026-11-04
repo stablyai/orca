@@ -4,7 +4,7 @@ import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { WorktreeRemovalRoute } from '../workspaces/removal/worktree-removal-execution-host-route'
 import type { LocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
-import { listWorktreesStrict } from '../git/worktree'
+import { listWorktreesStrict } from '../git/worktrees/catalog/worktree-listing'
 
 /** Require a validated local removal route before listing, preventing reads before non-local hosts are refused. */
 export async function listWorktreesOnRemovalRoute(

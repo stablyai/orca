@@ -1,5 +1,5 @@
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY

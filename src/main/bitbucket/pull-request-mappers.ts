@@ -1,4 +1,9 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/github/pull-request-types'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+import type {
+  CheckStatus,
+  PRMergeableState,
+  ProviderCheckSummary
+} from '../../shared/github/pull-request-types'
 
 export type RawBitbucketPullRequest = {
   id?: number
@@ -31,6 +36,7 @@ export type BitbucketPullRequestInfo = {
   state: 'open' | 'closed' | 'merged'
   url: string
   status: CheckStatus
+  checksSummary?: ProviderCheckSummary
   updatedAt: string
   mergeable: PRMergeableState
   headSha?: string
@@ -75,9 +81,30 @@ export function deriveBitbucketBuildStatus(
   return 'neutral'
 }
 
+export function summarizeBitbucketBuildStatuses(
+  statuses: readonly RawBitbucketBuildStatus[]
+): ProviderCheckSummary {
+  const summary = summarizeProviderChecks(
+    statuses.map(({ state }) => ({
+      status: 'completed',
+      conclusion:
+        {
+          SUCCESSFUL: 'success',
+          FAILED: 'failure',
+          ERROR: 'failure',
+          STOPPED: 'cancelled',
+          INPROGRESS: 'pending',
+          PENDING: 'pending'
+        }[state?.trim().toUpperCase() ?? ''] ?? 'neutral'
+    }))
+  )
+  return { ...summary, state: statuses.length ? deriveBitbucketBuildStatus(statuses) : 'none' }
+}
+
 export function mapBitbucketPullRequest(
   raw: RawBitbucketPullRequest,
-  status: CheckStatus
+  status: CheckStatus,
+  checksSummary?: ProviderCheckSummary
 ): BitbucketPullRequestInfo | null {
   if (typeof raw.id !== 'number' || !raw.title || !raw.links?.html?.href) {
     return null
@@ -89,6 +116,7 @@ export function mapBitbucketPullRequest(
     state: mapBitbucketPullRequestState(raw.state),
     url: raw.links.html.href,
     status,
+    ...(checksSummary ? { checksSummary } : {}),
     updatedAt: raw.updated_on ?? '',
     mergeable: 'UNKNOWN',
     ...(headSha ? { headSha } : {})

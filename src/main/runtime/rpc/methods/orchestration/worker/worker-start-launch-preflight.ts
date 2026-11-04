@@ -2,10 +2,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import {
-  resolveWorkerStartModeOnHost,
-  type WorkerStartModeReceipt
-} from '../../orchestration-worker-start-mode'
+import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
+import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { WorkerStartInput } from './worker-start-schema'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'

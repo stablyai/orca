@@ -1,5 +1,5 @@
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
 import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'

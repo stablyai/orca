@@ -1,14 +1,14 @@
 import { projectSourceControlActionLaunch } from '../../shared/source-control-action-launch-preferences'
 import { resolveSourceControlActionRecipe } from '../../shared/source-control-ai-operation-policy'
-import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import * as reconciliation from '../../shared/agent-choice-reconciliation'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import { resolveAgentLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import * as reconciliation from '../../shared/agent-launch/choices/agent-choice-reconciliation'
 import * as terminalPreparation from './loading-store/prepare-loaded-terminal-settings'
 import * as domainWrites from './profile-state/profile-state-domain-writes'
-import * as choiceArgs from '../../shared/agent-choice-args'
-import * as shell from '../../shared/tui-agent-startup-shell'
-import { agentPermissionChoices } from '../../shared/tui-agent-permission-choice'
+import * as choiceArgs from '../../shared/agent-launch/choices/agent-choice-args'
+import * as shell from '../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { agentPermissionChoices } from '../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import {
   closeTestStores,
   testState,

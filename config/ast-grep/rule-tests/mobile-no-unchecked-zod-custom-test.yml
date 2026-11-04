@@ -1,0 +1,9 @@
+id: mobile-no-unchecked-zod-custom
+valid:
+  - 'z.custom<Worktree>(isWorktreeCatalogRow)'
+  - 'z.custom<RpcResponse>((value) => isRpcResponse(value))'
+  - 'z.unknown()'
+invalid:
+  - 'z.custom<Worktree>()'
+  - 'z.array(z.custom<Worktree>()).optional()'
+  - 'z.custom()'

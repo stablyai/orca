@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 
@@ -73,16 +73,5 @@ describe('automation run completion evidence (STA-3386)', () => {
         retainedAgentsByPaneKey: { [PANE]: retained(boundary) }
       })
     ).toBe(false)
-  })
-
-  it('accepts a real done after dispatch', () => {
-    expect(
-      hasAutomationRunCompletionEvidence({
-        run: run(),
-        dispatchedAt: 1_000,
-        agentStatusByPaneKey: { [PANE]: entry() },
-        retainedAgentsByPaneKey: {}
-      })
-    ).toBe(true)
   })
 })

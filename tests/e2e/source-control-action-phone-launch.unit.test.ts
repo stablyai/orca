@@ -5,11 +5,11 @@ import type { RpcResponse } from '../../mobile/src/transport/types'
 import { launchAgentWithPrompt } from '../../mobile/src/session/pr-ai-triage-launch'
 import type { SourceControlActionRecipe } from '../../src/shared/source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from '../../src/shared/source-control-ai-types'
-import type { TuiAgent } from '../../src/shared/tui-agent'
+import type { TuiAgent } from '../../src/shared/agent-launch/catalog/tui-agent'
 import { liftActionPermissionArgs } from '../../src/shared/source-control-action-permission-lift'
 import { AgentLaunchReplay } from '../../src/shared/rpc-contract/agent-launch-params'
-import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-startup-plan-inputs'
-import { resolveAgentLaunchCommand } from '../../src/shared/tui-agent-launch-command'
+import { resolveAgentStartupPlanInputs } from '../../src/shared/agent-launch/startup/agent-startup-plan-inputs'
+import { resolveAgentLaunchCommand } from '../../src/shared/agent-launch/startup/tui-agent-launch-command'
 
 vi.mock('../../mobile/src/platform/random-v4-uuid', () => ({
   randomV4Uuid: () => randomUUID()

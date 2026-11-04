@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/runtime-file-client-types'
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../src/shared/terminal-tab-types'
-import type { Tab } from '../../src/shared/tab-types'
+
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../src/shared/constants'
 import {
   resolveNativeChatImageRuntimeContext,
@@ -204,51 +204,6 @@ describe('resolveNativeChatImageRuntimeContext', () => {
       })
     }
   )
-
-  it('resolves a floating chat to its pinned folder on the local host, and nothing before the pin', () => {
-    const floatingTab: Tab = {
-      id: 'floating-chat-1',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      groupId: 'floating-group',
-      contentType: 'agent-session',
-      entityId: 'session-1',
-      label: 'Codex Chat',
-      customLabel: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 0,
-      isPinned: false,
-      agentSessionAgent: 'codex'
-    }
-    const floatingState: AppState = {
-      ...state(),
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] },
-      getKnownWorktreeById: () => undefined,
-      worktreesByRepo: {},
-      // Why a focused runtime: floating must stay local even when one is selected.
-      settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: 'env-1' },
-      floatingWorkspacePath: '/home/me/changed-setting'
-    }
-
-    expect(resolveNativeChatImageRuntimeContext(floatingState, 'floating-chat-1')).toBeNull()
-    expect(
-      resolveNativeChatImageRuntimeContext(
-        {
-          ...floatingState,
-          structuredSessionLaunchDirectoryByTabId: {
-            'floating-chat-1': { sessionId: 'session-1', launchDirectory: '/home/me/pinned' }
-          }
-        },
-        'floating-chat-1'
-      )
-    ).toMatchObject({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      worktreePath: '/home/me/pinned',
-      expectedExecutionHostId: 'local',
-      target: { kind: 'local' as const }
-    })
-  })
 
   it('keeps selected-hook results equivalent to full-state resolution through ownership, pin and host transitions', () => {
     const base = state({

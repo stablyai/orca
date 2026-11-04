@@ -1,4 +1,8 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type {
+  NativeChatTranscriptFrame,
+  NativeChatTranscriptPage
+} from '../../../../shared/native-chat/native-chat-transcript-frames'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
@@ -56,7 +60,7 @@ function pageForClient(
   clientKind: RpcContext['clientKind'],
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
   agent?: string
-): { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number } {
+): NativeChatTranscriptPage {
   const isOpenCode = resolveNativeChatTranscriptAgent(agent) === 'opencode'
   const sanitized = (isOpenCode ? messages : windowTranscript(messages, limit)).map((message) =>
     sanitizeMessage(message, clientKind)
@@ -125,7 +129,8 @@ export const NATIVE_CHAT_METHODS = [
     name: 'nativeChat.subscribe',
     permission: 'workspace',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind, signal }, emit) => {
+    handler: async (params, { runtime, connectionId, clientKind, signal }, emitAny) => {
+      const emit = (frame: NativeChatTranscriptFrame): void => emitAny(frame)
       if (signal?.aborted) {
         return
       }

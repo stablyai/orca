@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -56,12 +57,12 @@ function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
   return source
 }
 
-it('offers the terminal header action order and targets Resume and Close at the displayed chat', () => {
+it('offers chat actions without a duplicate close button and targets Resume at the displayed chat', () => {
   const source = renderHeader()
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
     'Split Chat Right',
-    'Close tab'
+    'Chat settings'
   ])
   const folder = useAppStore.getState().folderWorkspaces[0]
   act(() => useAppStore.setState({ folderWorkspaces: [{ ...folder, executionHostId: 'ssh:dev' }] }))
@@ -80,11 +81,28 @@ it('offers the terminal header action order and targets Resume and Close at the 
       agent: 'codex'
     })
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Close tab' }))
-  expect(mocks.close).toHaveBeenCalledExactlyOnceWith({
-    type: 'close',
-    target: { kind: 'tab', worktreeId: source.worktreeId, tabId: source.id }
+})
+
+it('changes the saved chat width from the standalone chat toolbar', async () => {
+  const settings = {
+    ...getDefaultSettings('/tmp'),
+    nativeChatAppearance: { fontSize: 16, width: 'wide' as const }
+  }
+  const updateSettings = vi.fn(async (updates) => {
+    useAppStore.setState({ settings: { ...settings, ...updates } })
   })
+  useAppStore.setState({ settings, updateSettings })
+  renderHeader()
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Chat settings' }), { key: 'Enter' })
+  expect(screen.getByRole('menuitemradio', { name: 'Wide' }).getAttribute('aria-checked')).toBe(
+    'true'
+  )
+  fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full' }))
+  await waitFor(() =>
+    expect(updateSettings).toHaveBeenCalledWith({
+      nativeChatAppearance: { fontSize: 16, width: 'full' }
+    })
+  )
 })
 
 async function splitTooltipText(): Promise<string | null> {

@@ -13,7 +13,7 @@ import { findAiVaultSessionLiveState } from './ai-vault-original-pane'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   buildAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex

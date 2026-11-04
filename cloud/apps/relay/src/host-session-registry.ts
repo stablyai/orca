@@ -1619,17 +1619,15 @@ export class HostSessionRegistry {
       return
     }
     const assignmentReadStartedAt = performance.now()
-    // Combined is staging-only compatibility; stamped cells require the durable director epoch.
     const assignmentValid =
       admittedFromMemory ||
-      (this.config.role === 'combined'
-        ? hello.data.assignmentEpoch === 1
-        : await this.assignments.verifyCellAssignment({
-            userId: identity.sub,
-            relayHostId: identity.relayHostId,
-            cellId: this.config.cellId,
-            assignmentEpoch: hello.data.assignmentEpoch
-          }))
+      (await this.assignments.verifyCellAssignment({
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        cellId: this.config.cellId,
+        assignmentEpoch: hello.data.assignmentEpoch,
+        allowUnassignedBootstrap: this.config.role === 'combined'
+      }))
     // The database answer decides; the lease is only compared with it.
     if (leaseShadow && leaseCheck && !admittedFromMemory) {
       leaseShadow.record(
@@ -1638,7 +1636,6 @@ export class HostSessionRegistry {
         performance.now() - assignmentReadStartedAt
       )
     }
-    // The `combined` role compares the epoch without querying but is still labelled db.
     if (!admittedFromMemory) path = 'db'
     if (!assignmentValid) {
       refuse(RELAY_CLOSE_CODE.WRONG_CELL, 'wrong assignment epoch')

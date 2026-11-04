@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty/pty-ipc-daemon-provider-fixtures'
 import { registerPtyHandlers } from './pty/register-handlers'
-import { findCommandsOnLocalPath } from './command-path-resolver'
-import type * as CommandPathResolver from './command-path-resolver'
+import { findCommandsOnLocalPath } from './command-path/command-path-resolver'
+import type * as CommandPathResolver from './command-path/command-path-resolver'
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import type * as FsPromises from 'node:fs/promises'
 import type { Store } from '../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
 import type { PtySpawnIpcArgs } from './pty/ipc/spawn-types'
 
-vi.mock('./command-path-resolver', async (importOriginal) => ({
+vi.mock('./command-path/command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof CommandPathResolver>()),
   findCommandsOnLocalPath: vi.fn()
 }))
@@ -43,8 +43,10 @@ vi.mock('../agent-hooks/server', () =>
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../pwsh', () => import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
-vi.mock('../wsl', async (importOriginal) =>
+vi.mock('../pty/shell-startup/pwsh', () =>
+  import('./pty/pty-ipc-mock-registry').then((m) => m.pwshModuleMock())
+)
+vi.mock('../wsl/filesystem/unc-path-access', async (importOriginal) =>
   (await import('./pty/pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../telemetry/client', () =>

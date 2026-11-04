@@ -20,26 +20,32 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, win32 } from 'node:path'
 import { ipcMain } from 'electron'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   reviewHeadRemoteRefComponent,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
 } from '../../../shared/review-head-tracking-ref'
-import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../../shared/agent-detection'
+import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
+import { MAX_OSC_TITLE_CHARS } from '../../../shared/agent-status/title/osc-title-extraction'
+import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  addSparseWorktree,
-  addWorktree,
-  assertWorktreeCleanForRemoval,
   describeCreatedWorktree,
+  listWorktreesStrict
+} from '../../git/worktrees/catalog/worktree-listing'
+import {
   listWorktrees,
-  listWorktreesSharedStrict,
-  listWorktreesStrict,
-  removeWorktree
-} from '../../git/worktree'
-import * as gitRunner from '../../git/runner'
+  listWorktreesSharedStrict
+} from '../../git/worktrees/catalog/worktree-scan-cache'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
+
 import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../worktree-teardown'
 import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../worktree-teardown-deadline'
-import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../../git/status'
+import {
+  clearSubmodulePathsCacheForTests,
+  listSubmodulePaths
+} from '../../git/source-control/submodule-paths'
 import { getEffectiveHooks, hasHooksFile, loadHooks, runHook } from '../../workspace-hooks/hooks'
 import { parseOrcaYaml } from '../../../shared/orca-yaml'
 import {
@@ -86,7 +92,7 @@ import {
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
-} from '../../../shared/agent-prompt-injection'
+} from '../../../shared/agent-launch/startup/agent-prompt-injection'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import {
@@ -108,15 +114,15 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../shared/setup-agent-sequencing'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { beginWatcherInstall } from '../../ipc/watcher-removal-gate'
-import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../ipc/watcher-removal-drain'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { beginWatcherInstall } from '../../workspaces/removal/watcher-removal-gate'
+import { WATCHER_REMOVAL_DRAIN_BUDGET_MS } from '../../workspaces/removal/watcher-removal-drain'
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
 } from '../terminal-view-attribute-store'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktree-shared-directories'
-import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 export const exportedAGENT_PROMPT_BRACKETED_PASTE_END = AGENT_PROMPT_BRACKETED_PASTE_END
@@ -187,7 +193,7 @@ export const exportedGetEffectiveHooks = getEffectiveHooks
 export const exportedGetEffectiveHooksFromConfig = getEffectiveHooksFromConfig
 export const exportedGetRuntimeBrowserPageRegistry = getRuntimeBrowserPageRegistry
 export const exportedGetTerminalPasteIngestMs = getTerminalPasteIngestMs
-export const exportedGitRunner = gitRunner
+
 export const exportedHasHooksFile = hasHooksFile
 export const exportedHeadlessBrowserTabsUnchanged = headlessBrowserTabsUnchanged
 export const exportedHomedir = homedir

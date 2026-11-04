@@ -10,7 +10,7 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session/agent-session-host-authority'
 import { createHash } from 'node:crypto'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { isTuiAgentEnabled } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
