@@ -76,9 +76,12 @@ export function placeImportedWorktreeLines(
     naturalAnchorByRepoId.set(repoId, cardEnd)
   }
 
-  const anchorByRepoId = new Map(pinnedAnchorByRepoId)
-  for (const [repoId, anchor] of naturalAnchorByRepoId) {
-    anchorByRepoId.set(repoId, anchor)
+  // Natural anchors first, so lines sharing an anchor keep row order whatever is pinned.
+  const anchorByRepoId = new Map(naturalAnchorByRepoId)
+  for (const [repoId, anchor] of pinnedAnchorByRepoId) {
+    if (!anchorByRepoId.has(repoId)) {
+      anchorByRepoId.set(repoId, anchor)
+    }
   }
   if (pinnedHeaderIndex >= 0 && args.collapsedGroups.has(PINNED_GROUP_KEY)) {
     for (const worktree of args.pinnedSectionWorktrees) {

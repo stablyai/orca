@@ -54,6 +54,25 @@ function place(
 }
 
 describe('placeImportedWorktreeLines', () => {
+  it('keeps lines that share a card in row order when one project is also pinned', () => {
+    const rows = [
+      header(PINNED_GROUP_KEY),
+      item('b-pinned', repoB, PINNED_GROUP_KEY),
+      header('in-progress'),
+      item('parent', repoA, 'in-progress'),
+      item('child', repoB, 'in-progress', 1)
+    ]
+    expect(place(rows, [repoA, repoB])).toEqual([
+      `header:${PINNED_GROUP_KEY}`,
+      'b-pinned',
+      'header:in-progress',
+      'parent',
+      'child',
+      'line:repo-a',
+      'line:repo-b'
+    ])
+  })
+
   it('places the line after the whole lineage card, not inside it', () => {
     const rows = [
       header('in-progress'),
