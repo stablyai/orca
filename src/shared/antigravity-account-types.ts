@@ -59,3 +59,9 @@ export type AntigravityAccountTarget = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
 }
+
+/** Older hosts return only the accepted flow's id. */
+export type AntigravityChatSignInStartResult = {
+  flowId: string
+  status?: AntigravityChatSignInStatus
+}

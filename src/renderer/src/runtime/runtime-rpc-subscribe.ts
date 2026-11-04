@@ -5,7 +5,7 @@ import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 export type RuntimeRpcSubscriptionHandlers = {
   /** Each successful frame's result. */
-  onEvent: (result: unknown) => void
+  onEvent: (result: unknown, runtimeId?: string) => void
   onError: (error: unknown) => void
   /** Only a remote transport reports its own close; the local stream ends with a frame. */
   onClose: () => void
@@ -23,7 +23,7 @@ export async function subscribeRuntimeRpc(
       handlers.onError(response.error)
       return
     }
-    handlers.onEvent(response.result)
+    handlers.onEvent(response.result, response._meta.runtimeId)
   }
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)

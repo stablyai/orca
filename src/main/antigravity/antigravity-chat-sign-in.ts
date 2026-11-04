@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type {
   AntigravityChatSignInIntent,
   AntigravityChatSignInState,
+  AntigravityChatSignInStartResult,
   AntigravityChatSignInStatus
 } from '../../shared/antigravity-account-types'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
@@ -41,7 +42,6 @@ import {
 const FLOW_DEADLINE_MS = 300_000
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
 
-type Phase = AntigravityChatSignInState['phase']
 type Flow = {
   id: string
   owner: string
@@ -63,7 +63,7 @@ export type AntigravityChatSignInHost = {
 // Retain the flow until cleanup finishes, even after publishing a terminal phase.
 let active: Flow | null = null
 
-const settled = (phase: Phase): boolean =>
+const settled = (phase: AntigravityChatSignInState['phase']): boolean =>
   phase !== 'starting' && phase !== 'waiting' && phase !== 'verifying'
 const running = (current: Flow | null): current is Flow => {
   const shown = antigravityChatSignIn.get().value.flow
@@ -92,7 +92,7 @@ export function startAntigravityChatSignIn(
   host: AntigravityChatSignInHost,
   owner: string,
   intent: AntigravityChatSignInIntent = 'signIn'
-): { flowId: string } {
+): AntigravityChatSignInStartResult {
   if (ANTIGRAVITY_LAUNCH_SPEC.managedRuntime.pin() === null) {
     throw new Error(`Antigravity chats are not available on ${process.platform} ${process.arch}.`)
   }
@@ -103,7 +103,7 @@ export function startAntigravityChatSignIn(
     if (!running(active)) {
       throw new Error('The last Antigravity sign-in is still stopping. Try again in a moment.')
     }
-    return { flowId: active.id }
+    return { flowId: active.id, status: readAntigravityChatSignInStatus(owner) }
   }
   const current: Flow = {
     id: randomUUID(),
@@ -119,7 +119,7 @@ export function startAntigravityChatSignIn(
     flow: { flowId: current.id, owner, intent, phase: 'starting' }
   })
   current.done = runFlow(current, host)
-  return { flowId: current.id }
+  return { flowId: current.id, status: readAntigravityChatSignInStatus(owner) }
 }
 
 async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<void> {

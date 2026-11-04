@@ -165,7 +165,11 @@ it('shows another client the sign-in without its link, and refuses it every acti
   await expect(cancelAntigravityChatSignIn('phone', flowId)).rejects.toThrow('no longer active')
   const pasted = 'http://127.0.0.1:41234/?state=s1&code=c1'
   await expect(completeAntigravityChatSignIn('phone', flowId, pasted)).rejects.toThrow('no longer')
-  expect(startAntigravityChatSignIn(host, DESKTOP)).toEqual({ flowId })
+  expect(startAntigravityChatSignIn(host, DESKTOP)).toEqual({
+    flowId,
+    status: readAntigravityChatSignInStatus(DESKTOP)
+  })
+  expect(startAntigravityChatSignIn(host, DESKTOP).status?.flow?.intent).toBe('changeAccount')
   expect((await cancelAntigravityChatSignIn(DESKTOP, flowId))?.phase).toBe('cancelled')
   expect(phone.at(-1)?.flow).toEqual({ flowId: null, phase: 'cancelled' })
   watcher.close()
