@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import { locateEcho, replyEchoProjections } from './pty-startup-reply-echo-shapes'
-import { mode2031SequenceFor } from './terminal-color-scheme-protocol'
+import { mode2031SequenceFor } from './terminal/protocol/queries/terminal-color-scheme-protocol'
 
 const BASH = '/bin/bash'
 const itWithBash = process.platform !== 'win32' && existsSync(BASH) ? it : it.skip

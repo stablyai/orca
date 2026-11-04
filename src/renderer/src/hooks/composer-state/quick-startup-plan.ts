@@ -3,17 +3,17 @@ import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-c
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import {
   type AgentStartupPlan,
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
-} from '@/lib/tui-agent-startup'
+} from '../../../../shared/agent-launch/startup/tui-agent-startup'
 
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'

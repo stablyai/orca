@@ -1,7 +1,7 @@
 import { Loader2, Link2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   Dialog,
   DialogContent,

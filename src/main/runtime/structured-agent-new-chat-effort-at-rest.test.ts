@@ -10,7 +10,7 @@ import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecyc
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
-import { agentChatPermissionModes } from '../../shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
@@ -21,7 +21,7 @@ import { structuredAgentSessionShownSnapshot } from '../../shared/agent-session/
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
-import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
+import { CODEX_STRUCTURED_AGENT } from '../codex/structured/launch/codex-structured-agent-definition'
 import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'

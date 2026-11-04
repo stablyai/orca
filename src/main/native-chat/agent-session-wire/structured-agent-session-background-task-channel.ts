@@ -6,9 +6,9 @@ import type {
   AgentSessionHistoryResult
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from '../../../shared/agent-session/structured-agent-session-child-work-legacy'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
+import { structuredRunningChildWork } from '../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from './structured-agent-session-history-result'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import type { AgentSessionHistoryScope } from './agent-session-history-page'

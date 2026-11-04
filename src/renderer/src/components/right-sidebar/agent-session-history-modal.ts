@@ -1,6 +1,9 @@
 import { useAppStore } from '@/store'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import { isAiVaultAgent, type AiVaultAgent } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultAgent,
+  type AiVaultAgent
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultPanelWorkspace } from './ai-vault-panel-workspace'
 
 export type AgentSessionHistoryModalRequest = {

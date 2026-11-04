@@ -10,8 +10,8 @@ import {
 } from '../../native-chat/wsl-transcript-fs-access'
 import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
-import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault-session-log-resource'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { withOmpSubagentTranscriptCount } from './omp/session-scanner-omp-subagent-transcripts'
 import type {

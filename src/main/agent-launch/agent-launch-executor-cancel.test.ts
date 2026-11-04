@@ -2,7 +2,7 @@ import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
-import type { AgentLaunchIntent } from '../../shared/agent-launch-intent'
+import type { AgentLaunchIntent } from '../../shared/agent-launch/contracts/agent-launch-intent'
 
 const PROMPT = { text: 'fix the flaky test', delivery: 'submit' as const }
 

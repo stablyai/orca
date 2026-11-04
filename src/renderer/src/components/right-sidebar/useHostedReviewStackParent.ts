@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { normalizeHostedReviewBaseRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 
 export type HostedReviewStackParent = Pick<HostedReviewInfo, 'number' | 'url'>
 

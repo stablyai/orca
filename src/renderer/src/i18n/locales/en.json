@@ -2255,7 +2255,6 @@
         "9c3ba11a05": "Status:",
         "934d87ab96": "Loading check details…",
         "71c11aff84": "Rerun all checks",
-        "e31651a224": "Rerun failed checks",
         "1b56e28faa": "Rerun",
         "f4b1292569": "Start the default AI agent on these checks",
         "9a1004fc76": "Refresh checks",
@@ -2760,7 +2759,6 @@
         "662bc2998d": "Status:",
         "d8e82b7f15": "Loading check details…",
         "54cddd1858": "Rerun all checks",
-        "68605516dd": "Rerun failed checks",
         "522d9353e1": "Rerun",
         "0fa8b8faec": "Start the default AI agent on these checks",
         "5d0f42766d": "Refresh checks",
@@ -19681,7 +19679,8 @@
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
-        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+        "modelFallback": "Claude switched models: {{from}} → {{to}}."
       },
       "composer": {
         "send": "Send",
@@ -23332,6 +23331,7 @@
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "projectSetupState": {
@@ -23669,5 +23669,8 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "checks": {
+    "rerunUnsuccessful": "Rerun unsuccessful"
   }
 }

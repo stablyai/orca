@@ -11,7 +11,7 @@ import {
   getSessionParseCacheEntry
 } from './parse-cache/session-parse-cache-store'
 
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import {
   codexFixture,
   codexWorkerFixtureLines
@@ -24,7 +24,7 @@ import {
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
 } from './parse-cache/session-parse-cache-persistence'
-import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
+import { kiroTranscriptPathForMetadata } from '../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const SESSION_FILE = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl'

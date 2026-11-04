@@ -20,8 +20,8 @@ import { useAppStore } from '@/store'
 import type {
   BrowserExtensionToolbarAction,
   BrowserExtensionToolbarState
-} from '../../../../../shared/browser-extension-toolbar-types'
-import { CHROME_WEB_STORE_HOME_URL } from '../../../../../shared/browser-extension-webstore'
+} from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../../shared/browser/extensions/browser-extension-webstore'
 import {
   BrowserExtensionContextEntries,
   BrowserExtensionDropdownEntries,

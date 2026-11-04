@@ -23,7 +23,7 @@ vi.mock('../mobile-native-chat-stale-input', () => ({
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
-import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-tui-input-clear'
+import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 import { buildStoreState, FUTURE_PANE_KEY } from '../ipc-events-agent-status-store-test-fixtures'
 
@@ -14,7 +14,7 @@ async function setup() {
     workspaceSessionReady: true,
     tabsByWorktree: {}
   })
-  vi.doMock('../../store', () => ({ useAppStore: { getState: () => state } }))
+  vi.doMock('../../store/index', () => ({ useAppStore: { getState: () => state } }))
   vi.doMock('@/lib/telemetry', () => ({ track }))
   vi.doMock('../agent-hook-completion-notifications', () => ({
     observeAgentHookCompletionForNotification: vi.fn()

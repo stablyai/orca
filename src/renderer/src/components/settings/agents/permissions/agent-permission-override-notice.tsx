@@ -6,13 +6,13 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
-} from '../../../../../../shared/agent-launch-settings'
+} from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   agentPermissionChoices,
   PERMISSION_CHOICE_AGENTS,
   type AgentPermissionChoice
-} from '../../../../../../shared/tui-agent-permission-choice'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+} from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { nativeChatPermissionModeLabel } from '../../../native-chat/native-chat-permission-mode-labels'
 
 type Permissions =

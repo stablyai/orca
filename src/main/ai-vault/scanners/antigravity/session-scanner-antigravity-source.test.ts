@@ -2,8 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { filterAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
-import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
+import { filterAiVaultSessions } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../../session-scanner'
 import {
   isolatedScanRoots,

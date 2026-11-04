@@ -1,5 +1,5 @@
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
-import { advanceTerminalEscapeBoundary } from '../../../../../shared/terminal-partial-escape-tail'
+import { advanceTerminalEscapeBoundary } from '../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { admitResumedAppChunk } from './resume-escape-admission'
 

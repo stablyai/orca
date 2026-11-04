@@ -4,7 +4,7 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../../shared/ai-vault-search-types'
+} from '../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,

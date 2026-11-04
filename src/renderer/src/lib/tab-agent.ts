@@ -1,9 +1,9 @@
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import { agentTypeToIconAgent } from './agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
 import {
   firstTabAgentExcludingLeaf,
   selectCompletedTabAgentPanes,

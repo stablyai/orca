@@ -2,8 +2,11 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import { aiVaultLocalScanKey } from '../../shared/ai-vault-local-scan-key'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { aiVaultLocalScanKey } from '../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import {
   localAiVaultScanProgress,
   resetLocalAiVaultScanProgressForTests,

@@ -1,5 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { formatAgentTypeLabel, agentKindForAgentType } from '../../../lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
+import { agentKindForAgentType } from '../../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget,

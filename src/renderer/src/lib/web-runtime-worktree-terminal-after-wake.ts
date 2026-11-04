@@ -10,7 +10,7 @@ import {
 } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'

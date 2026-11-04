@@ -2,8 +2,8 @@
 // A created worktree's draft reaches its agent by one of two renderer routes: the pane's own
 // startup paste, or the draft helper that waits for the agent. Both must write it as launch input.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'

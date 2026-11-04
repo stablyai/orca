@@ -40,7 +40,7 @@ import {
   pruneMetadataMissingFromAuthoritativeLocalScan
 } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { RuntimeStore } from './runtime-store-contract'
-import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments/workspace-attachments'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'

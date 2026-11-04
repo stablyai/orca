@@ -1,6 +1,10 @@
-import { PairingOfferSchema, type PairingOffer } from './types'
-import { normalizePairingBase64 } from '../../../src/shared/mobile-pairing-base64'
-import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/mobile-pairing-protocol-limits'
+import './types'
+import {
+  PairingOfferSchema,
+  type PairingOffer
+} from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { normalizePairingBase64 } from '../../../src/shared/remote-runtime/pairing/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../src/shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 
 // Keep parsing aligned with src/shared/pairing.ts; use mobile base64 APIs instead of Node Buffer.
 

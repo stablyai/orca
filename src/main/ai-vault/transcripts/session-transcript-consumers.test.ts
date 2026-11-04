@@ -2,7 +2,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } fro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../session-scanner'
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cache-store'

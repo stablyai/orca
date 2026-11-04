@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -25,6 +25,7 @@ export type HostedReviewActionInfo = Pick<
   Partial<
     Pick<
       HostedReviewInfo,
+      | 'checksSummary'
       | 'reviewDecision'
       | 'autoMergeEnabled'
       | 'autoMergeAllowed'

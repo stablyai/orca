@@ -1,7 +1,7 @@
 import type { TerminalAttachmentLaunchResult } from '../../../shared/terminal-attachment-launch-result'
-import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal-snapshot-unavailability'
-import type { TerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
-import type { TerminalInputAckKind } from '../../../shared/terminal-stream-protocol'
+import type { TerminalSnapshotUnavailableReason } from '../../../shared/terminal/replay/terminal-snapshot-unavailability'
+import type { TerminalStreamEndVerdict } from '../../../shared/terminal/stream/terminal-stream-end-verdict'
+import type { TerminalInputAckKind } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { RemoteTerminalStreamWatchdog } from './remote-terminal-stream-watchdog'
 
 export type RuntimeEnvironmentSubscriptionHandle = {

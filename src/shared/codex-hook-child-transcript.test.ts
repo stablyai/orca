@@ -2,7 +2,7 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { normalizeHookPayload } from './agent-hook-listener'
+import { normalizeHookPayload } from './agent-hook-listener/normalization/normalize-hook-payload'
 import {
   createHookListenerState,
   seedLegacyAgentStatusForTests

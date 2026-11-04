@@ -1,5 +1,5 @@
 import { assertAutomationExtraAgentArgs } from '../automation-extra-agent-args-record'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { Automation, AutomationRun } from '../automations-types'
 import { getAutomationRunRepoId } from '../automation-run-identity'
 import {

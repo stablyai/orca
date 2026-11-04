@@ -10,7 +10,8 @@ import {
   ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY
 } from '../../shared/orcad-runtime-capabilities'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const extraCapabilities = vi.hoisted((): string[] => [])

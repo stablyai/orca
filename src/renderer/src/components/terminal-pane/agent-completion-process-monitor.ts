@@ -5,7 +5,7 @@ import {
 import {
   recognizeAgentProcess,
   type RecognizedAgentProcess
-} from '../../../../shared/agent-process-recognition'
+} from '../../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/shell-process-detection'
 import {
   clientOnlyUnverifiableInspection,

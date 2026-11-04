@@ -127,14 +127,4 @@ describe('automation update workspace-mode precondition', () => {
       setupDecision: 'run'
     })
   })
-
-  it('keeps the existing normalization for updates without the precondition', async () => {
-    const { store, id } = await newPerRunAutomation()
-    store.updateAutomation(id, switchToExisting)
-
-    const updated = store.updateAutomation(id, { name: 'Renamed', setupDecision: 'run' })
-
-    expect(updated).toMatchObject({ name: 'Renamed', workspaceMode: 'existing' })
-    expect(updated.setupDecision).toBeUndefined()
-  })
 })

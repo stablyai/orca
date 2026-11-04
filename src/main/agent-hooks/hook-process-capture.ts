@@ -1,6 +1,5 @@
 /** Capture before Orca inserts its managed-script shell. */
-export const CLAUDE_HOOK_PARENT_CAPTURE =
-  'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
+export const HOOK_PARENT_CAPTURE = 'ORCA_HOOK_AGENT_PID="${PPID:-}"; export ORCA_HOOK_AGENT_PID; '
 
 export function buildHookProcessCapture(): string[] {
   return [

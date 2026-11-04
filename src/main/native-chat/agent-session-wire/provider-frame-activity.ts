@@ -1,4 +1,4 @@
-import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { normalizeOptionalField } from '../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 
 export const MAX_PROVIDER_ACTIVITY_LENGTH = 160

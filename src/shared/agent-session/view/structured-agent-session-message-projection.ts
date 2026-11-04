@@ -126,18 +126,28 @@ export function projectStructuredAgentSessionMessages(
     }
   }
   const journalled = new Set(visibleItems.map((item) => item.itemId))
-  // Until handover, a queued send has no conversation position, even relative to commands it waits behind.
-  const queued = new Set(
-    submissions
-      .filter(isQueuedAgentJournalSubmission)
-      .map((submission) => agentJournalSubmissionKey(submission.clientMessageId))
+  const submissionsByItemId = new Map(
+    submissions.map((submission) => [
+      agentJournalSubmissionKey(submission.clientMessageId),
+      submission
+    ])
   )
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
   let moved = false
-  for (const message of projectItems(visibleItems)) {
-    if (queued.has(message.id)) {
+  for (const row of projectItems(visibleItems)) {
+    const submission = submissionsByItemId.get(row.id)
+    const message: NativeChatMessage =
+      submission?.dispatchState === 'pending' || submission?.dispatchState === 'unknown'
+        ? {
+            ...row,
+            deliveryState: submission.dispatchState,
+            ...(submission.queuedMessageId ? { queuedMessageId: submission.queuedMessageId } : {})
+          }
+        : row
+    // Until handover, queued sends have no conversation position.
+    if (submission && isQueuedAgentJournalSubmission(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(message)
@@ -178,12 +188,15 @@ export function projectStructuredAgentSessionMessages(
       .filter(
         (entry) =>
           !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)) &&
-          !submissions.some((submission) => submission.clientMessageId === entry.clientMessageId)
+          (!submissionsByItemId.has(agentJournalSubmissionKey(entry.clientMessageId)) ||
+            submissionsByItemId.get(agentJournalSubmissionKey(entry.clientMessageId))
+              ?.dispatchState === 'pending')
       )
       .map((entry): NativeChatMessage => ({
         id: agentJournalSubmissionKey(entry.clientMessageId),
         role: 'user',
         source: 'transcript',
+        deliveryState: 'pending',
         timestamp: entry.queuedAt,
         blocks: entry.body.blocks,
         ...(entry.sentWhileStopping ? { sentWhileStopping: true as const } : {})

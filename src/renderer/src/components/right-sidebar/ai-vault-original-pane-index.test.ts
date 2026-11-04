@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildAiVaultOriginalPaneIndex,
   createLazyAiVaultOriginalPaneIndex,

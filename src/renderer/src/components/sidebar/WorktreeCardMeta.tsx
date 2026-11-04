@@ -1,7 +1,7 @@
 import React from 'react'
 import { useWorkspaceReferenceLinkActions } from './use-workspace-reference-link-actions'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { WorktreeCardLinkedItemsSection } from './WorktreeCardLinkedItemsSection'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Pencil, StickyNote } from 'lucide-react'

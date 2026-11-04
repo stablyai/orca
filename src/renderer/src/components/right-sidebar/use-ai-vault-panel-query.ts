@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AiVaultScope } from '../../../../shared/ai-vault-types'
+import type { AiVaultScope } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 /** A query belongs to the workspace or project it searched: moving to another clears it, picking a scope keeps it. */
 export function useAiVaultPanelQuery(

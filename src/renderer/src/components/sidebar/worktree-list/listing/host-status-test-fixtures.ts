@@ -5,8 +5,8 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import type { RuntimeHostStatusSnapshot } from '../../../../../../shared/runtime-host-status'
-import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/runtime-environments'
+import type { RuntimeHostStatusSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 export function environment(id: string, pairedDeviceId?: string): PublicKnownRuntimeEnvironment {
@@ -113,6 +113,7 @@ export const visibilityArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = 
 export function sectionArgs(): Parameters<typeof useSidebarSectionRows>[0] {
   return {
     groupBy: 'repo',
+    sortBy: 'recent',
     projectOrderBy: 'manual',
     pinnedDisplayPolicy: 'single-location',
     defaultHostId: 'local',

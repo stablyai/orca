@@ -28,8 +28,10 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
-vi.mock('../codex/codex-state-db', () => ({ isCodexStateDbBackfillPending: vi.fn(() => false) }))
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
+  isCodexStateDbBackfillPending: vi.fn(() => false)
+}))
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 vi.mock('./codex-auth-presence', () => ({ probeCodexAuthPresence: vi.fn(() => 'present') }))

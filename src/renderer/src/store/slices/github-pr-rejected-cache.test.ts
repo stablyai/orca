@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { persistGitHubCacheChanges } from '../github/cache-persistence'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/source-control/hosted-review/hosted-review-github'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import {

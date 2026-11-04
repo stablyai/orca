@@ -1,4 +1,4 @@
-import type { BrowserClientProfileMetadata } from '../../../../shared/browser-client-profile-switch-protocol'
+import type { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import type {
   BrowserRoutePartitionIdentity,
   DerivedBrowserRoutePartition
