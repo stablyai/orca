@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
+import { TooltipProvider } from '../ui/tooltip'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
@@ -67,13 +68,15 @@ afterEach(() => {
 it('keeps landed files visible after work folds, opens a patch in one click and survives history remount', () => {
   const onLinkClick = vi.fn()
   const view = (working: boolean) => (
-    <NativeChatMessageList
-      session={session(messages)}
-      isWorking={working}
-      expandSignal={false}
-      onLinkClick={onLinkClick}
-      settledTurns={working ? undefined : new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
-    />
+    <TooltipProvider>
+      <NativeChatMessageList
+        session={session(messages)}
+        isWorking={working}
+        expandSignal={false}
+        onLinkClick={onLinkClick}
+        settledTurns={working ? undefined : new Map([['u', { startedAt: 1, workedSeconds: 2 }]])}
+      />
+    </TooltipProvider>
   )
   const { rerender, unmount } = render(view(true))
   expect(screen.getByRole('button', { name: /\/repo\/greeting.ts/ })).toBeVisible()

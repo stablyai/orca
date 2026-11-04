@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { AgentJournalRenderItemSchema } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -90,9 +90,13 @@ function fixture() {
     send,
     outcome,
     replay: () => {
-      const items = state.items.map((item) =>
-        AgentJournalRenderItemSchema.parse(JSON.parse(JSON.stringify(item)))
-      )
+      const items = state.items.map((item) => {
+        const restored: unknown = JSON.parse(JSON.stringify(item))
+        if (!isAdmissibleAgentJournalRenderItem(restored)) {
+          throw new Error('Journal item failed replay validation')
+        }
+        return restored
+      })
       state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
         type: 'history-page',
         page: {

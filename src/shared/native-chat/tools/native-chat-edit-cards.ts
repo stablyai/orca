@@ -141,7 +141,7 @@ export function buildEditSummaries(blocks: NativeChatBlock[]): Map<
       continue
     }
     const cached = diffSummaries.get(call)
-    let files = cached?.result === result ? cached.files : undefined
+    let files = cached && cached.result === result ? cached.files : undefined
     if (files === undefined) {
       files = editFilesFromPatchText(journalDiff.output, journalDiff.path, true)
       diffSummaries.set(call, { result, files })

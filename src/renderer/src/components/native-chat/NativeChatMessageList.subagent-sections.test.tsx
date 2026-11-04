@@ -303,7 +303,7 @@ import {
         />
       )
       const rollups = screen.getAllByRole('button', { name: /src\/[ab].ts/ })
-      expect(rollups.map((rollup) => rollup.textContent)).toEqual([
+      expect(rollups.map((rollup) => rollup.getAttribute('aria-label'))).toEqual([
         expect.stringMatching(/src\/a.ts/),
         expect.stringMatching(/src\/b.ts/)
       ])
@@ -351,7 +351,7 @@ import {
 
       rerender(view(false))
       rerender(view(true))
-      expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: false })).toBeVisible()
+      expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: true })).toBeVisible()
 
       fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
       expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
@@ -361,8 +361,8 @@ import {
 
     it('opens a working subagent while the session waits on it, and closes it once the parent moves on', () => {
       const { rerender } = render(listOf('working', true))
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-      expect(screen.getByRole('button', { name: /Ran 1 subagent/, expanded: false })).toBeVisible()
+      expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /explore the lane/, expanded: true })).toBeVisible()
       expect(screen.getAllByText('explore the lane')).toHaveLength(1)
       rerender(listOf('working'))
       expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
