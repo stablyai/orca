@@ -9,11 +9,27 @@ export type CanonicalHookTrustFixture = {
 
 export async function createCanonicalHookTrustFixture(): Promise<CanonicalHookTrustFixture> {
   const { MANAGED_HOOK_TIMEOUT_SECONDS } = await import('../agent-hooks/installer-utils')
-  const { getCodexManagedHookInstallMaterial } = await import('../codex/hook-service')
-  const { computeTrustKey, computeTrustedHash, escapeTomlString, normalizeHookTrustKeyForLookup } =
-    await import('../codex/config-toml-trust')
-  const { getCodexHookTrustSignature } = await import('../codex/codex-hook-identity')
-  const { writeCodexTrustGrantLedgerHome } = await import('../codex/codex-trust-grant-ledger')
+  const [, { getCodexManagedHookInstallMaterial }] = await Promise.all([
+    import('../codex/hooks/installation/hook-service'),
+    import('../codex/hooks/definitions/codex-hook-definition')
+  ])
+  const [
+    ,
+    {
+      computeCodexTrustKey: computeTrustKey,
+      computeCodexTrustedHash: computeTrustedHash,
+      normalizeCodexHookTrustLookupKey: normalizeHookTrustKeyForLookup
+    },
+    { escapeTomlBasicString: escapeTomlString }
+  ] = await Promise.all([
+    import('../codex/trust/toml/config-toml-trust'),
+    import('../codex/trust/identity/codex-trust-identity'),
+    import('../codex/configuration/toml/config-toml-syntax')
+  ])
+  const { getCodexHookTrustSignature } =
+    await import('../codex/hooks/definitions/codex-hook-identity')
+  const { writeCodexTrustGrantLedgerHome } =
+    await import('../codex/trust/grants/codex-trust-grant-ledger')
   const sourceHomePath = join(testState.fakeHomeDir, '.codex')
   const sourcePath = join(sourceHomePath, 'hooks.json')
   const material = getCodexManagedHookInstallMaterial()

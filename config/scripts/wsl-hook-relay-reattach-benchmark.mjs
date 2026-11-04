@@ -309,7 +309,9 @@ async function main() {
     const { ensureWslHookRelayForReattach } = await jiti.import(
       '../../src/main/agent-hooks/wsl-hook-relay-reattach.ts'
     )
-    const { codexHookService } = await jiti.import('../../src/main/codex/hook-service.ts')
+    const { codexHookService } = await jiti.import(
+      '../../src/main/codex/hooks/installation/hook-service.ts'
+    )
     const { MANAGED_AGENT_HOOK_TARGETS } = await jiti.import(
       '../../src/shared/managed-agent-hook-targets.ts'
     )

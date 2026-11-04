@@ -6,7 +6,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
-import type { AiVaultSearchSettings } from './ai-vault-search-settings'
+import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
@@ -89,6 +89,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
+  /** View newly opened Markdown files start in (see markdown-default-view-mode.ts); absent = Rich. */
+  markdownDefaultViewMode?: 'source' | 'rich'
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
   /** Selection paste preserves the normal clipboard; defaults on for Linux/macOS, off for Windows. */

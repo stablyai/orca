@@ -6,7 +6,7 @@ import {
   TEST_WORKTREE_ID
 } from '../../orca-runtime-test-fixtures.spec'
 import { recordPtySurface, forgetPtySurface } from '../../pty-recorded-surface-topology'
-import type { TerminalLeafMoveResult } from '../../../../shared/terminal-leaf-move'
+import type { TerminalLeafMoveResult } from '../../../../shared/workspace-layout/terminal-leaf-move'
 
 it('retires before dependent callbacks, keeps connected output idle and preserves partial writes when a callback fails', () => {
   const f = identityFixture()

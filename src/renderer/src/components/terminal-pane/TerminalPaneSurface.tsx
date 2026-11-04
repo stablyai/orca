@@ -1,7 +1,7 @@
 import { TerminalCrewPortals } from '../orchestration-crew/TerminalCrewPortals'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'

@@ -5,7 +5,7 @@ import {
 } from '../client-hosted-browser-page-persistence'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import {
   type ExecutionHostId,
@@ -24,7 +24,7 @@ import type { TerminalQuickCommand } from '../../../shared/terminal/quick-comman
 import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { Automation } from '../../../shared/automations-types'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {

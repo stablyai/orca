@@ -8,7 +8,7 @@ import { build } from 'esbuild'
 // Runtime bundling keeps independent consumer assertions outside shared project type graphs.
 export async function loadAnsiConsumers(root = process.cwd()) {
   const entries = [
-    ['parseAnsiSegments', 'renderer/src/components/editor/ipynb-ansi'],
+    ['parseAnsiSegments', 'renderer/src/components/editor/notebook/outputs/ipynb-ansi'],
     [
       'restoredSnapshotPaintsPrintableContent',
       'renderer/src/components/terminal-pane/restored-snapshot-coverage'

@@ -7,7 +7,7 @@ import {
 } from '../../../../../../shared/orcad-stale-lock-reclaim'
 import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
-import { quotePosixShellUnlessPlain } from '../../../../../../shared/shell-argument-quoting'
+import { quotePosixShellUnlessPlain } from '../../../../../../shared/shell/launch/shell-argument-quoting'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'

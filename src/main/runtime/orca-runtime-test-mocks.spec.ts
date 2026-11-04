@@ -3,6 +3,7 @@ import * as setup from './orca-runtime-test-mocks/setup.spec'
 import * as importedValues from './orca-runtime-test-mocks/imported-values.spec'
 
 import type * as GitUsernameModule from '../git/git-username'
+import * as importedValuesOwner1 from '../../shared/workspace-layout/stable-pane-id'
 
 export const AGENT_PROMPT_BRACKETED_PASTE_END =
   importedValues.exportedAGENT_PROMPT_BRACKETED_PASTE_END
@@ -95,7 +96,7 @@ export const listWorktreesStrict = importedValues.exportedListWorktreesStrict
 export const loadHooks = importedValues.exportedLoadHooks
 export const localWorktreeFilesystem = importedValues.exportedLocalWorktreeFilesystem
 export const lstat = importedValues.exportedLstat
-export const makePaneKey = importedValues.exportedMakePaneKey
+export const makePaneKey = importedValuesOwner1.makePaneKey
 export const mkdir = importedValues.exportedMkdir
 export const mkdirSync = importedValues.exportedMkdirSync
 export const mkdtemp = importedValues.exportedMkdtemp
@@ -235,8 +236,6 @@ export type OrcaRuntimeService = InstanceType<typeof importedValues.exportedOrca
 export type EventEmitter = InstanceType<typeof importedValues.exportedEventEmitter>
 export type OrchestrationDb = InstanceType<typeof importedValues.exportedOrchestrationDb>
 
-export type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
-export type { FolderWorkspace } from '../../shared/folder-workspace-types'
 export type { GitUsernameModule }
 export type { IPtyProvider } from '../providers/pty-provider-contract'
 export type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
@@ -251,10 +250,9 @@ export type {
 } from '../../shared/runtime-types'
 export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
 export type { Tab } from '../../shared/tab-types'
-export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 
 export type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
-export type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+
 export type { Worktree } from '../../shared/worktree/types'
 export type { WorktreeMeta } from '../../shared/worktree/meta-types'
 

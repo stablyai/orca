@@ -1,19 +1,20 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
-} from '../../../shared/runtime-host-status'
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import {

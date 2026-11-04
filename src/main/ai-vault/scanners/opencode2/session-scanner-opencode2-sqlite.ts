@@ -5,7 +5,7 @@ import {
 import type {
   AiVaultSession,
   AiVaultSessionPreviewMessage
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   createAccumulator,
   finalizeSession,

@@ -13,11 +13,11 @@ import {
   hasAnyRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
-  reconcileCodexPaneAccountsWithLivePtys,
-  type CodexPaneHomeRoute
-} from '../codex/codex-pane-account-registry'
-import { reconcileRetainedCodexHookHomes } from '../codex/retained-codex-hook-state'
-import { codexHookService } from '../codex/hook-service'
+  reconcileCodexPaneAccountsWithLivePtys
+} from '../codex/configuration/homes/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../codex/configuration/homes/codex-pane-account-registry-types'
+import { reconcileRetainedCodexHookHomes } from '../codex/hooks/installation/retained-codex-hook-state'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent

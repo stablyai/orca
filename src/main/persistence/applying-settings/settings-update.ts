@@ -15,7 +15,7 @@ import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal/qu
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
 import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
@@ -33,7 +33,7 @@ import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../shared/mobile-pairing-custom-address'
+} from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
 import { normalizeSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'

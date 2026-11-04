@@ -5,7 +5,7 @@ import {
   type RuntimeNavigationTarget
 } from '../../shared/runtime-navigation'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
 

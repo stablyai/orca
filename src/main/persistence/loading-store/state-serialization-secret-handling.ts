@@ -15,7 +15,7 @@ import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settin
 import { LEGACY_OPENCODE_GO_API_KEY_SLOT } from './legacy-opencode-go-api-key-migration'
 import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
 import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
-import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 
 import {
   applySecretSentinelSubstitutions,

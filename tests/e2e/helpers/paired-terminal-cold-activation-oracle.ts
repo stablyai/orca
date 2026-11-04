@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import '../../../src/shared/protocol-version'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
 import { expect } from './orca-app'
 import {
   callColdActivationRuntime,

@@ -1,4 +1,4 @@
-import type { TerminalRevealIdentity } from '../../../shared/terminal-reveal-identity'
+import type { TerminalRevealIdentity } from '../../../shared/workspace-layout/terminal-reveal-identity'
 
 type TerminalRevealState = {
   tabsByWorktree: Record<string, readonly { id: string }[]>

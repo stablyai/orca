@@ -3,7 +3,7 @@ import { buildRows } from './build-rows.test-fixture'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { getPRGroupKey } from './pr-group-key'
 import { getGroupKeyForWorktree } from '../../../../../../shared/sidebar-list/worktree-group-keys'
-import { repo, worktree, repoMap } from '../../worktree-list-groups-test-fixtures'
+import { repo, worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 

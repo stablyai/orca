@@ -6,7 +6,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/active-workspace'
-import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
+import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
+import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
@@ -18,7 +19,7 @@ import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_NESTED_ROW_SURFACE_INSET
 } from './indentation'
-import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'

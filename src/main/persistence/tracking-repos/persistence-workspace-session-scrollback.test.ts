@@ -3,9 +3,9 @@ import { writeFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
-import { MAX_BROWSER_HISTORY_ENTRIES } from '../../../shared/workspace-session-browser-history'
+import { MAX_BROWSER_HISTORY_ENTRIES } from '../../../shared/workspace-session/workspace-session-browser-history'
 import {
   closeTestStores,
   createSqliteTestStore,

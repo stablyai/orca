@@ -1,7 +1,10 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
-import { getCodexAccountDisplayLabel } from '@/lib/codex-account-display-label'
+import {
+  getCodexAccountDisplayDetail,
+  getCodexAccountDisplayLabel
+} from '@/lib/codex-account-display-label'
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
@@ -80,6 +83,10 @@ export function buildCodexStatusSwitchGroups(
   const makeGroup = (target: CodexStatusRuntimeTarget): CodexStatusSwitchGroup => {
     const activeId = getCodexStatusActiveId(state, target)
     const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
+    const systemDefaultLabel = translate(
+      'auto.components.status.bar.StatusBar.c676918adc',
+      'System default'
+    )
     return {
       key: getCodexStatusRuntimeKey(target),
       label: getCodexStatusRuntimeLabel(target, options.hostLabel),
@@ -87,13 +94,17 @@ export function buildCodexStatusSwitchGroups(
       targets: [
         {
           id: null,
-          label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
+          label: systemDefaultLabel,
+          name: systemDefaultLabel,
+          detail: null,
           active: activeId === null,
           runtimeTarget: target
         },
         ...accountsForTarget.map((account) => ({
           id: account.id,
           label: getCodexAccountDisplayLabel(account, accountsForTarget),
+          name: account.email,
+          detail: getCodexAccountDisplayDetail(account, accountsForTarget),
           active: account.id === activeId,
           runtimeTarget: target
         }))

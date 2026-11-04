@@ -5,7 +5,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus
-} from '../../../../../shared/runtime-host-status'
+} from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export function canRestorePairedParkedTerminal(ptyId: string): boolean {
   const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
@@ -22,4 +22,4 @@ export function canRestorePairedParkedTerminal(ptyId: string): boolean {
 }
 
 // Daemon worktreeId@@shortUuid IDs prevent cross-workspace reattach.
-export { isPtySessionIdOwnedByWorktree as isSessionOwnedByWorktree } from '../../../../../shared/pty-session-id-format'
+import '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'

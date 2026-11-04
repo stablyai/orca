@@ -1,19 +1,19 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   addOrUpdateEnvironmentFromPairingCode,
   resolveEnvironment,
-  RuntimeEnvironmentStoreError,
   updateEnvironmentFromPairingCode
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import {
   parseHostAccessLink,
   type ParsedHostAccessLink
-} from '../../../shared/remote-pairing-address'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   verifyRemotePairingRuntimeStatus,
   type RemotePairingFailure,
   type VerifyAndAddRuntimeEnvironmentResult
-} from '../../../shared/remote-pairing-verification'
+} from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -21,12 +21,12 @@ import {
   getPreferredPairingOffer,
   isEphemeralVmRuntimeEnvironment,
   redactRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   remoteServerPairingFailureText,
   type RemoteServerPairingFailureCode
-} from '../../../shared/remote-server-pairing-failure-copy'
+} from '../../../shared/remote-runtime/pairing/remote-server-pairing-failure-copy'
 
 type VerifyAndAddRuntimeEnvironmentArgs = {
   name: string

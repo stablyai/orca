@@ -1,4 +1,4 @@
-import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal-attachment-launch-result'
+import { parseTerminalAttachmentLaunchResult } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
@@ -102,7 +102,7 @@ import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-d
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
-} from '../../../../shared/terminal-surface-id'
+} from '../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'

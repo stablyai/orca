@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
-import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
+import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { LaunchSourceParam } from './launch-source-param'
 import {

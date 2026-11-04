@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_EXTENSION_INSTALL_PROMPT_REQUESTED_CHANNEL,
   type BrowserExtensionWebStoreInstallResult
-} from '../../../../shared/browser-extension-webstore'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
 import type * as PromptModule from './browser-extension-install-prompt'
 import type * as ServiceModule from '../web-store/browser-extension-webstore-service'
 import type * as InstallModule from '../installation/browser-extension-webstore-install'

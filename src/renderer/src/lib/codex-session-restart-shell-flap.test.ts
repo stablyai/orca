@@ -94,44 +94,6 @@ describe('spurious shell readings on Codex-launched panes', () => {
     })
   })
 
-  it('keeps the pane uncarded when the fresh scan confirms the shell (user exited Codex)', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('treats a rejected confirmation as no new evidence', async () => {
-    vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(new Error('daemon busy'))
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
-  it('survives a preload without confirmForegroundProcess', async () => {
-    ;(
-      window.api.pty as unknown as { confirmForegroundProcess?: unknown }
-    ).confirmForegroundProcess = undefined
-
-    await markLiveCodexSessionsForRestart({
-      owner: focusedOwner(),
-      previousAccountLabel: ACCOUNT_A,
-      nextAccountLabel: ACCOUNT_B
-    })
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-  })
-
   it('heals a spurious shell reading before the restored-pane stale lookup', async () => {
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([

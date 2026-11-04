@@ -3,7 +3,7 @@ import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
  * User close must release those bindings; these cases cover connected/exited, never unverifiable PTYs. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult

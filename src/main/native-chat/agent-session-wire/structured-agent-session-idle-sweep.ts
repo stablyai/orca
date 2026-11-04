@@ -137,7 +137,7 @@ export class StructuredAgentSessionIdleSweep {
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
     )
   }
 

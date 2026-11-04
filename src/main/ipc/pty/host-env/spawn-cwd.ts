@@ -1,5 +1,5 @@
-import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
@@ -11,7 +11,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import {
   resolveTerminalStartupCwdForWorkspace,
   type TerminalStartupCwdMissingDirFallback
-} from '../../../../shared/terminal-startup-cwd'
+} from '../../../../shared/shell/launch/terminal-startup-cwd'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,

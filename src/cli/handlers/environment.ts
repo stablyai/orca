@@ -8,19 +8,24 @@ import {
   type HostNameResult
 } from '../format'
 import { listSshTargets, LOCAL_HOST_LIST_NAME } from '../host-selector-alternatives'
-import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
-import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
+import {
+  getDefaultUserDataPath,
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess
+} from '../runtime-client'
+
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
+import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   addEnvironmentFromPairingCode,
-  listEnvironments,
   removeEnvironment,
   resolveEnvironment,
   type EnvironmentAddResult,
   type EnvironmentRemoveResult
 } from '../runtime/environments'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   'host name': async ({ client, flags, json }) => {

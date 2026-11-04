@@ -48,14 +48,14 @@ export function structuredChatNamingDeps(
     readFirstPrompt: async (sessionId, hostStartedAt) => {
       const host = getStructuredAgentSessionHost()
       return host
-        ? firstStructuredChatNamingPrompt(await host.journalSnapshot(sessionId), hostStartedAt)
+        ? firstStructuredChatNamingPrompt(await host.journalCurrentRead(sessionId), hostStartedAt)
         : ''
     },
     readJournalFirstPrompt: async (sessionId) => {
       const host = getStructuredAgentSessionHost()
       return host
         ? firstStructuredAgentSessionPrompt(
-            agentSessionCurrentContextRows((await host.journalSnapshot(sessionId)).items).items
+            agentSessionCurrentContextRows((await host.journalCurrentRead(sessionId)).items).items
           )
         : ''
     },

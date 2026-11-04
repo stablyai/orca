@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
