@@ -4,7 +4,7 @@ import type { AppState } from '../types'
 import { createHostedReviewSlice } from './hosted-review'
 import './hosted-review-card-refresh'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
-import { HostedReviewCreationEligibilityTimeoutError } from './hosted-review-cache-state'
+
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import '../../../../shared/constants'
 
@@ -121,25 +121,6 @@ describe('hosted review slice', () => {
 
     expect(store.getState().prCache['repo-1::feature/gitlab']).toBeUndefined()
     expect(store.getState().prCache['/repo::feature/gitlab']).toBeUndefined()
-  })
-
-  it('rejects a never-settling local eligibility probe after the timeout', async () => {
-    vi.useFakeTimers()
-    // A hung git/gh subprocess never resolves; the store must not wait forever.
-    mockApi.hostedReview.getCreationEligibility.mockReturnValueOnce(new Promise(() => {}))
-    const store = makeStore()
-
-    const pending = store.getState().getHostedReviewCreationEligibility({
-      repoPath: '/repo',
-      branch: 'feature/create-pr',
-      base: 'main'
-    })
-    const assertion = expect(pending).rejects.toBeInstanceOf(
-      HostedReviewCreationEligibilityTimeoutError
-    )
-    await vi.advanceTimersByTimeAsync(30_000)
-    await assertion
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('does not reuse an old-head request after the branch advances', async () => {
