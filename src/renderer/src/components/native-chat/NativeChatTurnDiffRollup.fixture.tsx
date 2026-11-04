@@ -37,7 +37,7 @@ export const settled = defineFixture({
 export const opened = defineFixture({
   width: 560,
   render: () => <NativeChatTurnDiffRollup diff={diff} />,
-  interact: async (frame) => {
-    await frame.getByRole('button', { name: /greeting.ts/ }).click()
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button')?.click()
   }
 })
