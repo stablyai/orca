@@ -12,7 +12,7 @@ const PARENT = {
   id: 'srv::/work/parent',
   hostId: 'runtime:env-1',
   instanceId: 'parent-instance'
-} as Worktree
+} as unknown as Worktree
 
 function stateWithServerInstall(installationId: string): AppState {
   return {
