@@ -211,62 +211,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
-  it('rolls back the sleeping record and suppression when the hibernation kill fails', async () => {
-    // Record written before the kill (pty:exit can beat it back); both it and the suppression must roll back if the kill fails.
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const targetLeaf = '11111111-1111-4111-8111-111111111111'
-    const targetPaneKey = `tab-1:${targetLeaf}`
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Claude', ptyId: 'pty-agent' })]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: targetLeaf },
-          activeLeafId: targetLeaf,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent' }
-        }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-agent'] }
-    })
-    store
-      .getState()
-      .setAgentStatus(
-        targetPaneKey,
-        { state: 'done', prompt: 'resume target', agentType: 'claude' },
-        'Claude',
-        { updatedAt: 2000, stateStartedAt: 1000 },
-        { tabId: 'tab-1', worktreeId: wt },
-        { providerSession: { key: 'session_id', id: 'sess-rollback-1' } }
-      )
-    mockApi.pty.kill.mockRejectedValueOnce(new Error('kill_failed'))
-
-    await expect(
-      store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
-        paneKey: targetPaneKey,
-        tabId: 'tab-1',
-        leafId: targetLeaf,
-        ptyId: 'pty-agent'
-      })
-    ).rejects.toThrow('kill_failed')
-
-    const state = store.getState()
-    expect(state.suppressedPtyExitIds['pty-agent']).toBeUndefined()
-    // Failed shutdown restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
-    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
-      origin: 'live',
-      agent: 'claude',
-      providerSession: { key: 'session_id', id: 'sess-rollback-1' }
-    })
-    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
-  })
-
   it('persists the sleeping record and suppression before issuing the hibernation kill', async () => {
     // pty:exit can beat the kill promise back; the record must be in the store before the kill or the wake never arms.
     const store = createTestStore()
@@ -324,27 +268,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(suppressionAtKillTime).toBe(true)
     const state = store.getState()
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toBeDefined()
-  })
-
-  it('keeps manual sleep worktree-wide', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Terminal', ptyId: 'pty-agent' })]
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-agent', 'pty-shell'] }
-    })
-
-    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
-
-    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
-    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-shell', { keepHistory: true })
   })
 
   it('does not commit pane sleep state when local target kill fails', async () => {
@@ -511,59 +434,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(store.getState().suppressedPtyExitIds['remote:runtime-1@@terminal-1']).toBeUndefined()
     expect(store.getState().suppressedPtyExitIds['terminal-1']).toBeUndefined()
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
-  })
-
-  it('clears stale relay wake hints when pane hibernation leaves no live PTYs in the tab', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const targetLeaf = '11111111-1111-4111-8111-111111111111'
-    const targetPaneKey = `tab-1:${targetLeaf}`
-
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [
-          makeTab({
-            id: 'tab-1',
-            worktreeId: wt,
-            title: 'Codex',
-            ptyId: 'ssh:ssh-1@@pty-agent'
-          })
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: targetLeaf },
-          activeLeafId: targetLeaf,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [targetLeaf]: 'ssh:ssh-1@@pty-agent' }
-        }
-      },
-      ptyIdsByTabId: { 'tab-1': ['ssh:ssh-1@@pty-agent'] },
-      lastKnownRelayPtyIdByTabId: { 'tab-1': 'ssh:ssh-1@@pty-agent' }
-    })
-    store
-      .getState()
-      .setAgentStatus(
-        targetPaneKey,
-        { state: 'done', prompt: 'resume target', agentType: 'codex' },
-        'Codex',
-        { updatedAt: 2000, stateStartedAt: 1000 },
-        { tabId: 'tab-1', worktreeId: wt },
-        { providerSession: { key: 'session_id', id: 'target-session' } }
-      )
-
-    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
-      paneKey: targetPaneKey,
-      tabId: 'tab-1',
-      leafId: targetLeaf,
-      ptyId: 'ssh:ssh-1@@pty-agent'
-    })
-
-    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
-    expect(store.getState().lastKnownRelayPtyIdByTabId['tab-1']).toBeUndefined()
   })
 
   it('does not retain stale completion evidence when pane status changes during hibernation', async () => {

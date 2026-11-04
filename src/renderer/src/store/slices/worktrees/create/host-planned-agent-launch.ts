@@ -1,7 +1,7 @@
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { ClientWorktreeCreateSettings } from './client-worktree-create-settings'

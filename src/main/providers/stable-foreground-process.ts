@@ -1,4 +1,4 @@
-import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcess } from '../../shared/agent-status/process/agent-process-recognition'
 import type { AgentForegroundProcessResolution } from './agent-foreground-process'
 
 export type StableForegroundProcess = {

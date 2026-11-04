@@ -1,14 +1,17 @@
 // Git discard holds autosave across all workspace views of the same physical file until Git settles.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { notifyEditorExternalFileChange, requestEditorSaveQuiesce } from './editor-autosave'
-import { attachEditorAutosaveController } from './editor-autosave-controller'
+import {
+  notifyEditorExternalFileChange,
+  requestEditorSaveQuiesce
+} from './autosave/editor-autosave'
+import { attachEditorAutosaveController } from './autosave/editor-autosave-controller'
 import {
   createEditorStore,
   createFakeEditorDisk,
   stubEditorWindowWithDisk,
   withLoadedBaselines
-} from './editor-autosave-controller-test-fixture'
-import { registerPendingEditorFlush } from './editor-pending-flush'
+} from './autosave/editor-autosave-controller-test-fixture'
+import { registerPendingEditorFlush } from './save/flush/editor-pending-flush'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const DISCARD_TARGET = { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'a.ts' }

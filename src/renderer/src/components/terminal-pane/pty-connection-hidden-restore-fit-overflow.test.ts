@@ -14,7 +14,11 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -168,6 +172,8 @@ describe('connectPanePty', () => {
     'recovers $name live output when the deadline interrupts an answered snapshot',
     async ({ name, pending, repaint, covered }) => {
       const { connectPanePty } = await import('./pty-connection')
+      const agentTitleMocks =
+        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const transport = createMockTransport('pty-id')
       let onData: ConnectCallbacks['onData']
       transport.connect.mockImplementation(
@@ -209,7 +215,11 @@ describe('connectPanePty', () => {
       const pane = createPane(1)
       const isVisibleRef = { current: false }
       const deps = createDeps({ isVisibleRef, startup: { command: 'codex' } })
-      const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      const disposable = connectPanePty(
+        pane as never,
+        createManager(1) as never,
+        bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+      )
       await flushAsyncTicks(6)
       safeFitAndThen.mockClear()
       safeFitAndThen.mockReturnValueOnce({

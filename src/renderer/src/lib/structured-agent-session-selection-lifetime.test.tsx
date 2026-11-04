@@ -23,7 +23,7 @@ import {
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
 import { listRuntimeSessionHostsForStartup } from '@/app-shell/startup-runtime-session-hosts'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   registerStructuredSelectionCatalogStore,
   forgetStructuredSessionSelection,
@@ -54,6 +54,7 @@ vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapability: () => true,
   useStructuredAgentSessionOwnPermissionState: () => 'supported',
+  useStructuredAgentSessionHostCapabilityState: () => 'unknown',
   structuredAgentSessionHostKey: () => 'paired-host'
 }))
 vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
@@ -439,7 +440,7 @@ it.each([false, true])(
     }
     expect(descriptor('model')?.kind).toMatchObject({ currentValue: 'gpt-5.5' })
     expect(descriptor('permissionMode')).toMatchObject({
-      description: 'Full access',
+      description: "Agent's own settings",
       settable: true
     })
     let picked: Promise<boolean> | undefined
@@ -460,8 +461,8 @@ it.each([false, true])(
       model: 'saved'
     })
     expect(descriptor('permissionMode')).toMatchObject({
-      description: 'Permissions',
-      settable: false
+      description: "Agent's own settings",
+      settable: true
     })
     await act(async () =>
       reads[1].resolve({

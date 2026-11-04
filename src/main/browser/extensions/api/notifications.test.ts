@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserExtensionCaller } from '../browser-extension-namespace-registry'
+import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
 type TestNotification = EventEmitter & {
   close: ReturnType<typeof vi.fn>
@@ -30,13 +30,14 @@ vi.mock('electron', async () => {
 vi.mock('../../../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => mocks.background
 }))
-vi.mock('../browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
+vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
 vi.mock('./permissions', () => ({ noteBrowserExtensionUserGesture: vi.fn() }))
 
 const { registerNotificationsNamespace, resolveNotificationIconPath } =
   await import('./notifications')
-const { getBrowserExtensionNamespace } = await import('../browser-extension-namespace-registry')
-const { emitBrowserExtensionEvent } = await import('../browser-extension-api-host')
+const { getBrowserExtensionNamespace } =
+  await import('../api-runtime/browser-extension-namespace-registry')
+const { emitBrowserExtensionEvent } = await import('../api-runtime/browser-extension-api-host')
 const { noteBrowserExtensionUserGesture } = await import('./permissions')
 registerNotificationsNamespace()
 

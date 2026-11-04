@@ -30,9 +30,12 @@ function createHarness(
     applyEdits
   } as unknown as editor.ITextModel
   const pushUndoStop = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the editor double implements every method exercised by content sync.
   const editorInstance = {
     getModel: () => model,
-    pushUndoStop
+    pushUndoStop,
+    saveViewState: vi.fn(() => null),
+    restoreViewState: vi.fn()
   } as unknown as editor.IStandaloneCodeEditor
   return {
     editorInstance,
@@ -45,6 +48,25 @@ function createHarness(
 }
 
 describe('monaco content sync', () => {
+  it('preserves the cursor, selection and viewport when formatting replaces the buffer', () => {
+    const harness = createHarness('const a={x:1}')
+    const viewState: editor.ICodeEditorViewState = {
+      cursorState: [],
+      viewState: {
+        scrollLeft: 0,
+        firstPosition: { lineNumber: 1, column: 1 },
+        firstPositionDeltaTop: 0
+      },
+      contributionsState: {}
+    }
+    vi.mocked(harness.editorInstance.saveViewState).mockReturnValue(viewState)
+
+    syncContentUpdate(harness.editorInstance, 'const a = { x: 1 }\n')
+
+    expect(harness.editorInstance.restoreViewState).toHaveBeenCalledWith(viewState)
+    expect(harness.pushUndoStop).toHaveBeenCalledTimes(2)
+  })
+
   it('inserts only an append-only suffix at the model end', () => {
     const harness = createHarness('first\nsecond\nlast')
 

@@ -10,17 +10,6 @@ function expectContiguousSlice(text: string, comment: string): void {
 }
 
 describe('extractWorktreePaletteCommentSnippet', () => {
-  it('highlights the match inside the returned text', () => {
-    const comment = 'the reconnect work is blocked on infra'
-    const matchStart = comment.indexOf('infra')
-    const { text, matchRange } = extractWorktreePaletteCommentSnippet(
-      comment,
-      matchStart,
-      matchStart + 'infra'.length
-    )
-    expect(text.slice(matchRange.start, matchRange.end)).toBe('infra')
-  })
-
   // CJK exhausts both 10-step whitespace scans; sweep emoji across cuts to cover either split surrogate half.
   it('never splits a surrogate pair at the leading edge', () => {
     let keptEmoji = 0

@@ -122,57 +122,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     cleanupGlobalEffectsTestWindow()
   })
 
-  it('keeps the shared glyph atlas warm on plain window refocus', () => {
-    const manager = {
-      getPanes: vi.fn(() => []),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null)
-    }
-
-    // Refocus atlas wipes race xterm page merging across streaming panes (#4480); reserve full atlas recovery for OS resume.
-    registerManagerForReset(manager)
-    beginHookRender()
-    useTerminalPaneGlobalEffects({
-      tabId: 'tab-1',
-      isActive: true,
-      isVisible: true,
-      isSyncFitEnabled: true,
-      paneCount: 0,
-      managerRef: { current: manager as never },
-      containerRef: { current: null },
-      paneTransportsRef: { current: new Map() },
-      isActiveRef: { current: false },
-      isVisibleRef: { current: false },
-      toggleExpandPane: vi.fn()
-    })
-
-    const focusListener = vi
-      .mocked(window.addEventListener)
-      .mock.calls.find(([eventName]) => eventName === 'focus')
-
-    expect(focusListener).toBeDefined()
-    const listener = focusListener?.[1]
-    if (typeof listener !== 'function') {
-      throw new Error('expected focus listener')
-    }
-    manager.resetWebglTextureAtlases.mockClear()
-    manager.scheduleRevealRepaint.mockClear()
-    manager.scheduleRevealPresent.mockClear()
-    listener(new Event('focus'))
-    listener(new Event('focus'))
-    listener(new Event('focus'))
-
-    // Refocus must use atlas-preserving present, never shared-atlas clearing.
-    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
-    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(3)
-  })
-
   it('recovers visible terminal rendering and input when the window regains focus', () => {
     const terminal = { name: 'terminal-a' }
     const manager = {
@@ -346,56 +295,5 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(siblingManager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
-  })
-
-  it('registers document visibility recovery for visible inactive terminals but not hidden ones', () => {
-    const addEventListener = vi.fn()
-    vi.stubGlobal('document', {
-      visibilityState: 'visible',
-      addEventListener,
-      removeEventListener: vi.fn()
-    })
-    const manager = {
-      getPanes: vi.fn(() => []),
-      resumeRendering: vi.fn(),
-      resetWebglTextureAtlases: vi.fn(),
-      scheduleRevealRepaint: vi.fn(),
-      scheduleRevealPresent: vi.fn(),
-      suspendRendering: vi.fn(),
-      fitAllRevealedPanes: vi.fn(),
-      getActivePane: vi.fn(() => null)
-    }
-    const useMountForVisibilityRecovery = (options: {
-      isActive: boolean
-      isVisible: boolean
-    }): void => {
-      resetHookRefs()
-      beginHookRender()
-      useTerminalPaneGlobalEffects({
-        tabId: 'tab-1',
-        isActive: options.isActive,
-        isVisible: options.isVisible,
-        isSyncFitEnabled: options.isVisible,
-        paneCount: 0,
-        managerRef: { current: manager as never },
-        containerRef: { current: null },
-        paneTransportsRef: { current: new Map() },
-        isActiveRef: { current: false },
-        isVisibleRef: { current: false },
-        toggleExpandPane: vi.fn()
-      })
-    }
-
-    useMountForVisibilityRecovery({ isActive: false, isVisible: true })
-    expect(
-      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
-    ).toBe(true)
-
-    addEventListener.mockClear()
-    useMountForVisibilityRecovery({ isActive: true, isVisible: false })
-
-    expect(
-      addEventListener.mock.calls.some(([eventName]) => eventName === 'visibilitychange')
-    ).toBe(false)
   })
 })

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanError } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanError } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 function isDisconnectedRemoteScanError(message: string): boolean {
   return (

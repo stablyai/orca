@@ -20,7 +20,7 @@ vi.mock('child_process', () => ({
   execFileSync: vi.fn()
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./access/filesystem-auth', () => ({
   resolveAuthorizedPath: resolveAuthorizedPathMock
 }))
 

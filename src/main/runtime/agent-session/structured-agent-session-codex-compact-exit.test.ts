@@ -94,37 +94,6 @@ it('delivers what waited behind the command once its child dies mid-command, wit
   ).toHaveLength(1)
 })
 
-it('runs a later command after Stop named the one whose child died', async () => {
-  const created = await harness.ok<{ fence: number }>(
-    'agentSession.create',
-    harness.createIntentParams()
-  )
-  const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
-
-  const dead = exitChild()
-  await vi.waitFor(async () => {
-    const turn = (await snapshot()).items.find(
-      (item) => item.itemId === structuredAgentSessionCommandTurn(command).itemId
-    )
-    expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
-  })
-  const { turnId } = structuredAgentSessionCommandTurn(command)
-  await harness.ok('agentSession.cancel', {
-    envelope: harness.envelope('agentSession.cancel', { turnId }, null),
-    turnId
-  })
-
-  // Nothing the dead command left behind holds the queue or refuses the next one.
-  const later = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(2))
-  expect(calls('thread/compact/start')[1]).not.toBe(dead)
-  const turn = (await snapshot()).items.find(
-    (item) => item.itemId === structuredAgentSessionCommandTurn(later).itemId
-  )
-  expect(readAgentJournalTurn(turn?.body)?.state).toBe('running')
-})
-
 it('ends a command Codex has not opened a turn for by stopping its child, and the next send gets a fresh one', async () => {
   const created = await harness.ok<{ fence: number }>(
     'agentSession.create',

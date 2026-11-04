@@ -17,7 +17,7 @@ import type { ClaudeJournalTranslator } from '../claude-journal-translator-contr
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
 import type { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
@@ -167,13 +167,14 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
+    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean
     reportedPermissionMode?: string | null
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
-  appliedOptions?: { model?: string; effort?: string }
+  appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState
@@ -358,6 +359,8 @@ export async function cancelClaudeAcquisitionAttempt(
 }
 
 export type ClaudeAcquireCallbacks = {
+  /** Publishes the session, its start ending admitted first so its exit is never missed. */
+  publish: (session: ClaudeSession) => void
   deliver: (attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void) => void
   emit: (
     session: ClaudeSession | null,

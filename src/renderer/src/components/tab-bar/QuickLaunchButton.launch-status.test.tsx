@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-
 import type { ReactNode } from 'react'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
@@ -11,8 +10,25 @@ import {
   screen
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import {
+  type StructuredLaunchState,
+  resetStructuredAgentLaunchRegistryForTests,
+  setStructuredLaunchState
+} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
+import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
+
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -52,10 +68,6 @@ vi.mock('@/lib/agent-catalog', () => ({
   ],
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
-    fallback.replace('{{value0}}', values?.value0 ?? '')
-}))
 const launchMock = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 const toastMessage = vi.hoisted(() => vi.fn())
@@ -63,30 +75,16 @@ vi.mock('sonner', () => ({
   toast: { error: toastError, message: toastMessage, success: vi.fn() }
 }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMock }))
-vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({ useWorktreeAgentRows: () => [] }))
+vi.mock('@/components/sidebar/workspace-card/activity/useWorktreeAgentRows', () => ({
+  useWorktreeAgentRows: () => []
+}))
 vi.mock('@/runtime/structured-chat-name-observation', () => ({
   useStructuredChatTabNames: () => new Map(),
   getStructuredChatTabNames: () => new Map()
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 0 }))
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
-import {
-  QuickLaunchAgentMenuItems,
-  ProjectedAgentMenuItems,
-  useTabAgentMenuLaunch
-} from './QuickLaunchButton'
-import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
-import {
-  resetStructuredAgentLaunchRegistryForTests,
-  setStructuredLaunchState
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 
 const WORKTREE_ID = 'worktree-1'
 
@@ -173,6 +171,35 @@ function expectLaunch(surface: 'chat' | 'terminal'): void {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+})
+
+it('updates the stable new-tab menu through real language and resource publications', async () => {
+  const { i18n } = await import('@/i18n/i18n')
+  const { default: spanish } = await import('@/i18n/locales/es.json')
+  const language = i18n.language
+  const previous = structuredClone(i18n.getResourceBundle('es', 'translation') ?? {})
+  await i18n.changeLanguage('en')
+  i18n.addResourceBundle('es', 'translation', spanish, true, true)
+  try {
+    const { row } = renderChoice('cli')
+    await act(() => i18n.changeLanguage('es'))
+    expect(screen.getByRole('menuitem', { name: 'Iniciar Codex en un nuevo terminal' })).toBe(row)
+    act(() =>
+      i18n.addResource(
+        'es',
+        'translation',
+        'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+        'Terminal actualizada {{value0}}'
+      )
+    )
+    expect(screen.getByRole('menuitem', { name: 'Terminal actualizada Codex' })).toBe(row)
+    expect(launchMock).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    i18n.removeResourceBundle('es', 'translation')
+    i18n.addResourceBundle('es', 'translation', previous)
+    await i18n.changeLanguage(language)
+  }
 })
 
 it.each(['cli', 'chat'] as const)(
@@ -341,16 +368,7 @@ it.each(['chat', 'cli'] as const)(
           delivered: outcome === 'delivered'
         })
       }
-      expect(toastError).toHaveBeenCalledTimes(
-        outcome === 'unconfirmed' || outcome === 'no-command' ? 1 : 0
-      )
-      if (outcome === 'unconfirmed') {
-        expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
-          description: expect.stringContaining(
-            "Orca couldn't confirm your message reached the agent"
-          )
-        })
-      }
+      expect(toastError).toHaveBeenCalledTimes(outcome === 'no-command' ? 1 : 0)
       cleanup()
     }
   }
@@ -593,7 +611,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     })
   })
 
-  it('tells the notes menu once why its notes did not reach the new agent', async () => {
+  it('completes an unknown notes handoff once without claiming it failed', async () => {
+    const onPromptHandedOff = vi.fn()
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
       promptDeliveryResult: Promise.resolve({
@@ -611,15 +630,14 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         onFocusTerminal={vi.fn()}
         prompt="review notes"
         promptDelivery="submit-after-ready"
-        onPromptHandedOff={vi.fn()}
+        onPromptHandedOff={onPromptHandedOff}
       />
     )
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
 
-    await vi.waitFor(() => expect(toastError).toHaveBeenCalledOnce())
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Couldn't send to"), {
-      description: expect.stringContaining("Orca couldn't confirm your message reached the agent")
-    })
+    expect(onPromptHandedOff).toHaveBeenCalledOnce()
+    await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toEqual({ delivered: false })
+    expect(toastError).not.toHaveBeenCalled()
   })
 
   it("says nothing while a new tab's terminal is still starting", async () => {
@@ -663,7 +681,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 })
 
-it('forwards configured choices through the existing dispatcher and launch-only Arguments only to terminals', () => {
+it('forwards configured choices and retains matching Terminal Arguments for either requested surface', () => {
   launchMock.mockClear()
   launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
   const hook = renderHook(() =>
@@ -702,5 +720,5 @@ it('forwards configured choices through the existing dispatcher and launch-only 
     requestedSurface: 'chat',
     sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
   })
-  expect(launchMock.mock.calls[1][0]).not.toHaveProperty('agentArgs')
+  expect(launchMock.mock.calls[1][0].agentArgs).toBe('--add-dir docs')
 })

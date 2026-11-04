@@ -5,7 +5,7 @@ import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
 import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { projectFolderLinkAccess, userNamedFileAccess } from './local-file-access'
-import { isPathInsideWorktree } from '../../../shared/terminal-links'
+import { isPathInsideWorktree } from '../../../shared/terminal/links/terminal-links'
 import type { DirEntry } from '../../../shared/filesystem-entry-types'
 
 export type UserOpenedPathStat = {

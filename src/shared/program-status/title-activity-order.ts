@@ -1,5 +1,5 @@
-import type { AgentStatus } from '../agent-title-core'
-import type { ProgramActivityChange } from '../agent-status-osc'
+import type { AgentStatus } from '../agent-status/title/agent-title-core'
+import type { ProgramActivityChange } from '../agent-status/transport/agent-status-osc'
 
 /** An activity change to apply before the title at `beforeTitle` (`titles.length`: after them all). */
 export type PlacedProgramActivity = { beforeTitle: number; activity: AgentStatus | null }

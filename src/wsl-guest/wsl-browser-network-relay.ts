@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { connect } from 'node:net'
-import { BrowserNetworkTunnelSession } from '../main/browser/browser-network-tunnel-session'
+import { BrowserNetworkTunnelSession } from '../main/browser/network/tunnels/browser-network-tunnel-session'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter

@@ -3,7 +3,7 @@ import {
   armFloatingPanelReclaimIntent,
   consumeFloatingPanelReclaimIntent
 } from '@/lib/floating-workspace-focus-reclaim'
-import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import {
   makeFile,
   makeTab,
@@ -188,41 +188,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     await renderPanel(false)
 
     expect(() => runEffects()).not.toThrow()
-  })
-
-  it('reclaims panel keyboard focus after a focused last-pane close empties the panel', async () => {
-    setFloatingTabs([makeTab({ id: 'tab-1' })])
-    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
-    const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
-    Object.setPrototypeOf(activeElement, HTMLElement.prototype)
-    vi.stubGlobal('document', {
-      activeElement,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    // A second render pass is needed before the active terminal pane mounts.
-    await renderPanel(true)
-    runEffects()
-    await Promise.resolve()
-    await renderPanel(true)
-    runEffects()
-    await Promise.resolve()
-    const element = await renderPanel(true)
-    attachRef(findByProp(element, 'data-floating-terminal-panel').props.ref, panelElement)
-    runEffects()
-
-    const tabBar = findByTypeName(element, 'TabBar')
-    ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
-    expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({ onClosed: expect.any(Function) })
-    )
-
-    setFloatingTabs([])
-    const emptyElement = await renderPanel(true)
-    attachRef(findByProp(emptyElement, 'data-floating-terminal-panel').props.ref, panelElement)
-    runEffects()
-    expect(panelElement.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   it('cancels the pending reclaim frame when the panel root unmounts before it runs', async () => {

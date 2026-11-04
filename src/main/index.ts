@@ -17,6 +17,7 @@ import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
 import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
 import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/main-process-quit'
@@ -35,12 +36,13 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
-import { deleteLegacyWslHostWakeList } from './wsl/wsl-host-early-wake'
-import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
+import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
+import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
 import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
 import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
 import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
@@ -135,7 +137,8 @@ const preflightReady =
   runMainProcessPreflight({
     focusExistingWindow,
     requestDesktopActivation
-  })
+  }) &&
+  ensureWindowsRendererRuntimeFiles(state.isServeMode)
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
@@ -232,7 +235,7 @@ if (preflightReady) {
                   profileId: error.profileId,
                   selector: {
                     kind: 'repair',
-                    sections: sections.map(({ domain, backupId }) => ({ domain, backupId }))
+                    sections: sections.map(profileStateRepairSectionApproval)
                   }
                 })
               })

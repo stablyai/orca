@@ -24,6 +24,26 @@ export default function SettingsMenuScreen({
       title={t('common.settings', 'Settings')}
       onBack={onBack ?? (() => router.back())}
     >
+      <SettingsMenuSections push={push} openExternal={openExternal}>
+        {children}
+      </SettingsMenuSections>
+    </SettingsScreen>
+  )
+}
+
+/** The menu's groups without a screen around them, so Home's Settings tab can host them. */
+export function SettingsMenuSections({
+  push,
+  openExternal,
+  children
+}: {
+  push: (route: string) => void
+  openExternal: (url: string) => Promise<unknown>
+  children?: ReactNode
+}) {
+  const t = useMobileTranslation()
+  return (
+    <>
       <MobileSettingsSection first items={mobileSettingsMenuItems(push)} />
 
       {children}
@@ -46,6 +66,6 @@ export default function SettingsMenuScreen({
           }
         ]}
       />
-    </SettingsScreen>
+    </>
   )
 }

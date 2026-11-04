@@ -1,3 +1,8 @@
+import {
+  readClaudeModelFallbackFrame,
+  claudeModelFallbackText
+} from '../../native-chat/claude-model-fallback'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../journal/agent-session-turn-notice'
 import { readWholeAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentJournalStatusItem } from '../journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
@@ -16,17 +21,22 @@ export function structuredAgentSessionStatusBlock(
 ): NativeChatTextBlock {
   const failure = readWholeAgentSessionFailureFact(body.failure)
   const orcaStop = readAgentSessionOrcaStop(body.orcaStop)
+  const modelFallback =
+    !failure && !orcaStop && body.presentation === undefined && body.tone === undefined
+      ? readClaudeModelFallbackFrame(body.providerFrame)
+      : null
   const presentation =
     body.presentation ??
+    (modelFallback ? AGENT_SESSION_TURN_NOTICE_PRESENTATION : undefined) ??
     (body.tone === 'warning' && itemId !== undefined && isAgentSessionLegacyCompactionResult(itemId)
       ? AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION
       : undefined)
   return {
     type: 'text',
-    text: body.text,
+    text: modelFallback ? claudeModelFallbackText(modelFallback) : body.text,
     ...(presentation !== undefined ? { presentation } : {}),
     ...(body.contextClear !== undefined ? { contextClear: body.contextClear } : {}),
-    ...(body.tone !== undefined ? { tone: body.tone } : {}),
+    ...(body.tone !== undefined ? { tone: body.tone } : modelFallback ? { tone: 'notice' } : {}),
     ...(body.providerFrame ? { providerFrame: body.providerFrame } : {}),
     ...(failure ? { failure } : {}),
     ...(failure?.kind === 'usageLimitReached' && turnScope?.kind === 'turn'

@@ -9,7 +9,7 @@ import {
   type AgentSessionAttentionEdge
 } from '../../../shared/agent-session/agent-session-attention'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isCoordinatorOnlyChatNews } from '../../../shared/dispatched-worker-attention'
 import type {
   NotificationDispatchRequest,

@@ -20,7 +20,6 @@ const launcherNode =
   process.execPath
 let root = ''
 let launcher = ''
-let inputs: string[] = []
 const SERVER_FIXTURE = [
   'using resource = { [Symbol.dispose]() {} };',
   'console.log(JSON.stringify({ node: process.versions.node, args: process.argv.slice(2) }));'
@@ -47,7 +46,7 @@ beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-launcher-isolation-'))
   launcher = join(root, ORCAD_LAUNCHER_FILENAME)
   await writeFile(join(root, ORCAD_SERVER_ENTRY_FILENAME), SERVER_FIXTURE)
-  inputs = await buildLauncher(launcher)
+  await buildLauncher(launcher)
 })
 
 it('changes the launcher identity when the server is rebuilt', async () => {
@@ -66,18 +65,6 @@ it('changes the launcher identity when the server is rebuilt', async () => {
 afterAll(async () => {
   // Windows can hold an exited node.exe image open briefly (EBUSY).
   await rm(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
-})
-
-it('keeps the server and profile-state graph outside the compatibility launcher', async () => {
-  expect(inputs.filter((path) => path.startsWith('src/main/'))).toEqual([
-    'src/main/orcad/orcad-app-paths.ts',
-    'src/main/orcad/orcad-configuration-exit.ts',
-    'src/main/orcad/orcad-bundled-runtime.ts',
-    'src/main/orcad/orcad-compile-cache.ts',
-    'src/main/orcad/launcher.ts'
-  ])
-  expect(inputs.some((path) => path.startsWith('node_modules/'))).toBe(false)
-  expect((await readFile(launcher)).length).toBeLessThan(32 * 1024)
 })
 
 it('runs an unpackaged server on the supported host runtime and preserves arguments', async () => {

@@ -20,7 +20,7 @@ import {
 } from './skill-delete/wsl-enumeration-protocol'
 import { SKILL_INSTALL_PROVIDERS } from '../../shared/skill-install-providers'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 
 const BATCH_FILE_COUNT = 8
 const GUEST_COMMAND_TIMEOUT_MS = 30_000

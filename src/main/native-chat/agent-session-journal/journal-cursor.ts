@@ -4,6 +4,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { AgentJournalResetReason } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReadSince } from './journal-store-contracts'
 import type { JournalRowsRead } from './journal-read-row'
+import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 
 export type JournalCursorRange = {
   epoch: string
@@ -77,5 +78,13 @@ export function readJournalSince(
   if (!resume.ok) {
     return { ok: false, reset: resume.reset }
   }
-  return { ok: true, ...source.rowsAfter(resume.afterSequence), cursor: currentCursor() }
+  try {
+    return { ok: true, ...source.rowsAfter(resume.afterSequence), cursor: currentCursor() }
+  } catch (error) {
+    // A reload needs no superseded record, so it still serves; storage errors stay retryable.
+    if (error instanceof JournalOutcomeDecodeError) {
+      return { ok: false, reset: 'schema_unreadable' }
+    }
+    throw error
+  }
 }

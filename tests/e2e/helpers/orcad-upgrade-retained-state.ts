@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { workspaceSessionStateSchema } from '../../../src/shared/workspace-session-schema'
+import { workspaceSessionStateSchema } from '../../../src/shared/workspace-session/workspace-session-schema'
 import { worktreeWorkspaceKey } from '../../../src/shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { mutateStoppedProfileState } from './persisted-profile-state'

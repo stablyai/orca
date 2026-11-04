@@ -1,11 +1,12 @@
+import { StructuredAgentSessionJournalObservers } from './structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from './structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from './structured-agent-session-host-request-failures'
 import { AT_REST_COMMANDS_READ_BUDGET_MS } from './at-rest-command-catalog'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
@@ -18,7 +19,10 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
-import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import {
+  StructuredAgentSessionSendSettlement,
+  sendSettlementReading
+} from './structured-agent-session-send-settlement'
 import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import type {
@@ -42,7 +46,14 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
-  private readonly journalObservers = new Map<string, Set<() => void>>()
+  private readonly journalObservers = new StructuredAgentSessionJournalObservers(
+    (sessionId, error) =>
+      this.deps().logger.warn('observing a journal publication failed', {
+        scope: 'journal-delivery',
+        sessionId,
+        error
+      })
+  )
 
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
@@ -50,7 +61,7 @@ export class StructuredAgentSessionClientDelivery {
     private readonly deps: () => StructuredAgentSessionHostDeps,
     /** Wake queue on every publish; only journal activity renews idle time, not generation end. */
     private readonly queue: {
-      onJournalActivity: (sessionId: string, activity?: boolean) => void
+      onJournalActivity: (sessionId: string, activity?: boolean, inputChanged?: boolean) => void
     },
     onAgentStarted: (sessionId: string) => void,
     onChildWorkChanged: (sessionId: string) => void,
@@ -208,6 +219,7 @@ export class StructuredAgentSessionClientDelivery {
     const journal = this.sessions.get(sessionId)?.journal
     if (journal) {
       this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
+      this.queue.onJournalActivity(sessionId, false)
     }
   }
 
@@ -251,17 +263,16 @@ export class StructuredAgentSessionClientDelivery {
     this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
   }
 
-  /** Observe every journal publication, including row-free wakes, without opening a client stream. */
-  observeJournalPublications = (sessionId: string, observer: () => void): (() => void) => {
-    const observers = this.journalObservers.get(sessionId) ?? new Set<() => void>()
-    observers.add(observer)
-    this.journalObservers.set(sessionId, observers)
-    return () => {
-      observers.delete(observer)
-      if (observers.size === 0 && this.journalObservers.get(sessionId) === observers) {
-        this.journalObservers.delete(sessionId)
-      }
-    }
+  /** Observe every journal publication, including row-free wakes, without opening a client stream.
+   *  `seed` reads the journal as it is now, so an observer comparing publications has a baseline. */
+  observeJournalPublications = (
+    sessionId: string,
+    observer: (journal: AgentSessionJournal) => void,
+    seed?: (journal: AgentSessionJournal | undefined) => void
+  ): (() => void) => {
+    const unsubscribe = this.journalObservers.add(sessionId, observer)
+    seed?.(this.sessions.get(sessionId)?.journal)
+    return unsubscribe
   }
 
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>
@@ -298,23 +309,18 @@ export class StructuredAgentSessionClientDelivery {
     this.journalObservers.clear()
   }
 
-  private publishJournal(sessionId: string, journal: AgentSessionJournal, activity = true): void {
+  publishJournal(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    activity = true,
+    inputChanged = true
+  ): void {
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
     // Observe completion after status projection updates, even without subscribers for background chats.
     this.turnCompletionFeed.observe(sessionId, journal)
-    this.queue.onJournalActivity(sessionId, activity)
-    for (const observer of this.journalObservers.get(sessionId) ?? []) {
-      try {
-        observer()
-      } catch (error) {
-        this.deps().logger.warn('observing a journal publication failed', {
-          scope: 'journal-delivery',
-          sessionId,
-          error
-        })
-      }
-    }
+    this.queue.onJournalActivity(sessionId, activity, inputChanged)
+    this.journalObservers.publish(sessionId, journal)
   }
 
   private currentWork(sessionId: string, journal: AgentSessionJournal) {
@@ -323,14 +329,7 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   private settlementReading(sessionId: string, journal: AgentSessionJournal) {
-    return {
-      // Released unanswered sends must end acknowledgement waits as uncertain.
-      submissions: () =>
-        journal.submissions().map(this.currentWork(sessionId, journal).publishedSubmission),
-      cursor: () => journal.cursor(),
-      activeTurnId: () => this.currentWork(sessionId, journal).activeTurnId(),
-      behindCommand: (id: string) => journal.inputOrder.forced(id)
-    }
+    return sendSettlementReading(journal, () => this.currentWork(sessionId, journal))
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

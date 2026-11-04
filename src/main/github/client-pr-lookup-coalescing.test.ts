@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
 import type { GitHubRepoContext, LocalGitExecOptions } from './github-repository-identity'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/source-control/hosted-review/hosted-review-github'
 import { makePR } from './pr-refresh-coordinator-test-harness'
 import {
   __resetHostedReviewBranchCacheForTests,

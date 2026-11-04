@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.fn() }))
 
-vi.mock('../git/runner', () => ({ glabExecFileAsync: glabExecFileAsyncMock }))
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
 
 import {
   _getKnownHostsCacheSize,

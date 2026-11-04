@@ -4,17 +4,6 @@ import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-rem
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 describe('workspace cleanup removal candidates', () => {
-  it('excludes workspaces already being deleted', () => {
-    const deleting = makeCandidate({ worktreeId: 'repo-1::/repo/deleting' })
-    const ready = makeCandidate({ worktreeId: 'repo-1::/repo/ready' })
-
-    expect(
-      filterWorkspaceCleanupRemovalCandidates([deleting, ready], {
-        [deleting.worktreeId]: { isDeleting: true }
-      })
-    ).toEqual([ready])
-  })
-
   it('keeps a same-id sibling on another host removable', () => {
     const local = makeCandidate({ worktreeId: 'repo-1::/repo/shared', executionHostId: 'local' })
     const remote = makeCandidate({

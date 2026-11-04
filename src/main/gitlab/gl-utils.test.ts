@@ -8,8 +8,13 @@ const { gitExecFileAsyncMock, glabExecFileAsyncMock, readLocalGitConfigSignature
   })
 )
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   glabExecFileAsync: glabExecFileAsyncMock
 }))
 
@@ -39,9 +44,9 @@ import {
   resolveIssueSource
 } from './gl-utils'
 import { GlabNonListResponseError } from './glab-api-response'
-import { _resetRemoteNameListingCache } from '../git/remote-name-listing'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
-import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+import { _resetRemoteNameListingCache } from '../git/remotes/remote-name-listing'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remotes/remote-url-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remotes/remote-ref-probe-cache'
 
 function mockGitRemoteCommands(remotes: Record<string, string>): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {

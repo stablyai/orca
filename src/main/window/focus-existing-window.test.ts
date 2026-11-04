@@ -263,6 +263,28 @@ describe('focusExistingMainWindow', () => {
     expect(openedWindow.calls.focus).toHaveBeenCalledTimes(1)
   })
 
+  it('drops a scheduled reopen retry once opening becomes forbidden', () => {
+    const timer = makeTimer()
+    let canOpen = true
+    const openWindow = vi.fn(() => {
+      throw new Error('transient failure')
+    })
+
+    focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      canOpenWindow: () => canOpen,
+      warn: vi.fn(),
+      setTimeout: timer.setTimeout
+    })
+    canOpen = false
+    timer.run(300)
+
+    expect(openWindow).toHaveBeenCalledTimes(1)
+    expect(timer.scheduledMs()).toEqual([])
+  })
+
   it('adopts a window that appeared during the retry gap instead of opening a duplicate', () => {
     // openWindow is not idempotent; adopt a raced-in window on retry or duplicate construction orphans it.
     const app = makeFakeApp()
