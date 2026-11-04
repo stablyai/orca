@@ -15,7 +15,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shar
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
-} from './editor/editor-autosave'
+} from './editor/autosave/editor-autosave'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import { agentMenuShortcutLabels } from './tab-bar/agent-menu-shortcut-labels'

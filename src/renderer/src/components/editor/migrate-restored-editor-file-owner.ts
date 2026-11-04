@@ -9,7 +9,7 @@ import {
   captureEditorFileOperationProvenance,
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
-import { requestEditorSaveQuiesce } from './editor-autosave'
+import { requestEditorSaveQuiesce } from './autosave/editor-autosave'
 import type { OpenFile, RestoredEditorOwnerResult } from '@/store/slices/editor'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'

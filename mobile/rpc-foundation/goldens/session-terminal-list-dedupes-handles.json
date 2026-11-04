@@ -35,11 +35,6 @@
       "settledAt": 0,
       "value": true
     },
-    "baced0d54c65": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": ["terminal-1"]
-    },
     "c7073e587980": {
       "name": "terminal.list#1",
       "ordinal": 1,
@@ -84,11 +79,6 @@
           }
         }
       }
-    },
-    "d217e810766d": {
-      "name": "prune-live-input",
-      "ordinal": 3,
-      "value": ["terminal-1"]
     }
   },
   "recording": {
@@ -103,7 +93,7 @@
             "fetch": "84e5ca07cb7a"
           },
           "state": "580c77c4c1df",
-          "effects": ["d217e810766d", "baced0d54c65"]
+          "effects": []
         }
       }
     ]

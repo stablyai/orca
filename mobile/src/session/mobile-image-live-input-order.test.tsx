@@ -94,7 +94,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
     deviceTokenRef: ref('phone'),
     ptyModesRef: ref(new Map()),
     liveInputRef,
-    commandInputRef: ref(null),
     liveInputFocusTimerRef: ref(null),
     sendLiveTerminalInputRef,
     showToast: vi.fn()
@@ -110,8 +109,6 @@ function fixture(title = 'Terminal', imagePath = '/tmp/orca-image.png', launchAg
       activeSessionTabTypeRef,
       connected: true,
       liveInputRef,
-      liveInputTerminalHandles: new Set(['term-1']),
-      liveInputTerminalHandlesRef: ref(new Set(['term-1'])),
       sendLiveTerminalInputRef,
       setLiveInputCapture: vi.fn()
     })

@@ -99,8 +99,6 @@ type SessionScope = Pick<
   | 'pairedHostClient'
   | 'connState'
   | 'agentSessionHostSupport'
-  | 'setInput'
-  | 'liveInputTerminalHandles'
   | 'activeHandle'
   | 'activeSessionTabId'
   | 'activeSessionTab'
@@ -112,12 +110,10 @@ type SessionScope = Pick<
   | 'setDictationEnabled'
   | 'deviceTokenRef'
   | 'dictationRouteContextRef'
-  | 'commandFieldAnchorRef'
   | 'activeHandleRef'
   | 'flushPendingLiveInputBeforeExternalSend'
   | 'canSend'
   | 'canCompose'
-  | 'liveInputEnabled'
   | 'showToast'
   | 'resetLiveInputFocus'
 >
@@ -162,10 +158,6 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     pairedHostClient: client,
     connState,
     agentSessionHostSupport: structuredAgentSessionHostSupport([]),
-    setInput: (next) => {
-      terminalText = typeof next === 'function' ? next(terminalText) : next
-    },
-    liveInputTerminalHandles: new Set<string>(),
     activeHandle,
     activeSessionTabId: tab.id,
     activeSessionTab: tab,
@@ -177,19 +169,20 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     setDictationEnabled: () => {},
     deviceTokenRef: useRef('dev'),
     dictationRouteContextRef: useRef(null),
-    commandFieldAnchorRef: useRef(null),
     activeHandleRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
     canSend: gate.canSend,
     canCompose: gate.canCompose,
-    liveInputEnabled: false,
     showToast: () => {},
     resetLiveInputFocus: () => {}
   }
   current = useMobileSessionNativeChatDictation(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SessionScope checks every consumed field; the remaining session subsystems are unused by this hook.
     scope as MobileSessionFeedbackCapabilitiesModel,
-    async () => true
+    async (_handle, text) => {
+      terminalText += text
+      return true
+    }
   )
   return null
 }
@@ -278,7 +271,7 @@ describe('dictation uses the active composer readiness', () => {
     }
   )
 
-  it('keeps buffered terminal dictation working', async () => {
+  it('types terminal dictation into the terminal', async () => {
     const client = createFakeRpcClient()
     await render({ client, tab: terminalTab, connState: 'connected', dictationEnabled: true })
     await start(client)

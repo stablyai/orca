@@ -3,7 +3,7 @@ import {
   armFloatingPanelReclaimIntent,
   consumeFloatingPanelReclaimIntent
 } from '@/lib/floating-workspace-focus-reclaim'
-import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/editor-autosave'
+import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import {
   makeFile,
   makeTab,
