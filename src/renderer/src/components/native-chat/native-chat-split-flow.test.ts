@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type * as importCreation from '@/runtime/web-runtime-terminal-creation'
@@ -12,6 +12,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-runtime-session-snapshot'
 
 let store: ReturnType<typeof createTestStore>
+let actualCreation: typeof importCreation
 const { createRemote, runtimeOwners, requestSplit } = vi.hoisted(() => ({
   createRemote: vi.fn(),
   runtimeOwners: new Map<string, string>(),
@@ -46,6 +47,13 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) =>
 createTabsSliceMockApi()
 
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
+
+beforeAll(async () => {
+  actualCreation = await vi.importActual<typeof importCreation>(
+    '@/runtime/web-runtime-terminal-creation'
+  )
+  await loadWebRuntimeSessionTabsApplyModulesForTests()
+})
 
 beforeEach(async () => {
   await i18n.changeLanguage('en')
@@ -153,11 +161,7 @@ it.each([
 })
 
 it('removes an empty split when accepted host creation cannot be mirrored', async () => {
-  const actual = await vi.importActual<typeof importCreation>(
-    '@/runtime/web-runtime-terminal-creation'
-  )
-  await loadWebRuntimeSessionTabsApplyModulesForTests()
-  createRemote.mockImplementation(actual.createWebRuntimeSessionTerminal)
+  createRemote.mockImplementation(actualCreation.createWebRuntimeSessionTerminal)
   vi.useFakeTimers()
   try {
     const worktreeId = folderWorkspaceKey('paired-folder')
