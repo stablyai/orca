@@ -179,6 +179,18 @@ describe('Claude profile refresh from the default home', () => {
       apiKeyHelper: 'helper'
     })
   })
+  it('passes Orca hooks added to the default home later on to the account', async () => {
+    // WSL accounts get Orca's hooks only through this copy.
+    const f = fixture()
+    f.json(join(f.source, 'settings.json'), { theme: 'x' })
+    await provision(f)
+    f.json(join(f.source, 'settings.json'), { theme: 'x', hooks: { Stop: [ORCA_HOOK] } })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      theme: 'x',
+      hooks: { Stop: [ORCA_HOOK] }
+    })
+  })
   itLinks('leaves a linked settings file alone', async () => {
     const f = fixture()
     f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })

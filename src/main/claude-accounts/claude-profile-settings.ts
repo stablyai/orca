@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
-import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { readClaudeProfileObject } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
@@ -11,10 +10,8 @@ import {
 
 // Digests, not values, so proxy keys in settings are not stored a second time.
 function digestSettings(value: Record<string, unknown>): Record<string, string> {
-  // Ignore managed hooks because Orca installs them in both folders.
-  const { config } = removeManagedHooks(value, getManagedScriptFileName())
   return Object.fromEntries(
-    Object.entries(config).map(([key, entry]) => [
+    Object.entries(value).map(([key, entry]) => [
       key,
       createHash('sha256').update(JSON.stringify(entry)).digest('hex')
     ])
