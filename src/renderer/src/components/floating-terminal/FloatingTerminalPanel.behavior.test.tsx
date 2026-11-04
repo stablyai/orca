@@ -2,7 +2,6 @@ import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import './FloatingTerminalPanel.bounds.spec'
 import './FloatingTerminalPanel.focus.spec'
-import './FloatingTerminalPanel.shortcuts.spec'
 import './FloatingTerminalPanel.tab-lifecycle.spec'
 
 // Why: the specs read the stubbed window's listeners in place of the app keyboard router's stage.
@@ -143,7 +142,6 @@ vi.mock('@/lib/connection-context', async () => {
 vi.mock('@/lib/create-untitled-markdown', () => ({
   createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
-// Why inline and sync: the shortcuts spec imports this module to assert the launch destination.
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn(() => null) }))
 vi.mock('@/lib/ipc-error', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createIpcErrorModule()

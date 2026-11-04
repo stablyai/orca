@@ -15,12 +15,6 @@ export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'handled' }
   | { readonly kind: 'suppress-raw' }
 
-export async function getTerminalLiveAccessoryInactiveInputCommitResult(
-  waitForPendingLiveInputFlush: () => Promise<boolean>
-): Promise<TerminalLiveAccessoryInputCommitResult> {
-  return (await waitForPendingLiveInputFlush()) ? { kind: 'allow-raw' } : { kind: 'suppress-raw' }
-}
-
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
   readonly applyLiveInputMirror: (
@@ -34,13 +28,11 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTextRef: RefObject<string>
-  readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly onInteraction: () => void
   readonly pendingLiveInputHandleRef: RefObject<string | null>
   readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
   readonly sentLiveInputTextRef: RefObject<string>
   readonly setLiveInputCapture: (text: string) => void
-  readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
 
 // The RN-Web ref is the field itself, so its caret is current even when an edit kept the offsets
@@ -75,13 +67,11 @@ export function useTerminalLiveAccessoryInputCommit({
   liveInputComposingRef,
   liveInputRef,
   liveInputTextRef,
-  liveInputTerminalHandles,
   onInteraction,
   pendingLiveInputHandleRef,
   queueLiveInputControl,
   sentLiveInputTextRef,
-  setLiveInputCapture,
-  waitForPendingLiveInputFlush
+  setLiveInputCapture
 }: TerminalLiveAccessoryInputCommitOptions): (
   input: TerminalLiveAccessoryInput
 ) => Promise<TerminalLiveAccessoryInputCommitResult> {
@@ -89,9 +79,6 @@ export function useTerminalLiveAccessoryInputCommit({
     async (input: TerminalLiveAccessoryInput): Promise<TerminalLiveAccessoryInputCommitResult> => {
       if (!activeHandle) {
         return { kind: 'allow-raw' }
-      }
-      if (!liveInputTerminalHandles.has(activeHandle)) {
-        return getTerminalLiveAccessoryInactiveInputCommitResult(waitForPendingLiveInputFlush)
       }
       onInteraction()
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
@@ -155,13 +142,11 @@ export function useTerminalLiveAccessoryInputCommit({
       liveInputComposingRef,
       liveInputRef,
       liveInputTextRef,
-      liveInputTerminalHandles,
       onInteraction,
       pendingLiveInputHandleRef,
       queueLiveInputControl,
       sentLiveInputTextRef,
-      setLiveInputCapture,
-      waitForPendingLiveInputFlush
+      setLiveInputCapture
     ]
   )
 }
