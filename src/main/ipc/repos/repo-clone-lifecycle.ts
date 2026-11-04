@@ -119,19 +119,21 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
     'repos:clone',
     async (_event, args: { url: string; destination: string }): Promise<Repo> => {
       // Validate the typed destination before resolving it.
-      deriveValidatedClonePath(args)
+      const typedClonePath = deriveValidatedClonePath(args)
       const clonePath = deriveValidatedClonePath({
         ...args,
         destination: await resolveExistingParentSymlinks(args.destination)
       })
       const clonePathKey = getClonePathComparisonKey(clonePath)
+      // Projects saved before symlink resolution keep the typed spelling.
+      const savedPathKeys = [clonePathKey, getClonePathComparisonKey(typedClonePath)]
       // Remote projects can share this path string without belonging to this clone host.
       const findSaved = (): Repo | undefined =>
         store
           .getRepos()
           .find(
             (r) =>
-              getClonePathComparisonKey(r.path) === clonePathKey &&
+              savedPathKeys.includes(getClonePathComparisonKey(r.path)) &&
               getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
           )
       return runWithClonePathLock(clonePathKey, async () => {

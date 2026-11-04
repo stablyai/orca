@@ -2,7 +2,7 @@ import type * as RepoDetectionModule from '../git/repo-detection'
 import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as GitRunner from '../git/runner'
@@ -751,6 +751,23 @@ describe('repos:add + repos:clone', () => {
       // Recreated project folders invalidate both worktree-root preparation and cached authorization.
       expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, saved)
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+    })
+
+    it('keeps a project saved under a symlinked destination spelling', async () => {
+      const root = await createTempRoot()
+      await mkdir(join(root, 'real'))
+      const destination = join(root, 'alias')
+      await symlink(join(root, 'real'), destination)
+      // Saved before clone paths were resolved, so it keeps the typed spelling.
+      const saved = savedProject(join(destination, 'orca'), {
+        gitRemoteIdentity: identity('example.com/orca')
+      })
+      mockStore.getRepos.mockReturnValue([saved])
+      gitExecFileAsyncMock.mockRejectedValue(new Error('spawn ENOENT'))
+
+      await expect(handlers.get('repos:clone')!(null, { url, destination })).resolves.toBe(saved)
+
+      expect(mockStore.addRepo).not.toHaveBeenCalled()
     })
 
     it('refuses, naming the project, when the saved project was a different repo', async () => {

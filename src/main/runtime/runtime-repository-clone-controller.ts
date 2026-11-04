@@ -51,7 +51,10 @@ export class RuntimeRepositoryCloneController {
       throw new Error('Clone destination is required')
     }
     // Validate the typed destination before resolving it.
-    deriveValidatedClonePath({ url: trimmedUrl, destination: trimmedDestination })
+    const typedClonePath = deriveValidatedClonePath({
+      url: trimmedUrl,
+      destination: trimmedDestination
+    })
     const clonePath = deriveValidatedClonePath({
       url: trimmedUrl,
       destination: await resolveExistingParentSymlinks(trimmedDestination)
@@ -75,7 +78,8 @@ export class RuntimeRepositoryCloneController {
           trimmedUrl,
           trimmedDestination,
           clonePath,
-          clonePathKey,
+          // Projects saved before symlink resolution keep the typed spelling.
+          [clonePathKey, getClonePathComparisonKey(typedClonePath)],
           executionHostId
         )
       )
@@ -91,7 +95,7 @@ export class RuntimeRepositoryCloneController {
     trimmedUrl: string,
     trimmedDestination: string,
     clonePath: string,
-    clonePathKey: string,
+    savedPathKeys: readonly string[],
     executionHostId?: ExecutionHostId | null
   ): Promise<Repo> {
     const store = this.deps.getStore()
@@ -102,7 +106,7 @@ export class RuntimeRepositoryCloneController {
     const findSaved = (): Repo | undefined =>
       store.getRepos().find((repo) => {
         return (
-          getClonePathComparisonKey(repo.path) === clonePathKey &&
+          savedPathKeys.includes(getClonePathComparisonKey(repo.path)) &&
           runtimeRepoIsRegistrationCandidate(repo, executionHostId)
         )
       })

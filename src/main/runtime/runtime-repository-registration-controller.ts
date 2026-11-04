@@ -171,13 +171,17 @@ export class RuntimeRepositoryRegistrationController {
         : { error: error instanceof Error ? error.message : String(error) }
     }
     const targetPath = join(await resolveExistingParentSymlinks(trimmedParentPath), trimmedName)
+    // Projects saved before symlink resolution keep the typed spelling.
+    const typedTargetPath = join(trimmedParentPath, trimmedName)
     // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store
         .getRepos()
         .find(
           (repo) =>
-            runtimeRepoIsRegistrationCandidate(repo) && runtimePathsEqual(repo.path, targetPath)
+            runtimeRepoIsRegistrationCandidate(repo) &&
+            (runtimePathsEqual(repo.path, targetPath) ||
+              runtimePathsEqual(repo.path, typedTargetPath))
         )
     const existing = findLocalAtTarget()
     if (existing) {

@@ -102,9 +102,12 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       const targetPath = join(await resolveExistingParentSymlinks(parentPath), name)
+      // Projects saved before symlink resolution keep the typed spelling.
+      const typedTargetPath = join(parentPath, name)
+      const isTargetRepo = (r: Repo): boolean => r.path === targetPath || r.path === typedTargetPath
 
       // Repeated Create requests must share one registration.
-      const existing = store.getRepos().find((r) => r.path === targetPath)
+      const existing = store.getRepos().find(isTargetRepo)
       if (existing) {
         emitRepoAdded('folder_picker', true, repoKind === 'git')
         return { repo: existing }
@@ -155,7 +158,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
               : undefined
           const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
           if (isEexist) {
-            const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+            const raceWinner = store.getRepos().find(isTargetRepo)
             if (raceWinner) {
               return { repo: raceWinner }
             }
@@ -203,7 +206,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       // IPC calls interleave while awaiting filesystem and Git work; recheck before registration.
-      const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+      const raceWinner = store.getRepos().find(isTargetRepo)
       if (raceWinner) {
         // A concurrent winner owns the directory even if this request created it.
         emitRepoAdded('folder_picker', true, repoKind === 'git')
