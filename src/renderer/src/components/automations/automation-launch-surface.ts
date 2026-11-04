@@ -135,7 +135,18 @@ export function automationCopyLaunchSetup(
   )
   const canonical = automationCanonicalLaunchSetup(copied)
   if (!hasModernAutomationLaunchSetup(canonical)) {
-    return input
+    if (canonical.extraAgentArgs === undefined) {
+      return input
+    }
+    return input.launchSetupPatch
+      ? {
+          ...input,
+          launchSetupPatch: {
+            ...input.launchSetupPatch,
+            arguments: { kind: 'legacy-extras', value: canonical.extraAgentArgs }
+          }
+        }
+      : { ...input, extraAgentArgs: canonical.extraAgentArgs }
   }
   const { extraAgentArgs: _extras, ...rest } = input
   return { ...rest, launchSetupPatch: { copy: canonical } }

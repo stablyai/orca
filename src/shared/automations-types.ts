@@ -102,7 +102,11 @@ export type AutomationPrecheckResult = {
 export type AutomationLaunchSetupPatch = {
   surface?: 'chat' | 'terminal'
   choices?: AgentChoicePatch
-  arguments?: { kind: 'legacy-extras' | 'value'; value: string } | { kind: 'empty' | 'inherit' }
+  arguments?:
+    | { kind: 'legacy-extras'; value: string }
+    | { kind: 'value'; value: string }
+    | { kind: 'empty' }
+    | { kind: 'inherit' }
   /** Canonical copies travel inside the strict envelope old hosts reject. */
   copy?: AutomationLaunchSetup
 }

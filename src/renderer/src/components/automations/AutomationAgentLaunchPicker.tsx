@@ -14,13 +14,8 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 import {
-  applyAutomationLaunchSetupPatch,
-  automationCanonicalLaunchSetup
-} from '../../../../shared/automation-launch-setup'
-import {
   automationLaunchChoices,
-  automationLegacyArguments,
-  automationArgumentChoices
+  automationLegacyArguments
 } from '../../../../shared/automation-launch-setup-source'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { Button } from '@/components/ui/button'
@@ -34,6 +29,7 @@ import { automationChatSupport } from './automation-launch-surface'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import { AutomationSurfaceField } from './AutomationSurfaceField'
 import type { AutomationDraft } from './AutomationEditorDialog'
+import { pickAutomationLaunch, editAutomationLegacyDraft } from './automation-launch-draft'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
@@ -148,7 +144,7 @@ export function AutomationAgentLaunchPicker({
       ...(merged?.ok ? { arguments: merged.agentArgs } : {})
     }
   })
-  const scope = useAgentPickerDraftScope(JSON.stringify([workspace, draft.agentId]))
+  const scope = useAgentPickerDraftScope(JSON.stringify([workspace, authority, draft.agentId]))
   const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
     const own = entry.agent === draft.agentId ? draft : undefined
     const preferences = own?.launchPreferences
@@ -177,98 +173,14 @@ export function AutomationAgentLaunchPicker({
         triggerLabel={
           visibleAgents.find((agent) => agent.id === draft.agentId)?.label ?? draft.agentId
         }
-        disabled={capabilities === null}
         setupDisabled={!modern}
         draftForEntry={draftForEntry}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}
         onPick={(agentId, accepted, _entry, pickedSurface) =>
-          onDraftChange((current) => {
-            const rebound = current.agentId !== agentId
-            if (!modern) {
-              return {
-                ...current,
-                agentId,
-                ...(pickedSurface ? { surface: pickedSurface } : {}),
-                ...(rebound
-                  ? {
-                      extraAgentArgs: automationLegacyArguments(current.agentId, current) ?? '',
-                      launchPreferences: undefined,
-                      agentArgs: undefined,
-                      launchSetupPatch: undefined
-                    }
-                  : {})
-              }
-            }
-            const edits = accepted?.acceptedEdits
-            const patch = {
-              ...(rebound
-                ? {
-                    copy: {
-                      surface: pickedSurface ?? surface,
-                      ...(current.extraAgentArgs ? { extraAgentArgs: current.extraAgentArgs } : {})
-                    }
-                  }
-                : current.launchSetupPatch),
-              ...(pickedSurface ? { surface: pickedSurface } : {}),
-              ...(edits
-                ? {
-                    choices: {
-                      ...(rebound ? {} : current.launchSetupPatch?.choices),
-                      ...edits.choices,
-                      options: {
-                        ...(rebound ? {} : current.launchSetupPatch?.choices?.options),
-                        ...edits.choices.options
-                      }
-                    },
-                    ...(edits.arguments !== undefined
-                      ? {
-                          arguments:
-                            edits.arguments === null
-                              ? { kind: 'empty' as const }
-                              : { kind: 'value' as const, value: edits.arguments }
-                        }
-                      : {})
-                  }
-                : {})
-            }
-            if (edits?.arguments !== undefined && patch.choices) {
-              const source = automationArgumentChoices(agentId, edits.arguments ?? '')
-              for (const occurrence of source.recognized) {
-                if (occurrence.key === 'model') {
-                  delete patch.choices.model
-                } else if (occurrence.key === 'permissionMode') {
-                  delete patch.choices.permissionMode
-                } else if (patch.choices.options) {
-                  delete patch.choices.options[occurrence.key]
-                }
-              }
-              Object.assign(patch.choices, edits.choices, {
-                options: { ...patch.choices.options, ...edits.choices.options }
-              })
-            }
-            const setup = applyAutomationLaunchSetupPatch(
-              {
-                agentId,
-                launchSetupPatch:
-                  patch.arguments?.kind === 'legacy-extras'
-                    ? { ...patch, arguments: undefined }
-                    : Object.keys(patch).length
-                      ? patch
-                      : undefined
-              },
-              current
-            )
-            return {
-              ...current,
-              agentId,
-              ...(pickedSurface ? { surface: pickedSurface } : {}),
-              launchPreferences: setup.launchPreferences,
-              agentArgs: setup.agentArgs,
-              extraAgentArgs: setup.extraAgentArgs ?? '',
-              launchSetupPatch: Object.keys(patch).length ? patch : undefined
-            }
-          })
+          onDraftChange((current) =>
+            pickAutomationLaunch(current, agentId, accepted, pickedSurface, modern, surface)
+          )
         }
       />
       {!modern ? (
@@ -282,7 +194,6 @@ export function AutomationAgentLaunchPicker({
       {showLegacyArguments ? (
         <AutomationExtraAgentArgsField
           draft={legacyDraft}
-          disabled={capabilities === null}
           onDraftChange={(update) =>
             onDraftChange((current) => {
               const visible = modern ? current : legacyArgumentsDraft(current)
@@ -291,23 +202,8 @@ export function AutomationAgentLaunchPicker({
                 return { ...current, reuseSession: next.reuseSession }
               }
               return {
-                ...next,
-                launchSetupPatch: modern
-                  ? {
-                      ...current.launchSetupPatch,
-                      arguments: {
-                        kind: 'legacy-extras' as const,
-                        value:
-                          automationLegacyArguments(current.agentId, {
-                            ...automationCanonicalLaunchSetup(current),
-                            extraAgentArgs: next.extraAgentArgs || undefined
-                          }) ?? ''
-                      }
-                    }
-                  : {
-                      ...current.launchSetupPatch,
-                      arguments: { kind: 'legacy-extras' as const, value: next.extraAgentArgs }
-                    }
+                ...editAutomationLegacyDraft(current, next.extraAgentArgs, modern),
+                reuseSession: next.reuseSession
               }
             })
           }

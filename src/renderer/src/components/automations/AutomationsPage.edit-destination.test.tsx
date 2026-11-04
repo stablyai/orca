@@ -26,6 +26,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
 import type { Repo } from '../../../../shared/repo-types'
 import { unscopedAutomationListRows, type AutomationListRow } from './automation-list-row-identity'
 import {
@@ -86,6 +87,74 @@ describe('AutomationsPage edit fencing', () => {
     })
     await save()
   }
+
+  it('keeps the captured edit authority while project metadata is unavailable and later hydrates', async () => {
+    const automation = makeAutomation({
+      id: 'a-captured',
+      projectId: 'hidden-repo',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'logical-project',
+        repoId: 'hidden-repo',
+        hostId: 'ssh:builder',
+        path: '/saved/physical',
+        projectHostSetupId: 'saved-setup'
+      }
+    })
+    const setups = mocks.state.projectHostSetups
+    const repos = mocks.state.repos
+    const repoMap = mocks.repoMap
+    mocks.state.repos = []
+    mocks.repoMap = new Map()
+    mocks.state.projectHostSetups = []
+    mocks.state.worktreesByRepo = {}
+    mocks.state.sshTargetLabels = new Map([['builder', 'Builder']])
+    mocks.state.sshTargetGenerations = new Map([['builder', 7]])
+    mocks.state.sshConnectionStates = new Map([['builder', { status: 'connected' }]])
+    api.automations.list.mockResolvedValue([automation])
+    api.automations.listScoped.mockImplementation(async ({ selector }) => ({
+      automations: selector.kind === 'orphan' ? [automation] : [],
+      items:
+        selector.kind === 'orphan'
+          ? [
+              {
+                automationId: automation.id,
+                selector: { kind: 'orphan', issue: AUTOMATION_ORPHAN_ISSUES.hostReselection }
+              }
+            ]
+          : [],
+      orphanCount: 1
+    }))
+    const page = await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      await mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+    expect(mocks.editorDialog?.editDestination?.resolution.status).not.toBe('ready')
+    expect(mocks.editorDialog?.launchAuthority).toEqual({ kind: 'desktop' })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        name: 'Captured edit'
+      }))
+    })
+    mocks.state.projectHostSetups = setups
+    mocks.state.repos = repos
+    mocks.repoMap = repoMap
+    await page.rerender()
+    expect(mocks.editorDialog?.launchAuthority).toEqual({ kind: 'desktop' })
+    expect(mocks.editorDialog?.draft).toMatchObject({ name: 'Captured edit' })
+    await save()
+    expect(api.automations.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: automation.id,
+        expectedOwner: { selector: { kind: 'orphan' } },
+        destination: undefined,
+        updates: { name: 'Captured edit' }
+      })
+    )
+    expect(api.automations.create).not.toHaveBeenCalled()
+  })
 
   it('refuses the save when the captured record cannot be re-read', async () => {
     const automation = makeAutomation({ id: 'a-1' })
@@ -291,6 +360,10 @@ describe('AutomationsPage edit destination', () => {
           workspaceMode: 'existing',
           workspaceId: RUNTIME_WORKSPACE_ID
         }))
+      })
+      expect(mocks.editorDialog?.launchAuthority).toMatchObject({
+        kind: 'runtime',
+        environmentId: RUNTIME_ID
       })
       await save()
 

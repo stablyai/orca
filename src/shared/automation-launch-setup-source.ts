@@ -1,4 +1,8 @@
-import type { AutomationLaunchSetup, AutomationLaunchPreferences } from './automations-types'
+import type {
+  AutomationLaunchSetup,
+  AutomationLaunchPreferences,
+  AutomationLaunchSetupPatch
+} from './automations-types'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
 import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
@@ -113,6 +117,50 @@ export function patchAutomationChoices(
   }
 }
 
+export function patchAutomationArguments(
+  agent: TuiAgent,
+  setup: AutomationLaunchSetup,
+  argument: Exclude<NonNullable<AutomationLaunchSetupPatch['arguments']>, { kind: 'legacy-extras' }>
+): AutomationLaunchSetup {
+  setup = { ...setup }
+  delete setup.extraAgentArgs
+  if (argument.kind === 'inherit') {
+    delete setup.agentArgs
+  } else {
+    setup.agentArgs = argument.kind === 'empty' ? null : argument.value || null
+    const source = automationArgumentChoices(agent, setup.agentArgs ?? '')
+    const accepted = reconcileAgentChoiceArgsDetailed({
+      agent,
+      userArgs: setup.agentArgs ?? '',
+      choices: automationLaunchChoices(setup),
+      mode: 'arguments-edit',
+      keys: new Set(source.recognized.map((entry) => entry.key))
+    })
+    const preferences = {
+      ...setup.launchPreferences,
+      options: { ...setup.launchPreferences?.options }
+    }
+    for (const [key, value] of Object.entries(accepted.effects.options ?? {})) {
+      if (value === null) {
+        preferences.options[key] = null
+      }
+    }
+    for (const occurrence of accepted.recognized) {
+      if (occurrence.key === 'model') {
+        delete preferences.model
+      } else if (occurrence.key === 'permissionMode') {
+        delete preferences.permissionMode
+      } else {
+        delete preferences.options[occurrence.key]
+      }
+    }
+    if (setup.launchPreferences !== undefined) {
+      setup.launchPreferences = preferences
+    }
+  }
+  return setup
+}
+
 /** The old protocol sees only safely representable authored domains, never host defaults. */
 export function automationLegacyArguments(
   agent: TuiAgent,
@@ -159,6 +207,17 @@ export function editAutomationLegacyArguments(
     if (!parsed.ok) {
       throw new Error(parsed.error)
     }
+  }
+  return patchAutomationLegacyArguments(agent, setup, value)
+}
+
+export function patchAutomationLegacyArguments(
+  agent: TuiAgent,
+  setup: AutomationLaunchSetup,
+  value: string
+): AutomationLaunchSetup {
+  if (value === (automationLegacyArguments(agent, setup) ?? '')) {
+    return setup
   }
   const incoming = automationArgumentChoices(agent, value)
   const current = automationArgumentChoices(agent, setup.agentArgs ?? '')

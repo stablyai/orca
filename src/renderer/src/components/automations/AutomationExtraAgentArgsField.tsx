@@ -48,12 +48,10 @@ export function AutomationExtraAgentArgsField({
           aria-invalid={Boolean(error) || needsFreshSession}
           aria-describedby={messageId}
           placeholder={getExtraAgentArgsPlaceholder(draft.agentId)}
-          onChange={(event) =>
-            onDraftChange((current) => ({
-              ...current,
-              extraAgentArgs: event.target.value
-            }))
-          }
+          onChange={(event) => {
+            const value = event.target.value
+            onDraftChange((current) => ({ ...current, extraAgentArgs: value }))
+          }}
           className="min-h-14 resize-none"
         />
         <div id={messageId} className="space-y-1.5">

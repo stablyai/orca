@@ -1,3 +1,4 @@
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import React from 'react'
 import { useAppStore } from '@/store'
 import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
@@ -73,6 +74,7 @@ export type AutomationDraft = {
 }
 
 type AutomationEditorDialogProps = {
+  launchAuthority?: AutomationAuthorityRef
   open: boolean
   isEditing: boolean
   isSaving: boolean
@@ -104,6 +106,7 @@ type AutomationEditorDialogProps = {
 }
 
 export function AutomationEditorDialog({
+  launchAuthority,
   open,
   isEditing,
   isSaving,
@@ -197,6 +200,7 @@ export function AutomationEditorDialog({
           />
           <AutomationEditorSettingsSidebar
             launchWorkspace={launchWorkspace}
+            launchAuthority={launchAuthority}
             destination={destination}
             surface={surface}
             chatSupported={chatSupported}

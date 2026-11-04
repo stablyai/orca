@@ -1,4 +1,3 @@
-import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
 import type {
   Automation,
   AutomationLaunchSetup,
@@ -6,12 +5,11 @@ import type {
 } from './automations-types'
 import { AutomationLaunchSetupPatch as PatchSchema } from './rpc-contract/automation-params'
 import {
-  automationLaunchChoices,
-  automationArgumentChoices,
   automationLaunchInputs,
   automationLegacyArguments,
   editAutomationLegacyArguments,
-  patchAutomationChoices
+  patchAutomationChoices,
+  patchAutomationArguments
 } from './automation-launch-setup-source'
 import { hasExtraAgentArgs, parseExtraAgentArgs } from './automation-extra-agent-args'
 import type { TuiAgent } from './tui-agent'
@@ -89,41 +87,7 @@ export function applyAutomationLaunchSetupPatch<
         : editAutomationLegacyArguments(agent, setup, legacy)
   }
   if (patch?.arguments && patch.arguments.kind !== 'legacy-extras') {
-    delete setup.extraAgentArgs
-    if (patch.arguments.kind === 'inherit') {
-      delete setup.agentArgs
-    } else {
-      setup.agentArgs = patch.arguments.kind === 'empty' ? null : patch.arguments.value || null
-      const source = automationArgumentChoices(agent, setup.agentArgs ?? '')
-      const accepted = reconcileAgentChoiceArgsDetailed({
-        agent,
-        userArgs: setup.agentArgs ?? '',
-        choices: automationLaunchChoices(setup),
-        mode: 'arguments-edit',
-        keys: new Set(source.recognized.map((entry) => entry.key))
-      })
-      const preferences = {
-        ...setup.launchPreferences,
-        options: { ...setup.launchPreferences?.options }
-      }
-      for (const [key, value] of Object.entries(accepted.effects.options ?? {})) {
-        if (value === null) {
-          preferences.options[key] = null
-        }
-      }
-      for (const occurrence of accepted.recognized) {
-        if (occurrence.key === 'model') {
-          delete preferences.model
-        } else if (occurrence.key === 'permissionMode') {
-          delete preferences.permissionMode
-        } else {
-          delete preferences.options[occurrence.key]
-        }
-      }
-      if (setup.launchPreferences !== undefined) {
-        setup.launchPreferences = preferences
-      }
-    }
+    setup = patchAutomationArguments(agent, setup, patch.arguments)
   }
   if (patch?.choices) {
     setup = patchAutomationChoices(agent, setup, patch.choices)

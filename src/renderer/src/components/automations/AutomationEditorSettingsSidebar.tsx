@@ -1,3 +1,4 @@
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
 import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
 import { translate } from '@/i18n/i18n'
@@ -23,6 +24,7 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 type AutomationEditorSettingsSidebarProps = {
   /** The host picker: where a create lands, or the host an edit can move the record to. */
   launchWorkspace?: ProspectiveWorkspace
+  launchAuthority?: AutomationAuthorityRef
   surface: 'chat' | 'terminal'
   chatSupported: boolean | null
   destination?: AutomationCreateDestinationControl
@@ -48,6 +50,7 @@ type AutomationEditorSettingsSidebarProps = {
 export function AutomationEditorSettingsSidebar({
   destination,
   launchWorkspace,
+  launchAuthority,
   surface,
   chatSupported,
   repos,
@@ -81,11 +84,7 @@ export function AutomationEditorSettingsSidebar({
           >
             <AutomationAgentLaunchPicker
               draft={draft}
-              authority={
-                destination?.resolution.status === 'ready'
-                  ? destination.resolution.authority
-                  : undefined
-              }
+              authority={launchAuthority}
               workspace={
                 launchWorkspace ?? {
                   kind: 'git-worktree',

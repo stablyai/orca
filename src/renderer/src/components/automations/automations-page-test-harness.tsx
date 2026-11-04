@@ -5,6 +5,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -63,6 +64,7 @@ export type ListPanelProps = {
 }
 
 export type EditorDialogProps = {
+  launchAuthority?: AutomationAuthorityRef
   open: boolean
   isEditing: boolean
   isSaving: boolean

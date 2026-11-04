@@ -119,14 +119,16 @@ function destinationControl(
 function renderSidebar(
   onDraftChange: (updater: (d: AutomationDraft) => AutomationDraft) => void,
   initial = DRAFT,
-  authority: AutomationAuthorityRef | null = { kind: 'desktop' }
+  authority: AutomationAuthorityRef | null = { kind: 'desktop' },
+  destination = destinationControl(authority)
 ) {
   function Form() {
     const [draft, setDraft] = useState(initial)
     return (
       <TooltipProvider>
         <AutomationEditorSettingsSidebar
-          destination={destinationControl(authority)}
+          destination={destination}
+          launchAuthority={authority ?? undefined}
           surface={draft.surface ?? 'terminal'}
           chatSupported={false}
           repos={[]}
@@ -151,7 +153,8 @@ function renderSidebar(
       </TooltipProvider>
     )
   }
-  return render(<Form />)
+  const view = render(<Form />)
+  return { ...view, refresh: () => view.rerender(<Form />) }
 }
 
 beforeEach(() => {
@@ -314,6 +317,123 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     expect(saved.extraAgentArgs).toBe('--add-dir docs --add-dir fixtures')
   })
 
+  it('keeps supplementary text through the native same-agent row and Save', () => {
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      extraAgentArgs: '--add-dir docs',
+      launchPreferences: { model: 'sonnet' }
+    }
+    renderSidebar(changed, initial)
+    const value = '--add-dir docs --add-dir fixtures'
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value } })
+    openPicker()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
+    expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', value)
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+        initial
+      )
+    ).toMatchObject({ extraAgentArgs: value, launchPreferences: { model: 'sonnet' } })
+  })
+
+  it('does not replay the rebind copy over text edited before Configure', () => {
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'codex',
+      extraAgentArgs: '--model old'
+    }
+    renderSidebar(changed, initial)
+    openPicker()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
+    const value = '--add-dir docs --add-dir fixtures'
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), { target: { value } })
+    openPicker()
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Model B' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Launch terminal' }))
+    expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', value)
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+        initial
+      )
+    ).toMatchObject({ extraAgentArgs: value, launchPreferences: { model: 'gpt-5.5' } })
+  })
+
+  it('keeps incomplete legacy input editable across selection and validates only on Save', () => {
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      extraAgentArgs: '--add-dir docs'
+    }
+    renderSidebar(changed, initial)
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--add-dir "' }
+    })
+    openPicker()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Claude' }))
+    expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty('value', '--add-dir "')
+    expect(screen.getByLabelText('Extra agent arguments').getAttribute('aria-invalid')).toBe('true')
+    const invalid = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(() =>
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(invalid, 'terminal', null) },
+        initial
+      )
+    ).toThrow()
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--add-dir fixtures' }
+    })
+    const corrected = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(corrected, 'terminal', null) },
+        initial
+      ).extraAgentArgs
+    ).toBe('--add-dir fixtures')
+  })
+
+  it('re-derives legacy presentation from canonical source after capability arrives', () => {
+    const capabilities = vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
+    const changed = vi.fn()
+    const initial: AutomationDraft = {
+      ...DRAFT,
+      agentId: 'claude',
+      extraAgentArgs: '--add-dir docs',
+      launchPreferences: { model: 'sonnet' }
+    }
+    const form = renderSidebar(changed, initial, {
+      kind: 'runtime',
+      environmentId: 'old',
+      pairingRevision: 1
+    })
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--model opus --add-dir fixtures' }
+    })
+    capabilities.mockReturnValue(AUTOMATION_RUNTIME_CAPABILITIES)
+    form.refresh()
+    expect(screen.getByLabelText('Extra agent arguments')).toHaveProperty(
+      'value',
+      '--add-dir fixtures'
+    )
+    openPicker()
+    expect(screen.getByRole('button', { name: 'Configure Claude' })).toBeTruthy()
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), initial)
+    expect(
+      applyAutomationLaunchSetupPatch(
+        { agentId: 'claude', ...automationDraftLaunchSetup(next, 'terminal', null) },
+        initial
+      )
+    ).toMatchObject({ extraAgentArgs: '--add-dir fixtures', launchPreferences: { model: 'opus' } })
+  })
+
   it('sends a legacy argument edit after an earlier surface pick', () => {
     vi.spyOn(launchRoute, 'resolveHostCapabilities').mockReturnValue([])
     const changed = vi.fn()
@@ -359,9 +479,27 @@ describe('AutomationEditorSettingsSidebar agent picker', () => {
     expect(screen.getByRole('button', { name: 'Configure Codex' })).toBeTruthy()
   })
 
-  it('disables the picker while its automation authority is unresolved', () => {
-    renderSidebar(vi.fn(), DRAFT, null)
-    expect(screen.getByRole('button', { name: 'Select agent' })).toHaveProperty('disabled', true)
+  it('uses the captured save authority even with no create-eligible destination', () => {
+    renderSidebar(vi.fn(), DRAFT, { kind: 'desktop' }, destinationControl(null))
+    openPicker()
+    expect(screen.getByRole('button', { name: 'Configure Codex' })).toBeTruthy()
+  })
+
+  it('keeps agent and legacy editing available before selecting a destination', () => {
+    const changed = vi.fn()
+    renderSidebar(changed, { ...DRAFT, agentId: 'claude' }, null)
+    fireEvent.change(screen.getByLabelText('Extra agent arguments'), {
+      target: { value: '--add-dir docs' }
+    })
+    openPicker()
+    expect(screen.queryByRole('button', { name: /^Configure / })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Codex' }))
+    const next = changed.mock.calls.reduce((draft, [update]) => update(draft), {
+      ...DRAFT,
+      agentId: 'claude'
+    })
+    expect(next.agentId).toBe('codex')
+    expect(next.extraAgentArgs).toBe('--add-dir docs')
   })
 
   it('discards an unaccepted setup when the editor owner closes', () => {
