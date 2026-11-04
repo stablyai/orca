@@ -1,3 +1,4 @@
+import { BrowserSplitToggle, type BrowserSplitFold } from './BrowserSplitToggle'
 import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
@@ -36,6 +37,8 @@ export type TabGroupPanelTabStrip = 'attached' | 'external'
 export default function TabGroupPanel({
   groupId,
   worktreeId,
+  browserFold,
+  side,
   isVisible,
   isFocused,
   hasSplitGroups,
@@ -54,6 +57,8 @@ export default function TabGroupPanel({
 }: {
   groupId: string
   worktreeId: string
+  browserFold?: BrowserSplitFold
+  side?: 'left' | 'right'
   isVisible: boolean
   isFocused: boolean
   hasSplitGroups: boolean
@@ -303,6 +308,13 @@ export default function TabGroupPanel({
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
+              {side && browserFold && activeTab?.contentType === 'browser' && (
+                <BrowserSplitToggle
+                  side={side}
+                  collapsed={false}
+                  onToggle={() => browserFold.setFold({ groupId, tabId: activeTab.id })}
+                />
+              )}
               <TabBarQuickCommandsButton
                 worktreeId={worktreeId}
                 groupId={groupId}

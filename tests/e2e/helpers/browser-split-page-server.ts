@@ -17,7 +17,7 @@ export async function startBrowserSplitPageServer(): Promise<BrowserSplitPageSer
       'Cache-Control': 'no-store'
     })
     response.end(
-      `<!doctype html><html><head><title>${pane} ${step}</title></head><body><h1>Pane ${pane}, page ${step}</h1><p>Split shortcut fixture.</p></body></html>`
+      `<!doctype html><html><head><title>${pane} ${step}</title></head><body><h1>Pane ${pane}, page ${step}</h1><p>Split shortcut fixture.</p>${pane === 'draft' ? '<textarea aria-label="Draft"></textarea>' : ''}</body></html>`
     )
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))

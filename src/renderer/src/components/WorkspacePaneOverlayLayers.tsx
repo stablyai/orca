@@ -9,6 +9,7 @@ import type { HiddenTerminalPrewarm } from './terminal-pane/terminal-pane-types'
 /** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */
 export function WorkspacePaneOverlayLayers({
   worktreeId,
+  foldedBrowserGroupId,
   worktreePath,
   isVisible,
   shouldMeasureHiddenWorktree,
@@ -23,6 +24,7 @@ export function WorkspacePaneOverlayLayers({
   ownsNativeChatToggleShortcut = true
 }: {
   worktreeId: string
+  foldedBrowserGroupId?: string | null
   worktreePath: string
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
@@ -53,6 +55,7 @@ export function WorkspacePaneOverlayLayers({
         ownsNativeChatToggleShortcut={ownsNativeChatToggleShortcut}
       />
       <RetainedBrowserPaneOverlayLayer
+        foldedBrowserGroupId={foldedBrowserGroupId}
         worktreeId={worktreeId}
         isWorktreeActive={isVisible}
         mountEligible={mountRetainedBrowserOverlay}

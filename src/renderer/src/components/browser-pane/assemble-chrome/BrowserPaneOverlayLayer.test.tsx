@@ -407,6 +407,29 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
+  it('retains the same browser pane when its split is collapsed and expanded', () => {
+    const overlay = (foldedBrowserGroupId: string | null) => (
+      <BrowserPaneOverlayLayer
+        worktreeId="wt-1"
+        isWorktreeActive
+        foldedBrowserGroupId={foldedBrowserGroupId}
+      />
+    )
+    const view = render(overlay(null))
+    const getPane = () => view.container.querySelector('[data-browser-pane-id="browser-a"]')
+    const pane = getPane()
+    expect(pane?.getAttribute('data-browser-pane-active')).toBe('true')
+
+    view.rerender(overlay('group-1'))
+    expect(getPane()).toBe(pane)
+    expect(pane?.getAttribute('data-browser-pane-active')).toBe('false')
+    expect(pane?.getAttribute('data-browser-find-shortcut-scope')).toBe('inactive')
+
+    view.rerender(overlay(null))
+    expect(getPane()).toBe(pane)
+    expect(pane?.getAttribute('data-browser-pane-active')).toBe('true')
+  })
+
   it('parks browser panes when their worktree is hidden', () => {
     const markup = renderOverlay({ isWorktreeActive: false })
 

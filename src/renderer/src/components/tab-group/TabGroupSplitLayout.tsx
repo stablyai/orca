@@ -1,3 +1,4 @@
+import type { BrowserSplitFold } from './BrowserSplitToggle'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
@@ -5,11 +6,13 @@ import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
 /** Compose main-window chrome around the shared drag scope/tree; other hosts supply their own chrome. */
 export default function TabGroupSplitLayout({
   layout,
+  browserFold,
   worktreeId,
   focusedGroupId,
   isWorktreeActive
 }: {
   layout: TabGroupLayoutNode
+  browserFold?: BrowserSplitFold
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
@@ -26,6 +29,7 @@ export default function TabGroupSplitLayout({
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <TabGroupSplitNodeTree
               layout={layout}
+              browserFold={browserFold}
               worktreeId={worktreeId}
               focusedGroupId={focusedGroupId}
               isWorktreeActive={isWorktreeActive}

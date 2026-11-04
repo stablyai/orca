@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { BrowserSplitToggle, type BrowserSplitFold } from './BrowserSplitToggle'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
@@ -142,7 +143,9 @@ export function ResizeHandle({
 
 function SplitNode({
   node,
+  side,
   nodePath,
+  browserFold,
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
@@ -160,7 +163,9 @@ function SplitNode({
   hoveredTabInsertion
 }: {
   node: TabGroupLayoutNode
+  side?: 'left' | 'right'
   nodePath: string
+  browserFold?: BrowserSplitFold
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
@@ -181,9 +186,25 @@ function SplitNode({
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   if (node.type === 'leaf') {
+    if (side && browserFold?.groupId === node.groupId) {
+      return (
+        <div className="flex flex-1 justify-center items-center bg-tab-bar">
+          <BrowserSplitToggle
+            side={side}
+            collapsed
+            onToggle={() => {
+              browserFold.setFold(null)
+              useAppStore.getState().focusGroup(worktreeId, node.groupId)
+            }}
+          />
+        </div>
+      )
+    }
     return (
       <TabGroupPanel
+        side={side}
         groupId={node.groupId}
+        browserFold={browserFold}
         worktreeId={worktreeId}
         isVisible={isWorktreeActive}
         // Retain hidden PTYs/layouts, but grant global terminal shortcuts only to the visible focused group.
@@ -208,6 +229,10 @@ function SplitNode({
   }
 
   const isHorizontal = node.direction === 'horizontal'
+  const firstFolded =
+    isHorizontal && node.first.type === 'leaf' && node.first.groupId === browserFold?.groupId
+  const secondFolded =
+    isHorizontal && node.second.type === 'leaf' && node.second.groupId === browserFold?.groupId
   const ratio = node.ratio ?? 0.5
 
   return (
@@ -215,10 +240,15 @@ function SplitNode({
       className="flex flex-1 min-w-0 min-h-0 overflow-hidden"
       style={{ flexDirection: isHorizontal ? 'row' : 'column' }}
     >
-      <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${ratio} 1 0%` }}>
+      <div
+        className="flex min-w-0 min-h-0 overflow-hidden"
+        style={{ flex: firstFolded ? '0 0 32px' : `${secondFolded ? 1 : ratio} 1 0%` }}
+      >
         <SplitNode
+          side={isHorizontal ? 'left' : undefined}
           node={node.first}
           nodePath={nodePath.length > 0 ? `${nodePath}.first` : 'first'}
+          browserFold={browserFold}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
@@ -237,19 +267,26 @@ function SplitNode({
           hoveredTabInsertion={hoveredTabInsertion}
         />
       </div>
-      <ResizeHandle
-        direction={node.direction}
-        onResizeStart={() => recordFeatureInteraction('terminal-panes')}
-        onRatioChange={(nextRatio) =>
-          ORCA_LAYOUT_OWNER_IS_MAIN
-            ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
-            : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
-        }
-      />
-      <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
+      {!firstFolded && !secondFolded && (
+        <ResizeHandle
+          direction={node.direction}
+          onResizeStart={() => recordFeatureInteraction('terminal-panes')}
+          onRatioChange={(nextRatio) =>
+            ORCA_LAYOUT_OWNER_IS_MAIN
+              ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
+              : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
+          }
+        />
+      )}
+      <div
+        className="flex min-w-0 min-h-0 overflow-hidden"
+        style={{ flex: secondFolded ? '0 0 32px' : `${firstFolded ? 1 : 1 - ratio} 1 0%` }}
+      >
         <SplitNode
+          side={isHorizontal ? 'right' : undefined}
           node={node.second}
           nodePath={nodePath.length > 0 ? `${nodePath}.second` : 'second'}
+          browserFold={browserFold}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
@@ -274,6 +311,7 @@ function SplitNode({
 /** Host this chrome-free tree in a sized flex container or panes collapse; the host owns drag scope and outer seams. */
 export function TabGroupSplitNodeTree({
   layout,
+  browserFold,
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
@@ -284,6 +322,7 @@ export function TabGroupSplitNodeTree({
   rootTouchesBottomEdge = false
 }: {
   layout: TabGroupLayoutNode
+  browserFold?: BrowserSplitFold
   worktreeId: string
   focusedGroupId?: string
   isWorktreeActive: boolean
@@ -299,6 +338,7 @@ export function TabGroupSplitNodeTree({
     <SplitNode
       node={layout}
       nodePath=""
+      browserFold={browserFold}
       worktreeId={worktreeId}
       focusedGroupId={focusedGroupId}
       isWorktreeActive={isWorktreeActive}
