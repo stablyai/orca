@@ -641,7 +641,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
         run: |
           set -euo pipefail
-          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
+          if git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/orcad-distribution/template/packaged-orcad-template.cjs" 2>/dev/null || git cat-file -e "refs/tags/${TAG}^{commit}:config/scripts/packaged-orcad-template.cjs" 2>/dev/null; then
             echo "ships=true" >>"$GITHUB_OUTPUT"
           else
             echo "ships=false" >>"$GITHUB_OUTPUT"
@@ -850,7 +850,12 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: |
+          ELECTRON_INSTALL_SCRIPT=config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
+          if [ ! -f "$ELECTRON_INSTALL_SCRIPT" ]; then
+            ELECTRON_INSTALL_SCRIPT=config/scripts/install-electron-package-binary.mjs
+          fi
+          node "$ELECTRON_INSTALL_SCRIPT"
 
       - name: Run skill package, transaction, and compatibility suites
         env:
@@ -901,7 +906,12 @@ jobs:
           native-runtime: node
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: |
+          ELECTRON_INSTALL_SCRIPT=config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
+          if [ ! -f "$ELECTRON_INSTALL_SCRIPT" ]; then
+            ELECTRON_INSTALL_SCRIPT=config/scripts/install-electron-package-binary.mjs
+          fi
+          node "$ELECTRON_INSTALL_SCRIPT"
 
       - name: Run skill package, transaction, and compatibility suites
         env:
@@ -1083,20 +1093,20 @@ jobs:
           # node-gyp could detect VS 18, breaking native dependency install.
           - os: windows-2022
             platform: win
-            release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never'
+            release_command: 'node $(if (Test-Path config/scripts/native-build/node-addons/ensure-native-runtime.mjs) { "config/scripts/native-build/node-addons/ensure-native-runtime.mjs" } else { "config/scripts/ensure-native-runtime.mjs" }) --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never'
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux-x64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
+            release_command: node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
           - os: ubuntu-24.04-arm
             platform: linux-arm64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always -c.publish.releaseType=draft
+            release_command: node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-arm64-unpacked
             eb_cache_path: |
               ~/.cache/electron
@@ -1618,7 +1628,7 @@ jobs:
       - name: Reseal the orcad template over its signed binaries
         id: reseal-orcad-template
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.restore-signed-inner.outcome == 'success' && needs.cut.outputs.ships_orcad_template == 'true'
-        run: node config/scripts/packaged-orcad-template.cjs --reseal-signed dist/win-unpacked inner-signing-list.txt
+        run: node $(if (Test-Path config/scripts/orcad-distribution/template/packaged-orcad-template.cjs) { "config/scripts/orcad-distribution/template/packaged-orcad-template.cjs" } else { "config/scripts/packaged-orcad-template.cjs" }) --reseal-signed dist/win-unpacked inner-signing-list.txt
 
       # The uninstaller must return signed before rebuilding the installer.
       - name: Restore signed uninstaller for the installer rebuild

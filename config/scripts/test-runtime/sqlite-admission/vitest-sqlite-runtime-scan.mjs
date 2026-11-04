@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve } from 'node:path'
-import { UNIT_INCLUDE } from '../../ci-unit-files.mjs'
+import { UNIT_INCLUDE } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
 const require = createRequire(new URL('../../vitest-sqlite-runtime-scan.mjs', import.meta.url))
 const root = resolve(import.meta.dirname, '../../../..')

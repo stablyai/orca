@@ -7,10 +7,13 @@ import {
   readWorktreeProfileMarker,
   sameFilesystemPath,
   WORKTREE_PROFILE_NAME_PATTERN
-} from '../dev-instance-isolation.mjs'
+} from '../development/instance-isolation/dev-instance-isolation.mjs'
 import { localRepositoryWorktrees } from './local-repository-worktrees.mjs'
 import { parseReclaimArguments } from './reclaim-worktree-command.mjs'
-import { isProcessAlive, readDaemonPids } from '../remote-agent-session-process-cleanup.mjs'
+import {
+  isProcessAlive,
+  readDaemonPids
+} from '../development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs'
 
 async function exists(filePath) {
   try {

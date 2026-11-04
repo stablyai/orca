@@ -13,8 +13,8 @@ import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { parse } from 'yaml'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
-import { collectNodeServerInputs } from './node-server-change-scope.mjs'
+import { classifyPrJobs } from './workflow/source-routing/pr-code-change-scope.mjs'
+import { collectNodeServerInputs } from './node-server/qualification/node-server-change-scope.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const unit = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
@@ -144,8 +144,8 @@ describe('Mobile CI tool preflight routing', () => {
       [tool, 'pnpm-lock.yaml'],
       [tool, 'package.json'],
       [tool, 'config/vitest.config.ts'],
-      [tool, 'config/scripts/pr-code-change-scope.mjs'],
-      [tool, 'config/scripts/pr-package-test-paths.mjs'],
+      [tool, 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'],
+      [tool, 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'],
       [tool, 'config/scripts/new-mobile-tool.mjs'],
       [tool, 'README.md'],
       [tool, 'mobile/vitest.config.ts']
@@ -242,19 +242,19 @@ function createMobileCiScopeRepository(
   const root = resolve(import.meta.dirname, '../..')
   for (const file of [
     'package.json',
-    'config/scripts/pr-code-change-scope.mjs',
-    'config/scripts/pr-package-test-paths.mjs',
-    'config/scripts/pr-layout-oracle-route.mjs',
-    'config/scripts/pr-shell-contract-prefixes.mjs',
+    'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+    'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
+    'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
+    'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
     'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
-    'config/scripts/git-pull-request-diff-base.mjs',
-    'config/scripts/pr-e2e-source-routing.mjs',
-    'config/scripts/pr-browser-e2e-source-routes.mjs',
-    'config/scripts/pr-editor-preview-e2e-source-routes.mjs',
-    'config/scripts/pr-feature-area-e2e-source-routes.mjs',
-    'config/scripts/pr-plugin-e2e-source-routes.mjs',
-    'config/scripts/pr-wsl-e2e-source-routes.mjs',
-    'config/scripts/ci-e2e-job-selection.mjs'
+    'config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs',
+    'config/scripts/workflow/source-routing/pr-e2e-source-routing.mjs',
+    'config/scripts/workflow/source-routing/pr-browser-e2e-source-routes.mjs',
+    'config/scripts/workflow/source-routing/pr-editor-preview-e2e-source-routes.mjs',
+    'config/scripts/workflow/source-routing/pr-feature-area-e2e-source-routes.mjs',
+    'config/scripts/workflow/source-routing/pr-plugin-e2e-source-routes.mjs',
+    'config/scripts/workflow/source-routing/pr-wsl-e2e-source-routes.mjs',
+    'config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs'
   ]) {
     mkdirSync(dirname(join(directory, file)), { recursive: true })
     copyFileSync(join(root, file), join(directory, file))
@@ -419,7 +419,10 @@ describe.skipIf(process.platform === 'win32')('Daemon mock complete Git change e
         repo.git('mv', helper, helper.replace('.ts', '-renamed.ts'))
       } else {
         rmSync(repo.tool)
-        symlinkSync('../../../config/scripts/pr-code-change-scope.mjs', repo.tool)
+        symlinkSync(
+          '../../../config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+          repo.tool
+        )
       }
       repo.commit()
       const { result, output } = repo.detect()

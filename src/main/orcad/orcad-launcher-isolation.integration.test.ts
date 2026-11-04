@@ -27,7 +27,9 @@ const SERVER_FIXTURE = [
 ].join('\n')
 
 async function buildLauncher(entry: string): Promise<string[]> {
-  const builder = pathToFileURL(join(process.cwd(), 'config/scripts/orcad-entry-build.mjs')).href
+  const builder = pathToFileURL(
+    join(process.cwd(), 'config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs')
+  ).href
   const result = await runProcess({
     program: process.execPath,
     args: [

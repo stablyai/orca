@@ -19,7 +19,7 @@ import {
   compilerCacheIdentity,
   packCompilerCache
 } from './headless-detector-compiler-cache.mjs'
-import { collectNodeServerInputs } from './node-server-change-scope.mjs'
+import { collectNodeServerInputs } from './node-server/qualification/node-server-change-scope.mjs'
 import { runProcessSync } from '@orca/process-host'
 
 const temporary = []
@@ -115,7 +115,7 @@ it('activates the compiler and workspace-policy parser and preserves import grap
   }
   writeFileSync(
     join(root, 'probe.mjs'),
-    "import { collectNodeServerInputs } from './config/scripts/node-server-change-scope.mjs'; console.log(JSON.stringify([...(await collectNodeServerInputs({ root: process.cwd(), entryPoints: ['entry.ts'] }))].sort()))"
+    "import { collectNodeServerInputs } from './config/scripts/node-server/qualification/node-server-change-scope.mjs'; console.log(JSON.stringify([...(await collectNodeServerInputs({ root: process.cwd(), entryPoints: ['entry.ts'] }))].sort()))"
   )
   const baseline = [...(await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] }))].sort()
   expect(baseline).toContain('src/packages/process-host/src/run-process.ts')

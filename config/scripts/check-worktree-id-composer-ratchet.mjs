@@ -1,6 +1,9 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet hand-built worktree IDs downward: inconsistent path spellings give one worktree multiple IDs (#30150); use shared/worktree/id.ts composers.
 

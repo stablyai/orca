@@ -1,6 +1,9 @@
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { readTrackedSources, runCountRatchet } from './ratchet-baseline.mjs'
+import {
+  readTrackedSources,
+  runCountRatchet
+} from './static-analysis/ratchet-baseline/ratchet-baseline.mjs'
 
 // Ratchet direct renderer workspace-record reads downward as sidebar records move to main’s feed (§2/§9); old-copy readers would silently go stale.
 // Lower bound misses destructuring/computed access; compiler guards removed fields. Writers remain until their migration.

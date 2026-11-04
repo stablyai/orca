@@ -10,8 +10,8 @@ import {
   checkRuntimeLauncherProtocolRatchet,
   isOverrideEnabled
 } from './check-runtime-launcher-protocol-ratchet.mjs'
-import { DAEMON_PROTOCOL_SOURCE_PATH } from './daemon-protocol-facts.mjs'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
+import { DAEMON_PROTOCOL_SOURCE_PATH } from './daemon-protocol/schema-facts/daemon-protocol-facts.mjs'
+import { classifyPrJobs } from './workflow/source-routing/pr-code-change-scope.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const repos = []

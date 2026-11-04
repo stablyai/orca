@@ -11,7 +11,7 @@ import {
   probeBunVersion,
   readPinnedBunVersion,
   resolvePinnedBunExecutable
-} from '../../pinned-bun-executable.mjs'
+} from '../../tool-invocation/pinned-bun-executable.mjs'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const vitestArgs = process.argv.slice(2)

@@ -7,9 +7,9 @@ import {
   releaseJavascriptConfiguration,
   restoreReleaseJavascript
 } from './release-javascript-artifact.mjs'
-import { resolvePnpmCliInvocation } from '../../pnpm-cli-invocation.mjs'
+import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 import { runProcessSync } from '@orca/process-host'
-import { describeProcessFailure } from '../../process-failure-message.mjs'
+import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import {
   annotateJavascriptParityFiles,
   compareJavascriptParityFiles

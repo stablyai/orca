@@ -1,7 +1,7 @@
 import { lstat, readdir, realpath, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { localRepositoryWorktrees } from './local-repository-worktrees.mjs'
-import { isProcessAlive } from '../remote-agent-session-process-cleanup.mjs'
+import { isProcessAlive } from '../development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs'
 import { parseReclaimArguments } from './reclaim-worktree-command.mjs'
 import {
   VITE_CACHE_HOST_ID,

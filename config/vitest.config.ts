@@ -3,13 +3,17 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
-import { UNIT_INCLUDE, UNIT_EXCLUDE, UNIT_SETUP_FILES } from './scripts/ci-unit-files.mjs'
-import TimingSequencer from './scripts/ci-unit-sequencer.mjs'
+import {
+  UNIT_INCLUDE,
+  UNIT_EXCLUDE,
+  UNIT_SETUP_FILES
+} from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
+import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
-import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
 
 const nodeRuntimeInclude = process.versions.bun
@@ -152,7 +156,7 @@ export default defineConfig({
     sequence: { sequencer: balancedShards ? TimingSequencer : RuntimeSequencer },
     ...(balancedShards
       ? {
-          reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
+          reporters: ['default', resolve('config/scripts/ci/sharding/ci-unit-timing-reporter.mjs')]
         }
       : {}),
     projects,

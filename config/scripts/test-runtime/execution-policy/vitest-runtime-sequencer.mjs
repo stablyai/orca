@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import { BaseSequencer } from 'vitest/node'
-import { rankFilesByDuration, readTimingBaseline } from '../../ci-shard-assignment.mjs'
+import { rankFilesByDuration, readTimingBaseline } from '../../ci/sharding/ci-shard-assignment.mjs'
 
 export default class RuntimeSequencer extends BaseSequencer {
   constructor(ctx, timingBaseline = undefined) {

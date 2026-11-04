@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { getElectronPlatformPath } from '../electron-platform-path.mjs'
+import { getElectronPlatformPath } from '../electron-installation/platform-layout/electron-platform-path.mjs'
 
 const roots: string[] = []
 afterEach(async () => {

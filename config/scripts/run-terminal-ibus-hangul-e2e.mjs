@@ -9,7 +9,7 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
-import { verifyPlaywrightParticipation } from './verify-playwright-participation.mjs'
+import { verifyPlaywrightParticipation } from './runtime-verification/participation/verify-playwright-participation.mjs'
 import os from 'node:os'
 import path from 'node:path'
 import {

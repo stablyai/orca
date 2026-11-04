@@ -91,10 +91,10 @@ function fixture(detectorStep = detector) {
   mkdirSync(join(directory, 'config/scripts'), { recursive: true })
   for (const file of [
     'package.json',
-    'config/scripts/pr-code-change-scope.mjs',
-    'config/scripts/pr-package-test-paths.mjs',
-    'config/scripts/pr-layout-oracle-route.mjs',
-    'config/scripts/pr-shell-contract-prefixes.mjs',
+    'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+    'config/scripts/workflow/source-routing/pr-package-test-paths.mjs',
+    'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
+    'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
     'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
     'config/scripts/mobile-release-check-scope.mjs',
     'config/scripts/mobile-test-change-scope.mjs'

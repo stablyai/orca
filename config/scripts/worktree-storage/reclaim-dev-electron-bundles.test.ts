@@ -7,7 +7,7 @@ import {
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
   selectStaleDevBundleDirs
-} from '../dev-electron-bundle-cache.mjs'
+} from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
 import { collectDevBundles } from './reclaim-dev-electron-bundles.mjs'
 
 const roots: string[] = []

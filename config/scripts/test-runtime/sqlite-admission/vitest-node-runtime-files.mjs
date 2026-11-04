@@ -204,7 +204,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/filesystem/watcher-process/parcel-watcher-shallow-file-subscription.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
-  'config/scripts/profile-state-worker-smoke.test.mjs',
+  'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/process-host-dev-rebuild.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts',
   'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'

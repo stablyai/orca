@@ -15,7 +15,8 @@ const supportedManifest = {
   engines: { node: '24' },
   packageManager: 'pnpm@12.14.0',
   scripts: {
-    postinstall: 'pnpm run build:packages && node config/scripts/rebuild-native-deps.mjs'
+    postinstall:
+      'pnpm run build:packages && node config/scripts/native-build/node-addons/rebuild-native-deps.mjs'
   }
 }
 
@@ -30,7 +31,7 @@ function select(options = {}) {
     for (const [file, content] of [
       ['.github/actions/install-node-dependencies/action.yml', options.action ?? supportedAction],
       ['.github/actions/prepare-native-runtime/action.yml', 'runs: {}'],
-      ['config/scripts/ensure-native-runtime.mjs', '']
+      ['config/scripts/native-build/node-addons/ensure-native-runtime.mjs', '']
     ]) {
       if (options.missing === file) {
         continue
@@ -108,7 +109,10 @@ it.each([
   ['another architecture', { arch: 'ARM64' }],
   ['missing installer', { missing: '.github/actions/install-node-dependencies/action.yml' }],
   ['missing native action', { missing: '.github/actions/prepare-native-runtime/action.yml' }],
-  ['missing runtime script', { missing: 'config/scripts/ensure-native-runtime.mjs' }],
+  [
+    'missing runtime script',
+    { missing: 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs' }
+  ],
   ['old installer interface', { action: 'inputs:\n  native-runtime: {}\nruns: {}\n' }],
   [
     'output-only names',

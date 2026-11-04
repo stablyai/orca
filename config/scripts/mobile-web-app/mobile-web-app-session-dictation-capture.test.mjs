@@ -3,9 +3,9 @@
 // Resolve package names before absence checks to catch typos; assert eight excluded vendored modules, not drifting total closure size.
 import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
-import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
+import { mobileWebAppRouteClosure } from '../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
-import { MOBILE_WEB_PAGE_ROUTES } from '../mobile-web-page-routes.mjs'
+import { MOBILE_WEB_PAGE_ROUTES } from '../build/mobile-web-app/mobile-web-page-routes.mjs'
 import { PAGE_ROUTE_MODULES } from './mobile-web-app-page-route-modules.mjs'
 import { MobileWebBundleRouteSchema } from '../../../src/shared/mobile-web-bundle/manifest-contract.ts'
 

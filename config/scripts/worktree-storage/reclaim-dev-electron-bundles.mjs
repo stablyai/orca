@@ -9,7 +9,7 @@ import {
   DEV_BUNDLE_MARKER_FILENAME,
   getDevBundleProcessTable,
   selectStaleDevBundleDirs
-} from '../dev-electron-bundle-cache.mjs'
+} from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
 
 const apply = process.argv.includes('--apply')
 const minAgeIndex = process.argv.indexOf('--min-age-days')

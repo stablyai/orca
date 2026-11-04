@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { writeWorktreeProfileMarker } from '../dev-instance-isolation.mjs'
+import { writeWorktreeProfileMarker } from '../development/instance-isolation/dev-instance-isolation.mjs'
 import { reclaimDevWorktreeProfiles } from './reclaim-dev-worktree-profiles.mjs'
 
 const roots = []

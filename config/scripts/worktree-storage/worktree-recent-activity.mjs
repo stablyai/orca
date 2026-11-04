@@ -1,7 +1,7 @@
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { isDevBundleInUse } from '../dev-electron-bundle-cache.mjs'
+import { isDevBundleInUse } from '../development/electron-bundle-cache/dev-electron-bundle-cache.mjs'
 
 async function git(worktree, args) {
   const result = await runProcess({

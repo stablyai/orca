@@ -24,8 +24,8 @@ import {
   recordAdoptedSharedElectronDist,
   resolveSharedElectronDistEntry,
   shareElectronDistFromCache
-} from '../shared-electron-dist-cache.mjs'
-import { getElectronPlatformPath } from '../electron-platform-path.mjs'
+} from '../electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs'
+import { getElectronPlatformPath } from '../electron-installation/platform-layout/electron-platform-path.mjs'
 
 const apply = process.argv.includes('--apply')
 const repoRoot = process.argv.includes('--repo')

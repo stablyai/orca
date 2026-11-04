@@ -2,7 +2,7 @@ import { globSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript-api'
 import { expect, it } from 'vitest'
-import { discoverUnitFiles } from '../../ci-unit-files.mjs'
+import { discoverUnitFiles } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import { getNodeRuntimeInclude } from '../sqlite-admission/vitest-node-runtime-files.mjs'
 
 it('runs Node runtime contracts in Node even when the coordinator uses Bun', () => {

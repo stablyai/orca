@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
-import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
+import { buildCounterbalancedSchedule } from './performance/measurement/counterbalanced-benchmark-schedule.mjs'
 
 const modulePath = 'src/main/daemon/terminal-history-legacy-scrollback-restore.ts'
 const baselineSource = readFileSync(0, 'utf8')

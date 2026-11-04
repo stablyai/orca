@@ -93,7 +93,7 @@ jobs:
           cache-electron-package: 'true'
 
       - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
 
       - name: Verify Blacksmith unit runner environment
         if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
@@ -112,7 +112,7 @@ jobs:
           ORCA_UNIT_SHARD_INDEX: ${{ matrix.shard.index }}
           ORCA_UNIT_SHARD_COUNT: ${{ matrix.shard.count }}
           ORCA_UNIT_CACHE_NAMESPACE: ${{ inputs.module_cache_namespace }}
-        run: node config/scripts/ci-unit-module-cache.mjs identity
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs identity
 
       # The key pins config, plugins, lockfile and runtimes; the newest producer for it wins.
       # Source edits are keyed per module by Vitest plus vitest-module-cache-resolution-key.ts.
@@ -131,7 +131,7 @@ jobs:
         env:
           ORCA_UNIT_CACHE_RESTORE_HIT: ${{ steps.module-cache-restore.outputs.cache-matched-key != '' }}
           ORCA_UNIT_CACHE_MODE: ${{ inputs.module_cache }}
-        run: node config/scripts/ci-unit-module-cache.mjs prepare
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs prepare
 
       - uses: actions/download-artifact@v8
         if: inputs.download_selection_plan
@@ -145,8 +145,8 @@ jobs:
         continue-on-error: true
         run: >-
           node --input-type=module -e '
-          import { discoverUnitFiles } from "./config/scripts/ci-unit-files.mjs";
-          import { writeAssignment } from "./config/scripts/ci-shard-assignment.mjs";
+          import { discoverUnitFiles } from "./config/scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs";
+          import { writeAssignment } from "./config/scripts/ci/sharding/ci-shard-assignment.mjs";
           writeAssignment("ci-shards/unit-discovery.json", { files: discoverUnitFiles() });'
 
       - name: Test shard
@@ -170,7 +170,7 @@ jobs:
           inputs.module_cache == 'cold' &&
           (github.ref == 'refs/heads/main' && github.event_name != 'pull_request' ||
           inputs.module_cache_seed && github.event_name == 'workflow_dispatch')
-        run: node config/scripts/ci-unit-module-cache.mjs seal
+        run: node config/scripts/ci/unit-cache/ci-unit-module-cache.mjs seal
 
       - name: Save unit module cache
         if: steps.module-cache-seal.outputs.ready == 'true'

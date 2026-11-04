@@ -37,7 +37,7 @@ export async function localModuleCacheEnv(root, env = process.env) {
   }
   const parent = localModuleCacheParent(root)
   // Lazy: the policy hash loads TypeScript sources that reclaim, which only needs the parent, avoids.
-  const { moduleCachePolicyHash } = await import('../../ci-unit-module-cache.mjs')
+  const { moduleCachePolicyHash } = await import('../../ci/unit-cache/ci-unit-module-cache.mjs')
   const key = `${(await moduleCachePolicyHash(root)).slice(0, 16)}-node${process.versions.node}`
   pruneLocalModuleCaches(parent, key)
   const path = join(parent, key)

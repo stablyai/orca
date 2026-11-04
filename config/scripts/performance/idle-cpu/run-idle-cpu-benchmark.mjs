@@ -172,7 +172,18 @@ function buildAppIfNeeded(root, skipBuild) {
   // Wrapper avoids Windows npx.cmd exec failure and verifies boot graph.
   run(
     process.execPath,
-    [path.join(root, 'config', 'scripts', 'run-electron-vite-build.mjs'), '--mode', 'e2e'],
+    [
+      path.join(
+        root,
+        'config',
+        'scripts',
+        'desktop-build',
+        'execution',
+        'run-electron-vite-build.mjs'
+      ),
+      '--mode',
+      'e2e'
+    ],
     {
       cwd: root,
       stdio: 'inherit',

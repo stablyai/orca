@@ -3,14 +3,14 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasWindowsNativeBatchReferenceViolation } from './windows-native-batch-reference-policy'
 
-const initializer = 'config/scripts/initialize-windows-native-toolchain.mjs'
-const benchmark = 'config/scripts/benchmark-windows-native-preparation.mjs'
-const observer = 'config/scripts/windows-native-benchmark-observer.mjs'
+const initializer = 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs'
+const benchmark = 'config/scripts/native-build/windows/benchmark-windows-native-preparation.mjs'
+const observer = 'config/scripts/native-build/windows/windows-native-benchmark-observer.mjs'
 const metadataCallers = [
-  'config/scripts/node-server-change-scope.mjs',
-  'config/scripts/pr-code-change-scope.mjs',
-  'config/scripts/orcad-windows-prebuild-cache.mjs',
-  'config/scripts/windows-native-toolchain-routing.test.mjs'
+  'config/scripts/node-server/qualification/node-server-change-scope.mjs',
+  'config/scripts/workflow/source-routing/pr-code-change-scope.mjs',
+  'config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs',
+  'config/scripts/workflow/source-routing/windows-native-toolchain-routing.test.mjs'
 ]
 const capture = 'capture-windows-native-environment.cmd'
 const initializerSource = `
