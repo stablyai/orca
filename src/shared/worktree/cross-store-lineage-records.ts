@@ -1,5 +1,5 @@
 import type { WorkspaceKey } from '../folder-workspaces/folder-workspace-types'
-import { isWorkspaceKey } from '../workspace-scope'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../workspace-scope'
 import type { CrossStoreWorkspaceLineage } from './lineage-types'
 
 const ORIGINS: readonly unknown[] = ['orchestration', 'cli', 'manual']
@@ -43,18 +43,47 @@ export function isCrossStoreWorkspaceLineage(value: unknown): value is CrossStor
   )
 }
 
-/** Drops malformed entries one by one; never the whole map. Undefined when nothing was saved. */
+/** Keeps every saved entry as written, readable or not; only a non-object map is discarded. */
 export function normalizeCrossStoreLineageByChildKey(
   value: unknown
-): Record<WorkspaceKey, CrossStoreWorkspaceLineage> | undefined {
-  if (!isPlainRecord(value)) {
-    return undefined
-  }
-  const kept: Record<WorkspaceKey, CrossStoreWorkspaceLineage> = {}
-  for (const [key, entry] of Object.entries(value)) {
+): Record<string, unknown> | undefined {
+  return isPlainRecord(value) ? value : undefined
+}
+
+/** The entries this build can read; the rest stay saved and the child shows standalone. */
+export function validCrossStoreLineage(
+  saved: Readonly<Record<string, unknown>> | undefined
+): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
+  const valid: Record<WorkspaceKey, CrossStoreWorkspaceLineage> = {}
+  for (const [key, entry] of Object.entries(saved ?? {})) {
     if (isCrossStoreWorkspaceLineage(entry) && entry.childWorkspaceKey === key) {
-      kept[entry.childWorkspaceKey] = entry
+      valid[entry.childWorkspaceKey] = entry
     }
   }
-  return kept
+  return valid
+}
+
+/** Re-keys a saved entry to its child's new key; an unreadable entry moves unchanged. */
+export function withCrossStoreChildKey(entry: unknown, childWorkspaceKey: WorkspaceKey): unknown {
+  return isPlainRecord(entry) ? { ...entry, childWorkspaceKey } : entry
+}
+
+type LineageChildKeys = {
+  crossStoreChildKeys: Iterable<string>
+  sameStoreWorktreeIds: Iterable<string>
+  sameStoreChildKeys: Iterable<string>
+}
+
+/** A child keeps at most one parent record; returns a child named by both representations. */
+export function findCrossStoreLineageConflict(keys: LineageChildKeys): string | null {
+  const sameStore = new Set<string>(keys.sameStoreChildKeys)
+  for (const worktreeId of keys.sameStoreWorktreeIds) {
+    sameStore.add(worktreeWorkspaceKey(worktreeId))
+  }
+  for (const childKey of keys.crossStoreChildKeys) {
+    if (sameStore.has(childKey)) {
+      return childKey
+    }
+  }
+  return null
 }

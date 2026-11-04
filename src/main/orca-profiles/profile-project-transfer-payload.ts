@@ -28,6 +28,7 @@ import {
   rekeyWorkspaceKey
 } from './profile-project-worktree-identity'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { withCrossStoreChildKey } from '../../shared/worktree/cross-store-lineage-records'
 
 export type TransferPayload = {
   repo: Repo
@@ -38,7 +39,7 @@ export type TransferPayload = {
   worktreeMeta: PersistedState['worktreeMeta']
   worktreeLineageById: PersistedState['worktreeLineageById']
   workspaceLineageByChildKey: PersistedState['workspaceLineageByChildKey']
-  crossStoreLineageByChildKey: NonNullable<PersistedState['crossStoreLineageByChildKey']>
+  crossStoreLineageByChildKey: Record<string, unknown>
   workspaceSession?: PersistedState['workspaceSession']
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, PersistedState['workspaceSession']>>
   sshTargets: SshTarget[]
@@ -136,15 +137,15 @@ function rekeyCrossStoreLineageRecord(
   record: PersistedState['crossStoreLineageByChildKey'],
   oldRepoId: string,
   newRepoId: string
-): NonNullable<PersistedState['crossStoreLineageByChildKey']> {
-  const next: NonNullable<PersistedState['crossStoreLineageByChildKey']> = {}
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {}
   for (const [oldKey, lineage] of Object.entries(record ?? {})) {
     const child = parseWorkspaceKey(oldKey)
     if (child?.type !== 'worktree' || !isRepoWorktreeId(oldRepoId, child.worktreeId)) {
       continue
     }
     const newChildKey = rekeyWorkspaceKey(oldRepoId, newRepoId, oldKey as WorkspaceKey)
-    next[newChildKey] = { ...structuredClone(lineage), childWorkspaceKey: newChildKey }
+    next[newChildKey] = withCrossStoreChildKey(structuredClone(lineage), newChildKey)
   }
   return next
 }

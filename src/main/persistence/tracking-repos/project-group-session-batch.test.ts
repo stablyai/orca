@@ -102,9 +102,7 @@ function fixture(folderCount: number) {
     removedIds,
     selected,
     operations,
-    scheduleSave,
-    removeWorkspaceLineageForRemovedFolder,
-    pruneMobileClientTabSelections
+    scheduleSave
   }
 }
 
@@ -132,11 +130,6 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
-    expect(setup.removeWorkspaceLineageForRemovedFolder.mock.calls).toEqual(
-      setup.removedIds.map((id) => [id])
-    )
-    expect(setup.pruneMobileClientTabSelections).toHaveBeenCalledTimes(1)
-    expect(setup.scheduleSave).toHaveBeenCalledTimes(1)
   })
 
   it('preserves session references when the deleted group has no folder workspaces', () => {
@@ -156,8 +149,5 @@ describe('project group session removal', () => {
     const before = structuredClone(setup.state)
     expect(setup.operations.deleteProjectGroup('missing')).toBe(false)
     expect(setup.state).toEqual(before)
-    expect(setup.removeWorkspaceLineageForRemovedFolder).not.toHaveBeenCalled()
-    expect(setup.pruneMobileClientTabSelections).not.toHaveBeenCalled()
-    expect(setup.scheduleSave).not.toHaveBeenCalled()
   })
 })

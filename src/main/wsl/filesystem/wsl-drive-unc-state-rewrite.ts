@@ -16,7 +16,7 @@ import {
 } from '../../../shared/worktree/id'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
 import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-workspace-types'
+import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
@@ -89,19 +89,19 @@ export function rewriteWslDriveUncState(
 
 /** 'rewrite-child-key': the parent names a workspace in another store, so it is never mapped. */
 function withRewrittenChildKeys(
-  record: NonNullable<PersistedState['crossStoreLineageByChildKey']>,
+  record: Record<string, unknown>,
   rewriter: WslDriveUncRewriter
-): NonNullable<PersistedState['crossStoreLineageByChildKey']> {
+): Record<string, unknown> {
   let changed = false
-  const next: NonNullable<PersistedState['crossStoreLineageByChildKey']> = {}
+  const next: Record<string, unknown> = {}
   for (const [key, lineage] of Object.entries(record)) {
     const childWorkspaceKey = rewriter.identity(key)
     if (childWorkspaceKey === key || !isWorkspaceKey(childWorkspaceKey)) {
-      next[key as WorkspaceKey] = lineage
+      next[key] = lineage
       continue
     }
     changed = true
-    next[childWorkspaceKey] = { ...lineage, childWorkspaceKey }
+    next[childWorkspaceKey] = withCrossStoreChildKey(lineage, childWorkspaceKey)
   }
   return changed ? next : record
 }

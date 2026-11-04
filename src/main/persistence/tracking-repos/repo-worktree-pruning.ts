@@ -136,7 +136,7 @@ export function pruneWorktreeStateForRepo(
   for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
     const childScope = parseWorkspaceKey(childKey)
     if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
-      delete state.crossStoreLineageByChildKey?.[childKey as WorkspaceKey]
+      delete state.crossStoreLineageByChildKey?.[childKey]
     }
   }
   pruneMobileClientTabSelections(belongsToHost)

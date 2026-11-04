@@ -73,7 +73,7 @@ function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string)
   for (const key of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
     const child = parseWorkspaceKey(key)
     if (child?.type === 'worktree' && isRepoWorktreeId(repoId, child.worktreeId)) {
-      delete state.crossStoreLineageByChildKey?.[key as WorkspaceKey]
+      delete state.crossStoreLineageByChildKey?.[key]
     }
   }
 }

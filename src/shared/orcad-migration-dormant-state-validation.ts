@@ -1,6 +1,7 @@
 import type { OrcadMigrationDormantStatePayload } from './orcad-migration/orcad-migration-manifest'
 import { getRepoIdFromWorktreeId } from './worktree/id'
 import { parseWorkspaceKey } from './workspace-scope'
+import { findCrossStoreLineageConflict } from './worktree/cross-store-lineage-records'
 import {
   assertOrcadMigrationDormantWorkspaceSessionReferences,
   parseOrcadMigrationDormantWorkspaceSession
@@ -108,6 +109,15 @@ export function parseOrcadMigrationDormantState(value: unknown): OrcadMigrationD
   const crossStoreLineage = payload.crossStoreLineage ?? []
   assertUnique(crossStoreLineage, (entry) => entry.childWorkspaceKey, 'cross_store_lineage')
   assertUnique(crossStoreLineage, (entry) => entry.sourceKey, 'cross_store_lineage_source')
+  if (
+    findCrossStoreLineageConflict({
+      crossStoreChildKeys: crossStoreLineage.map((entry) => entry.childWorkspaceKey),
+      sameStoreWorktreeIds: payload.worktreeLineage.map((entry) => entry.worktreeId),
+      sameStoreChildKeys: payload.workspaceLineage.map((entry) => entry.childWorkspaceKey)
+    })
+  ) {
+    throw new Error('orcad_migration_dormant_lineage_child_conflict')
+  }
   assertUnique(payload.sparsePresets, (entry) => `${entry.repoId}\0${entry.id}`, 'sparse_preset')
   assertUnique(payload.retiredWorktreeNames, (entry) => entry.repoId, 'retired_names')
   assertUnique(

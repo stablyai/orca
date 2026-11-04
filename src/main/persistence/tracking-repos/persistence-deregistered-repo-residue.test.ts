@@ -110,27 +110,36 @@ describe('deregistered repo residue', () => {
   })
 
   it('keeps a cross-store link whose parent repo is unknown here, and drops one with its child', async () => {
-    const link = (childWorktreeId: string) => ({
-      childWorkspaceKey: worktreeWorkspaceKey(childWorktreeId),
-      childInstanceId: 'child-instance',
-      parent: {
-        installationId: 'other-install',
-        workspaceKey: worktreeWorkspaceKey(GONE_WORKTREE),
-        instanceId: 'parent-instance'
-      },
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt: 1
-    })
-    const malformedChild = worktreeWorkspaceKey(`${LIVE_REPO}::/workspace/malformed`)
     writeDataFile({
       schemaVersion: 1,
       repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
       worktreeMeta: {},
       crossStoreLineageByChildKey: {
-        [worktreeWorkspaceKey(LIVE_WORKTREE)]: link(LIVE_WORKTREE),
-        [worktreeWorkspaceKey(GONE_WORKTREE)]: link(GONE_WORKTREE),
-        [malformedChild]: { childWorkspaceKey: malformedChild }
+        'worktree:live-repo::/workspace/live': {
+          childWorkspaceKey: 'worktree:live-repo::/workspace/live',
+          childInstanceId: 'child-instance',
+          parent: {
+            installationId: 'other-install',
+            workspaceKey: 'worktree:gone-repo::/workspace/orphan',
+            instanceId: 'parent-instance'
+          },
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 1
+        },
+        'worktree:gone-repo::/workspace/orphan': {
+          childWorkspaceKey: 'worktree:gone-repo::/workspace/orphan',
+          childInstanceId: 'child-instance',
+          parent: {
+            installationId: 'other-install',
+            workspaceKey: 'worktree:live-repo::/workspace/live',
+            instanceId: 'parent-instance'
+          },
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 1
+        },
+        'worktree:live-repo::/workspace/unreadable': { fieldFromANewerBuild: true }
       }
     })
 
@@ -138,7 +147,19 @@ describe('deregistered repo residue', () => {
     store.flush()
 
     expect((readDataFile() as PersistedState).crossStoreLineageByChildKey).toEqual({
-      [worktreeWorkspaceKey(LIVE_WORKTREE)]: link(LIVE_WORKTREE)
+      'worktree:live-repo::/workspace/live': {
+        childWorkspaceKey: 'worktree:live-repo::/workspace/live',
+        childInstanceId: 'child-instance',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:gone-repo::/workspace/orphan',
+          instanceId: 'parent-instance'
+        },
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      },
+      'worktree:live-repo::/workspace/unreadable': { fieldFromANewerBuild: true }
     })
   })
 

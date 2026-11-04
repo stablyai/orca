@@ -14,6 +14,10 @@ import { omitDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-per
 import { assertOrcadDestinationCanonicalMetadata } from './orcad-destination-worktree-metadata'
 import { assertSameValue } from './orcad-catalog-row-identity'
 import {
+  findCrossStoreLineageConflict,
+  validCrossStoreLineage
+} from '../../../shared/worktree/cross-store-lineage-records'
+import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
 } from '../../../shared/worktree/retired-name-registry'
@@ -76,6 +80,7 @@ export function prepareOrcadMigrationDormantState(
     key: entry.childWorkspaceKey,
     value: structuredClone(entry.lineage)
   }))
+  assertNoLineageChildConflict(payload, state)
   const existingPresets = new Map(
     Object.values(state.sparsePresetsByRepo)
       .flat()
@@ -109,7 +114,8 @@ export function prepareOrcadMigrationDormantState(
     ),
     newCrossStoreLineage: selectNewKeyedRows(
       crossStoreLineage,
-      state.crossStoreLineageByChildKey ?? {},
+      // An unreadable saved entry is replaced by the readable one the move carries.
+      validCrossStoreLineage(state.crossStoreLineageByChildKey),
       'cross_store_lineage'
     ),
     newSparsePresets,
@@ -184,6 +190,30 @@ export function applyPreparedOrcadMigrationDormantState(
   applyPreparedOrcadMigrationWorkspaceSession(prepared.workspaceSession, state)
   applyPreparedOrcadMigrationAutomationState(prepared.automationState, state)
   applyPreparedOrcadMigrationClientState(prepared.clientState, state)
+}
+
+/** Rejects before any mutation: a child must not end up with both parent representations. */
+function assertNoLineageChildConflict(
+  payload: OrcadMigrationDormantStatePayload,
+  state: PersistedState
+): void {
+  const incomingCrossStore = (payload.crossStoreLineage ?? []).map(
+    (entry) => entry.childWorkspaceKey
+  )
+  const conflict =
+    findCrossStoreLineageConflict({
+      crossStoreChildKeys: incomingCrossStore,
+      sameStoreWorktreeIds: Object.keys(state.worktreeLineageById),
+      sameStoreChildKeys: Object.keys(state.workspaceLineageByChildKey)
+    }) ??
+    findCrossStoreLineageConflict({
+      crossStoreChildKeys: Object.keys(validCrossStoreLineage(state.crossStoreLineageByChildKey)),
+      sameStoreWorktreeIds: payload.worktreeLineage.map((entry) => entry.worktreeId),
+      sameStoreChildKeys: payload.workspaceLineage.map((entry) => entry.childWorkspaceKey)
+    })
+  if (conflict) {
+    throw new Error(`orcad_migration_dormant_lineage_child_conflict:${conflict}`)
+  }
 }
 
 function selectNewKeyedRows<T>(

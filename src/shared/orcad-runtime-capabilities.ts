@@ -13,6 +13,10 @@ export const ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY =
 export const ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY =
   'orcad.migration-source.local-wsl.v1' as const
 
+// Older destinations drop dormantState.crossStoreLineage and commit anyway, losing the links.
+export const ORCAD_MIGRATION_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY =
+  'orcad.migration-cross-store-lineage.v1' as const
+
 // The blob channel also requires each installed kind’s orcad.migration-blob.<kind>.v1 capability.
 export const ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY = 'orcad.migration-blob.v1' as const
 
@@ -30,6 +34,7 @@ export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
+  ORCAD_MIGRATION_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY,
   ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY
 ] as const

@@ -3,6 +3,7 @@ import type { WorkspaceKey } from '../../../shared/folder-workspaces/folder-work
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { validCrossStoreLineage } from '../../../shared/worktree/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
@@ -26,13 +27,15 @@ export class CrossStoreLineagePersistence {
   getCrossStoreWorkspaceLineage(
     childWorkspaceKey: WorkspaceKey
   ): CrossStoreWorkspaceLineage | undefined {
-    return this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey?.[
-      childWorkspaceKey
-    ]
+    return validCrossStoreLineage(
+      this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
+    )[childWorkspaceKey]
   }
 
   getAllCrossStoreWorkspaceLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
-    return this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey ?? {}
+    return validCrossStoreLineage(
+      this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
+    )
   }
 
   /** Replaces the child's same-store parent; undefined when another host owns its raw-ID bucket. */

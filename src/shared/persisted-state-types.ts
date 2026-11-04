@@ -23,11 +23,7 @@ import type { Project, ProjectHostSetup } from './project-types'
 import type { Repo } from './repo-types'
 import type { SparsePreset } from './worktree/create-types'
 import type { RetiredNameRegistry } from './worktree/retired-name-registry'
-import type {
-  CrossStoreWorkspaceLineage,
-  WorkspaceLineage,
-  WorktreeLineage
-} from './worktree/lineage-types'
+import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import type { OrcadMigrationEvictedReceipt } from './orcad-migration/orcad-migration-evicted-receipts'
@@ -87,8 +83,9 @@ export type PersistedState = {
   worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
-  /** Parents in other stores; separate so older builds' same-store cleanup never reads them. */
-  crossStoreLineageByChildKey?: Record<WorkspaceKey, CrossStoreWorkspaceLineage>
+  /** Parents in other stores, as saved: entries this build can't read are kept, never trusted.
+   * Separate so older builds' same-store cleanup never reads them; read through validCrossStoreLineage. */
+  crossStoreLineageByChildKey?: Record<string, unknown>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
