@@ -177,7 +177,7 @@ export function useOnboardingFlow(
     if (!settings || themeStepEntryCapturedRef.current) {
       return
     }
-    // Why: capture entry theme so "Skip to project setup" keeps the preference the user arrived with.
+    // Why: capture entry theme so "Set up later" keeps the preference the user arrived with.
     themeStepEntryCapturedRef.current = true
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
@@ -276,7 +276,7 @@ export function useOnboardingFlow(
     setError
   })
 
-  const { next, skipToRepo, dismissOnboarding, back, jumpToStep } = useOnboardingFlowActions({
+  const { next, setUpLater, dismissOnboarding, back, jumpToStep } = useOnboardingFlowActions({
     busyLabel,
     setBusyLabel,
     setError,
@@ -317,7 +317,7 @@ export function useOnboardingFlow(
     detectedSet,
     isDetectingAgents,
     next,
-    skipToRepo,
+    setUpLater,
     dismissOnboarding,
     back,
     jumpToStep,
