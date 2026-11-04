@@ -14,7 +14,7 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -99,15 +99,16 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             })
             continue
           }
-          const existing = store
-            .getRepos()
-            .find(
-              (repo) =>
-                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                [normalizedImportRepoPath, resolvedImportRepoPath].includes(
-                  normalizeRuntimePathForComparison(repo.path)
-                )
-            )
+          const existing = store.getRepos().find(
+            (repo) =>
+              (repo.connectionId ?? null) === (args.connectionId ?? null) &&
+              (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
+                // The resolved spelling names this machine's folder, so only local rows may match it.
+                (resolvedImportRepoPath !== null &&
+                  !repo.connectionId &&
+                  !getRepoExecutionHostId(repo).startsWith('ssh:') &&
+                  normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
+          )
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {

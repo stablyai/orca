@@ -9,7 +9,7 @@ import type {
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { getRepoDialableSshTargetId } from '../../shared/execution-host'
+import { getRepoDialableSshTargetId, getRepoExecutionHostId } from '../../shared/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepoAsync } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
@@ -102,15 +102,16 @@ export class RuntimeNestedRepoImport {
           continue
         }
         // Import native rows only; SSH may share the path string. Paired hosts stamp native rows runtime:<env>, which still match.
-        const existing = store
-          .getRepos()
-          .find(
-            (repo) =>
-              getRepoDialableSshTargetId(repo) === null &&
-              [normalizedImportRepoPath, resolvedImportRepoPath].includes(
-                normalizeRuntimePathForComparison(repo.path)
-              )
-          )
+        const existing = store.getRepos().find(
+          (repo) =>
+            getRepoDialableSshTargetId(repo) === null &&
+            (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
+              // The resolved spelling names this machine's folder, so only native rows may match it.
+              (resolvedImportRepoPath !== null &&
+                !repo.connectionId &&
+                !getRepoExecutionHostId(repo).startsWith('ssh:') &&
+                normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
+        )
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
           if (group) {
