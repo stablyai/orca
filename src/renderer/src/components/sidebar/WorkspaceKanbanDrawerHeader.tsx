@@ -9,6 +9,7 @@ import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanDrawerHeaderProps = {
+  searchInputRef?: React.RefCallback<HTMLInputElement>
   selectedCount: number
   query: string
   isFiltering: boolean
@@ -31,6 +32,7 @@ type WorkspaceKanbanDrawerHeaderProps = {
 }
 
 export default function WorkspaceKanbanDrawerHeader({
+  searchInputRef,
   selectedCount,
   query,
   isFiltering,
@@ -74,6 +76,7 @@ export default function WorkspaceKanbanDrawerHeader({
             ) : null}
           </SheetTitle>
           <WorkspaceKanbanSearchField
+            searchInputRef={searchInputRef}
             query={query}
             isFiltering={isFiltering}
             isTooLarge={isTooLarge}
