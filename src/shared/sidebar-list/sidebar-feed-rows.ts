@@ -34,13 +34,10 @@ import {
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './host-filtering'
-import { deferHostSectionCollapse, scopeHostSectionCollapse } from './host-section-collapse'
 import { orderHostSectionOptions } from './host-section-order'
-import {
-  addHostSectionRows,
-  type HostSectionOption,
-  type HostSectionRow
-} from './host-section-rows'
+import type { HostSectionOption, HostSectionRow } from './host-section-rows'
+import { renderSidebarSectionRows as renderSidebarFeedRows } from './sidebar-section-rows'
+export { renderSidebarSectionRows as renderSidebarFeedRows } from './sidebar-section-rows'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -265,34 +262,6 @@ export function planSidebarFeedRows(
     hostScoped:
       view.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE || view.visibleWorkspaceHostIds !== null
   }
-}
-
-/** The planned rows under `collapsedGroups`, wrapped in host sections. */
-export function renderSidebarFeedRows(
-  planned: SidebarFeedPlan,
-  view: SidebarFeedView,
-  collapsedGroups: ReadonlySet<string>,
-  forceCollapseHosts = false
-): Pick<SidebarFeedRows, 'rows' | 'sectionRows'> {
-  const collapsed = new Set(collapsedGroups)
-  const rows = planned.plan.render(
-    planned.hostScoped ? deferHostSectionCollapse(collapsed) : collapsed
-  )
-  const sectioned = addHostSectionRows({
-    rows,
-    hostOptions: planned.orderedHostOptions,
-    workspaceHostScope: view.workspaceHostScope,
-    visibleWorkspaceHostIds: view.visibleWorkspaceHostIds,
-    defaultHostId: view.defaultHostId,
-    localHostLabel: view.localHostLabel,
-    collapsedHostKeys: collapsed,
-    forceCollapseHosts,
-    preferProjectGrouping: true
-  })
-  const sectionRows = planned.hostScoped
-    ? scopeHostSectionCollapse({ rows: sectioned, collapsedGroups: collapsed })
-    : sectioned
-  return { rows, sectionRows }
 }
 
 /** Build from published host inputs through shared filters/grouping without a clock; transient window overlays/cards stay outside. */

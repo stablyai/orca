@@ -226,6 +226,12 @@ export function useGlobalKeybindings(args: {
         return
       }
       if (
+        matchShortcut('sidebar.groups.toggleCollapseAll') &&
+        handlers.get('sidebar.groups.toggleCollapseAll')?.()
+      ) {
+        return
+      }
+      if (
         matchShortcut('sidebar.childWorkspaces.toggle') &&
         handlers.get('sidebar.childWorkspaces.toggle')?.()
       ) {

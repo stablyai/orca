@@ -51,6 +51,7 @@ export type KeybindingActionId =
   | 'sidebar.ports.toggle'
   | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.childWorkspaces.toggle'
+  | 'sidebar.groups.toggleCollapseAll'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
   | 'floatingWorkspace.maximize'

@@ -15,15 +15,12 @@ import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-r
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
-import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
-import {
-  deferHostSectionCollapse,
-  scopeHostSectionCollapse
-} from '../../../../../../shared/sidebar-list/host-section-collapse'
-import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { renderSidebarFeedRows } from '../../../../../../shared/sidebar-list/sidebar-feed-rows'
+import { collectSectionCollapseKeys } from '../../../../../../shared/sidebar-list/section-collapse'
+
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import {
   mergeDraggedHostSectionOrder,
@@ -38,6 +35,8 @@ import {
 } from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+
+const UNCOLLAPSED: ReadonlySet<string> = new Set()
 
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
@@ -212,17 +211,6 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     folderWorkspaces: args.visibleFolderWorkspacesForRows,
     defaultHostId
   })
-  const rowCollapsedGroups = useMemo(
-    () =>
-      hostScopedGroups
-        ? deferHostSectionCollapse(effectiveCollapsedGroups)
-        : effectiveCollapsedGroups,
-    [effectiveCollapsedGroups, hostScopedGroups]
-  )
-  const rows: Row[] = useMemo(
-    () => rowPlan.render(rowCollapsedGroups),
-    [rowPlan, rowCollapsedGroups]
-  )
   const orderedHostOptions = useMemo(
     () => orderHostSectionOptions(hostOptions, workspaceHostOrder),
     [hostOptions, workspaceHostOrder]
@@ -239,35 +227,27 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       ),
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
-  const sectionRows = useMemo(() => {
-    const sectioned = addHostSectionRows({
-      rows,
-      hostOptions: orderedHostOptions,
+  const planned = useMemo(
+    () => ({ plan: rowPlan, hostScoped: hostScopedGroups, orderedHostOptions }),
+    [rowPlan, hostScopedGroups, orderedHostOptions]
+  )
+  const view = useMemo(
+    () => ({
       workspaceHostScope: args.workspaceHostScope,
       visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
       defaultHostId,
-      localHostLabel: getLocalExecutionHostLabel(),
-      collapsedHostKeys: effectiveCollapsedGroups,
-      forceCollapseHosts: hostDragActive,
-      // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
-      preferProjectGrouping: true
-    })
-    return hostScopedGroups
-      ? scopeHostSectionCollapse({
-          rows: sectioned,
-          collapsedGroups: effectiveCollapsedGroups
-        })
-      : sectioned
-  }, [
-    args.visibleWorkspaceHostIds,
-    args.workspaceHostScope,
-    defaultHostId,
-    effectiveCollapsedGroups,
-    hostDragActive,
-    hostScopedGroups,
-    orderedHostOptions,
-    rows
-  ])
+      localHostLabel: getLocalExecutionHostLabel()
+    }),
+    [args.workspaceHostScope, args.visibleWorkspaceHostIds, defaultHostId]
+  )
+  const collapsibleGroupKeys = useMemo(
+    () => collectSectionCollapseKeys(renderSidebarFeedRows(planned, view, UNCOLLAPSED).sectionRows),
+    [planned, view]
+  )
+  const { rows, sectionRows } = useMemo(
+    () => renderSidebarFeedRows(planned, view, effectiveCollapsedGroups, hostDragActive),
+    [planned, view, effectiveCollapsedGroups, hostDragActive]
+  )
   const renderedSidebarRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(sectionRows),
     [sectionRows]
@@ -275,6 +255,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
 
   const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
+    collapsibleGroupKeys,
     occurrencePlan: rowPlan.occurrencePlan,
     hostOptions: headerHostOptions,
     effectiveCollapsedGroups,

@@ -90,6 +90,7 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setGroupsCollapsed: (keys: readonly string[], collapsed: boolean) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void

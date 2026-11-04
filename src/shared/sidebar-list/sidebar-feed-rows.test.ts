@@ -4,6 +4,7 @@ import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 import { NO_WORKSPACE_ROW_FILTERS } from '../workspace-view/workspace-row-filters'
 import type { Worktree } from '../worktree/types'
+import { collectSectionCollapseKeys } from './section-collapse'
 import { ALL_GROUP_KEY } from './group-keys'
 import type { HostSectionRow } from './host-section-rows'
 import { normalizePairedServerRow } from './paired-server-rows'
@@ -407,5 +408,80 @@ describe('buildSidebarFeedRows reads a row’s own registration of a repo two ho
     expect(outline(built.sectionRows)).toEqual(['|r::/w/a@0'])
     const header = built.sectionRows.find((row) => row.type === 'header')
     expect(header).toMatchObject({ hostWorktreeIds: new Map([['local', ['r::/w/a']]]) })
+  })
+})
+
+describe('sidebar section collapse scope', () => {
+  it('collects filtered nested headers before parent collapse, including pinned and host sections', () => {
+    const repos = [
+      repo('near', { projectGroupId: 'H' }),
+      repo('far', { projectGroupId: 'H', connectionId: 'box' }),
+      repo('excluded', { projectGroupId: 'X' })
+    ]
+    const feed = domains({
+      workspaces: buildWorkspaceRows({
+        worktrees: [
+          worktree('near::/w/a'),
+          worktree('near::/w/pinned', { isPinned: true }),
+          worktree('far::/w/b', { hostId: 'ssh:box' }),
+          worktree('excluded::/w/c')
+        ],
+        folderWorkspaces: [],
+        repos,
+        lineageById: {}
+      })
+    })
+    const scopedView = view({
+      groupBy: 'repo',
+      visibleWorkspaceHostIds: ['local', 'ssh:box'],
+      filters: { ...NO_WORKSPACE_ROW_FILTERS, filterRepoIds: ['near', 'far'] }
+    })
+    const index = indexSidebarFeed(feed, repos)
+    const planned = planSidebarFeedRows(
+      feed,
+      index,
+      catalog(repos, [projectGroup('G', null), projectGroup('H', 'G'), projectGroup('X', null)]),
+      scopedView,
+      rankSidebarFeedWorktrees(index, 'recent')
+    )
+    const expanded = renderSidebarFeedRows(planned, scopedView, new Set())
+    expect(collectSectionCollapseKeys(expanded.sectionRows)).toEqual([
+      'host:local',
+      'pinned',
+      'project-group:G',
+      'project-group:H',
+      'repo:near',
+      'host:ssh:box',
+      'repo:far'
+    ])
+    const collapsed = renderSidebarFeedRows(
+      planned,
+      scopedView,
+      new Set([
+        'host:local',
+        'host:ssh:box',
+        'project-group:G',
+        'project-group:H',
+        'repo:near',
+        'repo:far',
+        'pinned'
+      ])
+    )
+    expect(collapsed.sectionRows.filter((row) => row.type === 'item')).toEqual([])
+  })
+
+  it('has no eligible sections in an unpinned flat view', () => {
+    const repos = [repo('r')]
+    const feed = domains({
+      workspaces: buildWorkspaceRows({
+        worktrees: [worktree('r::/w/a')],
+        folderWorkspaces: [],
+        repos,
+        lineageById: {}
+      })
+    })
+    expect(
+      collectSectionCollapseKeys(buildSidebarFeedRows(feed, catalog(repos), view()).sectionRows)
+    ).toEqual([])
   })
 })
