@@ -141,6 +141,9 @@ async function signInAgainst(
   })
   agent.on('session/new', (frame) => {
     void sessionOpen.promise.then(async () => {
+      if (child.stdin.writableEnded) {
+        return
+      }
       const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
       if (options.sessionError) {
         agent.fail(frame, -32603, 'fixture session failure')
