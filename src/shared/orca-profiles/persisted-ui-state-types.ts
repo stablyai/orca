@@ -161,6 +161,7 @@ export type PersistedUIState = {
   _zcodeStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Muse status item. */
   _museStatusBarDefaultAdded?: boolean
+  _ollamaStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Git blame status item. */
   _gitBlameStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
