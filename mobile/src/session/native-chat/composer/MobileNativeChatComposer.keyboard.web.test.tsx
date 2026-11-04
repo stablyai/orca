@@ -8,7 +8,14 @@ vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('re
 vi.mock('./MobileNativeChatComposerField', () => import('./MobileNativeChatComposerField.web'))
 vi.mock('../../../platform/host-os', () => import('../../../platform/host-os.web'))
 vi.mock('../../../platform/keyboard-occlusion', () => ({ useKeyboardOcclusion: () => 0 }))
-vi.mock('lucide-react-native', () => ({ Plus: () => null }))
+vi.mock('lucide-react-native', () => ({
+  Plus: () => null,
+  AtSign: () => null,
+  Image: () => null,
+  Package: () => null,
+  Paperclip: () => null,
+  Terminal: () => null
+}))
 vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
 vi.mock('../input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: () => null
