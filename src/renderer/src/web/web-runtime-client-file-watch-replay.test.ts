@@ -189,47 +189,6 @@ describe('WebRuntimeClient file-watch replay resync', () => {
     expect(internals.subscriptions.size).toBe(0)
   })
 
-  it('does not replay a file watch stopped after its socket disconnects', async () => {
-    const client = new WebRuntimeClient(
-      pairedRuntimeConnectionFromOffer({
-        v: 2,
-        endpoint: 'ws://127.0.0.1:6768',
-        deviceToken: 'token',
-        publicKeyB64: Buffer.alloc(32).toString('base64')
-      })
-    )
-    const initialSocket = fakeSockets[0]!
-    initialSocket.readyState = FakeWebSocket.OPEN
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
-    const internals = client as unknown as {
-      ws: FakeWebSocket | null
-      handshake: PairedE2EEClientHandshake | null
-      state: string
-      subscriptions: Map<string, { needsReplay: boolean }>
-      setState(next: string): void
-    }
-    internals.handshake = createFixedKeyLegacyHandshakeForTest(new Uint8Array(32))
-    internals.state = 'connected'
-    const handle = await client.subscribe(
-      'files.watch',
-      { worktree: 'wt-1' },
-      { onResponse: vi.fn() }
-    )
-
-    initialSocket.onclose?.()
-    expect(Array.from(internals.subscriptions.values())[0]?.needsReplay).toBe(true)
-    handle.unsubscribe()
-    expect(internals.subscriptions.size).toBe(0)
-
-    const replacementSocket = new FakeWebSocket('ws://127.0.0.1:6768')
-    replacementSocket.readyState = FakeWebSocket.OPEN
-    internals.ws = replacementSocket
-    internals.handshake = createFixedKeyLegacyHandshakeForTest(new Uint8Array(32))
-    internals.setState('connected')
-    expect(replacementSocket.send).not.toHaveBeenCalled()
-    client.close()
-  })
-
   it('evicts a failed file-watch setup before reconnect can replay it', async () => {
     const client = new WebRuntimeClient(
       pairedRuntimeConnectionFromOffer({

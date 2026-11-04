@@ -7,7 +7,8 @@ import {
   buildDefaultTerminalOptions,
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
-  resolveTerminalCursorInactiveStyle
+  resolveTerminalCursorInactiveStyle,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildFontFamily } from '@/lib/monospace-font-family'
@@ -35,6 +36,7 @@ export function buildPreviewAppearanceOptions(
     fastScrollSensitivity: normalizeTerminalFastScrollSensitivity(
       settings?.terminalFastScrollSensitivity
     ),
+    scrollOnUserInput: resolveTerminalScrollOnUserInput(settings?.terminalScrollOnUserInput),
     lineHeight: normalizeTerminalLineHeight(settings?.terminalLineHeight),
     wordSeparator: settings?.terminalWordSeparator,
     // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.

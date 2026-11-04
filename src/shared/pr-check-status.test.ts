@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from './pr-check-status'
+import {
+  derivePRCheckStatus,
+  derivePRCheckStatusFromRollup,
+  summarizePRCheckRollup
+} from './pr-check-status'
+import { getProviderChecksOutcome } from './provider-check-summary'
 import type { PRCheckDetail } from './github/check-types'
 
 const check = (
@@ -37,4 +42,34 @@ describe('provider-neutral check status', () => {
   it.each(['ERROR', 'STARTUP_FAILURE'])('treats raw %s conclusions as failures', (conclusion) => {
     expect(derivePRCheckStatusFromRollup([{ status: 'COMPLETED', conclusion }])).toBe('failure')
   })
+})
+
+it.each([
+  [['CANCELLED'], 'cancelled'],
+  [['SUCCESS', 'CANCELLED'], 'cancelled'],
+  [['CANCELLED', 'PENDING'], 'pending'],
+  [['CANCELLED', 'FAILURE', 'PENDING'], 'failure']
+] as const)('preserves legacy counts while presenting %j as %s', (conclusions, outcome) => {
+  const raw = conclusions.map((conclusion) => ({ status: 'COMPLETED', conclusion }))
+  const summary = summarizePRCheckRollup(raw)
+  expect(summary.state).toBe('failure')
+  expect(summary.cancelled).toBe(1)
+  expect(summary.total).toBe(summary.passed + summary.failed + summary.pending + summary.neutral)
+  expect(getProviderChecksOutcome(summary)).toBe(outcome)
+  expect(getProviderChecksOutcome({ ...summary, cancelled: undefined })).toBe('failure')
+  expect(getProviderChecksOutcome({ ...summary, cancelled: summary.failed + 1 })).toBe('failure')
+  expect(getProviderChecksOutcome({ ...summary, total: 999 })).toBe('failure')
+})
+
+it('does not downgrade a coarse failure from contradictory cancellation metadata', () => {
+  const summary = {
+    state: 'failure' as const,
+    total: 1,
+    passed: 0,
+    failed: 0,
+    pending: 1,
+    neutral: 0,
+    cancelled: 0
+  }
+  expect(getProviderChecksOutcome(summary, 'failure')).toBe('failure')
 })

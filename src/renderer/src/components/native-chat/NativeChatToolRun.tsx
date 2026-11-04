@@ -182,6 +182,7 @@ export function NativeChatToolRun({
       {hasAskCall ? (
         <NativeChatAwaitingInputRow
           subject={askSubject}
+          onLinkClick={onLinkClick}
           pending={askIsActive}
           disclosureKey={disclosureId === undefined ? undefined : `ask:${disclosureId}`}
           // A grouped ask here still names only its count.

@@ -1,8 +1,8 @@
 // Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
-import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
+import type { AgentTurnOutcome } from '../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'

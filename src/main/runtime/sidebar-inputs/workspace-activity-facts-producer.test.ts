@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SidebarClock } from './sidebar-clock'
 import { AgentHookServer } from '../../agent-hooks/server'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   WorkspaceActivityFactsProducer,
   type WorkspaceSurfaceActivity

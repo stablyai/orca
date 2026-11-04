@@ -1,6 +1,6 @@
 import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId,

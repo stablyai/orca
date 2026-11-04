@@ -3,7 +3,7 @@ import type {
   TerminalQuickCommandAction,
   TerminalQuickCommandScope
 } from '../../../src/shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandBodySize,
   isAgentQuickCommand,

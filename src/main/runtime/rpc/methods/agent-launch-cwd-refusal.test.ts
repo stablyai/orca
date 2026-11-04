@@ -57,7 +57,7 @@ import { RuntimeRpcFailureError } from '../../../../cli/runtime/types'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITIES,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-launch-runtime-capability'
+} from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { RpcDispatcher } from '../dispatcher'
 import { UnixSocketTransport } from '../unix-socket-transport'
 import { AGENT_LAUNCH_METHODS } from './agent-launch'
@@ -86,7 +86,7 @@ import * as createdWorkspaceLaunch from '../../../agent-launch/agent-launch-crea
 import { formatAmbiguousCwdParentMessage } from '../../runtime-worktree-lineage-resolution'
 import { managedCwdMobileFixture } from './managed-cwd-mobile.test-fixture'
 import { managedCwdLaunchFixture } from './managed-cwd-launch.test-fixture'
-import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
+import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch/contracts/agent-launch-operation'
 import { AgentLaunchReplay } from '../../../../shared/rpc-contract/agent-launch-params'
 
 configureWorktreeAwarenessEnvironment({

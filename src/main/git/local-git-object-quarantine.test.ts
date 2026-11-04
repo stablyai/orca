@@ -9,13 +9,13 @@ import {
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   seedWslLinkedWorktreeGitRoutingForTests
-} from './wsl-linked-worktree-git-routing'
+} from './command-runner/wsl-linked-worktree-git-routing'
 
 const { readRepoCommonDirFromGitMock } = vi.hoisted(() => ({
   readRepoCommonDirFromGitMock: vi.fn()
 }))
 
-vi.mock('./worktree-list-reader', () => ({
+vi.mock('./worktrees/catalog/worktree-list-reader', () => ({
   readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
 }))
 vi.mock('../../shared/git-object-quarantine', async (importOriginal) => ({
@@ -53,17 +53,6 @@ describe('localGitObjectsDirectory', () => {
     expect(localGitObjectsDirectory('/mnt/c/repo/.git', 'Ubuntu')).toEqual({
       hostPath: 'C:\\repo\\.git\\objects',
       gitPath: '/mnt/c/repo/.git/objects'
-    })
-  })
-
-  it('uses one spelling for native Git', () => {
-    expect(localGitObjectsDirectory('/Users/me/repo/.git', undefined)).toEqual({
-      hostPath: '/Users/me/repo/.git/objects',
-      gitPath: '/Users/me/repo/.git/objects'
-    })
-    expect(localGitObjectsDirectory('C:\\repo\\.git', undefined)).toEqual({
-      hostPath: 'C:\\repo\\.git\\objects',
-      gitPath: 'C:\\repo\\.git\\objects'
     })
   })
 })

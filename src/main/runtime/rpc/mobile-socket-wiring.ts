@@ -175,6 +175,12 @@ export class MobileSocketWiring {
     message: MobileSocketPayload,
     metadata: MobileSocketTransportMetadata
   ): void {
+    const socket = this.authenticatedSockets.get(ws)
+    if (socket && !this.deviceRegistry.resolveAuthenticatedPrincipal(socket.device)) {
+      ws.close(4001, 'Unauthorized')
+      this.handleClose(ws)
+      return
+    }
     let channel = this.channels.get(ws)
     if (!channel) {
       const connectionId = randomBytes(8).toString('hex')

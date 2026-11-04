@@ -1,5 +1,5 @@
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { AgentLaunchPaneAlreadyLiveError } from '../../shared/agent-launch-pane-already-live'
+import { AgentLaunchPaneAlreadyLiveError } from '../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import { randomUUID } from 'node:crypto'

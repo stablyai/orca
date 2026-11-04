@@ -5,7 +5,7 @@ import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 
 const { authorize, spawn } = vi.hoisted(() => ({ authorize: vi.fn(), spawn: vi.fn() }))
 
-vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: authorize }))
+vi.mock('./access/filesystem-auth', () => ({ resolveAuthorizedPath: authorize }))
 vi.mock('../../ripgrep/bundled-ripgrep-spawn', () => ({ spawnBundledRipgrep: spawn }))
 vi.mock('../local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: () => ({})

@@ -258,6 +258,8 @@ describe('a failed ACP turn says why', () => {
     )
     f.apply(lane.promptResult('c1', { stopReason: 'max_tokens' }, 1003))
     expect(statusRows(await f.rig.rows())).toEqual([])
+    // The failed outcome alone still holds the cards waiting behind it.
+    expect(f.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
   })
 
   it('does not reopen or retarget an ended prompt for its late frame', async () => {

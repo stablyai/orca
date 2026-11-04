@@ -1,3 +1,4 @@
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import type { AppState } from '../types'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
@@ -54,18 +55,45 @@ export function syncPRChecksStatus(
   }
 
   const nextStatus = deriveCheckStatusFromChecks(checks)
+  // Detail pages are partial; retain the complete same-head summary until the next PR lookup.
   if (prEntry.data.checksStatus === nextStatus) {
     return null
   }
 
+  const hostedKey = getHostedReviewCacheKey(
+    repoPath,
+    normalized,
+    settings,
+    repoId,
+    connectionId,
+    executionHostId,
+    hasRepoOwner
+  )
+  const hostedEntry = state.hostedReviewCache?.[hostedKey]
+  const hosted = hostedEntry?.data
   return {
+    ...(hosted?.provider === 'github' &&
+    hosted.number === prEntry.data.number &&
+    hosted.headSha === prEntry.data.headSha &&
+    samePRRepo(hosted.githubRepository, prEntry.data.prRepo)
+      ? {
+          hostedReviewCache: {
+            ...state.hostedReviewCache,
+            [hostedKey]: {
+              ...hostedEntry,
+              data: { ...hosted, status: nextStatus, checksSummary: undefined }
+            }
+          }
+        }
+      : {}),
     prCache: {
       ...state.prCache,
       [prCacheKey]: {
         ...prEntry,
         data: {
           ...prEntry.data,
-          checksStatus: nextStatus
+          checksStatus: nextStatus,
+          checksSummary: undefined
         }
       }
     }

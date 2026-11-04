@@ -3,14 +3,14 @@ import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
 } from '../../../../shared/source-control-action-selection'
-import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -32,7 +32,7 @@ import { admitSourceControlRecovery } from './source-control-recovery-admission'
 export type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
   trimmedCommandInput: string
-  /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
+  /** Deliberate surface operations remain distinct from saved route preferences. */
   launchChoice?: AgentLaunchChoice
   recipe: SelectedSourceControlActionRecipe
   saveTargetValue: string
@@ -60,6 +60,8 @@ export type RunSourceControlAgentActionStartArgs = {
     agentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
+    chatSessionOptions?: Readonly<Record<string, string>>
+    preferredSurface?: 'chat'
     launchChoice?: AgentLaunchChoice
     sessionOptionsYieldToAgentArgs?: true
   }) => DirectWorkItemLaunchResult | Promise<DirectWorkItemLaunchResult>
@@ -80,7 +82,7 @@ export async function runSourceControlAgentActionStart({
   selectedAgent,
   trimmedCommandInput,
   launchChoice,
-  recipe,
+  recipe: submittedRecipe,
   saveTargetValue,
   actionId,
   repoId,
@@ -102,6 +104,7 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
     return false

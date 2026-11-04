@@ -1,3 +1,7 @@
+import {
+  CLAUDE_MODEL_FALLBACK_COPY,
+  claudeModelFallbackLabels
+} from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
@@ -11,7 +15,10 @@ import {
   type NativeChatBlock,
   type NativeChatTextBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureDetailText,
+  readWholeAgentSessionFailureFact
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
@@ -140,6 +147,41 @@ export function MobileNativeChatNoticeRow({
     ) : null
   }
   const look = nativeChatNoticeLook(notice)
+  const lineText = noticeLineText(notice, names, t)
+  const failureDetail = agentSessionFailureDetailText(
+    readWholeAgentSessionFailureFact(notice.failure)
+  )
+  const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
+  const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
+  const payload = notice.providerFrame?.payload
+  const diagnosticBody = (
+    <MobileNativeChatOwnedScrollView
+      positionKey={detailId}
+      style={[toolStyles.codeBox, toolStyles.codeScroll]}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text
+        selectable={INLINE_TEXT_SELECTION}
+        style={[
+          toolStyles.codeText,
+          scaledType(MONO_SIZE, fontScale),
+          look.kind === 'settled-permission' && { color: toneColor(look.tone) }
+        ]}
+      >
+        {diagnosticText}
+        {diagnosticText && payload ? '\n\n' : ''}
+        {payload?.truncated
+          ? `${t(
+              'chat.notice.truncatedResponse',
+              'Provider response truncated (original size: {{bytes}} bytes).',
+              { bytes: payload.byteLength }
+            )}\n`
+          : ''}
+        {payload?.head}
+      </Text>
+    </MobileNativeChatOwnedScrollView>
+  )
   switch (look.kind) {
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
@@ -155,7 +197,6 @@ export function MobileNativeChatNoticeRow({
                 agent
               }
             )
-      const payload = notice.providerFrame?.payload
       return (
         <View>
           {disclosed ? null : (
@@ -167,34 +208,7 @@ export function MobileNativeChatNoticeRow({
               onLongPress={onLongPress}
             />
           )}
-          {disclosed || expanded ? (
-            <MobileNativeChatOwnedScrollView
-              positionKey={detailId}
-              style={[toolStyles.codeBox, toolStyles.codeScroll]}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-            >
-              <Text
-                selectable={INLINE_TEXT_SELECTION}
-                style={[
-                  toolStyles.codeText,
-                  scaledType(MONO_SIZE, fontScale),
-                  { color: toneColor(look.tone) }
-                ]}
-              >
-                {notice.text}
-                {payload ? '\n\n' : ''}
-                {payload?.truncated
-                  ? `${t(
-                      'chat.notice.truncatedResponse',
-                      'Provider response truncated (original size: {{bytes}} bytes).',
-                      { bytes: payload.byteLength }
-                    )}\n`
-                  : ''}
-                {payload?.head}
-              </Text>
-            </MobileNativeChatOwnedScrollView>
-          ) : null}
+          {disclosed || expanded ? diagnosticBody : null}
         </View>
       )
     }
@@ -226,6 +240,16 @@ export function MobileNativeChatNoticeRow({
           {nativeChatHostStatusCopy(t)[look.presentation]}
         </Text>
       )
+    case 'model-fallback':
+      return (
+        <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
+          {t(
+            'chat.notice.modelFallback',
+            CLAUDE_MODEL_FALLBACK_COPY,
+            claudeModelFallbackLabels(look)
+          )}
+        </Text>
+      )
     case 'plan':
       return (
         <View style={styles.card}>
@@ -248,18 +272,32 @@ export function MobileNativeChatNoticeRow({
         </Text>
       )
     case 'line': {
-      const lineText = noticeLineText(notice, names, t)
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
         look.tone && { color: toneColor(look.tone) }
       ]
-      if (!look.tone) {
-        return (
+      const content = (
+        <View style={look.tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
             {lineText}
           </Text>
-        )
+          {detail || payload ? (
+            <View>
+              <NoticeDisclosureSummary
+                summary={t('pullRequest.markdownBlocks.details', 'Details')}
+                expanded={expanded}
+                fontScale={fontScale}
+                onPress={() => setExpanded((open) => !open)}
+                onLongPress={onLongPress}
+              />
+              {expanded ? diagnosticBody : null}
+            </View>
+          ) : null}
+        </View>
+      )
+      if (!look.tone) {
+        return content
       }
       const Icon =
         look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
@@ -271,9 +309,7 @@ export function MobileNativeChatNoticeRow({
             strokeWidth={2}
             style={styles.toneIcon}
           />
-          <Text selectable={INLINE_TEXT_SELECTION} style={[...textStyle, styles.toneText]}>
-            {lineText}
-          </Text>
+          {content}
         </View>
       )
     }

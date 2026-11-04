@@ -20,7 +20,7 @@ const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
   terminateWindowsProcessTreeMock: vi.fn(async () => {})
 }))
 
-vi.mock('../windows-process-tree-kill', () => ({
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: terminateWindowsProcessTreeMock
 }))
 

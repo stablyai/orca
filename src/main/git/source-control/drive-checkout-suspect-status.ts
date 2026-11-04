@@ -9,7 +9,7 @@ import {
   observeLocalWatcherEvents
 } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/wsl-linked-worktree-git-routing'
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey

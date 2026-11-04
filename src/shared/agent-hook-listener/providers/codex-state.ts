@@ -1,11 +1,12 @@
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../../agent-status-types'
-import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
+import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
   mainAgentTurnInterrupted,
   type AgentLeadStatusResolution
-} from '../../agent-lead-status-fold'
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import {
   codexRosterChildWorkLiveness,
   codexRosterToSnapshots,

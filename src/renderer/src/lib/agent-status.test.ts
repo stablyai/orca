@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAgentStatusTracker } from './agent-status'
+import { createAgentStatusTracker } from '../../../shared/agent-status/title/agent-title-status'
 
 describe('createAgentStatusTracker', () => {
   // Claude Code v2.1.86 emits task descriptions; only ✳ identifies idle in this captured sequence.

@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: mocks.track, isTelemetryEnabled: () => true }))
-vi.mock('../git/create-event-repo-probe', () => ({ probeCreateEventRepoFacts: mocks.probe }))
+vi.mock('../git/worktrees/creation/create-event-repo-probe', () => ({
+  probeCreateEventRepoFacts: mocks.probe
+}))
 vi.mock('./runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: mocks.createLocal
 }))

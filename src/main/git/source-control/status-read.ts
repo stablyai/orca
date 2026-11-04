@@ -18,7 +18,7 @@ import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
-} from '../worktree-symlink-detection'
+} from '../worktrees/content-paths/worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'

@@ -1059,7 +1059,8 @@
     },
     "prSidebar": {
       "loading": "Loading pull request…",
-      "notPermitted": "Not permitted — your GitHub account is not connected."
+      "notPermitted": "Not permitted — your GitHub account is not connected.",
+      "retryLoading": "Retry loading pull request"
     },
     "richMarkdownEditor": {
       "linkUrl": "Link URL",
@@ -1342,7 +1343,7 @@
       "linkButton": "Link pull request"
     },
     "prViewPanel": {
-      "providerUnavailable": "Hosted review panel unavailable for this provider.",
+      "githubRemoteRequired": "This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.",
       "branchUnavailable": "Current branch unavailable."
     },
     "prActionsSection": {
@@ -1680,6 +1681,9 @@
       "conflictsChecking": "Checking for conflicts",
       "noConflictsWithBase": "No conflicts with {{base}}",
       "noConflicts": "No conflicts"
+    },
+    "checkStatus": {
+      "cancelled": "Cancelled"
     }
   },
   "workspace": {
@@ -2302,7 +2306,8 @@
       "notesSent": "Notes sent"
     },
     "prActionsEngine": {
-      "mergeFailed": "Failed to merge pull request."
+      "mergeFailed": "Failed to merge pull request.",
+      "refreshFailed": "Failed to refresh pull request."
     },
     "prAiTriageLaunch": {
       "promptNotSent": "The agent started, but the prompt wasn't sent.",
@@ -2899,7 +2904,8 @@
       "plan": "Plan",
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
-      "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
+      "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3062,7 +3068,10 @@
       "resolved": "Resolved",
       "cancelled": "Cancelled",
       "resolver": "Answered on {{device}}",
-      "cancelledBy": "Cancelled on {{device}}"
+      "cancelledBy": "Cancelled on {{device}}",
+      "thisPhone": "this phone",
+      "computer": "the computer",
+      "otherDevice": "another device"
     },
     "subagentGroup": {
       "stateCompleted": "completed",
@@ -3815,7 +3824,6 @@
       "pipelineJobs_other": "{{count}} jobs",
       "description": "Description",
       "checks": "Checks",
-      "rerunFailed": "Rerun failed",
       "rerunAll": "Rerun all",
       "noChecks": "No checks found.",
       "pipeline": "Pipeline",
@@ -4015,7 +4023,6 @@
       "requestReviewers": "Request reviewers",
       "requestReview": "Request review",
       "checks": "Checks",
-      "rerunFailed": "Rerun failed",
       "rerunAll": "Rerun all",
       "noChecks": "No checks found.",
       "changedFiles": "Changed files",
@@ -4267,7 +4274,8 @@
     },
     "runtimeHydration": {
       "loadFailed": "Failed to load Tasks settings"
-    }
+    },
+    "rerunUnsuccessful": "Retry checks"
   },
   "terminal": {
     "webView": {
@@ -4501,6 +4509,7 @@
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
       "projectSetupState": {
         "notSetUp": "The project is not set up on the selected automation host.",

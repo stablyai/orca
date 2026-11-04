@@ -1,4 +1,4 @@
-import type { BlockedWslDistro } from '../wsl/wsl-unc-access-gate'
+import type { BlockedWslDistro } from '../wsl/filesystem/wsl-unc-access-gate'
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import type { WslSpec } from '../wsl/wsl-runner'
+import type { WslSpec } from '../wsl/execution/wsl-runner'
 import type * as WslPaths from '../../shared/wsl-paths'
 
 const guest = vi.hoisted(
@@ -29,7 +29,7 @@ vi.mock('../../shared/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
   listRunningWslDistrosAsync: async () => ['Ubuntu']
 }))
@@ -38,8 +38,8 @@ const gate = vi.hoisted(() => ({
     async (_path: string, _distro?: string | null): Promise<BlockedWslDistro | null> => null
   )
 }))
-vi.mock('../wsl/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
-vi.mock('../wsl/wsl-runner', () => ({
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: async (spec: WslSpec) => {
     if (guest.failure) {
       return { ...guest.failure, stderr: '', timedOut: false }

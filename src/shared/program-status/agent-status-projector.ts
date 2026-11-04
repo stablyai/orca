@@ -1,13 +1,19 @@
 // Projects OSC 7501 records onto agent-status payloads so they ride the OSC 9999 terminal-status ingress.
-import type { AgentStatusState, ParsedAgentStatusPayload } from '../agent-status-types'
-import type { AgentSubagentSnapshot, AgentSubagentState } from '../agent-status-subagent-snapshot'
-import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status-subagent-snapshot'
-import type { AgentTurnOutcome } from '../agent-turn-outcome'
-import { foldMainAgentWithRowChildWork } from '../agent-hook-row-child-work-fold'
+import type {
+  AgentStatusState,
+  ParsedAgentStatusPayload
+} from '../agent-status/contracts/agent-status-types'
+import type {
+  AgentSubagentSnapshot,
+  AgentSubagentState
+} from '../agent-status/contracts/agent-status-subagent-snapshot'
+import { AGENT_SUBAGENT_ID_MAX_LENGTH } from '../agent-status/contracts/agent-status-subagent-snapshot'
+import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
+import { foldMainAgentWithRowChildWork } from '../agent-hook-listener/state/agent-hook-row-child-work-fold'
 import {
   heldTurnCountsAsFinished,
   isAgentStatusHeldOpenByChildWork
-} from '../agent-lead-status-fold'
+} from '../agent-status/lifecycle/agent-lead-status-fold'
 import { createProgramStatusOscScanner } from './osc-scanner'
 import {
   programStatusDisplayText,

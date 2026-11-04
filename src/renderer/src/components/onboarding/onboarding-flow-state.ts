@@ -8,7 +8,7 @@ import {
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS } from './use-onboarding-flow-types'
 
 type TaskSourcesSnapshotProps = EventProps<'onboarding_task_sources_snapshot'>

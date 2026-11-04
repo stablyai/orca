@@ -1,10 +1,13 @@
+import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type {
-  AgentMainAgentStatus,
   AgentStatusState,
-  AgentSubagentSnapshot,
   AgentWorkingMode
-} from '../../agent-status-types'
-import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+} from '../../agent-status/contracts/agent-status-types'
+import type { AgentSubagentSnapshot } from '../../agent-status/contracts/agent-status-subagent-snapshot'
+import {
+  continueMainAgentStatus,
+  mainAgentTurnInterrupted
+} from '../../agent-status/lifecycle/agent-lead-status-fold'
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'

@@ -10,7 +10,7 @@ import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
+import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]

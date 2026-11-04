@@ -43,7 +43,7 @@ vi.mock('../../store', () => {
 vi.mock('./runtime-environment-explicit-connect', () => ({
   connectRuntimeHostAndReloadProjects: mocks.connectRuntime
 }))
-vi.mock('../settings/RuntimeRepairDialog', () => ({
+vi.mock('../runtime-access/RuntimeRepairDialog', () => ({
   RuntimeRepairDialog: ({ environmentId, name }: { environmentId: string; name: string }) => (
     <div role="dialog">{`Re-pair ${name} (${environmentId})`}</div>
   )

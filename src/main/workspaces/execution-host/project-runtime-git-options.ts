@@ -5,7 +5,7 @@ import {
   type ProjectRuntimeResolutionStore
 } from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { wslHostsOptedIn } from '../../wsl/wsl-host-gate'
+import { wslHostsOptedIn } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 export type LocalProjectGitExecOptions = {
   cwd: string

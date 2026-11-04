@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAgentStatusStore } from './agent-status-store'
+import { createAgentStatusStore } from './agent-status/store/agent-status-store'
 import type { ProcessTableRow } from './process-table-snapshot'
-import { TmuxAgentHookOwner, type TmuxManagedPty } from './tmux-agent-hook-owner'
+import { TmuxAgentHookOwner } from './tmux-agent-hook-owner'
+import type { TmuxManagedPty } from './tmux-agent-hook-contract'
 
 const paneKey = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
 const root: TmuxManagedPty = {
