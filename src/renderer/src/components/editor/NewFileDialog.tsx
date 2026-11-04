@@ -46,12 +46,16 @@ export function NewFileDialog({
 
   useEffect(() => {
     let cancelled = false
+    // Why: a suggestion is only valid for the exact folder it was looked up for.
+    setSuggestion(null)
+    if (!folder.trim()) {
+      return
+    }
     // Why: debounced so typing a path does not probe the filesystem per keystroke.
-    const suggestedFolder = folder.trim()
     const timer = setTimeout(() => {
-      void suggestName(suggestedFolder).then((next) => {
-        if (!cancelled && next) {
-          setSuggestion({ folder: suggestedFolder, name: next })
+      void suggestName(folder).then((next) => {
+        if (!cancelled) {
+          setSuggestion(next ? { folder, name: next } : null)
         }
       })
     }, 200)
@@ -61,8 +65,7 @@ export function NewFileDialog({
     }
   }, [folder, suggestName])
 
-  // Why: a suggestion belongs to the folder it was looked up for; show none for another folder.
-  const suggestedName = suggestion?.folder === folder.trim() ? suggestion.name : ''
+  const suggestedName = suggestion?.folder === folder ? suggestion.name : ''
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: folder || worktreePath })
@@ -87,14 +90,14 @@ export function NewFileDialog({
       )
       return
     }
-    const trimmedFolder = folder.trim()
-    if (!trimmedFolder) {
+    // Why: a folder name may legitimately end in a space, so only emptiness is judged on the trimmed value.
+    if (!folder.trim()) {
       setError(
         translate('auto.components.editor.NewFileDialog.folderEmpty', 'Folder path cannot be empty')
       )
       return
     }
-    if (getNamedFileRelativeDirectory(trimmedFolder, worktreePath) === null) {
+    if (getNamedFileRelativeDirectory(folder, worktreePath) === null) {
       setError(
         translate(
           'auto.components.editor.NewFileDialog.folderOutsideWorkspace',
@@ -104,7 +107,7 @@ export function NewFileDialog({
       return
     }
     setSubmitting(true)
-    const failure = await onCreate({ name: trimmedName, folder: trimmedFolder })
+    const failure = await onCreate({ name: trimmedName, folder })
     if (!mountedRef.current) {
       return
     }
