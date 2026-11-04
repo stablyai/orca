@@ -4,12 +4,20 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { NativeChatSideChatMenuItem } from './NativeChatSideChatMenuItem'
+import { AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 
 type MenuState = { unifiedTabsByWorktree: { workspace: { id: string }[] } }
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), readOnlySupported: true }))
+const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
+  readOnlySupported: true,
+  explicitOptionsSupported: true
+}))
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
-  useStructuredAgentSessionHostCapability: () => mocks.readOnlySupported
+  useStructuredAgentSessionHostCapability: (_target: unknown, capability: string) =>
+    capability === AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
+      ? mocks.explicitOptionsSupported
+      : mocks.readOnlySupported
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/store', () => ({
@@ -28,6 +36,7 @@ vi.mock('../native-chat/use-native-chat-side-chat', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.readOnlySupported = true
+  mocks.explicitOptionsSupported = true
 })
 afterEach(cleanup)
 
@@ -84,14 +93,17 @@ it.each(['Read only', 'Use main chat permissions'] as const)(
   }
 )
 
-it('keeps read-only unavailable on older hosts while inherited permissions remain usable', async () => {
-  mocks.readOnlySupported = false
-  mocks.open.mockResolvedValue(true)
-  await openSideChatMenu()
-  const readOnly = screen.getByRole('menuitem', { name: 'Read only' })
-  expect(readOnly.getAttribute('aria-disabled')).toBe('true')
-  fireEvent.click(readOnly)
-  expect(mocks.open).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Use main chat permissions' }))
-  await waitFor(() => expect(mocks.open).toHaveBeenCalledExactlyOnceWith('', [], 'inherit'))
-})
+it.each(['readOnlySupported', 'explicitOptionsSupported'] as const)(
+  'keeps read-only unavailable without %s while inherited permissions remain usable',
+  async (capability) => {
+    mocks[capability] = false
+    mocks.open.mockResolvedValue(true)
+    await openSideChatMenu()
+    const readOnly = screen.getByRole('menuitem', { name: 'Read only' })
+    expect(readOnly.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(readOnly)
+    expect(mocks.open).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Use main chat permissions' }))
+    await waitFor(() => expect(mocks.open).toHaveBeenCalledExactlyOnceWith('', [], 'inherit'))
+  }
+)

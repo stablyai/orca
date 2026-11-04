@@ -11,6 +11,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import type { SideChatPermission } from '../../../shared/agent-session-side-chat'
 import {
+  supportsStructuredAgentSessionCreateOptionsMode,
   supportsStructuredAgentSessionSideChat,
   supportsStructuredAgentSessionReadOnlySideChat
 } from '@/runtime/structured-agent-session-client'
@@ -101,7 +102,8 @@ async function launchNativeChatSideChat(
   if (
     permission === 'read-only' &&
     (!agentChatPermissionModes(agent)?.modes.includes('read-only') ||
-      !(await supportsStructuredAgentSessionReadOnlySideChat(target)))
+      !(await supportsStructuredAgentSessionReadOnlySideChat(target)) ||
+      !(await supportsStructuredAgentSessionCreateOptionsMode(target)))
   ) {
     return false
   }
@@ -148,5 +150,14 @@ async function launchNativeChatSideChat(
   if (result.kind !== 'structured') {
     return false
   }
-  return result.promptDeliveryResult ? (await result.promptDeliveryResult).delivered : true
+  if (!result.promptDeliveryResult) {
+    return true
+  }
+  const delivery = await result.promptDeliveryResult
+  return (
+    delivery.delivered ||
+    delivery.inComposer === true ||
+    delivery.unconfirmed === true ||
+    delivery.busy === true
+  )
 }

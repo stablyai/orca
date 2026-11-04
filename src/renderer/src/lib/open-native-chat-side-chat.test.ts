@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { openNativeChatSideChat } from './open-native-chat-side-chat'
 
-const mocks = vi.hoisted(() => ({ begin: vi.fn(), support: vi.fn() }))
+const mocks = vi.hoisted(() => ({ begin: vi.fn(), support: vi.fn(), explicitOptions: vi.fn() }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -25,6 +25,7 @@ vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForHost: () => ({ kind: 'local' })
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  supportsStructuredAgentSessionCreateOptionsMode: mocks.explicitOptions,
   supportsStructuredAgentSessionReadOnlySideChat: mocks.support,
   supportsStructuredAgentSessionSideChat: mocks.support
 }))
@@ -38,6 +39,7 @@ vi.mock('./agent-session/structured-agent-session-provisional-tab', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.support.mockResolvedValue(true)
+  mocks.explicitOptions.mockResolvedValue(true)
 })
 
 const source = { tabId: 'parent-tab', worktreeId: 'workspace', sessionId: 'parent' }
@@ -142,4 +144,29 @@ it('keeps read-only and inherited opens independent and carries only the explici
     settlement.resolve({ kind: 'structured' })
   }
   await expect(Promise.all([readOnly, inherited])).resolves.toEqual([true, true])
+})
+
+it.each(['inComposer', 'unconfirmed', 'busy'] as const)(
+  'accepts an opened side chat whose first question is %s without opening another child',
+  async (state) => {
+    mocks.begin.mockReturnValue({
+      settlement: Promise.resolve({
+        kind: 'structured',
+        promptDeliveryResult: Promise.resolve({ delivered: false, [state]: true })
+      })
+    })
+    await expect(openNativeChatSideChat(source, 'Question')).resolves.toBe(true)
+    expect(mocks.begin).toHaveBeenCalledOnce()
+  }
+)
+
+it('refuses read-only forks when an older host would discard the selected permission', async () => {
+  mocks.explicitOptions.mockResolvedValue(false)
+  mocks.begin.mockReturnValue({ settlement: Promise.resolve({ kind: 'structured' }) })
+  for (const question of ['', 'Question']) {
+    await expect(openNativeChatSideChat(source, question, [], 'read-only')).resolves.toBe(false)
+  }
+  expect(mocks.begin).not.toHaveBeenCalled()
+  await expect(openNativeChatSideChat(source)).resolves.toBe(true)
+  expect(mocks.begin).toHaveBeenCalledOnce()
 })

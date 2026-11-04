@@ -52,13 +52,20 @@ export function permissionUpdates(
   if (choice === 'default') {
     throw new Error('Choose a permission for all agents')
   }
-  if (mutation.withoutAuto) {
-    const agents = PERMISSION_CHOICE_AGENTS.filter(
-      (candidate) => !agentPermissionChoices(candidate).includes('auto')
-    )
-    return applyAgentPermissionOverrides(settings, agents, choice)
+  const agents = mutation.withoutAuto
+    ? PERMISSION_CHOICE_AGENTS.filter(
+        (candidate) => !agentPermissionChoices(candidate).includes('auto')
+      )
+    : PERMISSION_CHOICE_AGENTS
+  if (
+    choice === 'read-only' &&
+    agents.some((candidate) => !agentPermissionChoices(candidate).includes(choice))
+  ) {
+    throw new Error('Read only is not available for all selected agents')
   }
-  return applyAllAgentsPermission(settings, choice)
+  return mutation.withoutAuto
+    ? applyAgentPermissionOverrides(settings, agents, choice)
+    : applyAllAgentsPermission(settings, choice)
 }
 
 /** An older client's Auto/Yolo/Manual switch, as the choice it means. Manual passed no flag. */

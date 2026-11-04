@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { SideChatPermission } from '../../../../shared/agent-session-side-chat'
 import { AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY } from '../../../../shared/agent-session-side-chat'
@@ -59,6 +60,10 @@ function SideChatItem({
     target,
     AGENT_SESSION_SIDE_CHAT_READ_ONLY_CAPABILITY
   )
+  const explicitOptionsSupported = useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
+  )
   const reportFailure = () =>
     toast.error(translate('components.native-chat.sideChat.failed', 'Could not open a side chat.'))
   const choose = (permission: SideChatPermission) => {
@@ -81,6 +86,7 @@ function SideChatItem({
         <ContextMenuItem
           disabled={
             !readOnlySupported ||
+            !explicitOptionsSupported ||
             !agentChatPermissionModes(nativeChat.agent ?? '')?.modes.includes('read-only')
           }
           onSelect={() => choose('read-only')}
