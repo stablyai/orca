@@ -5,8 +5,8 @@ import {
   type PluginThemeRegistration
 } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import { resolveTerminalPalette } from '../../../../shared/terminal-theme-selection'
-import { TERMINAL_THEME_CATALOG } from '../../../../shared/terminal-themes'
+import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
+import { TERMINAL_THEME_CATALOG } from '../../../../shared/terminal-themes/terminal-theme-catalog'
 
 export type ThemeLookBase = 'light' | 'dark'
 
