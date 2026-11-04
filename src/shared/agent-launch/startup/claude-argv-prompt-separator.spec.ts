@@ -4,6 +4,11 @@ import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process
 import { tokenizeCommandLine } from '../../agent-status/process/agent-command-line-entrypoint'
 
 describe("Claude's argv prompt separator", () => {
+  /**
+   * The launch command Claude would be started with for `prompt`.
+   *
+   * @param claude A custom launch command, omitted to use the plain `claude` binary.
+   */
   function launchCommandFor(prompt: string, claude?: string): string | undefined {
     return buildAgentStartupPlan({
       agent: 'claude',
