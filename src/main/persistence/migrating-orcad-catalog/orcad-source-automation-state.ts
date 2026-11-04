@@ -1,3 +1,4 @@
+import { automationCanonicalDefinition } from '../../../shared/automation-launch-setup'
 import {
   isFinalAutomationRunStatus,
   type Automation,
@@ -190,7 +191,7 @@ function contextCanTransfer(
 
 function projectAutomationToDestination(source: Automation): Automation {
   const destination: Automation = {
-    ...structuredClone(source),
+    ...structuredClone(automationCanonicalDefinition(source)),
     runContext: projectContextToDestination(source.runContext),
     sourceContext: projectContextToDestination(source.sourceContext),
     executionTargetType: 'local',

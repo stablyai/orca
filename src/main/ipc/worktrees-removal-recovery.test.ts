@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { Store } from '../persistence/loading-store/store'
 import { agentHookServer } from '../agent-hooks/server'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,

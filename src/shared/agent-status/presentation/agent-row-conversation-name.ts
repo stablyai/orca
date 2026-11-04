@@ -6,7 +6,7 @@ import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from '../title/providers/jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from '../title/providers/opencode-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
-import type { TerminalTab } from '../../terminal-tab-types'
+import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,

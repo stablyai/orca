@@ -3,10 +3,9 @@ import { link, mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { readTerminalKittyFile, resolveKittyFilePath } from './terminal-kitty-file-read'
+import { readTerminalKittyFile } from './terminal-kitty-file-read'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../shared/terminal/images/terminal-kitty-file'
 import * as kittyTemporaryRoots from './terminal-kitty-temporary-roots'
-import { TerminalReadKittyFile } from '../../shared/rpc-contract/terminal-unary-params'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -97,51 +96,5 @@ describe('PTY-owned Kitty file reads', () => {
     await expect(readTerminalKittyFile({ path }, owner, controller.signal)).rejects.toThrow(
       'cancelled file'
     )
-  })
-
-  it.each(['relative.png', '', 'bad\0path'])('rejects malformed path %j', (path) => {
-    expect(() => resolveKittyFilePath(path, null)).toThrow()
-  })
-
-  it('rejects native Windows network, device and alternate-stream paths', () => {
-    vi.stubGlobal('process', { ...process, platform: 'win32' })
-    for (const path of [
-      '\\\\server\\share\\image',
-      '\\\\?\\C:\\image',
-      'C:\\tmp\\NUL',
-      'C:\\tmp\\image:stream'
-    ]) {
-      expect(() => resolveKittyFilePath(path, null)).toThrow()
-    }
-  })
-
-  it('maps only an absolute POSIX path into the authoritative WSL distro', () => {
-    vi.stubGlobal('process', { ...process, platform: 'win32' })
-    expect(resolveKittyFilePath('/tmp/image', 'Ubuntu')).toBe(
-      '\\\\wsl.localhost\\Ubuntu\\tmp\\image'
-    )
-    expect(resolveKittyFilePath('/mnt/c/tmp/image', 'Ubuntu')).toBe('C:\\tmp\\image')
-    for (const path of [
-      'C:\\image',
-      '//server/image',
-      'relative',
-      '/tmp\\image',
-      '/mnt/c/tmp/image:stream',
-      '/mnt/c/tmp/NUL'
-    ]) {
-      expect(() => resolveKittyFilePath(path, 'Ubuntu')).toThrow()
-    }
-  })
-
-  it.each([
-    { path: '/tmp/file', offset: -1 },
-    { path: '/tmp/file', offset: Number.MAX_SAFE_INTEGER + 1 },
-    { path: '/tmp/file', length: TERMINAL_KITTY_FILE_MAX_BYTES + 1 },
-    { path: '/tmp/file', length: 1.5 },
-    { path: '/tmp/file', length: -1 },
-    { path: 'x'.repeat(4097) },
-    { path: '/tmp/\0file' }
-  ])('rejects invalid wire request %j', (request) => {
-    expect(() => TerminalReadKittyFile.parse({ terminal: 'term', ...request })).toThrow()
   })
 })

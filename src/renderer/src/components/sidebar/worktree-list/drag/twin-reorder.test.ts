@@ -10,13 +10,13 @@ import {
   rankWorktreesForSort
 } from '../../../../../../shared/sidebar-list/smart-sort'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
-import { computeVisibleWorktrees } from '../../compute-visible-worktrees'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { computeVisibleWorktrees } from '../listing/compute-visible-worktrees'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups
-} from '../../worktree-manual-order'
-import { buildWorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
+} from './worktree-manual-order'
+import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 import { collectDropWrites, dropWriteRows } from './dragged-worktree-copies'
 import { getWorktreeDragGroups } from './groups'
 

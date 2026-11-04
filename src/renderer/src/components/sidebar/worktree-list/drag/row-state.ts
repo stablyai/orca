@@ -1,11 +1,11 @@
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
-import type { WorkspaceKanbanCardTrackedDropTarget } from '../../workspace-kanban-card-pointer-drag-dom'
-import type { WorktreeSidebarDragRect } from '../../worktree-sidebar-drag-autoscroll'
+import type { WorkspaceKanbanCardTrackedDropTarget } from '../../workspace-board/drag/workspace-kanban-card-pointer-drag-dom'
+import type { WorktreeSidebarDragRect } from './worktree-sidebar-drag-autoscroll'
 import type {
   WorktreeSidebarDropPreview,
   WorktreeSidebarStatusDropTarget,
   WorktreeSidebarTrackedStatusDropTarget
-} from '../../worktree-sidebar-drop-preview'
+} from './worktree-sidebar-drop-preview'
 
 export type WorktreeRowDragState = {
   /** Host identity of the dragged card; preview offsets are keyed the same way. */

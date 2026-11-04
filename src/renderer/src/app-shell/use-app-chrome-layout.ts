@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
+import { pendingWorktreeCreationIsVisible } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
@@ -25,11 +26,10 @@ export function useAppChromeLayout() {
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
-  // Pending creation owns the tab strip immediately; a delayed loader gate swaps it mid-create.
   const activePendingCreationExists = useAppStore(
     (s) =>
       s.activePendingCreationId !== null &&
-      s.pendingWorktreeCreations[s.activePendingCreationId] !== undefined
+      pendingWorktreeCreationIsVisible(s.pendingWorktreeCreations[s.activePendingCreationId])
   )
   // Booleans only: App owns this hook, and raw active ids would re-render the whole app on every workspace switch.
   const { hasActiveWorktree, hasTabBar, activeTabCanExpand, effectiveActiveTabExpanded } =

@@ -9,7 +9,7 @@ describe('real WSL terminal lane', () => {
     'src/main/wsl/execution/wsl-runner.ts',
     'src/main/pty/shell-startup/wsl-orca-env.ts',
     'src/shared/wsl-login-shell-command.ts',
-    'src/shared/shell-argument-quoting.ts',
+    'src/shared/shell/launch/shell-argument-quoting.ts',
     'src/shared/windows-terminal-shell.ts',
     'tests/e2e/helpers/wsl-golden-stub-agent.ts',
     'tests/e2e/golden-tab-bar-agent-launch.spec.ts',

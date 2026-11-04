@@ -12,7 +12,7 @@ import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
 } from '../../../shared/plugin-theme-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'

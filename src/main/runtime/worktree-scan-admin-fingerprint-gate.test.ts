@@ -1,5 +1,4 @@
 import type * as WorktreeListingModule from '../git/worktrees/catalog/worktree-listing'
-// Check scan-cache gating here; real-Git fingerprint behavior lives in repo-worktree-admin-fingerprint.test.ts. Windows CI also exercises repo-path handling.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {

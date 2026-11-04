@@ -11,6 +11,8 @@ import {
 } from './structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
+  hasStagedStructuredLaunchPrompt,
+  issueStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
@@ -30,7 +32,7 @@ import {
 import { structuredAgentSessionDrawnValues } from '../../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
-/** Freeze what create carries once; an ambiguous reply always replays the same payload.
+/** Freeze what create carries once; later evidence must join this exact input.
  *  `hostTakesExplicitOptions`: the host advertises the create options-mode capability. */
 export function prepareStructuredLaunchCreateMessage(
   state: StructuredLaunchState,
@@ -54,7 +56,13 @@ export function prepareStructuredLaunchCreateMessage(
     notifyStructuredLaunchListeners()
     return
   }
+  const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
   const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
+  if (hadPrompt || firstMessage) {
+    const beforeCreate = intent.beforeCreate
+    intent.beforeCreate = () =>
+      beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
+  }
   const { options: requested, selection } = structuredLaunchCreateOptions(state)
   const options =
     requested && state.selection.explicit && !optionsMode
@@ -167,7 +175,10 @@ export function publishStructuredLaunchCreateOptions(
   if (state.intent.createMessageSupport !== true) {
     return applyStructuredLaunchExplicitOptions(state, receipt)
   }
-  settleStructuredLaunchCreateOptions(state, state.intent.params.options ?? {})
+  settleStructuredLaunchCreateOptions(state, {
+    kind: 'accepted',
+    options: state.intent.params.options ?? {}
+  })
   void applyStructuredLaunchHeldOptions(state, receipt, false).catch((error: unknown) => {
     console.warn('[native-chat] applying a launch option failed', error)
   })

@@ -3,7 +3,7 @@ import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store/index'
 import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
-import { NotesSendMenu, type NotesSendMenuScope } from '../../NotesSendMenu'
+import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

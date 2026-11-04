@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import StatusIndicator from '@/components/sidebar/StatusIndicator'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { cn } from '@/lib/utils'

@@ -3,7 +3,7 @@ import type {
   TerminalPaneRecoveryReason,
   TerminalTab,
   TerminalTabRecoveryLedger
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 // Row-owned recovery survives remount disposal that erased module-map budgets (b5cfc6ca). Pending attempts block repeats; observed failure refuses the same reason until a new trigger.
 

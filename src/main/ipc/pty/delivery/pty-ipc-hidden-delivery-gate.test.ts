@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from '../pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { registerPtyHandlers } from '../register-handlers'
 import { getPtyRendererDeliveryDebugSnapshot } from './debug'
 

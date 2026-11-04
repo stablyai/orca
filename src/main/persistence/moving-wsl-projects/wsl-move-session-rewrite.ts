@@ -6,20 +6,20 @@
  */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
-import { filterWorkspaceSessionTabs } from '../../../shared/workspace-session-tab-filter'
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
+import { filterWorkspaceSessionTabs } from '../../../shared/workspace-session/workspace-session-tab-filter'
+import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   mergeWorkspaceSessionArrayField,
   mergeWorkspaceSessionRecordField
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   filterWorkspaceRows,
   workspaceIdsNamedByPartition
-} from '../../../shared/workspace-session-stranded-partition-adoption'
+} from '../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { WslMoveRewriteScope } from './wsl-move-rewrite-scope'
 

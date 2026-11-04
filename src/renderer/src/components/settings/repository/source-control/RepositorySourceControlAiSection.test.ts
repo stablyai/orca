@@ -22,7 +22,7 @@ import {
 import { withRepoAiActionAgent } from './repository-source-control-ai-action-agent-draft'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 
-import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
+import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control/ai/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../source-control/SourceControlActionAgentPicker'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
@@ -607,7 +607,7 @@ it('keeps staged repository setup through template edits and saves/reopens only 
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: '--model claude-sonnet-5-5 --accepted' }
     })
-    fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
       target: { value: '--pending' }
     })

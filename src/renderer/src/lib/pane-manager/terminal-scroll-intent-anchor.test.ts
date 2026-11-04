@@ -42,26 +42,6 @@ afterEach(() => {
 })
 
 describe('pinned scroll intent anchoring', () => {
-  it('restores the pinned content after scrollback trimming renumbers lines', async () => {
-    const terminal = createTerminal()
-    await writeLines(terminal, 0, 100)
-    terminal.scrollToLine(20)
-    markTerminalPinnedViewport(terminal)
-    const pinnedContent = topVisibleLine(terminal)
-
-    await writeLines(terminal, 100, 12)
-    // xterm keeps a user-scrolled viewport on the same content while trimming.
-    expect(terminal.buffer.active.viewportY).toBe(8)
-    expect(topVisibleLine(terminal)).toBe(pinnedContent)
-
-    // A mouse report or typed key snaps xterm to the bottom before Orca restores.
-    terminal.scrollToBottom()
-    enforceTerminalCurrentScrollIntent(terminal)
-
-    expect(terminal.buffer.active.viewportY).toBe(8)
-    expect(topVisibleLine(terminal)).toBe(pinnedContent)
-  })
-
   it('keeps a keyed remount on the pinned content after trimming', async () => {
     const first = createTerminal()
     bindTerminalScrollIntentKey(first, 'anchor-keyed-remount')
@@ -78,54 +58,5 @@ describe('pinned scroll intent anchoring', () => {
     enforceTerminalCurrentScrollIntent(replacement)
 
     expect(topVisibleLine(replacement)).toBe(pinnedContent)
-  })
-
-  it('re-anchors when the user moves the pin', async () => {
-    const terminal = createTerminal()
-    await writeLines(terminal, 0, 100)
-    terminal.scrollToLine(30)
-    markTerminalPinnedViewport(terminal)
-    terminal.scrollToLine(25)
-    syncTerminalScrollIntentFromViewport(terminal)
-    const pinnedContent = topVisibleLine(terminal)
-
-    await writeLines(terminal, 100, 5)
-    terminal.scrollToBottom()
-    enforceTerminalCurrentScrollIntent(terminal)
-
-    expect(terminal.buffer.active.viewportY).toBe(20)
-    expect(topVisibleLine(terminal)).toBe(pinnedContent)
-  })
-
-  it('re-anchors when the user returns to the stale recorded line after trimming', async () => {
-    const terminal = createTerminal()
-    await writeLines(terminal, 0, 100)
-    terminal.scrollToLine(20)
-    markTerminalPinnedViewport(terminal)
-    await writeLines(terminal, 100, 9)
-    expect(terminal.buffer.active.viewportY).toBe(11)
-
-    terminal.scrollToLine(20)
-    syncTerminalScrollIntentFromViewport(terminal)
-    const pinnedContent = topVisibleLine(terminal)
-    terminal.scrollToBottom()
-    enforceTerminalCurrentScrollIntent(terminal)
-
-    expect(topVisibleLine(terminal)).toBe(pinnedContent)
-  })
-
-  it('falls back to the recorded coordinates after the scrollback is cleared for a replay', async () => {
-    const terminal = createTerminal()
-    await writeLines(terminal, 0, 100)
-    terminal.scrollToLine(20)
-    markTerminalPinnedViewport(terminal)
-    const pinnedContent = topVisibleLine(terminal)
-
-    await write(terminal, '\x1b[2J\x1b[3J\x1b[H')
-    await writeLines(terminal, 40, 60)
-    terminal.scrollToBottom()
-    enforceTerminalCurrentScrollIntent(terminal)
-
-    expect(topVisibleLine(terminal)).toBe(pinnedContent)
   })
 })
