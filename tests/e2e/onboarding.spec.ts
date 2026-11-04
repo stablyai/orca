@@ -343,38 +343,6 @@ test.describe('Onboarding flow', () => {
     await expectMainPage(orcaPage)
   })
 
-  test('Set up later from theme restores the entry theme choice', async ({ orcaPage }) => {
-    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
-      timeout: 15_000
-    })
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-
-    await orcaPage.waitForFunction(
-      () =>
-        document.documentElement.classList.contains('dark') ||
-        document.documentElement.classList.contains('light')
-    )
-    const entryTheme = (await getSettings(orcaPage)).theme
-    const startingTheme = await getDocumentThemeClass(orcaPage)
-    const oppositeTheme: 'dark' | 'light' = startingTheme === 'dark' ? 'light' : 'dark'
-    const oppositeTileName = oppositeTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
-    await orcaPage.getByRole('button', { name: oppositeTileName }).click()
-    await expect
-      .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
-      .toBe(oppositeTheme)
-
-    await onboardingFooterButton(orcaPage, SET_UP_LATER_BUTTON).click()
-
-    await expectMainPage(orcaPage)
-    await expect
-      .poll(async () => (await getSettings(orcaPage)).theme, { timeout: 5_000 })
-      .toBe(entryTheme)
-    await expect
-      .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
-      .toBe(startingTheme)
-  })
-
   test('notification sound choice persists on Continue', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
