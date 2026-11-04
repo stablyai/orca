@@ -9,7 +9,8 @@ import type {
   JiraStatus,
   JiraUser
 } from '../../shared/jira/jira-types'
-import { adfToMarkdownText, textToAdf, type AdfToMarkdownOptions } from './adf-markdown'
+import { adfToMarkdownText, type AdfToMarkdownOptions } from './adf-markdown'
+import { markdownToAdf } from './markdown-adf'
 import {
   asRecord,
   asString,
@@ -180,9 +181,10 @@ export function issueUrl(site: JiraSite, key: string): string {
   return `${site.siteUrl}/browse/${encodeURIComponent(key)}`
 }
 
-// REST v2 (Server/DC) bodies are plain text; v3 (Cloud) requires ADF documents.
-export function toBodyText(site: JiraSite, text: string): unknown {
-  return site.authType === 'server' ? text : textToAdf(text)
+// REST v2 (Server/DC) bodies are wiki text; v3 (Cloud) requires ADF documents,
+// built from the Markdown Orca renders so Jira shows the same structure.
+export async function toBodyText(site: JiraSite, text: string): Promise<unknown> {
+  return site.authType === 'server' ? text : markdownToAdf(text)
 }
 
 /** Site-specific custom field ids for agile data; discovered per site, see jira-agile-fields.ts. */
