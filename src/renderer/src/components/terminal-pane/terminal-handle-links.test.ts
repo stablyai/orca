@@ -456,18 +456,17 @@ describe('createTerminalHandleLinkProvider', () => {
       } as unknown as MouseEvent,
       links[0].text
     )
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(window.api.runtime.call).toHaveBeenNthCalledWith(1, {
-      method: 'orchestration.dispatchShow',
-      params: { task: 'task_worker' }
+    await vi.waitFor(() => {
+      expect(window.api.runtime.call).toHaveBeenNthCalledWith(1, {
+        method: 'orchestration.dispatchShow',
+        params: { task: 'task_worker' }
+      })
+      expect(window.api.runtime.call).toHaveBeenNthCalledWith(2, {
+        method: 'terminal.focus',
+        params: { terminal: 'term_worker', navigation: 'host' }
+      })
+      expect(preventDefault).toHaveBeenCalled()
     })
-    expect(window.api.runtime.call).toHaveBeenNthCalledWith(2, {
-      method: 'terminal.focus',
-      params: { terminal: 'term_worker', navigation: 'host' }
-    })
-    expect(preventDefault).toHaveBeenCalled()
   })
 
   it('focuses resolved task terminals directly when they are already mounted', async () => {
@@ -499,21 +498,20 @@ describe('createTerminalHandleLinkProvider', () => {
       } as unknown as MouseEvent,
       links[0].text
     )
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(window.api.runtime.call).toHaveBeenCalledTimes(1)
-    expect(window.api.runtime.call).toHaveBeenCalledWith({
-      method: 'orchestration.dispatchShow',
-      params: { task: 'task_worker' }
+    await vi.waitFor(() => {
+      expect(window.api.runtime.call).toHaveBeenCalledTimes(1)
+      expect(window.api.runtime.call).toHaveBeenCalledWith({
+        method: 'orchestration.dispatchShow',
+        params: { task: 'task_worker' }
+      })
+      expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
+      expect(mocks.storeState.markWorktreeVisited).toHaveBeenCalledWith('wt-1')
+      expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
+      expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
+      expect(mocks.storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1')
+      expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
+      expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
     })
-    expect(mocks.storeState.setActiveWorktree).toHaveBeenCalledWith('wt-1')
-    expect(mocks.storeState.markWorktreeVisited).toHaveBeenCalledWith('wt-1')
-    expect(mocks.storeState.setActiveView).toHaveBeenCalledWith('terminal')
-    expect(mocks.storeState.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-    expect(mocks.storeState.revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1')
-    expect(mocks.storeState.setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('tab-1')
   })
 
   it('focuses mounted task terminals only when they belong to the owning runtime', async () => {
@@ -686,17 +684,16 @@ describe('createTerminalHandleLinkProvider', () => {
       } as unknown as MouseEvent,
       links[0].text
     )
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
-    expect(window.api.runtime.call).toHaveBeenNthCalledWith(1, {
-      method: 'orchestration.dispatchShow',
-      params: { task: 'task_worker' }
-    })
-    expect(window.api.runtime.call).toHaveBeenNthCalledWith(2, {
-      method: 'terminal.focus',
-      params: { terminal: 'term_worker', navigation: 'host' }
+    await vi.waitFor(() => {
+      expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+      expect(window.api.runtime.call).toHaveBeenNthCalledWith(1, {
+        method: 'orchestration.dispatchShow',
+        params: { task: 'task_worker' }
+      })
+      expect(window.api.runtime.call).toHaveBeenNthCalledWith(2, {
+        method: 'terminal.focus',
+        params: { terminal: 'term_worker', navigation: 'host' }
+      })
     })
   })
 

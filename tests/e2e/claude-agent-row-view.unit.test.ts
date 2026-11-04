@@ -14,6 +14,7 @@ import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster
 import { decodeAgentSubagentsField } from '../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
 import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
+import { successResponse } from '../../src/main/runtime/rpc/errors'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
@@ -329,7 +330,11 @@ beforeEach(async () => {
           mocks.transport(method, params),
         subscribe: (_args: unknown, onResponse: (response: unknown) => void) => {
           listeners++
-          const stop = bridge.subscribe((snapshot) => onResponse({ ok: true, result: snapshot }))
+          const stop = bridge.subscribe((snapshot) =>
+            onResponse(
+              successResponse('claude-row-view', { runtimeId: 'row-view-runtime' }, snapshot)
+            )
+          )
           return {
             unsubscribe: () => {
               listeners--
