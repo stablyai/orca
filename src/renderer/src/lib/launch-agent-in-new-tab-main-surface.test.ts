@@ -62,7 +62,10 @@ describe('launchAgentInNewTab main-window surface', () => {
     const store = seedMainWindowOnEditor()
     const id = 'folder:captured'
     store.setState((state) => ({
-      settings: { ...state.settings, nativeChatProviders: { claude: true } },
+      settings: {
+        ...(state.settings ?? getDefaultSettings('/tmp')),
+        nativeChatProviders: { claude: true }
+      },
       folderWorkspaces: [
         makeFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
         makeFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
