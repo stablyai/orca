@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mergeAiVaultConversationSearch } from './ai-vault-conversation-search'
 import { conversationSessions } from '../sidebar/ProjectConversationList.test-fixture'
-import type { AiVaultSessionFilterState } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultSessionFilterState } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 const base = {
   ...conversationSessions[0]!,
   source: 'structured-record' as const,

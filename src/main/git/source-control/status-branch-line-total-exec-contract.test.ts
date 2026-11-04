@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildGitBranchLineTotalDiffArgs,
   invalidateGitBranchLineTotalInFlight
-} from '../../../shared/git-branch-line-total'
+} from '../../../shared/git/status/git-branch-line-total'
 
-import type * as BranchLineTotal from '../../../shared/git-branch-line-total'
+import type * as BranchLineTotal from '../../../shared/git/status/git-branch-line-total'
 
 // Spy on real Git argv to validate opt-in and coalescing without stubbing results.
 const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
   coalescerJoins: { count: 0, onJoin: undefined as undefined | (() => void) }
 }))
 
-vi.mock('../../../shared/git-branch-line-total', async (importOriginal) => {
+vi.mock('../../../shared/git/status/git-branch-line-total', async (importOriginal) => {
   const actual = await importOriginal<typeof BranchLineTotal>()
   return {
     ...actual,

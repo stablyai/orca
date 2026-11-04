@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import { isChromeExtensionId } from '../../../shared/browser-extension-url'
+import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult
-} from '../../../shared/browser-extension-types'
+} from '../../../shared/browser/extensions/browser-extension-types'
 import {
   addUnpackedBrowserExtension,
   listBrowserExtensionsForProfile,

@@ -2,10 +2,13 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
-import { filterAiVaultSessions } from '../../../../shared/ai-vault-session-filters'
+import { filterAiVaultSessions } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import {
   markInputQuietSchedulerInput,

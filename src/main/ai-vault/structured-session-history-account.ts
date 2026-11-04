@@ -9,7 +9,7 @@ import {
   isLegacyAgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 
 export function projectedAccountHome(ownership: StructuredProviderSessionOwnership) {

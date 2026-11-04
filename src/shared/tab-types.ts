@@ -1,4 +1,4 @@
-import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { AiVaultSessionTitle } from './ai-vault/contracts/ai-vault-session-title'
 import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 

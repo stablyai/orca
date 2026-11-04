@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import AiVaultPanel from './AiVaultPanel'
 import { conversationSessions } from '../sidebar/ProjectConversationList.test-fixture'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 
 const state = {
   settings: { aiVaultSearch: { enabled: true } },

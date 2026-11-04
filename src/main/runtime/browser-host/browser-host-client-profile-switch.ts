@@ -1,8 +1,8 @@
 import {
   BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
   BrowserClientProfileMetadata
-} from '../../../shared/browser-client-profile-switch-protocol'
-import type { BrowserClientHostCommandResult } from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 import type { RuntimeBrowserClientPlacement } from '../../../shared/runtime-browser-placement'
 import type { BrowserHostLeaseState } from './browser-host-lease-records'

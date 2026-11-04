@@ -5,7 +5,10 @@ import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { AiVaultListResult, AiVaultSession } from '../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type * as CachedSessionListModule from '../../ai-vault/cached-session-list'
 import type * as SessionParseCacheModule from '../../ai-vault/parse-cache/session-parse-cache-store'
 

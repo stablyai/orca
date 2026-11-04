@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'

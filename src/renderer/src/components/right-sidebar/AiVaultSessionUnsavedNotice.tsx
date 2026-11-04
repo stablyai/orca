@@ -4,7 +4,7 @@ import {
   aiVaultSessionRecoverableSignalCount,
   isAiVaultSessionRecoverableEmpty,
   type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 
 // Zero-turn transcripts may still have recoverable queued prompts or subagent history.

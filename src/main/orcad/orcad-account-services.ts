@@ -8,14 +8,14 @@ import type {
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../providers/accounts/provider-account-services'
-import { createCodexRuntimeHomeLaunchPreparation } from '../codex/codex-runtime-home-launch-preparation'
-import { createCodexSessionResumeLaunchPreparation } from '../codex/codex-session-resume-launch-preparation'
-import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
+import { createCodexRuntimeHomeLaunchPreparation } from '../codex/configuration/homes/codex-runtime-home-launch-preparation'
+import { createCodexSessionResumeLaunchPreparation } from '../codex/history/resume/codex-session-resume-launch-preparation'
+import { prepareCodexAiVaultSessionResume } from '../codex/history/resume/codex-ai-vault-session-resume'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { resolveHostAgentBaseEnvironment } from '../runtime/structured-agent-shell-environment'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'

@@ -1,4 +1,4 @@
-import type { CommitMessageDraftContext } from '../../../shared/commit-message-generation'
+import type { CommitMessageDraftContext } from '../../../shared/source-control/ai/generation/commit-message-generation'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'

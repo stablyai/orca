@@ -1,9 +1,9 @@
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import {
   aiVaultCachedDepthServes,
   truncateAiVaultListResult
-} from '../../../../shared/ai-vault-session-depth'
+} from '../../../../shared/ai-vault/scanning/ai-vault-session-depth'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 const MAX_CACHED_SESSION_SCOPES = 8

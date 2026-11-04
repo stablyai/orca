@@ -137,7 +137,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 

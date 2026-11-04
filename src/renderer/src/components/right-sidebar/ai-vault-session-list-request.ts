@@ -1,4 +1,7 @@
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   parseRoutableExecutionHostId,
   type ExecutionHostScope

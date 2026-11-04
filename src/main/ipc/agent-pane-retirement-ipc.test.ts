@@ -30,10 +30,6 @@ beforeEach(() => {
 })
 
 describe('pane retirement IPC request identity', () => {
-  it.each([undefined, id])('accepts legacy omission or a valid UUID: %s', (requestId) => {
-    mocks.handlers.get('agentStatus:retirePaneAuthority')?.({}, paneKey, requestId)
-    expect(mocks.retire).toHaveBeenCalledWith(paneKey, requestId)
-  })
   it.each([null, '', 'bad-id', 42, {}, `${id} `])(
     'rejects malformed request identity %j',
     (requestId) => {

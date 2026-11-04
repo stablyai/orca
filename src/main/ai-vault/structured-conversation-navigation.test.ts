@@ -6,8 +6,8 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
-import { filterAiVaultSessions } from '../../shared/ai-vault-session-filters'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { filterAiVaultSessions } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,

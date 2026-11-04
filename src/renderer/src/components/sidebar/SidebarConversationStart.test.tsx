@@ -12,7 +12,7 @@ import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/la
 import type * as AgentLaunchPlanModule from '@/lib/agent-session-launch-plan'
 import type { ProvisionalLaunchArgs } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { SidebarConversationStart } from './SidebarConversationStart'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentMenuRowsTarget } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'

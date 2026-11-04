@@ -5,7 +5,7 @@ import {
 } from '../../transcripts/remote-session-content-lines'
 import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'

@@ -19,7 +19,7 @@ import {
   makeWorktree
 } from '../../store/slices/store-test-helpers'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { resetAgentStatusEpochClockForTests } from '@/lib/agent-status-epoch-clock'
 import { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
 import { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-decision-projection'

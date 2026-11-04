@@ -28,7 +28,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { runtimePairingRepairRoute } from '../../../../shared/runtime-environments'
+import { runtimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'

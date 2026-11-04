@@ -2,19 +2,23 @@ import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState, type Ref } from 'react'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
+import type {
+  AiVaultScope,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultResumeStartup } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { translate } from '@/i18n/i18n'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
-import type { AiVaultSessionListGroup, AiVaultSessionProject } from './ai-vault-session-filters'
+import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
+import type { AiVaultSessionProject } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import type {
   AiVaultSessionResumeActions,
   AiVaultSessionResumeState
 } from './ai-vault-session-resume'
-import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 import {
   extractVaultVirtualRowIndexes,
   getVaultStickyHeaderIndexes,
@@ -23,7 +27,7 @@ import {
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { resolveAiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import { resumeAiVaultSessionHere, type AiVaultResumeHere } from './ai-vault-session-resume-here'
 import {

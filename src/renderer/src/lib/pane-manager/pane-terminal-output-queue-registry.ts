@@ -7,7 +7,7 @@ import { cancelTerminalWriteStallWatch } from './terminal-write-pipeline-health'
 import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
-} from '../../../../shared/terminal-scrollback-policy'
+} from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   exposeTerminalOutputSchedulerDebugApi as exposeDebugApi,
   recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,

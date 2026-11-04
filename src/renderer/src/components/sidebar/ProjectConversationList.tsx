@@ -22,8 +22,8 @@ import { ConversationProjectMenu } from './ConversationProjectMenu'
 import { HiddenConversationProjects } from './HiddenConversationProjects'
 import type { AiVaultSessionVirtualList } from '../right-sidebar/AiVaultSessionVirtualList'
 import { resolveAiVaultSessionRowChatActions } from '../right-sidebar/ai-vault-session-chat-action'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSessionProject } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { conversationPreferenceKey } from '../../../../shared/conversation-navigation-preferences'
 import {
   projectConversations,

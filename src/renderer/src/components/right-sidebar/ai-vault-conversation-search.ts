@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   filterAiVaultSessions,
   type AiVaultSessionFilterState
-} from '../../../../shared/ai-vault-session-filters'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { conversationPreferenceKey } from '../../../../shared/conversation-navigation-preferences'
 
 /** Keep indexed content matches and add bounded, host-owned conversation metadata matches. */

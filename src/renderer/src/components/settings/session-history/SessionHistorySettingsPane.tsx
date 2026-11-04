@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import {
   AiVaultSearchSettingsSchema,
   resolveAiVaultSearchSettings
-} from '../../../../../shared/ai-vault-search-settings'
+} from '../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,

@@ -3,7 +3,7 @@ import type {
   AiVaultSearchHit,
   AiVaultSearchRequest,
   AiVaultSearchResponse
-} from '../../../../shared/ai-vault-search-types'
+} from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
@@ -15,9 +15,9 @@ import type {
   AiVaultAgent,
   AiVaultSearchSort,
   AiVaultSession
-} from '../../../../shared/ai-vault-types'
-import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault-search-scope'
-import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultSearchScopeIdentity } from '../../../../shared/ai-vault/search/ai-vault-search-scope'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'

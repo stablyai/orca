@@ -1,11 +1,14 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
+import type {
+  AiVaultScope,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultResumeStartup } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { cn } from '@/lib/utils'
 import { VaultGroupHeader } from './AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
-import type { AiVaultSessionGroup } from './ai-vault-session-filters'
+import type { AiVaultSessionGroup } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   aiVaultSessionResumeLabel,
@@ -13,11 +16,11 @@ import {
   type AiVaultSessionResumeActions,
   type AiVaultSessionResumeState
 } from './ai-vault-session-resume'
+import { isAiVaultSessionInCurrentWorktree } from './ai-vault-session-worktree'
 import {
   canJumpToAiVaultSessionWorktree,
-  isAiVaultSessionInCurrentWorktree,
   type AiVaultSessionWorktreeInfo
-} from './ai-vault-session-worktree'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions
@@ -25,7 +28,7 @@ import {
 import { canContinueAiVaultSessionInNewSession } from './ai-vault-session-continuation'
 import { resolveAiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { canResumeAiVaultSearchHit, hasAiVaultSearchHitPath } from './ai-vault-search-session'
 
 export type AiVaultListRow =

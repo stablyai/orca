@@ -11,7 +11,7 @@ import {
 import {
   addMobilePairingCustomAddress,
   removeMobilePairingCustomAddress
-} from '../../../../shared/mobile-pairing-custom-address'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 
 function haveSameAddresses(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((address, index) => address === right[index])

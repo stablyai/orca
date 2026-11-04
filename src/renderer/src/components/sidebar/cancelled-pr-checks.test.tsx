@@ -7,9 +7,9 @@ import { CircleCheck } from 'lucide-react'
 import {
   summarizeProviderChecks,
   getProviderChecksOutcome
-} from '../../../../shared/provider-check-summary'
+} from '../../../../shared/source-control/checks/provider-check-summary'
 import { summarizeWorkspaceReviewChecks } from '../../../../shared/workspace-review-checks'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachment-normalization'
+import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { PRChecksCell } from '../task-page/github/ChecksCell'
 import { ActivityBarButton, TopActivityOverflowMenu } from '../right-sidebar/activity-bar-buttons'

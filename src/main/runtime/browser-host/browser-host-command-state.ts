@@ -4,9 +4,9 @@ import {
 } from '../../browser/client-hosts/commands/browser-command-cache-bytes'
 import type {
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 
 export const DEFAULT_MAX_OUTSTANDING_COMMANDS = 256
 export const DEFAULT_MAX_OUTSTANDING_COMMANDS_PER_PAGE = 32

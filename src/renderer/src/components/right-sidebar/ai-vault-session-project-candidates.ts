@@ -1,22 +1,22 @@
-import { isAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { isAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 import {
   folderGroupKey,
   folderLabel,
   type AiVaultSessionProject
-} from '../../../../shared/ai-vault-session-filters'
-import { createNormalizedAiVaultScopeCwdMatcher } from '../../../../shared/ai-vault-scope-cwd-match'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import { createNormalizedAiVaultScopeCwdMatcher } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
 export {
   aiVaultSessionProjectCwdKey,
   matchAiVaultSessionCwdCandidates as matchAiVaultProjectCandidates
-} from '../../../../shared/ai-vault-session-cwd-candidates'
+} from '../../../../shared/ai-vault/scanning/ai-vault-session-cwd-candidates'
 
 export type SessionProjectCandidate = {
   workspaceId?: string

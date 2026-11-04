@@ -18,7 +18,7 @@ vi.mock('../store', async () => {
 
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
-import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { recoverFromDegradedStartup } from './startup-degraded-recovery'
 import '../web/web-runtime-client-error'
 

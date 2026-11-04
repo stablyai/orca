@@ -1,17 +1,17 @@
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 import { createConversationWorkspaceMatcher } from '../../../../shared/conversation-workspace-matcher'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   folderGroupKey,
   type AiVaultSessionProject
-} from '../../../../shared/ai-vault-session-filters'
+} from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceWorktreeHostId
-} from '../../../../shared/folder-workspace-worktree'
+} from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { ProjectOrderBy, ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
 import {

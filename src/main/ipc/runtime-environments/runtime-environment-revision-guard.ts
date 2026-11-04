@@ -1,4 +1,4 @@
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
 export function runtimeEnvironmentRevisionFailure(

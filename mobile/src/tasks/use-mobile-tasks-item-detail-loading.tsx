@@ -9,11 +9,8 @@ import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
 import { fetchJiraIssueDetail } from './mobile-jira-task-source'
 import { createJiraTask } from './mobile-tasks-item-mapping'
-import {
-  type HostedReviewDecision,
-  buildGitLabCheckSummary,
-  useEffect
-} from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import { buildGitLabCheckSummary, useEffect } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import {
   githubItemDetailRead,

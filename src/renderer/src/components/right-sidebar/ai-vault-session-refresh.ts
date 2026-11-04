@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import {
-  isAiVaultScanCancelledError,
-  type AiVaultListResult,
-  type AiVaultSession
-} from '../../../../shared/ai-vault-types'
+
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
@@ -35,6 +31,12 @@ import {
   aiVaultForcedRescanDelay,
   resetAiVaultForcedRescanBudgetForTest
 } from './ai-vault-forced-rescan-budget'
+import {
+  type AiVaultListResult,
+  type AiVaultSession,
+  isAiVaultScanCancelledError as isAiVaultScanCancellation
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+
 export { claimAiVaultForcedRescan } from './ai-vault-forced-rescan-budget'
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
@@ -44,7 +46,6 @@ export function resetAiVaultForcedRescanThrottleForTest(): void {
 }
 
 // Desktop IPC resolves cancellations; web/runtime RPC rejects, so recognize both.
-export const isAiVaultScanCancellation = isAiVaultScanCancelledError
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
 

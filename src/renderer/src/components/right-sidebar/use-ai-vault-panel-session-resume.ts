@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
@@ -12,9 +12,9 @@ import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-i
 import { resolveAiVaultHistoryRowResume } from './ai-vault-session-resume-in-chat-workspace'
 import {
   useAiVaultSessionOwnerWorkspaces,
-  useAiVaultSessionWorktreeMap,
-  withAiVaultCurrentWorktreeStatus
+  useAiVaultSessionWorktreeMap
 } from './ai-vault-session-worktree'
+import { withAiVaultCurrentWorktreeStatus } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 
 export function useAiVaultPanelSessionResume(args: {
   sessions: readonly AiVaultSession[]

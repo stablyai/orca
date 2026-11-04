@@ -22,7 +22,7 @@ import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
 import type * as AgentPickerRowsModule from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type * as ZustandShallow from 'zustand/react/shallow'
 import type * as HostAgentSettingsTransport from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import {
   buildTabAgentLaunchOptionsFromRows,

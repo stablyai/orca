@@ -13,7 +13,7 @@ vi.mock('../../ipc/runtime-environments/runtime-environment-transport-routing', 
 vi.mock('../../ipc/runtime-environments/runtime-environment-registry-root', () => ({
   getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'vps', createdAt: 1, pairingRevision: 12 })
 }))
 

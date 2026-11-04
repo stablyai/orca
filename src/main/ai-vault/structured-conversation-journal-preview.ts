@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import {

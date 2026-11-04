@@ -1,10 +1,10 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientHostedPageInventory,
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
+  BrowserClientHostCommandEvent
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type {
   RemoteRuntimeSubscription,
   RemoteRuntimeSubscriptionCallbacks

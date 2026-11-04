@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { isKiroSessionMetadataPath, parseKiroSessionFile } from './session-scanner-kiro-parser'
-import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault-session-log-resource'
+import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 
 const SESSION_ID = '0b5e1c2a-3d4f-4a5b-8c6d-7e8f9a0b1c2d'
 

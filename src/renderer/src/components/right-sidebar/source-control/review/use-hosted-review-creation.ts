@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { normalizeHostedReviewHeadRef } from '../../../../../../shared/hosted-review-refs'
+import { normalizeHostedReviewHeadRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from '../../source-control-create-review-blocked-action'
 import { localizedCreateFailure } from '../../hosted-review-create-failure-copy'
 import type { SourceControlAi } from '../ai/use-ai'

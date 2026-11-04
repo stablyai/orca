@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { ConversationPreference } from '../../../../shared/conversation-navigation-preferences'
 import { projectConversationTitle } from '../../../../shared/project-conversation-list'

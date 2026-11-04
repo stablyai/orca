@@ -8,7 +8,7 @@ import type {
   AiVaultListArgs,
   AiVaultListResult,
   AiVaultSession
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'

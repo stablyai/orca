@@ -8,7 +8,7 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION
-} from '../../../../shared/terminal-mode-reset-profiles'
+} from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'

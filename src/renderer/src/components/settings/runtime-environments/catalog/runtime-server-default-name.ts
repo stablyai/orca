@@ -1,5 +1,5 @@
-import { parseHostAccessLink } from '../../../../../../shared/remote-pairing-address'
-import { findCollidingEnvironmentName } from '../../../../../../shared/runtime-environment-name-collision'
+import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
+import { findCollidingEnvironmentName } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environment-name-collision'
 
 /** Choose host, host:port, then numbered suffixes so servers sharing a machine/address still get unique blank-name defaults. */
 export function defaultServerNameForAccessLink(

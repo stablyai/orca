@@ -9,24 +9,27 @@ import {
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
-import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
+import type {
+  AiVaultScope,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultResumeStartup } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
-import { latestSessionConversationTurn } from './ai-vault-session-display'
+import { latestSessionConversationTurn } from '../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletability'
 import { useAiVaultSessionDeleteHost } from './ai-vault-session-delete-action'
 import type { AiVaultSessionResumeActions } from './ai-vault-session-resume'
-import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import type { AiVaultSessionWorktreeInfo } from '../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
 import {
   conversationRoleLabel,
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
 import { AgentStateDot } from '@/components/AgentStateDot'

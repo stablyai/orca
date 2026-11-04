@@ -1,6 +1,6 @@
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
 import {
   getTerminalWebglAutoDecision,

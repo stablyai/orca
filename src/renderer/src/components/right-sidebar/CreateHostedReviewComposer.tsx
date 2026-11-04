@@ -25,13 +25,13 @@ import { translate } from '@/i18n/i18n'
 import {
   hostedReviewProviderSupportsDraft,
   type HostedReviewProvider
-} from '../../../../shared/hosted-review'
+} from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import type { HostedReviewStackParent } from './useHostedReviewStackParent'
 import type {
   DropdownActionKind,
   DropdownEntry
-} from '../../../../shared/source-control-dropdown-item-types'
+} from '../../../../shared/source-control/dropdown/source-control-dropdown-item-types'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
 import { getCreateButtonLabel } from './create-hosted-review-button-label'
 import {

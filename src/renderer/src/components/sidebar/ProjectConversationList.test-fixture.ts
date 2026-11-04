@@ -1,9 +1,9 @@
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import type { ProjectConversationListProps } from './ProjectConversationList'
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 
 export const conversationRepos: Repo[] = [
   {

@@ -1,4 +1,7 @@
-import { getCommitMessageAgentSpec, type CommitMessageAgentSpec } from './commit-message-agent-spec'
+import {
+  getCommitMessageAgentSpec,
+  type CommitMessageAgentSpec
+} from './source-control/ai/generation/commit-message-agent-spec'
 import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-probe'
 import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from './omp-model-list-probe'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'

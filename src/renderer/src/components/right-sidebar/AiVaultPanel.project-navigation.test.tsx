@@ -5,7 +5,10 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import AiVaultPanel from './AiVaultPanel'
 import { resetAiVaultForcedRescanThrottleForTest } from './ai-vault-session-refresh'
 import { resetInputQuietSchedulerForTest } from '@/lib/input-quiet-scheduler'

@@ -6,18 +6,18 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { managedWorktreeDirectories } from '../../../../shared/worktree/ownership'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { resolveActiveProjectKey } from './ai-vault-project-key'
-import { toAiVaultProjectKey } from '../../../../shared/ai-vault-project-key'
+import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getProjectHostSetupLookup } from '../../../../shared/project-host-setup-lookup'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {
   compareAiVaultProjectCandidates,
@@ -30,14 +30,14 @@ import {
   hasCandidatePath,
   type SessionProjectCandidate
 } from './ai-vault-session-project-candidates'
-import type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
+import type { AiVaultSessionProject } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
   aiVaultCandidateProject,
   aiVaultFolderProject,
   resolveStructuredAiVaultSessionProject
 } from './ai-vault-structured-session-project'
 
-export type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
+export type { AiVaultSessionProject } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
 export type AiVaultProjectContext = {
   activeProjectKey: string | null
