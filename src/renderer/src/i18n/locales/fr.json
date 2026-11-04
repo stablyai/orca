@@ -17976,6 +17976,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "L’hôte d’exécution enregistré ne correspond plus à cette configuration du projet."
+        },
+        "launchSettings": {
+          "needsFreshSession": "Les paramètres de lancement de l’agent nécessitent une nouvelle session à chaque exécution."
         }
       },
       "agent": {

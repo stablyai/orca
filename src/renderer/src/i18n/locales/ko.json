@@ -17319,6 +17319,9 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
+        },
+        "launchSettings": {
+          "needsFreshSession": "에이전트 시작 설정을 사용하려면 실행할 때마다 새 세션이 필요합니다."
         }
       },
       "agent": {
