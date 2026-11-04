@@ -1,10 +1,10 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares a missing module
-// entry. config/patches/@xterm__addon-ligatures* keeps the runtime import valid.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
-import type { Terminal } from '@xterm/xterm'
-
-type LigatureRange = [number, number]
-type CharacterJoiner = (text: string) => LigatureRange[]
+import type { ITerminalAddon, Terminal } from '@xterm/xterm'
+import {
+  acquireSharedLigatureFont,
+  releaseSharedLigatureFont,
+  type LigatureRange,
+  type SharedLigatureFont
+} from './shared-ligature-fonts'
 
 const LIGATURE_CACHE_CHARACTER_BUDGET = 100_000
 // Bound tiny attribute-segment caches; 2K entries exceeds one visible grid without permitting tens of thousands per pane.
@@ -17,7 +17,6 @@ function cloneRanges(ranges: readonly LigatureRange[]): LigatureRange[] {
 class LigatureRangeCache {
   private readonly entries = new Map<string, { ranges: LigatureRange[]; size: number }>()
   private cachedCharacters = 0
-  generation = 0
 
   get(text: string): LigatureRange[] | undefined {
     const entry = this.entries.get(text)
@@ -60,57 +59,73 @@ class LigatureRangeCache {
   clear(): void {
     this.entries.clear()
     this.cachedCharacters = 0
-    this.generation++
   }
 }
 
-function createCachedCharacterJoiner(
-  terminal: Terminal,
-  joiner: CharacterJoiner,
-  cache: LigatureRangeCache
-): CharacterJoiner {
-  let cachedFontFamily = terminal.options.fontFamily
-  return (text) => {
-    const fontFamily = terminal.options.fontFamily
-    if (fontFamily !== cachedFontFamily) {
-      cachedFontFamily = fontFamily
-      cache.clear()
+/**
+ * Joins ligatures from a font parsed once per font stack and shared across terminals, and caches
+ * exact rows with bounded retention: TUIs repaint unchanged rows while upstream retries every ligature.
+ */
+export class TerminalLigaturesAddon implements ITerminalAddon {
+  private readonly cache = new LigatureRangeCache()
+  private terminal: Terminal | null = null
+  private joinerId: number | null = null
+  private font: SharedLigatureFont | null = null
+  private unsubscribeFontLoaded: (() => void) | null = null
+
+  activate(terminal: Terminal): void {
+    if (!terminal.element) {
+      throw new Error('Cannot activate TerminalLigaturesAddon before open is called')
     }
-    const cached = cache.get(text)
+    this.terminal = terminal
+    this.joinerId = terminal.registerCharacterJoiner((text) => this.join(text))
+    terminal.element.style.fontFeatureSettings = '"calt" on'
+  }
+
+  private join(text: string): LigatureRange[] {
+    const font = this.fontFor(this.terminal?.options.fontFamily ?? '')
+    const cached = this.cache.get(text)
     if (cached) {
       return cached
     }
-    const generationBeforeJoin = cache.generation
-    const ranges = joiner(text)
-    // Async font discovery may refresh during this call; do not refill a just-cleared fallback cache.
-    if (cache.generation === generationBeforeJoin) {
-      cache.set(text, ranges)
-    }
+    const ranges = font.join(text)
+    this.cache.set(text, ranges)
     return ranges
   }
-}
 
-/** Cache exact rows with bounded retention: TUIs repaint unchanged rows while upstream otherwise retries every ligature at every character. */
-export class TerminalLigaturesAddon extends LigaturesAddon {
-  override activate(terminal: Terminal): void {
-    const cache = new LigatureRangeCache()
-    const terminalForAddon = new Proxy(terminal, {
-      get(target, property) {
-        if (property === 'registerCharacterJoiner') {
-          return (joiner: CharacterJoiner): number =>
-            target.registerCharacterJoiner(createCachedCharacterJoiner(target, joiner, cache))
-        }
-        if (property === 'refresh') {
-          return (start: number, end: number): void => {
-            cache.clear()
-            target.refresh(start, end)
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
-        const value = Reflect.get(target, property, target) as unknown
-        return typeof value === 'function' ? value.bind(target) : value
-      }
+  private fontFor(fontFamily: string): SharedLigatureFont {
+    if (this.font?.fontFamily === fontFamily) {
+      return this.font
+    }
+    this.releaseFont()
+    this.cache.clear()
+    const font = acquireSharedLigatureFont(fontFamily)
+    this.font = font
+    this.unsubscribeFontLoaded = font.onFontLoaded(() => {
+      this.cache.clear()
+      this.terminal?.refresh(0, this.terminal.rows - 1)
     })
-    super.activate(terminalForAddon)
+    return font
+  }
+
+  private releaseFont(): void {
+    this.unsubscribeFontLoaded?.()
+    this.unsubscribeFontLoaded = null
+    if (this.font) {
+      releaseSharedLigatureFont(this.font)
+      this.font = null
+    }
+  }
+
+  dispose(): void {
+    if (this.joinerId !== null) {
+      this.terminal?.deregisterCharacterJoiner(this.joinerId)
+      this.joinerId = null
+    }
+    this.releaseFont()
+    if (this.terminal?.element) {
+      this.terminal.element.style.fontFeatureSettings = ''
+    }
+    this.terminal = null
   }
 }

@@ -1,7 +1,7 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { ImageAddon } from '@xterm/addon-image'
-import type { LigaturesAddon } from '@xterm/addon-ligatures'
+import type { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
@@ -161,7 +161,7 @@ export type ManagedPaneInternal = {
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
   // Ligatures are optional and toggleable; null means disabled.
-  ligaturesAddon: LigaturesAddon | null
+  ligaturesAddon: TerminalLigaturesAddon | null
   // Images are optional and lazy-loaded; null means disabled or not yet resolved.
   imageAddon: ImageAddon | null
   // Enabled but waiting for the lazy addon; onLoaded drains these panes.

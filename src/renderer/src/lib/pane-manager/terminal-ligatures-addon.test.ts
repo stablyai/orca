@@ -25,13 +25,14 @@ vi.mock('@xterm/addon-ligatures', () => ({
 
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 
-function createTerminalHarness() {
+function createTerminalHarness(fontFamily = 'Fira Code') {
   let registeredJoiner: ((text: string) => [number, number][]) | null = null
   const refresh = vi.fn()
   const deregisterCharacterJoiner = vi.fn()
   const terminal = {
     element: { style: {} },
-    options: { fontFamily: 'Fira Code' },
+    options: { fontFamily },
+    rows: 24,
     refresh,
     registerCharacterJoiner(joiner: (text: string) => [number, number][]): number {
       registeredJoiner = joiner
@@ -65,19 +66,18 @@ describe('TerminalLigaturesAddon', () => {
     expect(joiner('a => b')).toEqual([[2, 4]])
   })
 
-  it('evicts the least-recently-used segment', () => {
-    const harness = createTerminalHarness()
-    new TerminalLigaturesAddon().activate(harness.terminal)
-    const joiner = harness.getRegisteredJoiner()
+  it('repaints every terminal sharing a font once that font loads', () => {
+    const first = createTerminalHarness('Shared Mono')
+    const second = createTerminalHarness('Shared Mono')
+    new TerminalLigaturesAddon().activate(first.terminal)
+    new TerminalLigaturesAddon().activate(second.terminal)
+    first.getRegisteredJoiner()('a => b')
+    second.getRegisteredJoiner()('a => b')
 
-    for (let index = 0; index < 2_048; index++) {
-      joiner(`s${index}`)
-    }
-    joiner('s0')
-    joiner('new segment')
-    joiner('s1')
-    joiner('s0')
+    // The addon refreshes its own terminal after parsing the font file.
+    addonMock.delegateTerminal!.refresh(0, 0)
 
-    expect(addonMock.joiner).toHaveBeenCalledTimes(2_050)
+    expect(first.refresh).toHaveBeenCalledWith(0, 23)
+    expect(second.refresh).toHaveBeenCalledWith(0, 23)
   })
 })
