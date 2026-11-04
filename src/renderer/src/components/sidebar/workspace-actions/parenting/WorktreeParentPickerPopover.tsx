@@ -20,7 +20,6 @@ import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
-import { useParentMachineLabel } from './use-parent-machine-label'
 import { selectWorktreeParent } from './worktree-parent-selection'
 
 export { selectWorktreeParent }
@@ -181,10 +180,6 @@ export function WorktreeParentPickerPopover({
     }, 150)
     return () => window.clearTimeout(timerId)
   }, [open])
-
-  const machineLabelOf = useParentMachineLabel(
-    useCallback((candidate: Worktree) => !!child && isCrossStoreParent(child, candidate), [child])
-  )
 
   const handleSelect = useCallback(
     (candidate: Worktree) => {
@@ -393,7 +388,11 @@ export function WorktreeParentPickerPopover({
                         repo={repoMap.get(candidate.repoId)}
                         status={statuses.get(candidate.id) ?? 'inactive'}
                         isCurrent={activeWorktreeId === candidate.id}
-                        machineLabel={machineLabelOf(candidate)}
+                        machineHostId={
+                          child && isCrossStoreParent(child, candidate)
+                            ? candidate.hostId
+                            : undefined
+                        }
                       />
                     </div>
                   )

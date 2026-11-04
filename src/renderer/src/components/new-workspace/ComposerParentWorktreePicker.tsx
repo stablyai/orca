@@ -46,8 +46,7 @@ import {
 import { useRepoMap } from '@/store/selectors'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'
-import { useParentMachineLabel } from '@/components/sidebar/workspace-actions/parenting/use-parent-machine-label'
-import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
+import { ParentMachineBadge } from '@/components/sidebar/workspace-actions/parenting/ParentMachineBadge'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
@@ -275,8 +274,6 @@ function ParentWorktreeCandidateList({
     worktreesByRepo
   ])
 
-  const machineLabelOf = useParentMachineLabel(isCrossStoreCandidate)
-
   const filtered = useMemo(
     () => filterWorktreeParentCandidates(candidates, search, repoMap),
     [candidates, search, repoMap]
@@ -400,8 +397,8 @@ function ParentWorktreeCandidateList({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-medium">{candidate.displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
-                      {machineLabelOf(candidate) ? (
-                        <WorktreeHostContextBadge label={machineLabelOf(candidate) ?? ''} />
+                      {candidate.hostId && isCrossStoreCandidate(candidate) ? (
+                        <ParentMachineBadge hostId={candidate.hostId} />
                       ) : null}
                       <GitBranch className="size-3 shrink-0" />
                       <span className="truncate">

@@ -340,11 +340,8 @@ export function recordWorkspaceLineageForCreatedWorktree(
 /** Same refusal as the RPC create, before any checkout exists: a well-formed ref from another store. */
 async function assertCreatableCrossStoreParent(
   runtime: OrcaRuntimeService,
-  parent: CreateWorktreeArgs['crossStoreParent']
+  parent: NonNullable<CreateWorktreeArgs['crossStoreParent']>
 ): Promise<void> {
-  if (parent === undefined) {
-    return
-  }
   // IPC args are unchecked.
   if (!CrossStoreParentRefSchema.safeParse(parent).success) {
     throw new Error('The parent on another machine is malformed.')
@@ -989,7 +986,10 @@ async function performLocalWorktreeCreate(
   pathClaim: WorktreeCreatePathClaim,
   onWorkspaceCreated?: (worktreeId: string) => void
 ): Promise<CreateWorktreeResult> {
-  await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
+  // Why: no await without a ref, so the common create keeps its synchronous probe start.
+  if (args.crossStoreParent !== undefined) {
+    await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
+  }
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,

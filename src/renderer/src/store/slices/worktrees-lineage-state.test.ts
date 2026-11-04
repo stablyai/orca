@@ -243,7 +243,7 @@ describe('worktree lineage state', () => {
       result: { worktree: { ...serverTwin, lineage } },
       _meta: { runtimeId: 'runtime-remote' }
     })
-    store.setState({ worktreesByRepo: { repo1: [localTwin, serverTwin] } } as Partial<AppState>)
+    store.setState({ worktreesByRepo: { repo1: [localTwin, serverTwin] } })
 
     await store.getState().assignWorktreeParent(lineage.worktreeId, {
       parentWorktreeId: lineage.parentWorktreeId,
