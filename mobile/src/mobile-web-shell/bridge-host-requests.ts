@@ -21,6 +21,8 @@ type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 // Suppress cancelled requests’ late replies so an id the page abandoned cannot receive an old answer.
 type PendingRequest = { live: boolean; retire?: () => void }
 
+export const BRIDGE_REQUEST_RETIRED = 'The page stopped waiting before this request was sent.'
+
 export type BridgeHostRequestDeps = {
   client: RpcClient
   isIdTaken: (id: string) => boolean
@@ -79,12 +81,17 @@ export class BridgeHostRequests {
     if (bound) {
       return this.forwardExact(message, params, record)
     }
-    if (options !== undefined) {
-      return client.sendRequest(message.method, params, options)
+    // A request still waiting for the connection must not leave once the page has given up on it;
+    // the physical client checks this exact record after connecting, before allocating a frame.
+    const beforeSend = () => {
+      if (!record.live || this.pending.get(message.id) !== record) {
+        throw new Error(BRIDGE_REQUEST_RETIRED)
+      }
     }
-    return 'params' in message
-      ? client.sendRequest(message.method, params)
-      : client.sendRequest(message.method)
+    return client.sendRequest(message.method, 'params' in message ? params : undefined, {
+      ...options,
+      beforeSend
+    })
   }
 
   private async forwardExact(

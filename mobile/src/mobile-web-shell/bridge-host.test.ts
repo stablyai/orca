@@ -18,6 +18,7 @@ import {
 } from './bridge/bridge-caps'
 import type { BridgeHostMessage } from './bridge/bridge-envelope'
 import { BridgeReplyAssembler } from './bridge/bridge-reply-chunking'
+import { BRIDGE_REQUEST_RETIRED } from './bridge-host-requests'
 
 describe('requests', () => {
   it('replays the arity the page used', () => {
@@ -34,11 +35,21 @@ describe('requests', () => {
         options: { timeoutMs: 50 }
       })
     )
-    expect(bridge.client.requests.map((request) => request.args)).toEqual([
-      ['status.get'],
-      ['status.get', { a: 1 }],
-      ['status.get', undefined, { timeoutMs: 50 }]
+    // The shell adds only its local pre-send fence; method, params and the page's options pass through.
+    const forwarded = bridge.client.requests.map(({ args: [method, params, options] }) => {
+      const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
+      return [method, params, rest, typeof beforeSend]
+    })
+    expect(forwarded).toEqual([
+      ['status.get', undefined, {}, 'function'],
+      ['status.get', { a: 1 }, {}, 'function'],
+      ['status.get', undefined, { timeoutMs: 50 }, 'function']
     ])
+    const fence = (index: number) =>
+      (bridge.client.requests[index]!.args[2] as { beforeSend: () => void }).beforeSend
+    bridge.host.receive(clientFrame({ type: 'cancel', id: ID, target: 'request' }))
+    expect(fence(0)).toThrow(BRIDGE_REQUEST_RETIRED)
+    expect(fence(1)).not.toThrow()
   })
 
   it('carries a host failure through as data, _meta and error.data included', async () => {

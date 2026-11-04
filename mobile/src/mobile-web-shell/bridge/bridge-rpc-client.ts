@@ -219,9 +219,12 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     throwIfBridgeSignalAborted(requestOptions?.signal)
     requestOptions?.beforeSend?.()
     const id = nextId()
+    const cancel = () => {
+      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
+    }
     const response = new Promise<RpcResponse>((resolve, reject) => {
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
-      requests.open(id, { resolve, reject }, requestOptions?.timeoutMs ?? 30_000, method)
+      requests.open(id, { resolve, reject }, requestOptions?.timeoutMs ?? 30_000, method, cancel)
       const outcome = sendFrame({
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'request',
@@ -239,9 +242,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
         )
       }
     })
-    return requests.wait(id, response, requestOptions, () => {
-      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
-    })
+    return requests.wait(id, response, requestOptions, cancel)
   }
 
   function subscribe(

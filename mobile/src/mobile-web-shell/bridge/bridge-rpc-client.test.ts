@@ -1,3 +1,6 @@
+import { getRemoteRuntimeRequestAdmissionEvidence } from '../../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
+import { RpcClientRequestTracker } from '../../transport/rpc-client-request-tracker'
+import type { RpcRequestFrame } from '../../transport/rpc-envelope-fields'
 import type { RpcResponse } from '../../transport/types'
 import type { BridgePortPair } from './bridge-port-pair-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +12,7 @@ import {
 import { createFakeRpcClient } from '../bridge-host-test-fakes'
 import { BRIDGE_MAX_MESSAGE_BYTES, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import { bridgeOrdinaryBackstopMs } from './bridge-client-requests'
 
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 
@@ -23,6 +27,12 @@ function readError(thrown: unknown): Error {
     throw new Error(`expected an Error, got ${typeof thrown}`)
   }
   return thrown
+}
+
+// The shell forwards method, params and the page's options, adding only its local pre-send fence.
+function shellLocal([method, params, options]: readonly unknown[]): unknown[] {
+  const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
+  return [method, params, rest, typeof beforeSend]
 }
 
 async function ready(pair: BridgePortPair): Promise<BridgePortPair> {
@@ -45,10 +55,10 @@ describe('bridge round trip: requests', () => {
     void pair.client.sendRequest('worktree.ps', { host: 'a' })
     void pair.client.sendRequest('worktree.ps', { host: 'a' }, { timeoutMs: 50 })
     await pair.flush()
-    expect(pair.rpc.requests.map((request) => request.args)).toEqual([
-      ['worktree.ps'],
-      ['worktree.ps', { host: 'a' }],
-      ['worktree.ps', { host: 'a' }, { timeoutMs: 50 }]
+    expect(pair.rpc.requests.map((request) => shellLocal(request.args))).toEqual([
+      ['worktree.ps', undefined, {}, 'function'],
+      ['worktree.ps', { host: 'a' }, {}, 'function'],
+      ['worktree.ps', { host: 'a' }, { timeoutMs: 50 }, 'function']
     ])
   })
 
@@ -297,6 +307,127 @@ describe('bridge round trip: notifications and state', () => {
   })
 })
 
+// The shell answered and split a large reply; lost native posts leave the page waiting on its backstop.
+describe('bridge round trip: lost replies', () => {
+  it.each([
+    {
+      lost: 'the final reply frame',
+      drop: (part?: { i: number; of: number }) => part !== undefined && part.i === part.of - 1
+    },
+    { lost: 'every reply frame', drop: () => true }
+  ])('settles once, unknown, and cancels once when $lost never arrives', async ({ drop }) => {
+    const baseline = getRemoteRuntimeRequestAdmissionEvidence()
+    const held: string[] = []
+    const pair = await ready(
+      createFakeBridgePortPair({
+        holdToPage: (json) => {
+          const frame = JSON.parse(json) as { type: string; part?: { i: number; of: number } }
+          return frame.type === 'reply' && drop(frame.part) && held.push(json) > 0
+        }
+      })
+    )
+    let settled = false
+    const answer = pair.client
+      .sendRequest('worktree.ps', undefined, { timeoutMs: 50 })
+      .catch((error: unknown) => error)
+      .finally(() => (settled = true))
+    await pair.flush()
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).not.toEqual(baseline)
+    pair.rpc.requests[0]!.resolve(success('large', 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES)))
+    await pair.flush()
+    // The shell posted every part and released its lease; only delivery was lost.
+    expect(pair.toPage.filter((json) => json.includes('"part"')).length).toBeGreaterThan(1)
+    expect(held.length).toBeGreaterThan(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(bridgeOrdinaryBackstopMs(50) - 1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    const error = await answer
+    expect(readError(error).message).toBe('Request timed out: worktree.ps')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    await pair.flush()
+    expect(pair.readToShell().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
+    // Late parts find no request: no second settlement, no new request.
+    held.forEach((json) => pair.deliverToPage(json))
+    await pair.flush()
+    expect(pair.rpc.requests).toHaveLength(1)
+    expect(pair.readToShell().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
+    pair.client.close()
+    pair.host.dispose()
+  })
+})
+
+// The shell's production tracker behind a connection the test opens: a request may wait to connect.
+function queuedShell() {
+  const frames: RpcRequestFrame[] = []
+  const waiters: (() => void)[] = []
+  let connected = false
+  let nextId = 0
+  const tracker = new RpcClientRequestTracker({
+    nextId: () => `physical-${++nextId}`,
+    getState: () => (connected ? 'connected' : 'connecting'),
+    waitForConnected: () =>
+      connected ? Promise.resolve() : new Promise<void>((resolve) => waiters.push(resolve)),
+    sendFrame: (frame) => frames.push(frame) > 0
+  })
+  const rpc = createFakeRpcClient()
+  rpc.sendRequest = (...args) => tracker.sendRequest(...args)
+  const reconnect = () => {
+    connected = true
+    waiters.splice(0).forEach((resolve) => resolve())
+  }
+  return { rpc, tracker, frames, reconnect }
+}
+
+describe('bridge round trip: queued ordinary requests', () => {
+  it('never sends a queued request the page gave up on, and sends its successor once', async () => {
+    const baseline = getRemoteRuntimeRequestAdmissionEvidence()
+    const shell = queuedShell()
+    const pair = await ready(createFakeBridgePortPair({ rpc: shell.rpc }))
+    const abandoned = pair.client.sendRequest('worktree.ps').catch((error: unknown) => error)
+    await pair.flush()
+    await vi.advanceTimersByTimeAsync(bridgeOrdinaryBackstopMs(30_000))
+    const error = await abandoned
+    expect(readError(error).message).toBe('Request timed out: worktree.ps')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    await pair.flush()
+    expect(pair.readToShell().filter((frame) => frame.type === 'cancel')).toHaveLength(1)
+    shell.reconnect()
+    await pair.flush()
+    expect(shell.frames).toEqual([])
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline)
+    const successor = pair.client.sendRequest('worktree.ps')
+    await pair.flush()
+    expect(shell.frames.map((frame) => frame.method)).toEqual(['worktree.ps'])
+    shell.tracker.resolve(success(shell.frames[0]!.id, 'next'))
+    await pair.flush()
+    expect(await successor).toEqual(success(shell.frames[0]!.id, 'next'))
+    expect(shell.frames).toHaveLength(1)
+    expect(shell.tracker.size()).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual(baseline)
+    pair.client.close()
+    pair.host.dispose()
+  })
+
+  it('answers a connect-then-response that crosses T inside the shell budget', async () => {
+    const shell = queuedShell()
+    const pair = await ready(createFakeBridgePortPair({ rpc: shell.rpc }))
+    const answer = pair.client.sendRequest('worktree.ps', undefined, { timeoutMs: 50 })
+    await pair.flush()
+    await vi.advanceTimersByTimeAsync(45)
+    shell.reconnect()
+    await pair.flush()
+    await vi.advanceTimersByTimeAsync(40)
+    shell.tracker.resolve(success(shell.frames[0]!.id, 'slow'))
+    await pair.flush()
+    expect(await answer).toEqual(success(shell.frames[0]!.id, 'slow'))
+    expect(pair.readToShell().filter((frame) => frame.type === 'cancel')).toEqual([])
+    pair.client.close()
+    pair.host.dispose()
+  })
+})
+
 describe('bridge round trip: close', () => {
   it('settles pendings delivery-unknown, retires the streams, and leaves the shell client open', async () => {
     const pair = await ready(createFakeBridgePortPair())
@@ -324,7 +455,12 @@ it('keeps source signals local, cancels only the abandoned waiter and preserves 
     .catch((error) => error)
   await pair.flush()
   expect(beforeSend).toHaveBeenCalledOnce()
-  expect(pair.rpc.requests[0]!.args).toEqual(['status.get', undefined, { timeoutMs: 50 }])
+  expect(shellLocal(pair.rpc.requests[0]!.args)).toEqual([
+    'status.get',
+    undefined,
+    { timeoutMs: 50 },
+    'function'
+  ])
   expect(
     pair.toShell.some((frame) => frame.includes('signal') || frame.includes('beforeSend'))
   ).toBe(false)
@@ -341,12 +477,29 @@ it('keeps source signals local, cancels only the abandoned waiter and preserves 
   pair.rpc.requests[1]!.resolve(success('retry35636', { next: true }))
   await pair.flush()
   expect(await successor).toEqual(success('retry35636', { next: true }))
+  // The shell owns the deadline: its answer after T still reaches a signal-bearing caller.
+  const slow = pair.client.sendRequest('status.get', undefined, {
+    signal: new AbortController().signal,
+    timeoutMs: 50
+  })
+  await pair.flush()
+  await vi.advanceTimersByTimeAsync(60)
+  pair.rpc.requests[2]!.resolve(success('slow35636', { slow: true }))
+  await pair.flush()
+  expect(await slow).toEqual(success('slow35636', { slow: true }))
+  // A reply that never comes still settles, at the page's later backstop.
+  let settled = false
   const dropped = pair.client
     .sendRequest('status.get', undefined, { signal: new AbortController().signal, timeoutMs: 50 })
     .catch((error) => error)
+    .finally(() => (settled = true))
   await pair.flush()
-  await vi.advanceTimersByTimeAsync(51)
-  expect((await dropped).message).toContain('timed out')
+  await vi.advanceTimersByTimeAsync(bridgeOrdinaryBackstopMs(50) - 1)
+  expect(settled).toBe(false)
+  await vi.advanceTimersByTimeAsync(1)
+  const error = await dropped
+  expect(error.message).toBe('Request timed out: status.get')
+  expect(isRpcDeliveryUnknown(error)).toBe(true)
   pair.client.close()
   pair.host.dispose()
 })

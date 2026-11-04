@@ -1,5 +1,6 @@
 import type { SendRequestOptions } from '../../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import { RPC_REQUEST_MIN_ACK_MS } from '../../transport/rpc-request-budget'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeClientClosedError, BridgeReplyRefusedError } from './bridge-client-errors'
 import type { BridgeReplyMessage } from './bridge-envelope'
@@ -10,6 +11,17 @@ export type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: unknown) => void
   timeout?: ReturnType<typeof setTimeout>
+}
+
+// Time for the shell's final reply to cross the bridge after its own deadline answer.
+export const BRIDGE_REPLY_HANDOFF_ALLOWANCE_MS = 2_000
+const MAX_TIMER_MS = 2 ** 31 - 1
+
+// The shell owns an ordinary request's deadline: its connect wait and response budget may each take
+// the timeout. The page only backstops a silent bridge, after both legs, the ack floor and a handoff.
+export function bridgeOrdinaryBackstopMs(timeoutMs: number): number {
+  const backstop = 2 * timeoutMs + RPC_REQUEST_MIN_ACK_MS + BRIDGE_REPLY_HANDOFF_ALLOWANCE_MS
+  return Math.min(MAX_TIMER_MS, Math.max(1, backstop))
 }
 
 // Discard assembler state whenever a request settles or is abandoned; a missing final part otherwise holds one of the 64 slots until page close.
@@ -25,18 +37,32 @@ export class BridgeClientRequests {
     return this.pending.has(id)
   }
 
-  open(id: string, request: PendingRequest, timeoutMs: number, method: string): void {
+  // Native verbs run on the shell itself and keep their own deadline. An ordinary request's backstop
+  // settles it unknown once and tells the shell to drop it, so a still-queued send never leaves.
+  open(
+    id: string,
+    request: PendingRequest,
+    timeoutMs: number,
+    method: string,
+    cancel: () => void
+  ): void {
+    const native = isBridgeNativeMethod(method)
     request.timeout = setTimeout(
-      () =>
+      () => {
+        if (!this.pending.has(id)) {
+          return
+        }
         this.fail(
           id,
           markRpcDeliveryUnknown(
-            new Error(
-              isBridgeNativeMethod(method) ? 'Request timed out' : `Request timed out: ${method}`
-            )
+            new Error(native ? 'Request timed out' : `Request timed out: ${method}`)
           )
-        ),
-      timeoutMs
+        )
+        if (!native) {
+          cancel()
+        }
+      },
+      native ? timeoutMs : bridgeOrdinaryBackstopMs(timeoutMs)
     )
     this.pending.set(id, request)
   }
@@ -48,6 +74,7 @@ export class BridgeClientRequests {
     this.assembler.discard(id)
   }
 
+  // Only the caller's abort ends the wait early; automatic expiry is the pending request's backstop.
   wait(
     id: string,
     response: Promise<RpcResponse>,
@@ -61,37 +88,27 @@ export class BridgeClientRequests {
     return new Promise((resolve, reject) => {
       // Pending-map removal precedes raw reaction delivery; an abort in between must still win.
       let terminal = false
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const cleanup = () => {
-        if (timer !== undefined) {
-          clearTimeout(timer)
-        }
-        signal.removeEventListener('abort', onAbort)
-      }
-      const abandon = (error: Error) => {
+      const onAbort = () => {
         if (terminal) {
           return
         }
         terminal = true
-        cleanup()
         this.fail(id, new Error('Request abandoned'))
         cancel()
-        reject(error)
+        reject(Object.assign(new Error('Promise settlement wait aborted'), { name: 'AbortError' }))
       }
-      const onAbort = () =>
-        abandon(Object.assign(new Error('Promise settlement wait aborted'), { name: 'AbortError' }))
       void response.then(
         (value) => {
           if (!terminal) {
             terminal = true
-            cleanup()
+            signal.removeEventListener('abort', onAbort)
             resolve(value)
           }
         },
         (error: unknown) => {
           if (!terminal) {
             terminal = true
-            cleanup()
+            signal.removeEventListener('abort', onAbort)
             reject(error)
           }
         }
@@ -99,19 +116,6 @@ export class BridgeClientRequests {
       if (signal.aborted) {
         onAbort()
         return
-      }
-      timer = setTimeout(
-        () => abandon(new Error('Promise settlement wait timed out')),
-        Math.max(1, options?.timeoutMs ?? 30_000)
-      )
-      const handle: unknown = timer
-      if (
-        typeof handle === 'object' &&
-        handle !== null &&
-        'unref' in handle &&
-        typeof handle.unref === 'function'
-      ) {
-        handle.unref()
       }
       signal.addEventListener('abort', onAbort, { once: true })
       if (signal.aborted) {

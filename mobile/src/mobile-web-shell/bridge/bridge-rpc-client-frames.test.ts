@@ -9,6 +9,7 @@ import {
 } from './bridge-caps'
 import { createFakeBridgePortPair } from './bridge-port-pair-test-harness'
 import { BRIDGE_ACK_INTERVAL_FRAMES } from './bridge-client-subscriptions'
+import { bridgeOrdinaryBackstopMs } from './bridge-client-requests'
 import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
@@ -353,7 +354,7 @@ describe('bridge client after close', () => {
 })
 
 describe('bridge client replies', () => {
-  it('keeps ordinary operation identity at the page deadline without changing native timeouts', async () => {
+  it('keeps ordinary operation identity at the page backstop without changing native timeouts', async () => {
     const page = createPageClient()
     page.start()
     const ordinarySettled = vi.fn()
@@ -384,7 +385,8 @@ describe('bridge client replies', () => {
       part: { i: 0, of: 2 },
       chunk: '{'
     })
-    await vi.advanceTimersByTimeAsync(49)
+    // The shell owns ordinary deadlines; the page settles a silent request only at its later backstop.
+    await vi.advanceTimersByTimeAsync(bridgeOrdinaryBackstopMs(50) - 1)
     expect(overriddenSettled).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     const overriddenError = await overridden
@@ -397,18 +399,26 @@ describe('bridge client replies', () => {
       id: overriddenId,
       payload: { id: overriddenId, ok: true, result: 'late' }
     })
-    await vi.advanceTimersByTimeAsync(29_949)
-    expect(ordinarySettled).not.toHaveBeenCalled()
+    // Native verbs keep their own deadline.
+    await vi.advanceTimersByTimeAsync(30_000 - bridgeOrdinaryBackstopMs(50) - 1)
     expect(nativeSettled).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
-    const ordinaryError = await ordinary
     const nativeError = await native
-    expect(readError(ordinaryError).name).toBe('Error')
-    expect(readError(ordinaryError).message).toBe('Request timed out: worktree.ps')
     expect(readError(nativeError).name).toBe('Error')
     expect(readError(nativeError).message).toBe('Request timed out')
-    expect(isRpcDeliveryUnknown(ordinaryError)).toBe(true)
     expect(isRpcDeliveryUnknown(nativeError)).toBe(true)
+    await vi.advanceTimersByTimeAsync(bridgeOrdinaryBackstopMs(30_000) - 30_000 - 1)
+    expect(ordinarySettled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    const ordinaryError = await ordinary
+    expect(readError(ordinaryError).name).toBe('Error')
+    expect(readError(ordinaryError).message).toBe('Request timed out: worktree.ps')
+    expect(isRpcDeliveryUnknown(ordinaryError)).toBe(true)
+    // One existing cancel per expired ordinary request, none for the native verb.
+    expect(page.frames().flatMap((frame) => (frame.type === 'cancel' ? [frame.id] : []))).toEqual([
+      overriddenId,
+      ordinaryId
+    ])
     page.deliver({
       v: BRIDGE_PROTOCOL_VERSION,
       type: 'reply',

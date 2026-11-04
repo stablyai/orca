@@ -66,10 +66,16 @@ it('uses one unscoped first-hop probe, leaves final S distinct from D, and prese
       ...fields
     })
   }
-  expect(f.client.requests.slice(2).map((request) => request.args)).toEqual([
-    ['github.listLabels'],
-    ['github.listLabels', params],
-    ['github.listLabels', undefined, { envelope }]
+  // Unrelated calls keep their data; the shell adds only its local pre-send fence.
+  expect(
+    f.client.requests.slice(2).map(({ args: [method, sent, options] }) => {
+      const { beforeSend, ...rest } = (options ?? {}) as { beforeSend?: () => void }
+      return [method, sent, rest, typeof beforeSend]
+    })
+  ).toEqual([
+    ['github.listLabels', undefined, {}, 'function'],
+    ['github.listLabels', params, {}, 'function'],
+    ['github.listLabels', undefined, { envelope }, 'function']
   ])
   f.requests.closeAll(false)
 })
