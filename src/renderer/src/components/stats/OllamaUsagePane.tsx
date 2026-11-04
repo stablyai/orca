@@ -156,6 +156,29 @@ export function OllamaUsagePane(): React.JSX.Element {
         />
       </div>
 
+      {/* Legacy plans answer session/weekly remaining percents; modern plans report
+          windowless USD balances, so these rows only appear when the API sent them. */}
+      {(ollama?.session || ollama?.weekly) && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {ollama?.session ? (
+            <StatCard
+              label={translate(
+                'auto.components.stats.OllamaUsagePane.sessionWindow',
+                '5 hours used'
+              )}
+              value={`${Math.round(ollama.session.usedPercent)}%`}
+              icon={<CalendarClock className="size-4" />}
+            />
+          ) : null}
+          {ollama?.weekly ? (
+            <StatCard
+              label={translate('auto.components.stats.OllamaUsagePane.weeklyWindow', 'Weekly used')}
+              value={`${Math.round(ollama.weekly.usedPercent)}%`}
+              icon={<CalendarClock className="size-4" />}
+            />
+          ) : null}
+        </div>
+      )}
       {totals?.inputTokens != null ? (
         <p className="px-1 text-xs text-muted-foreground">
           {translate(

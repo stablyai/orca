@@ -5599,7 +5599,9 @@
           "monthSpend": "30-day spend",
           "periodReset": "Plan period resets",
           "tokenTotals": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests",
-          "accountSettings": "Ollama cloud account settings"
+          "accountSettings": "Ollama cloud account settings",
+          "sessionWindow": "5 hours used",
+          "weeklyWindow": "Weekly used"
         }
       },
       "sparse": {
