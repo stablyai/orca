@@ -9,7 +9,11 @@ import type {
   ProjectGroupImportResult
 } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
-import { getRepoDialableSshTargetId, getRepoExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId
+} from '../../shared/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepoAsync } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
@@ -108,7 +112,7 @@ export class RuntimeNestedRepoImport {
             (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
               // The resolved spelling names this machine's folder, so only native rows may match it.
               (resolvedImportRepoPath !== null &&
-                !repo.connectionId &&
+                getRepoRoutingConnectionId(repo) === null &&
                 !getRepoExecutionHostId(repo).startsWith('ssh:') &&
                 normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
         )
