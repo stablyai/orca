@@ -113,7 +113,7 @@ function rewriteTomlStringSettingLine(
   if (!parsed || rewritten === null) {
     return line
   }
-  return `${line.slice(0, parsed.start)}${quoteTomlPath(rewritten)}${line.slice(parsed.end)}`
+  return `${line.slice(0, parsed.start)}${quoteTomlString(rewritten)}${line.slice(parsed.end)}`
 }
 
 function isPathConfigKey(fullPath: string): boolean {
@@ -145,7 +145,7 @@ function shouldRewriteRelativePath(value: string): boolean {
   return !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)
 }
 
-function quoteTomlPath(value: string): string {
+export function quoteTomlString(value: string): string {
   return canUseTomlLiteralString(value) ? `'${value}'` : quoteTomlBasicString(value)
 }
 

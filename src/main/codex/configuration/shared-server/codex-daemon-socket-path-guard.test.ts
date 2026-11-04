@@ -17,10 +17,8 @@ import {
   codexDaemonSocketPathExceedsLimit,
   stripCodexDaemonOverride
 } from './codex-daemon-socket-path-guard'
-import {
-  syncSystemConfigIntoLegacySharedCodexHome,
-  syncSystemConfigIntoManagedCodexHome
-} from '../settings/codex-config-mirror'
+import { syncSystemConfigIntoManagedCodexHome } from '../settings/codex-config-mirror'
+import { syncSystemConfigIntoLegacySharedCodexHome } from '../settings/codex-legacy-shared-home-sync'
 import { getCodexConfigSyncStatus } from '../settings/config-sync-stall'
 import { getCodexSettingsBaselinePath } from '../settings/config-settings-baseline'
 import { extractOrdinaryCodexSettings } from '../toml/config-toml-runtime-owned-sections'

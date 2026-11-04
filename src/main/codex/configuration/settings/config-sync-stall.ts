@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import { isOnlyCodexDaemonOverride } from '../shared-server/codex-daemon-socket-path-guard'
+import { stripDesktopCuaReplBrowserSurfaceOverride } from '../toml/config-toml-desktop-cua-repl-browser-surface'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import {
   getCodexSettingsBaselinePath,
@@ -27,7 +28,9 @@ export function getCodexConfigSyncStatus(
   if (
     runtimeConfigObservation.kind === 'absent' ||
     (runtimeConfigObservation.kind === 'present' &&
-      isOnlyCodexDaemonOverride(runtimeConfigObservation.value))
+      isOnlyCodexDaemonOverride(
+        stripDesktopCuaReplBrowserSurfaceOverride(runtimeConfigObservation.value)
+      ))
   ) {
     return { state: 'synced', reason: null, systemConfigPath }
   }

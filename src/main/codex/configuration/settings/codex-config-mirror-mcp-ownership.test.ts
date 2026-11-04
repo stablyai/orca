@@ -2,10 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  syncSystemConfigIntoManagedCodexHome,
-  syncSystemConfigIntoLegacySharedCodexHome
-} from './codex-config-mirror'
+import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import { syncSystemConfigIntoLegacySharedCodexHome } from './codex-legacy-shared-home-sync'
 
 let root: string
 let runtimeHomePath: string

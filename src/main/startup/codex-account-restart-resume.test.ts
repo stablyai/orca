@@ -30,7 +30,7 @@ vi.mock('../codex/configuration/homes/codex-home-paths', () => ({
   getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
 vi.mock('../codex/configuration/settings/codex-config-mirror', () => ({
-  ensureCodexDaemonSocketGuard: vi.fn()
+  ensureCodexRuntimeConfigOverrides: vi.fn()
 }))
 
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'

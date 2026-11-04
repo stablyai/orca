@@ -12,7 +12,7 @@ import {
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
-import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex-config-mirror'
+import { ensureCodexRuntimeConfigOverrides } from '../../configuration/settings/codex-config-mirror'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import {
   getOrcaManagedCodexHomePath,
@@ -49,7 +49,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     }
     if (!isSystemHome) {
       // Hook repair may skip or fail before its config mirror applies the guard.
-      ensureCodexDaemonSocketGuard(home)
+      ensureCodexRuntimeConfigOverrides(home)
     }
   }
 
