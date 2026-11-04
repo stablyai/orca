@@ -19,8 +19,10 @@ import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent
 import { resolveAgentLaunchExecutionContext } from '@/lib/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/launch-agent-in-new-tab-structured-route'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import { claudeConfigProfileLaunchEnvFor } from '@/lib/claude-config-profile-launch'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import {
+  claudeConfigProfileLaunchEnvFor,
+  claudeConfigProfilesRunHere
+} from '@/lib/claude-config-profile-launch'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch,
@@ -79,16 +81,14 @@ export function launchAgentInNewTabWithOutcome(
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
-  const workspacePath = store.getKnownWorktreeById?.(worktreeId)?.path
   const profileEnv = claudeConfigProfileLaunchEnvFor({
     agent,
     profileId: args.claudeConfigProfileId,
     profiles: store.settings?.claudeConfigProfiles,
-    // The folder lives on this computer, so a WSL, SSH or server terminal cannot use it.
     local:
+      args.claudeConfigProfileId !== undefined &&
       !isRemote &&
-      !isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-      !(workspacePath && isWslUncPath(workspacePath))
+      claudeConfigProfilesRunHere(store, worktreeId)
   })
   if (profileEnv === null) {
     args.focusIntent?.cancel()
@@ -311,6 +311,7 @@ export function launchAgentInNewTabWithOutcome(
   }
 }
 
+/** Layer a profile's CLAUDE_CONFIG_DIR over the configured agent env so the launch and its resume record carry it. */
 function withClaudeConfigProfileEnv<T extends { agentEnv: Record<string, string> }>(
   inputs: T,
   profileEnv: Record<string, string> | undefined

@@ -38,6 +38,7 @@ export function getClaudeWslProfileRouter(): ClaudeWslProfileRouter | undefined 
   return installedWsl
 }
 
+/** Add the selected Claude account's routing env to a pane, except for a profile launch that names its own folder. */
 export function withClaudeProfileTerminalEnv<Env extends Record<string, string> | undefined>(
   env: Env,
   target: ClaudeAccountSelectionTarget

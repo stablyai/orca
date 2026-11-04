@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -94,6 +94,33 @@ describe('Claude profile launches on both spawn lanes', () => {
         expect.objectContaining({ env: expect.objectContaining({ CLAUDE_CONFIG_DIR: configDir }) })
       )
       clearProviderPtyState(id)
+    }
+  )
+
+  it.each(LAUNCH_RACE_LANES)(
+    '%s lane: a profile folder that cannot be created stops the launch',
+    async (lane) => {
+      const root = await mkdtemp(join(tmpdir(), 'claude-profile-'))
+      onTestFinished(() => rm(root, { recursive: true, force: true }))
+      const configDir = join(root, 'not-a-folder')
+      await writeFile(configDir, '')
+      const spawn = vi.fn()
+      installDaemonTestProvider({ spawn })
+      const lanes = registerLaunchRaceLanes({
+        handlers,
+        mainWindow,
+        runtime: createLaunchRaceRuntime()
+      })
+      await expect(
+        lanes.spawn[lane]({
+          cols: 80,
+          rows: 24,
+          sessionId: `claude-profile-file-${lane}`,
+          command: 'claude',
+          env: { CLAUDE_CONFIG_DIR: configDir, ORCA_CLAUDE_CONFIG_PROFILE_DIR: configDir }
+        })
+      ).rejects.toThrow(`The Claude profile folder ${configDir} could not be created`)
+      expect(spawn).not.toHaveBeenCalled()
     }
   )
 })

@@ -15,11 +15,16 @@ describe('Claude config profiles', () => {
         { id: 'blank', label: '  ', configDir: '/Users/me/.claude-blank' },
         { id: 'same-folder', label: 'Again', configDir: '/Users/me/.claude-work/' },
         { id: 'work', label: 'Same id', configDir: '/Users/me/.claude-other' },
-        { id: 'windows', label: 'Windows', configDir: 'C:\\Users\\me\\.claude-win' }
+        { id: 'windows', label: 'Windows', configDir: 'C:\\Users\\me\\.claude-win' },
+        { id: 'unc', label: 'Share', configDir: '\\\\server\\share\\claude' },
+        { id: 'unc-up', label: 'Share up', configDir: '\\\\server\\share\\..\\other' },
+        { id: 'unc-host-only', label: 'Host', configDir: '\\\\server' },
+        { id: 'tab', label: 'Tab', configDir: '/Users/me/.claude\tab' }
       ])
     ).toEqual([
       { id: 'work', label: 'Work', configDir: '/Users/me/.claude-work' },
-      { id: 'windows', label: 'Windows', configDir: 'C:\\Users\\me\\.claude-win' }
+      { id: 'windows', label: 'Windows', configDir: 'C:\\Users\\me\\.claude-win' },
+      { id: 'unc', label: 'Share', configDir: '\\\\server\\share\\claude' }
     ])
   })
 

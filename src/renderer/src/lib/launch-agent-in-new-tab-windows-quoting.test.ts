@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RendererAppPlatform from './renderer-app-platform'
 
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 const mockCreateTab = vi.fn()
@@ -6,6 +7,9 @@ function queuedStartups() {
   return mockCreateTab.mock.calls.flatMap((call) => call[3]?.pendingStartup ?? [])
 }
 const mockPasteDraftWhenAgentReady = vi.fn()
+const appPlatform = vi.hoisted((): { value: NodeJS.Platform | undefined } => ({
+  value: undefined
+}))
 
 const store = {
   activeRepoId: 'repo-1',
@@ -78,6 +82,14 @@ vi.mock('@/store', () => ({
   }
 }))
 
+vi.mock('./renderer-app-platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof RendererAppPlatform>()
+  return {
+    ...actual,
+    getRendererAppPlatform: () => appPlatform.value ?? actual.getRendererAppPlatform()
+  }
+})
+
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: vi.fn() }
 }))
@@ -116,6 +128,7 @@ vi.mock('../../../shared/workspace-layout/terminal-surface-id', () => ({
 describe('launchAgentInNewTab Windows shell quoting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    appPlatform.value = undefined
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
@@ -300,5 +313,44 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     const queued = queuedStartups().at(-1)
     expect(queued.command).toContain(`'don'"'"'t'`)
     expect(queued.command).not.toContain("'don''t'")
+  })
+
+  it('refuses a Claude profile for a Windows-drive project that runs in WSL', async () => {
+    appPlatform.value = 'win32'
+    const configDir = 'C:\\Users\\jinwo\\.claude-work'
+    Object.assign(store.settings, {
+      claudeConfigProfiles: [{ id: 'work', label: 'work', configDir }]
+    })
+    store.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
+    store.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: 'C:\\Users\\jinwo\\repo\\feature',
+          displayName: 'feature'
+        }
+      ]
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const launch = () =>
+      launchAgentInNewTab({
+        requestId: 'request-10',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        claudeConfigProfileId: 'work'
+      })
+
+    store.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
+    expect(launch()).not.toBeNull()
+    expect(queuedStartups().at(-1)?.env).toMatchObject({ CLAUDE_CONFIG_DIR: configDir })
+
+    mockCreateTab.mockClear()
+    store.projects = [
+      { id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
+    ]
+    expect(launch()).toBeNull()
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 })

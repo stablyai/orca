@@ -14,6 +14,7 @@ import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 
+/** Why the add form cannot save yet, or null when the label and folder are usable. */
 function draftError(
   label: string,
   configDir: string,
@@ -56,6 +57,7 @@ export function ClaudeConfigProfilesSetting({
   )
   const full = profiles.length >= CLAUDE_CONFIG_PROFILES_MAX
 
+  /** Save the draft as a new profile, or show why it cannot be saved. */
   const add = (): void => {
     const problem = draftError(label, configDir, profiles)
     setError(problem)
@@ -72,6 +74,7 @@ export function ClaudeConfigProfilesSetting({
     setConfigDir('')
   }
 
+  /** Fill the folder field from the system picker; a failed picker leaves the field as typed. */
   const browse = async (): Promise<void> => {
     try {
       const picked = await window.api.shell.pickDirectory({})

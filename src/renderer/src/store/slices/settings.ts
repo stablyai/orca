@@ -61,6 +61,7 @@ function normalizeRuntimeEnvironmentId(value: string | null | undefined): string
   return trimmed ? trimmed : null
 }
 
+/** Normalize a renderer settings write the same way main does, so local state never holds a shape main would reject. */
 function normalizeSettingsUpdates(
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null

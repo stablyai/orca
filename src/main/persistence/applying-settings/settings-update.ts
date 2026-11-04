@@ -55,6 +55,7 @@ export type SettingsMutationOperations = {
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
 }
 
+/** Apply a settings change from any writer, normalizing each field at this store boundary. */
 export function updateSettings(
   operations: SettingsMutationOperations,
   updates: Partial<GlobalSettings>,

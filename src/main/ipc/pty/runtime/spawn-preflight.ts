@@ -27,6 +27,7 @@ import {
   JCODE_RUNTIME_DIR_ENV_KEY
 } from '../../../../shared/jcode-runtime-dir'
 
+/** Resolve provider, cwd, account routing and host binding for a runtime PTY spawn; null means nothing to spawn. */
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {

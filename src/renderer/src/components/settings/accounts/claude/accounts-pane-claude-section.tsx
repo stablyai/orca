@@ -31,6 +31,7 @@ import {
   trackAccountAddition
 } from '../sign-in/account-add-cancel-target'
 
+/** Settings > AI Provider Accounts > Claude: managed accounts, the running-session policy and Claude profiles. */
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
     accountRuntime,

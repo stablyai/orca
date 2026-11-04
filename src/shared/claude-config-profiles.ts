@@ -18,15 +18,26 @@ export const CLAUDE_CONFIG_PROFILES_MAX = 32
 const MAX_LABEL_LENGTH = 64
 const MAX_DIR_LENGTH = 4096
 
+// POSIX root, a drive root such as C:\, or a UNC share such as \\server\share.
+const ABSOLUTE_DIR = /^(?:\/|[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/
+
+/** Control characters, NUL and newlines included, cannot be part of a usable env value or folder name. */
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x20 || code === 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Env values are not shell-expanded, so `~` or relative folders would name the wrong place. */
 export function isClaudeConfigProfileDir(value: string): boolean {
-  if (value.length === 0 || value.length > MAX_DIR_LENGTH || /[\0\r\n]/.test(value)) {
+  if (value.length === 0 || value.length > MAX_DIR_LENGTH || hasControlCharacter(value)) {
     return false
   }
-  if (!value.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(value)) {
-    return false
-  }
-  return !value.split(/[\\/]/).includes('..')
+  return ABSOLUTE_DIR.test(value) && !value.split(/[\\/]/).includes('..')
 }
 
 const ClaudeConfigProfileSchema = z.object({
@@ -35,11 +46,13 @@ const ClaudeConfigProfileSchema = z.object({
   configDir: z.string().trim().refine(isClaudeConfigProfileDir)
 })
 
+/** Compare folders ignoring a trailing separator, so `/a/` and `/a` count as one profile. */
 function sameDir(left: string, right: string): boolean {
   const strip = (value: string) => value.replace(/[\\/]+$/, '')
   return strip(left) === strip(right)
 }
 
+/** The saved profile that already uses this folder, if any. */
 export function findClaudeConfigProfileByDir(
   profiles: readonly ClaudeConfigProfile[] | undefined,
   configDir: string
@@ -70,6 +83,7 @@ export function normalizeClaudeConfigProfiles(value: unknown): ClaudeConfigProfi
   return profiles
 }
 
+/** Launch env for a profile: the folder as CLAUDE_CONFIG_DIR plus the marker main checks before skipping account routing. */
 export function claudeConfigProfileLaunchEnv(profile: ClaudeConfigProfile): Record<string, string> {
   return {
     CLAUDE_CONFIG_DIR: profile.configDir,

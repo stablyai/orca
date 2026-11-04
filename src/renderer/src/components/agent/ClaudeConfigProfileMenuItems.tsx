@@ -3,7 +3,12 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { claudeConfigProfileRows } from '../tab-bar/claude-config-profile-rows'
+import {
+  claudeConfigProfileRows,
+  withClaudeConfigProfileRows
+} from '../tab-bar/claude-config-profile-rows'
+import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import { launchableClaudeConfigProfiles } from '@/lib/claude-config-profile-launch'
 import { rowId, rowLabel, rowTitle } from '../tab-bar/tab-agent-row-presentation'
 
 /** Profile rows whose label contains every search word; none unless Claude can start in a terminal here. */
@@ -11,10 +16,10 @@ export function useClaudeConfigProfilePickerRows(
   entries: readonly AgentPickerEntry[],
   words: readonly string[]
 ): NewTabAgentMenuRow[] {
-  const profiles = useAppStore((state) => state.settings?.claudeConfigProfiles)
   const claude = entries.find(
     (entry) => entry.agent === 'claude' && entry.surfaces.includes('terminal')
   )
+  const profiles = useAppStore((state) => launchableClaudeConfigProfiles(state, claude?.worktreeId))
   const base: NewTabAgentMenuRow | undefined = claude
     ? { agent: 'claude', kind: 'cli', executionHostId: claude.rows[0]?.executionHostId }
     : undefined
@@ -24,6 +29,20 @@ export function useClaudeConfigProfilePickerRows(
   })
 }
 
+/** A settled menu's rows with profile rows beside Claude, when this workspace can reach the folders. */
+export function useRowsWithClaudeConfigProfiles(
+  model: NewTabAgentMenuModel
+): readonly NewTabAgentMenuRow[] {
+  const settled = model.state === 'settled' ? model : null
+  const profiles = useAppStore((state) =>
+    launchableClaudeConfigProfiles(state, settled?.pickerContext?.workspace.worktreeId)
+  )
+  return settled
+    ? withClaudeConfigProfileRows(settled.rows, profiles, settled.detection.detectedIds)
+    : []
+}
+
+/** Plain launch items for Claude profile rows; profiles have no setup submenu. */
 export function ClaudeConfigProfileMenuItems({
   rows,
   disabled,

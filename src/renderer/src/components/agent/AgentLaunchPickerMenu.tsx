@@ -56,6 +56,7 @@ type Launch = (
   surface?: AgentPickerSurface
 ) => boolean | void | Promise<boolean>
 
+/** Searchable agent list with setup submenus; launch mode also lists Claude profile rows. */
 export function AgentLaunchPickerMenu({
   draftScope,
   shortcutLabels,

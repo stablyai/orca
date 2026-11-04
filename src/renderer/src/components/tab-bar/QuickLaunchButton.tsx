@@ -32,7 +32,7 @@ import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/
 import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
-import { withClaudeConfigProfileRows } from './claude-config-profile-rows'
+import { useRowsWithClaudeConfigProfiles } from '../agent/ClaudeConfigProfileMenuItems'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -61,6 +61,7 @@ function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | nul
   return getAgentCatalog().find((a) => a.id === agent) ?? null
 }
 
+/** Launch a picked agent menu row in a new tab, carrying its surface, host and Claude profile. */
 export function useTabAgentMenuLaunch({
   worktreeId,
   groupId,
@@ -174,6 +175,7 @@ function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): 
   return <ProjectedAgentMenuItems {...props} model={model} runLaunch={runLaunch} />
 }
 
+/** Agent menu rows for one workspace, with Claude profile rows beside Claude where their folders are reachable. */
 export function ProjectedAgentMenuItems({
   disabled = false,
   model,
@@ -194,7 +196,7 @@ export function ProjectedAgentMenuItems({
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
-  const claudeConfigProfiles = useAppStore((s) => s.settings?.claudeConfigProfiles)
+  const shownRows = useRowsWithClaudeConfigProfiles(model)
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
     openSettingsPage()
@@ -227,7 +229,6 @@ export function ProjectedAgentMenuItems({
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
   const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
-  const shownRows = withClaudeConfigProfileRows(rows, claudeConfigProfiles, detectedIds)
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (

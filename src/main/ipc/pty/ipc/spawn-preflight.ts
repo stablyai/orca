@@ -14,6 +14,7 @@ import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
+/** Resolve provider, cwd and account routing for a renderer PTY spawn before anything starts. */
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Establish local daemon identity before yielding so early output can be hidden; SSH execution is rejected here.
