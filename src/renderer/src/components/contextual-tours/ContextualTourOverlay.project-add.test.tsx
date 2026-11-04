@@ -21,9 +21,12 @@ function Workspace() {
   useContextualTour('workspace-agent-sessions', true)
   const modal = useAppStore((state) => state.activeModal)
   const closeModal = useAppStore((state) => state.closeModal)
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar)
   return (
     <TooltipProvider>
-      <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />
+      <button onClick={toggleSidebar}>Toggle sidebar</button>
+      {sidebarOpen && <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={() => {}} />}
       <div data-contextual-tour-target="terminal-pane-split-target" />
       <AddRepoDialogChrome
         isOpen={modal === 'add-repo'}
@@ -89,6 +92,13 @@ async function splitFromTip(): Promise<unknown> {
 it('leads from the first project tip to an actionable terminal split', async () => {
   render(<Workspace />)
   await userEvent.click(await screen.findByRole('button', { name: 'Next' }))
+  expect(await splitFromTip()).toEqual({ tabId: 'terminal-1', direction: 'vertical' })
+})
+
+it('keeps terminal splitting available when the project control disappears with the sidebar', async () => {
+  render(<Workspace />)
+  await screen.findByRole('button', { name: 'Next' })
+  await userEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }))
   expect(await splitFromTip()).toEqual({ tabId: 'terminal-1', direction: 'vertical' })
 })
 
