@@ -3875,6 +3875,7 @@
       "hostUnreachable": "このホストに接続できませんでした。再接続し、更新して現在の状態を確認してください。",
       "actionFailed": "ホストでこの操作を完了できませんでした。更新して再試行してください。",
       "dispatched": "送信済み",
+      "sent": "送信済み",
       "skippedPrecheck": "スキップ · 事前チェック",
       "skippedMissedSchedule": "スキップ · 予定時刻を過ぎました",
       "skippedHostUnavailable": "スキップ · ホストが利用不可",

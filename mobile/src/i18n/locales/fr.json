@@ -3976,6 +3976,7 @@
       "hostUnreachable": "Impossible de joindre cet hôte. Reconnectez-vous, puis actualisez pour vérifier son état actuel.",
       "actionFailed": "Impossible de terminer cette action sur l’hôte. Actualisez et réessayez.",
       "dispatched": "Transmise",
+      "sent": "Envoyé",
       "skippedPrecheck": "Ignorée · vérification préalable",
       "skippedMissedSchedule": "Ignorée · horaire manqué",
       "skippedHostUnavailable": "Ignorée · hôte indisponible",

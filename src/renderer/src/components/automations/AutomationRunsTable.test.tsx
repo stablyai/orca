@@ -133,13 +133,14 @@ describe('AutomationRunsTable rows', () => {
 
   it('distinguishes accepted historical Chat delivery from completion and unproved delivery', () => {
     const rendered = entries(6)
-    const historical: Pick<AutomationRun, 'status' | 'sessionKind'>[] = [
+    const historical: (Pick<AutomationRun, 'status'> &
+      Partial<Pick<AutomationRun, 'sessionKind'>>)[] = [
       { status: 'dispatched', sessionKind: 'chat' },
       { status: 'completed', sessionKind: 'chat' },
       { status: 'pending', sessionKind: 'chat' },
       { status: 'dispatching', sessionKind: 'chat' },
       { status: 'dispatched', sessionKind: 'terminal' },
-      { status: 'dispatched', sessionKind: null }
+      { status: 'dispatched' }
     ]
     historical.forEach((run, index) => Object.assign(rendered[index].run, run))
     render(

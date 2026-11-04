@@ -128,7 +128,7 @@ describe('automation-list-last-run', () => {
     expect(
       getLocalAutomationLastRunSnapshot(
         automation,
-        makeRun({ status: 'dispatched', sessionKind: null })
+        makeRun({ status: 'dispatched', sessionKind: undefined })
       ).statusLabel
     ).toBe('Launched')
     expect(

@@ -4447,6 +4447,7 @@
       "pending": "Pending",
       "starting": "Starting",
       "dispatched": "Dispatched",
+      "sent": "Sent",
       "skippedPrecheck": "Skipped · precheck",
       "skippedMissedSchedule": "Skipped · missed schedule",
       "skippedHostUnavailable": "Skipped · host unavailable",

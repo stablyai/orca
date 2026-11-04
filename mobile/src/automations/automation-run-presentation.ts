@@ -2,11 +2,15 @@ import {
   AUTOMATION_RUN_FAILURE_COPY as EN,
   type AutomationRunFailureCode
 } from '../../../src/shared/automation-run-failure-copy'
+import { isAutomationRunHistory } from '../../../src/shared/automation-run-retention'
 import { translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import type { MobileAutomationRun } from './automation-reply-schema'
 
-export function automationRunStatusLabel(status: string): string {
+export function automationRunStatusLabel(status: string, sessionKind?: unknown): string {
+  if (status === 'dispatched' && sessionKind === 'chat') {
+    return translate('automations.mobile.sent', 'Sent')
+  }
   const runStatusLabels: Record<string, string> = {
     pending: translate('automations.mobile.pending', 'Pending'),
     dispatching: translate('automations.mobile.starting', 'Starting'),
@@ -51,7 +55,9 @@ export function runMatchesOutcome(run: MobileAutomationRun, outcome: string): bo
     return run.status.startsWith('skipped_')
   }
   if (outcome === 'active') {
-    return ['pending', 'dispatching', 'dispatched'].includes(run.status)
+    return (
+      ['pending', 'dispatching', 'dispatched'].includes(run.status) && !isAutomationRunHistory(run)
+    )
   }
   return run.status === outcome
 }

@@ -142,7 +142,7 @@ export function AutomationRunDetails(props: {
         </Text>
       ) : null}
       <Text style={styles.title}>{run.title}</Text>
-      <Text style={styles.text}>{automationRunStatusLabel(run.status)}</Text>
+      <Text style={styles.text}>{automationRunStatusLabel(run.status, run.sessionKind)}</Text>
       <View style={styles.card}>
         <AutomationMetadata
           label={t('automations.mobile.scheduledFor', 'Scheduled for')}

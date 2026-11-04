@@ -3,9 +3,7 @@ import { isFinalAutomationRunStatus, type AutomationRun } from './automations-ty
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
 /** Delivery history may acquire a result later without pinning history or workspace metadata. */
-export function isAutomationRunHistory(
-  run: Pick<AutomationRun, 'status' | 'sessionKind'>
-): boolean {
+export function isAutomationRunHistory(run: { status: string; sessionKind?: unknown }): boolean {
   return (
     isFinalAutomationRunStatus(run.status) ||
     (run.status === 'dispatched' && run.sessionKind !== 'chat')

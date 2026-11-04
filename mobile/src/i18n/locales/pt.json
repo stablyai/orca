@@ -3976,6 +3976,7 @@
       "hostUnreachable": "Não foi possível acessar este host. Reconecte e atualize para verificar o estado atual.",
       "actionFailed": "Não foi possível concluir esta ação no host. Atualize e tente novamente.",
       "dispatched": "Enviada",
+      "sent": "Enviado",
       "skippedPrecheck": "Ignorada · pré-verificação",
       "skippedMissedSchedule": "Ignorada · horário perdido",
       "skippedHostUnavailable": "Ignorada · host indisponível",
