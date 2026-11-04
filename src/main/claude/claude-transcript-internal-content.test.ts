@@ -14,6 +14,7 @@ import {
 import {
   SESSION,
   SID,
+  at,
   chat,
   chatTurn,
   prompt,
@@ -107,7 +108,7 @@ it('imports recorded repair results without inventing outside work or duplicate 
       original.body.kind === 'tool-call' && original.body.input
     )
   }
-  expect(c.rows()).not.toContain('(continuedOutside)')
+  expect(c.rows().some((row) => row.startsWith('(continued-outside'))).toBe(false)
   expect(await c.open('a1')).toBe(true)
   expect(c.journal.snapshot()).toEqual(after)
   expect((await c.replay()).snapshot()).toEqual(after)
@@ -125,7 +126,168 @@ it('imports recorded repair results without inventing outside work or duplicate 
   ])
   expect(await c.open('a1')).toBe(true)
   expect(c.rows()).toContain('assistant:real outside answer')
-  expect(c.rows().filter((row) => row === '(continuedOutside)')).toHaveLength(1)
+  expect(c.rows().filter((row) => row === '(continued-outside)')).toHaveLength(1)
+  const outside = c.journal
+    .snapshot()
+    .items.find(
+      (item) =>
+        item.body.kind === 'message' &&
+        item.body.role === 'assistant' &&
+        item.body.blocks.some(
+          (block) => block.type === 'text' && block.text === 'real outside answer'
+        )
+    )!
+  const outsideScope = outside.turnScope
+  expect(outsideScope.kind).toBe('turn')
+  if (outsideScope.kind !== 'turn') {
+    throw new Error('outside turn missing')
+  }
+  expect(c.journal.item(outsideScope.turnItemId)?.body).toMatchObject({
+    kind: 'turn',
+    state: 'completed'
+  })
+  expect(turns.some((turn) => turn.itemId === outsideScope.turnItemId)).toBe(false)
+  expect(
+    c.journal.snapshot().items.filter((item) => turns.some((turn) => turn.itemId === item.itemId))
+  ).toEqual(turns)
+  const caughtUp = c.journal.snapshot()
+  expect(await c.open('a1')).toBe(true)
+  expect(c.journal.snapshot()).toEqual(caughtUp)
+  expect((await c.replay()).snapshot()).toEqual(caughtUp)
+})
+
+it.each([false, true])('ignores quiet caveat time with a later prompt: %s', async (laterPrompt) => {
+  const c = await chat()
+  await c.live()
+  await c.write([
+    ...chatTurn,
+    prompt('outside', 'a1', 'outside work', 10),
+    reply('answer', 'outside', 'msg_answer', { type: 'text', text: 'done' }, 11),
+    {
+      ...prompt('caveat', 'answer', '<local-command-caveat>internal</local-command-caveat>', 60),
+      isMeta: true
+    },
+    ...(laterPrompt ? [prompt('next', 'caveat', 'next request', 70)] : [])
+  ])
+  expect(await c.open('a1')).toBe(true)
+  const turn = c.journal
+    .snapshot()
+    .items.find((item) => item.body.kind === 'turn' && item.body.turnId === 'outside')
+  expect(turn?.body).toMatchObject({
+    startedAt: Date.parse(at(10)),
+    completedAt: Date.parse(at(11))
+  })
+})
+
+it('preserves a task boundary without inventing a successor until real output arrives', async () => {
+  const c = await chat()
+  await c.live()
+  const wake = { ...task, ...prompt('wake', 'answer-again', String(message(task).content), 60) }
+  await c.write([
+    ...chatTurn,
+    prompt('outside', 'a1', 'outside work', 10),
+    reply('answer', 'outside', 'msg_answer', { type: 'text', text: 'first answer' }, 11),
+    { ...prompt('quiet', 'answer', 'quiet metadata', 12), isMeta: true },
+    reply('answer-again', 'quiet', 'msg_again', { type: 'text', text: 'continued answer' }, 13),
+    wake
+  ])
+  expect(await c.open('a1')).toBe(true)
+  const before = c.journal.snapshot()
+  const turn = before.items.find(
+    (item) => item.body.kind === 'turn' && item.body.turnId === 'outside'
+  )!
+  expect(turn.body).toMatchObject({
+    state: 'completed',
+    startedAt: Date.parse(at(10)),
+    completedAt: Date.parse(at(13))
+  })
+  expect(before.items.filter((item) => item.body.kind === 'turn')).toHaveLength(2)
+  const continued = before.items.find(
+    (item) =>
+      item.body.kind === 'message' &&
+      item.body.role === 'assistant' &&
+      item.body.blocks.some((block) => block.type === 'text' && block.text === 'continued answer')
+  )!
+  expect(continued.turnScope).toEqual({ kind: 'turn', turnItemId: turn.itemId })
+  expect(await c.open('a1')).toBe(true)
+  expect(c.journal.snapshot()).toEqual(before)
+  await c.write([
+    reply('wake-answer', 'wake', 'msg_wake', { type: 'text', text: 'wake answer' }, 61)
+  ])
+  expect(await c.open('a1')).toBe(true)
+  const after = c.journal.snapshot()
+  const answer = after.items.find(
+    (item) =>
+      item.body.kind === 'message' &&
+      item.body.role === 'assistant' &&
+      item.body.blocks.some((block) => block.type === 'text' && block.text === 'wake answer')
+  )!
+  const scope = answer.turnScope
+  expect(scope.kind).toBe('turn')
+  if (scope.kind !== 'turn') {
+    throw new Error('wake turn missing')
+  }
+  expect(scope.turnItemId).not.toBe(turn.itemId)
+  expect(c.journal.item(scope.turnItemId)?.body).toMatchObject({ kind: 'turn', state: 'completed' })
+  expect(c.journal.item(turn.itemId)).toEqual(turn)
+  expect(after.items.filter((item) => item.body.kind === 'turn')).toHaveLength(3)
+  expect(c.rows().filter((row) => row === '(continued-outside)')).toHaveLength(1)
+  expect(await c.open('a1')).toBe(true)
+  expect(c.journal.snapshot()).toEqual(after)
+  expect((await c.replay()).snapshot()).toEqual(after)
+})
+
+it('keeps mixed task results with their saved caller before an independent reply', async () => {
+  const c = await chat()
+  await c.live({ tool: true, interrupted: true })
+  const saved = c.journal.snapshot()
+  const tool = saved.items.find((item) => item.body.kind === 'tool-call')!
+  const failed = saved.items.filter((item) => item.body.kind === 'turn')
+  await c.write([
+    ...chatTurn,
+    {
+      ...task,
+      ...prompt('mixed-task', 'a1', '', 60),
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: String(message(task).content) },
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'real result' }
+        ]
+      }
+    },
+    reply(
+      'mixed-answer',
+      'mixed-task',
+      'msg_mixed',
+      { type: 'text', text: 'independent answer' },
+      61
+    )
+  ])
+  expect(await c.open('a1')).toBe(true)
+  expect(c.journal.item(tool.itemId)).toMatchObject({
+    turnScope: tool.turnScope,
+    body: { name: 'Read', input: { path: 'original' }, state: 'completed' }
+  })
+  expect(
+    c.journal.snapshot().items.filter((item) => failed.some((old) => old.itemId === item.itemId))
+  ).toEqual(failed)
+  const answer = c.journal
+    .snapshot()
+    .items.find(
+      (item) =>
+        item.body.kind === 'message' &&
+        item.body.role === 'assistant' &&
+        item.body.blocks.some(
+          (block) => block.type === 'text' && block.text === 'independent answer'
+        )
+    )!
+  expect(answer.turnScope).not.toEqual(tool.turnScope)
+  const scope = answer.turnScope
+  if (scope.kind !== 'turn') {
+    throw new Error('independent turn missing')
+  }
+  expect(c.journal.item(scope.turnItemId)?.body).toMatchObject({ kind: 'turn', state: 'completed' })
 })
 
 describe('internal content keeps live settlement and semantic siblings', () => {
@@ -158,6 +320,7 @@ describe('internal content keeps live settlement and semantic siblings', () => {
     expect(sent).toEqual({ state: 'admitted' })
     live(realEcho, true)
     live(synthetic)
+    expect(translator.currentTurnId).toBe(waiter.sentUuid)
     const result = { type: 'result', subtype: 'success', session_id: SID, uuid: 'real-result' }
     live(result)
     expect(session.dispatchWaiters).toHaveLength(0)

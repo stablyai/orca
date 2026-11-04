@@ -65,6 +65,7 @@ export function journalClaudeStream(
 ): boolean {
   const delta = ctx.streamedBlocks.observe(message, observedAt)
   const thinking = ctx.streamedThinking.observe(message, observedAt)
+  // Prefer message_start; use the first content delta for older streams that omit it.
   const source =
     delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
   ctx.turn.ensureOpen(message, source, observedAt)

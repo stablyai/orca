@@ -1,5 +1,6 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
   type AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
@@ -89,4 +90,20 @@ export function createClaudeTranscriptItemReader(
     return scope
   }
   return { saved, localPrompt, scopeOf, promptScope, dependencies }
+}
+
+/** A restored call cannot undo its saved result or discard its original call metadata. */
+export function claudeRestoredItemBody(
+  body: AgentJournalItemBody,
+  existing: AgentJournalItemBody
+): AgentJournalItemBody {
+  if (body.kind === 'tool-call' && existing.kind === 'tool-call') {
+    return body.state === 'running'
+      ? existing
+      : { ...existing, ...body, name: existing.name, input: existing.input }
+  }
+  if (body.kind === 'message' && body.role === 'reasoning' && existing.kind === 'message') {
+    return { ...existing, ...body }
+  }
+  return body
 }

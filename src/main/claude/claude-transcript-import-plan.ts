@@ -38,7 +38,10 @@ import {
   readClaudeMessageEnvelope
 } from './structured/journal/claude-structured-item-translation'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
+import {
+  createClaudeTranscriptItemReader,
+  claudeRestoredItemBody
+} from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
 import { claudeMessageWithoutSyntheticText } from './claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
@@ -107,20 +110,7 @@ export function createClaudeTranscriptImportPlan(input: {
         return { accepted: true } as const
       }
       turnScope = scopeOf(existing)
-      if (body.kind === 'tool-call' && existing.body.kind === 'tool-call') {
-        // A call alone cannot undo its saved result; result-only suffixes keep the call metadata.
-        body =
-          body.state === 'running'
-            ? existing.body
-            : { ...existing.body, ...body, name: existing.body.name, input: existing.body.input }
-      }
-      if (
-        body.kind === 'message' &&
-        body.role === 'reasoning' &&
-        existing.body.kind === 'message'
-      ) {
-        body = { ...existing.body, ...body }
-      }
+      body = claudeRestoredItemBody(body, existing.body)
       if (isDeepStrictEqual(existing.body, body)) {
         return { accepted: true } as const
       }
@@ -201,21 +191,31 @@ export function createClaudeTranscriptImportPlan(input: {
           matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
         }
       }
-      const { decoded, ignored } = claudeTranscriptPrompt(row, envelope, input.providerSessionId)
+      const { decoded, ignored, internalTurnStart, hasWork } = claudeTranscriptPrompt(
+        row,
+        envelope,
+        input.providerSessionId
+      )
       if (ignored) {
         return
       }
       uuids.push(uuid)
       if (!decoded) {
-        if (envelope?.content.length && sourceObservedAt !== undefined) {
-          workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
+        if (hasWork) {
+          if (sourceObservedAt !== undefined) {
+            workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
+          }
+          translator.handle({
+            type: 'message',
+            sessionId: input.sessionId,
+            message: frame,
+            ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
+          })
         }
-        translator.handle({
-          type: 'message',
-          sessionId: input.sessionId,
-          message: frame,
-          ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
-        })
+        // A hidden physical prompt still separates turns; caller-owned results settle first.
+        if (internalTurnStart) {
+          idle()
+        }
         return
       }
       // Folded input stays in the ongoing turn; a physical opener also settles its predecessor.
@@ -255,6 +255,7 @@ export function createClaudeTranscriptImportPlan(input: {
       input.check()
       idle()
       translator.flush()
+      // A row that renders nothing adds no divider either.
       const rows = [...mutations.values()]
       const batch = createHistoryCatchUpBatch()
       const firstCreated = rows.find(
