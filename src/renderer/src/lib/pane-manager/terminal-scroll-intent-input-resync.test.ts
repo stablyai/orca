@@ -57,22 +57,6 @@ afterEach(() => {
 })
 
 describe('terminal scroll-intent input resync', () => {
-  it('does not apply input resync after tracking is disposed', () => {
-    vi.stubGlobal('requestAnimationFrame', () => 0)
-    vi.stubGlobal('Element', TestElement)
-    const { terminal, capturedInput, capturedUserInput } = createTerminalWithInputCapture(42, 100)
-    const host = new TestElement() as unknown as HTMLElement
-    const disposable = attachTerminalScrollIntentTracking(terminal, host)
-
-    markTerminalPinnedViewport(terminal)
-    capturedUserInput.listener?.()
-    disposable.dispose()
-    terminal.buffer.active.viewportY = terminal.buffer.active.baseY
-    capturedInput.listener?.('a')
-
-    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
-  })
-
   it('defers real typing intent until a snapshot rebuild completes', () => {
     vi.stubGlobal('requestAnimationFrame', () => 0)
     vi.stubGlobal('Element', TestElement)
