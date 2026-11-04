@@ -1,5 +1,5 @@
-import type { AgentStatus } from './agent-title-core'
-import type { TerminalAgent } from './terminal-agent'
+import type { AgentStatus } from './agent-status/title/agent-title-core'
+import type { TerminalAgent } from './agent-status/identity/terminal-agent'
 
 export function hermesNativeTitleStatus(
   title: string,
