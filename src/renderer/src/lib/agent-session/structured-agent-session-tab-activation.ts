@@ -70,7 +70,9 @@ export function activateStructuredAgentSessionTabOnOwner(
       // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
       ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
     }
-  )
+  ).catch(() => {
+    // A chat still opening (or one whose start failed) has no host tab yet; the next activation retries.
+  })
 }
 
 export function activateStructuredAgentSessionById(args: {
