@@ -34,9 +34,11 @@ import {
   Wrench,
   type LucideIcon
 } from 'lucide-react'
+import React from 'react'
 import type { Components } from 'react-markdown'
 import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
 import { compactCommentMarkdownComponents } from '@/components/sidebar/comment-markdown-element-renderers'
+import { isMermaidPre, renderMermaidFence } from '@/components/sidebar/comment-mermaid-fence'
 
 const icons = new Map<string, LucideIcon>([
   ['book-open', BookOpen],
@@ -88,8 +90,25 @@ const severityIcons = new Map<string, LucideIcon>([
 ])
 
 const CompactImage = compactCommentMarkdownComponents.img
+const CompactPre = compactCommentMarkdownComponents.pre
+
+// Bound the diagram so a tall one cannot take over the sidebar; click expands it.
+const diagramClassName =
+  'my-1 max-w-full overflow-hidden rounded border border-border/50 p-1.5 [&_.mermaid-block_svg]:max-h-60 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-32 [&_.mermaid-block_pre]:overflow-auto [&_.mermaid-block_pre]:rounded [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-1.5 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[10px]'
 
 const components: Components = {
+  // Review bots (Greptile) post Mermaid diagrams; show them as diagrams, with the source until they render.
+  pre: ({ node, children }) => {
+    const source = CompactPre ? (
+      <CompactPre node={node}>{children}</CompactPre>
+    ) : (
+      <pre>{children}</pre>
+    )
+    const code = React.Children.toArray(children)[0]
+    return isMermaidPre(children) && React.isValidElement<{ children?: React.ReactNode }>(code)
+      ? renderMermaidFence(code.props.children, diagramClassName, source)
+      : source
+  },
   picture: ({ children }) => <>{children}</>,
   source: () => null,
   img: ({ src, alt }) => {
