@@ -15,7 +15,7 @@ import {
   remoteNodeRuntimeStoreDir,
   tryWithRuntimeStoreLock
 } from './remote-node-runtime-store-lock'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination

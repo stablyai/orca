@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN } from '../../../../shared/terminal/diagnostics/terminal-render-desync-evidence'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { createCaptureId } from './terminal-render-desync-evidence-persistence'
 

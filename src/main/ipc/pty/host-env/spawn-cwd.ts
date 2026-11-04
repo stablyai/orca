@@ -11,7 +11,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import {
   resolveTerminalStartupCwdForWorkspace,
   type TerminalStartupCwdMissingDirFallback
-} from '../../../../shared/terminal-startup-cwd'
+} from '../../../../shared/shell/launch/terminal-startup-cwd'
 import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,

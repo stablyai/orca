@@ -3,6 +3,7 @@ import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-pro
 import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { terminalQuickCommandAgentPromptMaxLength } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
+import { prewarmMobileAgentHistorySnapshot } from '../agent-history/agent-history-session-scanner'
 import '../../../src/shared/protocol-version'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/program-status/protocol'
@@ -19,6 +20,7 @@ import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-cloc
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -185,8 +187,12 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     hostProgramStatusSupportedRef.current = false
     // Retry status after cutover/timeouts even when connection state never changes or features can remain hidden forever.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
+      const supportsAgentHistory = capabilities.includes(MOBILE_AI_VAULT_CAPABILITY)
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
-      setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
+      setAgentSessionHistorySupported(supportsAgentHistory)
+      if (supportsAgentHistory) {
+        prewarmMobileAgentHistorySnapshot(hostId, worktreeId, client)
+      }
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       setQuickCommandAgentPromptMaxLength(terminalQuickCommandAgentPromptMaxLength(capabilities))
@@ -198,7 +204,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         PROGRAM_STATUS_RUNTIME_CAPABILITY
       )
     })
-  }, [client, connState])
+  }, [client, connState, hostId, worktreeId])
   return {
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,

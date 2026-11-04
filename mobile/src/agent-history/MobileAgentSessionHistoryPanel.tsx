@@ -101,6 +101,7 @@ function MobileAgentSessionHistoryPanelContent({
     scope,
     screenState,
     refreshing,
+    loadingMore,
     hostStatusResult,
     activeWorktreePath,
     scopeFilterPaths,
@@ -341,6 +342,12 @@ function MobileAgentSessionHistoryPanelContent({
                 onClear={() => setQuery('')}
                 bottomInset={searchBarHeight}
               />
+            ) : loadingMore ? (
+              <MobileStateView
+                loading
+                title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
+                bottomInset={searchBarHeight}
+              />
             ) : (
               <MobileStateView
                 icon={History}
@@ -357,6 +364,7 @@ function MobileAgentSessionHistoryPanelContent({
               sections={sections}
               sessionsById={sessionsById}
               refreshing={refreshing}
+              loadingMore={loadingMore}
               showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
               resumeActionStateBySessionId={resumeActionStateBySessionId}
               onResume={onResumeSession}

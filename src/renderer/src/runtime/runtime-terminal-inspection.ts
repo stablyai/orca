@@ -12,12 +12,11 @@ import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
   isClientOnlyUnverifiableInspection,
-  type TerminalProcessInspection
-} from '../../../shared/terminal-process-inspection'
+  type TerminalProcessInspection,
+  type TerminalProcessInspection as RuntimeTerminalProcessInspection
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
-
-export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {

@@ -30,7 +30,7 @@ vi.mock('@/components/ui/tooltip', () => ({
     mocks.activeTooltipOpen ? <span>{children}</span> : null
 }))
 
-vi.mock('./ScrollToCurrentWorkspaceToolbarButton', () => ({
+vi.mock('./worktree-list/navigation/ScrollToCurrentWorkspaceToolbarButton', () => ({
   ScrollToCurrentWorkspaceToolbarButton: () => <button type="button">Current workspace</button>
 }))
 

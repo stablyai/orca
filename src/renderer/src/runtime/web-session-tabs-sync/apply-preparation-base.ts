@@ -21,7 +21,7 @@ import {
   clearWebAgentSessionHandoff
 } from '../web-agent-session-handoff'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   isReadyTerminalTab,
   isTerminalSurfaceTab,

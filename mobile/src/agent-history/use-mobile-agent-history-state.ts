@@ -81,6 +81,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       ? hostStatusProbe.result
       : null
   const [refreshing, setRefreshing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const generationRef = useRef(0)
   const mountedRef = useRef(true)
   const lastSnapshotsRef = useRef<Map<string, AgentHistoryCachedSnapshot>>(new Map())
@@ -99,8 +100,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const hasActiveWorktree = activeWorktree !== null
   const effectiveWorktreesLoaded = worktreesLoaded || (fastFirstScreen && hasActiveWorktree)
   // Path keys, not array identity: worktree.ps replaces the array even when every path is unchanged.
-  const workspaceScopePathsKey = mobileAiVaultScopePathsKey('workspace', activeWorktree, worktrees)
-  const projectScopePathsKey = mobileAiVaultScopePathsKey('project', activeWorktree, worktrees)
+  const activeScopePathsKey =
+    scope === 'all' ? '' : mobileAiVaultScopePathsKey(scope, activeWorktree, worktrees)
   const scopeContextRef = useRef({ activeWorktree, worktrees })
   scopeContextRef.current = { activeWorktree, worktrees }
   const activeWorktreePath = activeWorktree?.path ?? null
@@ -116,7 +117,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     feed?.getNamingSnapshot ?? noNames,
     noNames
   )
-  const identityKey = `${hostId}\0${clientGeneration}\0${connState}\0${worktreeId}\0${hasActiveWorktree}\0${workspaceScopePathsKey}\0${projectScopePathsKey}\0${effectiveWorktreesLoaded}\0${scope}`
+  const identityKey = `${hostId}\0${clientGeneration}\0${connState}\0${worktreeId}\0${hasActiveWorktree}\0${activeScopePathsKey}\0${effectiveWorktreesLoaded}\0${scope}`
   const identity = useMemo(() => ({ client, identityKey }), [client, identityKey])
   const identityRef = useRef(identity)
   useLayoutEffect(() => {
@@ -141,6 +142,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       if (!client || connState !== 'connected') {
         if (isCurrent()) {
           setHostStatusProbe(null)
+          setLoadingMore(false)
           const message = t('agentHistory.useAgentHistoryState.waitingForHost', 'Waiting for host…')
           // Keep stale rows visible during reconnect reloads instead of replacing them with full-screen error, matching host list.
           setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'error', message }))
@@ -148,6 +150,17 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         return
       }
 
+      const { activeWorktree: scopedWorktree, worktrees: scopedWorktrees } = scopeContextRef.current
+      const derivedScopePaths = deriveMobileAiVaultScopePaths(
+        options.scope,
+        scopedWorktree,
+        scopedWorktrees
+      )
+      const scopePaths = mobileAiVaultScanScopePaths(derivedScopePaths)
+      const cacheKey = scopePaths.join('\0')
+      const previousSnapshot =
+        lastSnapshotsRef.current.get(cacheKey) ?? readCachedAgentHistorySnapshot(hostId, cacheKey)
+      setLoadingMore(!options.force && !previousSnapshot)
       setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
       activeLoads.current += 1
       try {
@@ -162,6 +175,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         )
         setHostStatusProbe({ hostId, client, generation: clientGeneration, result: status })
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
+          setLoadingMore(false)
           setScreenState({ kind: 'unsupported' })
           return
         }
@@ -174,17 +188,6 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           return
         }
 
-        const { activeWorktree: scopedWorktree, worktrees: scopedWorktrees } =
-          scopeContextRef.current
-        const derivedScopePaths = deriveMobileAiVaultScopePaths(
-          options.scope,
-          scopedWorktree,
-          scopedWorktrees
-        )
-        const scopePaths = mobileAiVaultScanScopePaths(derivedScopePaths)
-        const cacheKey = (scopePaths ?? []).join('\0')
-        const previousSnapshot =
-          lastSnapshotsRef.current.get(cacheKey) ?? readCachedAgentHistorySnapshot(hostId, cacheKey)
         const fallbackErrorMessage = t(
           'agentHistory.useAgentHistoryState.loadFailed',
           'Unable to load agent sessions'
@@ -223,6 +226,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           lastSnapshotsRef.current.set(cacheKey, snapshot)
           writeCachedAgentHistorySnapshot(hostId, cacheKey, snapshot)
         }
+        setLoadingMore(false)
         setScreenState({
           kind: 'ready',
           hostId,
@@ -239,6 +243,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
             ? err.message
             : t('agentHistory.useAgentHistoryState.loadFailed', 'Unable to load agent sessions')
         setHostStatusProbe(null)
+        setLoadingMore(false)
         setScreenState({ kind: 'error', message })
       } finally {
         activeLoads.current -= 1
@@ -250,6 +255,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       }
     },
     [
+      activeScopePathsKey,
       client,
       clientGeneration,
       connState,
@@ -257,8 +263,6 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       feed,
       hasActiveWorktree,
       hostId,
-      projectScopePathsKey,
-      workspaceScopePathsKey,
       effectiveWorktreesLoaded,
       t
     ]
@@ -307,6 +311,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     scope,
     screenState: namedScreenState,
     refreshing,
+    loadingMore,
     hostStatusResult,
     activeWorktreePath,
     scopeFilterPaths,

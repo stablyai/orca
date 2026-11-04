@@ -9,6 +9,11 @@ import type { AgentSessionConversationNames } from '../../../src/shared/agent-se
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import {
+  deriveMobileAiVaultScopePaths,
+  mobileAiVaultScanScopePaths,
+  resolveActiveHistoryWorktree
+} from './agent-history-scope-paths'
 import { agentHistorySessionScan } from './mobile-agent-history-operations'
 
 // Match desktop SESSION_LIMIT=500 for recency only; host separately caps in-scope union.
@@ -18,8 +23,10 @@ export const MOBILE_AI_VAULT_FIRST_SCREEN_LIMIT = 24
 
 /** Module cache cap. A phone keeps a handful of hosts and scopes, not the full desktop history. */
 const MAX_CACHED_SNAPSHOTS = 20
+const IS_VITEST = typeof process !== 'undefined' && Boolean(process.env?.VITEST)
 
 const snapshotCache = new Map<string, AgentHistoryCachedSnapshot>()
+const inflightPrewarms = new Set<string>()
 
 export type AgentHistoryScreenState =
   | { kind: 'loading' }
@@ -186,6 +193,50 @@ export function writeCachedAgentHistorySnapshot(
 /** Drops every cached scan so a host switch or test cannot reuse another machine's rows. */
 export function clearCachedAgentHistorySnapshots(): void {
   snapshotCache.clear()
+  inflightPrewarms.clear()
+}
+
+/** Prewarms the scoped snapshot cache in the background so cold navigation into Agent Session History renders on frame 0. */
+export function prewarmMobileAgentHistorySnapshot(
+  hostId: string,
+  worktreeId: string,
+  client: RpcClient | null,
+  enabled = !IS_VITEST
+): void {
+  if (!client || !enabled) {
+    return
+  }
+  const activeWorktree = resolveActiveHistoryWorktree([], worktreeId, true)
+  const scopePaths = mobileAiVaultScanScopePaths(
+    deriveMobileAiVaultScopePaths('workspace', activeWorktree, [])
+  )
+  const cacheKey = scopePaths.join('\0')
+  if (readCachedAgentHistorySnapshot(hostId, cacheKey)) {
+    return
+  }
+  const inflightKey = snapshotCacheId(hostId, cacheKey)
+  if (inflightPrewarms.has(inflightKey)) {
+    return
+  }
+  inflightPrewarms.add(inflightKey)
+  void scanMobileAgentSessions(client, {
+    scopePaths,
+    force: false
+  })
+    .then((result) => {
+      if (result.fingerprint) {
+        writeCachedAgentHistorySnapshot(hostId, cacheKey, {
+          fingerprint: result.fingerprint,
+          sessions: result.sessions,
+          issues: result.issues,
+          client
+        })
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      inflightPrewarms.delete(inflightKey)
+    })
 }
 
 /**

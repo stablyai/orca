@@ -17,12 +17,12 @@ import * as presentation from '@/lib/program-status/agent-row-presentation'
 import * as worktreeStatus from '@/lib/worktree-status'
 import * as sessionTime from '@/components/right-sidebar/ai-vault-session-time'
 import { readStoreListenerCount } from '@/store/store-listener-census'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
-import { emptyCrew } from '../../../../shared/orchestration-crew'
+
+import { type OrchestrationCrewRow, emptyCrew } from '../../../../shared/orchestration-crew'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const local = { kind: 'local' } as const
 function row(id = 0): OrchestrationCrewRow {

@@ -1,7 +1,7 @@
 // Both runtime and client admission must preserve closed tabs and refuse cross-tab ID collisions.
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { admitPaneToSession, applyCommandToSession } from './terminal-pane-admission'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

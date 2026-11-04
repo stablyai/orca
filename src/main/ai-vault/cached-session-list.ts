@@ -166,10 +166,9 @@ export function prewarmAiVaultSessionListCache(scopePaths?: readonly string[]): 
   if (process.env.VITEST) {
     return
   }
-  void listAiVaultSessions({ includeAntigravityIdeSessions: true, limit: 500 }).catch(() => {})
+  void listAiVaultSessions({ limit: 500 }).catch(() => {})
   if (scopePaths && scopePaths.length > 0) {
     void listAiVaultSessions({
-      includeAntigravityIdeSessions: true,
       limit: 500,
       scopePaths: [...scopePaths]
     }).catch(() => {})

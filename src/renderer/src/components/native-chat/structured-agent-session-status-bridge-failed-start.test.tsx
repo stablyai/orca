@@ -116,7 +116,7 @@ import {
   resetTerminalTabActivityFlagsCacheForTest,
   resolveTerminalTabActivityStatus
 } from '../tab-bar/terminal-tab-activity-status'
-import { selectWorktreeAgentActivitySummary } from '../sidebar/worktree-agent-activity-summary'
+import { selectWorktreeAgentActivitySummary } from '../sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
 
 import { getDefaultSettings } from '../../../../shared/constants'

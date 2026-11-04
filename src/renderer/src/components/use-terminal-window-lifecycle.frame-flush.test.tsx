@@ -15,7 +15,7 @@ vi.mock('./window-close-request-coordinator', () => ({
 
 import { useAppStore } from '../store'
 import { makeOpenFile } from '../store/slices/store-session-test-harness'
-import { registerEditorFrameFlush } from './editor/editor-pending-flush'
+import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 import { useTerminalWindowLifecycle } from './use-terminal-window-lifecycle'
 
 const drainMicrotasks = () => new Promise((resolve) => setImmediate(resolve))

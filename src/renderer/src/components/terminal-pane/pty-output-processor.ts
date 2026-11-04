@@ -6,7 +6,7 @@ import {
   createAgentStatusOscProcessor,
   type ProgramActivityChange
 } from '../../../../shared/agent-status/transport/agent-status-osc'
-import { createProgramStatusSideEffectScanner } from '../../../../shared/terminal-agent-status-processor'
+import { createProgramStatusSideEffectScanner } from '../../../../shared/program-status/terminal-agent-status-processor'
 
 import { placeProgramActivityAmongTitles } from '../../../../shared/program-status/title-activity-order'
 import {

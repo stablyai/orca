@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { RefreshControl, SectionList, View } from 'react-native'
+import { ActivityIndicator, RefreshControl, SectionList, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SectionHeader } from '../components/list/ListGroup'
@@ -16,6 +16,7 @@ type Props = {
   sections: MobileAgentHistorySection[]
   sessionsById: ReadonlyMap<string, AiVaultSession>
   refreshing: boolean
+  loadingMore?: boolean
   showCurrentWorktreeBadges: boolean
   resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
@@ -28,6 +29,7 @@ export function MobileAgentSessionHistoryList({
   sections,
   sessionsById,
   refreshing,
+  loadingMore = false,
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
@@ -89,6 +91,13 @@ export function MobileAgentSessionHistoryList({
       )}
       renderItem={renderItem}
       ItemSeparatorComponent={RowSeparator}
+      ListFooterComponent={
+        loadingMore ? (
+          <View style={styles.footerLoading}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+          </View>
+        ) : null
+      }
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
     />

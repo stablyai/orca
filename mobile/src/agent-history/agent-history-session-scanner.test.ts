@@ -5,7 +5,9 @@ import type { RpcResponse } from '../transport/types'
 import {
   clearCachedAgentHistorySnapshots,
   MOBILE_AI_VAULT_SESSION_LIMIT,
+  prewarmMobileAgentHistorySnapshot,
   readCachedAgentHistorySnapshot,
+  readInitialAgentHistoryScreenState,
   scanMobileAgentSessions,
   writeCachedAgentHistorySnapshot,
   type AgentHistoryCachedSnapshot
@@ -218,6 +220,41 @@ describe('agent history snapshot cache', () => {
     expect(readCachedAgentHistorySnapshot('host', 'scope-0')).toBe(oldest)
     expect(readCachedAgentHistorySnapshot('host', 'scope-1')).toBeUndefined()
     expect(readCachedAgentHistorySnapshot('host', 'scope-20')?.fingerprint).toBe('fp-20')
+  })
+
+  it('prewarms the scoped snapshot cache so initial screen state starts ready on cold open', async () => {
+    const { client, calls } = fakeClient(() => ({
+      id: '1',
+      ok: true,
+      result: {
+        sessions: [{ id: 's-prewarmed', title: 'Prewarmed' }],
+        issues: [],
+        fingerprint: 'fp-prewarmed'
+      },
+      _meta: { runtimeId: 'r1' }
+    }))
+
+    prewarmMobileAgentHistorySnapshot('host-1', 'repo-1::/worktrees/feature-a', client, true)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual({
+      method: 'aiVault.listSessions',
+      params: {
+        limit: MOBILE_AI_VAULT_SESSION_LIMIT,
+        force: false,
+        scopePaths: ['/worktrees/feature-a'],
+        afterFingerprint: null
+      }
+    })
+    expect(readInitialAgentHistoryScreenState('host-1', client, 'connected')).toEqual({
+      kind: 'ready',
+      hostId: 'host-1',
+      client,
+      sessions: [{ id: 's-prewarmed', title: 'Prewarmed' }],
+      issues: []
+    })
   })
 })
 

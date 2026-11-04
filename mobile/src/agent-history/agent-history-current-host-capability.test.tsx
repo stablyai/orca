@@ -441,6 +441,7 @@ it('renders first-screen preview (limit 24) before full scoped scan (limit 500) 
     tree = create(createElement(Probe))
   })
   try {
+    expect(observed.current?.loadingMore).toBe(true)
     expect(observed.current?.screenState).toMatchObject({
       kind: 'ready',
       sessions: [expect.objectContaining({ id: 's-preview', title: 'First Screen Session' })]
@@ -477,6 +478,7 @@ it('renders first-screen preview (limit 24) before full scoped scan (limit 500) 
         }
       })
     })
+    expect(observed.current?.loadingMore).toBe(false)
     expect(observed.current?.screenState).toMatchObject({
       kind: 'ready',
       sessions: [

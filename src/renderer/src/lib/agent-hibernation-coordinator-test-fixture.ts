@@ -1,6 +1,9 @@
 import { vi, type Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'

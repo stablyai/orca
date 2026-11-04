@@ -28,7 +28,7 @@ import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
-import { buildSidebarHostOptions } from '../../sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
