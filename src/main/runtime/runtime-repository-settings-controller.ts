@@ -9,7 +9,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { teardownStops } from './owned-session-teardown-policy'
 import { assertNoProjectWorktreeCreate } from '../workspaces/creation/worktree-create-in-flight'
-import { releaseWorktreeCreatePreparationsForRepo } from '../workspaces/creation/preparation/worktree-create-preparation'
+import { releaseWorktreeCreatePreparationsForRepo } from '../workspaces/creation/preparation/worktree-create-preparation-project-removal'
 
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 

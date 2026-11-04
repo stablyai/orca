@@ -13,9 +13,9 @@ import {
   _resetWorktreeCreatePreparationsForTests,
   consumePreparedWorktreeCreate,
   hasPendingWorktreeCreatePreparations,
-  prepareWorktreeCreateForRepo,
-  releaseWorktreeCreatePreparationsForRepo
+  prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
+import { releaseWorktreeCreatePreparationsForRepo } from './worktree-create-preparation-project-removal'
 
 describe('worktree create preparation registry', () => {
   it.each([undefined, 'Ubuntu'])(
@@ -346,6 +346,24 @@ describe('worktree create preparation registry', () => {
         baseBranch: 'origin/main'
       })
     ).resolves.toMatchObject({ status: 'hit' })
+  })
+
+  it('still discards armed checkouts when the project runtime needs repair', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    await flushBackgroundWork()
+    mocks.getWorktreeOptions.mockImplementation(() => {
+      throw new Error('Project runtime requires repair before git execution: wsl-distro-missing')
+    })
+
+    expect(() => releaseWorktreeCreatePreparationsForRepo(store, repo)).not.toThrow()
+    await flushBackgroundWork()
+
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      mocks.prepareCheckout.mock.calls[0]?.[1],
+      {},
+      expect.any(String)
+    )
   })
 
   it('routes preparation and finalization through the selected WSL runtime', async () => {
